@@ -1,0 +1,397 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { PromptInput } from './components/PromptInput';
+import { AgentCard } from './components/AgentCard';
+import { LoadingSkeleton } from './components/LoadingSkeleton';
+import { DebateMode } from './components/DebateMode';
+import { DiscussMode } from './components/DiscussMode';
+import { Sidebar } from './components/Sidebar';
+import { streamPrompt, getSession } from './api';
+import { PromptResponse, ScoredAgent, SessionData, SessionTurn, AGENTS } from './types';
+
+const AGENT_IDS = ['agent_1', 'agent_2', 'agent_3', 'agent_4'] as const;
+
+type Phase = 'idle' | 'pipeline' | 'streaming' | 'scoring' | 'done';
+type ViewMode = 'arena' | 'debate' | 'discuss';
+
+function App() {
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [response, setResponse] = useState<PromptResponse | null>(null);
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [currentPrompt, setCurrentPrompt] = useState('');
+
+  // View mode
+  const [viewMode, setViewMode] = useState<ViewMode>('arena');
+  const [challengedAgent, setChallengedAgent] = useState<ScoredAgent | null>(null);
+  const [discussAgent, setDiscussAgent] = useState<ScoredAgent | null>(null);
+
+  // Session management
+  const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [activeTurnId, setActiveTurnId] = useState<string | null>(null);
+
+  // Per-agent streaming state
+  const [streamingTexts, setStreamingTexts] = useState<Record<string, string>>({});
+  const [doneAgents, setDoneAgents] = useState<Set<string>>(new Set());
+
+  // Ref to accumulate tokens without re-rendering on every single token
+  const tokenBuffers = useRef<Record<string, string>>({});
+  const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Session restore on mount
+  useEffect(() => {
+    const storedSessionId = localStorage.getItem('arena_session_id');
+    if (storedSessionId) {
+      getSession(storedSessionId).then((data) => {
+        if (data && data.turns.length > 0) {
+          setSessionData(data);
+          // Load most recent turn
+          const lastTurn = data.turns[data.turns.length - 1];
+          loadTurn(lastTurn);
+        }
+      });
+    }
+  }, []);
+
+  const loadTurn = (turn: SessionTurn) => {
+    // Convert SessionTurn to PromptResponse format
+    const scoredResponses = Object.entries(turn.agent_responses).map(([agentId, response]) => ({
+      response,
+      score: agentId === turn.winner_id ? 100 : 75,
+      is_winner: agentId === turn.winner_id,
+    }));
+
+    const promptResponse: PromptResponse = {
+      session_id: sessionData?.session_id || '',
+      prompt: turn.prompt,
+      prompt_category: '',
+      winner: turn.agent_responses[turn.winner_id],
+      winner_agent_id: turn.winner_id,
+      all_responses: scoredResponses,
+      integrity: null,
+      timestamp: turn.timestamp,
+    };
+
+    setResponse(promptResponse);
+    setExpandedAgent(turn.winner_id);
+    setActiveTurnId(turn.turn_id);
+    setPhase('done');
+  };
+
+  const handleTurnClick = (turnId: string) => {
+    const turn = sessionData?.turns.find((t) => t.turn_id === turnId);
+    if (turn) {
+      loadTurn(turn);
+    }
+  };
+
+  const flushTokens = useCallback(() => {
+    setStreamingTexts((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const [id, text] of Object.entries(tokenBuffers.current)) {
+        if (next[id] !== text) {
+          next[id] = text;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, []);
+
+  const handleSubmit = async (prompt: string) => {
+    // Reset all state
+    setPhase('pipeline');
+    setError(null);
+    setResponse(null);
+    setExpandedAgent(null);
+    setCurrentPrompt(prompt);
+    setStreamingTexts({});
+    setDoneAgents(new Set());
+    setViewMode('arena');
+    setChallengedAgent(null);
+    setDiscussAgent(null);
+    tokenBuffers.current = {};
+
+    // Flush streaming text to state at 60fps-ish
+    flushTimer.current = setInterval(flushTokens, 50);
+
+    try {
+      await streamPrompt(prompt, {
+        onPipeline: (data) => {
+          if (!data.passed) {
+            setError(data.rejection_reason || 'Prompt rejected');
+            setPhase('idle');
+          } else {
+            setPhase('streaming');
+          }
+        },
+        onToken: (data) => {
+          tokenBuffers.current[data.agent_id] =
+            (tokenBuffers.current[data.agent_id] || '') + data.token;
+        },
+        onAgentDone: (data) => {
+          setDoneAgents((prev) => new Set(prev).add(data.agent_id));
+        },
+        onAgentError: (data) => {
+          tokenBuffers.current[data.agent_id] =
+            `[Error: ${data.error}]`;
+          setDoneAgents((prev) => new Set(prev).add(data.agent_id));
+        },
+        onResult: (data) => {
+          // Final flush
+          flushTokens();
+          if (flushTimer.current) clearInterval(flushTimer.current);
+
+          setResponse(data);
+          setExpandedAgent(data.winner_agent_id);
+          setPhase('done');
+
+          // Save session ID to localStorage
+          localStorage.setItem('arena_session_id', data.session_id);
+
+          // Update session data with new turn
+          if (sessionData?.session_id === data.session_id) {
+            const newTurn: SessionTurn = {
+              turn_id: `turn_${Date.now()}`,
+              prompt: data.prompt,
+              agent_responses: data.all_responses.reduce((acc, scored) => {
+                acc[scored.response.agent_id] = scored.response;
+                return acc;
+              }, {} as Record<string, any>),
+              winner_id: data.winner_agent_id,
+              timestamp: data.timestamp,
+            };
+            setSessionData({
+              ...sessionData,
+              turns: [...sessionData.turns, newTurn],
+            });
+            setActiveTurnId(newTurn.turn_id);
+          } else {
+            // New session
+            const newTurn: SessionTurn = {
+              turn_id: `turn_${Date.now()}`,
+              prompt: data.prompt,
+              agent_responses: data.all_responses.reduce((acc, scored) => {
+                acc[scored.response.agent_id] = scored.response;
+                return acc;
+              }, {} as Record<string, any>),
+              winner_id: data.winner_agent_id,
+              timestamp: data.timestamp,
+            };
+            setSessionData({
+              session_id: data.session_id,
+              user_id: 'anonymous',
+              turns: [newTurn],
+              topics: [],
+              created_at: data.timestamp,
+              last_active: data.timestamp,
+            });
+            setActiveTurnId(newTurn.turn_id);
+          }
+        },
+        onError: (data) => {
+          if (flushTimer.current) clearInterval(flushTimer.current);
+          setError(data.detail);
+          setPhase('idle');
+        },
+      });
+    } catch (err) {
+      if (flushTimer.current) clearInterval(flushTimer.current);
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+      setPhase('idle');
+    }
+  };
+
+  const toggleAgent = (agentId: string) => {
+    setExpandedAgent(expandedAgent === agentId ? null : agentId);
+  };
+
+  const handleChallenge = (scored: ScoredAgent) => {
+    setChallengedAgent(scored);
+    setViewMode('debate');
+  };
+
+  const handleDiscuss = (scored: ScoredAgent) => {
+    setDiscussAgent(scored);
+    setViewMode('discuss');
+  };
+
+  const exitToArena = () => {
+    setViewMode('arena');
+    setChallengedAgent(null);
+    setDiscussAgent(null);
+  };
+
+  const isLoading = phase === 'pipeline';
+  const isStreaming = phase === 'streaming' || phase === 'scoring';
+  const isDone = phase === 'done';
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Sidebar */}
+      {sessionData && viewMode === 'arena' && (
+        <Sidebar
+          turns={sessionData.turns.map((t) => ({
+            turn_id: t.turn_id,
+            prompt: t.prompt,
+            winner_id: t.winner_id,
+            timestamp: t.timestamp,
+          }))}
+          activeTurnId={activeTurnId}
+          onTurnClick={handleTurnClick}
+        />
+      )}
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        {/* Header */}
+        <header className="text-center mb-12">
+          <h1
+            className="font-serif text-4xl font-semibold text-text-primary mb-2 cursor-pointer"
+            onClick={exitToArena}
+          >
+            Arena
+          </h1>
+          <p className="text-text-secondary">
+            Four minds. One question. The best answer wins.
+          </p>
+        </header>
+
+        {/* Input — hidden during debate/discuss modes */}
+        {viewMode === 'arena' && (
+          <div className="mb-12">
+            <PromptInput
+              onSubmit={handleSubmit}
+              isLoading={isLoading || isStreaming}
+            />
+          </div>
+        )}
+
+        {/* Error */}
+        {error && viewMode === 'arena' && (
+          <div className="mb-8 p-4 bg-surface border border-accent/30 rounded-lg text-text-primary">
+            <p className="text-sm font-medium text-accent mb-1">Cannot process</p>
+            <p className="text-text-secondary text-sm">{error}</p>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════ */}
+        {/* ARENA VIEW                                      */}
+        {/* ═══════════════════════════════════════════════ */}
+        {viewMode === 'arena' && (
+          <>
+            {/* Pipeline loading — skeleton cards */}
+            {isLoading && <LoadingSkeleton />}
+
+            {/* Streaming phase — show live tokens */}
+            {isStreaming && (
+              <div className="space-y-6">
+                {currentPrompt && (
+                  <div className="p-4 bg-surface/50 rounded-lg border border-border">
+                    <p className="text-sm text-text-secondary mb-1">Your question</p>
+                    <p className="text-text-primary">{currentPrompt}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {AGENT_IDS.map((id) => (
+                    <AgentCard
+                      key={id}
+                      agentId={id}
+                      isExpanded={false}
+                      onToggle={() => {}}
+                      streamingText={streamingTexts[id] || ''}
+                      isStreaming={!doneAgents.has(id)}
+                    />
+                  ))}
+                </div>
+                {doneAgents.size === 4 && (
+                  <p className="text-center text-sm text-text-secondary animate-pulse">
+                    Scoring responses...
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Final results */}
+            {isDone && response && (
+              <div className="space-y-6">
+                {/* Original prompt */}
+                <div className="p-4 bg-surface/50 rounded-lg border border-border">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-text-secondary mb-1">Your question</p>
+                      <p className="text-text-primary">{response.prompt}</p>
+                    </div>
+                    {response.prompt_category && (
+                      <span className="text-xs text-text-secondary bg-border/50 px-2 py-1 rounded">
+                        {response.prompt_category}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Agent responses — sorted by score, winner expands */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[...response.all_responses]
+                    .sort((a, b) => b.score - a.score)
+                    .map((scoredAgent) => (
+                      <AgentCard
+                        key={scoredAgent.response.agent_id}
+                        agentId={scoredAgent.response.agent_id}
+                        scoredAgent={scoredAgent}
+                        isExpanded={expandedAgent === scoredAgent.response.agent_id}
+                        onToggle={() => toggleAgent(scoredAgent.response.agent_id)}
+                        onChallenge={() => handleChallenge(scoredAgent)}
+                        onDiscuss={() => handleDiscuss(scoredAgent)}
+                      />
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {phase === 'idle' && !error && (
+              <div className="text-center py-16">
+                <p className="text-text-secondary">
+                  Submit a prompt to see how four different perspectives respond.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════ */}
+        {/* DEBATE VIEW                                     */}
+        {/* ═══════════════════════════════════════════════ */}
+        {viewMode === 'debate' && response && challengedAgent && (
+          <DebateMode
+            originalPrompt={response.prompt}
+            challengedAgent={challengedAgent}
+            allResponses={response.all_responses}
+            sessionId={response.session_id}
+            onExit={exitToArena}
+          />
+        )}
+
+        {/* ═══════════════════════════════════════════════ */}
+        {/* DISCUSS VIEW (1-on-1 chat)                      */}
+        {/* ═══════════════════════════════════════════════ */}
+        {viewMode === 'discuss' && response && discussAgent && (
+          <DiscussMode
+            originalPrompt={response.prompt}
+            activeAgent={discussAgent}
+            allResponses={response.all_responses}
+            sessionId={response.session_id}
+            onExit={exitToArena}
+            onSwitchAgent={(agentId) => {
+              const found = response.all_responses.find(
+                (s) => s.response.agent_id === agentId
+              );
+              if (found) setDiscussAgent(found);
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default App;
