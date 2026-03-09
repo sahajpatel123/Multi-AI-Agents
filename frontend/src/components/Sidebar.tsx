@@ -22,14 +22,18 @@ export function Sidebar({ turns, activeTurnId, onTurnClick }: SidebarProps) {
     return null;
   }
 
+  // Reverse turns to show newest first
+  const reversedTurns = [...turns].reverse();
+
   return (
     <>
-      {/* Toggle button — always visible */}
+      {/* Toggle button — moves with sidebar */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed left-4 top-4 z-50 p-2 bg-surface border border-border rounded-lg
+        className="fixed top-4 z-50 p-2 bg-surface border border-border rounded-lg
                    text-text-secondary hover:text-text-primary hover:border-accent/50
-                   transition-all duration-300"
+                   transition-all duration-300 ease-in-out"
+        style={{ left: isOpen ? '276px' : '16px' }}
         aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
       >
         {isOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -54,9 +58,9 @@ export function Sidebar({ turns, activeTurnId, onTurnClick }: SidebarProps) {
             </p>
           </div>
 
-          {/* Turn list */}
+          {/* Turn list — newest first */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {turns.map((turn) => (
+            {reversedTurns.map((turn) => (
               <SessionCard
                 key={turn.turn_id}
                 prompt={turn.prompt}

@@ -150,41 +150,35 @@ function App() {
           localStorage.setItem('arena_session_id', data.session_id);
 
           // Update session data with new turn
+          const currentTimestamp = new Date().toISOString();
+          const newTurn: SessionTurn = {
+            turn_id: `turn_${Date.now()}`,
+            prompt: data.prompt,
+            agent_responses: data.all_responses.reduce((acc, scored) => {
+              acc[scored.response.agent_id] = scored.response;
+              return acc;
+            }, {} as Record<string, any>),
+            winner_id: data.winner_agent_id,
+            timestamp: currentTimestamp,
+          };
+
           if (sessionData?.session_id === data.session_id) {
-            const newTurn: SessionTurn = {
-              turn_id: `turn_${Date.now()}`,
-              prompt: data.prompt,
-              agent_responses: data.all_responses.reduce((acc, scored) => {
-                acc[scored.response.agent_id] = scored.response;
-                return acc;
-              }, {} as Record<string, any>),
-              winner_id: data.winner_agent_id,
-              timestamp: data.timestamp,
-            };
+            // Existing session - append new turn
             setSessionData({
               ...sessionData,
               turns: [...sessionData.turns, newTurn],
+              last_active: currentTimestamp,
             });
             setActiveTurnId(newTurn.turn_id);
           } else {
             // New session
-            const newTurn: SessionTurn = {
-              turn_id: `turn_${Date.now()}`,
-              prompt: data.prompt,
-              agent_responses: data.all_responses.reduce((acc, scored) => {
-                acc[scored.response.agent_id] = scored.response;
-                return acc;
-              }, {} as Record<string, any>),
-              winner_id: data.winner_agent_id,
-              timestamp: data.timestamp,
-            };
             setSessionData({
               session_id: data.session_id,
               user_id: 'anonymous',
               turns: [newTurn],
               topics: [],
-              created_at: data.timestamp,
-              last_active: data.timestamp,
+              created_at: currentTimestamp,
+              last_active: currentTimestamp,
             });
             setActiveTurnId(newTurn.turn_id);
           }
