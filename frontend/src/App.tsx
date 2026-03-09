@@ -115,6 +115,9 @@ function App() {
     // Flush streaming text to state at 60fps-ish
     flushTimer.current = setInterval(flushTokens, 50);
 
+    // Pass existing session_id if available
+    const existingSessionId = sessionData?.session_id || localStorage.getItem('arena_session_id') || undefined;
+
     try {
       await streamPrompt(prompt, {
         onPipeline: (data) => {
@@ -149,7 +152,7 @@ function App() {
           // Save session ID to localStorage
           localStorage.setItem('arena_session_id', data.session_id);
 
-          // Update session data with new turn
+          // Update session data with new turn using functional update
           const currentTimestamp = new Date().toISOString();
           const newTurn: SessionTurn = {
             turn_id: `turn_${Date.now()}`,
@@ -162,33 +165,34 @@ function App() {
             timestamp: currentTimestamp,
           };
 
-          if (sessionData?.session_id === data.session_id) {
-            // Existing session - append new turn
-            setSessionData({
-              ...sessionData,
-              turns: [...sessionData.turns, newTurn],
-              last_active: currentTimestamp,
-            });
-            setActiveTurnId(newTurn.turn_id);
-          } else {
-            // New session
-            setSessionData({
-              session_id: data.session_id,
-              user_id: 'anonymous',
-              turns: [newTurn],
-              topics: [],
-              created_at: currentTimestamp,
-              last_active: currentTimestamp,
-            });
-            setActiveTurnId(newTurn.turn_id);
-          }
+          setSessionData((prev) => {
+            if (prev && prev.session_id === data.session_id) {
+              // Existing session - append new turn
+              return {
+                ...prev,
+                turns: [...prev.turns, newTurn],
+                last_active: currentTimestamp,
+              };
+            } else {
+              // New session or first turn
+              return {
+                session_id: data.session_id,
+                user_id: 'anonymous',
+                turns: prev ? [...prev.turns, newTurn] : [newTurn],
+                topics: [],
+                created_at: prev?.created_at || currentTimestamp,
+                last_active: currentTimestamp,
+              };
+            }
+          });
+          setActiveTurnId(newTurn.turn_id);
         },
         onError: (data) => {
           if (flushTimer.current) clearInterval(flushTimer.current);
           setError(data.detail);
           setPhase('idle');
         },
-      });
+      }, existingSessionId);
     } catch (err) {
       if (flushTimer.current) clearInterval(flushTimer.current);
       setError(err instanceof Error ? err.message : 'Something went wrong');
