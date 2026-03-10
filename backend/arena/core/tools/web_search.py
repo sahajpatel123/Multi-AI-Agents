@@ -80,6 +80,11 @@ class WebSearchTool(Tool):
             if not query:
                 query = prompt  # Use full prompt if extraction fails
             
+            # Enhance query for better results
+            query = self._enhance_query(query, prompt)
+            
+            print(f"[WEB_SEARCH] Searching for: {query}")
+            
             # Perform search
             with DDGS() as ddgs:
                 results = list(ddgs.text(query, max_results=3))
@@ -129,6 +134,28 @@ class WebSearchTool(Tool):
                 data=None,
                 error=f"Search error: {str(e)}"
             )
+    
+    def _enhance_query(self, query: str, original_prompt: str) -> str:
+        """Enhance query with context for better search results"""
+        query_lower = query.lower()
+        original_lower = original_prompt.lower()
+        
+        # Add "today" or "current" for price queries
+        if 'price' in query_lower or 'price' in original_lower:
+            if 'bitcoin' in query_lower or 'btc' in query_lower:
+                return "Bitcoin price USD today"
+            elif 'ethereum' in query_lower or 'eth' in query_lower:
+                return "Ethereum price USD today"
+            elif any(crypto in query_lower for crypto in ['crypto', 'cryptocurrency']):
+                return f"{query} today USD"
+            elif 'today' not in query_lower and 'current' not in query_lower:
+                return f"{query} today"
+        
+        # Add "latest" for news queries
+        if 'news' in query_lower and 'latest' not in query_lower:
+            return f"latest {query}"
+        
+        return query
     
     def _extract_query(self, prompt: str) -> str:
         """Extract search query from natural language prompt"""
