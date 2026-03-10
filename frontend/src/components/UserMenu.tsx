@@ -9,7 +9,7 @@ interface UserMenuProps {
   onLogout: () => void;
 }
 
-const REGISTERED_LIMIT = 20;
+const REGISTERED_LIMIT = 10;
 
 export function UserMenu({
   user,
@@ -104,7 +104,7 @@ export function UserMenu({
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs text-text-secondary">Today</span>
                   <span className="text-xs font-medium text-text-primary">
-                    {used} / {limit} prompts
+                    {used} / {limit} messages used
                   </span>
                 </div>
                 <div className="h-1 bg-border rounded-full overflow-hidden">

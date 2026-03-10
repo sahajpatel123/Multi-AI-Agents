@@ -80,8 +80,16 @@ def _reset_if_new_day(reset_at: datetime) -> bool:
 
 def check_and_increment_guest(db: Session, ip: str) -> None:
     """
-    Check guest rate limit by IP. Increments counter.
+    Check guest rate limit. Increments counter.
     Raises RateLimitExceeded if over limit.
+    
+    Message counting rules:
+    - User submits a prompt → agents respond = 1 message
+    - User triggers debate mode = 1 message
+    - User triggers 1-on-1 discuss mode reply = 1 message
+    - Error responses do NOT count toward the limit
+    - Toxicity rejections do NOT count toward the limit
+    - Only successful responses count
     """
     settings = get_settings()
     limit = settings.guest_daily_limit
@@ -101,8 +109,8 @@ def check_and_increment_guest(db: Session, ip: str) -> None:
     if record.prompt_count_today >= limit:
         raise RateLimitExceeded(
             message=(
-                f"You've used your {limit} prompts for today. "
-                "Sign up for 20 free prompts daily."
+                f"You've used your {limit} free messages today. "
+                "Sign up for 10 messages daily, free."
             ),
             tier="guest",
             used=record.prompt_count_today,
@@ -117,6 +125,14 @@ def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
     """
     Check registered/pro rate limit. Increments counter.
     Raises RateLimitExceeded if over limit.
+    
+    Message counting rules:
+    - User submits a prompt → agents respond = 1 message
+    - User triggers debate mode = 1 message
+    - User triggers 1-on-1 discuss mode reply = 1 message
+    - Error responses do NOT count toward the limit
+    - Toxicity rejections do NOT count toward the limit
+    - Only successful responses count
     """
     if user_tier == UserTier.PRO.value:
         return  # Unlimited
@@ -137,8 +153,8 @@ def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
     if user.prompt_count_today >= limit:
         raise RateLimitExceeded(
             message=(
-                "You've reached your daily limit. "
-                "Upgrade to Pro for unlimited prompts."
+                "You've reached your 10 daily messages. "
+                "Upgrade to Pro for unlimited access."
             ),
             tier=user.tier.value,
             used=user.prompt_count_today,

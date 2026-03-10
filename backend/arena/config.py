@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     # Rate limits
     guest_daily_limit: int = 5
-    registered_daily_limit: int = 20
+    registered_daily_limit: int = 10
 
     # App
     app_version: str = "1.0.0"
