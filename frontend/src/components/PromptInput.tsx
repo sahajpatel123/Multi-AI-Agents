@@ -20,22 +20,32 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-[720px] mx-auto">
       <div 
-        className="relative rounded-2xl"
-        style={{ boxShadow: '0 4px 24px rgba(74, 103, 85, 0.18)' }}
+        className="relative flex items-center bg-background border border-border"
+        style={{ 
+          borderRadius: '999px',
+          padding: '8px 12px 8px 20px',
+          boxShadow: '0 4px 24px rgba(74, 103, 85, 0.18)',
+          maxHeight: '56px'
+        }}
       >
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Ask something and watch four minds respond..."
           className="
-            w-full bg-background rounded-2xl
-            text-text-primary placeholder:text-text-secondary/60
+            flex-1 bg-transparent text-text-primary placeholder:text-text-secondary/60
             focus:outline-none focus:ring-0
-            resize-none min-h-[100px]
-            font-sans text-base
-            border-0
+            resize-none overflow-y-auto
+            font-sans border-0
           "
-          style={{ padding: '16px 52px 16px 20px' }}
+          style={{ 
+            borderRadius: '999px',
+            padding: '10px 0',
+            fontSize: '15px',
+            lineHeight: '1.5',
+            minHeight: '36px',
+            maxHeight: '120px'
+          }}
           disabled={isLoading}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -48,16 +58,21 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
           type="submit"
           disabled={!prompt.trim() || isLoading}
           className="
-            absolute right-3 bottom-3 p-2 rounded-md
+            flex items-center justify-center flex-shrink-0 ml-2
             bg-accent text-white
             disabled:opacity-40 disabled:cursor-not-allowed
             hover:bg-accent/90 transition-colors
           "
+          style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%'
+          }}
         >
           {isLoading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
-            <Send className="w-5 h-5" />
+            <Send className="w-4 h-4" />
           )}
         </button>
       </div>
