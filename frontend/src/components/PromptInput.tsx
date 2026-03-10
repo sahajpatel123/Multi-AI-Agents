@@ -20,14 +20,14 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-[720px] mx-auto" style={{ margin: '0 auto' }}>
       <div 
-        className="relative flex items-center bg-background border border-border w-full"
+        className="flex items-center bg-background border border-border w-full"
         style={{ 
           borderRadius: '999px',
-          padding: '8px 12px 8px 20px',
+          padding: '0 8px 0 0',
           boxShadow: '0 4px 24px rgba(74, 103, 85, 0.18)',
-          maxHeight: '56px',
           maxWidth: '720px',
-          margin: '0 auto'
+          margin: '0 auto',
+          minHeight: '52px'
         }}
       >
         <textarea
@@ -41,11 +41,13 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
             font-sans border-0
           "
           style={{ 
-            borderRadius: '999px',
-            padding: '10px 0',
+            padding: '12px 52px 12px 24px',
             fontSize: '15px',
             lineHeight: '1.5',
-            minHeight: '36px',
+            verticalAlign: 'middle',
+            display: 'flex',
+            alignItems: 'center',
+            minWidth: '0',
             maxHeight: '120px'
           }}
           disabled={isLoading}
@@ -60,15 +62,18 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
           type="submit"
           disabled={!prompt.trim() || isLoading}
           className="
-            flex items-center justify-center flex-shrink-0 ml-2
+            flex items-center justify-center flex-shrink-0
             bg-accent text-white
             disabled:opacity-40 disabled:cursor-not-allowed
             hover:bg-accent/90 transition-colors
           "
           style={{
+            position: 'relative',
             width: '36px',
             height: '36px',
-            borderRadius: '50%'
+            borderRadius: '50%',
+            marginLeft: '8px',
+            alignSelf: 'center'
           }}
         >
           {isLoading ? (
