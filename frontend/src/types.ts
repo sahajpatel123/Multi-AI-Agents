@@ -45,6 +45,7 @@ export interface AgentConfig {
   agent_number: number;
   name: string;
   color: string;
+  oneLiner?: string;
 }
 
 export interface DebateMessage {
@@ -116,23 +117,27 @@ export const AGENTS: Record<string, AgentConfig> = {
     agent_number: 1,
     name: 'The Analyst',
     color: '#8C9BAB',
+    oneLiner: 'I find the flaw in everything.',
   },
   agent_2: {
     agent_id: 'agent_2',
     agent_number: 2,
     name: 'The Philosopher',
     color: '#9B8FAA',
+    oneLiner: 'I question the premise first.',
   },
   agent_3: {
     agent_id: 'agent_3',
     agent_number: 3,
     name: 'The Pragmatist',
     color: '#8AA899',
+    oneLiner: 'I only care what actually works.',
   },
   agent_4: {
     agent_id: 'agent_4',
     agent_number: 4,
     name: 'The Contrarian',
     color: '#B0977E',
+    oneLiner: 'I say what no one else will.',
   },
 };

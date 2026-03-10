@@ -11,6 +11,7 @@ interface AgentCardProps {
   agentId: string;
   onChallenge?: () => void;
   onDiscuss?: () => void;
+  isIdle?: boolean;
 }
 
 export function AgentCard({
@@ -22,6 +23,7 @@ export function AgentCard({
   agentId,
   onChallenge,
   onDiscuss,
+  isIdle = false,
 }: AgentCardProps) {
   const agentConfig = AGENTS[agentId];
   const response = scoredAgent?.response;
@@ -53,15 +55,16 @@ export function AgentCard({
   return (
     <div
       className={`
-        bg-surface rounded-lg border cursor-pointer
+        bg-surface rounded-lg border
         transition-all duration-300 ease-in-out
+        ${isIdle ? 'opacity-75 cursor-default' : 'cursor-pointer'}
         ${isWinner
           ? 'border-accent ring-2 ring-accent/20 scale-[1.02]'
           : 'border-border hover:border-text-secondary/30 scale-100'
         }
         ${isExpanded ? 'md:col-span-2' : ''}
       `}
-      onClick={onToggle}
+      onClick={isIdle ? undefined : onToggle}
     >
       <div className="p-4">
         {/* Header */}
@@ -84,7 +87,7 @@ export function AgentCard({
               />
             )}
           </div>
-          {score != null && (
+          {score != null && !isIdle && (
             <div className="flex items-center gap-3 text-sm text-text-secondary">
               <span>Score: {score}</span>
               <span>Confidence: {response?.confidence ?? 0}%</span>
@@ -97,7 +100,11 @@ export function AgentCard({
           ref={contentRef}
           className="transition-all duration-300 ease-in-out overflow-hidden"
         >
-          {isStreaming ? (
+          {isIdle ? (
+            <p className="text-text-secondary text-sm italic">
+              {agentConfig.oneLiner || 'Ready to respond...'}
+            </p>
+          ) : isStreaming ? (
             <p className="text-text-primary leading-relaxed whitespace-pre-wrap">
               {displayText}
               <span className="inline-block w-0.5 h-4 ml-0.5 bg-text-secondary/50 animate-pulse align-text-bottom" />
@@ -161,16 +168,18 @@ export function AgentCard({
         </div>
       </div>
 
-      {/* Confidence bar — animated fill */}
-      <div className="h-1 bg-border/30 rounded-b-lg overflow-hidden">
-        <div
-          className="h-full rounded-b-lg transition-all duration-700 ease-out"
-          style={{
-            width: `${barWidth}%`,
-            backgroundColor: agentConfig.color,
-          }}
-        />
-      </div>
+      {/* Confidence bar — animated fill (hidden in idle state) */}
+      {!isIdle && (
+        <div className="h-1 bg-border/30 rounded-b-lg overflow-hidden">
+          <div
+            className="h-full rounded-b-lg transition-all duration-700 ease-out"
+            style={{
+              width: `${barWidth}%`,
+              backgroundColor: agentConfig.color,
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

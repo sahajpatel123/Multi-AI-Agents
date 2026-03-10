@@ -239,7 +239,7 @@ function App() {
   const isDone = phase === 'done';
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Sidebar */}
       {sessionData && viewMode === 'arena' && (
         <Sidebar
@@ -253,191 +253,196 @@ function App() {
           onTurnClick={handleTurnClick}
         />
       )}
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        {/* Header */}
-        <header className="mb-12">
-          <div className="flex items-center justify-end mb-6">
+
+      {/* Arena View - New Layout */}
+      {viewMode === 'arena' && (
+        <>
+          {/* Top Bar: Wordmark + Auth */}
+          <header className="flex items-center justify-between px-6 py-4">
+            <h1 className="font-serif text-xl font-semibold text-text-primary cursor-pointer" onClick={exitToArena}>
+              Arena
+            </h1>
             <UserMenu
               user={user}
               isLoading={authLoading}
               onSignInClick={() => { setAuthModalTab('login'); setAuthModalOpen(true); }}
               onLogout={logout}
             />
-          </div>
-          <div className="text-center">
-            <h1
-              className="font-serif text-4xl font-semibold text-text-primary mb-2 cursor-pointer"
-              onClick={exitToArena}
-            >
-              Arena
-            </h1>
-            <p className="text-text-secondary">
-              Four minds. One question. The best answer wins.
-            </p>
-          </div>
-        </header>
+          </header>
 
-        {/* Input — hidden during debate/discuss modes */}
-        {viewMode === 'arena' && (
-          <div className="mb-12">
-            <PromptInput
-              onSubmit={handleSubmit}
-              isLoading={isLoading || isStreaming}
-            />
-            {/* Guest nudge after 3rd use */}
-            {!user && !authLoading && guestPromptCount >= 3 && (
-              <p className="text-center text-xs text-text-secondary mt-3">
-                <button
-                  onClick={() => { setAuthModalTab('signup'); setAuthModalOpen(true); }}
-                  className="text-accent hover:underline"
-                >
-                  Sign up
-                </button>
-                {' '}to save your history and get 20 prompts per day.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Error */}
-        {error && viewMode === 'arena' && (
-          <div className="mb-8 p-4 bg-surface border border-accent/30 rounded-lg text-text-primary">
-            <p className="text-sm font-medium text-accent mb-1">Cannot process</p>
-            <p className="text-text-secondary text-sm">{error}</p>
-          </div>
-        )}
-
-        {/* ═══════════════════════════════════════════════ */}
-        {/* ARENA VIEW                                      */}
-        {/* ═══════════════════════════════════════════════ */}
-        {viewMode === 'arena' && (
-          <>
-            {/* Pipeline loading — skeleton cards */}
-            {isLoading && <LoadingSkeleton />}
-
-            {/* Streaming phase — show live tokens */}
-            {isStreaming && (
-              <div className="space-y-6">
-                {currentPrompt && (
-                  <div className="p-4 bg-surface/50 rounded-lg border border-border">
-                    <p className="text-sm text-text-secondary mb-1">Your question</p>
-                    <p className="text-text-primary">{currentPrompt}</p>
-                  </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {AGENT_IDS.map((id) => (
-                    <AgentCard
-                      key={id}
-                      agentId={id}
-                      isExpanded={false}
-                      onToggle={() => {}}
-                      streamingText={streamingTexts[id] || ''}
-                      isStreaming={!doneAgents.has(id)}
-                    />
-                  ))}
-                </div>
-                {doneAgents.size === 4 && (
-                  <p className="text-center text-sm text-text-secondary animate-pulse">
-                    Scoring responses...
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Final results */}
-            {isDone && response && (
-              <div className="space-y-6">
-                {/* Original prompt */}
-                <div className="p-4 bg-surface/50 rounded-lg border border-border">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm text-text-secondary mb-1">Your question</p>
-                      <p className="text-text-primary">{response.prompt}</p>
-                      {response.tools_used && response.tools_used.length > 0 && (
-                        <div className="mt-2 flex items-center gap-2 text-xs text-text-secondary italic">
-                          <span>Tools used:</span>
-                          {response.tools_used.map((tool, idx) => (
-                            <span key={idx} className="bg-border/30 px-2 py-0.5 rounded">
-                              {tool === 'calculator' && '🔢 Calculator'}
-                              {tool === 'web_search' && '🔍 Web search'}
-                              {tool === 'datetime' && '📅 DateTime'}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {response.prompt_category && (
-                      <span className="text-xs text-text-secondary bg-border/50 px-2 py-1 rounded">
-                        {response.prompt_category}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Agent responses — sorted by score, winner expands */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[...response.all_responses]
-                    .sort((a, b) => b.score - a.score)
-                    .map((scoredAgent) => (
-                      <AgentCard
-                        key={scoredAgent.response.agent_id}
-                        agentId={scoredAgent.response.agent_id}
-                        scoredAgent={scoredAgent}
-                        isExpanded={expandedAgent === scoredAgent.response.agent_id}
-                        onToggle={() => toggleAgent(scoredAgent.response.agent_id)}
-                        onChallenge={() => handleChallenge(scoredAgent)}
-                        onDiscuss={() => handleDiscuss(scoredAgent)}
-                      />
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {/* Empty state */}
-            {phase === 'idle' && !error && (
-              <div className="text-center py-16">
-                <p className="text-text-secondary">
-                  Submit a prompt to see how four different perspectives respond.
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col px-6 pb-32 overflow-auto">
+            {/* Current Prompt Display (when active) */}
+            {currentPrompt && phase !== 'idle' && (
+              <div className="text-center mb-6">
+                <p className="text-sm text-text-secondary italic">
+                  "{currentPrompt}"
                 </p>
               </div>
             )}
-          </>
-        )}
 
-        {/* ═══════════════════════════════════════════════ */}
-        {/* DEBATE VIEW                                     */}
-        {/* ═══════════════════════════════════════════════ */}
-        {viewMode === 'debate' && response && challengedAgent && (
-          <DebateMode
-            originalPrompt={response.prompt}
-            challengedAgent={challengedAgent}
-            allResponses={response.all_responses}
-            sessionId={response.session_id}
-            onExit={exitToArena}
-            onSuccess={refreshUser}
-          />
-        )}
+            {/* Error */}
+            {error && (
+              <div className="mb-6 p-4 bg-surface border border-accent/30 rounded-lg text-text-primary max-w-2xl mx-auto">
+                <p className="text-sm font-medium text-accent mb-1">Cannot process</p>
+                <p className="text-text-secondary text-sm">{error}</p>
+              </div>
+            )}
 
-        {/* ═══════════════════════════════════════════════ */}
-        {/* DISCUSS VIEW (1-on-1 chat)                      */}
-        {/* ═══════════════════════════════════════════════ */}
-        {viewMode === 'discuss' && response && discussAgent && (
-          <DiscussMode
-            originalPrompt={response.prompt}
-            activeAgent={discussAgent}
-            allResponses={response.all_responses}
-            sessionId={response.session_id}
-            onExit={exitToArena}
-            onSuccess={refreshUser}
-            onSwitchAgent={(agentId) => {
-              const found = response.all_responses.find(
-                (s) => s.response.agent_id === agentId
-              );
-              if (found) setDiscussAgent(found);
-            }}
-          />
-        )}
-      </div>
+            {/* Agent Cards - Always Visible in 2x2 Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl mx-auto w-full">
+              {/* Pipeline loading — skeleton cards */}
+              {isLoading && AGENT_IDS.map((id) => (
+                <div key={id} className="bg-surface rounded-lg border border-border p-6">
+                  <div className="animate-pulse space-y-3">
+                    <div className="h-4 bg-border/50 rounded w-1/3"></div>
+                    <div className="h-3 bg-border/30 rounded w-full"></div>
+                    <div className="h-3 bg-border/30 rounded w-5/6"></div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Streaming phase — show live tokens */}
+              {isStreaming && AGENT_IDS.map((id) => (
+                <AgentCard
+                  key={id}
+                  agentId={id}
+                  isExpanded={false}
+                  onToggle={() => {}}
+                  streamingText={streamingTexts[id] || ''}
+                  isStreaming={!doneAgents.has(id)}
+                />
+              ))}
+
+              {/* Final results */}
+              {isDone && response && [...response.all_responses]
+                .sort((a, b) => b.score - a.score)
+                .map((scoredAgent) => (
+                  <AgentCard
+                    key={scoredAgent.response.agent_id}
+                    agentId={scoredAgent.response.agent_id}
+                    scoredAgent={scoredAgent}
+                    isExpanded={expandedAgent === scoredAgent.response.agent_id}
+                    onToggle={() => toggleAgent(scoredAgent.response.agent_id)}
+                    onChallenge={() => handleChallenge(scoredAgent)}
+                    onDiscuss={() => handleDiscuss(scoredAgent)}
+                  />
+                ))}
+
+              {/* Idle state — show cards with one-liners */}
+              {phase === 'idle' && !error && AGENT_IDS.map((id) => (
+                <AgentCard
+                  key={id}
+                  agentId={id}
+                  isExpanded={false}
+                  onToggle={() => {}}
+                  isIdle={true}
+                />
+              ))}
+            </div>
+
+            {/* Scoring indicator */}
+            {isStreaming && doneAgents.size === 4 && (
+              <p className="text-center text-sm text-text-secondary animate-pulse mt-4">
+                Scoring responses...
+              </p>
+            )}
+
+            {/* Tools used indicator (when done) */}
+            {isDone && response?.tools_used && response.tools_used.length > 0 && (
+              <div className="text-center mt-4">
+                <div className="inline-flex items-center gap-2 text-xs text-text-secondary italic">
+                  <span>Tools used:</span>
+                  {response.tools_used.map((tool, idx) => (
+                    <span key={idx} className="bg-border/30 px-2 py-0.5 rounded">
+                      {tool === 'calculator' && '🔢 Calculator'}
+                      {tool === 'web_search' && '🔍 Web search'}
+                      {tool === 'datetime' && '📅 DateTime'}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Fixed Bottom Prompt Box */}
+          <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border">
+            <div className="max-w-4xl mx-auto px-6 py-4">
+              <PromptInput
+                onSubmit={handleSubmit}
+                isLoading={isLoading || isStreaming}
+              />
+              {/* Guest nudge after 3rd use */}
+              {!user && !authLoading && guestPromptCount >= 3 && (
+                <p className="text-center text-xs text-text-secondary mt-2">
+                  <button
+                    onClick={() => { setAuthModalTab('signup'); setAuthModalOpen(true); }}
+                    className="text-accent hover:underline"
+                  >
+                    Sign up
+                  </button>
+                  {' '}to save your history and get 20 prompts per day.
+                </p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Debate & Discuss Views - Keep Original Layout */}
+      {viewMode !== 'arena' && (
+        <div className="max-w-4xl mx-auto px-4 py-12">
+          <header className="mb-12">
+            <div className="flex items-center justify-end mb-6">
+              <UserMenu
+                user={user}
+                isLoading={authLoading}
+                onSignInClick={() => { setAuthModalTab('login'); setAuthModalOpen(true); }}
+                onLogout={logout}
+              />
+            </div>
+            <div className="text-center">
+              <h1
+                className="font-serif text-4xl font-semibold text-text-primary mb-2 cursor-pointer"
+                onClick={exitToArena}
+              >
+                Arena
+              </h1>
+              <p className="text-text-secondary">
+                Four minds. One question. The best answer wins.
+              </p>
+            </div>
+          </header>
+
+          {viewMode === 'debate' && response && challengedAgent && (
+            <DebateMode
+              originalPrompt={response.prompt}
+              challengedAgent={challengedAgent}
+              allResponses={response.all_responses}
+              sessionId={response.session_id}
+              onExit={exitToArena}
+              onSuccess={refreshUser}
+            />
+          )}
+
+          {viewMode === 'discuss' && response && discussAgent && (
+            <DiscussMode
+              originalPrompt={response.prompt}
+              activeAgent={discussAgent}
+              allResponses={response.all_responses}
+              sessionId={response.session_id}
+              onExit={exitToArena}
+              onSuccess={refreshUser}
+              onSwitchAgent={(agentId) => {
+                const found = response.all_responses.find(
+                  (s) => s.response.agent_id === agentId
+                );
+                if (found) setDiscussAgent(found);
+              }}
+            />
+          )}
+        </div>
+      )}
 
       {/* Auth modal */}
       <AuthModal
