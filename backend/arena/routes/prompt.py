@@ -125,7 +125,7 @@ async def submit_prompt(
 
         agent_timings: dict[str, int] = {}
         t_agents = time.monotonic()
-        responses = await orchestrator.run_all_agents(pipeline_result.enriched_prompt)
+        responses, tools_used = await orchestrator.run_all_agents(pipeline_result.enriched_prompt)
         agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
 
         integrity_report = check_integrity(responses, session_id)
@@ -158,6 +158,7 @@ async def submit_prompt(
             scored_responses=scored_responses,
             winner=winner,
             integrity=integrity_report,
+            tools_used=tools_used,
         )
 
         memory = get_memory_manager()
@@ -241,7 +242,7 @@ async def stream_prompt(
                 })
                 return
 
-            queue, gather_task = await orchestrator.stream_all_agents(
+            queue, gather_task, tools_used = await orchestrator.stream_all_agents(
                 pipeline_result.enriched_prompt
             )
 
@@ -281,6 +282,7 @@ async def stream_prompt(
                 scored_responses=scored_responses,
                 winner=winner,
                 integrity=integrity_report,
+                tools_used=tools_used,
             )
 
             yield _sse_event("result", final.model_dump(mode="json"))

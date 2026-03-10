@@ -127,6 +127,7 @@ async def assemble_payload(
     scored_responses: list[ScoredAgent],
     winner: ScoredAgent,
     integrity: IntegrityReport | None,
+    tools_used: list[str] | None = None,
 ) -> PromptResponse:
     """
     Assemble the final response payload.
@@ -196,5 +197,6 @@ async def assemble_payload(
         winner_agent_id=final_winner.agent_id,
         all_responses=final_scored,
         integrity=integrity,
+        tools_used=tools_used or [],
         timestamp=datetime.utcnow(),
     )

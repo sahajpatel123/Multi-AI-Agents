@@ -108,6 +108,7 @@ class PromptResponse(BaseModel):
     winner_agent_id: str = Field(..., description="ID of the winning agent")
     all_responses: list[ScoredAgent] = Field(..., description="All 4 agent responses with scores")
     integrity: IntegrityReport | None = Field(None, description="Persona integrity report")
+    tools_used: list[str] = Field(default_factory=list, description="List of tools that were used (e.g., ['calculator', 'web_search'])")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 

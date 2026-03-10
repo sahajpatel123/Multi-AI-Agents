@@ -3,13 +3,15 @@
 import asyncio
 import json
 from datetime import datetime
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Dict
 
 import anthropic
 
 from arena.config import get_settings
 from arena.models.schemas import AgentConfig, AgentResponse
-from arena.core.agents import AGENTS, get_all_agents
+from arena.core.agents import AGENTS, get_all_agents, is_specialist_prompt
+from arena.core.tools.tool_router import ToolRouter
+from arena.core.tools.base import ToolResult
 
 
 class Orchestrator:
@@ -21,16 +23,26 @@ class Orchestrator:
         self.model = settings.default_model
         self.max_tokens = settings.max_tokens
         self.timeout = settings.timeout_seconds
+        self.tool_router = ToolRouter()
     
-    async def _call_agent(self, agent: AgentConfig, prompt: str) -> AgentResponse:
+    def _inject_tool_context(self, system_prompt: str, tool_context: str) -> str:
+        """Inject tool results into agent system prompt"""
+        if not tool_context:
+            return system_prompt
+        return f"{system_prompt}\n\n{tool_context}"
+    
+    async def _call_agent(self, agent: AgentConfig, prompt: str, tool_context: str = "") -> AgentResponse:
         """Call a single agent and parse its response"""
         try:
+            # Inject tool context into system prompt if available
+            system_prompt = self._inject_tool_context(agent.system_prompt, tool_context)
+            
             response = await asyncio.wait_for(
                 self.client.messages.create(
                     model=self.model,
                     max_tokens=self.max_tokens,
                     temperature=agent.temperature,
-                    system=agent.system_prompt,
+                    system=system_prompt,
                     messages=[{"role": "user", "content": prompt}],
                 ),
                 timeout=self.timeout,
@@ -85,17 +97,43 @@ class Orchestrator:
             timestamp=datetime.utcnow(),
         )
     
-    async def run_all_agents(self, prompt: str) -> list[AgentResponse]:
-        """Run all agents in parallel and collect responses"""
-        agents = get_all_agents()
+    async def run_all_agents(self, prompt: str) -> tuple[list[AgentResponse], list[str]]:
+        """
+        Run all agents in parallel and collect responses.
+        Returns tuple of (responses, tools_used).
+        Tools are executed first and results injected into agent context.
+        Conditionally includes Agent 5 if specialist prompt is detected.
+        """
+        # Execute tools first (in parallel)
+        tool_results = await self.tool_router.execute_tools(prompt)
         
-        # Create tasks for all agents
-        tasks = [self._call_agent(agent, prompt) for agent in agents]
+        # Format tool context for injection
+        tool_context = self.tool_router.format_tool_context(tool_results)
+        
+        # Get list of successfully used tools
+        tools_used = self.tool_router.get_tool_summary(tool_results)
+        
+        # Detect if specialist agent should be included
+        include_specialist = is_specialist_prompt(prompt)
+        
+        # Get agents (conditionally includes Agent 5)
+        agents = get_all_agents(include_specialist=include_specialist)
+        
+        # Create tasks for all agents with tool context
+        tasks = [self._call_agent(agent, prompt, tool_context) for agent in agents]
         
         # Run all tasks concurrently
         responses = await asyncio.gather(*tasks, return_exceptions=False)
         
-        return responses
+        # Filter out Agent 5 if it returned SKIP
+        filtered_responses = []
+        for response in responses:
+            if response.agent_id == "agent_5" and "SKIP:" in response.verdict:
+                # Agent 5 declined to respond - exclude it
+                continue
+            filtered_responses.append(response)
+        
+        return filtered_responses, tools_used
     
     async def run_single_agent(self, agent_id: str, prompt: str) -> AgentResponse | None:
         """Run a single agent by ID"""
@@ -105,16 +143,19 @@ class Orchestrator:
         return await self._call_agent(agent, prompt)
 
     async def _stream_agent(
-        self, agent: AgentConfig, prompt: str, output_queue: asyncio.Queue
+        self, agent: AgentConfig, prompt: str, output_queue: asyncio.Queue, tool_context: str = ""
     ) -> AgentResponse:
         """Stream a single agent's response, pushing tokens to a shared queue."""
         full_text = ""
         try:
+            # Inject tool context into system prompt if available
+            system_prompt = self._inject_tool_context(agent.system_prompt, tool_context)
+            
             async with self.client.messages.stream(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 temperature=agent.temperature,
-                system=agent.system_prompt,
+                system=system_prompt,
                 messages=[{"role": "user", "content": prompt}],
             ) as stream:
                 async for text in stream.text_stream:
@@ -144,19 +185,35 @@ class Orchestrator:
 
     async def stream_all_agents(
         self, prompt: str
-    ) -> tuple[asyncio.Queue, list[asyncio.Task]]:
+    ) -> tuple[asyncio.Queue, list[asyncio.Task], list[str]]:
         """
         Start streaming all agents in parallel.
-        Returns the shared queue and task handles.
+        Returns the shared queue, task handles, and list of tools used.
         Consumers read from the queue; when all tasks finish,
         a sentinel {"type": "all_done"} is pushed.
+        Tools are executed first and results injected into agent context.
+        Conditionally includes Agent 5 if specialist prompt is detected.
         """
         queue: asyncio.Queue = asyncio.Queue()
-        agents = get_all_agents()
+        
+        # Execute tools first (in parallel)
+        tool_results = await self.tool_router.execute_tools(prompt)
+        
+        # Format tool context for injection
+        tool_context = self.tool_router.format_tool_context(tool_results)
+        
+        # Get list of successfully used tools
+        tools_used = self.tool_router.get_tool_summary(tool_results)
+        
+        # Detect if specialist agent should be included
+        include_specialist = is_specialist_prompt(prompt)
+        
+        # Get agents (conditionally includes Agent 5)
+        agents = get_all_agents(include_specialist=include_specialist)
 
         async def _run_all() -> list[AgentResponse]:
             tasks = [
-                asyncio.create_task(self._stream_agent(agent, prompt, queue))
+                asyncio.create_task(self._stream_agent(agent, prompt, queue, tool_context))
                 for agent in agents
             ]
             responses = await asyncio.gather(*tasks)
@@ -164,4 +221,4 @@ class Orchestrator:
             return list(responses)
 
         gather_task = asyncio.create_task(_run_all())
-        return queue, gather_task
+        return queue, gather_task, tools_used
