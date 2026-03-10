@@ -5,8 +5,11 @@ import { LoadingSkeleton } from './components/LoadingSkeleton';
 import { DebateMode } from './components/DebateMode';
 import { DiscussMode } from './components/DiscussMode';
 import { Sidebar } from './components/Sidebar';
+import { AuthModal } from './components/AuthModal';
+import { UserMenu } from './components/UserMenu';
 import { streamPrompt, getSession } from './api';
-import { PromptResponse, ScoredAgent, SessionData, SessionTurn, AGENTS } from './types';
+import { useAuth } from './hooks/useAuth';
+import { PromptResponse, ScoredAgent, SessionData, SessionTurn } from './types';
 
 const AGENT_IDS = ['agent_1', 'agent_2', 'agent_3', 'agent_4'] as const;
 
@@ -14,6 +17,11 @@ type Phase = 'idle' | 'pipeline' | 'streaming' | 'scoring' | 'done';
 type ViewMode = 'arena' | 'debate' | 'discuss';
 
 function App() {
+  const { user, isLoading: authLoading, login, register, logout } = useAuth();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'login' | 'signup'>('login');
+  const [guestPromptCount, setGuestPromptCount] = useState(0);
+
   const [phase, setPhase] = useState<Phase>('idle');
   const [response, setResponse] = useState<PromptResponse | null>(null);
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
@@ -149,6 +157,11 @@ function App() {
           setExpandedAgent(data.winner_agent_id);
           setPhase('done');
 
+          // Track guest usage for nudge
+          if (!user) {
+            setGuestPromptCount((c) => c + 1);
+          }
+
           // Save session ID to localStorage
           localStorage.setItem('arena_session_id', data.session_id);
 
@@ -195,7 +208,8 @@ function App() {
       }, existingSessionId);
     } catch (err) {
       if (flushTimer.current) clearInterval(flushTimer.current);
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      const msg = err instanceof Error ? err.message : 'Something went wrong';
+      setError(msg);
       setPhase('idle');
     }
   };
@@ -241,16 +255,26 @@ function App() {
       )}
       <div className="max-w-4xl mx-auto px-4 py-12">
         {/* Header */}
-        <header className="text-center mb-12">
-          <h1
-            className="font-serif text-4xl font-semibold text-text-primary mb-2 cursor-pointer"
-            onClick={exitToArena}
-          >
-            Arena
-          </h1>
-          <p className="text-text-secondary">
-            Four minds. One question. The best answer wins.
-          </p>
+        <header className="mb-12">
+          <div className="flex items-center justify-end mb-6">
+            <UserMenu
+              user={user}
+              isLoading={authLoading}
+              onSignInClick={() => { setAuthModalTab('login'); setAuthModalOpen(true); }}
+              onLogout={logout}
+            />
+          </div>
+          <div className="text-center">
+            <h1
+              className="font-serif text-4xl font-semibold text-text-primary mb-2 cursor-pointer"
+              onClick={exitToArena}
+            >
+              Arena
+            </h1>
+            <p className="text-text-secondary">
+              Four minds. One question. The best answer wins.
+            </p>
+          </div>
         </header>
 
         {/* Input — hidden during debate/discuss modes */}
@@ -260,6 +284,18 @@ function App() {
               onSubmit={handleSubmit}
               isLoading={isLoading || isStreaming}
             />
+            {/* Guest nudge after 3rd use */}
+            {!user && !authLoading && guestPromptCount >= 3 && (
+              <p className="text-center text-xs text-text-secondary mt-3">
+                <button
+                  onClick={() => { setAuthModalTab('signup'); setAuthModalOpen(true); }}
+                  className="text-accent hover:underline"
+                >
+                  Sign up
+                </button>
+                {' '}to save your history and get 20 prompts per day.
+              </p>
+            )}
           </div>
         )}
 
@@ -388,6 +424,15 @@ function App() {
           />
         )}
       </div>
+
+      {/* Auth modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onLogin={login}
+        onRegister={register}
+        defaultTab={authModalTab}
+      />
     </div>
   );
 }

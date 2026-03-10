@@ -5,9 +5,72 @@ import {
   DiscussChatMessage,
   DiscussResponse,
   SessionData,
+  User,
 } from './types';
 
 const API_BASE = '/api';
+
+// ──────────────────────────────────────────────────────────────
+// Auth
+// ──────────────────────────────────────────────────────────────
+
+export async function register(email: string, password: string): Promise<User> {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'Registration failed');
+  }
+  return res.json();
+}
+
+export async function login(email: string, password: string): Promise<User> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'Login failed');
+  }
+  return res.json();
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_BASE}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+}
+
+export async function getMe(): Promise<User | null> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function refreshToken(): Promise<User | null> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
 
 export async function submitPrompt(prompt: string, sessionId?: string): Promise<PromptResponse> {
   const response = await fetch(`${API_BASE}/prompt`, {

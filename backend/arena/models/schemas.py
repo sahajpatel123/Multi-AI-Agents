@@ -3,7 +3,7 @@
 from typing import Optional, List, Any, Dict, Literal
 from datetime import datetime
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class PromptCategory(str, Enum):
@@ -201,7 +201,68 @@ class MemoryContext(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Standard error response"""
-    
+
     error: str
     detail: str | None = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ─────────────────────────────────────────────────
+# Auth schemas
+# ─────────────────────────────────────────────────
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one number")
+        return v
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=1)
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    tier: str
+    created_at: datetime
+    prompt_count_today: int
+
+    model_config = {"from_attributes": True}
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+# ─────────────────────────────────────────────────
+# Rate limit error schema
+# ─────────────────────────────────────────────────
+
+class RateLimitError(BaseModel):
+    error: str = "rate_limit_exceeded"
+    message: str
+    tier: str
+    prompts_used: int
+    daily_limit: int
+    resets_at: str
+
+
+# ─────────────────────────────────────────────────
+# Cost tracking schema
+# ─────────────────────────────────────────────────
+
+class RequestCost(BaseModel):
+    request_id: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    model: str = ""

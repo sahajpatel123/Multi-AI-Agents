@@ -99,6 +99,16 @@ export interface SessionData {
   last_active: string;
 }
 
+export type UserTier = 'guest' | 'registered' | 'pro';
+
+export interface User {
+  id: number;
+  email: string;
+  tier: UserTier;
+  created_at: string;
+  prompt_count_today: number;
+}
+
 export const AGENTS: Record<string, AgentConfig> = {
   agent_1: {
     agent_id: 'agent_1',
