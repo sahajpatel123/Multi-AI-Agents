@@ -34,13 +34,13 @@ from arena.core.persona_integrity import check_integrity
 from arena.core.response_shaper import assemble_payload
 from arena.core.scorer import Scorer
 from arena.database import get_db
-from arena.db_models import User
 from arena.models.schemas import (
     ContradictionFlag,
     ErrorResponse,
     PromptRequest,
     PromptResponse,
     RateLimitError,
+    UserResponse,
 )
 
 router = APIRouter(prefix="/api", tags=["prompt"])
@@ -55,14 +55,14 @@ def _get_client_ip(request: Request) -> str:
 
 def _check_rate_limit(
     request: Request,
-    user: Optional[User],
+    user: Optional[UserResponse],
     db: Session,
     request_id: str,
 ) -> None:
     """Enforce rate limits BEFORE touching the input pipeline. Raises HTTPException if exceeded."""
     try:
         if user:
-            check_and_increment_user(db, user)
+            check_and_increment_user(db, user.id, user.tier)
         else:
             ip = _get_client_ip(request)
             check_and_increment_guest(db, ip)
@@ -99,7 +99,7 @@ async def submit_prompt(
     request: Request,
     body: PromptRequest,
     db: Session = Depends(get_db),
-    user: Optional[User] = Depends(get_current_user_optional),
+    user: Optional[UserResponse] = Depends(get_current_user_optional),
 ) -> PromptResponse:
     """Submit a prompt to all 4 agents simultaneously."""
     request_id = new_request_id()
@@ -210,7 +210,7 @@ async def stream_prompt(
     request: Request,
     body: PromptRequest,
     db: Session = Depends(get_db),
-    user: Optional[User] = Depends(get_current_user_optional),
+    user: Optional[UserResponse] = Depends(get_current_user_optional),
 ):
     """SSE streaming endpoint — streams agent tokens in real-time."""
     request_id = new_request_id()

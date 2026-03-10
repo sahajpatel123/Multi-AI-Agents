@@ -113,13 +113,18 @@ def check_and_increment_guest(db: Session, ip: str) -> None:
     db.commit()
 
 
-def check_and_increment_user(db: Session, user: User) -> None:
+def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
     """
     Check registered/pro rate limit. Increments counter.
     Raises RateLimitExceeded if over limit.
     """
-    if user.tier == UserTier.PRO:
+    if user_tier == UserTier.PRO.value:
         return  # Unlimited
+
+    # Fetch fresh User instance from DB to avoid detached instance issues
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return
 
     settings = get_settings()
     limit = settings.registered_daily_limit

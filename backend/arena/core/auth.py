@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from arena.config import get_settings
 from arena.database import get_db
 from arena.db_models import User, UserTier
+from arena.models.schemas import UserResponse
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -123,8 +124,8 @@ COOKIE_SECURE = False  # Set True in production (HTTPS)
 def get_current_user_optional(
     request: Request,
     db: Session = Depends(get_db),
-) -> Optional[User]:
-    """Returns the authenticated user or None (for guest)."""
+) -> Optional[UserResponse]:
+    """Returns the authenticated user as Pydantic model or None (for guest)."""
     token = request.cookies.get(ACCESS_COOKIE)
     if not token:
         return None
@@ -134,12 +135,16 @@ def get_current_user_optional(
     user_id = payload.get("sub")
     if not user_id:
         return None
-    return get_user_by_id(db, int(user_id))
+    user = get_user_by_id(db, int(user_id))
+    if not user:
+        return None
+    # Convert ORM model to Pydantic before session closes
+    return UserResponse.model_validate(user)
 
 
 def get_current_user_required(
-    user: Optional[User] = Depends(get_current_user_optional),
-) -> User:
+    user: Optional[UserResponse] = Depends(get_current_user_optional),
+) -> UserResponse:
     """Requires an authenticated user; raises 401 if not."""
     if not user:
         raise HTTPException(
