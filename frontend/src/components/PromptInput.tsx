@@ -61,7 +61,7 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
             border: 'none',
             outline: 'none',
             resize: 'none',
-            fontSize: '15px',
+            fontSize: '17px',
             lineHeight: '1.5',
             color: '#1A1714',
             padding: '8px 0 0 0',
