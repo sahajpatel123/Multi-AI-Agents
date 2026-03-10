@@ -29,7 +29,11 @@ class Orchestrator:
         """Inject tool results into agent system prompt"""
         if not tool_context:
             return system_prompt
-        return f"{system_prompt}\n\n{tool_context}"
+        
+        injected = f"{system_prompt}\n\n{tool_context}"
+        print(f"[ORCHESTRATOR] Injecting tool context ({len(tool_context)} chars) into system prompt")
+        print(f"[ORCHESTRATOR] Tool context preview: {tool_context[:200]}...")
+        return injected
     
     async def _call_agent(self, agent: AgentConfig, prompt: str, tool_context: str = "") -> AgentResponse:
         """Call a single agent and parse its response"""

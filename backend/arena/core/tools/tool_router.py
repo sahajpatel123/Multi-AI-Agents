@@ -25,13 +25,18 @@ class ToolRouter:
         Returns dict of tool_name -> ToolResult.
         Never raises - tools that fail return ToolResult with success=False.
         """
+        print(f"[TOOL_ROUTER] Checking tools for prompt: {prompt[:100]}...")
+        
         # Determine which tools should trigger
-        tools_to_run = [
-            tool for tool in self.tools
-            if tool.should_trigger(prompt, **kwargs)
-        ]
+        tools_to_run = []
+        for tool in self.tools:
+            should_trigger = tool.should_trigger(prompt, **kwargs)
+            print(f"[TOOL_ROUTER] {tool.name}: should_trigger={should_trigger}")
+            if should_trigger:
+                tools_to_run.append(tool)
         
         if not tools_to_run:
+            print("[TOOL_ROUTER] No tools triggered")
             return {}
         
         # Execute all triggered tools in parallel
