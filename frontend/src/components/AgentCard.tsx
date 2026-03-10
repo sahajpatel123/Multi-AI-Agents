@@ -55,15 +55,20 @@ export function AgentCard({
   return (
     <div
       className={`
-        bg-surface rounded-lg border
+        bg-surface rounded-2xl
         transition-all duration-300 ease-in-out
         ${isIdle ? 'opacity-75 cursor-default' : 'cursor-pointer'}
         ${isWinner
-          ? 'border-accent ring-2 ring-accent/20 scale-[1.02]'
-          : 'border-border hover:border-text-secondary/30 scale-100'
+          ? 'ring-2 ring-accent/30 scale-[1.02]'
+          : 'scale-100'
         }
         ${isExpanded ? 'md:col-span-2' : ''}
       `}
+      style={{
+        boxShadow: isWinner 
+          ? '0 4px 20px rgba(196, 149, 106, 0.25)' 
+          : '0 2px 12px rgba(26, 23, 20, 0.06)'
+      }}
       onClick={isIdle ? undefined : onToggle}
     >
       <div className="p-4">

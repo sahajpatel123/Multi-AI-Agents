@@ -18,22 +18,28 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full">
-      <div className="relative">
+    <form onSubmit={handleSubmit} className="w-full max-w-[720px] mx-auto">
+      <div 
+        className="relative rounded-2xl"
+        style={{ boxShadow: '0 4px 24px rgba(74, 103, 85, 0.18)' }}
+      >
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Ask something and watch four minds respond..."
           className="
-            w-full p-4 pr-14 bg-surface border border-border rounded-lg
+            w-full bg-background rounded-2xl
             text-text-primary placeholder:text-text-secondary/60
-            focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent
+            focus:outline-none focus:ring-0
             resize-none min-h-[100px]
             font-sans text-base
+            border-0
           "
+          style={{ padding: '16px 52px 16px 20px' }}
           disabled={isLoading}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && e.metaKey) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
               handleSubmit(e);
             }
           }}
@@ -55,9 +61,6 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
           )}
         </button>
       </div>
-      <p className="mt-2 text-xs text-text-secondary">
-        Press ⌘ + Enter to submit
-      </p>
     </form>
   );
 }

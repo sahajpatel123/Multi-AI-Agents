@@ -271,7 +271,7 @@ function App() {
           </header>
 
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col px-6 pb-32 overflow-auto">
+          <div className="flex-1 flex flex-col px-6 py-8 pb-40 overflow-auto">
             {/* Current Prompt Display (when active) */}
             {currentPrompt && phase !== 'idle' && (
               <div className="text-center mb-6">
@@ -366,25 +366,23 @@ function App() {
           </div>
 
           {/* Fixed Bottom Prompt Box */}
-          <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border">
-            <div className="max-w-4xl mx-auto px-6 py-4">
-              <PromptInput
-                onSubmit={handleSubmit}
-                isLoading={isLoading || isStreaming}
-              />
-              {/* Guest nudge after 3rd use */}
-              {!user && !authLoading && guestPromptCount >= 3 && (
-                <p className="text-center text-xs text-text-secondary mt-2">
-                  <button
-                    onClick={() => { setAuthModalTab('signup'); setAuthModalOpen(true); }}
-                    className="text-accent hover:underline"
-                  >
-                    Sign up
-                  </button>
-                  {' '}to save your history and get 20 prompts per day.
-                </p>
-              )}
-            </div>
+          <div className="fixed bottom-6 left-0 right-0 px-6">
+            <PromptInput
+              onSubmit={handleSubmit}
+              isLoading={isLoading || isStreaming}
+            />
+            {/* Guest nudge after 3rd use */}
+            {!user && !authLoading && guestPromptCount >= 3 && (
+              <p className="text-center text-xs text-text-secondary mt-2">
+                <button
+                  onClick={() => { setAuthModalTab('signup'); setAuthModalOpen(true); }}
+                  className="text-accent hover:underline"
+                >
+                  Sign up
+                </button>
+                {' '}to save your history and get 20 prompts per day.
+              </p>
+            )}
           </div>
         </>
       )}
