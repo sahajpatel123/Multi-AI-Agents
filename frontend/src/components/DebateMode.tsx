@@ -14,6 +14,7 @@ interface DebateModeProps {
   allResponses: ScoredAgent[];
   sessionId: string;
   onExit: () => void;
+  onSuccess?: () => void;
 }
 
 type DebatePhase = 'idle' | 'streaming' | 'done';
@@ -30,6 +31,7 @@ export function DebateMode({
   allResponses,
   sessionId,
   onExit,
+  onSuccess,
 }: DebateModeProps) {
   const [phase, setPhase] = useState<DebatePhase>('idle');
   const [rounds, setRounds] = useState<DebateRound[]>([]);
@@ -120,6 +122,9 @@ export function DebateMode({
             setCurrentRound(nextRound);
             setPhase('done');
             scrollToBottom();
+            
+            // Refresh user count after successful debate round
+            if (onSuccess) onSuccess();
           },
           onError: (data) => {
             if (flushTimer.current) clearInterval(flushTimer.current);

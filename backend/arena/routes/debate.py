@@ -3,19 +3,30 @@
 import asyncio
 import json
 import uuid
+from typing import Optional
 
 import anthropic
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
 from arena.config import get_settings
+from arena.core.auth import get_current_user_optional
+from arena.core.cost_tracker import (
+    RateLimitExceeded,
+    check_and_increment_guest,
+    check_and_increment_user,
+)
+from arena.database import get_db
 from arena.models.schemas import (
     DebateRequest,
     DebateReaction,
     DebateMessage,
     DebateRoundResponse,
     ErrorResponse,
+    RateLimitError,
+    UserResponse,
 )
 from arena.core.agents import AGENTS
 
@@ -142,16 +153,51 @@ async def _get_reaction(
 # POST /api/debate — batch endpoint
 # ──────────────────────────────────────────────────────────────
 
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 @router.post(
     "/debate",
     response_model=DebateRoundResponse,
-    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        429: {"model": RateLimitError},
+        500: {"model": ErrorResponse},
+    },
 )
-async def run_debate_round(request: DebateRequest) -> DebateRoundResponse:
+async def run_debate_round(
+    http_request: Request,
+    request: DebateRequest,
+    db: Session = Depends(get_db),
+    user: Optional[UserResponse] = Depends(get_current_user_optional),
+) -> DebateRoundResponse:
     """
     Run one round of debate. The 3 non-challenged agents react
     to the challenged agent's verdict in parallel.
     """
+    # Check rate limit BEFORE any LLM calls
+    try:
+        if user:
+            check_and_increment_user(db, user.id, user.tier)
+        else:
+            ip = _get_client_ip(http_request)
+            check_and_increment_guest(db, ip)
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": e.message,
+                "tier": e.tier,
+                "prompts_used": e.used,
+                "daily_limit": e.limit,
+            },
+        )
+    
     if request.challenged_agent_id not in AGENTS:
         raise HTTPException(status_code=400, detail="Invalid challenged agent ID")
 
@@ -212,7 +258,12 @@ async def run_debate_round(request: DebateRequest) -> DebateRoundResponse:
 # ──────────────────────────────────────────────────────────────
 
 @router.post("/debate/stream")
-async def stream_debate_round(request: DebateRequest):
+async def stream_debate_round(
+    http_request: Request,
+    request: DebateRequest,
+    db: Session = Depends(get_db),
+    user: Optional[UserResponse] = Depends(get_current_user_optional),
+):
     """
     SSE streaming debate — streams each agent's reaction token by token.
 
@@ -222,6 +273,25 @@ async def stream_debate_round(request: DebateRequest):
     - "result"         → final DebateRoundResponse
     - "error"          → something went wrong
     """
+    # Check rate limit BEFORE any LLM calls
+    try:
+        if user:
+            check_and_increment_user(db, user.id, user.tier)
+        else:
+            ip = _get_client_ip(http_request)
+            check_and_increment_guest(db, ip)
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": e.message,
+                "tier": e.tier,
+                "prompts_used": e.used,
+                "daily_limit": e.limit,
+            },
+        )
+    
     if request.challenged_agent_id not in AGENTS:
         raise HTTPException(status_code=400, detail="Invalid challenged agent ID")
 

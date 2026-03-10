@@ -17,7 +17,7 @@ type Phase = 'idle' | 'pipeline' | 'streaming' | 'scoring' | 'done';
 type ViewMode = 'arena' | 'debate' | 'discuss';
 
 function App() {
-  const { user, isLoading: authLoading, login, register, logout } = useAuth();
+  const { user, isLoading: authLoading, login, register, logout, refreshUser } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'signup'>('login');
   const [guestPromptCount, setGuestPromptCount] = useState(0);
@@ -402,6 +402,7 @@ function App() {
             allResponses={response.all_responses}
             sessionId={response.session_id}
             onExit={exitToArena}
+            onSuccess={refreshUser}
           />
         )}
 
@@ -415,6 +416,7 @@ function App() {
             allResponses={response.all_responses}
             sessionId={response.session_id}
             onExit={exitToArena}
+            onSuccess={refreshUser}
             onSwitchAgent={(agentId) => {
               const found = response.all_responses.find(
                 (s) => s.response.agent_id === agentId

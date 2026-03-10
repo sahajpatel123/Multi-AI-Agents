@@ -14,6 +14,7 @@ interface DiscussModeProps {
   sessionId: string;
   onExit: () => void;
   onSwitchAgent: (agentId: string) => void;
+  onSuccess?: () => void;
 }
 
 export function DiscussMode({
@@ -23,6 +24,7 @@ export function DiscussMode({
   sessionId,
   onExit,
   onSwitchAgent,
+  onSuccess,
 }: DiscussModeProps) {
   const agentConfig = AGENTS[activeAgent.response.agent_id];
 
@@ -101,6 +103,9 @@ export function DiscussMode({
             }));
             setIsStreaming(false);
             scrollToBottom();
+            
+            // Refresh user count after successful discuss message
+            if (onSuccess) onSuccess();
           },
           onError: (data) => {
             if (flushTimer.current) clearInterval(flushTimer.current);

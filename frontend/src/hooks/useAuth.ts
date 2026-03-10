@@ -12,6 +12,7 @@ export interface UseAuth extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 export function useAuth(): UseAuth {
@@ -40,6 +41,11 @@ export function useAuth(): UseAuth {
     setUser(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const u = await getMe();
+    setUser(u);
+  }, []);
+
   return {
     user,
     isLoading,
@@ -47,5 +53,6 @@ export function useAuth(): UseAuth {
     login,
     register,
     logout,
+    refreshUser,
   };
 }

@@ -2,18 +2,29 @@
 
 import json
 import uuid
+from typing import Optional
 
 import anthropic
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
 from arena.config import get_settings
+from arena.core.auth import get_current_user_optional
+from arena.core.cost_tracker import (
+    RateLimitExceeded,
+    check_and_increment_guest,
+    check_and_increment_user,
+)
+from arena.database import get_db
 from arena.models.schemas import (
     DiscussRequest,
     DiscussResponse,
     DiscussChatMessage,
     ErrorResponse,
+    RateLimitError,
+    UserResponse,
 )
 from arena.core.agents import AGENTS
 from arena.core.memory import get_memory_manager
@@ -83,16 +94,51 @@ def _build_messages(
 # POST /api/discuss — batch endpoint
 # ──────────────────────────────────────────────────────────────
 
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 @router.post(
     "/discuss",
     response_model=DiscussResponse,
-    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        429: {"model": RateLimitError},
+        500: {"model": ErrorResponse},
+    },
 )
-async def discuss_with_agent(request: DiscussRequest) -> DiscussResponse:
+async def discuss_with_agent(
+    http_request: Request,
+    request: DiscussRequest,
+    db: Session = Depends(get_db),
+    user: Optional[UserResponse] = Depends(get_current_user_optional),
+) -> DiscussResponse:
     """
     Send a message to a single agent in a 1-on-1 conversation.
     The agent stays in character with full memory of the thread.
     """
+    # Check rate limit BEFORE any LLM calls
+    try:
+        if user:
+            check_and_increment_user(db, user.id, user.tier)
+        else:
+            ip = _get_client_ip(http_request)
+            check_and_increment_guest(db, ip)
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": e.message,
+                "tier": e.tier,
+                "prompts_used": e.used,
+                "daily_limit": e.limit,
+            },
+        )
+    
     if request.agent_id not in AGENTS:
         raise HTTPException(status_code=400, detail="Invalid agent ID")
 
@@ -154,7 +200,12 @@ async def discuss_with_agent(request: DiscussRequest) -> DiscussResponse:
 # ──────────────────────────────────────────────────────────────
 
 @router.post("/discuss/stream")
-async def stream_discuss(request: DiscussRequest):
+async def stream_discuss(
+    http_request: Request,
+    request: DiscussRequest,
+    db: Session = Depends(get_db),
+    user: Optional[UserResponse] = Depends(get_current_user_optional),
+):
     """
     SSE streaming 1-on-1 discussion — streams the agent's reply token by token.
 
@@ -163,6 +214,25 @@ async def stream_discuss(request: DiscussRequest):
     - "result" → final DiscussResponse with updated history
     - "error"  → something went wrong
     """
+    # Check rate limit BEFORE any LLM calls
+    try:
+        if user:
+            check_and_increment_user(db, user.id, user.tier)
+        else:
+            ip = _get_client_ip(http_request)
+            check_and_increment_guest(db, ip)
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": e.message,
+                "tier": e.tier,
+                "prompts_used": e.used,
+                "daily_limit": e.limit,
+            },
+        )
+    
     if request.agent_id not in AGENTS:
         raise HTTPException(status_code=400, detail="Invalid agent ID")
 
