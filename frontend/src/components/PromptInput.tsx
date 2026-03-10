@@ -18,37 +18,56 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-[720px] mx-auto" style={{ margin: '0 auto' }}>
+    <form 
+      onSubmit={handleSubmit}
+      style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        display: 'flex',
+        justifyContent: 'center',
+        padding: '20px 24px 28px 24px',
+        background: 'transparent',
+        zIndex: 50,
+        pointerEvents: 'none'
+      }}
+    >
       <div 
-        className="flex items-center bg-background border border-border w-full"
         style={{ 
-          borderRadius: '999px',
-          padding: '0 8px 0 0',
-          boxShadow: '0 4px 24px rgba(74, 103, 85, 0.18)',
+          pointerEvents: 'all',
+          display: 'flex',
+          alignItems: 'center',
+          width: '100%',
           maxWidth: '720px',
-          margin: '0 auto',
-          minHeight: '52px'
+          minHeight: '54px',
+          background: '#FAF7F4',
+          border: '1px solid #E0D8D0',
+          borderRadius: '999px',
+          boxShadow: '0 4px 24px rgba(74, 103, 85, 0.18)',
+          padding: '0 8px 0 20px',
+          gap: '8px'
         }}
       >
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Ask something and watch four minds respond..."
-          className="
-            flex-1 bg-transparent text-text-primary placeholder:text-text-secondary/60
-            focus:outline-none focus:ring-0
-            resize-none overflow-y-auto
-            font-sans border-0
-          "
+          className="placeholder:text-text-secondary/60 font-sans"
           style={{ 
-            padding: '12px 52px 12px 24px',
+            flex: 1,
+            minWidth: 0,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            resize: 'none',
             fontSize: '15px',
             lineHeight: '1.5',
-            verticalAlign: 'middle',
-            display: 'flex',
-            alignItems: 'center',
-            minWidth: '0',
-            maxHeight: '120px'
+            color: '#1A1714',
+            padding: '14px 0',
+            maxHeight: '120px',
+            overflowY: 'auto',
+            alignSelf: 'center'
           }}
           disabled={isLoading}
           onKeyDown={(e) => {
@@ -61,25 +80,25 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
         <button
           type="submit"
           disabled={!prompt.trim() || isLoading}
-          className="
-            flex items-center justify-center flex-shrink-0
-            bg-accent text-white
-            disabled:opacity-40 disabled:cursor-not-allowed
-            hover:bg-accent/90 transition-colors
-          "
+          className="disabled:opacity-40 disabled:cursor-not-allowed hover:bg-accent/90 transition-colors"
           style={{
-            position: 'relative',
-            width: '36px',
-            height: '36px',
+            flexShrink: 0,
+            width: '38px',
+            height: '38px',
             borderRadius: '50%',
-            marginLeft: '8px',
-            alignSelf: 'center'
+            background: '#C4956A',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            alignSelf: 'center',
+            cursor: 'pointer',
+            border: 'none'
           }}
         >
           {isLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader2 className="w-4 h-4 animate-spin text-white" />
           ) : (
-            <Send className="w-4 h-4" />
+            <Send className="w-4 h-4 text-white" />
           )}
         </button>
       </div>

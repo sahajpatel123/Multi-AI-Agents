@@ -366,27 +366,25 @@ function App() {
           </div>
 
           {/* Fixed Bottom Prompt Box */}
-          <div 
-            className="fixed bottom-0 left-0 right-0 bg-transparent overflow-visible z-50"
-            style={{ padding: '16px 24px 24px 24px' }}
-          >
-            <PromptInput
-              onSubmit={handleSubmit}
-              isLoading={isLoading || isStreaming}
-            />
-            {/* Guest nudge after 3rd use */}
-            {!user && !authLoading && guestPromptCount >= 3 && (
-              <p className="text-center text-xs text-text-secondary mt-2">
+          <PromptInput
+            onSubmit={handleSubmit}
+            isLoading={isLoading || isStreaming}
+          />
+          
+          {/* Guest nudge after 3rd use */}
+          {!user && !authLoading && guestPromptCount >= 3 && (
+            <div className="fixed bottom-20 left-0 right-0 z-40 pointer-events-none">
+              <p className="text-center text-xs text-text-secondary">
                 <button
                   onClick={() => { setAuthModalTab('signup'); setAuthModalOpen(true); }}
-                  className="text-accent hover:underline"
+                  className="text-accent hover:underline pointer-events-auto"
                 >
                   Sign up
                 </button>
                 {' '}to save your history and get 20 prompts per day.
               </p>
-            )}
-          </div>
+            </div>
+          )}
         </>
       )}
 
