@@ -350,9 +350,21 @@ function App() {
                 {/* Original prompt */}
                 <div className="p-4 bg-surface/50 rounded-lg border border-border">
                   <div className="flex items-center justify-between">
-                    <div>
+                    <div className="flex-1">
                       <p className="text-sm text-text-secondary mb-1">Your question</p>
                       <p className="text-text-primary">{response.prompt}</p>
+                      {response.tools_used && response.tools_used.length > 0 && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-text-secondary italic">
+                          <span>Tools used:</span>
+                          {response.tools_used.map((tool, idx) => (
+                            <span key={idx} className="bg-border/30 px-2 py-0.5 rounded">
+                              {tool === 'calculator' && '🔢 Calculator'}
+                              {tool === 'web_search' && '🔍 Web search'}
+                              {tool === 'datetime' && '📅 DateTime'}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     {response.prompt_category && (
                       <span className="text-xs text-text-secondary bg-border/50 px-2 py-1 rounded">
@@ -362,8 +374,19 @@ function App() {
                   </div>
                 </div>
 
+                {/* Specialist agent label */}
+                {response.all_responses.some(r => r.response.agent_id === 'agent_5') && (
+                  <p className="text-xs text-text-secondary italic text-center">
+                    Specialist agent activated
+                  </p>
+                )}
+
                 {/* Agent responses — sorted by score, winner expands */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`grid gap-4 ${
+                  response.all_responses.length === 5 
+                    ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
+                    : 'grid-cols-1 md:grid-cols-2'
+                }`}>
                   {[...response.all_responses]
                     .sort((a, b) => b.score - a.score)
                     .map((scoredAgent) => (
