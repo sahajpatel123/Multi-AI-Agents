@@ -18,14 +18,16 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-[720px] mx-auto">
+    <form onSubmit={handleSubmit} className="w-full max-w-[720px] mx-auto" style={{ margin: '0 auto' }}>
       <div 
-        className="relative flex items-center bg-background border border-border"
+        className="relative flex items-center bg-background border border-border w-full"
         style={{ 
           borderRadius: '999px',
           padding: '8px 12px 8px 20px',
           boxShadow: '0 4px 24px rgba(74, 103, 85, 0.18)',
-          maxHeight: '56px'
+          maxHeight: '56px',
+          maxWidth: '720px',
+          margin: '0 auto'
         }}
       >
         <textarea

@@ -271,7 +271,7 @@ function App() {
           </header>
 
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col px-6 py-8 pb-40 overflow-auto">
+          <div className="flex-1 flex flex-col px-6 py-8 pb-[100px] overflow-auto">
             {/* Current Prompt Display (when active) */}
             {currentPrompt && phase !== 'idle' && (
               <div className="text-center mb-6">
@@ -366,7 +366,10 @@ function App() {
           </div>
 
           {/* Fixed Bottom Prompt Box */}
-          <div className="fixed bottom-6 left-0 right-0 px-6">
+          <div 
+            className="fixed bottom-0 left-0 right-0 bg-transparent overflow-visible z-50"
+            style={{ padding: '16px 24px 24px 24px' }}
+          >
             <PromptInput
               onSubmit={handleSubmit}
               isLoading={isLoading || isStreaming}
