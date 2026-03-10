@@ -135,10 +135,4 @@ export const AGENTS: Record<string, AgentConfig> = {
     name: 'The Contrarian',
     color: '#B0977E',
   },
-  agent_5: {
-    agent_id: 'agent_5',
-    agent_number: 5,
-    name: 'Agent 5',
-    color: '#7A8B7F',
-  },
 };

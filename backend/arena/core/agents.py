@@ -101,34 +101,6 @@ You must ALWAYS respond with valid JSON in this exact format:
 }"""
 
 
-AGENT_5_SYSTEM_PROMPT = """You are Agent 5. You are a research-grade reasoning engine specializing in physics, mathematics, and formal logic.
-
-Your rules:
-- Only respond to prompts involving physics, mathematics, statistics, logic, or formal reasoning. If the prompt is outside these domains, output exactly:
-  SKIP: outside specialist domain
-- Show your working. Never give an answer without the reasoning steps that produced it.
-- Use precise notation where it helps clarity.
-- If a problem is unsolvable or ambiguous, state exactly why and what additional information would be needed.
-- Never guess. If you are uncertain, quantify your uncertainty explicitly.
-- Call out when other agents' responses contain mathematical or logical errors.
-- Your confidence score reflects the mathematical certainty of your answer, not your subjective feeling.
-
-Response format:
-1. Problem restatement (confirm you understood correctly)
-2. Method (which approach and why)
-3. Working (step by step)
-4. Answer (clear, unambiguous)
-5. Confidence: 0-100 based on mathematical certainty
-
-You must ALWAYS respond with valid JSON in this exact format:
-{
-  "verdict": "your full response text here",
-  "one_liner": "single sentence summary of your position",
-  "confidence": <number 0-100>,
-  "key_assumption": "the biggest assumption your answer rests on"
-}"""
-
-
 AGENTS: dict[str, AgentConfig] = {
     "agent_1": AgentConfig(
         agent_id="agent_1",
@@ -162,14 +134,6 @@ AGENTS: dict[str, AgentConfig] = {
         temperature=1.0,
         system_prompt=AGENT_4_SYSTEM_PROMPT,
     ),
-    "agent_5": AgentConfig(
-        agent_id="agent_5",
-        agent_number=5,
-        name="Agent 5",
-        color="#7A8B7F",
-        temperature=0.1,
-        system_prompt=AGENT_5_SYSTEM_PROMPT,
-    ),
 }
 
 
@@ -178,54 +142,6 @@ def get_agent_config(agent_id: str) -> AgentConfig | None:
     return AGENTS.get(agent_id)
 
 
-def get_all_agents(include_specialist: bool = False) -> list[AgentConfig]:
-    """
-    Get agent configurations.
-    If include_specialist is True, includes Agent 5 (specialist).
-    Otherwise returns only agents 1-4.
-    """
-    if include_specialist:
-        return list(AGENTS.values())
-    else:
-        # Return only agents 1-4
-        return [AGENTS[f"agent_{i}"] for i in range(1, 5)]
-
-
-def is_specialist_prompt(prompt: str) -> bool:
-    """
-    Detect if prompt requires specialist agent (physics, math, logic).
-    Fast heuristic check - no LLM calls.
-    """
-    prompt_lower = prompt.lower()
-    
-    # Math/physics/logic keywords
-    specialist_keywords = [
-        # Mathematics
-        'calculate', 'compute', 'solve', 'equation', 'formula', 'theorem',
-        'proof', 'derivative', 'integral', 'matrix', 'vector', 'algebra',
-        'geometry', 'calculus', 'trigonometry', 'statistics', 'probability',
-        'logarithm', 'exponential', 'polynomial', 'function',
-        
-        # Physics
-        'physics', 'force', 'energy', 'momentum', 'velocity', 'acceleration',
-        'mass', 'gravity', 'quantum', 'relativity', 'thermodynamics',
-        'electromagnetic', 'wave', 'particle', 'atom', 'nuclear',
-        
-        # Logic
-        'logic', 'logical', 'syllogism', 'premise', 'conclusion', 'inference',
-        'deduction', 'induction', 'contradiction', 'tautology', 'fallacy',
-        'proof', 'axiom', 'lemma', 'corollary',
-        
-        # Formal reasoning
-        'formal', 'rigorous', 'mathematical', 'analytical', 'quantitative',
-    ]
-    
-    # Check for specialist keywords
-    has_specialist_keyword = any(kw in prompt_lower for kw in specialist_keywords)
-    
-    # Check for mathematical symbols or expressions
-    import re
-    has_math_symbols = bool(re.search(r'[\+\-\*/\^=<>∫∑∏√π∞]', prompt))
-    has_numbers_with_operators = bool(re.search(r'\d+\s*[\+\-\*/\^]\s*\d+', prompt))
-    
-    return has_specialist_keyword or has_math_symbols or has_numbers_with_operators
+def get_all_agents() -> list[AgentConfig]:
+    """Get all agent configurations"""
+    return list(AGENTS.values())

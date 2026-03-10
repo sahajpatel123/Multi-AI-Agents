@@ -9,7 +9,7 @@ import anthropic
 
 from arena.config import get_settings
 from arena.models.schemas import AgentConfig, AgentResponse
-from arena.core.agents import AGENTS, get_all_agents, is_specialist_prompt
+from arena.core.agents import AGENTS, get_all_agents
 from arena.core.tools.tool_router import ToolRouter
 from arena.core.tools.base import ToolResult
 
@@ -102,7 +102,6 @@ class Orchestrator:
         Run all agents in parallel and collect responses.
         Returns tuple of (responses, tools_used).
         Tools are executed first and results injected into agent context.
-        Conditionally includes Agent 5 if specialist prompt is detected.
         """
         # Execute tools first (in parallel)
         tool_results = await self.tool_router.execute_tools(prompt)
@@ -113,11 +112,8 @@ class Orchestrator:
         # Get list of successfully used tools
         tools_used = self.tool_router.get_tool_summary(tool_results)
         
-        # Detect if specialist agent should be included
-        include_specialist = is_specialist_prompt(prompt)
-        
-        # Get agents (conditionally includes Agent 5)
-        agents = get_all_agents(include_specialist=include_specialist)
+        # Get all agents (always 4 agents)
+        agents = get_all_agents()
         
         # Create tasks for all agents with tool context
         tasks = [self._call_agent(agent, prompt, tool_context) for agent in agents]
@@ -125,15 +121,7 @@ class Orchestrator:
         # Run all tasks concurrently
         responses = await asyncio.gather(*tasks, return_exceptions=False)
         
-        # Filter out Agent 5 if it returned SKIP
-        filtered_responses = []
-        for response in responses:
-            if response.agent_id == "agent_5" and "SKIP:" in response.verdict:
-                # Agent 5 declined to respond - exclude it
-                continue
-            filtered_responses.append(response)
-        
-        return filtered_responses, tools_used
+        return responses, tools_used
     
     async def run_single_agent(self, agent_id: str, prompt: str) -> AgentResponse | None:
         """Run a single agent by ID"""
@@ -192,7 +180,6 @@ class Orchestrator:
         Consumers read from the queue; when all tasks finish,
         a sentinel {"type": "all_done"} is pushed.
         Tools are executed first and results injected into agent context.
-        Conditionally includes Agent 5 if specialist prompt is detected.
         """
         queue: asyncio.Queue = asyncio.Queue()
         
@@ -205,11 +192,8 @@ class Orchestrator:
         # Get list of successfully used tools
         tools_used = self.tool_router.get_tool_summary(tool_results)
         
-        # Detect if specialist agent should be included
-        include_specialist = is_specialist_prompt(prompt)
-        
-        # Get agents (conditionally includes Agent 5)
-        agents = get_all_agents(include_specialist=include_specialist)
+        # Get all agents (always 4 agents)
+        agents = get_all_agents()
 
         async def _run_all() -> list[AgentResponse]:
             tasks = [

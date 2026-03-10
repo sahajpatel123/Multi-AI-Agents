@@ -48,7 +48,7 @@ class AgentConfig(BaseModel):
     """Configuration for a single agent"""
     
     agent_id: str = Field(..., description="Unique identifier (e.g., 'agent_1')")
-    agent_number: int = Field(..., ge=1, le=5, description="Agent number 1-5")
+    agent_number: int = Field(..., ge=1, le=4, description="Agent number 1-4")
     name: str = Field(..., description="Display name for the agent")
     color: str = Field(..., pattern=r"^#[0-9A-Fa-f]{6}$", description="Hex color code")
     temperature: float = Field(..., ge=0.0, le=2.0, description="LLM temperature")

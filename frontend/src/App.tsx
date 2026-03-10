@@ -374,19 +374,8 @@ function App() {
                   </div>
                 </div>
 
-                {/* Specialist agent label */}
-                {response.all_responses.some(r => r.response.agent_id === 'agent_5') && (
-                  <p className="text-xs text-text-secondary italic text-center">
-                    Specialist agent activated
-                  </p>
-                )}
-
                 {/* Agent responses — sorted by score, winner expands */}
-                <div className={`grid gap-4 ${
-                  response.all_responses.length === 5 
-                    ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
-                    : 'grid-cols-1 md:grid-cols-2'
-                }`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[...response.all_responses]
                     .sort((a, b) => b.score - a.score)
                     .map((scoredAgent) => (
