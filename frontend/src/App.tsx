@@ -271,34 +271,46 @@ function App() {
           </header>
 
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col overflow-auto" style={{ padding: '24px 32px 120px 32px' }}>
-            {/* Current Prompt Display (when active) */}
-            {currentPrompt && phase !== 'idle' && (
-              <div className="text-center mb-6">
-                <p className="text-sm text-text-secondary italic">
-                  "{currentPrompt}"
-                </p>
-              </div>
-            )}
+          <div 
+            className="flex-1 overflow-auto"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: 'calc(100vh - 120px)',
+              padding: '24px 24px 0 24px'
+            }}
+          >
+            <div style={{ width: '100%', maxWidth: '900px' }}>
+              {/* Current Prompt Display (when active) */}
+              {currentPrompt && phase !== 'idle' && (
+                <div className="text-center mb-6">
+                  <p className="text-sm text-text-secondary italic">
+                    "{currentPrompt}"
+                  </p>
+                </div>
+              )}
 
-            {/* Error */}
-            {error && (
-              <div className="mb-6 p-4 bg-surface border border-accent/30 rounded-lg text-text-primary max-w-2xl mx-auto">
-                <p className="text-sm font-medium text-accent mb-1">Cannot process</p>
-                <p className="text-text-secondary text-sm">{error}</p>
-              </div>
-            )}
+              {/* Error */}
+              {error && (
+                <div className="mb-6 p-4 bg-surface border border-accent/30 rounded-lg text-text-primary max-w-2xl mx-auto">
+                  <p className="text-sm font-medium text-accent mb-1">Cannot process</p>
+                  <p className="text-text-secondary text-sm">{error}</p>
+                </div>
+              )}
 
-            {/* Agent Cards - Always Visible in 2x2 Grid */}
-            <div 
-              className="grid w-full"
-              style={{
-                gridTemplateColumns: '1fr 1fr',
-                gridTemplateRows: '1fr 1fr',
-                gap: '16px',
-                height: '100%'
-              }}
-            >
+              {/* Agent Cards - Always Visible in 2x2 Grid */}
+              <div 
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gridTemplateRows: '1fr 1fr',
+                  gap: '16px',
+                  width: '100%',
+                  maxWidth: '900px',
+                  aspectRatio: '1 / 1'
+                }}
+              >
               {/* Pipeline loading — skeleton cards */}
               {isLoading && AGENT_IDS.map((id) => (
                 <div key={id} className="bg-surface rounded-lg border border-border p-6">
@@ -347,30 +359,31 @@ function App() {
                   isIdle={true}
                 />
               ))}
-            </div>
-
-            {/* Scoring indicator */}
-            {isStreaming && doneAgents.size === 4 && (
-              <p className="text-center text-sm text-text-secondary animate-pulse mt-4">
-                Scoring responses...
-              </p>
-            )}
-
-            {/* Tools used indicator (when done) */}
-            {isDone && response?.tools_used && response.tools_used.length > 0 && (
-              <div className="text-center mt-4">
-                <div className="inline-flex items-center gap-2 text-xs text-text-secondary italic">
-                  <span>Tools used:</span>
-                  {response.tools_used.map((tool, idx) => (
-                    <span key={idx} className="bg-border/30 px-2 py-0.5 rounded">
-                      {tool === 'calculator' && '🔢 Calculator'}
-                      {tool === 'web_search' && '🔍 Web search'}
-                      {tool === 'datetime' && '📅 DateTime'}
-                    </span>
-                  ))}
-                </div>
               </div>
-            )}
+
+              {/* Scoring indicator */}
+              {isStreaming && doneAgents.size === 4 && (
+                <p className="text-center text-sm text-text-secondary animate-pulse mt-4">
+                  Scoring responses...
+                </p>
+              )}
+
+              {/* Tools used indicator (when done) */}
+              {isDone && response?.tools_used && response.tools_used.length > 0 && (
+                <div className="text-center mt-4">
+                  <div className="inline-flex items-center gap-2 text-xs text-text-secondary italic">
+                    <span>Tools used:</span>
+                    {response.tools_used.map((tool, idx) => (
+                      <span key={idx} className="bg-border/30 px-2 py-0.5 rounded">
+                        {tool === 'calculator' && '🔢 Calculator'}
+                        {tool === 'web_search' && '🔍 Web search'}
+                        {tool === 'datetime' && '📅 DateTime'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Fixed Bottom Prompt Box */}
