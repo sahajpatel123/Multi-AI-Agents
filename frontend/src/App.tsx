@@ -307,8 +307,8 @@ function App() {
                   gridTemplateRows: '1fr 1fr',
                   gap: '16px',
                   width: '100%',
-                  maxWidth: '900px',
-                  aspectRatio: '4 / 3'
+                  height: 'calc(100vh - 140px)',
+                  padding: '16px 24px 0 24px',
                 }}
               >
               {/* Pipeline loading — skeleton cards */}
