@@ -271,7 +271,7 @@ function App() {
           </header>
 
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col px-6 py-8 pb-[100px] overflow-auto">
+          <div className="flex-1 flex flex-col overflow-auto" style={{ padding: '24px 32px 120px 32px' }}>
             {/* Current Prompt Display (when active) */}
             {currentPrompt && phase !== 'idle' && (
               <div className="text-center mb-6">
@@ -290,7 +290,15 @@ function App() {
             )}
 
             {/* Agent Cards - Always Visible in 2x2 Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl mx-auto w-full">
+            <div 
+              className="grid w-full"
+              style={{
+                gridTemplateColumns: '1fr 1fr',
+                gridTemplateRows: '1fr 1fr',
+                gap: '16px',
+                height: '100%'
+              }}
+            >
               {/* Pipeline loading — skeleton cards */}
               {isLoading && AGENT_IDS.map((id) => (
                 <div key={id} className="bg-surface rounded-lg border border-border p-6">

@@ -67,11 +67,13 @@ export function AgentCard({
       style={{
         boxShadow: isWinner 
           ? '0 4px 20px rgba(196, 149, 106, 0.25)' 
-          : '0 2px 12px rgba(26, 23, 20, 0.06)'
+          : '0 2px 12px rgba(26, 23, 20, 0.06)',
+        height: '100%',
+        minHeight: '200px'
       }}
       onClick={isIdle ? undefined : onToggle}
     >
-      <div className="p-4">
+      <div style={{ padding: '28px 32px' }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
