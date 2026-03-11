@@ -308,7 +308,7 @@ function App() {
                   gap: '16px',
                   width: '100%',
                   maxWidth: '900px',
-                  aspectRatio: '1 / 1'
+                  aspectRatio: '4 / 3'
                 }}
               >
               {/* Pipeline loading — skeleton cards */}
