@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PromptInput } from './components/PromptInput';
 import { AgentCard } from './components/AgentCard';
-import { LoadingSkeleton } from './components/LoadingSkeleton';
 import { DebateMode } from './components/DebateMode';
 import { DiscussMode } from './components/DiscussMode';
 import { Sidebar } from './components/Sidebar';
@@ -21,6 +20,8 @@ function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'signup'>('login');
   const [guestPromptCount, setGuestPromptCount] = useState(0);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarToggleHovered, setIsSidebarToggleHovered] = useState(false);
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [response, setResponse] = useState<PromptResponse | null>(null);
@@ -77,6 +78,7 @@ function App() {
       all_responses: scoredResponses,
       integrity: null,
       timestamp: turn.timestamp,
+      tools_used: [],
     };
 
     setResponse(promptResponse);
@@ -89,6 +91,7 @@ function App() {
     const turn = sessionData?.turns.find((t) => t.turn_id === turnId);
     if (turn) {
       loadTurn(turn);
+      setIsSidebarOpen(false);
     }
   };
 
@@ -241,9 +244,9 @@ function App() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Sidebar */}
-      {sessionData && viewMode === 'arena' && (
+      {viewMode === 'arena' && (
         <Sidebar
-          turns={sessionData.turns.map((t) => ({
+          turns={(sessionData?.turns || []).map((t) => ({
             turn_id: t.turn_id,
             prompt: t.prompt,
             winner_id: t.winner_id,
@@ -251,17 +254,86 @@ function App() {
           }))}
           activeTurnId={activeTurnId}
           onTurnClick={handleTurnClick}
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
         />
       )}
 
       {/* Arena View - New Layout */}
       {viewMode === 'arena' && (
         <>
-          {/* Top Bar: Wordmark + Auth */}
+          {/* Top Bar: Sidebar Trigger + Auth */}
           <header className="flex items-center justify-between px-6 py-4">
-            <h1 className="font-serif text-xl font-semibold text-text-primary cursor-pointer" onClick={exitToArena}>
-              Arena
-            </h1>
+            <button
+              onClick={() => setIsSidebarOpen((prev) => !prev)}
+              onMouseEnter={() => setIsSidebarToggleHovered(true)}
+              onMouseLeave={() => setIsSidebarToggleHovered(false)}
+              aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              className="group relative"
+              style={{
+                width: '40px',
+                height: '28px',
+                borderRadius: '6px',
+                border: isSidebarToggleHovered
+                  ? '1px solid rgba(255,255,255,0.7)'
+                  : '1.75px solid rgba(119, 115, 110, 0.56)',
+                background: 'transparent',
+                boxShadow: isSidebarToggleHovered
+                  ? '0 12px 36px rgba(26, 23, 20, 0.14), inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(255,255,255,0.3)'
+                  : isSidebarOpen
+                    ? '0 8px 20px rgba(26, 23, 20, 0.14)'
+                    : '0 4px 10px rgba(26, 23, 20, 0.08)',
+                transition: 'all 280ms cubic-bezier(0.22, 1, 0.36, 1)',
+                transform: isSidebarToggleHovered ? 'translateY(-2px)' : isSidebarOpen ? 'translateY(-1px)' : 'translateY(0)',
+                backdropFilter: isSidebarToggleHovered ? 'blur(20px)' : 'blur(0px)',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  borderRadius: 'inherit',
+                  opacity: isSidebarToggleHovered ? 1 : 0,
+                  transition: 'opacity 0.4s ease',
+                  pointerEvents: 'none',
+                  background: `linear-gradient(
+                    135deg,
+                    rgba(255,255,255,0.45) 0%,
+                    rgba(255,255,255,0.15) 40%,
+                    rgba(255,255,255,0.0) 60%,
+                    rgba(26, 23, 20, 0.08) 100%
+                  )`,
+                }}
+              />
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  top: '5px',
+                  bottom: '5px',
+                  left: '50%',
+                  width: '1.75px',
+                  background: 'rgba(119, 115, 110, 0.56)',
+                  transform: 'translateX(-50%)',
+                }}
+              />
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  left: '6px',
+                  right: '6px',
+                  top: '5px',
+                  bottom: '5px',
+                  border: '1.75px solid rgba(119, 115, 110, 0.56)',
+                  borderRadius: '3px',
+                }}
+              />
+            </button>
             <UserMenu
               user={user}
               isLoading={authLoading}
@@ -271,20 +343,20 @@ function App() {
           </header>
 
           {/* Main Content Area */}
-          <div 
-            className="flex-1 overflow-auto"
+          <div
+            className="flex-1"
             style={{
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: 'calc(100vh - 120px)',
-              padding: '24px 24px 0 24px'
+              flexDirection: 'column',
+              padding: '8px',
+              paddingBottom: '80px',
+              minHeight: 0,
             }}
           >
-            <div style={{ width: '100%', maxWidth: '900px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               {/* Current Prompt Display (when active) */}
               {currentPrompt && phase !== 'idle' && (
-                <div className="text-center mb-6">
+                <div className="text-center mb-4">
                   <p className="text-sm text-text-secondary italic">
                     "{currentPrompt}"
                   </p>
@@ -293,22 +365,24 @@ function App() {
 
               {/* Error */}
               {error && (
-                <div className="mb-6 p-4 bg-surface border border-accent/30 rounded-lg text-text-primary max-w-2xl mx-auto">
+                <div className="mb-4 p-4 bg-surface border border-accent/30 rounded-lg text-text-primary max-w-2xl mx-auto">
                   <p className="text-sm font-medium text-accent mb-1">Cannot process</p>
                   <p className="text-text-secondary text-sm">{error}</p>
                 </div>
               )}
 
               {/* Agent Cards - Always Visible in 2x2 Grid */}
-              <div 
+              <div
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
                   gridTemplateRows: '1fr 1fr',
-                  gap: '16px',
-                  width: '100%',
-                  height: 'calc(100vh - 140px)',
-                  padding: '16px 24px 0 24px',
+                  gap: '8px',
+                  flex: 1,
+                  minHeight: 0,
+                  transition: 'transform 520ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  transform: isSidebarOpen ? 'translateX(min(54px, 6vw))' : 'translateX(0)',
+                  willChange: 'transform',
                 }}
               >
               {/* Pipeline loading — skeleton cards */}
@@ -438,7 +512,6 @@ function App() {
             <DebateMode
               originalPrompt={response.prompt}
               challengedAgent={challengedAgent}
-              allResponses={response.all_responses}
               sessionId={response.session_id}
               onExit={exitToArena}
               onSuccess={refreshUser}

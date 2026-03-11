@@ -26,12 +26,19 @@ export function AgentCard({
   isIdle = false,
 }: AgentCardProps) {
   const agentConfig = AGENTS[agentId];
+  const agentBackgrounds: Record<string, string> = {
+    agent_1: '#EEF0F2',
+    agent_2: '#F0EDF2',
+    agent_3: '#EDF2EF',
+    agent_4: '#F2EDE8',
+  };
   const response = scoredAgent?.response;
   const score = scoredAgent?.score;
   const isWinner = scoredAgent?.is_winner ?? false;
 
   // Animated confidence bar — starts at 0, animates to final value
   const [barWidth, setBarWidth] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
   const prevConfidence = useRef(0);
 
   useEffect(() => {
@@ -45,6 +52,13 @@ export function AgentCard({
 
   // Content height transition ref
   const contentRef = useRef<HTMLDivElement>(null);
+  const agentRgb: Record<string, string> = {
+    agent_1: '140, 155, 171',
+    agent_2: '155, 143, 170',
+    agent_3: '138, 168, 153',
+    agent_4: '176, 151, 126',
+  };
+  const hoverRgb = agentRgb[agentId] || '26, 23, 20';
 
   const displayText = isStreaming
     ? streamingText || ''
@@ -55,8 +69,7 @@ export function AgentCard({
   return (
     <div
       className={`
-        bg-surface rounded-2xl
-        transition-all duration-300 ease-in-out
+        rounded-2xl
         ${isIdle ? 'opacity-75 cursor-default' : 'cursor-pointer'}
         ${isWinner
           ? 'ring-2 ring-accent/30 scale-[1.02]'
@@ -65,14 +78,42 @@ export function AgentCard({
         ${isExpanded ? 'md:col-span-2' : ''}
       `}
       style={{
-        boxShadow: isWinner 
-          ? '0 4px 20px rgba(196, 149, 106, 0.25)' 
-          : '0 2px 12px rgba(26, 23, 20, 0.06)',
+        backgroundColor: agentBackgrounds[agentId] || '#FAF7F4',
+        boxShadow: isHovered
+          ? `0 12px 40px rgba(${hoverRgb}, 0.25), inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(255,255,255,0.3)`
+          : isWinner
+            ? '0 4px 20px rgba(196, 149, 106, 0.25)'
+            : '0 2px 12px rgba(26, 23, 20, 0.06)',
+        border: isHovered ? '1px solid rgba(255,255,255,0.7)' : '1px solid transparent',
+        transition: 'all 0.4s ease',
+        backdropFilter: isHovered ? 'blur(20px)' : 'blur(0px)',
+        transform: isHovered ? 'translateY(-4px)' : undefined,
+        position: 'relative',
+        overflow: 'hidden',
         height: '100%',
         minHeight: '200px'
       }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       onClick={isIdle ? undefined : onToggle}
     >
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: 'inherit',
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.4s ease',
+          pointerEvents: 'none',
+          background: `linear-gradient(
+            135deg,
+            rgba(255,255,255,0.45) 0%,
+            rgba(255,255,255,0.15) 40%,
+            rgba(255,255,255,0.0) 60%,
+            rgba(${hoverRgb}, 0.15) 100%
+          )`,
+        }}
+      />
       <div style={{ padding: '28px 32px' }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
@@ -81,7 +122,10 @@ export function AgentCard({
               className="w-3 h-3 rounded-full"
               style={{ backgroundColor: agentConfig.color }}
             />
-            <span className="font-medium text-text-primary">
+            <span
+              className="font-bold tracking-[0.012em] text-text-primary"
+              style={{ fontSize: '1.30rem', textShadow: '0 0.5px 0 rgba(26, 23, 20, 0.5)' }}
+            >
               {agentConfig.name}
             </span>
             {isWinner && (

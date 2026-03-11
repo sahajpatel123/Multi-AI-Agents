@@ -11,7 +11,6 @@ import {
 interface DebateModeProps {
   originalPrompt: string;
   challengedAgent: ScoredAgent;
-  allResponses: ScoredAgent[];
   sessionId: string;
   onExit: () => void;
   onSuccess?: () => void;
@@ -28,7 +27,6 @@ interface DebateRound {
 export function DebateMode({
   originalPrompt,
   challengedAgent,
-  allResponses,
   sessionId,
   onExit,
   onSuccess,
