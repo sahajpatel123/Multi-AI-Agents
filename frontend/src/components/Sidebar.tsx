@@ -33,25 +33,28 @@ export function Sidebar({ turns, activeTurnId, onTurnClick, isOpen, onClose }: S
                     transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
                     ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{
-          width: '320px',
+          width: '308px',
           maxWidth: '88vw',
-          boxShadow: '12px 0 38px rgba(26, 23, 20, 0.16)',
+          boxShadow: '10px 0 30px rgba(26, 23, 20, 0.14)',
           background:
-            'linear-gradient(180deg, rgba(252,250,248,0.98) 0%, rgba(247,243,239,0.98) 100%)',
+            'linear-gradient(180deg, rgba(252,250,248,0.98) 0%, rgba(245,241,237,0.98) 100%)',
         }}
       >
-        <div className="flex flex-col h-full px-4 py-5">
+        <div className="flex flex-col h-full px-4 py-6">
           <div className="space-y-2">
             <MenuAction icon={<Plus className="w-5 h-5" />} label="New chat" isPrimary />
-            <MenuAction icon={<Search className="w-5 h-5" />} label="Search" />
+            <MenuAction
+              icon={<Search className="w-5 h-5" />}
+              label="Search"
+            />
           </div>
 
           <div className="mt-2 space-y-2">
             <MenuAction icon={<MessageSquare className="w-5 h-5" />} label="Chats" />
           </div>
 
-          <div className="mt-6 mb-2">
-            <p className="text-[13px] tracking-[0.01em] text-text-secondary/85">Recents</p>
+          <div className="mt-7 mb-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-text-secondary/75">Recents</p>
           </div>
 
           <div className="flex-1 overflow-y-auto pb-4">
@@ -63,13 +66,15 @@ export function Sidebar({ turns, activeTurnId, onTurnClick, isOpen, onClose }: S
                     <button
                       key={turn.turn_id}
                       onClick={() => onTurnClick(turn.turn_id)}
-                      className="w-full text-left rounded-xl px-3 py-2.5 transition-all duration-200"
+                      className="w-full text-left rounded-lg px-3 py-2.5 transition-all duration-200"
                       style={{
                         background: isActive ? 'rgba(20, 18, 16, 0.06)' : 'transparent',
+                        border: isActive ? '1px solid rgba(255,255,255,0.52)' : '1px solid transparent',
+                        boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.62)' : 'none',
                       }}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-text-primary truncate" style={{ fontSize: '14px', lineHeight: '1.35' }}>
+                        <p className="text-text-primary truncate font-medium" style={{ fontSize: '14px', lineHeight: '1.35' }}>
                           {turn.prompt}
                         </p>
                         {isActive ? (
@@ -85,7 +90,7 @@ export function Sidebar({ turns, activeTurnId, onTurnClick, isOpen, onClose }: S
                 className="rounded-2xl border border-border px-4 py-4"
                 style={{ background: 'rgba(255, 255, 255, 0.35)' }}
               >
-                <p className="text-[12px] leading-relaxed text-text-secondary">
+                <p className="text-[12px] font-medium leading-relaxed text-text-secondary">
                   Your prompts will appear here once you run one.
                 </p>
               </div>
@@ -93,7 +98,7 @@ export function Sidebar({ turns, activeTurnId, onTurnClick, isOpen, onClose }: S
           </div>
 
           <div className="pt-3 border-t border-border/60">
-            <p className="text-xs text-text-secondary/75">{turns.length} {turns.length === 1 ? 'prompt' : 'prompts'}</p>
+            <p className="text-xs font-medium text-text-secondary/75">{turns.length} {turns.length === 1 ? 'prompt' : 'prompts'}</p>
           </div>
         </div>
       </div>
@@ -113,9 +118,10 @@ interface MenuActionProps {
   icon: ReactNode;
   label: string;
   isPrimary?: boolean;
+  onClick?: () => void;
 }
 
-function MenuAction({ icon, label, isPrimary = false }: MenuActionProps) {
+function MenuAction({ icon, label, isPrimary = false, onClick }: MenuActionProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -124,16 +130,17 @@ function MenuAction({ icon, label, isPrimary = false }: MenuActionProps) {
       type="button"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onClick={onClick}
       style={{
         position: 'relative',
         overflow: 'hidden',
-        transition: 'all 0.4s ease',
-        backdropFilter: isHovered ? 'blur(20px)' : 'blur(0px)',
+        transition: 'all 0.3s ease',
+        backdropFilter: isHovered ? 'blur(8px)' : 'blur(0px)',
         boxShadow: isHovered
-          ? '0 12px 36px rgba(26, 23, 20, 0.14), inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(255,255,255,0.3)'
+          ? '0 8px 18px rgba(26, 23, 20, 0.12), inset 0 1px 0 rgba(255,255,255,0.72)'
           : 'none',
-        border: isHovered ? '1px solid rgba(255,255,255,0.7)' : '1px solid transparent',
-        transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+        border: isHovered ? '1px solid rgba(255,255,255,0.65)' : '1px solid transparent',
+        transform: isHovered ? 'translateY(-1px)' : 'translateY(0)',
       }}
     >
       <div
@@ -142,14 +149,14 @@ function MenuAction({ icon, label, isPrimary = false }: MenuActionProps) {
           inset: 0,
           borderRadius: 'inherit',
           opacity: isHovered ? 1 : 0,
-          transition: 'opacity 0.4s ease',
+          transition: 'opacity 0.3s ease',
           pointerEvents: 'none',
           background: `linear-gradient(
-            135deg,
-            rgba(255,255,255,0.45) 0%,
-            rgba(255,255,255,0.15) 40%,
-            rgba(255,255,255,0.0) 60%,
-            rgba(26, 23, 20, 0.08) 100%
+            140deg,
+            rgba(255,255,255,0.24) 0%,
+            rgba(255,255,255,0.1) 42%,
+            rgba(255,255,255,0.0) 62%,
+            rgba(26, 23, 20, 0.06) 100%
           )`,
         }}
       />
@@ -161,7 +168,7 @@ function MenuAction({ icon, label, isPrimary = false }: MenuActionProps) {
       >
         <span className="text-text-primary/95">{icon}</span>
       </span>
-      <span className="font-medium text-text-primary/92" style={{ fontSize: '15px', lineHeight: '1.15' }}>
+      <span className="font-semibold text-text-primary/92" style={{ fontSize: '14px', lineHeight: '1.15' }}>
         {label}
       </span>
     </button>

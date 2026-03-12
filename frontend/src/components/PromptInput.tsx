@@ -4,9 +4,10 @@ import { Send, Loader2 } from 'lucide-react';
 interface PromptInputProps {
   onSubmit: (prompt: string) => void;
   isLoading: boolean;
+  placeholder?: string;
 }
 
-export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
+export function PromptInput({ onSubmit, isLoading, placeholder = 'Ask something and watch four minds respond...' }: PromptInputProps) {
   const [prompt, setPrompt] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -52,7 +53,7 @@ export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Ask something and watch four minds respond..."
+          placeholder={placeholder}
           className="placeholder:text-text-secondary/60 font-sans"
           style={{ 
             flex: 1,

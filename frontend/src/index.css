@@ -6,6 +6,7 @@
 
 :root {
   --font-anthropic-serif: "Tiempos Text", "Copernicus", "Source Serif 4", "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "New York", "Times New Roman", serif;
+  --ease-out-premium: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body {
@@ -13,7 +14,38 @@ body {
   @apply bg-background text-text-primary antialiased;
   font-feature-settings: "liga" 1, "kern" 1, "calt" 1;
   text-rendering: optimizeLegibility;
+  letter-spacing: 0.002em;
 }
+
+#root {
+  min-height: 100vh;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(176, 151, 126, 0.45) rgba(240, 235, 227, 0.65);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(176, 151, 126, 0.45);
+  border: 2px solid rgba(240, 235, 227, 0.65);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(240, 235, 227, 0.65);
+}
+
+::selection {
+  background: rgba(196, 149, 106, 0.28);
+  color: #1A1714;
+}
+
 
 @keyframes pulse {
   0%, 100% {

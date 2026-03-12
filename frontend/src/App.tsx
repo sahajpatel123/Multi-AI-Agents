@@ -6,9 +6,9 @@ import { DiscussMode } from './components/DiscussMode';
 import { Sidebar } from './components/Sidebar';
 import { AuthModal } from './components/AuthModal';
 import { UserMenu } from './components/UserMenu';
-import { streamPrompt, getSession } from './api';
+import { streamPrompt, streamDiscuss, getSession } from './api';
 import { useAuth } from './hooks/useAuth';
-import { PromptResponse, ScoredAgent, SessionData, SessionTurn } from './types';
+import { AGENTS, DiscussChatMessage, PromptResponse, ScoredAgent, SessionData, SessionTurn } from './types';
 
 const AGENT_IDS = ['agent_1', 'agent_2', 'agent_3', 'agent_4'] as const;
 
@@ -22,6 +22,13 @@ function App() {
   const [guestPromptCount, setGuestPromptCount] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarToggleHovered, setIsSidebarToggleHovered] = useState(false);
+  const [focusedAgentId, setFocusedAgentId] = useState<string | null>(null);
+  const [focusedCardRect, setFocusedCardRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const [isFocusedExpanded, setIsFocusedExpanded] = useState(false);
+  const [focusedHistories, setFocusedHistories] = useState<Record<string, DiscussChatMessage[]>>({});
+  const [focusedChatError, setFocusedChatError] = useState<string | null>(null);
+  const [focusedStreamingText, setFocusedStreamingText] = useState('');
+  const [isFocusedChatStreaming, setIsFocusedChatStreaming] = useState(false);
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [response, setResponse] = useState<PromptResponse | null>(null);
@@ -45,6 +52,9 @@ function App() {
   // Ref to accumulate tokens without re-rendering on every single token
   const tokenBuffers = useRef<Record<string, string>>({});
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const focusedTokenBuffer = useRef('');
+  const focusedFlushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const focusedMessagesEndRef = useRef<HTMLDivElement>(null);
 
   // Session restore on mount
   useEffect(() => {
@@ -121,6 +131,12 @@ function App() {
     setViewMode('arena');
     setChallengedAgent(null);
     setDiscussAgent(null);
+    setFocusedAgentId(null);
+    setFocusedCardRect(null);
+    setFocusedHistories({});
+    setFocusedStreamingText('');
+    setFocusedChatError(null);
+    setIsFocusedChatStreaming(false);
     tokenBuffers.current = {};
 
     // Flush streaming text to state at 60fps-ish
@@ -217,10 +233,6 @@ function App() {
     }
   };
 
-  const toggleAgent = (agentId: string) => {
-    setExpandedAgent(expandedAgent === agentId ? null : agentId);
-  };
-
   const handleChallenge = (scored: ScoredAgent) => {
     setChallengedAgent(scored);
     setViewMode('debate');
@@ -237,12 +249,173 @@ function App() {
     setDiscussAgent(null);
   };
 
+  const openFocusedAgent = (agentId: string, cardRect?: DOMRect) => {
+    if (phase === 'pipeline') return;
+    if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
+    const matchedResponse = response?.all_responses.find(
+      (s) => s.response.agent_id === agentId
+    )?.response;
+    const seedFromResponse = matchedResponse?.one_liner || matchedResponse?.verdict;
+    setIsSidebarOpen(false);
+    setFocusedAgentId(agentId);
+    setFocusedCardRect(cardRect ? {
+      top: cardRect.top,
+      left: cardRect.left,
+      width: cardRect.width,
+      height: cardRect.height,
+    } : null);
+    setIsFocusedExpanded(false);
+    setFocusedChatError(null);
+    setFocusedStreamingText('');
+    setFocusedHistories((prev) => {
+      const existing = prev[agentId];
+      if (existing && existing.length > 0) return prev;
+
+      if (!seedFromResponse) return prev;
+
+      return {
+        ...prev,
+        [agentId]: [{
+          role: 'agent',
+          content: seedFromResponse,
+          timestamp: new Date().toISOString(),
+        }],
+      };
+    });
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setIsFocusedExpanded(true));
+    });
+  };
+
+  const closeFocusedAgent = () => {
+    setIsFocusedExpanded(false);
+    if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
+    setTimeout(() => {
+      setFocusedAgentId(null);
+      setFocusedCardRect(null);
+      setFocusedStreamingText('');
+      setFocusedChatError(null);
+      setIsFocusedChatStreaming(false);
+      focusedTokenBuffer.current = '';
+    }, 360);
+  };
+
+  const focusedScored = focusedAgentId && response
+    ? response.all_responses.find((s) => s.response.agent_id === focusedAgentId)
+    : undefined;
+  const focusedHistory = focusedAgentId ? (focusedHistories[focusedAgentId] || []) : [];
+  const focusedAgentConfig = focusedAgentId ? AGENTS[focusedAgentId] : null;
+  const flushFocusedTokens = useCallback(() => {
+    setFocusedStreamingText(focusedTokenBuffer.current);
+  }, []);
+
+  useEffect(() => {
+    if (!focusedAgentId) return;
+    setTimeout(() => {
+      focusedMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 40);
+  }, [focusedAgentId, focusedHistory.length, focusedStreamingText]);
+
+  const handleFocusedAgentSubmit = async (message: string) => {
+    if (!focusedAgentId || isFocusedChatStreaming) return;
+
+    const trimmed = message.trim();
+    if (!trimmed) return;
+
+    setFocusedChatError(null);
+    setIsFocusedChatStreaming(true);
+    setFocusedStreamingText('');
+    focusedTokenBuffer.current = '';
+
+    const currentHistory = focusedHistories[focusedAgentId] || [];
+    setFocusedHistories((prev) => ({
+      ...prev,
+      [focusedAgentId]: [
+        ...currentHistory,
+        { role: 'user', content: trimmed, timestamp: new Date().toISOString() },
+      ],
+    }));
+
+    focusedFlushTimer.current = setInterval(flushFocusedTokens, 50);
+
+    try {
+      await streamDiscuss(
+        {
+          agent_id: focusedAgentId,
+          message: trimmed,
+          conversation_history: currentHistory,
+          original_verdict: focusedScored?.response.verdict || focusedAgentConfig?.oneLiner || '',
+          original_prompt: response?.prompt || currentPrompt || 'General discussion',
+          session_id: response?.session_id || sessionData?.session_id || localStorage.getItem('arena_session_id') || undefined,
+        },
+        {
+          onToken: (data) => {
+            focusedTokenBuffer.current += data.token;
+          },
+          onResult: (data) => {
+            if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
+            setFocusedStreamingText('');
+            setFocusedHistories((prev) => ({
+              ...prev,
+              [focusedAgentId]: data.conversation_history,
+            }));
+            setIsFocusedChatStreaming(false);
+            if (user) refreshUser();
+          },
+          onError: (data) => {
+            if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
+            setFocusedChatError(data.detail);
+            setIsFocusedChatStreaming(false);
+          },
+        }
+      );
+    } catch (err) {
+      if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
+      setFocusedChatError(err instanceof Error ? err.message : 'Failed to message agent');
+      setIsFocusedChatStreaming(false);
+    }
+  };
+
+  const handlePromptSubmit = (prompt: string) => {
+    if (focusedAgentId) {
+      void handleFocusedAgentSubmit(prompt);
+      return;
+    }
+    void handleSubmit(prompt);
+  };
+
+  const handleAgentTitleClick = (agentId: string) => {
+    setExpandedAgent((prev) => (prev === agentId ? null : agentId));
+  };
+
   const isLoading = phase === 'pipeline';
   const isStreaming = phase === 'streaming' || phase === 'scoring';
   const isDone = phase === 'done';
+  const focusedTargetStyle = {
+    left: 'clamp(120px, 20vw, 380px)',
+    top: 'clamp(104px, 12vh, 146px)',
+    width: 'min(920px, calc(100vw - 180px))',
+    height: 'min(620px, calc(100vh - 210px))',
+    borderRadius: '22px',
+  };
+  const focusedPanelBackgrounds: Record<string, string> = {
+    agent_1: 'linear-gradient(180deg, rgba(243,245,247,0.92) 0%, rgba(238,240,242,0.92) 100%)',
+    agent_2: 'linear-gradient(180deg, rgba(244,241,246,0.92) 0%, rgba(240,237,242,0.92) 100%)',
+    agent_3: 'linear-gradient(180deg, rgba(241,246,243,0.92) 0%, rgba(237,242,239,0.92) 100%)',
+    agent_4: 'linear-gradient(180deg, rgba(246,241,236,0.92) 0%, rgba(242,237,232,0.92) 100%)',
+  };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div
+      className="min-h-screen bg-background flex flex-col"
+      style={{
+        background: `
+          radial-gradient(1200px 560px at 12% -5%, rgba(140, 155, 171, 0.1), transparent 62%),
+          radial-gradient(900px 520px at 88% 108%, rgba(176, 151, 126, 0.12), transparent 64%),
+          #FAF7F4
+        `,
+      }}
+    >
       {/* Sidebar */}
       {viewMode === 'arena' && (
         <Sidebar
@@ -263,7 +436,14 @@ function App() {
       {viewMode === 'arena' && (
         <>
           {/* Top Bar: Sidebar Trigger + Auth */}
-          <header className="flex items-center justify-between px-6 py-4">
+          <header
+            className="flex items-center justify-between px-6 py-4"
+            style={{
+              filter: focusedAgentId ? 'blur(4px)' : 'blur(0px)',
+              transition: 'filter 320ms cubic-bezier(0.22, 1, 0.36, 1)',
+              pointerEvents: focusedAgentId ? 'none' : 'auto',
+            }}
+          >
             <button
               onClick={() => setIsSidebarOpen((prev) => !prev)}
               onMouseEnter={() => setIsSidebarToggleHovered(true)}
@@ -280,13 +460,13 @@ function App() {
                   : '1.75px solid rgba(119, 115, 110, 0.56)',
                 background: 'transparent',
                 boxShadow: isSidebarToggleHovered
-                  ? '0 12px 36px rgba(26, 23, 20, 0.14), inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(255,255,255,0.3)'
+                  ? '0 10px 22px rgba(26, 23, 20, 0.12), inset 0 1px 0 rgba(255,255,255,0.76)'
                   : isSidebarOpen
-                    ? '0 8px 20px rgba(26, 23, 20, 0.14)'
-                    : '0 4px 10px rgba(26, 23, 20, 0.08)',
+                    ? '0 6px 16px rgba(26, 23, 20, 0.1)'
+                    : '0 2px 8px rgba(26, 23, 20, 0.06)',
                 transition: 'all 280ms cubic-bezier(0.22, 1, 0.36, 1)',
-                transform: isSidebarToggleHovered ? 'translateY(-2px)' : isSidebarOpen ? 'translateY(-1px)' : 'translateY(0)',
-                backdropFilter: isSidebarToggleHovered ? 'blur(20px)' : 'blur(0px)',
+                transform: isSidebarToggleHovered ? 'translateY(-1px)' : 'translateY(0)',
+                backdropFilter: isSidebarToggleHovered ? 'blur(8px)' : 'blur(0px)',
                 position: 'relative',
                 overflow: 'hidden',
               }}
@@ -298,14 +478,13 @@ function App() {
                   inset: 0,
                   borderRadius: 'inherit',
                   opacity: isSidebarToggleHovered ? 1 : 0,
-                  transition: 'opacity 0.4s ease',
+                  transition: 'opacity 0.3s ease',
                   pointerEvents: 'none',
                   background: `linear-gradient(
-                    135deg,
-                    rgba(255,255,255,0.45) 0%,
-                    rgba(255,255,255,0.15) 40%,
-                    rgba(255,255,255,0.0) 60%,
-                    rgba(26, 23, 20, 0.08) 100%
+                    140deg,
+                    rgba(255,255,255,0.26) 0%,
+                    rgba(255,255,255,0.08) 48%,
+                    rgba(26, 23, 20, 0.06) 100%
                   )`,
                 }}
               />
@@ -348,9 +527,11 @@ function App() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              padding: '8px',
-              paddingBottom: '80px',
+              padding: '18px 32px 138px 32px',
               minHeight: 0,
+              filter: focusedAgentId ? 'blur(6px)' : 'blur(0px)',
+              transition: 'filter 340ms cubic-bezier(0.22, 1, 0.36, 1)',
+              pointerEvents: focusedAgentId ? 'none' : 'auto',
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
@@ -376,10 +557,12 @@ function App() {
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
-                  gridTemplateRows: '1fr 1fr',
-                  gap: '8px',
+                  gridTemplateRows: 'minmax(0, 1fr) minmax(0, 1fr)',
+                  columnGap: '22px',
+                  rowGap: '24px',
                   flex: 1,
                   minHeight: 0,
+                  marginBottom: '10px',
                   transition: 'transform 520ms cubic-bezier(0.22, 1, 0.36, 1)',
                   transform: isSidebarOpen ? 'translateX(min(54px, 6vw))' : 'translateX(0)',
                   willChange: 'transform',
@@ -402,7 +585,7 @@ function App() {
                   key={id}
                   agentId={id}
                   isExpanded={false}
-                  onToggle={() => {}}
+                  onToggle={(cardRect) => openFocusedAgent(id, cardRect)}
                   streamingText={streamingTexts[id] || ''}
                   isStreaming={!doneAgents.has(id)}
                 />
@@ -417,7 +600,8 @@ function App() {
                     agentId={scoredAgent.response.agent_id}
                     scoredAgent={scoredAgent}
                     isExpanded={expandedAgent === scoredAgent.response.agent_id}
-                    onToggle={() => toggleAgent(scoredAgent.response.agent_id)}
+                    onTitleClick={() => handleAgentTitleClick(scoredAgent.response.agent_id)}
+                    onToggle={(cardRect) => openFocusedAgent(scoredAgent.response.agent_id, cardRect)}
                     onChallenge={() => handleChallenge(scoredAgent)}
                     onDiscuss={() => handleDiscuss(scoredAgent)}
                   />
@@ -429,7 +613,7 @@ function App() {
                   key={id}
                   agentId={id}
                   isExpanded={false}
-                  onToggle={() => {}}
+                  onToggle={(cardRect) => openFocusedAgent(id, cardRect)}
                   isIdle={true}
                 />
               ))}
@@ -460,10 +644,114 @@ function App() {
             </div>
           </div>
 
+          {focusedAgentId && focusedAgentConfig && (
+            <>
+              <div
+                className="fixed inset-0 z-30 bg-text-primary/10"
+                style={{
+                  opacity: isFocusedExpanded ? 1 : 0,
+                  transition: 'opacity 320ms cubic-bezier(0.22, 1, 0.36, 1)',
+                }}
+                onClick={closeFocusedAgent}
+              />
+              <div
+                className="fixed z-40 overflow-hidden"
+                style={{
+                  ...(isFocusedExpanded
+                    ? focusedTargetStyle
+                    : focusedCardRect
+                      ? {
+                          left: `${focusedCardRect.left}px`,
+                          top: `${focusedCardRect.top}px`,
+                          width: `${focusedCardRect.width}px`,
+                          height: `${focusedCardRect.height}px`,
+                          borderRadius: '16px',
+                        }
+                      : focusedTargetStyle),
+                  transition: 'all 520ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  background: focusedPanelBackgrounds[focusedAgentId] || 'rgba(250, 247, 244, 0.78)',
+                  backdropFilter: 'blur(14px)',
+                  border: '1px solid rgba(255,255,255,0.65)',
+                  boxShadow: '0 24px 54px rgba(26, 23, 20, 0.22)',
+                }}
+              >
+                <div className="h-full flex flex-col">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-border/70">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: focusedAgentConfig.color }}
+                      />
+                      <p className="font-semibold text-text-primary">{focusedAgentConfig.name}</p>
+                    </div>
+                    <button
+                      onClick={closeFocusedAgent}
+                      className="text-sm text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                    {focusedHistory.map((msg, idx) => (
+                      <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        {msg.role === 'user' ? (
+                          <div className="max-w-[82%] rounded-xl px-4 py-3 border border-accent/25 bg-accent/10">
+                            <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                          </div>
+                        ) : (
+                          <div
+                            className="max-w-[82%] rounded-xl px-4 py-3 border"
+                            style={{
+                              borderColor: `${focusedAgentConfig.color}35`,
+                              backgroundColor: `${focusedAgentConfig.color}10`,
+                            }}
+                          >
+                            <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {isFocusedChatStreaming && (
+                      <div className="flex justify-start">
+                        <div
+                          className="max-w-[82%] rounded-xl px-4 py-3 border"
+                          style={{
+                            borderColor: `${focusedAgentConfig.color}35`,
+                            backgroundColor: `${focusedAgentConfig.color}10`,
+                          }}
+                        >
+                          <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
+                            {focusedStreamingText}
+                            <span className="inline-block w-0.5 h-3.5 ml-0.5 bg-text-secondary/50 animate-pulse align-text-bottom" />
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {focusedChatError && (
+                      <div className="rounded-lg border border-accent/30 bg-surface px-3 py-2">
+                        <p className="text-xs text-text-secondary">{focusedChatError}</p>
+                      </div>
+                    )}
+
+                    <div ref={focusedMessagesEndRef} />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
           {/* Fixed Bottom Prompt Box */}
           <PromptInput
-            onSubmit={handleSubmit}
-            isLoading={isLoading || isStreaming}
+            onSubmit={handlePromptSubmit}
+            isLoading={focusedAgentId ? isFocusedChatStreaming : (isLoading || isStreaming)}
+            placeholder={
+              focusedAgentId && focusedAgentConfig
+                ? `Message ${focusedAgentConfig.name} directly...`
+                : 'Ask something and watch four minds respond...'
+            }
           />
           
           {/* Guest nudge after 3rd use */}

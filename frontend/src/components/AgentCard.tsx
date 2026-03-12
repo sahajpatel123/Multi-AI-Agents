@@ -5,7 +5,8 @@ import { ScoredAgent, AGENTS } from '../types';
 interface AgentCardProps {
   scoredAgent?: ScoredAgent;
   isExpanded: boolean;
-  onToggle: () => void;
+  onToggle: (cardRect?: DOMRect) => void;
+  onTitleClick?: () => void;
   streamingText?: string;
   isStreaming?: boolean;
   agentId: string;
@@ -18,6 +19,7 @@ export function AgentCard({
   scoredAgent,
   isExpanded,
   onToggle,
+  onTitleClick,
   streamingText,
   isStreaming,
   agentId,
@@ -31,6 +33,12 @@ export function AgentCard({
     agent_2: '#F0EDF2',
     agent_3: '#EDF2EF',
     agent_4: '#F2EDE8',
+  };
+  const agentBackgroundGradients: Record<string, string> = {
+    agent_1: 'linear-gradient(180deg, #F3F5F7 0%, #EEF0F2 100%)',
+    agent_2: 'linear-gradient(180deg, #F4F1F6 0%, #F0EDF2 100%)',
+    agent_3: 'linear-gradient(180deg, #F1F6F3 0%, #EDF2EF 100%)',
+    agent_4: 'linear-gradient(180deg, #F6F1EC 0%, #F2EDE8 100%)',
   };
   const response = scoredAgent?.response;
   const score = scoredAgent?.score;
@@ -65,37 +73,40 @@ export function AgentCard({
     : isExpanded
       ? response?.verdict || ''
       : response?.one_liner || '';
+  const useBottomReplyZone = !isIdle && !isExpanded;
 
   return (
     <div
       className={`
         rounded-2xl
-        ${isIdle ? 'opacity-75 cursor-default' : 'cursor-pointer'}
+        cursor-pointer
         ${isWinner
-          ? 'ring-2 ring-accent/30 scale-[1.02]'
+          ? 'ring-2 ring-accent/30 scale-[1.01]'
           : 'scale-100'
         }
         ${isExpanded ? 'md:col-span-2' : ''}
       `}
       style={{
-        backgroundColor: agentBackgrounds[agentId] || '#FAF7F4',
+        background: agentBackgroundGradients[agentId] || `linear-gradient(180deg, ${agentBackgrounds[agentId] || '#FAF7F4'} 0%, ${agentBackgrounds[agentId] || '#FAF7F4'} 100%)`,
         boxShadow: isHovered
-          ? `0 12px 40px rgba(${hoverRgb}, 0.25), inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(255,255,255,0.3)`
+          ? `0 10px 24px rgba(${hoverRgb}, 0.18), inset 0 1px 0 rgba(255,255,255,0.72)`
           : isWinner
-            ? '0 4px 20px rgba(196, 149, 106, 0.25)'
-            : '0 2px 12px rgba(26, 23, 20, 0.06)',
-        border: isHovered ? '1px solid rgba(255,255,255,0.7)' : '1px solid transparent',
-        transition: 'all 0.4s ease',
-        backdropFilter: isHovered ? 'blur(20px)' : 'blur(0px)',
-        transform: isHovered ? 'translateY(-4px)' : undefined,
+            ? '0 8px 18px rgba(196, 149, 106, 0.18)'
+            : '0 4px 14px rgba(26, 23, 20, 0.07)',
+        border: isHovered ? '1px solid rgba(255,255,255,0.7)' : `1px solid rgba(${hoverRgb}, 0.16)`,
+        transition: 'all 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
+        backdropFilter: isHovered ? 'blur(8px)' : 'blur(0px)',
+        transform: isHovered ? 'translateY(-2px)' : undefined,
         position: 'relative',
         overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
         height: '100%',
-        minHeight: '200px'
+        minHeight: '220px'
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onClick={isIdle ? undefined : onToggle}
+      onClick={(e) => onToggle((e.currentTarget as HTMLDivElement).getBoundingClientRect())}
     >
       <div
         style={{
@@ -103,18 +114,18 @@ export function AgentCard({
           inset: 0,
           borderRadius: 'inherit',
           opacity: isHovered ? 1 : 0,
-          transition: 'opacity 0.4s ease',
+          transition: 'opacity 0.3s ease',
           pointerEvents: 'none',
           background: `linear-gradient(
-            135deg,
-            rgba(255,255,255,0.45) 0%,
-            rgba(255,255,255,0.15) 40%,
-            rgba(255,255,255,0.0) 60%,
-            rgba(${hoverRgb}, 0.15) 100%
+            145deg,
+            rgba(255,255,255,0.24) 0%,
+            rgba(255,255,255,0.09) 46%,
+            rgba(255,255,255,0.0) 64%,
+            rgba(${hoverRgb}, 0.08) 100%
           )`,
         }}
       />
-      <div style={{ padding: '28px 32px' }}>
+      <div style={{ padding: '28px 32px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -122,12 +133,26 @@ export function AgentCard({
               className="w-3 h-3 rounded-full"
               style={{ backgroundColor: agentConfig.color }}
             />
-            <span
-              className="font-bold tracking-[0.012em] text-text-primary"
-              style={{ fontSize: '1.30rem', textShadow: '0 0.5px 0 rgba(26, 23, 20, 0.5)' }}
-            >
-              {agentConfig.name}
-            </span>
+            {onTitleClick ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTitleClick();
+                }}
+                className="font-bold tracking-[0.012em] text-text-primary hover:opacity-80 transition-opacity"
+                style={{ fontSize: '1.1rem', textShadow: '0 0.4px 0 rgba(26, 23, 20, 0.45)' }}
+              >
+                {agentConfig.name}
+              </button>
+            ) : (
+              <span
+                className="font-bold tracking-[0.012em] text-text-primary"
+                style={{ fontSize: '1.1rem', textShadow: '0 0.4px 0 rgba(26, 23, 20, 0.45)' }}
+              >
+                {agentConfig.name}
+              </span>
+            )}
             {isWinner && (
               <Trophy className="w-4 h-4 text-accent" />
             )}
@@ -139,7 +164,7 @@ export function AgentCard({
             )}
           </div>
           {score != null && !isIdle && (
-            <div className="flex items-center gap-3 text-sm text-text-secondary">
+            <div className="flex items-center gap-3 text-[12.5px] text-text-secondary/95">
               <span>Score: {score}</span>
               <span>Confidence: {response?.confidence ?? 0}%</span>
             </div>
@@ -150,16 +175,25 @@ export function AgentCard({
         <div
           ref={contentRef}
           className="transition-all duration-300 ease-in-out overflow-hidden"
+          style={{
+            marginTop: useBottomReplyZone ? 'auto' : undefined,
+            marginBottom: useBottomReplyZone ? '100px' : undefined,
+          }}
         >
           {isIdle ? (
-            <p className="text-text-secondary text-sm italic">
+            <p className="text-sm italic" style={{ color: 'rgba(74, 66, 60, 0.9)' }}>
               {agentConfig.oneLiner || 'Ready to respond...'}
             </p>
           ) : isStreaming ? (
-            <p className="text-text-primary leading-relaxed whitespace-pre-wrap">
-              {displayText}
-              <span className="inline-block w-0.5 h-4 ml-0.5 bg-text-secondary/50 animate-pulse align-text-bottom" />
-            </p>
+            <div className="pt-5 border-t border-border/80">
+              <p
+                className="text-text-primary leading-relaxed whitespace-pre-wrap"
+                style={{ fontSize: '1.12rem', lineHeight: '1.55' }}
+              >
+                {displayText}
+                <span className="inline-block w-0.5 h-4 ml-0.5 bg-text-secondary/50 animate-pulse align-text-bottom" />
+              </p>
+            </div>
           ) : isExpanded && response ? (
             <div className="space-y-3">
               <p className="text-text-primary leading-relaxed">
@@ -184,9 +218,9 @@ export function AgentCard({
                     <button
                       onClick={(e) => { e.stopPropagation(); onChallenge(); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
-                                 bg-background border border-border rounded
+                                 bg-background/75 border border-border rounded-md
                                  text-text-secondary hover:text-text-primary hover:border-accent/50
-                                 transition-all duration-300"
+                                 transition-all duration-300 hover:shadow-sm"
                     >
                       <Swords className="w-3 h-3" />
                       Challenge
@@ -196,9 +230,9 @@ export function AgentCard({
                     <button
                       onClick={(e) => { e.stopPropagation(); onDiscuss(); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
-                                 bg-background border border-border rounded
+                                 bg-background/75 border border-border rounded-md
                                  text-text-secondary hover:text-text-primary hover:border-accent/50
-                                 transition-all duration-300"
+                                 transition-all duration-300 hover:shadow-sm"
                     >
                       <MessageCircle className="w-3 h-3" />
                       Discuss
@@ -208,13 +242,20 @@ export function AgentCard({
               )}
             </div>
           ) : response ? (
-            <p className="text-text-secondary text-sm">
-              {response.one_liner}
-            </p>
+            <div className="pt-5 border-t border-border/80">
+              <p
+                className="text-text-primary"
+                style={{ color: 'rgba(47, 42, 38, 0.95)', fontSize: '1.12rem', lineHeight: '1.55' }}
+              >
+                {response.one_liner}
+              </p>
+            </div>
           ) : !isStreaming ? (
-            <p className="text-text-secondary/40 text-sm italic">
-              Waiting for response...
-            </p>
+            <div className="pt-5 border-t border-border/70">
+              <p className="text-sm italic" style={{ color: 'rgba(74, 66, 60, 0.55)' }}>
+                Waiting for response...
+              </p>
+            </div>
           ) : null}
         </div>
       </div>

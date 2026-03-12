@@ -41,8 +41,12 @@ export function UserMenu({
     return (
       <button
         onClick={onSignInClick}
-        className="text-sm text-text-secondary hover:text-text-primary transition-colors px-3 py-1.5
-                   border border-border rounded-lg hover:border-accent/50"
+        className="text-sm text-text-secondary hover:text-text-primary transition-all duration-200 px-3.5 py-1.5
+                   border border-border rounded-lg hover:border-accent/55"
+        style={{
+          background: 'rgba(250,247,244,0.62)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.78)',
+        }}
       >
         Sign in
       </button>
@@ -61,8 +65,12 @@ export function UserMenu({
       {/* Avatar button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center
-                   text-sm font-medium text-text-primary hover:border-accent/50 transition-colors"
+        className="w-8 h-8 rounded-full border border-border flex items-center justify-center
+                   text-sm font-medium text-text-primary hover:border-accent/50 transition-all duration-200"
+        style={{
+          background: 'rgba(240,235,227,0.88)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.78)',
+        }}
         aria-label="Account menu"
       >
         {initial}
@@ -71,8 +79,13 @@ export function UserMenu({
       {/* Dropdown */}
       {isOpen && (
         <div
-          className="absolute right-0 top-10 w-64 bg-surface border border-border rounded-xl
-                     shadow-lg z-50 py-1"
+          className="absolute right-0 top-10 w-64 border border-border rounded-xl
+                     z-50 py-1"
+          style={{
+            background: 'linear-gradient(180deg, rgba(248,244,240,0.98) 0%, rgba(243,238,233,0.98) 100%)',
+            boxShadow: '0 16px 34px rgba(26, 23, 20, 0.16)',
+            backdropFilter: 'blur(8px)',
+          }}
         >
           {/* User info */}
           <div className="px-4 py-3 border-b border-border">
