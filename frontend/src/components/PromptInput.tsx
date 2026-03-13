@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Send, Loader2, Swords } from 'lucide-react';
 
 interface PromptInputProps {
   onSubmit: (prompt: string) => void;
   isLoading: boolean;
   placeholder?: string;
+  presetPrompt?: string;
+  presetPromptNonce?: number;
   showChallengeWidget?: boolean;
   onChallengeClick?: () => void;
   isChallengeEnabled?: boolean;
@@ -15,6 +17,8 @@ export function PromptInput({
   onSubmit,
   isLoading,
   placeholder = 'Ask something and watch four minds respond...',
+  presetPrompt,
+  presetPromptNonce,
   showChallengeWidget = false,
   onChallengeClick,
   isChallengeEnabled = false,
@@ -22,6 +26,15 @@ export function PromptInput({
 }: PromptInputProps) {
   const [prompt, setPrompt] = useState('');
   const [isChallengeHovered, setIsChallengeHovered] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!presetPrompt || presetPromptNonce === undefined) return;
+    setPrompt(presetPrompt);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+  }, [presetPrompt, presetPromptNonce]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +86,7 @@ export function PromptInput({
           }}
         >
           <textarea
+            ref={textareaRef}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder={placeholder}

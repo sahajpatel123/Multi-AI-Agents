@@ -3,17 +3,42 @@ import { PromptInput } from './components/PromptInput';
 import { AgentCard } from './components/AgentCard';
 import { DebateMode } from './components/DebateMode';
 import { DiscussMode } from './components/DiscussMode';
+import { LeaderboardView } from './components/LeaderboardView';
 import { Sidebar } from './components/Sidebar';
 import { AuthModal } from './components/AuthModal';
 import { UserMenu } from './components/UserMenu';
-import { streamPrompt, streamDiscuss, getSession } from './api';
+import { AgentDot } from './components/AgentDot';
+import { streamPrompt, streamDiscuss, getSession, parseStreamedAgentPreview } from './api';
 import { useAuth } from './hooks/useAuth';
-import { AGENTS, DiscussChatMessage, PromptResponse, ScoredAgent, SessionData, SessionTurn } from './types';
+import {
+  AGENTS,
+  DiscussChatMessage,
+  PromptResponse,
+  SavedResponseItem,
+  ScoredAgent,
+  SessionData,
+  SessionTurn,
+} from './types';
 
 const AGENT_IDS = ['agent_1', 'agent_2', 'agent_3', 'agent_4'] as const;
+const EXAMPLE_PROMPTS = [
+  'Should I quit my job and start a business?',
+  'Is AI going to replace most jobs?',
+  "What's the most important skill to learn right now?",
+] as const;
 
 type Phase = 'idle' | 'pipeline' | 'streaming' | 'scoring' | 'done';
-type ViewMode = 'arena' | 'debate' | 'discuss';
+type ViewMode = 'arena' | 'debate' | 'discuss' | 'leaderboard';
+type Sentiment = 'like' | 'dislike' | null;
+
+interface ResponsePreference {
+  sentiment: Sentiment;
+}
+
+interface ScrollTarget {
+  turnId: string;
+  agentId: string;
+}
 
 function App() {
   const { user, isLoading: authLoading, login, register, logout, refreshUser } = useAuth();
@@ -35,6 +60,13 @@ function App() {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
+  const [hasSubmittedPrompt, setHasSubmittedPrompt] = useState(false);
+  const [presetPrompt, setPresetPrompt] = useState('');
+  const [presetPromptNonce, setPresetPromptNonce] = useState(0);
+  const [showPromptChips, setShowPromptChips] = useState(false);
+  const [activeExamplePromptIndex, setActiveExamplePromptIndex] = useState(0);
+  const [isExamplePromptHovered, setIsExamplePromptHovered] = useState(false);
+  const [examplePromptPhase, setExamplePromptPhase] = useState<'visible' | 'exiting' | 'entering'>('visible');
 
   // View mode
   const [viewMode, setViewMode] = useState<ViewMode>('arena');
@@ -44,6 +76,13 @@ function App() {
   // Session management
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [activeTurnId, setActiveTurnId] = useState<string | null>(null);
+  const [savedItems, setSavedItems] = useState<SavedResponseItem[]>([]);
+  const [responsePreferences, setResponsePreferences] = useState<Record<string, ResponsePreference>>({});
+  const [copyFeedback, setCopyFeedback] = useState<Record<string, boolean>>({});
+  const [shareFeedback, setShareFeedback] = useState<Record<string, boolean>>({});
+  const [dotFlashKeys, setDotFlashKeys] = useState<Record<string, number>>({});
+  const [highlightedAgentId, setHighlightedAgentId] = useState<string | null>(null);
+  const [pendingScrollTarget, setPendingScrollTarget] = useState<ScrollTarget | null>(null);
 
   // Per-agent streaming state
   const [streamingTexts, setStreamingTexts] = useState<Record<string, string>>({});
@@ -55,6 +94,9 @@ function App() {
   const focusedTokenBuffer = useRef('');
   const focusedFlushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const focusedMessagesEndRef = useRef<HTMLDivElement>(null);
+  const feedbackTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const agentCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Session restore on mount
   useEffect(() => {
@@ -71,6 +113,44 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setShowPromptChips(true);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (hasSubmittedPrompt || isExamplePromptHovered) return;
+
+    let swapTimer: number | undefined;
+    let frameOne: number | undefined;
+    let frameTwo: number | undefined;
+
+    const rotateTimer = window.setTimeout(() => {
+      setExamplePromptPhase('exiting');
+
+      swapTimer = window.setTimeout(() => {
+        setActiveExamplePromptIndex((prev) => (prev + 1) % EXAMPLE_PROMPTS.length);
+        setExamplePromptPhase('entering');
+
+        frameOne = requestAnimationFrame(() => {
+          frameTwo = requestAnimationFrame(() => {
+            setExamplePromptPhase('visible');
+          });
+        });
+      }, 300);
+    }, 3000);
+
+    return () => {
+      window.clearTimeout(rotateTimer);
+      if (swapTimer !== undefined) window.clearTimeout(swapTimer);
+      if (frameOne !== undefined) cancelAnimationFrame(frameOne);
+      if (frameTwo !== undefined) cancelAnimationFrame(frameTwo);
+    };
+  }, [activeExamplePromptIndex, hasSubmittedPrompt, isExamplePromptHovered]);
+
   const loadTurn = (turn: SessionTurn) => {
     // Convert SessionTurn to PromptResponse format
     const scoredResponses = Object.entries(turn.agent_responses).map(([agentId, response]) => ({
@@ -80,9 +160,9 @@ function App() {
     }));
 
     const promptResponse: PromptResponse = {
-      session_id: sessionData?.session_id || '',
+      session_id: sessionData?.session_id || localStorage.getItem('arena_session_id') || '',
       prompt: turn.prompt,
-      prompt_category: '',
+      prompt_category: turn.prompt_category || '',
       winner: turn.agent_responses[turn.winner_id],
       winner_agent_id: turn.winner_id,
       all_responses: scoredResponses,
@@ -93,13 +173,40 @@ function App() {
 
     setResponse(promptResponse);
     setExpandedAgent(turn.winner_id);
+    setCurrentPrompt(turn.prompt);
     setActiveTurnId(turn.turn_id);
     setPhase('done');
   };
 
+  const getResponseKey = useCallback((turnId: string, agentId: string) => `${turnId}:${agentId}`, []);
+
+  const queueFeedbackReset = useCallback((kind: 'copy' | 'share', key: string) => {
+    const timeoutKey = `${kind}:${key}`;
+    if (feedbackTimeouts.current[timeoutKey]) {
+      clearTimeout(feedbackTimeouts.current[timeoutKey]);
+    }
+
+    const setState = kind === 'copy' ? setCopyFeedback : setShareFeedback;
+    setState((prev) => ({ ...prev, [key]: true }));
+
+    feedbackTimeouts.current[timeoutKey] = setTimeout(() => {
+      setState((prev) => ({ ...prev, [key]: false }));
+      delete feedbackTimeouts.current[timeoutKey];
+    }, 1500);
+  }, []);
+
+  const triggerDotFlash = useCallback((agentId: string) => {
+    setDotFlashKeys((prev) => ({ ...prev, [agentId]: (prev[agentId] || 0) + 1 }));
+  }, []);
+
+  const copyText = useCallback(async (text: string) => {
+    await navigator.clipboard.writeText(text);
+  }, []);
+
   const handleTurnClick = (turnId: string) => {
     const turn = sessionData?.turns.find((t) => t.turn_id === turnId);
     if (turn) {
+      setViewMode('arena');
       loadTurn(turn);
       setIsSidebarOpen(false);
     }
@@ -109,9 +216,10 @@ function App() {
     setStreamingTexts((prev) => {
       const next = { ...prev };
       let changed = false;
-      for (const [id, text] of Object.entries(tokenBuffers.current)) {
-        if (next[id] !== text) {
-          next[id] = text;
+      for (const [id, rawText] of Object.entries(tokenBuffers.current)) {
+        const previewText = parseStreamedAgentPreview(rawText) || '';
+        if (next[id] !== previewText) {
+          next[id] = previewText;
           changed = true;
         }
       }
@@ -119,7 +227,107 @@ function App() {
     });
   }, []);
 
+  const handleCopyResponse = useCallback(async (scoredAgent: ScoredAgent) => {
+    if (!activeTurnId) return;
+    const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
+    await copyText(scoredAgent.response.one_liner);
+    queueFeedbackReset('copy', key);
+  }, [activeTurnId, copyText, getResponseKey, queueFeedbackReset]);
+
+  const handleShareResponse = useCallback(async (scoredAgent: ScoredAgent) => {
+    if (!activeTurnId) return;
+    const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
+    const agent = AGENTS[scoredAgent.response.agent_id];
+    await copyText(`${agent.name} on Arena:\n${scoredAgent.response.one_liner}\n\narena.ai`);
+    queueFeedbackReset('share', key);
+  }, [activeTurnId, copyText, getResponseKey, queueFeedbackReset]);
+
+  const handleLikeResponse = useCallback((scoredAgent: ScoredAgent) => {
+    if (!activeTurnId) return;
+    const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
+    let shouldFlash = false;
+
+    setResponsePreferences((prev) => {
+      const current = prev[key]?.sentiment || null;
+      const nextSentiment: Sentiment = current === 'like' ? null : 'like';
+      shouldFlash = nextSentiment === 'like';
+      return {
+        ...prev,
+        [key]: {
+          sentiment: nextSentiment,
+        },
+      };
+    });
+
+    if (shouldFlash) {
+      triggerDotFlash(scoredAgent.response.agent_id);
+    }
+  }, [activeTurnId, getResponseKey, triggerDotFlash]);
+
+  const handleDislikeResponse = useCallback((scoredAgent: ScoredAgent) => {
+    if (!activeTurnId) return;
+    const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
+
+    setResponsePreferences((prev) => {
+      const current = prev[key]?.sentiment || null;
+      const nextSentiment: Sentiment = current === 'dislike' ? null : 'dislike';
+      return {
+        ...prev,
+        [key]: {
+          sentiment: nextSentiment,
+        },
+      };
+    });
+  }, [activeTurnId, getResponseKey]);
+
+  const handleSaveResponse = useCallback((scoredAgent: ScoredAgent) => {
+    if (!activeTurnId || !response) return;
+
+    const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
+    const nextItem: SavedResponseItem = {
+      id: key,
+      session_id: response.session_id,
+      turn_id: activeTurnId,
+      prompt: response.prompt,
+      prompt_category: response.prompt_category,
+      agent_id: scoredAgent.response.agent_id,
+      one_liner: scoredAgent.response.one_liner,
+      verdict: scoredAgent.response.verdict,
+      timestamp: response.timestamp,
+    };
+
+    setSavedItems((prev) => {
+      const exists = prev.some((item) => item.id === key);
+      if (exists) {
+        return prev.filter((item) => item.id !== key);
+      }
+      return [...prev, nextItem];
+    });
+  }, [activeTurnId, getResponseKey, response]);
+
+  const handleSavedItemClick = useCallback((item: SavedResponseItem) => {
+    setViewMode('arena');
+    setIsSidebarOpen(false);
+    setFocusedAgentId(null);
+    setFocusedCardRect(null);
+    setIsFocusedExpanded(false);
+    setExpandedAgent(item.agent_id);
+    setPendingScrollTarget({ turnId: item.turn_id, agentId: item.agent_id });
+
+    if (activeTurnId === item.turn_id) {
+      return;
+    }
+
+    const turn = sessionData?.turns.find((entry) => entry.turn_id === item.turn_id);
+    if (turn) {
+      loadTurn(turn);
+      setExpandedAgent(item.agent_id);
+    }
+  }, [activeTurnId, sessionData]);
+
   const handleSubmit = async (prompt: string) => {
+    setHasSubmittedPrompt(true);
+
     // Reset all state
     setPhase('pipeline');
     setError(null);
@@ -137,6 +345,8 @@ function App() {
     setFocusedStreamingText('');
     setFocusedChatError(null);
     setIsFocusedChatStreaming(false);
+    setHighlightedAgentId(null);
+    setPendingScrollTarget(null);
     tokenBuffers.current = {};
 
     // Flush streaming text to state at 60fps-ish
@@ -160,6 +370,14 @@ function App() {
             (tokenBuffers.current[data.agent_id] || '') + data.token;
         },
         onAgentDone: (data) => {
+          // Parse the accumulated JSON and extract one_liner for display
+          const rawJson = tokenBuffers.current[data.agent_id] || '';
+          try {
+            const parsed = JSON.parse(rawJson);
+            tokenBuffers.current[data.agent_id] = parsed.one_liner || rawJson;
+          } catch {
+            // If parsing fails, keep the raw text
+          }
           setDoneAgents((prev) => new Set(prev).add(data.agent_id));
         },
         onAgentError: (data) => {
@@ -189,6 +407,7 @@ function App() {
           const newTurn: SessionTurn = {
             turn_id: `turn_${Date.now()}`,
             prompt: data.prompt,
+            prompt_category: data.prompt_category,
             agent_responses: data.all_responses.reduce((acc, scored) => {
               acc[scored.response.agent_id] = scored.response;
               return acc;
@@ -247,6 +466,11 @@ function App() {
     setViewMode('arena');
     setChallengedAgent(null);
     setDiscussAgent(null);
+  };
+
+  const openLeaderboard = () => {
+    setViewMode('leaderboard');
+    setIsSidebarOpen(false);
   };
 
   const openFocusedAgent = (agentId: string, cardRect?: DOMRect) => {
@@ -316,6 +540,27 @@ function App() {
     }, 40);
   }, [focusedAgentId, focusedHistory.length, focusedStreamingText]);
 
+  useEffect(() => {
+    if (!pendingScrollTarget || viewMode !== 'arena' || activeTurnId !== pendingScrollTarget.turnId) return;
+
+    const targetNode = agentCardRefs.current[pendingScrollTarget.agentId];
+    if (!targetNode) return;
+
+    targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedAgentId(pendingScrollTarget.agentId);
+    setPendingScrollTarget(null);
+
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedAgentId(null);
+    }, 1600);
+  }, [activeTurnId, pendingScrollTarget, viewMode]);
+
+  useEffect(() => () => {
+    Object.values(feedbackTimeouts.current).forEach(clearTimeout);
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+  }, []);
+
   const handleFocusedAgentSubmit = async (message: string) => {
     if (!focusedAgentId || isFocusedChatStreaming) return;
 
@@ -384,6 +629,11 @@ function App() {
     void handleSubmit(prompt);
   };
 
+  const handleExamplePromptClick = (prompt: string) => {
+    setPresetPrompt(prompt);
+    setPresetPromptNonce((prev) => prev + 1);
+  };
+
   const handleAgentTitleClick = (agentId: string) => {
     setExpandedAgent((prev) => (prev === agentId ? null : agentId));
   };
@@ -413,6 +663,10 @@ function App() {
   const isLoading = phase === 'pipeline';
   const isStreaming = phase === 'streaming' || phase === 'scoring';
   const isDone = phase === 'done';
+  const sortedResponses = response
+    ? [...response.all_responses].sort((a, b) => b.score - a.score)
+    : [];
+  const savedIds = new Set(savedItems.map((item) => item.id));
   const focusedTargetStyle = {
     left: '50%',
     top: '50%',
@@ -445,6 +699,7 @@ function App() {
           turns={(sessionData?.turns || []).map((t) => ({
             turn_id: t.turn_id,
             prompt: t.prompt,
+            prompt_category: t.prompt_category,
             winner_id: t.winner_id,
             timestamp: t.timestamp,
           }))}
@@ -452,6 +707,9 @@ function App() {
           onTurnClick={handleTurnClick}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
+          onLeaderboardClick={openLeaderboard}
+          savedItems={savedItems}
+          onSavedItemClick={handleSavedItemClick}
         />
       )}
 
@@ -607,13 +865,13 @@ function App() {
               >
               {/* Pipeline loading — skeleton cards */}
               {isLoading && AGENT_IDS.map((id) => (
-                <div key={id} className="bg-surface rounded-lg border border-border p-6">
-                  <div className="animate-pulse space-y-3">
-                    <div className="h-4 bg-border/50 rounded w-1/3"></div>
-                    <div className="h-3 bg-border/30 rounded w-full"></div>
-                    <div className="h-3 bg-border/30 rounded w-5/6"></div>
-                  </div>
-                </div>
+                <AgentCard
+                  key={id}
+                  agentId={id}
+                  isExpanded={false}
+                  onToggle={() => {}}
+                  isLoadingState={true}
+                />
               ))}
 
               {/* Streaming phase — show live tokens */}
@@ -629,9 +887,14 @@ function App() {
               ))}
 
               {/* Final results */}
-              {isDone && response && [...response.all_responses]
-                .sort((a, b) => b.score - a.score)
-                .map((scoredAgent) => (
+              {isDone && response && sortedResponses.map((scoredAgent) => {
+                  const responseKey = activeTurnId
+                    ? getResponseKey(activeTurnId, scoredAgent.response.agent_id)
+                    : null;
+                  const preference = responseKey ? responsePreferences[responseKey]?.sentiment || null : null;
+                  const isSaved = responseKey ? savedIds.has(responseKey) : false;
+
+                  return (
                   <AgentCard
                     key={scoredAgent.response.agent_id}
                     agentId={scoredAgent.response.agent_id}
@@ -641,8 +904,24 @@ function App() {
                     onToggle={(cardRect) => openFocusedAgent(scoredAgent.response.agent_id, cardRect)}
                     onChallenge={() => handleChallenge(scoredAgent)}
                     onDiscuss={() => handleDiscuss(scoredAgent)}
+                    cardRef={(node) => {
+                      agentCardRefs.current[scoredAgent.response.agent_id] = node;
+                    }}
+                    isHighlighted={highlightedAgentId === scoredAgent.response.agent_id}
+                    dotFlashKey={dotFlashKeys[scoredAgent.response.agent_id] || 0}
+                    onCopy={() => { void handleCopyResponse(scoredAgent); }}
+                    onLike={() => handleLikeResponse(scoredAgent)}
+                    onDislike={() => handleDislikeResponse(scoredAgent)}
+                    onShare={() => { void handleShareResponse(scoredAgent); }}
+                    onSave={() => handleSaveResponse(scoredAgent)}
+                    isLiked={preference === 'like'}
+                    isDisliked={preference === 'dislike'}
+                    isSaved={isSaved}
+                    copyFeedbackActive={Boolean(responseKey && copyFeedback[responseKey])}
+                    shareFeedbackActive={Boolean(responseKey && shareFeedback[responseKey])}
                   />
-                ))}
+                );
+              })}
 
               {/* Idle state — show cards with one-liners */}
               {phase === 'idle' && !error && AGENT_IDS.map((id) => (
@@ -715,10 +994,7 @@ function App() {
                 <div className="h-full flex flex-col">
                   <div className="flex items-center justify-between px-5 py-4 border-b border-border/70">
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: focusedAgentConfig.color }}
-                      />
+                      <AgentDot agentId={focusedAgentId} size={10} flashKey={dotFlashKeys[focusedAgentId] || 0} />
                       <p className="font-semibold text-text-primary">{focusedAgentConfig.name}</p>
                     </div>
                     <button
@@ -780,6 +1056,63 @@ function App() {
             </>
           )}
 
+          {viewMode === 'arena' && phase === 'idle' && !error && !hasSubmittedPrompt && (
+            <div
+              style={{
+                position: 'fixed',
+                left: 0,
+                right: 0,
+                bottom: '94px',
+                display: 'flex',
+                justifyContent: 'center',
+                padding: '0 24px',
+                zIndex: 49,
+                pointerEvents: 'none',
+                opacity: showPromptChips ? 1 : 0,
+                transition: 'opacity 400ms ease',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => handleExamplePromptClick(EXAMPLE_PROMPTS[activeExamplePromptIndex])}
+                onMouseEnter={() => setIsExamplePromptHovered(true)}
+                onMouseLeave={() => setIsExamplePromptHovered(false)}
+                style={{
+                  pointerEvents: 'all',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  maxWidth: '720px',
+                  background: '#F0EBE3',
+                  border: '1px solid #E0D8D0',
+                  borderRadius: '999px',
+                  padding: '8px 20px',
+                  fontSize: '13px',
+                  color: '#6B6460',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  opacity: examplePromptPhase === 'exiting' ? 0 : 1,
+                  transform:
+                    examplePromptPhase === 'exiting'
+                      ? 'translateY(-6px)'
+                      : examplePromptPhase === 'entering'
+                        ? 'translateY(6px)'
+                        : isExamplePromptHovered
+                          ? 'translateY(-1px)'
+                          : 'translateY(0)',
+                  transition:
+                    examplePromptPhase === 'visible'
+                      ? 'background 150ms ease, color 150ms ease, transform 150ms ease, opacity 300ms ease'
+                      : 'opacity 300ms ease, transform 300ms ease',
+                  backgroundColor: isExamplePromptHovered ? '#E0D8D0' : '#F0EBE3',
+                  color: isExamplePromptHovered ? '#1A1714' : '#6B6460',
+                }}
+              >
+                {EXAMPLE_PROMPTS[activeExamplePromptIndex]}
+              </button>
+            </div>
+          )}
+
           {/* Fixed Bottom Prompt Box */}
           <PromptInput
             onSubmit={handlePromptSubmit}
@@ -789,6 +1122,8 @@ function App() {
                 ? `Message ${focusedAgentConfig.name} directly...`
                 : 'Ask something and watch four minds respond...'
             }
+            presetPrompt={presetPrompt}
+            presetPromptNonce={presetPromptNonce}
             showChallengeWidget={viewMode === 'arena'}
             onChallengeClick={handleChallengeWidgetClick}
             isChallengeEnabled={Boolean(challengeTarget) && !isLoading && !isStreaming}
@@ -816,8 +1151,25 @@ function App() {
         </>
       )}
 
+      {viewMode === 'leaderboard' && (
+        <div className="max-w-5xl mx-auto px-4 py-12 w-full">
+          <div className="flex items-center justify-end mb-6">
+            <UserMenu
+              user={user}
+              isLoading={authLoading}
+              onSignInClick={() => { setAuthModalTab('login'); setAuthModalOpen(true); }}
+              onLogout={logout}
+            />
+          </div>
+          <LeaderboardView
+            turns={sessionData?.turns || []}
+            onBack={exitToArena}
+          />
+        </div>
+      )}
+
       {/* Debate & Discuss Views - Keep Original Layout */}
-      {viewMode !== 'arena' && (
+      {(viewMode === 'debate' || viewMode === 'discuss') && (
         <div className="max-w-4xl mx-auto px-4 py-12">
           <header className="mb-12">
             <div className="flex items-center justify-end mb-6">

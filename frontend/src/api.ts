@@ -101,6 +101,28 @@ export interface StreamCallbacks {
   onError?: (data: { detail: string }) => void;
 }
 
+export function parseStreamedAgentPreview(rawText: string): string | null {
+  const trimmed = rawText.trim();
+  if (!trimmed) return null;
+
+  let normalized = trimmed;
+  if (normalized.startsWith('```')) {
+    const lines = normalized.split('\n');
+    normalized = lines.slice(1).join('\n');
+    if (normalized.endsWith('```')) {
+      normalized = normalized.slice(0, -3);
+    }
+    normalized = normalized.trim();
+  }
+
+  try {
+    const parsed = JSON.parse(normalized) as { one_liner?: unknown };
+    return typeof parsed.one_liner === 'string' ? parsed.one_liner : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function streamPrompt(
   prompt: string,
   callbacks: StreamCallbacks,

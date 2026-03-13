@@ -1,31 +1,66 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   Plus,
   Ellipsis,
+  Trophy,
+  LayoutGrid,
+  HelpCircle,
+  CheckSquare,
+  MessageSquare,
+  Swords,
+  Bookmark,
 } from 'lucide-react';
+import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
+import { AgentDot } from './AgentDot';
 
-interface SessionTurn {
+interface SidebarTurn {
   turn_id: string;
   prompt: string;
+  prompt_category?: string;
   winner_id: string;
   timestamp: string;
 }
 
 interface SidebarProps {
-  turns: SessionTurn[];
+  turns: SidebarTurn[];
   activeTurnId: string | null;
   onTurnClick: (turnId: string) => void;
   isOpen: boolean;
   onClose: () => void;
+  onLeaderboardClick: () => void;
+  savedItems: SavedResponseItem[];
+  onSavedItemClick: (item: SavedResponseItem) => void;
 }
 
-export function Sidebar({ turns, activeTurnId, onTurnClick, isOpen, onClose }: SidebarProps) {
-  // Reverse turns to show newest first
-  const reversedTurns = [...turns].reverse();
+type FilterValue = 'all' | PromptCategory;
+
+const FILTERS: Array<{ value: FilterValue; label: string; icon: ReactNode }> = [
+  { value: 'all', label: 'All', icon: <LayoutGrid className="w-[15px] h-[15px]" /> },
+  { value: 'question', label: 'Question', icon: <HelpCircle className="w-[15px] h-[15px]" /> },
+  { value: 'task', label: 'Task', icon: <CheckSquare className="w-[15px] h-[15px]" /> },
+  { value: 'statement', label: 'Statement', icon: <MessageSquare className="w-[15px] h-[15px]" /> },
+  { value: 'debate', label: 'Debate', icon: <Swords className="w-[15px] h-[15px]" /> },
+];
+
+export function Sidebar({
+  turns,
+  activeTurnId,
+  onTurnClick,
+  isOpen,
+  onClose,
+  onLeaderboardClick,
+  savedItems,
+  onSavedItemClick,
+}: SidebarProps) {
+  const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
+  const reversedTurns = useMemo(() => [...turns].reverse(), [turns]);
+  const filteredTurns = useMemo(
+    () => reversedTurns.filter((turn) => activeFilter === 'all' || turn.prompt_category === activeFilter),
+    [activeFilter, reversedTurns],
+  );
 
   return (
     <>
-      {/* Sidebar panel */}
       <div
         className={`fixed left-0 top-0 h-full bg-surface border-r border-border z-40
                     transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
@@ -34,29 +69,72 @@ export function Sidebar({ turns, activeTurnId, onTurnClick, isOpen, onClose }: S
           width: '308px',
           maxWidth: '88vw',
           boxShadow: '10px 0 30px rgba(26, 23, 20, 0.14)',
-          background:
-            'linear-gradient(180deg, rgba(252,250,248,0.98) 0%, rgba(245,241,237,0.98) 100%)',
+          background: 'linear-gradient(180deg, rgba(252,250,248,0.98) 0%, rgba(245,241,237,0.98) 100%)',
         }}
       >
         <div className="flex flex-col h-full px-4 py-6">
-          <div className="mb-4">
+          <div className="mb-2">
             <MenuAction icon={<Plus className="w-5 h-5" />} label="New chat" isPrimary />
+          </div>
+          <div className="mb-5">
+            <MenuAction
+              icon={<Trophy className="w-5 h-5" />}
+              label="Leaderboard"
+              onClick={onLeaderboardClick}
+            />
           </div>
 
           <div className="mb-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-text-secondary/75">Recents</p>
           </div>
+          <div className="flex items-center gap-2 mb-3">
+            {FILTERS.map((filter) => {
+              const isActive = activeFilter === filter.value;
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  aria-label={filter.label}
+                  title={filter.label}
+                  onClick={() => setActiveFilter(filter.value)}
+                  className="flex items-center justify-center"
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    background: isActive ? '#C4956A' : '#F0EBE3',
+                    color: isActive ? '#FFFFFF' : '#6B6460',
+                    transition: 'all 150ms ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = '#E0D8D0';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = '#F0EBE3';
+                    }
+                  }}
+                >
+                  {filter.icon}
+                </button>
+              );
+            })}
+          </div>
 
-          <div className="flex-1 overflow-y-auto pb-4">
-            {reversedTurns.length > 0 ? (
+          <div className="flex-1 overflow-y-auto pr-1 pb-4">
+            {filteredTurns.length > 0 ? (
               <div className="space-y-1">
-                {reversedTurns.map((turn) => {
+                {filteredTurns.map((turn) => {
                   const isActive = turn.turn_id === activeTurnId;
+                  const winner = AGENTS[turn.winner_id];
+
                   return (
                     <button
                       key={turn.turn_id}
                       onClick={() => onTurnClick(turn.turn_id)}
-                      className="w-full text-left rounded-lg px-3 py-2.5 transition-all duration-200"
+                      className="w-full text-left rounded-lg px-3 py-2.5 transition-all duration-150"
                       style={{
                         background: isActive ? 'rgba(20, 18, 16, 0.06)' : 'transparent',
                         border: isActive ? '1px solid rgba(255,255,255,0.52)' : '1px solid transparent',
@@ -71,11 +149,20 @@ export function Sidebar({ turns, activeTurnId, onTurnClick, isOpen, onClose }: S
                           <Ellipsis className="w-4 h-4 shrink-0 text-text-secondary/80" />
                         ) : null}
                       </div>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <AgentDot agentId={turn.winner_id} size={8} />
+                          <span className="text-xs text-text-secondary truncate">{winner.name}</span>
+                        </div>
+                        <span className="text-[11px] text-text-secondary/70 capitalize">
+                          {turn.prompt_category || 'unknown'}
+                        </span>
+                      </div>
                     </button>
                   );
                 })}
               </div>
-            ) : (
+            ) : turns.length === 0 ? (
               <div
                 className="rounded-2xl border border-border px-4 py-4"
                 style={{ background: 'rgba(255, 255, 255, 0.35)' }}
@@ -84,16 +171,53 @@ export function Sidebar({ turns, activeTurnId, onTurnClick, isOpen, onClose }: S
                   Your prompts will appear here once you run one.
                 </p>
               </div>
+            ) : (
+              <div className="py-8 text-center">
+                <p className="text-[12px] font-medium leading-relaxed text-text-secondary capitalize">
+                  No {activeFilter} prompts yet
+                </p>
+              </div>
+            )}
+
+            {savedItems.length > 0 && (
+              <div className="mt-6">
+                <div className="mb-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-text-secondary/75">Saved</p>
+                </div>
+                <div className="space-y-1">
+                  {[...savedItems].reverse().map((item) => {
+                    const agent = AGENTS[item.agent_id];
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => onSavedItemClick(item)}
+                        className="w-full rounded-lg border border-transparent px-3 py-2.5 text-left transition-all duration-150 hover:border-border hover:bg-white/30"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <AgentDot agentId={item.agent_id} size={8} />
+                              <span className="text-xs font-medium text-text-primary">{agent.name}</span>
+                            </div>
+                            <p className="mt-1 text-xs leading-relaxed text-text-secondary truncate">
+                              {item.one_liner.slice(0, 40)}
+                              {item.one_liner.length > 40 ? '…' : ''}
+                            </p>
+                          </div>
+                          <Bookmark className="w-3.5 h-3.5 shrink-0 text-accent" style={{ fill: 'currentColor' }} />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
 
-          <div className="pt-3 border-t border-border/60">
-            <p className="text-xs font-medium text-text-secondary/75">{turns.length} {turns.length === 1 ? 'prompt' : 'prompts'}</p>
-          </div>
         </div>
       </div>
 
-      {/* Overlay — close sidebar when clicking outside */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-text-primary/8 backdrop-blur-[1px] z-30 transition-opacity duration-300"
@@ -124,7 +248,7 @@ function MenuAction({ icon, label, isPrimary = false, onClick }: MenuActionProps
       style={{
         position: 'relative',
         overflow: 'hidden',
-        transition: 'all 0.3s ease',
+        transition: 'all 150ms ease',
         backdropFilter: isHovered ? 'blur(8px)' : 'blur(0px)',
         boxShadow: isHovered
           ? '0 8px 18px rgba(26, 23, 20, 0.12), inset 0 1px 0 rgba(255,255,255,0.72)'
@@ -139,7 +263,7 @@ function MenuAction({ icon, label, isPrimary = false, onClick }: MenuActionProps
           inset: 0,
           borderRadius: 'inherit',
           opacity: isHovered ? 1 : 0,
-          transition: 'opacity 0.3s ease',
+          transition: 'opacity 150ms ease',
           pointerEvents: 'none',
           background: `linear-gradient(
             140deg,

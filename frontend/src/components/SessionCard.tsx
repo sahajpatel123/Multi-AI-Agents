@@ -1,4 +1,5 @@
 import { AGENTS } from '../types';
+import { AgentDot } from './AgentDot';
 
 interface SessionCardProps {
   prompt: string;
@@ -32,10 +33,7 @@ export function SessionCard({
       </p>
       <div className="flex items-center justify-between text-xs">
         <div className="flex items-center gap-1.5">
-          <div
-            className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: winnerConfig.color }}
-          />
+          <AgentDot agentId={winnerAgentId} size={8} />
           <span className="text-text-secondary">{winnerConfig.name}</span>
         </div>
         <span className="text-text-secondary/60">{timeAgo}</span>

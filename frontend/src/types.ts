@@ -87,8 +87,23 @@ export interface DiscussResponse {
 export interface SessionTurn {
   turn_id: string;
   prompt: string;
+  prompt_category?: string;
   agent_responses: Record<string, AgentResponse>;
   winner_id: string;
+  timestamp: string;
+}
+
+export type PromptCategory = 'question' | 'task' | 'statement' | 'debate';
+
+export interface SavedResponseItem {
+  id: string;
+  session_id: string;
+  turn_id: string;
+  prompt: string;
+  prompt_category?: string;
+  agent_id: string;
+  one_liner: string;
+  verdict: string;
   timestamp: string;
 }
 

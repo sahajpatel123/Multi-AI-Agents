@@ -6,6 +6,7 @@ import {
   DiscussChatMessage,
   AGENTS,
 } from '../types';
+import { AgentDot } from './AgentDot';
 
 interface DiscussModeProps {
   originalPrompt: string;
@@ -139,10 +140,7 @@ export function DiscussMode({
             Back to Arena
           </button>
           <div className="flex items-center gap-2">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: agentConfig.color }}
-            />
+            <AgentDot agentId={activeAgent.response.agent_id} size={12} />
             <span className="text-sm font-medium text-text-primary">
               {agentConfig.name}
             </span>
@@ -305,10 +303,7 @@ export function DiscussMode({
                          transition-all duration-300"
             >
               <div className="flex items-center gap-2 mb-1.5">
-                <div
-                  className="w-2.5 h-2.5 rounded-full"
-                  style={{ backgroundColor: other.color }}
-                />
+                <AgentDot agentId={scored.response.agent_id} size={10} />
                 <span className="text-xs font-medium text-text-primary">
                   {other.name}
                 </span>

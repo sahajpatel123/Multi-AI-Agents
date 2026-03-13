@@ -7,6 +7,7 @@ import {
   DebateReaction,
   AGENTS,
 } from '../types';
+import { AgentDot } from './AgentDot';
 
 interface DebateModeProps {
   originalPrompt: string;
@@ -170,10 +171,7 @@ export function DebateMode({
         style={{ borderColor: challengedConfig.color }}
       >
         <div className="flex items-center gap-2 mb-3">
-          <div
-            className="w-3 h-3 rounded-full"
-            style={{ backgroundColor: challengedConfig.color }}
-          />
+          <AgentDot agentId={challengedAgent.response.agent_id} size={12} />
           <span className="font-medium text-text-primary">
             {challengedConfig.name}
           </span>
@@ -237,10 +235,7 @@ export function DebateMode({
                   className="bg-surface rounded-lg border border-border p-4 transition-all duration-300"
                 >
                   <div className="flex items-center gap-2 mb-2">
-                    <div
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: agent.color }}
-                    />
+                    <AgentDot agentId={reaction.agent_id} size={10} />
                     <span className="text-sm font-medium text-text-primary">
                       {agent.name}
                     </span>
@@ -283,10 +278,7 @@ export function DebateMode({
                   className="bg-surface rounded-lg border border-border p-4"
                 >
                   <div className="flex items-center gap-2 mb-2">
-                    <div
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: agent.color }}
-                    />
+                    <AgentDot agentId={id} size={10} />
                     <span className="text-sm font-medium text-text-primary">
                       {agent.name}
                     </span>

@@ -1,6 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { Trophy, Swords, MessageCircle } from 'lucide-react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
+import {
+  Trophy,
+  Swords,
+  MessageCircle,
+  Copy,
+  Check,
+  ThumbsUp,
+  ThumbsDown,
+  Share2,
+  Bookmark,
+} from 'lucide-react';
 import { ScoredAgent, AGENTS } from '../types';
+import { AgentDot } from './AgentDot';
 
 interface AgentCardProps {
   scoredAgent?: ScoredAgent;
@@ -13,7 +24,44 @@ interface AgentCardProps {
   onChallenge?: () => void;
   onDiscuss?: () => void;
   isIdle?: boolean;
+  dotFlashKey?: number;
+  isHighlighted?: boolean;
+  cardRef?: (node: HTMLDivElement | null) => void;
+  onCopy?: () => void;
+  onLike?: () => void;
+  onDislike?: () => void;
+  onShare?: () => void;
+  onSave?: () => void;
+  isLiked?: boolean;
+  isDisliked?: boolean;
+  isSaved?: boolean;
+  copyFeedbackActive?: boolean;
+  shareFeedbackActive?: boolean;
+  isLoadingState?: boolean;
 }
+
+const THINKING_PHRASES: Record<string, string[]> = {
+  agent_1: [
+    'Finding the flaw...',
+    'Stress testing this...',
+    "Looking for what's wrong...",
+  ],
+  agent_2: [
+    'Questioning the premise...',
+    'Rethinking from scratch...',
+    'Challenging assumptions...',
+  ],
+  agent_3: [
+    'Cutting through the noise...',
+    'Finding what actually works...',
+    'Getting to the point...',
+  ],
+  agent_4: [
+    'Preparing to disagree...',
+    'Finding the other side...',
+    'Saying what no one else will...',
+  ],
+};
 
 export function AgentCard({
   scoredAgent,
@@ -26,6 +74,20 @@ export function AgentCard({
   onChallenge,
   onDiscuss,
   isIdle = false,
+  dotFlashKey = 0,
+  isHighlighted = false,
+  cardRef,
+  onCopy,
+  onLike,
+  onDislike,
+  onShare,
+  onSave,
+  isLiked = false,
+  isDisliked = false,
+  isSaved = false,
+  copyFeedbackActive = false,
+  shareFeedbackActive = false,
+  isLoadingState = false,
 }: AgentCardProps) {
   const agentConfig = AGENTS[agentId];
   const agentBackgrounds: Record<string, string> = {
@@ -47,6 +109,8 @@ export function AgentCard({
   // Animated confidence bar — starts at 0, animates to final value
   const [barWidth, setBarWidth] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
+  const [thinkingPhraseIndex, setThinkingPhraseIndex] = useState(0);
+  const [thinkingPhrasePhase, setThinkingPhrasePhase] = useState<'visible' | 'exiting' | 'entering'>('visible');
   const prevConfidence = useRef(0);
 
   useEffect(() => {
@@ -73,23 +137,56 @@ export function AgentCard({
     : isExpanded
       ? response?.verdict || ''
       : response?.one_liner || '';
+  const showThinkingPhrase = (isLoadingState || (isStreaming && !displayText.trim())) && !response;
+  const thinkingPhrases = THINKING_PHRASES[agentId] || ['Thinking...'];
   const useBottomReplyZone = !isIdle && !isExpanded;
+
+  useEffect(() => {
+    if (!showThinkingPhrase) {
+      setThinkingPhrasePhase('visible');
+      return;
+    }
+
+    let swapTimer: number | undefined;
+    let frameId: number | undefined;
+
+    const rotateTimer = window.setTimeout(() => {
+      setThinkingPhrasePhase('exiting');
+      swapTimer = window.setTimeout(() => {
+        setThinkingPhraseIndex((prev) => (prev + 1) % thinkingPhrases.length);
+        setThinkingPhrasePhase('entering');
+        frameId = requestAnimationFrame(() => {
+          setThinkingPhrasePhase('visible');
+        });
+      }, 300);
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(rotateTimer);
+      if (swapTimer !== undefined) window.clearTimeout(swapTimer);
+      if (frameId !== undefined) cancelAnimationFrame(frameId);
+    };
+  }, [showThinkingPhrase, thinkingPhrases.length, thinkingPhraseIndex]);
 
   return (
     <div
       className={`
         rounded-2xl
-        cursor-pointer
+        ${isLoadingState ? 'cursor-default' : 'cursor-pointer'}
         ${isWinner
           ? 'ring-2 ring-accent/30 scale-[1.01]'
           : 'scale-100'
         }
+        ${isHighlighted ? 'ring-2 ring-accent/45' : ''}
         ${isExpanded ? 'md:col-span-2' : ''}
       `}
+      ref={cardRef}
       style={{
         background: agentBackgroundGradients[agentId] || `linear-gradient(180deg, ${agentBackgrounds[agentId] || '#FAF7F4'} 0%, ${agentBackgrounds[agentId] || '#FAF7F4'} 100%)`,
         boxShadow: isHovered
           ? `0 10px 24px rgba(${hoverRgb}, 0.18), inset 0 1px 0 rgba(255,255,255,0.72)`
+          : isHighlighted
+            ? '0 12px 30px rgba(196, 149, 106, 0.2)'
           : isWinner
             ? '0 8px 18px rgba(196, 149, 106, 0.18)'
             : '0 4px 14px rgba(26, 23, 20, 0.07)',
@@ -106,7 +203,10 @@ export function AgentCard({
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onClick={(e) => onToggle((e.currentTarget as HTMLDivElement).getBoundingClientRect())}
+      onClick={(e) => {
+        if (isLoadingState) return;
+        onToggle((e.currentTarget as HTMLDivElement).getBoundingClientRect());
+      }}
     >
       <div
         style={{
@@ -129,10 +229,7 @@ export function AgentCard({
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: agentConfig.color }}
-            />
+            <AgentDot agentId={agentId} size={12} flashKey={dotFlashKey} />
             {onTitleClick ? (
               <button
                 type="button"
@@ -177,13 +274,41 @@ export function AgentCard({
           className="transition-all duration-300 ease-in-out overflow-hidden"
           style={{
             marginTop: useBottomReplyZone ? 'auto' : undefined,
-            marginBottom: useBottomReplyZone ? '100px' : undefined,
           }}
         >
           {isIdle ? (
             <p className="text-sm italic" style={{ color: 'rgba(74, 66, 60, 0.9)' }}>
               {agentConfig.oneLiner || 'Ready to respond...'}
             </p>
+          ) : showThinkingPhrase ? (
+            <div
+              style={{
+                flex: 1,
+                minHeight: '132px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+              }}
+            >
+              <p
+                style={{
+                  color: '#6B6460',
+                  fontStyle: 'italic',
+                  fontSize: '13px',
+                  opacity: thinkingPhrasePhase === 'exiting' ? 0 : 1,
+                  transform:
+                    thinkingPhrasePhase === 'exiting'
+                      ? 'translateY(-6px)'
+                      : thinkingPhrasePhase === 'entering'
+                        ? 'translateY(6px)'
+                        : 'translateY(0)',
+                  transition: 'opacity 300ms ease, transform 300ms ease',
+                }}
+              >
+                {thinkingPhrases[thinkingPhraseIndex]}
+              </p>
+            </div>
           ) : isStreaming ? (
             <div className="pt-5 border-t border-border/80">
               <p
@@ -258,6 +383,48 @@ export function AgentCard({
             </div>
           ) : null}
         </div>
+
+        {response && (
+          <div
+            className="flex items-center gap-1.5"
+            style={{
+              marginTop: 'auto',
+              paddingTop: '10px',
+              borderTop: '1px solid #E0D8D0',
+            }}
+          >
+            <ActionButton
+              icon={copyFeedbackActive ? <Check className="w-[15px] h-[15px]" /> : <Copy className="w-[15px] h-[15px]" />}
+              onClick={onCopy}
+              active={copyFeedbackActive}
+              activeColor="#C4956A"
+            />
+            <ActionButton
+              icon={<ThumbsUp className="w-[15px] h-[15px]" style={isLiked ? { fill: 'currentColor' } : undefined} />}
+              onClick={onLike}
+              active={isLiked}
+              activeColor="#C4956A"
+            />
+            <ActionButton
+              icon={<ThumbsDown className="w-[15px] h-[15px]" style={isDisliked ? { fill: 'currentColor' } : undefined} />}
+              onClick={onDislike}
+              active={isDisliked}
+              activeColor="#6B6460"
+            />
+            <ActionButton
+              icon={shareFeedbackActive ? <Check className="w-[15px] h-[15px]" /> : <Share2 className="w-[15px] h-[15px]" />}
+              onClick={onShare}
+              active={shareFeedbackActive}
+              activeColor="#C4956A"
+            />
+            <ActionButton
+              icon={<Bookmark className="w-[15px] h-[15px]" style={isSaved ? { fill: 'currentColor' } : undefined} />}
+              onClick={onSave}
+              active={isSaved}
+              activeColor="#C4956A"
+            />
+          </div>
+        )}
       </div>
 
       {/* Confidence bar — animated fill (hidden in idle state) */}
@@ -273,5 +440,40 @@ export function AgentCard({
         </div>
       )}
     </div>
+  );
+}
+
+interface ActionButtonProps {
+  icon: ReactNode;
+  onClick?: () => void;
+  active?: boolean;
+  activeColor?: string;
+}
+
+function ActionButton({ icon, onClick, active = false, activeColor = '#1A1714' }: ActionButtonProps) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      aria-pressed={active}
+      className="flex items-center justify-center"
+      style={{
+        width: '28px',
+        height: '28px',
+        borderRadius: '6px',
+        background: isHovered ? '#F0EBE3' : 'transparent',
+        color: active ? activeColor : (isHovered ? '#1A1714' : '#6B6460'),
+        transition: 'all 150ms ease',
+      }}
+    >
+      {icon}
+    </button>
   );
 }
