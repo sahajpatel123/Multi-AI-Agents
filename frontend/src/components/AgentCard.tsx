@@ -1,8 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
   Trophy,
-  Swords,
-  MessageCircle,
   Copy,
   Check,
   ThumbsUp,
@@ -12,6 +10,7 @@ import {
 } from 'lucide-react';
 import { ScoredAgent, AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
+import { ShareDropdown } from './ShareDropdown';
 
 interface AgentCardProps {
   scoredAgent?: ScoredAgent;
@@ -32,12 +31,14 @@ interface AgentCardProps {
   onDislike?: () => void;
   onShare?: () => void;
   onSave?: () => void;
+  prompt?: string;
   isLiked?: boolean;
   isDisliked?: boolean;
   isSaved?: boolean;
   copyFeedbackActive?: boolean;
   shareFeedbackActive?: boolean;
   isLoadingState?: boolean;
+  animateConfidenceBar?: boolean;
 }
 
 const THINKING_PHRASES: Record<string, string[]> = {
@@ -80,16 +81,19 @@ export function AgentCard({
   onCopy,
   onLike,
   onDislike,
-  onShare,
   onSave,
+  prompt = '',
   isLiked = false,
   isDisliked = false,
   isSaved = false,
   copyFeedbackActive = false,
   shareFeedbackActive = false,
   isLoadingState = false,
+  animateConfidenceBar = true,
 }: AgentCardProps) {
   const agentConfig = AGENTS[agentId];
+  const [isShareDropdownOpen, setIsShareDropdownOpen] = useState(false);
+  const shareButtonRef = useRef<HTMLButtonElement>(null);
   const agentBackgrounds: Record<string, string> = {
     agent_1: '#EEF0F2',
     agent_2: '#F0EDF2',
@@ -114,13 +118,25 @@ export function AgentCard({
   const prevConfidence = useRef(0);
 
   useEffect(() => {
-    if (response?.confidence != null && response.confidence !== prevConfidence.current) {
+    if (response?.confidence == null) {
+      setBarWidth(0);
+      prevConfidence.current = 0;
+      return;
+    }
+
+    if (!animateConfidenceBar) {
+      setBarWidth(response.confidence);
+      prevConfidence.current = response.confidence;
+      return;
+    }
+
+    if (response.confidence !== prevConfidence.current) {
       // Small delay so the animation is visible after mount
       const timer = setTimeout(() => setBarWidth(response.confidence), 50);
       prevConfidence.current = response.confidence;
       return () => clearTimeout(timer);
     }
-  }, [response?.confidence]);
+  }, [animateConfidenceBar, response?.confidence]);
 
   // Content height transition ref
   const contentRef = useRef<HTMLDivElement>(null);
@@ -134,12 +150,10 @@ export function AgentCard({
 
   const displayText = isStreaming
     ? streamingText || ''
-    : isExpanded
-      ? response?.verdict || ''
-      : response?.one_liner || '';
+    : response?.one_liner || '';
   const showThinkingPhrase = (isLoadingState || (isStreaming && !displayText.trim())) && !response;
   const thinkingPhrases = THINKING_PHRASES[agentId] || ['Thinking...'];
-  const useBottomReplyZone = !isIdle && !isExpanded;
+  const useBottomReplyZone = !isIdle;
 
   useEffect(() => {
     if (!showThinkingPhrase) {
@@ -178,11 +192,12 @@ export function AgentCard({
           : 'scale-100'
         }
         ${isHighlighted ? 'ring-2 ring-accent/45' : ''}
-        ${isExpanded ? 'md:col-span-2' : ''}
       `}
       ref={cardRef}
       style={{
-        background: agentBackgroundGradients[agentId] || `linear-gradient(180deg, ${agentBackgrounds[agentId] || '#FAF7F4'} 0%, ${agentBackgrounds[agentId] || '#FAF7F4'} 100%)`,
+        background: isWinner
+          ? `linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.06) 100%), ${agentBackgroundGradients[agentId] || `linear-gradient(180deg, ${agentBackgrounds[agentId] || '#FAF7F4'} 0%, ${agentBackgrounds[agentId] || '#FAF7F4'} 100%)`}`
+          : agentBackgroundGradients[agentId] || `linear-gradient(180deg, ${agentBackgrounds[agentId] || '#FAF7F4'} 0%, ${agentBackgrounds[agentId] || '#FAF7F4'} 100%)`,
         boxShadow: isHovered
           ? `0 10px 24px rgba(${hoverRgb}, 0.18), inset 0 1px 0 rgba(255,255,255,0.72)`
           : isHighlighted
@@ -319,53 +334,6 @@ export function AgentCard({
                 <span className="inline-block w-0.5 h-4 ml-0.5 bg-text-secondary/50 animate-pulse align-text-bottom" />
               </p>
             </div>
-          ) : isExpanded && response ? (
-            <div className="space-y-3">
-              <p className="text-text-primary leading-relaxed">
-                {response.verdict}
-              </p>
-              <div className="pt-3 border-t border-border">
-                <p className="text-sm text-text-secondary">
-                  <span className="font-medium">Key assumption:</span>{' '}
-                  {response.key_assumption}
-                </p>
-              </div>
-              {scoredAgent?.contradiction?.detected && (
-                <div className="pt-3 border-t border-border">
-                  <p className="text-xs text-text-secondary italic">
-                    ⚠ Conflicts with earlier position
-                  </p>
-                </div>
-              )}
-              {(onChallenge || onDiscuss) && (
-                <div className="flex gap-2 pt-2">
-                  {onChallenge && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onChallenge(); }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
-                                 bg-background/75 border border-border rounded-md
-                                 text-text-secondary hover:text-text-primary hover:border-accent/50
-                                 transition-all duration-300 hover:shadow-sm"
-                    >
-                      <Swords className="w-3 h-3" />
-                      Challenge
-                    </button>
-                  )}
-                  {onDiscuss && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onDiscuss(); }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
-                                 bg-background/75 border border-border rounded-md
-                                 text-text-secondary hover:text-text-primary hover:border-accent/50
-                                 transition-all duration-300 hover:shadow-sm"
-                    >
-                      <MessageCircle className="w-3 h-3" />
-                      Discuss
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
           ) : response ? (
             <div className="pt-5 border-t border-border/80">
               <p
@@ -412,9 +380,10 @@ export function AgentCard({
               activeColor="#6B6460"
             />
             <ActionButton
-              icon={shareFeedbackActive ? <Check className="w-[15px] h-[15px]" /> : <Share2 className="w-[15px] h-[15px]" />}
-              onClick={onShare}
-              active={shareFeedbackActive}
+              ref={shareButtonRef}
+              icon={<Share2 className="w-[15px] h-[15px]" />}
+              onClick={() => setIsShareDropdownOpen(!isShareDropdownOpen)}
+              active={isShareDropdownOpen}
               activeColor="#C4956A"
             />
             <ActionButton
@@ -439,6 +408,18 @@ export function AgentCard({
           />
         </div>
       )}
+
+      {response && (
+        <ShareDropdown
+          agentId={agentId}
+          agentName={agentConfig.name}
+          oneLiner={response.one_liner}
+          prompt={prompt}
+          isOpen={isShareDropdownOpen}
+          onClose={() => setIsShareDropdownOpen(false)}
+          anchorRef={shareButtonRef}
+        />
+      )}
     </div>
   );
 }
@@ -448,13 +429,15 @@ interface ActionButtonProps {
   onClick?: () => void;
   active?: boolean;
   activeColor?: string;
+  ref?: React.RefObject<HTMLButtonElement>;
 }
 
-function ActionButton({ icon, onClick, active = false, activeColor = '#1A1714' }: ActionButtonProps) {
+const ActionButton = ({ icon, onClick, active = false, activeColor = '#1A1714', ref }: ActionButtonProps) => {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
     <button
+      ref={ref}
       type="button"
       onClick={(e) => {
         e.stopPropagation();
@@ -476,4 +459,4 @@ function ActionButton({ icon, onClick, active = false, activeColor = '#1A1714' }
       {icon}
     </button>
   );
-}
+};

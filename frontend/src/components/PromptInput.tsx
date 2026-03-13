@@ -29,8 +29,8 @@ export function PromptInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!presetPrompt || presetPromptNonce === undefined) return;
-    setPrompt(presetPrompt);
+    if (presetPromptNonce === undefined) return;
+    setPrompt(presetPrompt || '');
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
     });

@@ -57,6 +57,8 @@ function App() {
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [response, setResponse] = useState<PromptResponse | null>(null);
+  const [currentResponses, setCurrentResponses] = useState<PromptResponse | null>(null);
+  const [animateCurrentResponseBars, setAnimateCurrentResponseBars] = useState(false);
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
@@ -94,6 +96,7 @@ function App() {
   const focusedTokenBuffer = useRef('');
   const focusedFlushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const focusedMessagesEndRef = useRef<HTMLDivElement>(null);
+  const currentResponseBarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feedbackTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const agentCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -172,6 +175,8 @@ function App() {
     };
 
     setResponse(promptResponse);
+    setCurrentResponses(promptResponse);
+    setAnimateCurrentResponseBars(false);
     setExpandedAgent(turn.winner_id);
     setCurrentPrompt(turn.prompt);
     setActiveTurnId(turn.turn_id);
@@ -325,6 +330,41 @@ function App() {
     }
   }, [activeTurnId, sessionData]);
 
+  const handleNewChat = useCallback(() => {
+    if (flushTimer.current) clearInterval(flushTimer.current);
+    if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
+    if (currentResponseBarTimer.current) clearTimeout(currentResponseBarTimer.current);
+
+    setPhase('idle');
+    setResponse(null);
+    setCurrentResponses(null);
+    setAnimateCurrentResponseBars(false);
+    setExpandedAgent(null);
+    setError(null);
+    setCurrentPrompt('');
+    setHasSubmittedPrompt(false);
+    setPresetPrompt('');
+    setPresetPromptNonce((prev) => prev + 1);
+    setStreamingTexts({});
+    setDoneAgents(new Set());
+    setViewMode('arena');
+    setChallengedAgent(null);
+    setDiscussAgent(null);
+    setFocusedAgentId(null);
+    setFocusedCardRect(null);
+    setIsFocusedExpanded(false);
+    setFocusedHistories({});
+    setFocusedStreamingText('');
+    setFocusedChatError(null);
+    setIsFocusedChatStreaming(false);
+    setHighlightedAgentId(null);
+    setPendingScrollTarget(null);
+    setActiveTurnId(null);
+    tokenBuffers.current = {};
+    focusedTokenBuffer.current = '';
+    setIsSidebarOpen(false);
+  }, []);
+
   const handleSubmit = async (prompt: string) => {
     setHasSubmittedPrompt(true);
 
@@ -332,6 +372,8 @@ function App() {
     setPhase('pipeline');
     setError(null);
     setResponse(null);
+    setCurrentResponses(null);
+    setAnimateCurrentResponseBars(false);
     setExpandedAgent(null);
     setCurrentPrompt(prompt);
     setStreamingTexts({});
@@ -391,6 +433,12 @@ function App() {
           if (flushTimer.current) clearInterval(flushTimer.current);
 
           setResponse(data);
+          setCurrentResponses(data);
+          setAnimateCurrentResponseBars(true);
+          if (currentResponseBarTimer.current) clearTimeout(currentResponseBarTimer.current);
+          currentResponseBarTimer.current = setTimeout(() => {
+            setAnimateCurrentResponseBars(false);
+          }, 750);
           setExpandedAgent(data.winner_agent_id);
           setPhase('done');
 
@@ -559,6 +607,7 @@ function App() {
   useEffect(() => () => {
     Object.values(feedbackTimeouts.current).forEach(clearTimeout);
     if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    if (currentResponseBarTimer.current) clearTimeout(currentResponseBarTimer.current);
   }, []);
 
   const handleFocusedAgentSubmit = async (message: string) => {
@@ -635,7 +684,7 @@ function App() {
   };
 
   const handleAgentTitleClick = (agentId: string) => {
-    setExpandedAgent((prev) => (prev === agentId ? null : agentId));
+    openFocusedAgent(agentId);
   };
   const challengeTarget = (() => {
     if (!response) return null;
@@ -663,8 +712,8 @@ function App() {
   const isLoading = phase === 'pipeline';
   const isStreaming = phase === 'streaming' || phase === 'scoring';
   const isDone = phase === 'done';
-  const sortedResponses = response
-    ? [...response.all_responses].sort((a, b) => b.score - a.score)
+  const sortedResponses = currentResponses
+    ? [...currentResponses.all_responses].sort((a, b) => b.score - a.score)
     : [];
   const savedIds = new Set(savedItems.map((item) => item.id));
   const focusedTargetStyle = {
@@ -705,6 +754,7 @@ function App() {
           }))}
           activeTurnId={activeTurnId}
           onTurnClick={handleTurnClick}
+          onNewChat={handleNewChat}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
           onLeaderboardClick={openLeaderboard}
@@ -887,7 +937,7 @@ function App() {
               ))}
 
               {/* Final results */}
-              {isDone && response && sortedResponses.map((scoredAgent) => {
+              {isDone && currentResponses && sortedResponses.map((scoredAgent) => {
                   const responseKey = activeTurnId
                     ? getResponseKey(activeTurnId, scoredAgent.response.agent_id)
                     : null;
@@ -899,7 +949,7 @@ function App() {
                     key={scoredAgent.response.agent_id}
                     agentId={scoredAgent.response.agent_id}
                     scoredAgent={scoredAgent}
-                    isExpanded={expandedAgent === scoredAgent.response.agent_id}
+                    isExpanded={false}
                     onTitleClick={() => handleAgentTitleClick(scoredAgent.response.agent_id)}
                     onToggle={(cardRect) => openFocusedAgent(scoredAgent.response.agent_id, cardRect)}
                     onChallenge={() => handleChallenge(scoredAgent)}
@@ -919,6 +969,8 @@ function App() {
                     isSaved={isSaved}
                     copyFeedbackActive={Boolean(responseKey && copyFeedback[responseKey])}
                     shareFeedbackActive={Boolean(responseKey && shareFeedback[responseKey])}
+                    animateConfidenceBar={animateCurrentResponseBars}
+                    prompt={currentPrompt}
                   />
                 );
               })}
@@ -1088,7 +1140,6 @@ function App() {
                   borderRadius: '999px',
                   padding: '8px 20px',
                   fontSize: '13px',
-                  color: '#6B6460',
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
                   opacity: examplePromptPhase === 'exiting' ? 0 : 1,

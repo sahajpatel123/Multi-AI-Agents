@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Plus,
   Ellipsis,
@@ -9,6 +9,8 @@ import {
   MessageSquare,
   Swords,
   Bookmark,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
 import { AgentDot } from './AgentDot';
@@ -25,6 +27,7 @@ interface SidebarProps {
   turns: SidebarTurn[];
   activeTurnId: string | null;
   onTurnClick: (turnId: string) => void;
+  onNewChat: () => void;
   isOpen: boolean;
   onClose: () => void;
   onLeaderboardClick: () => void;
@@ -46,6 +49,7 @@ export function Sidebar({
   turns,
   activeTurnId,
   onTurnClick,
+  onNewChat,
   isOpen,
   onClose,
   onLeaderboardClick,
@@ -53,11 +57,83 @@ export function Sidebar({
   onSavedItemClick,
 }: SidebarProps) {
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
-  const reversedTurns = useMemo(() => [...turns].reverse(), [turns]);
+  const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
+  const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
+  const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
+  const [customTitles, setCustomTitles] = useState<Record<string, string>>({});
+  const [deletedTurnIds, setDeletedTurnIds] = useState<Set<string>>(new Set());
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const menuLayerRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const reversedTurns = useMemo(
+    () => [...turns].reverse().filter((turn) => !deletedTurnIds.has(turn.turn_id)),
+    [turns, deletedTurnIds],
+  );
+
   const filteredTurns = useMemo(
     () => reversedTurns.filter((turn) => activeFilter === 'all' || turn.prompt_category === activeFilter),
     [activeFilter, reversedTurns],
   );
+
+  useEffect(() => {
+    if (!openMenuTurnId && !confirmDeleteTurnId) return;
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (menuLayerRef.current?.contains(event.target as Node)) return;
+      setOpenMenuTurnId(null);
+      setConfirmDeleteTurnId(null);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [openMenuTurnId, confirmDeleteTurnId]);
+
+  useEffect(() => {
+    if (!editingTurnId) return;
+    editInputRef.current?.focus();
+    editInputRef.current?.select();
+  }, [editingTurnId]);
+
+  const handleNewChatClick = () => {
+    scrollAreaRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    setOpenMenuTurnId(null);
+    setConfirmDeleteTurnId(null);
+    setEditingTurnId(null);
+    onNewChat();
+  };
+
+  const startRename = (turn: SidebarTurn) => {
+    const currentLabel = customTitles[turn.turn_id] || turn.prompt;
+    setEditingTurnId(turn.turn_id);
+    setEditingValue(currentLabel);
+    setOpenMenuTurnId(null);
+    setConfirmDeleteTurnId(null);
+  };
+
+  const saveRename = (turnId: string) => {
+    const nextValue = editingValue.trim();
+    if (nextValue) {
+      setCustomTitles((prev) => ({ ...prev, [turnId]: nextValue }));
+    }
+    setEditingTurnId(null);
+    setEditingValue('');
+  };
+
+  const cancelRename = () => {
+    setEditingTurnId(null);
+    setEditingValue('');
+  };
+
+  const deleteTurn = (turnId: string) => {
+    setDeletedTurnIds((prev) => new Set(prev).add(turnId));
+    setOpenMenuTurnId(null);
+    setConfirmDeleteTurnId(null);
+    if (activeTurnId === turnId) {
+      onNewChat();
+    }
+  };
 
   return (
     <>
@@ -74,7 +150,7 @@ export function Sidebar({
       >
         <div className="flex flex-col h-full px-4 py-6">
           <div className="mb-2">
-            <MenuAction icon={<Plus className="w-5 h-5" />} label="New chat" isPrimary />
+            <MenuAction icon={<Plus className="w-5 h-5" />} label="New chat" isPrimary onClick={handleNewChatClick} />
           </div>
           <div className="mb-5">
             <MenuAction
@@ -107,14 +183,10 @@ export function Sidebar({
                     transition: 'all 150ms ease',
                   }}
                   onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.background = '#E0D8D0';
-                    }
+                    if (!isActive) e.currentTarget.style.background = '#E0D8D0';
                   }}
                   onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.background = '#F0EBE3';
-                    }
+                    if (!isActive) e.currentTarget.style.background = '#F0EBE3';
                   }}
                 >
                   {filter.icon}
@@ -123,52 +195,188 @@ export function Sidebar({
             })}
           </div>
 
-          <div className="flex-1 overflow-y-auto pr-1 pb-4">
+          <div className="flex-1 overflow-y-auto pr-1 pb-4" ref={scrollAreaRef}>
             {filteredTurns.length > 0 ? (
               <div className="space-y-1">
                 {filteredTurns.map((turn) => {
                   const isActive = turn.turn_id === activeTurnId;
                   const winner = AGENTS[turn.winner_id];
+                  const isMenuOpen = openMenuTurnId === turn.turn_id;
+                  const isConfirmingDelete = confirmDeleteTurnId === turn.turn_id;
+                  const isEditing = editingTurnId === turn.turn_id;
+                  const displayTitle = customTitles[turn.turn_id] || turn.prompt;
 
                   return (
-                    <button
+                    <div
                       key={turn.turn_id}
-                      onClick={() => onTurnClick(turn.turn_id)}
-                      className="w-full text-left rounded-lg px-3 py-2.5 transition-all duration-150"
+                      className="relative rounded-lg px-3 py-2.5 transition-all duration-150"
                       style={{
                         background: isActive ? 'rgba(20, 18, 16, 0.06)' : 'transparent',
                         border: isActive ? '1px solid rgba(255,255,255,0.52)' : '1px solid transparent',
                         boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.62)' : 'none',
                       }}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-text-primary truncate font-medium" style={{ fontSize: '14px', lineHeight: '1.35' }}>
-                          {turn.prompt}
-                        </p>
-                        {isActive ? (
-                          <Ellipsis className="w-4 h-4 shrink-0 text-text-secondary/80" />
-                        ) : null}
-                      </div>
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <AgentDot agentId={turn.winner_id} size={8} />
-                          <span className="text-xs text-text-secondary truncate">{winner.name}</span>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          {isEditing ? (
+                            <input
+                              ref={editInputRef}
+                              value={editingValue}
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  saveRename(turn.turn_id);
+                                }
+                                if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  cancelRename();
+                                }
+                              }}
+                              onBlur={() => saveRename(turn.turn_id)}
+                              className="w-full bg-white border border-border rounded-md px-2 py-1 text-[13px] text-text-primary outline-none"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => onTurnClick(turn.turn_id)}
+                              className="w-full text-left"
+                            >
+                              <p className="text-text-primary truncate font-medium" style={{ fontSize: '14px', lineHeight: '1.35' }}>
+                                {displayTitle}
+                              </p>
+                              <div className="mt-2 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <AgentDot agentId={turn.winner_id} size={8} />
+                                  <span className="text-xs text-text-secondary truncate">{winner.name}</span>
+                                </div>
+                                <span className="text-[11px] text-text-secondary/70 capitalize">
+                                  {turn.prompt_category || 'unknown'}
+                                </span>
+                              </div>
+                            </button>
+                          )}
                         </div>
-                        <span className="text-[11px] text-text-secondary/70 capitalize">
-                          {turn.prompt_category || 'unknown'}
-                        </span>
+
+                        <div className="relative shrink-0" ref={isMenuOpen || isConfirmingDelete ? menuLayerRef : undefined}>
+                          <button
+                            type="button"
+                            aria-label="History item actions"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTurnId(null);
+                              setEditingValue('');
+                              setConfirmDeleteTurnId(null);
+                              setOpenMenuTurnId((prev) => (prev === turn.turn_id ? null : turn.turn_id));
+                            }}
+                            className="flex items-center justify-center"
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '6px',
+                              background: isMenuOpen ? '#F0EBE3' : 'transparent',
+                              color: '#6B6460',
+                              transition: 'all 150ms ease',
+                            }}
+                          >
+                            <Ellipsis className="w-4 h-4" />
+                          </button>
+
+                          {isMenuOpen && (
+                            <div
+                              className="absolute right-0 mt-2"
+                              style={{
+                                background: '#FFFFFF',
+                                border: '1px solid #E0D8D0',
+                                borderRadius: '10px',
+                                boxShadow: '0 4px 16px rgba(26,23,20,0.08)',
+                                padding: '4px',
+                                minWidth: '140px',
+                                zIndex: 120,
+                              }}
+                            >
+                              <MenuItem
+                                icon={<Pencil className="w-[14px] h-[14px]" />}
+                                label="Rename"
+                                color="#1A1714"
+                                hoverBackground="#F0EBE3"
+                                onClick={() => startRename(turn)}
+                              />
+                              <MenuItem
+                                icon={<Trash2 className="w-[14px] h-[14px]" />}
+                                label="Delete"
+                                color="#C0392B"
+                                hoverBackground="#FEF2F2"
+                                onClick={() => {
+                                  setOpenMenuTurnId(null);
+                                  setConfirmDeleteTurnId(turn.turn_id);
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          {isConfirmingDelete && (
+                            <div
+                              className="absolute right-0 mt-2"
+                              style={{
+                                background: '#FFFFFF',
+                                border: '1px solid #E0D8D0',
+                                borderRadius: '10px',
+                                boxShadow: '0 4px 16px rgba(26,23,20,0.08)',
+                                padding: '10px',
+                                minWidth: '160px',
+                                zIndex: 120,
+                              }}
+                            >
+                              <p className="text-[13px]" style={{ color: '#1A1714', marginBottom: '10px' }}>
+                                Delete this prompt?
+                              </p>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteTurnId(null)}
+                                  style={{
+                                    padding: '6px 10px',
+                                    fontSize: '12px',
+                                    borderRadius: '6px',
+                                    color: '#6B6460',
+                                    background: '#F0EBE3',
+                                    transition: 'all 150ms ease',
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteTurn(turn.turn_id)}
+                                  style={{
+                                    padding: '6px 10px',
+                                    fontSize: '12px',
+                                    borderRadius: '6px',
+                                    color: '#FFFFFF',
+                                    background: '#C0392B',
+                                    transition: 'all 150ms ease',
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
-            ) : turns.length === 0 ? (
+            ) : reversedTurns.length === 0 ? (
               <div
                 className="rounded-2xl border border-border px-4 py-4"
                 style={{ background: 'rgba(255, 255, 255, 0.35)' }}
               >
                 <p className="text-[12px] font-medium leading-relaxed text-text-secondary">
-                  Your prompts will appear here once you run one.
+                  Your history will appear here.
                 </p>
               </div>
             ) : (
@@ -285,6 +493,40 @@ function MenuAction({ icon, label, isPrimary = false, onClick }: MenuActionProps
       <span className="font-semibold text-text-primary/92" style={{ fontSize: '14px', lineHeight: '1.15' }}>
         {label}
       </span>
+    </button>
+  );
+}
+
+interface MenuItemProps {
+  icon: ReactNode;
+  label: string;
+  color: string;
+  hoverBackground: string;
+  onClick: () => void;
+}
+
+function MenuItem({ icon, label, color, hoverBackground, onClick }: MenuItemProps) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="w-full flex items-center gap-2"
+      style={{
+        padding: '8px 12px',
+        fontSize: '13px',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        transition: 'all 150ms ease',
+        color,
+        background: isHovered ? hoverBackground : 'transparent',
+      }}
+    >
+      {icon}
+      {label}
     </button>
   );
 }
