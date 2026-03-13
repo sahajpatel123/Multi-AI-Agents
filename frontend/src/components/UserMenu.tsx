@@ -61,7 +61,7 @@ export function UserMenu({
   const pct = limit ? Math.min((used / limit) * 100, 100) : 0;
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div className="relative z-[90]" ref={menuRef}>
       {/* Avatar button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -80,7 +80,7 @@ export function UserMenu({
       {isOpen && (
         <div
           className="absolute right-0 top-10 w-64 border border-border rounded-xl
-                     z-50 py-1"
+                     z-[100] py-1"
           style={{
             background: 'linear-gradient(180deg, rgba(248,244,240,0.98) 0%, rgba(243,238,233,0.98) 100%)',
             boxShadow: '0 16px 34px rgba(26, 23, 20, 0.16)',

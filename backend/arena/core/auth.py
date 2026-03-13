@@ -1,19 +1,19 @@
 """Auth core — JWT creation/verification, password hashing, user helpers, FastAPI dependencies"""
 
+import base64
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException, Request, status
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.database import get_db
 from arena.db_models import User, UserTier
 from arena.models.schemas import UserResponse
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
@@ -23,12 +23,40 @@ REFRESH_TOKEN_TYPE = "refresh"
 # Password helpers
 # ─────────────────────────────────────────────────
 
+def _prehash(plain: str) -> bytes:
+    """SHA-256 → base64-encoded bytes (always 44 bytes), permanently within bcrypt's 72-byte limit.
+    This means passwords of any length work identically — no truncation, no data loss."""
+    digest = hashlib.sha256(plain.encode("utf-8")).digest()
+    return base64.b64encode(digest)  # 44 ASCII bytes
+
+
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    """Hash a password with SHA-256 prehash + bcrypt."""
+    return _bcrypt.hashpw(_prehash(plain), _bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    """Verify a password against its stored hash.
+
+    Tries the current SHA-256 prehash method first.
+    Falls back to the old truncation method for hashes created before this fix,
+    so existing users are never locked out.
+    """
+    hashed_b = hashed.encode("utf-8") if isinstance(hashed, str) else hashed
+
+    # Primary path: current method (SHA-256 prehash → bcrypt).
+    try:
+        if _bcrypt.checkpw(_prehash(plain), hashed_b):
+            return True
+    except Exception:
+        pass
+
+    # Backward-compat path: old method (plain UTF-8 truncated to 72 bytes → bcrypt).
+    try:
+        old_bytes = plain.encode("utf-8")[:72].decode("utf-8", errors="ignore").encode("utf-8")
+        return _bcrypt.checkpw(old_bytes, hashed_b)
+    except Exception:
+        return False
 
 
 # ─────────────────────────────────────────────────

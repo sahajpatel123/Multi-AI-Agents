@@ -1,8 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import {
   Plus,
-  Search,
-  MessageSquare,
   Ellipsis,
 } from 'lucide-react';
 
@@ -41,19 +39,11 @@ export function Sidebar({ turns, activeTurnId, onTurnClick, isOpen, onClose }: S
         }}
       >
         <div className="flex flex-col h-full px-4 py-6">
-          <div className="space-y-2">
+          <div className="mb-4">
             <MenuAction icon={<Plus className="w-5 h-5" />} label="New chat" isPrimary />
-            <MenuAction
-              icon={<Search className="w-5 h-5" />}
-              label="Search"
-            />
           </div>
 
-          <div className="mt-2 space-y-2">
-            <MenuAction icon={<MessageSquare className="w-5 h-5" />} label="Chats" />
-          </div>
-
-          <div className="mt-7 mb-2">
+          <div className="mb-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-text-secondary/75">Recents</p>
           </div>
 

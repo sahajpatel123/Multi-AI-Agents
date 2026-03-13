@@ -81,14 +81,28 @@ async def register(
     response: Response,
     db: Session = Depends(get_db),
 ) -> UserResponse:
-    if get_user_by_email(db, body.email):
+    try:
+        if get_user_by_email(db, body.email):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with that email already exists",
+            )
+        user = create_user(db, body.email, body.password)
+        
+        # Convert to response model before setting cookies to avoid DetachedInstanceError
+        user_response = _user_to_response(user)
+        _set_auth_cookies(response, user)
+        
+        return user_response
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (they're already JSON)
+        raise
+    except Exception as e:
+        # Catch any other errors and return JSON
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account with that email already exists",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}",
         )
-    user = create_user(db, body.email, body.password)
-    _set_auth_cookies(response, user)
-    return _user_to_response(user)
 
 
 @router.post("/login", response_model=UserResponse)
@@ -97,14 +111,28 @@ async def login(
     response: Response,
     db: Session = Depends(get_db),
 ) -> UserResponse:
-    user = authenticate_user(db, body.email, body.password)
-    if not user:
+    try:
+        user = authenticate_user(db, body.email, body.password)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
+            )
+        
+        # Convert to response model before setting cookies to avoid DetachedInstanceError
+        user_response = _user_to_response(user)
+        _set_auth_cookies(response, user)
+        
+        return user_response
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (they're already JSON)
+        raise
+    except Exception as e:
+        # Catch any other errors and return JSON
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Login failed: {str(e)}",
         )
-    _set_auth_cookies(response, user)
-    return _user_to_response(user)
 
 
 @router.post("/logout")
@@ -119,25 +147,39 @@ async def refresh(
     db: Session = Depends(get_db),
     arena_refresh: Optional[str] = Cookie(default=None),
 ) -> UserResponse:
-    if not arena_refresh:
+    try:
+        if not arena_refresh:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="No refresh token",
+            )
+        payload = decode_token(arena_refresh)
+        if not payload or payload.get("type") != REFRESH_TOKEN_TYPE:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired refresh token",
+            )
+        user = get_user_by_id(db, int(payload["sub"]))
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+            )
+        
+        # Convert to response model before setting cookies to avoid DetachedInstanceError
+        user_response = _user_to_response(user)
+        _set_auth_cookies(response, user)
+        
+        return user_response
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (they're already JSON)
+        raise
+    except Exception as e:
+        # Catch any other errors and return JSON
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No refresh token",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Token refresh failed: {str(e)}",
         )
-    payload = decode_token(arena_refresh)
-    if not payload or payload.get("type") != REFRESH_TOKEN_TYPE:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
-        )
-    user = get_user_by_id(db, int(payload["sub"]))
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-    _set_auth_cookies(response, user)
-    return _user_to_response(user)
 
 
 @router.get("/me", response_model=UserResponse)

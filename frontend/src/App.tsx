@@ -387,15 +387,38 @@ function App() {
   const handleAgentTitleClick = (agentId: string) => {
     setExpandedAgent((prev) => (prev === agentId ? null : agentId));
   };
+  const challengeTarget = (() => {
+    if (!response) return null;
+    if (focusedAgentId) {
+      return response.all_responses.find((s) => s.response.agent_id === focusedAgentId) || null;
+    }
+    if (expandedAgent) {
+      return response.all_responses.find((s) => s.response.agent_id === expandedAgent) || null;
+    }
+    return response.all_responses.find((s) => s.response.agent_id === response.winner_agent_id) || response.all_responses[0] || null;
+  })();
+  const handleChallengeWidgetClick = () => {
+    if (!challengeTarget) return;
+    if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
+    setFocusedAgentId(null);
+    setFocusedCardRect(null);
+    setIsFocusedExpanded(false);
+    setFocusedStreamingText('');
+    setFocusedChatError(null);
+    setIsFocusedChatStreaming(false);
+    focusedTokenBuffer.current = '';
+    handleChallenge(challengeTarget);
+  };
 
   const isLoading = phase === 'pipeline';
   const isStreaming = phase === 'streaming' || phase === 'scoring';
   const isDone = phase === 'done';
   const focusedTargetStyle = {
-    left: 'clamp(120px, 20vw, 380px)',
-    top: 'clamp(104px, 12vh, 146px)',
-    width: 'min(920px, calc(100vw - 180px))',
-    height: 'min(620px, calc(100vh - 210px))',
+    left: '50%',
+    top: '50%',
+    width: 'min(920px, calc(100vw - 96px))',
+    height: 'min(620px, calc(100vh - 190px))',
+    transform: 'translate(-50%, -50%)',
     borderRadius: '22px',
   };
   const focusedPanelBackgrounds: Record<string, string> = {
@@ -439,80 +462,92 @@ function App() {
           <header
             className="flex items-center justify-between px-6 py-4"
             style={{
+              position: 'relative',
+              zIndex: 80,
               filter: focusedAgentId ? 'blur(4px)' : 'blur(0px)',
               transition: 'filter 320ms cubic-bezier(0.22, 1, 0.36, 1)',
               pointerEvents: focusedAgentId ? 'none' : 'auto',
             }}
           >
-            <button
-              onClick={() => setIsSidebarOpen((prev) => !prev)}
-              onMouseEnter={() => setIsSidebarToggleHovered(true)}
-              onMouseLeave={() => setIsSidebarToggleHovered(false)}
-              aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-              title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-              className="group relative"
+            <div
               style={{
-                width: '40px',
-                height: '28px',
-                borderRadius: '6px',
-                border: isSidebarToggleHovered
-                  ? '1px solid rgba(255,255,255,0.7)'
-                  : '1.75px solid rgba(119, 115, 110, 0.56)',
-                background: 'transparent',
-                boxShadow: isSidebarToggleHovered
-                  ? '0 10px 22px rgba(26, 23, 20, 0.12), inset 0 1px 0 rgba(255,255,255,0.76)'
-                  : isSidebarOpen
-                    ? '0 6px 16px rgba(26, 23, 20, 0.1)'
-                    : '0 2px 8px rgba(26, 23, 20, 0.06)',
-                transition: 'all 280ms cubic-bezier(0.22, 1, 0.36, 1)',
-                transform: isSidebarToggleHovered ? 'translateY(-1px)' : 'translateY(0)',
-                backdropFilter: isSidebarToggleHovered ? 'blur(8px)' : 'blur(0px)',
-                position: 'relative',
-                overflow: 'hidden',
+                transition: 'transform 500ms cubic-bezier(0.22, 1, 0.36, 1)',
+                transform: isSidebarOpen
+                  ? 'translateX(min(224px, calc(88vw - 84px)))'
+                  : 'translateX(0)',
+                willChange: 'transform',
               }}
             >
-              <span
-                aria-hidden="true"
+              <button
+                onClick={() => setIsSidebarOpen((prev) => !prev)}
+                onMouseEnter={() => setIsSidebarToggleHovered(true)}
+                onMouseLeave={() => setIsSidebarToggleHovered(false)}
+                aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                className="group relative"
                 style={{
-                  position: 'absolute',
-                  inset: 0,
-                  borderRadius: 'inherit',
-                  opacity: isSidebarToggleHovered ? 1 : 0,
-                  transition: 'opacity 0.3s ease',
-                  pointerEvents: 'none',
-                  background: `linear-gradient(
-                    140deg,
-                    rgba(255,255,255,0.26) 0%,
-                    rgba(255,255,255,0.08) 48%,
-                    rgba(26, 23, 20, 0.06) 100%
-                  )`,
+                  width: '40px',
+                  height: '28px',
+                  borderRadius: '6px',
+                  border: isSidebarToggleHovered
+                    ? '1px solid rgba(255,255,255,0.7)'
+                    : '1.75px solid rgba(119, 115, 110, 0.56)',
+                  background: 'transparent',
+                  boxShadow: isSidebarToggleHovered
+                    ? '0 10px 22px rgba(26, 23, 20, 0.12), inset 0 1px 0 rgba(255,255,255,0.76)'
+                    : isSidebarOpen
+                      ? '0 6px 16px rgba(26, 23, 20, 0.1)'
+                      : '0 2px 8px rgba(26, 23, 20, 0.06)',
+                  transition: 'all 280ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  transform: isSidebarToggleHovered ? 'translateY(-1px)' : 'translateY(0)',
+                  backdropFilter: isSidebarToggleHovered ? 'blur(8px)' : 'blur(0px)',
+                  position: 'relative',
+                  overflow: 'hidden',
                 }}
-              />
-              <span
-                aria-hidden="true"
-                style={{
-                  position: 'absolute',
-                  top: '5px',
-                  bottom: '5px',
-                  left: '50%',
-                  width: '1.75px',
-                  background: 'rgba(119, 115, 110, 0.56)',
-                  transform: 'translateX(-50%)',
-                }}
-              />
-              <span
-                aria-hidden="true"
-                style={{
-                  position: 'absolute',
-                  left: '6px',
-                  right: '6px',
-                  top: '5px',
-                  bottom: '5px',
-                  border: '1.75px solid rgba(119, 115, 110, 0.56)',
-                  borderRadius: '3px',
-                }}
-              />
-            </button>
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: 'inherit',
+                    opacity: isSidebarToggleHovered ? 1 : 0,
+                    transition: 'opacity 0.3s ease',
+                    pointerEvents: 'none',
+                    background: `linear-gradient(
+                      140deg,
+                      rgba(255,255,255,0.26) 0%,
+                      rgba(255,255,255,0.08) 48%,
+                      rgba(26, 23, 20, 0.06) 100%
+                    )`,
+                  }}
+                />
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    top: '5px',
+                    bottom: '5px',
+                    left: '50%',
+                    width: '1.75px',
+                    background: 'rgba(119, 115, 110, 0.56)',
+                    transform: 'translateX(-50%)',
+                  }}
+                />
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    left: '6px',
+                    right: '6px',
+                    top: '5px',
+                    bottom: '5px',
+                    border: '1.75px solid rgba(119, 115, 110, 0.56)',
+                    borderRadius: '3px',
+                  }}
+                />
+              </button>
+            </div>
             <UserMenu
               user={user}
               isLoading={authLoading}
@@ -529,6 +564,8 @@ function App() {
               flexDirection: 'column',
               padding: '18px 32px 138px 32px',
               minHeight: 0,
+              position: 'relative',
+              zIndex: 10,
               filter: focusedAgentId ? 'blur(6px)' : 'blur(0px)',
               transition: 'filter 340ms cubic-bezier(0.22, 1, 0.36, 1)',
               pointerEvents: focusedAgentId ? 'none' : 'auto',
@@ -697,7 +734,7 @@ function App() {
                       <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         {msg.role === 'user' ? (
                           <div className="max-w-[82%] rounded-xl px-4 py-3 border border-accent/25 bg-accent/10">
-                            <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                            <p className="text-[15px] text-text-primary leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                           </div>
                         ) : (
                           <div
@@ -707,7 +744,7 @@ function App() {
                               backgroundColor: `${focusedAgentConfig.color}10`,
                             }}
                           >
-                            <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                            <p className="text-[15px] text-text-primary leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                           </div>
                         )}
                       </div>
@@ -722,7 +759,7 @@ function App() {
                             backgroundColor: `${focusedAgentConfig.color}10`,
                           }}
                         >
-                          <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
+                          <p className="text-[15px] text-text-primary leading-relaxed whitespace-pre-wrap">
                             {focusedStreamingText}
                             <span className="inline-block w-0.5 h-3.5 ml-0.5 bg-text-secondary/50 animate-pulse align-text-bottom" />
                           </p>
@@ -751,6 +788,14 @@ function App() {
               focusedAgentId && focusedAgentConfig
                 ? `Message ${focusedAgentConfig.name} directly...`
                 : 'Ask something and watch four minds respond...'
+            }
+            showChallengeWidget={viewMode === 'arena'}
+            onChallengeClick={handleChallengeWidgetClick}
+            isChallengeEnabled={Boolean(challengeTarget) && !isLoading && !isStreaming}
+            challengeTitle={
+              challengeTarget
+                ? `Challenge ${AGENTS[challengeTarget.response.agent_id].name}`
+                : 'Challenge is available after responses are ready'
             }
           />
           
