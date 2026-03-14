@@ -9,7 +9,7 @@ const FAQS = [
   },
   {
     question: 'What is Pro and when is it coming?',
-    answer: "Pro unlocks unlimited questions, access to all 16 personas, and Agent mode. We're working on it — join the waitlist to get early access.",
+    answer: "Pro unlocks unlimited questions and Agent mode. We're working on it — join the waitlist to get early access.",
   },
   {
     question: 'How does the scoring work?',
@@ -66,7 +66,7 @@ export function PricingPage() {
             <div style={{ height: '0.5px', background: '#E0D8D0', marginBottom: '1.5rem' }} />
 
             <div style={{ flex: 1 }}>
-              {['10 questions per day', 'All 4 current personas', 'Full session history', 'Saved responses', 'Agent leaderboard', 'Priority access to new personas'].map((feature, idx) => (
+              {['10 questions per day', 'All 16 personas', 'Full session history', 'Saved responses', 'Agent leaderboard', 'Priority access to new features'].map((feature, idx) => (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '.6rem' }}>
                   <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#C4B8AE', flexShrink: 0 }} />
                   <span style={{ fontSize: '13px', color: '#6B6460' }}>{feature}</span>
@@ -104,7 +104,7 @@ export function PricingPage() {
             <div style={{ height: '0.5px', background: 'rgba(250,247,244,0.1)', marginBottom: '1.5rem' }} />
 
             <div style={{ flex: 1 }}>
-              {['Unlimited questions', 'All 16 personas (library)', 'Agent mode access', 'Custom persona panels', 'Priority support', 'Early feature access'].map((feature, idx) => (
+              {['Unlimited questions', 'Agent mode access', 'Priority support', 'Early feature access'].map((feature, idx) => (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '.6rem' }}>
                   <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(250,247,244,0.2)', flexShrink: 0 }} />
                   <span style={{ fontSize: '13px', color: 'rgba(250,247,244,0.6)' }}>{feature}</span>

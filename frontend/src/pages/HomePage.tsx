@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 
@@ -53,7 +52,7 @@ const ACTIVE_PERSONAS = [
   { name: 'The Contrarian', color: '#B0977E', quote: 'I say what no one else will.' },
 ];
 
-const LOCKED_PERSONAS = [
+const MORE_PERSONAS = [
   { name: 'The Scientist', quote: 'Evidence, methodology, data.' },
   { name: 'The Historian', quote: 'Every pattern has a precedent.' },
   { name: 'The Economist', quote: 'Incentives explain everything.' },
@@ -78,8 +77,8 @@ const HERO_CARDS = [
 export function HomePage() {
   const navigate = useNavigate();
   const [activePromptIndex, setActivePromptIndex] = useState(0);
-  const [promptPhase, setPromptPhase] = useState<'visible' | 'exiting' | 'entering'>('visible');
-  const [isPromptHovered, setIsPromptHovered] = useState(false);
+  const [, setPromptPhase] = useState<'visible' | 'exiting' | 'entering'>('visible');
+  const [isPromptHovered] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const giant4Ref = useRef<HTMLDivElement>(null);
   const ctaButtonRef = useRef<HTMLButtonElement>(null);
@@ -89,7 +88,7 @@ export function HomePage() {
   const [comparisonHovered, setComparisonHovered] = useState<'left' | 'right' | null>(null);
   const [howItWorksHovered, setHowItWorksHovered] = useState<number | null>(null);
   const [personaHovered, setPersonaHovered] = useState<number | null>(null);
-  const [lockedPersonaHovered, setLockedPersonaHovered] = useState<number | null>(null);
+  const [morePersonaHovered, setMorePersonaHovered] = useState<number | null>(null);
 
   const tickerReveal = useScrollReveal(0);
   const manifestoReveal1 = useScrollReveal(0);
@@ -643,30 +642,23 @@ export function HomePage() {
             </div>
           ))}
 
-          {LOCKED_PERSONAS.map((persona, idx) => (
+          {MORE_PERSONAS.map((persona, idx) => (
             <div
               key={persona.name}
-              onMouseEnter={() => setLockedPersonaHovered(idx)}
-              onMouseLeave={() => setLockedPersonaHovered(null)}
+              onMouseEnter={() => setMorePersonaHovered(idx)}
+              onMouseLeave={() => setMorePersonaHovered(null)}
               style={{
                 border: '0.5px solid #E0D8D0',
                 borderRadius: '12px',
                 padding: '1rem',
-                background: '#F7F5F2',
-                opacity: lockedPersonaHovered === idx ? 0.85 : 0.65,
-                position: 'relative',
-                transform: lockedPersonaHovered === idx ? 'translateY(-2px)' : 'translateY(0)',
+                background: '#FFFFFF',
+                transform: morePersonaHovered === idx ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)',
+                boxShadow: morePersonaHovered === idx ? '0 8px 24px rgba(26,23,20,0.08)' : 'none',
                 transition: 'all 200ms ease',
               }}
             >
-              {lockedPersonaHovered === idx && (
-                <div style={{ position: 'absolute', top: '-28px', left: '50%', transform: 'translateX(-50%)', background: '#1A1714', color: '#FAF7F4', fontSize: '11px', padding: '4px 10px', borderRadius: '999px', whiteSpace: 'nowrap', opacity: 1, transition: 'opacity 150ms ease' }}>
-                  Unlocking soon
-                </div>
-              )}
-              <Lock style={{ position: 'absolute', top: '10px', right: '10px', width: '10px', height: '10px', color: '#6B6460' }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '.6rem' }}>
-                <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4B8AE' }} />
+                <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4B8AE', transform: morePersonaHovered === idx ? 'scale(1.6)' : 'scale(1)', transition: 'all 200ms ease' }} />
                 <span style={{ fontSize: '12px', fontWeight: 500, color: '#1A1714' }}>{persona.name}</span>
               </div>
               <p style={{ fontSize: '12px', fontStyle: 'italic', color: '#6B6460', lineHeight: 1.5 }}>{persona.quote}</p>
@@ -675,7 +667,7 @@ export function HomePage() {
         </div>
 
         <p style={{ textAlign: 'center', fontSize: '14px', color: '#6B6460', marginTop: '1rem' }}>
-          12 more personas unlocking soon — <span style={{ color: '#C4956A' }}>join the waitlist</span>
+          Explore all 16 personas in the library.
         </p>
       </section>
 

@@ -8,6 +8,7 @@ import {
   AGENTS,
 } from '../types';
 import { AgentDot } from './AgentDot';
+import { usePanel } from '../context/PanelContext';
 
 interface DebateModeProps {
   originalPrompt: string;
@@ -32,6 +33,7 @@ export function DebateMode({
   onExit,
   onSuccess,
 }: DebateModeProps) {
+  const { panel } = usePanel();
   const [phase, setPhase] = useState<DebatePhase>('idle');
   const [rounds, setRounds] = useState<DebateRound[]>([]);
   const [debateHistory, setDebateHistory] = useState<DebateMessage[]>([]);
@@ -95,6 +97,7 @@ export function DebateMode({
           debate_history: debateHistory,
           user_interjection: userMessage || null,
           session_id: sessionId,
+          persona_ids: panel.map((persona) => persona.id),
         },
         {
           onReactionToken: (data) => {

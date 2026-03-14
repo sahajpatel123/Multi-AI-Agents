@@ -12,6 +12,13 @@ import { ScoredAgent, AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
 import { ShareDropdown } from './ShareDropdown';
 
+interface AgentDisplayConfig {
+  name: string;
+  color: string;
+  quote?: string;
+  bgTint?: string;
+}
+
 interface AgentCardProps {
   scoredAgent?: ScoredAgent;
   isExpanded: boolean;
@@ -39,6 +46,7 @@ interface AgentCardProps {
   shareFeedbackActive?: boolean;
   isLoadingState?: boolean;
   animateConfidenceBar?: boolean;
+  displayConfig?: AgentDisplayConfig;
 }
 
 const THINKING_PHRASES: Record<string, string[]> = {
@@ -66,14 +74,14 @@ const THINKING_PHRASES: Record<string, string[]> = {
 
 export function AgentCard({
   scoredAgent,
-  isExpanded,
+  isExpanded: _isExpanded,
   onToggle,
   onTitleClick,
   streamingText,
   isStreaming,
   agentId,
-  onChallenge,
-  onDiscuss,
+  onChallenge: _onChallenge,
+  onDiscuss: _onDiscuss,
   isIdle = false,
   dotFlashKey = 0,
   isHighlighted = false,
@@ -87,24 +95,25 @@ export function AgentCard({
   isDisliked = false,
   isSaved = false,
   copyFeedbackActive = false,
-  shareFeedbackActive = false,
+  shareFeedbackActive: _shareFeedbackActive = false,
   isLoadingState = false,
   animateConfidenceBar = true,
+  displayConfig,
 }: AgentCardProps) {
   const agentConfig = AGENTS[agentId];
+  const resolvedDisplay = {
+    name: displayConfig?.name || agentConfig.name,
+    color: displayConfig?.color || agentConfig.color,
+    quote: displayConfig?.quote || agentConfig.oneLiner,
+    bgTint: displayConfig?.bgTint,
+  };
   const [isShareDropdownOpen, setIsShareDropdownOpen] = useState(false);
   const shareButtonRef = useRef<HTMLButtonElement>(null);
   const agentBackgrounds: Record<string, string> = {
-    agent_1: '#EEF0F2',
-    agent_2: '#F0EDF2',
-    agent_3: '#EDF2EF',
-    agent_4: '#F2EDE8',
-  };
-  const agentBackgroundGradients: Record<string, string> = {
-    agent_1: 'linear-gradient(180deg, #F3F5F7 0%, #EEF0F2 100%)',
-    agent_2: 'linear-gradient(180deg, #F4F1F6 0%, #F0EDF2 100%)',
-    agent_3: 'linear-gradient(180deg, #F1F6F3 0%, #EDF2EF 100%)',
-    agent_4: 'linear-gradient(180deg, #F6F1EC 0%, #F2EDE8 100%)',
+    agent_1: resolvedDisplay.bgTint || '#EEF0F2',
+    agent_2: resolvedDisplay.bgTint || '#F0EDF2',
+    agent_3: resolvedDisplay.bgTint || '#EDF2EF',
+    agent_4: resolvedDisplay.bgTint || '#F2EDE8',
   };
   const response = scoredAgent?.response;
   const score = scoredAgent?.score;
@@ -140,17 +149,9 @@ export function AgentCard({
 
   // Content height transition ref
   const contentRef = useRef<HTMLDivElement>(null);
-  const agentRgb: Record<string, string> = {
-    agent_1: '140, 155, 171',
-    agent_2: '155, 143, 170',
-    agent_3: '138, 168, 153',
-    agent_4: '176, 151, 126',
-  };
-  const hoverRgb = agentRgb[agentId] || '26, 23, 20';
-
   const displayText = isStreaming
     ? streamingText || ''
-    : response?.one_liner || '';
+    : response?.one_liner || resolvedDisplay.quote || '';
   const showThinkingPhrase = (isLoadingState || (isStreaming && !displayText.trim())) && !response;
   const thinkingPhrases = THINKING_PHRASES[agentId] || ['Thinking...'];
   const useBottomReplyZone = !isIdle;
@@ -210,13 +211,12 @@ export function AgentCard({
         onToggle((e.currentTarget as HTMLDivElement).getBoundingClientRect());
       }}
     >
-      {/* Top accent bar */}
-      <div style={{ height: '2px', background: agentConfig.color, borderRadius: '999px', width: '100%' }} />
+      <div style={{ height: '2px', background: resolvedDisplay.color, borderRadius: '999px', width: '100%' }} />
       <div style={{ padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <AgentDot agentId={agentId} size={12} flashKey={dotFlashKey} />
+            <AgentDot agentId={agentId} size={12} flashKey={dotFlashKey} color={resolvedDisplay.color} />
             {onTitleClick ? (
               <button
                 type="button"
@@ -228,11 +228,11 @@ export function AgentCard({
                 onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
                 onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
               >
-                {agentConfig.name}
+                {resolvedDisplay.name}
               </button>
             ) : (
               <span style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714' }}>
-                {agentConfig.name}
+                {resolvedDisplay.name}
               </span>
             )}
             {isWinner && (
@@ -240,7 +240,7 @@ export function AgentCard({
             )}
             {isStreaming && (
               <span
-                style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: agentConfig.color, animation: 'breathe 2.4s ease-in-out infinite' }}
+                style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: resolvedDisplay.color, animation: 'breathe 2.4s ease-in-out infinite' }}
               />
             )}
           </div>

@@ -29,6 +29,7 @@ from arena.core.observability import (
     log_unhandled_exception,
     new_request_id,
 )
+from arena.core.agents import get_all_agents
 from arena.core.orchestrator import Orchestrator
 from arena.core.persona_integrity import check_integrity
 from arena.core.response_shaper import assemble_payload
@@ -114,6 +115,11 @@ async def submit_prompt(
     cost = RequestCostAccumulator(request_id=request_id)
 
     try:
+        try:
+            active_agents = get_all_agents(body.persona_ids)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
         pipeline_result = await run_input_pipeline(body.prompt)
 
         if not pipeline_result.passed:
@@ -125,7 +131,10 @@ async def submit_prompt(
 
         agent_timings: dict[str, int] = {}
         t_agents = time.monotonic()
-        responses, tools_used = await orchestrator.run_all_agents(pipeline_result.enriched_prompt)
+        responses, tools_used = await orchestrator.run_all_agents(
+            pipeline_result.enriched_prompt,
+            agents=active_agents,
+        )
         agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
 
         integrity_report = check_integrity(responses, session_id)
@@ -227,6 +236,12 @@ async def stream_prompt(
 
     async def event_generator():
         try:
+            try:
+                active_agents = get_all_agents(body.persona_ids)
+            except ValueError as e:
+                yield _sse_event("error", {"detail": str(e)})
+                return
+
             pipeline_result = await run_input_pipeline(body.prompt)
 
             yield _sse_event("pipeline", {
@@ -243,7 +258,8 @@ async def stream_prompt(
                 return
 
             queue, gather_task, tools_used = await orchestrator.stream_all_agents(
-                pipeline_result.enriched_prompt
+                pipeline_result.enriched_prompt,
+                agents=active_agents,
             )
 
             while True:

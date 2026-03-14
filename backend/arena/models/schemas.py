@@ -72,6 +72,7 @@ class PromptRequest(BaseModel):
     
     prompt: str = Field(..., min_length=1, max_length=10000, description="User's prompt")
     session_id: str | None = Field(None, description="Optional session ID for continuity")
+    persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
 
 
 class IntegrityReport(BaseModel):
@@ -129,6 +130,7 @@ class DebateRequest(BaseModel):
     debate_history: list[DebateMessage] = Field(default_factory=list, description="Previous debate messages")
     user_interjection: str | None = Field(None, description="Optional user message to redirect the debate")
     session_id: str | None = Field(None, description="Session ID for continuity")
+    persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
 
 
 class DebateReaction(BaseModel):
@@ -164,6 +166,7 @@ class DiscussRequest(BaseModel):
     original_verdict: str = Field(..., description="Agent's original verdict for context")
     original_prompt: str = Field(..., description="The original arena prompt for context")
     session_id: str | None = Field(None, description="Session ID for continuity")
+    persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
 
 
 class DiscussResponse(BaseModel):

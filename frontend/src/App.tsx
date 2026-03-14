@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PromptInput } from './components/PromptInput';
 import { AgentCard } from './components/AgentCard';
@@ -11,6 +11,7 @@ import { UserMenu } from './components/UserMenu';
 import { AgentDot } from './components/AgentDot';
 import { streamPrompt, streamDiscuss, getSession, parseStreamedAgentPreview } from './api';
 import { useAuth } from './hooks/useAuth';
+import { usePanel } from './context/PanelContext';
 import {
   AGENTS,
   DiscussChatMessage,
@@ -44,6 +45,8 @@ interface ScrollTarget {
 function App() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, login, register, logout, refreshUser } = useAuth();
+  const { panel } = usePanel();
+  const personaIds = panel.map((persona) => persona.id);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'signup'>('login');
   const [guestPromptCount, setGuestPromptCount] = useState(0);
@@ -91,6 +94,20 @@ function App() {
   // Per-agent streaming state
   const [streamingTexts, setStreamingTexts] = useState<Record<string, string>>({});
   const [doneAgents, setDoneAgents] = useState<Set<string>>(new Set());
+
+  const panelByAgentId = useMemo(
+    () =>
+      AGENT_IDS.reduce<Record<string, (typeof panel)[number]>>((acc, agentId, index) => {
+        acc[agentId] = panel[index];
+        return acc;
+      }, {}),
+    [panel],
+  );
+
+  const getPersonaForAgentId = useCallback(
+    (agentId: string) => panelByAgentId[agentId] || null,
+    [panelByAgentId],
+  );
 
   // Ref to accumulate tokens without re-rendering on every single token
   const tokenBuffers = useRef<Record<string, string>>({});
@@ -244,10 +261,10 @@ function App() {
   const handleShareResponse = useCallback(async (scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
     const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
-    const agent = AGENTS[scoredAgent.response.agent_id];
+    const agent = getPersonaForAgentId(scoredAgent.response.agent_id) || AGENTS[scoredAgent.response.agent_id];
     await copyText(`${agent.name} on Arena:\n${scoredAgent.response.one_liner}\n\narena.ai`);
     queueFeedbackReset('share', key);
-  }, [activeTurnId, copyText, getResponseKey, queueFeedbackReset]);
+  }, [activeTurnId, copyText, getPersonaForAgentId, getResponseKey, queueFeedbackReset]);
 
   const handleLikeResponse = useCallback((scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
@@ -493,7 +510,7 @@ function App() {
           setError(data.detail);
           setPhase('idle');
         },
-      }, existingSessionId);
+      }, existingSessionId, personaIds);
     } catch (err) {
       if (flushTimer.current) clearInterval(flushTimer.current);
       const msg = err instanceof Error ? err.message : 'Something went wrong';
@@ -578,7 +595,15 @@ function App() {
     ? response.all_responses.find((s) => s.response.agent_id === focusedAgentId)
     : undefined;
   const focusedHistory = focusedAgentId ? (focusedHistories[focusedAgentId] || []) : [];
-  const focusedAgentConfig = focusedAgentId ? AGENTS[focusedAgentId] : null;
+  const focusedPersona = focusedAgentId ? getPersonaForAgentId(focusedAgentId) : null;
+  const focusedAgentConfig = focusedAgentId
+    ? {
+        ...AGENTS[focusedAgentId],
+        name: focusedPersona?.name || AGENTS[focusedAgentId].name,
+        color: focusedPersona?.color || AGENTS[focusedAgentId].color,
+        oneLiner: focusedPersona?.quote || AGENTS[focusedAgentId].oneLiner,
+      }
+    : null;
   const flushFocusedTokens = useCallback(() => {
     setFocusedStreamingText(focusedTokenBuffer.current);
   }, []);
@@ -643,6 +668,7 @@ function App() {
           original_verdict: focusedScored?.response.verdict || focusedAgentConfig?.oneLiner || '',
           original_prompt: response?.prompt || currentPrompt || 'General discussion',
           session_id: response?.session_id || sessionData?.session_id || localStorage.getItem('arena_session_id') || undefined,
+          persona_ids: personaIds,
         },
         {
           onToken: (data) => {
@@ -727,10 +753,10 @@ function App() {
     borderRadius: '22px',
   };
   const focusedPanelBackgrounds: Record<string, string> = {
-    agent_1: 'linear-gradient(180deg, rgba(243,245,247,0.92) 0%, rgba(238,240,242,0.92) 100%)',
-    agent_2: 'linear-gradient(180deg, rgba(244,241,246,0.92) 0%, rgba(240,237,242,0.92) 100%)',
-    agent_3: 'linear-gradient(180deg, rgba(241,246,243,0.92) 0%, rgba(237,242,239,0.92) 100%)',
-    agent_4: 'linear-gradient(180deg, rgba(246,241,236,0.92) 0%, rgba(242,237,232,0.92) 100%)',
+    agent_1: `linear-gradient(180deg, rgba(255,255,255,0.9) 0%, ${getPersonaForAgentId('agent_1')?.bgTint || 'rgba(238,240,242,0.92)'} 100%)`,
+    agent_2: `linear-gradient(180deg, rgba(255,255,255,0.9) 0%, ${getPersonaForAgentId('agent_2')?.bgTint || 'rgba(240,237,242,0.92)'} 100%)`,
+    agent_3: `linear-gradient(180deg, rgba(255,255,255,0.9) 0%, ${getPersonaForAgentId('agent_3')?.bgTint || 'rgba(237,242,239,0.92)'} 100%)`,
+    agent_4: `linear-gradient(180deg, rgba(255,255,255,0.9) 0%, ${getPersonaForAgentId('agent_4')?.bgTint || 'rgba(242,237,232,0.92)'} 100%)`,
   };
 
   return (
@@ -942,6 +968,7 @@ function App() {
                 <AgentCard
                   key={id}
                   agentId={id}
+                  displayConfig={getPersonaForAgentId(id) || undefined}
                   isExpanded={false}
                   onToggle={() => {}}
                   isLoadingState={true}
@@ -953,6 +980,7 @@ function App() {
                 <AgentCard
                   key={id}
                   agentId={id}
+                  displayConfig={getPersonaForAgentId(id) || undefined}
                   isExpanded={false}
                   onToggle={(cardRect) => openFocusedAgent(id, cardRect)}
                   streamingText={streamingTexts[id] || ''}
@@ -978,6 +1006,7 @@ function App() {
                   >
                     <AgentCard
                       agentId={scoredAgent.response.agent_id}
+                      displayConfig={getPersonaForAgentId(scoredAgent.response.agent_id) || undefined}
                       scoredAgent={scoredAgent}
                       isExpanded={false}
                       onTitleClick={() => handleAgentTitleClick(scoredAgent.response.agent_id)}
@@ -1011,6 +1040,7 @@ function App() {
                 <AgentCard
                   key={id}
                   agentId={id}
+                  displayConfig={getPersonaForAgentId(id) || undefined}
                   isExpanded={false}
                   onToggle={(cardRect) => openFocusedAgent(id, cardRect)}
                   isIdle={true}
@@ -1025,21 +1055,6 @@ function App() {
                 </p>
               )}
 
-              {/* Tools used indicator (when done) */}
-              {isDone && response?.tools_used && response.tools_used.length > 0 && (
-                <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#6B6460', fontStyle: 'italic' }}>
-                    <span>Tools used:</span>
-                    {response.tools_used.map((tool, idx) => (
-                      <span key={idx} style={{ background: '#F0EBE3', padding: '2px 8px', borderRadius: '999px' }}>
-                        {tool === 'calculator' && '🔢 Calculator'}
-                        {tool === 'web_search' && '🔍 Web search'}
-                        {tool === 'datetime' && '📅 DateTime'}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -1082,7 +1097,12 @@ function App() {
                 <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '0.5px solid #E0D8D0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <AgentDot agentId={focusedAgentId} size={8} flashKey={dotFlashKeys[focusedAgentId] || 0} />
+                      <AgentDot
+                        agentId={focusedAgentId}
+                        size={8}
+                        flashKey={dotFlashKeys[focusedAgentId] || 0}
+                        color={focusedPersona?.color}
+                      />
                       <p style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714' }}>{focusedAgentConfig.name}</p>
                     </div>
                     <button
@@ -1112,7 +1132,7 @@ function App() {
                         ) : (
                           <div style={{ maxWidth: '82%', borderRadius: '12px', padding: '12px 14px', border: '0.5px solid #E0D8D0', background: '#FFFFFF' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
-                              <AgentDot agentId={focusedAgentId} size={5} />
+                              <AgentDot agentId={focusedAgentId} size={5} color={focusedPersona?.color} />
                               <span style={{ fontSize: '11px', fontWeight: 500, color: focusedAgentConfig.color }}>
                                 {focusedAgentConfig.name}
                               </span>
@@ -1127,7 +1147,7 @@ function App() {
                       <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                         <div style={{ maxWidth: '82%', borderRadius: '12px', padding: '12px 14px', border: '0.5px solid #E0D8D0', background: '#FFFFFF' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
-                            <AgentDot agentId={focusedAgentId} size={5} />
+                            <AgentDot agentId={focusedAgentId} size={5} color={focusedPersona?.color} />
                             <span style={{ fontSize: '11px', fontWeight: 500, color: focusedAgentConfig.color }}>
                               {focusedAgentConfig.name}
                             </span>
@@ -1235,7 +1255,7 @@ function App() {
               isChallengeEnabled={Boolean(challengeTarget) && !isLoading && !isStreaming}
               challengeTitle={
                 challengeTarget
-                  ? `Challenge ${AGENTS[challengeTarget.response.agent_id].name}`
+                  ? `Challenge ${getPersonaForAgentId(challengeTarget.response.agent_id)?.name || AGENTS[challengeTarget.response.agent_id].name}`
                   : 'Challenge is available after responses are ready'
               }
             />
@@ -1269,15 +1289,27 @@ function App() {
       )}
 
       {viewMode === 'leaderboard' && (
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '3rem 1rem', width: '100%', background: '#FAF7F4' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
+        <div style={{ minHeight: '100vh', background: '#FAF7F4' }}>
+          <header style={{
+            height: '52px',
+            borderBottom: '0.5px solid #E0D8D0',
+            background: 'rgba(250,247,244,0.85)',
+            backdropFilter: 'blur(12px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            padding: '0 24px',
+            position: 'sticky',
+            top: 0,
+            zIndex: 80,
+          }}>
             <UserMenu
               user={user}
               isLoading={authLoading}
               onSignInClick={() => { setAuthModalTab('login'); setAuthModalOpen(true); }}
               onLogout={logout}
             />
-          </div>
+          </header>
           <LeaderboardView
             turns={sessionData?.turns || []}
             onBack={exitToArena}

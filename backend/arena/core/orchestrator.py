@@ -101,7 +101,11 @@ class Orchestrator:
             timestamp=datetime.utcnow(),
         )
     
-    async def run_all_agents(self, prompt: str) -> tuple[list[AgentResponse], list[str]]:
+    async def run_all_agents(
+        self,
+        prompt: str,
+        agents: list[AgentConfig] | None = None,
+    ) -> tuple[list[AgentResponse], list[str]]:
         """
         Run all agents in parallel and collect responses.
         Returns tuple of (responses, tools_used).
@@ -117,10 +121,10 @@ class Orchestrator:
         tools_used = self.tool_router.get_tool_summary(tool_results)
         
         # Get all agents (always 4 agents)
-        agents = get_all_agents()
+        active_agents = agents or get_all_agents()
         
         # Create tasks for all agents with tool context
-        tasks = [self._call_agent(agent, prompt, tool_context) for agent in agents]
+        tasks = [self._call_agent(agent, prompt, tool_context) for agent in active_agents]
         
         # Run all tasks concurrently
         responses = await asyncio.gather(*tasks, return_exceptions=False)
@@ -176,7 +180,9 @@ class Orchestrator:
             return self._create_error_response(agent, str(e))
 
     async def stream_all_agents(
-        self, prompt: str
+        self,
+        prompt: str,
+        agents: list[AgentConfig] | None = None,
     ) -> tuple[asyncio.Queue, list[asyncio.Task], list[str]]:
         """
         Start streaming all agents in parallel.
@@ -197,12 +203,12 @@ class Orchestrator:
         tools_used = self.tool_router.get_tool_summary(tool_results)
         
         # Get all agents (always 4 agents)
-        agents = get_all_agents()
+        active_agents = agents or get_all_agents()
 
         async def _run_all() -> list[AgentResponse]:
             tasks = [
                 asyncio.create_task(self._stream_agent(agent, prompt, queue, tool_context))
-                for agent in agents
+                for agent in active_agents
             ]
             responses = await asyncio.gather(*tasks)
             await queue.put({"type": "all_done", "responses": None})

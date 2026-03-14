@@ -7,6 +7,7 @@ import {
   AGENTS,
 } from '../types';
 import { AgentDot } from './AgentDot';
+import { usePanel } from '../context/PanelContext';
 
 interface DiscussModeProps {
   originalPrompt: string;
@@ -27,6 +28,7 @@ export function DiscussMode({
   onSwitchAgent,
   onSuccess,
 }: DiscussModeProps) {
+  const { panel } = usePanel();
   const agentConfig = AGENTS[activeAgent.response.agent_id];
 
   // Per-agent conversation histories (so switching back preserves context)
@@ -90,6 +92,7 @@ export function DiscussMode({
           original_verdict: activeAgent.response.verdict,
           original_prompt: originalPrompt,
           session_id: sessionId,
+          persona_ids: panel.map((persona) => persona.id),
         },
         {
           onToken: (data) => {

@@ -8,13 +8,14 @@ interface LeaderboardViewProps {
   onBack: () => void;
 }
 
+const RANK_LABELS = ['#1', '#2', '#3', '#4'];
+
 export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
-  const [animatedPercentages, setAnimatedPercentages] = useState<Record<string, number>>({});
-  const [pageVisible, setPageVisible] = useState(false);
-  const [showPercentages, setShowPercentages] = useState(false);
+  const [animatedWidths, setAnimatedWidths] = useState<Record<string, number>>({});
+  const [showNumbers, setShowNumbers] = useState(false);
+  const [visible, setVisible] = useState(false);
 
   const leaderboard = useMemo(() => {
-    const totalWins = turns.length;
     const winsByAgent = turns.reduce<Record<string, number>>((acc, turn) => {
       acc[turn.winner_id] = (acc[turn.winner_id] || 0) + 1;
       return acc;
@@ -23,195 +24,255 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
     return Object.values(AGENTS)
       .map((agent) => {
         const wins = winsByAgent[agent.agent_id] || 0;
-        const percentage = totalWins > 0 ? (wins / totalWins) * 100 : 0;
+        const percentage = turns.length > 0 ? (wins / turns.length) * 100 : 0;
         return { agent, wins, percentage };
       })
       .sort((a, b) => b.wins - a.wins);
   }, [turns]);
 
   useEffect(() => {
-    setAnimatedPercentages({});
-    setPageVisible(false);
-    setShowPercentages(false);
+    setAnimatedWidths({});
+    setShowNumbers(false);
+    setVisible(false);
 
-    const frameId = window.requestAnimationFrame(() => {
-      setPageVisible(true);
-    });
+    const frameId = requestAnimationFrame(() => setVisible(true));
 
-    const barTimer = window.setTimeout(() => {
-      setAnimatedPercentages(
-        leaderboard.reduce<Record<string, number>>((acc, entry) => {
-          acc[entry.agent.agent_id] = entry.percentage;
+    const barTimer = setTimeout(() => {
+      setAnimatedWidths(
+        leaderboard.reduce<Record<string, number>>((acc, { agent, percentage }) => {
+          acc[agent.agent_id] = percentage;
           return acc;
         }, {}),
       );
-    }, 40);
+    }, 60);
 
-    const percentageTimer = window.setTimeout(() => {
-      setShowPercentages(true);
-    }, 700);
+    const numTimer = setTimeout(() => setShowNumbers(true), 680);
 
     return () => {
-      window.cancelAnimationFrame(frameId);
-      window.clearTimeout(barTimer);
-      window.clearTimeout(percentageTimer);
+      cancelAnimationFrame(frameId);
+      clearTimeout(barTimer);
+      clearTimeout(numTimer);
     };
   }, [leaderboard]);
 
+  const totalPrompts = turns.length;
+  const topAgent = leaderboard[0];
+  const hasData = totalPrompts > 0;
+
   return (
     <div
-      className="max-w-4xl mx-auto px-4 py-12"
       style={{
-        opacity: pageVisible ? 1 : 0,
-        transform: pageVisible ? 'translateY(0)' : 'translateY(12px)',
-        transition: 'opacity 350ms ease, transform 350ms ease',
+        maxWidth: '680px',
+        margin: '0 auto',
+        padding: '32px 24px 64px',
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0)' : 'translateY(10px)',
+        transition: 'opacity 300ms ease, transform 300ms ease',
       }}
     >
-      <div className="mb-10">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex items-center gap-2"
-          style={{
-            background: '#F0EBE3',
-            border: '1px solid #E0D8D0',
-            borderRadius: '999px',
-            padding: '6px 14px',
-            fontSize: '13px',
-            color: '#6B6460',
-            transition: 'all 150ms ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#E0D8D0';
-            e.currentTarget.style.color = '#1A1714';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#F0EBE3';
-            e.currentTarget.style.color = '#6B6460';
-          }}
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </button>
-      </div>
+      {/* Back */}
+      <button
+        type="button"
+        onClick={onBack}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          background: 'transparent',
+          border: 'none',
+          padding: '4px 0',
+          fontSize: '13px',
+          color: '#8A8078',
+          cursor: 'pointer',
+          marginBottom: '28px',
+          transition: 'color 150ms ease',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = '#1A1714')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = '#8A8078')}
+      >
+        <ArrowLeft style={{ width: '14px', height: '14px' }} />
+        Back to Arena
+      </button>
 
-      <div style={{ marginBottom: '32px' }}>
-        <div className="flex items-center gap-3">
-          <Trophy style={{ width: '24px', height: '24px', color: '#C4956A' }} />
-          <h1 style={{ fontSize: '26px', fontWeight: 500, letterSpacing: '-0.02em', color: '#1A1714' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '36px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <Trophy style={{ width: '20px', height: '20px', color: '#C4956A', flexShrink: 0 }} />
+          <h1 style={{ fontSize: '22px', fontWeight: 500, color: '#1A1714', letterSpacing: '-0.02em', margin: 0 }}>
             Agent Leaderboard
           </h1>
         </div>
-        <p style={{ color: '#6B6460', fontSize: '13px', marginTop: '8px' }}>
-          Based on your session history · {turns.length} {turns.length === 1 ? 'prompt' : 'prompts'}
+        <p style={{ fontSize: '13px', color: '#9A9088', margin: 0 }}>
+          {hasData
+            ? `Based on ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'} in this session`
+            : 'Win rates will appear once you start prompting'}
         </p>
       </div>
 
-      <div
-        style={{
-          height: '1px',
-          background: '#E0D8D0',
-          marginBottom: '32px',
-        }}
-      />
+      {/* Divider */}
+      <div style={{ height: '0.5px', background: '#E8E0D8', marginBottom: '32px' }} />
 
-      {turns.length === 0 ? (
-        <div className="py-24 text-center">
-          <Trophy style={{ width: '40px', height: '40px', color: '#E0D8D0', margin: '0 auto' }} />
-          <p style={{ fontSize: '15px', color: '#6B6460', marginTop: '12px' }}>
-            No winners yet
-          </p>
-          <p style={{ fontSize: '13px', color: '#6B6460', marginTop: '6px' }}>
-            Ask your first question to start tracking which agent wins most
-          </p>
-        </div>
-      ) : (
-        <div>
+      {hasData ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
           {leaderboard.map(({ agent, wins, percentage }, index) => {
-            const isTopRank = index === 0;
+            const isFirst = index === 0;
+            const width = animatedWidths[agent.agent_id] ?? 0;
+
             return (
               <div
                 key={agent.agent_id}
                 style={{
-                  marginBottom: '36px',
-                  opacity: pageVisible ? 1 : 0,
-                  transform: pageVisible ? 'translateY(0)' : 'translateY(8px)',
-                  transition: `opacity 350ms ease ${index * 80}ms, transform 350ms ease ${index * 80}ms`,
-                  background: isTopRank ? '#FFFFFF' : 'transparent',
-                  border: isTopRank ? '0.5px solid #E0D8D0' : '0.5px solid transparent',
-                  borderRadius: isTopRank ? '12px' : '0',
-                  padding: isTopRank ? '1rem' : '0',
+                  padding: '18px 20px',
+                  borderRadius: '14px',
+                  background: isFirst ? '#FFFFFF' : 'transparent',
+                  border: isFirst ? '0.5px solid #E0D8D0' : '0.5px solid transparent',
+                  marginBottom: '8px',
+                  opacity: visible ? 1 : 0,
+                  transform: visible ? 'translateY(0)' : 'translateY(6px)',
+                  transition: `opacity 300ms ease ${index * 70}ms, transform 300ms ease ${index * 70}ms, background 150ms ease`,
+                  boxShadow: isFirst ? '0 2px 12px rgba(26,23,20,0.06)' : 'none',
                 }}
               >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center">
-                    <span
-                      style={{
-                        width: '24px',
-                        marginRight: '16px',
-                        fontSize: '13px',
-                        color: isTopRank ? '#C4956A' : '#6B6460',
-                      }}
-                    >
-                      #{index + 1}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  {/* Left: rank + agent */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: isFirst ? '#C4956A' : '#B0A898',
+                      letterSpacing: '0.05em',
+                      width: '20px',
+                      flexShrink: 0,
+                    }}>
+                      {RANK_LABELS[index]}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <AgentDot agentId={agent.agent_id} size={8} />
-                      <span style={{ fontWeight: 500, fontSize: '14px', color: '#1A1714' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AgentDot agentId={agent.agent_id} size={isFirst ? 9 : 7} />
+                      <span style={{
+                        fontSize: isFirst ? '15px' : '14px',
+                        fontWeight: isFirst ? 500 : 400,
+                        color: '#1A1714',
+                      }}>
                         {agent.name}
                       </span>
                     </div>
                   </div>
 
-                  <span
-                    style={{
-                      background: '#F0EBE3',
-                      border: '0.5px solid #E0D8D0',
-                      borderRadius: '999px',
-                      padding: '3px 12px',
+                  {/* Right: wins + percentage */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{
+                      opacity: showNumbers ? 1 : 0,
+                      transition: 'opacity 200ms ease',
                       fontSize: '12px',
-                      color: '#1A1714',
-                    }}
-                  >
-                    {wins} {wins === 1 ? 'win' : 'wins'}
-                  </span>
-                </div>
-
-                <div style={{ marginTop: '14px' }}>
-                  <div
-                    style={{
-                      opacity: showPercentages ? 1 : 0,
-                      transition: 'opacity 150ms ease',
-                      marginBottom: '8px',
-                    }}
-                  >
-                    <span style={{ fontSize: '11px', color: agent.color }}>
+                      color: agent.color,
+                      fontWeight: 500,
+                      minWidth: '32px',
+                      textAlign: 'right',
+                    }}>
                       {Math.round(percentage)}%
                     </span>
-                  </div>
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '2px',
-                      background: '#F0EBE3',
+                    <span style={{
+                      background: isFirst ? '#F5EEE6' : '#F0EBE3',
+                      border: `0.5px solid ${isFirst ? 'rgba(196,149,106,0.2)' : '#E0D8D0'}`,
                       borderRadius: '999px',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${animatedPercentages[agent.agent_id] || 0}%`,
-                        height: '100%',
-                        background: agent.color,
-                        borderRadius: '999px',
-                        transition: 'width 700ms cubic-bezier(0.16,1,0.3,1)',
-                      }}
-                    />
+                      padding: '3px 10px',
+                      fontSize: '12px',
+                      color: isFirst ? '#C4956A' : '#6B6460',
+                      fontWeight: isFirst ? 500 : 400,
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {wins} {wins === 1 ? 'win' : 'wins'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ flex: 1, height: isFirst ? '4px' : '3px', background: '#F0EBE3', borderRadius: '999px', overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${width}%`,
+                      height: '100%',
+                      background: agent.color,
+                      borderRadius: '999px',
+                      transition: 'width 800ms cubic-bezier(0.16,1,0.3,1)',
+                      opacity: isFirst ? 1 : 0.7,
+                    }} />
                   </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      ) : (
+        /* Empty state */
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          padding: '60px 24px',
+          background: '#FFFFFF',
+          borderRadius: '16px',
+          border: '0.5px solid #E8E0D8',
+        }}>
+          <div style={{
+            width: '52px',
+            height: '52px',
+            borderRadius: '14px',
+            background: '#F5EEE6',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '16px',
+          }}>
+            <Trophy style={{ width: '22px', height: '22px', color: '#C4956A' }} />
+          </div>
+          <p style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714', margin: '0 0 6px' }}>
+            No data yet
+          </p>
+          <p style={{ fontSize: '13px', color: '#9A9088', textAlign: 'center', margin: 0, maxWidth: '260px', lineHeight: '1.6' }}>
+            Ask your first question in the Arena and this leaderboard will start tracking who wins.
+          </p>
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              marginTop: '24px',
+              padding: '8px 20px',
+              borderRadius: '999px',
+              background: '#1A1714',
+              color: '#FAF7F4',
+              border: 'none',
+              fontSize: '13px',
+              cursor: 'pointer',
+              transition: 'opacity 150ms ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+          >
+            Go to Arena
+          </button>
+        </div>
+      )}
+
+      {/* Footer stat — only when there's data */}
+      {hasData && topAgent && topAgent.wins > 0 && (
+        <div style={{
+          marginTop: '28px',
+          padding: '14px 18px',
+          borderRadius: '10px',
+          background: 'transparent',
+          border: '0.5px solid #E8E0D8',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          <AgentDot agentId={topAgent.agent.agent_id} size={6} />
+          <p style={{ fontSize: '12px', color: '#9A9088', margin: 0 }}>
+            <span style={{ color: '#1A1714', fontWeight: 500 }}>{topAgent.agent.name}</span>
+            {' '}is currently leading with{' '}
+            <span style={{ color: '#C4956A', fontWeight: 500 }}>{Math.round(topAgent.percentage)}% win rate</span>
+            {' '}across {totalPrompts} {totalPrompts === 1 ? 'prompt' : 'prompts'}.
+          </p>
         </div>
       )}
     </div>

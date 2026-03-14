@@ -26,7 +26,7 @@ from arena.models.schemas import (
     RateLimitError,
     UserResponse,
 )
-from arena.core.agents import AGENTS
+from arena.core.agents import get_agent_config, get_persona_id_for_agent, get_raw_persona_prompt
 from arena.core.memory import get_memory_manager
 
 
@@ -61,17 +61,9 @@ RULES:
 - Do NOT use JSON formatting. Respond with plain text only."""
 
 
-def _get_personality_excerpt(agent_id: str) -> str:
-    """Pull the PERSONALITY section from an agent's system prompt."""
-    agent = AGENTS.get(agent_id)
-    if not agent:
-        return ""
-    prompt = agent.system_prompt
-    start = prompt.find("PERSONALITY:")
-    end = prompt.find("RESPONSE STYLE:")
-    if start != -1 and end != -1:
-        return prompt[start:end].strip()
-    return prompt[:200]
+def _get_persona_excerpt(agent_id: str, persona_ids: list[str] | None = None) -> str:
+    """Return the raw persona prompt so discuss mode keeps the same identity."""
+    return get_raw_persona_prompt(get_persona_id_for_agent(agent_id, persona_ids))
 
 
 def _build_messages(
@@ -139,12 +131,15 @@ async def discuss_with_agent(
             },
         )
     
-    if request.agent_id not in AGENTS:
+    try:
+        agent = get_agent_config(request.agent_id, request.persona_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if not agent:
         raise HTTPException(status_code=400, detail="Invalid agent ID")
 
     settings = get_settings()
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    agent = AGENTS[request.agent_id]
     session_id = request.session_id or str(uuid.uuid4())
 
     # Get agent's previous responses from memory
@@ -162,7 +157,7 @@ async def discuss_with_agent(
 
     system_prompt = DISCUSS_SYSTEM_PROMPT.format(
         agent_name=agent.name,
-        personality_excerpt=_get_personality_excerpt(request.agent_id),
+        personality_excerpt=_get_persona_excerpt(request.agent_id, request.persona_ids),
         original_prompt=request.original_prompt,
         original_verdict=request.original_verdict,
         previous_responses_context=prev_context,
@@ -233,12 +228,15 @@ async def stream_discuss(
             },
         )
     
-    if request.agent_id not in AGENTS:
+    try:
+        agent = get_agent_config(request.agent_id, request.persona_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if not agent:
         raise HTTPException(status_code=400, detail="Invalid agent ID")
 
     settings = get_settings()
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    agent = AGENTS[request.agent_id]
     session_id = request.session_id or str(uuid.uuid4())
 
     # Get agent's previous responses from memory
@@ -256,7 +254,7 @@ async def stream_discuss(
 
     system_prompt = DISCUSS_SYSTEM_PROMPT.format(
         agent_name=agent.name,
-        personality_excerpt=_get_personality_excerpt(request.agent_id),
+        personality_excerpt=_get_persona_excerpt(request.agent_id, request.persona_ids),
         original_prompt=request.original_prompt,
         original_verdict=request.original_verdict,
         previous_responses_context=prev_context,

@@ -7,6 +7,8 @@ interface AgentDotProps {
   flashKey?: number;
   className?: string;
   style?: CSSProperties;
+  color?: string;
+  disableAnimation?: boolean;
 }
 
 const BREATHE_ANIMATIONS: Record<string, string> = {
@@ -29,6 +31,8 @@ export function AgentDot({
   flashKey = 0,
   className,
   style,
+  color,
+  disableAnimation = false,
 }: AgentDotProps) {
   const agent = AGENTS[agentId];
   const [isFlashing, setIsFlashing] = useState(false);
@@ -69,9 +73,9 @@ export function AgentDot({
         minHeight: size,
         display: 'inline-block',
         borderRadius: '999px',
-        backgroundColor: agent.color,
+        backgroundColor: color || agent.color,
         transformOrigin: 'center',
-        animation,
+        animation: disableAnimation ? 'none' : animation,
         ...style,
       }}
     />

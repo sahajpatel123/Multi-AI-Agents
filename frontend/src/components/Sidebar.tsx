@@ -3,6 +3,7 @@ import {
   Plus,
   Ellipsis,
   Trophy,
+  Sparkles,
   LayoutGrid,
   HelpCircle,
   CheckSquare,
@@ -12,8 +13,10 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
 import { AgentDot } from './AgentDot';
+import { usePanel } from '../context/PanelContext';
 
 interface SidebarTurn {
   turn_id: string;
@@ -56,6 +59,8 @@ export function Sidebar({
   savedItems,
   onSavedItemClick,
 }: SidebarProps) {
+  const navigate = useNavigate();
+  const { isDefaultPanel, resetPanel } = usePanel();
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
@@ -138,10 +143,12 @@ export function Sidebar({
   return (
     <>
       <div
-        className={`fixed left-0 top-0 h-full z-40
+        className={`fixed left-0 z-40
                     transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
                     ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{
+          top: '52px',
+          height: 'calc(100% - 52px)',
           width: '260px',
           maxWidth: '88vw',
           background: '#F5F2EE',
@@ -158,6 +165,43 @@ export function Sidebar({
               label="Leaderboard"
               onClick={onLeaderboardClick}
             />
+          </div>
+          <div className="mb-5">
+            <MenuAction
+              icon={<Sparkles style={{ width: '14px', height: '14px', color: '#9B8FAA' }} />}
+              label="Personas"
+              onClick={() => {
+                onClose();
+                navigate('/personas');
+              }}
+            />
+            {!isDefaultPanel && (
+              <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px' }}>
+                <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#C4956A', flexShrink: 0 }} />
+                <span style={{ color: '#C4956A' }}>Custom panel active</span>
+                <button
+                  type="button"
+                  onClick={resetPanel}
+                  style={{
+                    color: '#6B6460',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontSize: '11px',
+                    transition: 'color 150ms ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = '#1A1714';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = '#6B6460';
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={{ margin: '1.2rem 0 0.6rem' }}>
@@ -440,7 +484,8 @@ export function Sidebar({
 
       {isOpen && (
         <div
-          className="fixed inset-0 bg-text-primary/8 backdrop-blur-[1px] z-30 transition-opacity duration-300"
+          className="fixed inset-x-0 bottom-0 bg-text-primary/8 backdrop-blur-[1px] z-30 transition-opacity duration-300"
+          style={{ top: '52px' }}
           onClick={onClose}
         />
       )}

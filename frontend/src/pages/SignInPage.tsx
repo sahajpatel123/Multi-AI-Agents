@@ -112,7 +112,7 @@ export function SignInPage() {
               <span style={{ display: 'block', color: '#C4956A', fontStyle: 'italic' }}>One account.</span>
             </h1>
             <p style={{ fontSize: '13px', color: 'rgba(250,247,244,0.5)', lineHeight: 1.7, maxWidth: '280px' }}>
-              Save your history. Track your leaderboard. Unlock more personas.
+              Save your history. Track your leaderboard. Keep your panel synced.
             </p>
           </div>
         </div>

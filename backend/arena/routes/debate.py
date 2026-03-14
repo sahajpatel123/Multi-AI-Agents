@@ -28,7 +28,12 @@ from arena.models.schemas import (
     RateLimitError,
     UserResponse,
 )
-from arena.core.agents import AGENTS
+from arena.core.agents import (
+    get_agent_config,
+    get_all_agents,
+    get_persona_id_for_agent,
+    get_raw_persona_prompt,
+)
 
 
 router = APIRouter(prefix="/api", tags=["debate"])
@@ -54,19 +59,9 @@ Respond with ONLY valid JSON:
 {{"content": "your 2-3 sentence reaction", "stance": "agree|disagree|partially agree"}}"""
 
 
-# Extract personality excerpts from the full system prompts
-def _get_personality_excerpt(agent_id: str) -> str:
-    """Pull the PERSONALITY section from an agent's system prompt."""
-    agent = AGENTS.get(agent_id)
-    if not agent:
-        return ""
-    prompt = agent.system_prompt
-    # Extract between PERSONALITY: and RESPONSE STYLE:
-    start = prompt.find("PERSONALITY:")
-    end = prompt.find("RESPONSE STYLE:")
-    if start != -1 and end != -1:
-        return prompt[start:end].strip()
-    return prompt[:200]
+def _get_persona_excerpt(agent_id: str, persona_ids: list[str] | None = None) -> str:
+    """Pull the raw persona sections used to keep debate voice consistent."""
+    return get_raw_persona_prompt(get_persona_id_for_agent(agent_id, persona_ids))
 
 
 def _build_debate_context(
@@ -86,7 +81,8 @@ def _build_debate_context(
         parts.append("")
         parts.append("DEBATE SO FAR:")
         for msg in request.debate_history:
-            speaker = AGENTS[msg.agent_id].name if msg.agent_id in AGENTS else "User"
+            speaker_config = get_agent_config(msg.agent_id, request.persona_ids)
+            speaker = speaker_config.name if speaker_config else "User"
             parts.append(f"  [{speaker}]: {msg.content}")
 
     # Add user interjection if present
@@ -118,10 +114,12 @@ async def _get_reaction(
     request: DebateRequest,
 ) -> DebateReaction:
     """Get a single agent's debate reaction."""
-    agent = AGENTS[agent_id]
+    agent = get_agent_config(agent_id, request.persona_ids)
+    if not agent:
+        raise ValueError(f"Unknown agent id: {agent_id}")
     system_prompt = DEBATE_REACTION_PROMPT.format(
         agent_name=agent.name,
-        personality_excerpt=_get_personality_excerpt(agent_id),
+        personality_excerpt=_get_persona_excerpt(agent_id, request.persona_ids),
     )
     user_message = _build_debate_context(request, agent_id)
 
@@ -198,7 +196,14 @@ async def run_debate_round(
             },
         )
     
-    if request.challenged_agent_id not in AGENTS:
+    try:
+        active_agents = get_all_agents(request.persona_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    active_agent_map = {agent.agent_id: agent for agent in active_agents}
+
+    if request.challenged_agent_id not in active_agent_map:
         raise HTTPException(status_code=400, detail="Invalid challenged agent ID")
 
     if request.round_number > 3:
@@ -210,7 +215,7 @@ async def run_debate_round(
     session_id = request.session_id or str(uuid.uuid4())
 
     # The 3 agents that are NOT the challenged one
-    reacting_ids = [aid for aid in AGENTS if aid != request.challenged_agent_id]
+    reacting_ids = [agent.agent_id for agent in active_agents if agent.agent_id != request.challenged_agent_id]
 
     try:
         # Run all 3 reactions in parallel
@@ -292,7 +297,14 @@ async def stream_debate_round(
             },
         )
     
-    if request.challenged_agent_id not in AGENTS:
+    try:
+        active_agents = get_all_agents(request.persona_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    active_agent_map = {agent.agent_id: agent for agent in active_agents}
+
+    if request.challenged_agent_id not in active_agent_map:
         raise HTTPException(status_code=400, detail="Invalid challenged agent ID")
 
     settings = get_settings()
@@ -300,7 +312,7 @@ async def stream_debate_round(
     model = settings.default_model
     session_id = request.session_id or str(uuid.uuid4())
 
-    reacting_ids = [aid for aid in AGENTS if aid != request.challenged_agent_id]
+    reacting_ids = [agent.agent_id for agent in active_agents if agent.agent_id != request.challenged_agent_id]
 
     async def event_generator():
         try:
@@ -308,10 +320,10 @@ async def stream_debate_round(
             full_texts: dict[str, str] = {}
 
             async def _stream_reaction(agent_id: str):
-                agent = AGENTS[agent_id]
+                agent = active_agent_map[agent_id]
                 system_prompt = DEBATE_REACTION_PROMPT.format(
                     agent_name=agent.name,
-                    personality_excerpt=_get_personality_excerpt(agent_id),
+                    personality_excerpt=_get_persona_excerpt(agent_id, request.persona_ids),
                 )
                 user_message = _build_debate_context(request, agent_id)
                 full_text = ""
@@ -378,7 +390,7 @@ async def stream_debate_round(
             # Parse all reactions and build final response
             reactions: list[DebateReaction] = []
             for agent_id in reacting_ids:
-                agent = AGENTS[agent_id]
+                agent = active_agent_map[agent_id]
                 raw = full_texts.get(agent_id, '{"content":"No reaction.","stance":"disagree"}')
                 try:
                     data = _parse_json_from_llm(raw)

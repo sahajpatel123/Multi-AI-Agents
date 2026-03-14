@@ -72,7 +72,11 @@ export async function refreshToken(): Promise<User | null> {
   }
 }
 
-export async function submitPrompt(prompt: string, sessionId?: string): Promise<PromptResponse> {
+export async function submitPrompt(
+  prompt: string,
+  sessionId?: string,
+  personaIds?: string[],
+): Promise<PromptResponse> {
   const response = await fetch(`${API_BASE}/prompt`, {
     method: 'POST',
     headers: {
@@ -81,6 +85,7 @@ export async function submitPrompt(prompt: string, sessionId?: string): Promise<
     body: JSON.stringify({
       prompt,
       session_id: sessionId,
+      persona_ids: personaIds,
     }),
   });
 
@@ -127,11 +132,12 @@ export async function streamPrompt(
   prompt: string,
   callbacks: StreamCallbacks,
   sessionId?: string,
+  personaIds?: string[],
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/prompt/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, session_id: sessionId }),
+    body: JSON.stringify({ prompt, session_id: sessionId, persona_ids: personaIds }),
   });
 
   if (!response.ok) {
@@ -211,6 +217,7 @@ export async function streamDebateRound(
     debate_history: DebateMessage[];
     user_interjection?: string | null;
     session_id?: string;
+    persona_ids?: string[];
   },
   callbacks: DebateStreamCallbacks,
 ): Promise<void> {
@@ -287,6 +294,7 @@ export async function streamDiscuss(
     original_verdict: string;
     original_prompt: string;
     session_id?: string;
+    persona_ids?: string[];
   },
   callbacks: DiscussStreamCallbacks,
 ): Promise<void> {
