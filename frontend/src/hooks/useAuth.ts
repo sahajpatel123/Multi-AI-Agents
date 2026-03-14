@@ -1,5 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
-import { getMe, login as apiLogin, logout as apiLogout, register as apiRegister } from '../api';
+import {
+  createElement,
+  createContext,
+  Dispatch,
+  ReactNode,
+  SetStateAction,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import { login as apiLogin, logout as apiLogout, register as apiRegister } from '../api';
 import { User } from '../types';
 
 export interface AuthState {
@@ -9,50 +20,95 @@ export interface AuthState {
 }
 
 export interface UseAuth extends AuthState {
+  setUser: Dispatch<SetStateAction<User | null>>;
+  setIsAuthenticated: Dispatch<SetStateAction<boolean>>;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
-export function useAuth(): UseAuth {
+const AuthContext = createContext<UseAuth | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // On mount, check if we have a valid session cookie
-  useEffect(() => {
-    getMe()
-      .then(setUser)
-      .finally(() => setIsLoading(false));
+  const refreshUser = useCallback(async () => {
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/me', {
+        credentials: 'include',
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as User;
+        setUser(data);
+        setIsAuthenticated(true);
+        return;
+      }
+
+      setUser(null);
+      setIsAuthenticated(false);
+    } catch {
+      setUser(null);
+      setIsAuthenticated(false);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    void refreshUser();
+  }, [refreshUser]);
+
   const login = useCallback(async (email: string, password: string) => {
-    const u = await apiLogin(email, password);
-    setUser(u);
+    const nextUser = await apiLogin(email, password);
+    setUser(nextUser);
+    setIsAuthenticated(true);
+    setIsLoading(false);
   }, []);
 
   const register = useCallback(async (email: string, password: string) => {
-    const u = await apiRegister(email, password);
-    setUser(u);
+    const nextUser = await apiRegister(email, password);
+    setUser(nextUser);
+    setIsAuthenticated(true);
+    setIsLoading(false);
   }, []);
 
   const logout = useCallback(async () => {
     await apiLogout();
     setUser(null);
+    setIsAuthenticated(false);
+    setIsLoading(false);
   }, []);
 
-  const refreshUser = useCallback(async () => {
-    const u = await getMe();
-    setUser(u);
-  }, []);
+  const value = useMemo<UseAuth>(
+    () => ({
+      user,
+      isAuthenticated,
+      isLoading,
+      setUser,
+      setIsAuthenticated,
+      login,
+      register,
+      logout,
+      refreshUser,
+    }),
+    [user, isAuthenticated, isLoading, login, logout, refreshUser, register],
+  );
 
-  return {
-    user,
-    isLoading,
-    isAuthenticated: !!user,
-    login,
-    register,
-    logout,
-    refreshUser,
-  };
+  return createElement(AuthContext.Provider, { value }, children);
+}
+
+export function useAuth(): UseAuth {
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+
+  return context;
 }

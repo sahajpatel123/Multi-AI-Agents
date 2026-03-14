@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { login, register } from '../api';
+import { useAuth } from '../hooks/useAuth';
 
 type Tab = 'signin' | 'signup';
 type PasswordStrength = 'weak' | 'fair' | 'good' | 'strong' | null;
 
 export function SignInPage() {
   const navigate = useNavigate();
+  const { setUser, setIsAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,7 +35,9 @@ export function SignInPage() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      const signedInUser = await login(email, password);
+      setUser(signedInUser);
+      setIsAuthenticated(true);
       const redirect = sessionStorage.getItem('redirectAfterLogin') || '/app';
       sessionStorage.removeItem('redirectAfterLogin');
       navigate(redirect);
@@ -61,7 +65,9 @@ export function SignInPage() {
     setIsLoading(true);
 
     try {
-      await register(email, password);
+      const registeredUser = await register(email, password);
+      setUser(registeredUser);
+      setIsAuthenticated(true);
       const redirect = sessionStorage.getItem('redirectAfterLogin') || '/app';
       sessionStorage.removeItem('redirectAfterLogin');
       navigate(redirect);

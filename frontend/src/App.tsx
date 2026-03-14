@@ -1153,22 +1153,23 @@ function App() {
             </>
           )}
 
-          {viewMode === 'arena' && phase === 'idle' && !error && !hasSubmittedPrompt && (
-            <div
-              style={{
-                position: 'fixed',
-                left: 0,
-                right: 0,
-                bottom: '94px',
-                display: 'flex',
-                justifyContent: 'center',
-                padding: '0 24px',
-                zIndex: 49,
-                pointerEvents: 'none',
-                opacity: showPromptChips ? 1 : 0,
-                transition: 'opacity 400ms ease',
-              }}
-            >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '14px',
+              position: 'fixed',
+              bottom: '24px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 'calc(100% - 280px - 48px)',
+              maxWidth: '720px',
+              zIndex: 40,
+              pointerEvents: 'none',
+            }}
+          >
+            {viewMode === 'arena' && phase === 'idle' && !error && !hasSubmittedPrompt && (
               <button
                 type="button"
                 onClick={() => handleExamplePromptClick(EXAMPLE_PROMPTS[activeExamplePromptIndex])}
@@ -1178,58 +1179,67 @@ function App() {
                   pointerEvents: 'all',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  maxWidth: '720px',
-                  background: isExamplePromptHovered ? '#E0D8D0' : '#F0EBE3',
-                  border: '0.5px solid #E0D8D0',
-                  borderRadius: '999px',
-                  padding: '7px 18px',
+                  gap: '8px',
+                  width: 'fit-content',
+                  maxWidth: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '4px 2px',
                   fontSize: '13px',
-                  color: isExamplePromptHovered ? '#1A1714' : '#6B6460',
+                  color: isExamplePromptHovered ? '#3A3330' : '#8A8078',
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
-                  opacity: examplePromptPhase === 'exiting' ? 0 : 1,
+                  opacity: showPromptChips ? (examplePromptPhase === 'exiting' ? 0 : 1) : 0,
                   transform:
                     examplePromptPhase === 'exiting'
-                      ? 'translateY(-6px)'
+                      ? 'translateY(-5px)'
                       : examplePromptPhase === 'entering'
-                        ? 'translateY(6px)'
+                        ? 'translateY(5px)'
                         : isExamplePromptHovered
                           ? 'translateY(-1px)'
                           : 'translateY(0)',
                   transition:
                     examplePromptPhase === 'visible'
-                      ? 'background 150ms ease, color 150ms ease, transform 150ms ease, opacity 300ms ease'
+                      ? 'color 150ms ease, transform 150ms ease, opacity 300ms ease'
                       : 'opacity 300ms ease, transform 300ms ease',
-                  backgroundColor: isExamplePromptHovered ? '#E0D8D0' : '#F0EBE3',
-                  color: isExamplePromptHovered ? '#1A1714' : '#6B6460',
+                  letterSpacing: '0.01em',
+                  fontStyle: 'italic',
                 }}
               >
+                <span style={{
+                  display: 'inline-block',
+                  width: '4px',
+                  height: '4px',
+                  borderRadius: '50%',
+                  background: isExamplePromptHovered ? '#C4956A' : '#C0B4A8',
+                  transition: 'background 150ms ease',
+                  flexShrink: 0,
+                  marginBottom: '1px',
+                }} />
                 {EXAMPLE_PROMPTS[activeExamplePromptIndex]}
               </button>
-            </div>
-          )}
+            )}
 
-          {/* Fixed Bottom Prompt Box */}
-          <PromptInput
-            onSubmit={handlePromptSubmit}
-            isLoading={focusedAgentId ? isFocusedChatStreaming : (isLoading || isStreaming)}
-            placeholder={
-              focusedAgentId && focusedAgentConfig
-                ? `Message ${focusedAgentConfig.name} directly...`
-                : 'Ask something and watch four minds respond...'
-            }
-            presetPrompt={presetPrompt}
-            presetPromptNonce={presetPromptNonce}
-            showChallengeWidget={viewMode === 'arena'}
-            onChallengeClick={handleChallengeWidgetClick}
-            isChallengeEnabled={Boolean(challengeTarget) && !isLoading && !isStreaming}
-            challengeTitle={
-              challengeTarget
-                ? `Challenge ${AGENTS[challengeTarget.response.agent_id].name}`
-                : 'Challenge is available after responses are ready'
-            }
-          />
+            <PromptInput
+              onSubmit={handlePromptSubmit}
+              isLoading={focusedAgentId ? isFocusedChatStreaming : (isLoading || isStreaming)}
+              placeholder={
+                focusedAgentId && focusedAgentConfig
+                  ? `Message ${focusedAgentConfig.name} directly...`
+                  : 'Ask something and watch four minds respond...'
+              }
+              presetPrompt={presetPrompt}
+              presetPromptNonce={presetPromptNonce}
+              showChallengeWidget={viewMode === 'arena'}
+              onChallengeClick={handleChallengeWidgetClick}
+              isChallengeEnabled={Boolean(challengeTarget) && !isLoading && !isStreaming}
+              challengeTitle={
+                challengeTarget
+                  ? `Challenge ${AGENTS[challengeTarget.response.agent_id].name}`
+                  : 'Challenge is available after responses are ready'
+              }
+            />
+          </div>
           
           {/* Guest nudge after 3rd use */}
           {!user && !authLoading && guestPromptCount >= 3 && (

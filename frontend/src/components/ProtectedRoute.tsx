@@ -15,15 +15,15 @@ const AGENTS = [
 ];
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const [showContent, setShowContent] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (!isLoading && !isAuthenticated) {
       sessionStorage.setItem('redirectAfterLogin', '/app');
     }
-  }, [isLoading, user]);
+  }, [isAuthenticated, isLoading]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -33,10 +33,36 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }, [isLoading]);
 
   if (isLoading) {
-    return null;
+    return (
+      <div
+        style={{
+          height: '100vh',
+          background: '#FAF7F4',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <style>{`
+          @keyframes breathe {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.6; }
+          }
+        `}</style>
+        <div
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            background: '#C4956A',
+            animation: 'breathe 1.5s ease-in-out infinite',
+          }}
+        />
+      </div>
+    );
   }
 
-  if (user) {
+  if (isAuthenticated) {
     return <>{children}</>;
   }
 
