@@ -20,6 +20,13 @@ export function UserMenu({
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const breatheStyle = `
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.5); opacity: 0.6; }
+    }
+  `;
+
   // Close on outside click
   useEffect(() => {
     if (!isOpen) return;
@@ -33,23 +40,57 @@ export function UserMenu({
   }, [isOpen]);
 
   if (isLoading) {
-    return <div className="w-8 h-8 rounded-full bg-border animate-pulse" />;
+    return (
+      <>
+        <style>{breatheStyle}</style>
+        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#E0D8D0', animation: 'breathe 2.4s ease-in-out infinite' }} />
+      </>
+    );
   }
 
-  // Guest state — show "Sign In" button
+  // Guest state — show "Sign In" text link + "Try Arena" pill
   if (!user) {
     return (
-      <button
-        onClick={onSignInClick}
-        className="text-sm text-text-secondary hover:text-text-primary transition-all duration-200 px-3.5 py-1.5
-                   border border-border rounded-lg hover:border-accent/55"
-        style={{
-          background: 'rgba(250,247,244,0.62)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.78)',
-        }}
-      >
-        Sign in
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <button
+          onClick={onSignInClick}
+          style={{
+            fontSize: '13px',
+            color: '#6B6460',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '8px 12px',
+            transition: 'color 150ms ease',
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'}
+          onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}
+        >
+          Sign in
+        </button>
+        <button
+          onClick={onSignInClick}
+          style={{
+            fontSize: '13px',
+            fontWeight: 500,
+            color: '#FAF7F4',
+            background: '#1A1714',
+            border: 'none',
+            borderRadius: '999px',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            transition: 'all 150ms ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#C4956A';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#1A1714';
+          }}
+        >
+          Try Arena
+        </button>
+      </div>
     );
   }
 
@@ -61,16 +102,27 @@ export function UserMenu({
   const pct = limit ? Math.min((used / limit) * 100, 100) : 0;
 
   return (
-    <div className="relative z-[90]" ref={menuRef}>
+    <div style={{ position: 'relative', zIndex: 90 }} ref={menuRef}>
       {/* Avatar button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-8 h-8 rounded-full border border-border flex items-center justify-center
-                   text-sm font-medium text-text-primary hover:border-accent/50 transition-all duration-200"
         style={{
-          background: 'rgba(240,235,227,0.88)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.78)',
+          width: '32px',
+          height: '32px',
+          borderRadius: '50%',
+          border: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '13px',
+          fontWeight: 500,
+          color: '#1A1714',
+          background: '#F0EBE3',
+          cursor: 'pointer',
+          transition: 'all 150ms ease',
         }}
+        onMouseEnter={(e) => e.currentTarget.style.background = '#E0D8D0'}
+        onMouseLeave={(e) => e.currentTarget.style.background = '#F0EBE3'}
         aria-label="Account menu"
       >
         {initial}
@@ -79,26 +131,31 @@ export function UserMenu({
       {/* Dropdown */}
       {isOpen && (
         <div
-          className="absolute right-0 top-10 w-64 border border-border rounded-xl
-                     z-[100] py-1"
           style={{
-            background: 'linear-gradient(180deg, rgba(248,244,240,0.98) 0%, rgba(243,238,233,0.98) 100%)',
-            boxShadow: '0 16px 34px rgba(26, 23, 20, 0.16)',
-            backdropFilter: 'blur(8px)',
+            position: 'absolute',
+            right: 0,
+            top: '40px',
+            width: '256px',
+            border: '0.5px solid #E0D8D0',
+            borderRadius: '10px',
+            zIndex: 100,
+            padding: '4px',
+            background: '#FFFFFF',
+            boxShadow: '0 16px 34px rgba(26, 23, 20, 0.12)',
           }}
         >
           {/* User info */}
-          <div className="px-4 py-3 border-b border-border">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-border flex items-center justify-center text-xs font-medium text-text-primary">
+          <div style={{ padding: '0.75rem 1rem', borderBottom: '0.5px solid #E0D8D0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#F0EBE3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 500, color: '#1A1714' }}>
                 {initial}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-text-primary truncate">{user.email}</p>
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs text-text-secondary capitalize">{user.tier}</p>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <p style={{ fontSize: '11px', color: '#6B6460', textTransform: 'capitalize' }}>{user.tier}</p>
                   {isPro && (
-                    <span className="text-xs font-medium text-accent">Pro</span>
+                    <span style={{ fontSize: '11px', fontWeight: 500, color: '#C4956A' }}>Pro</span>
                   )}
                 </div>
               </div>
@@ -106,27 +163,32 @@ export function UserMenu({
           </div>
 
           {/* Usage */}
-          <div className="px-4 py-3 border-b border-border">
+          <div style={{ padding: '0.75rem 1rem', borderBottom: '0.5px solid #E0D8D0' }}>
             {isPro ? (
-              <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-                <Zap className="w-3 h-3 text-accent" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#6B6460' }}>
+                <Zap style={{ width: '12px', height: '12px', color: '#C4956A' }} />
                 <span>Unlimited prompts</span>
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-text-secondary">Today</span>
-                  <span className="text-xs font-medium text-text-primary">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '11px', color: '#6B6460' }}>Today</span>
+                  <span style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714' }}>
                     {used} / {limit} messages used
                   </span>
                 </div>
-                <div className="h-1 bg-border rounded-full overflow-hidden">
+                <div style={{ height: '2px', background: '#E0D8D0', borderRadius: '999px', overflow: 'hidden' }}>
                   <div
-                    className="h-full bg-accent rounded-full transition-all duration-300"
-                    style={{ width: `${pct}%` }}
+                    style={{
+                      height: '100%',
+                      background: '#C4956A',
+                      borderRadius: '999px',
+                      width: `${pct}%`,
+                      transition: 'width 300ms ease',
+                    }}
                   />
                 </div>
-                <p className="text-xs text-text-secondary mt-1.5">
+                <p style={{ fontSize: '11px', color: '#6B6460', marginTop: '6px' }}>
                   Resets at midnight UTC
                 </p>
               </>
@@ -136,10 +198,30 @@ export function UserMenu({
           {/* Actions */}
           <button
             onClick={() => { setIsOpen(false); onLogout(); }}
-            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-text-secondary
-                       hover:text-text-primary hover:bg-background transition-colors"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '10px 1rem',
+              fontSize: '13px',
+              color: '#6B6460',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 150ms ease',
+              borderRadius: '6px',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#1A1714';
+              e.currentTarget.style.background = '#F0EBE3';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '#6B6460';
+              e.currentTarget.style.background = 'transparent';
+            }}
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut style={{ width: '14px', height: '14px' }} />
             Sign out
           </button>
         </div>

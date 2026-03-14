@@ -138,30 +138,30 @@ export function Sidebar({
   return (
     <>
       <div
-        className={`fixed left-0 top-0 h-full bg-surface border-r border-border z-40
+        className={`fixed left-0 top-0 h-full z-40
                     transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
                     ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{
-          width: '308px',
+          width: '260px',
           maxWidth: '88vw',
-          boxShadow: '10px 0 30px rgba(26, 23, 20, 0.14)',
-          background: 'linear-gradient(180deg, rgba(252,250,248,0.98) 0%, rgba(245,241,237,0.98) 100%)',
+          background: '#F5F2EE',
+          borderRight: '0.5px solid #E0D8D0',
         }}
       >
         <div className="flex flex-col h-full px-4 py-6">
           <div className="mb-2">
-            <MenuAction icon={<Plus className="w-5 h-5" />} label="New chat" isPrimary onClick={handleNewChatClick} />
+            <MenuAction icon={<Plus style={{ width: '14px', height: '14px' }} />} label="New chat" isPrimary onClick={handleNewChatClick} />
           </div>
           <div className="mb-5">
             <MenuAction
-              icon={<Trophy className="w-5 h-5" />}
+              icon={<Trophy style={{ width: '14px', height: '14px', color: '#C4956A' }} />}
               label="Leaderboard"
               onClick={onLeaderboardClick}
             />
           </div>
 
-          <div className="mb-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-text-secondary/75">Recents</p>
+          <div style={{ margin: '1.2rem 0 0.6rem' }}>
+            <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6B6460' }}>Recents</p>
           </div>
           <div className="flex items-center gap-2 mb-3">
             {FILTERS.map((filter) => {
@@ -209,11 +209,20 @@ export function Sidebar({
                   return (
                     <div
                       key={turn.turn_id}
-                      className="relative rounded-lg px-3 py-2.5 transition-all duration-150"
                       style={{
-                        background: isActive ? 'rgba(20, 18, 16, 0.06)' : 'transparent',
-                        border: isActive ? '1px solid rgba(255,255,255,0.52)' : '1px solid transparent',
-                        boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.62)' : 'none',
+                        position: 'relative',
+                        borderRadius: '10px',
+                        padding: '8px 10px',
+                        background: isActive ? '#F0EBE3' : 'transparent',
+                        borderLeft: isActive ? '2px solid #C4956A' : '2px solid transparent',
+                        transition: 'all 150ms ease',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive) e.currentTarget.style.background = '#F0EBE3';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) e.currentTarget.style.background = 'transparent';
                       }}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -241,19 +250,14 @@ export function Sidebar({
                             <button
                               type="button"
                               onClick={() => onTurnClick(turn.turn_id)}
-                              className="w-full text-left"
+                              style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                             >
-                              <p className="text-text-primary truncate font-medium" style={{ fontSize: '14px', lineHeight: '1.35' }}>
+                              <p style={{ fontSize: '13px', color: '#1A1714', fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: '1.35' }}>
                                 {displayTitle}
                               </p>
-                              <div className="mt-2 flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <AgentDot agentId={turn.winner_id} size={8} />
-                                  <span className="text-xs text-text-secondary truncate">{winner.name}</span>
-                                </div>
-                                <span className="text-[11px] text-text-secondary/70 capitalize">
-                                  {turn.prompt_category || 'unknown'}
-                                </span>
+                              <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <AgentDot agentId={turn.winner_id} size={5} />
+                                <span style={{ fontSize: '11px', color: '#6B6460', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{winner.name}</span>
                               </div>
                             </button>
                           )}
@@ -371,28 +375,25 @@ export function Sidebar({
                 })}
               </div>
             ) : reversedTurns.length === 0 ? (
-              <div
-                className="rounded-2xl border border-border px-4 py-4"
-                style={{ background: 'rgba(255, 255, 255, 0.35)' }}
-              >
-                <p className="text-[12px] font-medium leading-relaxed text-text-secondary">
+              <div style={{ padding: '1rem', textAlign: 'center' }}>
+                <p style={{ fontSize: '13px', color: '#6B6460' }}>
                   Your history will appear here.
                 </p>
               </div>
             ) : (
-              <div className="py-8 text-center">
-                <p className="text-[12px] font-medium leading-relaxed text-text-secondary capitalize">
+              <div style={{ padding: '2rem 0', textAlign: 'center' }}>
+                <p style={{ fontSize: '13px', color: '#6B6460', textTransform: 'capitalize' }}>
                   No {activeFilter} prompts yet
                 </p>
               </div>
             )}
 
             {savedItems.length > 0 && (
-              <div className="mt-6">
-                <div className="mb-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-text-secondary/75">Saved</p>
+              <div style={{ marginTop: '1.5rem' }}>
+                <div style={{ margin: '1.2rem 0 0.6rem' }}>
+                  <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6B6460' }}>Saved</p>
                 </div>
-                <div className="space-y-1">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {[...savedItems].reverse().map((item) => {
                     const agent = AGENTS[item.agent_id];
                     return (
@@ -400,20 +401,31 @@ export function Sidebar({
                         key={item.id}
                         type="button"
                         onClick={() => onSavedItemClick(item)}
-                        className="w-full rounded-lg border border-transparent px-3 py-2.5 text-left transition-all duration-150 hover:border-border hover:bg-white/30"
+                        style={{
+                          width: '100%',
+                          borderRadius: '10px',
+                          padding: '8px 10px',
+                          textAlign: 'left',
+                          transition: 'all 150ms ease',
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#F0EBE3'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <AgentDot agentId={item.agent_id} size={8} />
-                              <span className="text-xs font-medium text-text-primary">{agent.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: '8px' }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <AgentDot agentId={item.agent_id} size={5} />
+                              <span style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714' }}>{agent.name}</span>
                             </div>
-                            <p className="mt-1 text-xs leading-relaxed text-text-secondary truncate">
+                            <p style={{ marginTop: '4px', fontSize: '11px', lineHeight: '1.6', color: '#6B6460', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {item.one_liner.slice(0, 40)}
                               {item.one_liner.length > 40 ? '…' : ''}
                             </p>
                           </div>
-                          <Bookmark className="w-3.5 h-3.5 shrink-0 text-accent" style={{ fill: 'currentColor' }} />
+                          <Bookmark style={{ width: '12px', height: '12px', flexShrink: 0, color: '#C4956A', fill: 'currentColor' }} />
                         </div>
                       </button>
                     );
@@ -448,49 +460,36 @@ function MenuAction({ icon, label, isPrimary = false, onClick }: MenuActionProps
 
   return (
     <button
-      className="w-full flex items-center gap-3 rounded-xl px-2 py-1.5 text-left"
       type="button"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
       style={{
-        position: 'relative',
-        overflow: 'hidden',
+        width: '100%',
+        background: isPrimary ? '#1A1714' : '#F0EBE3',
+        color: isPrimary ? '#FAF7F4' : '#1A1714',
+        borderRadius: '999px',
+        padding: '8px 16px',
+        fontSize: '13px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        border: isPrimary ? 'none' : '0.5px solid #E0D8D0',
+        cursor: 'pointer',
         transition: 'all 150ms ease',
-        backdropFilter: isHovered ? 'blur(8px)' : 'blur(0px)',
-        boxShadow: isHovered
-          ? '0 8px 18px rgba(26, 23, 20, 0.12), inset 0 1px 0 rgba(255,255,255,0.72)'
-          : 'none',
-        border: isHovered ? '1px solid rgba(255,255,255,0.65)' : '1px solid transparent',
-        transform: isHovered ? 'translateY(-1px)' : 'translateY(0)',
+        opacity: isHovered ? (isPrimary ? 0.85 : 1) : 1,
+      }}
+      onMouseOver={(e) => {
+        if (!isPrimary) e.currentTarget.style.background = '#E0D8D0';
+      }}
+      onMouseOut={(e) => {
+        if (!isPrimary) e.currentTarget.style.background = '#F0EBE3';
       }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: 'inherit',
-          opacity: isHovered ? 1 : 0,
-          transition: 'opacity 150ms ease',
-          pointerEvents: 'none',
-          background: `linear-gradient(
-            140deg,
-            rgba(255,255,255,0.24) 0%,
-            rgba(255,255,255,0.1) 42%,
-            rgba(255,255,255,0.0) 62%,
-            rgba(26, 23, 20, 0.06) 100%
-          )`,
-        }}
-      />
-      <span
-        className="flex h-10 w-10 items-center justify-center rounded-full"
-        style={{
-          background: isPrimary ? 'rgba(20, 18, 16, 0.08)' : 'transparent',
-        }}
-      >
-        <span className="text-text-primary/95">{icon}</span>
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px' }}>
+        {icon}
       </span>
-      <span className="font-semibold text-text-primary/92" style={{ fontSize: '14px', lineHeight: '1.15' }}>
+      <span style={{ fontWeight: 400 }}>
         {label}
       </span>
     </button>

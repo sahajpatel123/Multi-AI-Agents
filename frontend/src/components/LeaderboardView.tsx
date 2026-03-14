@@ -97,11 +97,8 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
 
       <div style={{ marginBottom: '32px' }}>
         <div className="flex items-center gap-3">
-          <Trophy style={{ width: '28px', height: '28px', color: '#C4956A' }} />
-          <h1
-            className="font-serif text-text-primary"
-            style={{ fontSize: '28px', fontWeight: 600 }}
-          >
+          <Trophy style={{ width: '24px', height: '24px', color: '#C4956A' }} />
+          <h1 style={{ fontSize: '26px', fontWeight: 500, letterSpacing: '-0.02em', color: '#1A1714' }}>
             Agent Leaderboard
           </h1>
         </div>
@@ -140,10 +137,10 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                   opacity: pageVisible ? 1 : 0,
                   transform: pageVisible ? 'translateY(0)' : 'translateY(8px)',
                   transition: `opacity 350ms ease ${index * 80}ms, transform 350ms ease ${index * 80}ms`,
-                  background: isTopRank ? '#F0EBE3' : 'transparent',
-                  border: isTopRank ? '1px solid #E0D8D0' : '1px solid transparent',
+                  background: isTopRank ? '#FFFFFF' : 'transparent',
+                  border: isTopRank ? '0.5px solid #E0D8D0' : '0.5px solid transparent',
                   borderRadius: isTopRank ? '12px' : '0',
-                  padding: isTopRank ? '16px' : '0',
+                  padding: isTopRank ? '1rem' : '0',
                 }}
               >
                 <div className="flex items-center justify-between gap-4">
@@ -159,8 +156,8 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                       #{index + 1}
                     </span>
                     <div className="flex items-center gap-2">
-                      <AgentDot agentId={agent.agent_id} size={10} />
-                      <span style={{ fontWeight: 600, fontSize: '15px', color: '#1A1714' }}>
+                      <AgentDot agentId={agent.agent_id} size={8} />
+                      <span style={{ fontWeight: 500, fontSize: '14px', color: '#1A1714' }}>
                         {agent.name}
                       </span>
                     </div>
@@ -169,9 +166,9 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                   <span
                     style={{
                       background: '#F0EBE3',
-                      border: '1px solid #E0D8D0',
+                      border: '0.5px solid #E0D8D0',
                       borderRadius: '999px',
-                      padding: '2px 10px',
+                      padding: '3px 12px',
                       fontSize: '12px',
                       color: '#1A1714',
                     }}
@@ -195,8 +192,8 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                   <div
                     style={{
                       width: '100%',
-                      height: '3px',
-                      background: '#E0D8D0',
+                      height: '2px',
+                      background: '#F0EBE3',
                       borderRadius: '999px',
                       overflow: 'hidden',
                     }}
@@ -207,7 +204,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                         height: '100%',
                         background: agent.color,
                         borderRadius: '999px',
-                        transition: 'width 700ms ease-out',
+                        transition: 'width 700ms cubic-bezier(0.16,1,0.3,1)',
                       }}
                     />
                   </div>

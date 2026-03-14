@@ -71,39 +71,79 @@ export function AuthModal({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-text-primary/20 z-50 flex items-center justify-center p-4"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(26, 23, 20, 0.2)',
+          zIndex: 50,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+        }}
         onClick={onClose}
       >
         {/* Modal card */}
         <div
-          className="bg-surface border border-border rounded-xl shadow-lg w-full max-w-sm"
+          style={{
+            background: '#FFFFFF',
+            border: '0.5px solid #E0D8D0',
+            borderRadius: '14px',
+            boxShadow: '0 16px 34px rgba(26, 23, 20, 0.12)',
+            width: '100%',
+            maxWidth: '420px',
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border">
-            <h2 className="font-serif text-lg font-semibold text-text-primary">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem 1rem', borderBottom: '0.5px solid #E0D8D0' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#1A1714' }}>
               {tab === 'login' ? 'Welcome back' : 'Create account'}
             </h2>
             <button
               onClick={onClose}
-              className="text-text-secondary hover:text-text-primary transition-colors p-1 rounded"
+              style={{
+                color: '#6B6460',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '6px',
+                transition: 'color 150ms ease',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}
               aria-label="Close"
             >
-              <X className="w-4 h-4" />
+              <X style={{ width: '16px', height: '16px' }} />
             </button>
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-border">
+          <div style={{ display: 'flex', borderBottom: '0.5px solid #E0D8D0' }}>
             {(['login', 'signup'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => { setTab(t); setError(null); }}
-                className={`flex-1 py-3 text-sm font-medium transition-colors ${
-                  tab === t
-                    ? 'text-text-primary border-b-2 border-accent -mb-px'
-                    : 'text-text-secondary hover:text-text-primary'
-                }`}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 0',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: tab === t ? '#1A1714' : '#6B6460',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: tab === t ? '2px solid #C4956A' : 'none',
+                  marginBottom: tab === t ? '-1px' : '0',
+                  cursor: 'pointer',
+                  transition: 'color 150ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (tab !== t) e.currentTarget.style.color = '#1A1714';
+                }}
+                onMouseLeave={(e) => {
+                  if (tab !== t) e.currentTarget.style.color = '#6B6460';
+                }}
               >
                 {t === 'login' ? 'Log in' : 'Sign up'}
               </button>
@@ -111,9 +151,9 @@ export function AuthModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <form onSubmit={handleSubmit} style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: '#6B6460', marginBottom: '6px' }}>
                 Email
               </label>
               <input
@@ -123,15 +163,31 @@ export function AuthModal({
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg
-                           text-text-primary text-sm placeholder:text-text-secondary/50
-                           focus:outline-none focus:border-accent/60 transition-colors"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: '#FAF7F4',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: '10px',
+                  color: '#1A1714',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'all 150ms ease',
+                }}
                 placeholder="you@example.com"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = '#C4956A';
+                  e.currentTarget.style.background = '#FFFFFF';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#E0D8D0';
+                  e.currentTarget.style.background = '#FAF7F4';
+                }}
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5">
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: '#6B6460', marginBottom: '6px' }}>
                 Password
               </label>
               <input
@@ -141,23 +197,55 @@ export function AuthModal({
                 required
                 autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
                 minLength={tab === 'signup' ? 8 : 1}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg
-                           text-text-primary text-sm placeholder:text-text-secondary/50
-                           focus:outline-none focus:border-accent/60 transition-colors"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: '#FAF7F4',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: '10px',
+                  color: '#1A1714',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'all 150ms ease',
+                }}
                 placeholder={tab === 'signup' ? 'At least 8 characters' : '••••••••'}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = '#C4956A';
+                  e.currentTarget.style.background = '#FFFFFF';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#E0D8D0';
+                  e.currentTarget.style.background = '#FAF7F4';
+                }}
               />
             </div>
 
             {error && (
-              <p className="text-sm text-accent">{error}</p>
+              <p style={{ fontSize: '13px', color: '#C4956A' }}>{error}</p>
             )}
 
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-2.5 bg-text-primary text-background text-sm font-medium
-                         rounded-lg hover:bg-text-primary/90 transition-colors
-                         disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                width: '100%',
+                padding: '10px 0',
+                background: isSubmitting ? '#6B6460' : '#1A1714',
+                color: '#FAF7F4',
+                fontSize: '14px',
+                fontWeight: 500,
+                borderRadius: '999px',
+                border: 'none',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                opacity: isSubmitting ? 0.5 : 1,
+                transition: 'all 150ms ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!isSubmitting) e.currentTarget.style.background = '#C4956A';
+              }}
+              onMouseLeave={(e) => {
+                if (!isSubmitting) e.currentTarget.style.background = '#1A1714';
+              }}
             >
               {isSubmitting
                 ? (tab === 'login' ? 'Logging in...' : 'Creating account...')
@@ -165,7 +253,7 @@ export function AuthModal({
             </button>
 
             {tab === 'signup' && (
-              <p className="text-xs text-text-secondary text-center">
+              <p style={{ fontSize: '11px', color: '#6B6460', textAlign: 'center' }}>
                 Free account includes 20 prompts per day.
               </p>
             )}

@@ -184,37 +184,24 @@ export function AgentCard({
 
   return (
     <div
-      className={`
-        rounded-2xl
-        ${isLoadingState ? 'cursor-default' : 'cursor-pointer'}
-        ${isWinner
-          ? 'ring-2 ring-accent/30 scale-[1.01]'
-          : 'scale-100'
-        }
-        ${isHighlighted ? 'ring-2 ring-accent/45' : ''}
-      `}
       ref={cardRef}
       style={{
-        background: isWinner
-          ? `linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.06) 100%), ${agentBackgroundGradients[agentId] || `linear-gradient(180deg, ${agentBackgrounds[agentId] || '#FAF7F4'} 0%, ${agentBackgrounds[agentId] || '#FAF7F4'} 100%)`}`
-          : agentBackgroundGradients[agentId] || `linear-gradient(180deg, ${agentBackgrounds[agentId] || '#FAF7F4'} 0%, ${agentBackgrounds[agentId] || '#FAF7F4'} 100%)`,
-        boxShadow: isHovered
-          ? `0 10px 24px rgba(${hoverRgb}, 0.18), inset 0 1px 0 rgba(255,255,255,0.72)`
-          : isHighlighted
-            ? '0 12px 30px rgba(196, 149, 106, 0.2)'
-          : isWinner
-            ? '0 8px 18px rgba(196, 149, 106, 0.18)'
-            : '0 4px 14px rgba(26, 23, 20, 0.07)',
-        border: isHovered ? '1px solid rgba(255,255,255,0.7)' : `1px solid rgba(${hoverRgb}, 0.16)`,
-        transition: 'all 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
-        backdropFilter: isHovered ? 'blur(8px)' : 'blur(0px)',
-        transform: isHovered ? 'translateY(-2px)' : undefined,
+        background: isWinner ? '#FFFCF9' : (isLoadingState ? `linear-gradient(90deg, ${agentBackgrounds[agentId]} 0%, rgba(255,255,255,0.6) 50%, ${agentBackgrounds[agentId]} 100%)` : agentBackgrounds[agentId]),
+        backgroundSize: isLoadingState ? '200% 100%' : 'auto',
+        animation: isLoadingState ? 'shimmer 1.5s infinite' : (isWinner ? 'winnerPulse 400ms ease-out' : 'none'),
+        border: isWinner ? '1px solid #C4956A' : '0.5px solid #E0D8D0',
+        borderRadius: '16px',
+        boxShadow: isHovered ? '0 8px 24px rgba(26,23,20,0.07)' : (isHighlighted ? '0 12px 30px rgba(196, 149, 106, 0.2)' : 'none'),
+        transition: 'all 200ms ease',
+        transform: isHovered ? 'translateY(-3px)' : 'translateY(0)',
         position: 'relative',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        minHeight: '220px'
+        minHeight: '220px',
+        cursor: isLoadingState ? 'default' : 'pointer',
+        willChange: 'transform',
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -223,27 +210,12 @@ export function AgentCard({
         onToggle((e.currentTarget as HTMLDivElement).getBoundingClientRect());
       }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: 'inherit',
-          opacity: isHovered ? 1 : 0,
-          transition: 'opacity 0.3s ease',
-          pointerEvents: 'none',
-          background: `linear-gradient(
-            145deg,
-            rgba(255,255,255,0.24) 0%,
-            rgba(255,255,255,0.09) 46%,
-            rgba(255,255,255,0.0) 64%,
-            rgba(${hoverRgb}, 0.08) 100%
-          )`,
-        }}
-      />
-      <div style={{ padding: '28px 32px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* Top accent bar */}
+      <div style={{ height: '2px', background: agentConfig.color, borderRadius: '999px', width: '100%' }} />
+      <div style={{ padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {/* Header */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <AgentDot agentId={agentId} size={12} flashKey={dotFlashKey} />
             {onTitleClick ? (
               <button
@@ -252,47 +224,49 @@ export function AgentCard({
                   e.stopPropagation();
                   onTitleClick();
                 }}
-                className="font-bold tracking-[0.012em] text-text-primary hover:opacity-80 transition-opacity"
-                style={{ fontSize: '1.1rem', textShadow: '0 0.4px 0 rgba(26, 23, 20, 0.45)' }}
+                style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714', background: 'none', border: 'none', cursor: 'pointer', transition: 'opacity 150ms ease' }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
               >
                 {agentConfig.name}
               </button>
             ) : (
-              <span
-                className="font-bold tracking-[0.012em] text-text-primary"
-                style={{ fontSize: '1.1rem', textShadow: '0 0.4px 0 rgba(26, 23, 20, 0.45)' }}
-              >
+              <span style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714' }}>
                 {agentConfig.name}
               </span>
             )}
             {isWinner && (
-              <Trophy className="w-4 h-4 text-accent" />
+              <Trophy style={{ width: '14px', height: '14px', color: '#C4956A' }} />
             )}
             {isStreaming && (
               <span
-                className="inline-block w-1.5 h-1.5 rounded-full animate-pulse"
-                style={{ backgroundColor: agentConfig.color }}
+                style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: agentConfig.color, animation: 'breathe 2.4s ease-in-out infinite' }}
               />
             )}
           </div>
           {score != null && !isIdle && (
-            <div className="flex items-center gap-3 text-[12.5px] text-text-secondary/95">
-              <span>Score: {score}</span>
-              <span>Confidence: {response?.confidence ?? 0}%</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', color: '#1A1714', background: isWinner ? '#C4956A' : '#F0EBE3', padding: '3px 10px', borderRadius: '999px', fontWeight: isWinner ? 500 : 400 }}>
+                {isWinner ? `Winner · ${score}` : score}
+              </span>
             </div>
           )}
         </div>
 
+        {/* Divider */}
+        {!isIdle && <div style={{ height: '0.5px', background: '#E0D8D0', margin: '10px 0' }} />}
+
         {/* Content with transition */}
         <div
           ref={contentRef}
-          className="transition-all duration-300 ease-in-out overflow-hidden"
           style={{
             marginTop: useBottomReplyZone ? 'auto' : undefined,
+            overflow: 'hidden',
+            transition: 'all 300ms ease-in-out',
           }}
         >
           {isIdle ? (
-            <p className="text-sm italic" style={{ color: 'rgba(74, 66, 60, 0.9)' }}>
+            <p style={{ fontSize: '13px', color: '#6B6460', fontStyle: 'italic', marginTop: '0.4rem' }}>
               {agentConfig.oneLiner || 'Ready to respond...'}
             </p>
           ) : showThinkingPhrase ? (
@@ -325,27 +299,21 @@ export function AgentCard({
               </p>
             </div>
           ) : isStreaming ? (
-            <div className="pt-5 border-t border-border/80">
-              <p
-                className="text-text-primary leading-relaxed whitespace-pre-wrap"
-                style={{ fontSize: '1.12rem', lineHeight: '1.55' }}
-              >
+            <div>
+              <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
                 {displayText}
-                <span className="inline-block w-0.5 h-4 ml-0.5 bg-text-secondary/50 animate-pulse align-text-bottom" />
+                <span style={{ display: 'inline-block', width: '2px', height: '16px', marginLeft: '2px', background: 'rgba(107,100,96,0.5)', animation: 'breathe 1.2s ease-in-out infinite', verticalAlign: 'text-bottom' }} />
               </p>
             </div>
           ) : response ? (
-            <div className="pt-5 border-t border-border/80">
-              <p
-                className="text-text-primary"
-                style={{ color: 'rgba(47, 42, 38, 0.95)', fontSize: '1.12rem', lineHeight: '1.55' }}
-              >
+            <div>
+              <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7' }}>
                 {response.one_liner}
               </p>
             </div>
           ) : !isStreaming ? (
-            <div className="pt-5 border-t border-border/70">
-              <p className="text-sm italic" style={{ color: 'rgba(74, 66, 60, 0.55)' }}>
+            <div>
+              <p style={{ fontSize: '13px', color: '#6B6460', fontStyle: 'italic' }}>
                 Waiting for response...
               </p>
             </div>
@@ -354,56 +322,67 @@ export function AgentCard({
 
         {response && (
           <div
-            className="flex items-center gap-1.5"
             style={{
               marginTop: 'auto',
               paddingTop: '10px',
-              borderTop: '1px solid #E0D8D0',
+              borderTop: '0.5px solid #F0EBE3',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
           >
             <ActionButton
-              icon={copyFeedbackActive ? <Check className="w-[15px] h-[15px]" /> : <Copy className="w-[15px] h-[15px]" />}
+              icon={copyFeedbackActive ? <Check style={{ width: '15px', height: '15px' }} /> : <Copy style={{ width: '15px', height: '15px' }} />}
               onClick={onCopy}
               active={copyFeedbackActive}
               activeColor="#C4956A"
             />
             <ActionButton
-              icon={<ThumbsUp className="w-[15px] h-[15px]" style={isLiked ? { fill: 'currentColor' } : undefined} />}
+              icon={<ThumbsUp style={{ width: '15px', height: '15px', fill: isLiked ? 'currentColor' : 'none' }} />}
               onClick={onLike}
               active={isLiked}
               activeColor="#C4956A"
             />
             <ActionButton
-              icon={<ThumbsDown className="w-[15px] h-[15px]" style={isDisliked ? { fill: 'currentColor' } : undefined} />}
+              icon={<ThumbsDown style={{ width: '15px', height: '15px', fill: isDisliked ? 'currentColor' : 'none' }} />}
               onClick={onDislike}
               active={isDisliked}
               activeColor="#6B6460"
             />
             <ActionButton
               ref={shareButtonRef}
-              icon={<Share2 className="w-[15px] h-[15px]" />}
+              icon={<Share2 style={{ width: '15px', height: '15px' }} />}
               onClick={() => setIsShareDropdownOpen(!isShareDropdownOpen)}
               active={isShareDropdownOpen}
               activeColor="#C4956A"
             />
             <ActionButton
-              icon={<Bookmark className="w-[15px] h-[15px]" style={isSaved ? { fill: 'currentColor' } : undefined} />}
+              icon={<Bookmark style={{ width: '15px', height: '15px', fill: isSaved ? 'currentColor' : 'none' }} />}
               onClick={onSave}
               active={isSaved}
               activeColor="#C4956A"
             />
+            {!isIdle && (
+              <div style={{ marginLeft: 'auto', fontSize: '11px', color: '#6B6460', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span>Click</span>
+                <span style={{ fontSize: '14px', color: agentConfig.color }}>•</span>
+                <span>to go deeper</span>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* Confidence bar — animated fill (hidden in idle state) */}
       {!isIdle && (
-        <div className="h-1 bg-border/30 rounded-b-lg overflow-hidden">
+        <div style={{ height: '2px', background: '#F0EBE3', borderRadius: '999px', overflow: 'hidden' }}>
           <div
-            className="h-full rounded-b-lg transition-all duration-700 ease-out"
             style={{
+              height: '100%',
+              borderRadius: '999px',
               width: `${barWidth}%`,
               backgroundColor: agentConfig.color,
+              transition: 'width 700ms cubic-bezier(0.16,1,0.3,1)',
             }}
           />
         </div>
@@ -434,6 +413,7 @@ interface ActionButtonProps {
 
 const ActionButton = ({ icon, onClick, active = false, activeColor = '#1A1714', ref }: ActionButtonProps) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [isClicked, setIsClicked] = useState(false);
 
   return (
     <button
@@ -441,12 +421,13 @@ const ActionButton = ({ icon, onClick, active = false, activeColor = '#1A1714', 
       type="button"
       onClick={(e) => {
         e.stopPropagation();
+        setIsClicked(true);
+        setTimeout(() => setIsClicked(false), 300);
         onClick?.();
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       aria-pressed={active}
-      className="flex items-center justify-center"
       style={{
         width: '28px',
         height: '28px',
@@ -454,6 +435,12 @@ const ActionButton = ({ icon, onClick, active = false, activeColor = '#1A1714', 
         background: isHovered ? '#F0EBE3' : 'transparent',
         color: active ? activeColor : (isHovered ? '#1A1714' : '#6B6460'),
         transition: 'all 150ms ease',
+        transform: isHovered ? 'scale(1.15)' : (isClicked ? 'scale(1.4)' : 'scale(1)'),
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: 'none',
+        cursor: 'pointer',
       }}
     >
       {icon}

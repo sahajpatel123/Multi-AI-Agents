@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PromptInput } from './components/PromptInput';
 import { AgentCard } from './components/AgentCard';
 import { DebateMode } from './components/DebateMode';
@@ -41,6 +42,7 @@ interface ScrollTarget {
 }
 
 function App() {
+  const navigate = useNavigate();
   const { user, isLoading: authLoading, login, register, logout, refreshUser } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'signup'>('login');
@@ -733,15 +735,60 @@ function App() {
 
   return (
     <div
-      className="min-h-screen bg-background flex flex-col"
       style={{
-        background: `
-          radial-gradient(1200px 560px at 12% -5%, rgba(140, 155, 171, 0.1), transparent 62%),
-          radial-gradient(900px 520px at 88% 108%, rgba(176, 151, 126, 0.12), transparent 64%),
-          #FAF7F4
-        `,
+        minHeight: '100vh',
+        background: '#FAF7F4',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
+      <style>{`
+        @keyframes floatOrb1 {
+          0% { transform: translate(0px, 0px); }
+          100% { transform: translate(60px, 40px); }
+        }
+        @keyframes floatOrb2 {
+          0% { transform: translate(0px, 0px); }
+          100% { transform: translate(-50px, -60px); }
+        }
+        @keyframes breathe {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.5); opacity: 0.6; }
+        }
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        @keyframes cardEntrance1 {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes cardEntrance2 {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes cardEntrance3 {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes cardEntrance4 {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes winnerPulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.02); }
+          100% { transform: scale(1); }
+        }
+        .breathe { animation: breathe 2.4s ease-in-out infinite; }
+      `}</style>
+
+      {/* Ambient Orbs */}
+      <div style={{ position: 'fixed', top: '-100px', left: '-200px', width: '600px', height: '600px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(196,149,106,0.05) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0, animation: 'floatOrb1 18s ease-in-out infinite alternate', willChange: 'transform' }} />
+      <div style={{ position: 'fixed', bottom: '-100px', right: '-150px', width: '500px', height: '500px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(138,168,153,0.04) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0, animation: 'floatOrb2 22s ease-in-out infinite alternate', willChange: 'transform' }} />
+
       {/* Sidebar */}
       {viewMode === 'arena' && (
         <Sidebar
@@ -768,10 +815,18 @@ function App() {
         <>
           {/* Top Bar: Sidebar Trigger + Auth */}
           <header
-            className="flex items-center justify-between px-6 py-4"
             style={{
-              position: 'relative',
+              position: 'sticky',
+              top: 0,
               zIndex: 80,
+              height: '52px',
+              borderBottom: '0.5px solid #E0D8D0',
+              background: 'rgba(250,247,244,0.85)',
+              backdropFilter: 'blur(12px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0 24px',
               filter: focusedAgentId ? 'blur(4px)' : 'blur(0px)',
               transition: 'filter 320ms cubic-bezier(0.22, 1, 0.36, 1)',
               pointerEvents: focusedAgentId ? 'none' : 'auto',
@@ -779,6 +834,9 @@ function App() {
           >
             <div
               style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
                 transition: 'transform 500ms cubic-bezier(0.22, 1, 0.36, 1)',
                 transform: isSidebarOpen
                   ? 'translateX(min(224px, calc(88vw - 84px)))'
@@ -792,69 +850,32 @@ function App() {
                 onMouseLeave={() => setIsSidebarToggleHovered(false)}
                 aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
                 title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                className="group relative"
                 style={{
-                  width: '40px',
-                  height: '28px',
-                  borderRadius: '6px',
-                  border: isSidebarToggleHovered
-                    ? '1px solid rgba(255,255,255,0.7)'
-                    : '1.75px solid rgba(119, 115, 110, 0.56)',
-                  background: 'transparent',
-                  boxShadow: isSidebarToggleHovered
-                    ? '0 10px 22px rgba(26, 23, 20, 0.12), inset 0 1px 0 rgba(255,255,255,0.76)'
-                    : isSidebarOpen
-                      ? '0 6px 16px rgba(26, 23, 20, 0.1)'
-                      : '0 2px 8px rgba(26, 23, 20, 0.06)',
-                  transition: 'all 280ms cubic-bezier(0.22, 1, 0.36, 1)',
-                  transform: isSidebarToggleHovered ? 'translateY(-1px)' : 'translateY(0)',
-                  backdropFilter: isSidebarToggleHovered ? 'blur(8px)' : 'blur(0px)',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: isSidebarToggleHovered ? '#F0EBE3' : 'transparent',
+                  transition: 'all 150ms ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
                   position: 'relative',
                   overflow: 'hidden',
                 }}
               >
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    borderRadius: 'inherit',
-                    opacity: isSidebarToggleHovered ? 1 : 0,
-                    transition: 'opacity 0.3s ease',
-                    pointerEvents: 'none',
-                    background: `linear-gradient(
-                      140deg,
-                      rgba(255,255,255,0.26) 0%,
-                      rgba(255,255,255,0.08) 48%,
-                      rgba(26, 23, 20, 0.06) 100%
-                    )`,
-                  }}
-                />
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: 'absolute',
-                    top: '5px',
-                    bottom: '5px',
-                    left: '50%',
-                    width: '1.75px',
-                    background: 'rgba(119, 115, 110, 0.56)',
-                    transform: 'translateX(-50%)',
-                  }}
-                />
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: 'absolute',
-                    left: '6px',
-                    right: '6px',
-                    top: '5px',
-                    bottom: '5px',
-                    border: '1.75px solid rgba(119, 115, 110, 0.56)',
-                    borderRadius: '3px',
-                  }}
-                />
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ position: 'relative', zIndex: 1 }}>
+                  <rect x="2" y="4" width="12" height="1.5" rx="0.75" fill="#6B6460" />
+                  <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="#6B6460" />
+                  <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" fill="#6B6460" />
+                </svg>
               </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => navigate('/')}>
+                <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }} className="breathe" />
+                <span style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
+              </div>
             </div>
             <UserMenu
               user={user}
@@ -866,11 +887,12 @@ function App() {
 
           {/* Main Content Area */}
           <div
-            className="flex-1"
             style={{
+              flex: 1,
               display: 'flex',
               flexDirection: 'column',
-              padding: '18px 32px 138px 32px',
+              padding: '24px 32px 138px 32px',
+              background: '#FAF7F4',
               minHeight: 0,
               position: 'relative',
               zIndex: 10,
@@ -882,18 +904,20 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               {/* Current Prompt Display (when active) */}
               {currentPrompt && phase !== 'idle' && (
-                <div className="text-center mb-4">
-                  <p className="text-sm text-text-secondary italic">
+                <div style={{ textAlign: 'center', marginBottom: '1.5rem', maxWidth: '600px', margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
+                  <p style={{ fontSize: '14px', color: '#6B6460', fontStyle: 'italic' }}>
                     "{currentPrompt}"
                   </p>
+                  <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
                 </div>
               )}
 
               {/* Error */}
               {error && (
-                <div className="mb-4 p-4 bg-surface border border-accent/30 rounded-lg text-text-primary max-w-2xl mx-auto">
-                  <p className="text-sm font-medium text-accent mb-1">Cannot process</p>
-                  <p className="text-text-secondary text-sm">{error}</p>
+                <div style={{ marginBottom: '1rem', padding: '1rem', background: '#FFFFFF', border: '0.5px solid rgba(196,149,106,0.3)', borderRadius: '12px', maxWidth: '600px', margin: '0 auto 1rem' }}>
+                  <p style={{ fontSize: '13px', fontWeight: 500, color: '#C4956A', marginBottom: '0.25rem' }}>Cannot process</p>
+                  <p style={{ fontSize: '13px', color: '#6B6460' }}>{error}</p>
                 </div>
               )}
 
@@ -937,7 +961,7 @@ function App() {
               ))}
 
               {/* Final results */}
-              {isDone && currentResponses && sortedResponses.map((scoredAgent) => {
+              {isDone && currentResponses && sortedResponses.map((scoredAgent, index) => {
                   const responseKey = activeTurnId
                     ? getResponseKey(activeTurnId, scoredAgent.response.agent_id)
                     : null;
@@ -945,33 +969,40 @@ function App() {
                   const isSaved = responseKey ? savedIds.has(responseKey) : false;
 
                   return (
-                  <AgentCard
+                  <div
                     key={scoredAgent.response.agent_id}
-                    agentId={scoredAgent.response.agent_id}
-                    scoredAgent={scoredAgent}
-                    isExpanded={false}
-                    onTitleClick={() => handleAgentTitleClick(scoredAgent.response.agent_id)}
-                    onToggle={(cardRect) => openFocusedAgent(scoredAgent.response.agent_id, cardRect)}
-                    onChallenge={() => handleChallenge(scoredAgent)}
-                    onDiscuss={() => handleDiscuss(scoredAgent)}
-                    cardRef={(node) => {
-                      agentCardRefs.current[scoredAgent.response.agent_id] = node;
+                    style={{
+                      animation: `cardEntrance${index + 1} 500ms cubic-bezier(0.16,1,0.3,1) ${index * 80}ms backwards`,
+                      willChange: 'transform',
                     }}
-                    isHighlighted={highlightedAgentId === scoredAgent.response.agent_id}
-                    dotFlashKey={dotFlashKeys[scoredAgent.response.agent_id] || 0}
-                    onCopy={() => { void handleCopyResponse(scoredAgent); }}
-                    onLike={() => handleLikeResponse(scoredAgent)}
-                    onDislike={() => handleDislikeResponse(scoredAgent)}
-                    onShare={() => { void handleShareResponse(scoredAgent); }}
-                    onSave={() => handleSaveResponse(scoredAgent)}
-                    isLiked={preference === 'like'}
-                    isDisliked={preference === 'dislike'}
-                    isSaved={isSaved}
-                    copyFeedbackActive={Boolean(responseKey && copyFeedback[responseKey])}
-                    shareFeedbackActive={Boolean(responseKey && shareFeedback[responseKey])}
-                    animateConfidenceBar={animateCurrentResponseBars}
-                    prompt={currentPrompt}
-                  />
+                  >
+                    <AgentCard
+                      agentId={scoredAgent.response.agent_id}
+                      scoredAgent={scoredAgent}
+                      isExpanded={false}
+                      onTitleClick={() => handleAgentTitleClick(scoredAgent.response.agent_id)}
+                      onToggle={(cardRect) => openFocusedAgent(scoredAgent.response.agent_id, cardRect)}
+                      onChallenge={() => handleChallenge(scoredAgent)}
+                      onDiscuss={() => handleDiscuss(scoredAgent)}
+                      cardRef={(node) => {
+                        agentCardRefs.current[scoredAgent.response.agent_id] = node;
+                      }}
+                      isHighlighted={highlightedAgentId === scoredAgent.response.agent_id}
+                      dotFlashKey={dotFlashKeys[scoredAgent.response.agent_id] || 0}
+                      onCopy={() => { void handleCopyResponse(scoredAgent); }}
+                      onLike={() => handleLikeResponse(scoredAgent)}
+                      onDislike={() => handleDislikeResponse(scoredAgent)}
+                      onShare={() => { void handleShareResponse(scoredAgent); }}
+                      onSave={() => handleSaveResponse(scoredAgent)}
+                      isLiked={preference === 'like'}
+                      isDisliked={preference === 'dislike'}
+                      isSaved={isSaved}
+                      copyFeedbackActive={Boolean(responseKey && copyFeedback[responseKey])}
+                      shareFeedbackActive={Boolean(responseKey && shareFeedback[responseKey])}
+                      animateConfidenceBar={animateCurrentResponseBars}
+                      prompt={currentPrompt}
+                    />
+                  </div>
                 );
               })}
 
@@ -989,18 +1020,18 @@ function App() {
 
               {/* Scoring indicator */}
               {isStreaming && doneAgents.size === 4 && (
-                <p className="text-center text-sm text-text-secondary animate-pulse mt-4">
+                <p style={{ textAlign: 'center', fontSize: '13px', color: '#6B6460', animation: 'breathe 2.4s ease-in-out infinite', marginTop: '1rem' }}>
                   Scoring responses...
                 </p>
               )}
 
               {/* Tools used indicator (when done) */}
               {isDone && response?.tools_used && response.tools_used.length > 0 && (
-                <div className="text-center mt-4">
-                  <div className="inline-flex items-center gap-2 text-xs text-text-secondary italic">
+                <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#6B6460', fontStyle: 'italic' }}>
                     <span>Tools used:</span>
                     {response.tools_used.map((tool, idx) => (
-                      <span key={idx} className="bg-border/30 px-2 py-0.5 rounded">
+                      <span key={idx} style={{ background: '#F0EBE3', padding: '2px 8px', borderRadius: '999px' }}>
                         {tool === 'calculator' && '🔢 Calculator'}
                         {tool === 'web_search' && '🔍 Web search'}
                         {tool === 'datetime' && '📅 DateTime'}
@@ -1015,16 +1046,21 @@ function App() {
           {focusedAgentId && focusedAgentConfig && (
             <>
               <div
-                className="fixed inset-0 z-30 bg-text-primary/10"
                 style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 30,
+                  background: 'rgba(26, 23, 20, 0.1)',
                   opacity: isFocusedExpanded ? 1 : 0,
                   transition: 'opacity 320ms cubic-bezier(0.22, 1, 0.36, 1)',
                 }}
                 onClick={closeFocusedAgent}
               />
               <div
-                className="fixed z-40 overflow-hidden"
                 style={{
+                  position: 'fixed',
+                  zIndex: 40,
+                  overflow: 'hidden',
                   ...(isFocusedExpanded
                     ? focusedTargetStyle
                     : focusedCardRect
@@ -1037,67 +1073,76 @@ function App() {
                         }
                       : focusedTargetStyle),
                   transition: 'all 520ms cubic-bezier(0.22, 1, 0.36, 1)',
-                  background: focusedPanelBackgrounds[focusedAgentId] || 'rgba(250, 247, 244, 0.78)',
+                  background: focusedPanelBackgrounds[focusedAgentId] || 'rgba(250, 247, 244, 0.95)',
                   backdropFilter: 'blur(14px)',
-                  border: '1px solid rgba(255,255,255,0.65)',
-                  boxShadow: '0 24px 54px rgba(26, 23, 20, 0.22)',
+                  border: '0.5px solid #E0D8D0',
+                  boxShadow: '0 24px 54px rgba(26, 23, 20, 0.15)',
                 }}
               >
-                <div className="h-full flex flex-col">
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-border/70">
-                    <div className="flex items-center gap-2.5">
-                      <AgentDot agentId={focusedAgentId} size={10} flashKey={dotFlashKeys[focusedAgentId] || 0} />
-                      <p className="font-semibold text-text-primary">{focusedAgentConfig.name}</p>
+                <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '0.5px solid #E0D8D0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <AgentDot agentId={focusedAgentId} size={8} flashKey={dotFlashKeys[focusedAgentId] || 0} />
+                      <p style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714' }}>{focusedAgentConfig.name}</p>
                     </div>
                     <button
                       onClick={closeFocusedAgent}
-                      className="text-sm text-text-secondary hover:text-text-primary transition-colors"
+                      style={{
+                        fontSize: '13px',
+                        color: '#6B6460',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'color 150ms ease',
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'}
+                      onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}
                     >
                       Close
                     </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {focusedHistory.map((msg, idx) => (
-                      <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div key={idx} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                         {msg.role === 'user' ? (
-                          <div className="max-w-[82%] rounded-xl px-4 py-3 border border-accent/25 bg-accent/10">
-                            <p className="text-[15px] text-text-primary leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                          <div style={{ maxWidth: '82%', borderRadius: '12px', padding: '12px 14px', background: '#1A1714' }}>
+                            <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
                           </div>
                         ) : (
-                          <div
-                            className="max-w-[82%] rounded-xl px-4 py-3 border"
-                            style={{
-                              borderColor: `${focusedAgentConfig.color}35`,
-                              backgroundColor: `${focusedAgentConfig.color}10`,
-                            }}
-                          >
-                            <p className="text-[15px] text-text-primary leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                          <div style={{ maxWidth: '82%', borderRadius: '12px', padding: '12px 14px', border: '0.5px solid #E0D8D0', background: '#FFFFFF' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                              <AgentDot agentId={focusedAgentId} size={5} />
+                              <span style={{ fontSize: '11px', fontWeight: 500, color: focusedAgentConfig.color }}>
+                                {focusedAgentConfig.name}
+                              </span>
+                            </div>
+                            <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
                           </div>
                         )}
                       </div>
                     ))}
 
                     {isFocusedChatStreaming && (
-                      <div className="flex justify-start">
-                        <div
-                          className="max-w-[82%] rounded-xl px-4 py-3 border"
-                          style={{
-                            borderColor: `${focusedAgentConfig.color}35`,
-                            backgroundColor: `${focusedAgentConfig.color}10`,
-                          }}
-                        >
-                          <p className="text-[15px] text-text-primary leading-relaxed whitespace-pre-wrap">
+                      <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                        <div style={{ maxWidth: '82%', borderRadius: '12px', padding: '12px 14px', border: '0.5px solid #E0D8D0', background: '#FFFFFF' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                            <AgentDot agentId={focusedAgentId} size={5} />
+                            <span style={{ fontSize: '11px', fontWeight: 500, color: focusedAgentConfig.color }}>
+                              {focusedAgentConfig.name}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
                             {focusedStreamingText}
-                            <span className="inline-block w-0.5 h-3.5 ml-0.5 bg-text-secondary/50 animate-pulse align-text-bottom" />
+                            <span style={{ display: 'inline-block', width: '2px', height: '16px', marginLeft: '2px', background: 'rgba(107,100,96,0.5)', animation: 'breathe 1.2s ease-in-out infinite', verticalAlign: 'text-bottom' }} />
                           </p>
                         </div>
                       </div>
                     )}
 
                     {focusedChatError && (
-                      <div className="rounded-lg border border-accent/30 bg-surface px-3 py-2">
-                        <p className="text-xs text-text-secondary">{focusedChatError}</p>
+                      <div style={{ borderRadius: '10px', border: '0.5px solid rgba(196,149,106,0.3)', background: '#FFFFFF', padding: '0.75rem' }}>
+                        <p style={{ fontSize: '11px', color: '#6B6460' }}>{focusedChatError}</p>
                       </div>
                     )}
 
@@ -1135,11 +1180,12 @@ function App() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   maxWidth: '720px',
-                  background: '#F0EBE3',
-                  border: '1px solid #E0D8D0',
+                  background: isExamplePromptHovered ? '#E0D8D0' : '#F0EBE3',
+                  border: '0.5px solid #E0D8D0',
                   borderRadius: '999px',
-                  padding: '8px 20px',
+                  padding: '7px 18px',
                   fontSize: '13px',
+                  color: isExamplePromptHovered ? '#1A1714' : '#6B6460',
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
                   opacity: examplePromptPhase === 'exiting' ? 0 : 1,
@@ -1187,11 +1233,21 @@ function App() {
           
           {/* Guest nudge after 3rd use */}
           {!user && !authLoading && guestPromptCount >= 3 && (
-            <div className="fixed bottom-20 left-0 right-0 z-40 pointer-events-none">
-              <p className="text-center text-xs text-text-secondary">
+            <div style={{ position: 'fixed', bottom: '80px', left: 0, right: 0, zIndex: 40, pointerEvents: 'none' }}>
+              <p style={{ textAlign: 'center', fontSize: '11px', color: '#6B6460' }}>
                 <button
                   onClick={() => { setAuthModalTab('signup'); setAuthModalOpen(true); }}
-                  className="text-accent hover:underline pointer-events-auto"
+                  style={{
+                    color: '#C4956A',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    pointerEvents: 'auto',
+                    textDecoration: 'none',
+                    transition: 'text-decoration 150ms ease',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                  onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
                 >
                   Sign up
                 </button>
@@ -1203,8 +1259,8 @@ function App() {
       )}
 
       {viewMode === 'leaderboard' && (
-        <div className="max-w-5xl mx-auto px-4 py-12 w-full">
-          <div className="flex items-center justify-end mb-6">
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '3rem 1rem', width: '100%', background: '#FAF7F4' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
             <UserMenu
               user={user}
               isLoading={authLoading}
@@ -1221,9 +1277,9 @@ function App() {
 
       {/* Debate & Discuss Views - Keep Original Layout */}
       {(viewMode === 'debate' || viewMode === 'discuss') && (
-        <div className="max-w-4xl mx-auto px-4 py-12">
-          <header className="mb-12">
-            <div className="flex items-center justify-end mb-6">
+        <div style={{ maxWidth: '1024px', margin: '0 auto', padding: '3rem 1rem', background: '#FAF7F4' }}>
+          <header style={{ marginBottom: '3rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
               <UserMenu
                 user={user}
                 isLoading={authLoading}
@@ -1231,14 +1287,14 @@ function App() {
                 onLogout={logout}
               />
             </div>
-            <div className="text-center">
+            <div style={{ textAlign: 'center' }}>
               <h1
-                className="font-serif text-4xl font-semibold text-text-primary mb-2 cursor-pointer"
+                style={{ fontSize: '36px', fontWeight: 500, color: '#1A1714', marginBottom: '0.5rem', cursor: 'pointer', letterSpacing: '-0.02em' }}
                 onClick={exitToArena}
               >
                 Arena
               </h1>
-              <p className="text-text-secondary">
+              <p style={{ fontSize: '14px', color: '#6B6460' }}>
                 Four minds. One question. The best answer wins.
               </p>
             </div>

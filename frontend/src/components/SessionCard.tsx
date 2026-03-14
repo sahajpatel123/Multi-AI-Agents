@@ -22,21 +22,33 @@ export function SessionCard({
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left p-3 rounded-lg border transition-all duration-300
-                  ${isActive 
-                    ? 'bg-background border-accent/50' 
-                    : 'bg-surface border-border hover:border-text-secondary/30'
-                  }`}
+      style={{
+        width: '100%',
+        textAlign: 'left',
+        padding: '8px 10px',
+        borderRadius: '10px',
+        border: isActive ? '0.5px solid transparent' : 'none',
+        borderLeft: isActive ? '2px solid #C4956A' : 'none',
+        background: isActive ? '#F0EBE3' : 'transparent',
+        cursor: 'pointer',
+        transition: 'all 150ms ease',
+      }}
+      onMouseEnter={(e) => {
+        if (!isActive) e.currentTarget.style.background = '#F0EBE3';
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) e.currentTarget.style.background = 'transparent';
+      }}
     >
-      <p className="text-sm text-text-primary line-clamp-2 leading-relaxed mb-2">
+      <p style={{ fontSize: '13px', color: '#1A1714', lineHeight: '1.5', marginBottom: '6px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
         {prompt}
       </p>
-      <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-1.5">
-          <AgentDot agentId={winnerAgentId} size={8} />
-          <span className="text-text-secondary">{winnerConfig.name}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <AgentDot agentId={winnerAgentId} size={5} />
+          <span style={{ color: '#6B6460' }}>{winnerConfig.name}</span>
         </div>
-        <span className="text-text-secondary/60">{timeAgo}</span>
+        <span style={{ color: '#6B6460', opacity: 0.6 }}>{timeAgo}</span>
       </div>
     </button>
   );

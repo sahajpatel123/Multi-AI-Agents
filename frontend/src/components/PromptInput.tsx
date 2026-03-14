@@ -77,20 +77,59 @@ export function PromptInput({
             width: '100%',
             maxWidth: '720px',
             minHeight: '54px',
-            background: '#FAF7F4',
-            border: '1px solid #E0D8D0',
+            background: '#FFFFFF',
+            border: '0.5px solid #E0D8D0',
             borderRadius: '999px',
-            boxShadow: '0 4px 24px rgba(74, 103, 85, 0.18)',
-            padding: '0 8px 0 20px',
-            gap: '8px'
+            boxShadow: '0 4px 24px rgba(26,23,20,0.08)',
+            padding: '4px 4px 4px 20px',
+            gap: '8px',
+            transition: 'all 200ms ease',
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = '#C4956A';
+            e.currentTarget.style.boxShadow = '0 4px 24px rgba(196,149,106,0.15)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = '#E0D8D0';
+            e.currentTarget.style.boxShadow = '0 4px 24px rgba(26,23,20,0.08)';
           }}
         >
+          {showChallengeWidget && (
+            <button
+              type="button"
+              onClick={onChallengeClick}
+              disabled={!isChallengeEnabled}
+              aria-label={challengeTitle}
+              title={challengeTitle}
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '8px',
+                background: 'transparent',
+                color: '#6B6460',
+                border: 'none',
+                cursor: isChallengeEnabled ? 'pointer' : 'not-allowed',
+                opacity: isChallengeEnabled ? 1 : 0.4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 150ms ease',
+              }}
+              onMouseEnter={(e) => {
+                if (isChallengeEnabled) e.currentTarget.style.background = '#F0EBE3';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <Swords style={{ width: '14px', height: '14px' }} />
+            </button>
+          )}
           <textarea
             ref={textareaRef}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder={placeholder}
-            className="placeholder:text-text-secondary/60 font-sans"
             style={{ 
               flex: 1,
               minWidth: 0,
@@ -98,14 +137,15 @@ export function PromptInput({
               border: 'none',
               outline: 'none',
               resize: 'none',
-              fontSize: '17px',
-              lineHeight: '1',
-              color: '#483f36',
-              padding: '16px 0 0 0',
+              fontSize: '14px',
+              lineHeight: '1.5',
+              color: '#1A1714',
+              padding: '14px 0',
               maxHeight: '120px',
               overflowY: 'auto',
-              alignSelf: 'center'
+              fontFamily: 'inherit',
             }}
+            className="placeholder:text-[#6B6460]"
             disabled={isLoading}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -117,83 +157,35 @@ export function PromptInput({
           <button
             type="submit"
             disabled={!prompt.trim() || isLoading}
-            className="disabled:opacity-40 disabled:cursor-not-allowed hover:bg-accent/90 transition-colors"
             style={{
               flexShrink: 0,
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: '#C4956A',
+              width: '36px',
+              height: '36px',
+              borderRadius: '999px',
+              background: isLoading ? '#C4956A' : '#1A1714',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              alignSelf: 'center',
-              cursor: 'pointer',
-              border: 'none'
+              cursor: (!prompt.trim() || isLoading) ? 'not-allowed' : 'pointer',
+              border: 'none',
+              opacity: (!prompt.trim() || isLoading) ? 0.4 : 1,
+              transition: 'all 150ms ease',
+            }}
+            onMouseEnter={(e) => {
+              if (prompt.trim() && !isLoading) e.currentTarget.style.background = '#C4956A';
+            }}
+            onMouseLeave={(e) => {
+              if (!isLoading) e.currentTarget.style.background = '#1A1714';
             }}
           >
             {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-white" />
+              <Loader2 style={{ width: '16px', height: '16px', color: '#FAF7F4', animation: 'spin 1s linear infinite' }} />
             ) : (
-              <Send className="w-4 h-4 text-white" />
+              <Send style={{ width: '16px', height: '16px', color: '#FAF7F4' }} />
             )}
           </button>
         </div>
 
-        {showChallengeWidget && (
-          <button
-            type="button"
-            onClick={onChallengeClick}
-            onMouseEnter={() => setIsChallengeHovered(true)}
-            onMouseLeave={() => setIsChallengeHovered(false)}
-            disabled={!isChallengeEnabled}
-            aria-label={challengeTitle}
-            title={challengeTitle}
-            style={{
-              position: 'relative',
-              width: '54px',
-              height: '54px',
-              flexShrink: 0,
-              borderRadius: '999px',
-              border: isChallengeHovered
-                ? '1px solid rgba(255,255,255,0.68)'
-                : '1px solid rgba(176, 151, 126, 0.32)',
-              background: 'rgba(250, 247, 244, 0.72)',
-              backdropFilter: isChallengeHovered ? 'blur(10px)' : 'blur(0px)',
-              boxShadow: isChallengeHovered
-                ? '0 10px 24px rgba(176, 151, 126, 0.24), inset 0 1px 0 rgba(255,255,255,0.82)'
-                : '0 4px 14px rgba(26, 23, 20, 0.1)',
-              transition: 'all 320ms cubic-bezier(0.22, 1, 0.36, 1)',
-              transform: isChallengeHovered ? 'translateY(-1px)' : 'translateY(0)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: isChallengeEnabled ? 'pointer' : 'not-allowed',
-              opacity: isChallengeEnabled ? 1 : 0.46,
-              overflow: 'hidden',
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                borderRadius: 'inherit',
-                opacity: isChallengeHovered ? 1 : 0,
-                transition: 'opacity 0.3s ease',
-                pointerEvents: 'none',
-                background: `linear-gradient(
-                  145deg,
-                  rgba(255,255,255,0.34) 0%,
-                  rgba(255,255,255,0.12) 45%,
-                  rgba(255,255,255,0.0) 64%,
-                  rgba(176, 151, 126, 0.1) 100%
-                )`,
-              }}
-            />
-            <Swords className="w-[18px] h-[18px] text-text-primary/85" />
-          </button>
-        )}
       </div>
     </form>
   );

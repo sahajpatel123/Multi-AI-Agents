@@ -127,43 +127,61 @@ export function DiscussMode({
   );
 
   return (
-    <div className="flex gap-4 min-h-[60vh]">
+    <div style={{ display: 'flex', gap: '1rem', minHeight: '60vh', background: '#FAF7F4' }}>
+      <style>{`
+        @keyframes breathe {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.5); opacity: 0.6; }
+        }
+      `}</style>
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col">
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* Chat header */}
-        <div className="flex items-center justify-between mb-4">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
           <button
             onClick={onExit}
-            className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary transition-colors duration-300"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '13px',
+              color: '#6B6460',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'color 150ms ease',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft style={{ width: '14px', height: '14px' }} />
             Back to Arena
           </button>
-          <div className="flex items-center gap-2">
-            <AgentDot agentId={activeAgent.response.agent_id} size={12} />
-            <span className="text-sm font-medium text-text-primary">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AgentDot agentId={activeAgent.response.agent_id} size={10} />
+            <span style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714' }}>
               {agentConfig.name}
             </span>
-            <span className="text-xs text-text-secondary">1-on-1</span>
+            <span style={{ fontSize: '11px', color: '#6B6460' }}>1-on-1</span>
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1" style={{ maxHeight: '55vh' }}>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem', paddingRight: '4px', maxHeight: '55vh' }}>
           {/* Agent's original verdict as first message */}
           {currentHistory.length === 0 && !isStreaming && (
-            <div className="flex justify-start">
-              <div
-                className="max-w-[80%] rounded-lg px-4 py-3 border"
-                style={{
-                  backgroundColor: `${agentConfig.color}08`,
-                  borderColor: `${agentConfig.color}25`,
-                }}
-              >
-                <p className="text-sm text-text-primary leading-relaxed">
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <div style={{ maxWidth: '80%', background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                  <AgentDot agentId={activeAgent.response.agent_id} size={5} />
+                  <span style={{ fontSize: '11px', fontWeight: 500, color: agentConfig.color }}>
+                    {agentConfig.name}
+                  </span>
+                </div>
+                <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7' }}>
                   {activeAgent.response.verdict}
                 </p>
-                <p className="text-xs text-text-secondary mt-2 italic">
+                <p style={{ fontSize: '11px', color: '#6B6460', marginTop: '8px', fontStyle: 'italic' }}>
                   Original verdict
                 </p>
               </div>
@@ -174,21 +192,21 @@ export function DiscussMode({
           {currentHistory.map((msg, i) => (
             <div
               key={i}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}
             >
               {msg.role === 'user' ? (
-                <div className="max-w-[80%] bg-accent/10 border border-accent/20 rounded-lg px-4 py-3">
-                  <p className="text-sm text-text-primary">{msg.content}</p>
+                <div style={{ maxWidth: '80%', background: '#1A1714', borderRadius: '12px', padding: '12px 14px' }}>
+                  <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: '1.7' }}>{msg.content}</p>
                 </div>
               ) : (
-                <div
-                  className="max-w-[80%] rounded-lg px-4 py-3 border"
-                  style={{
-                    backgroundColor: `${agentConfig.color}08`,
-                    borderColor: `${agentConfig.color}25`,
-                  }}
-                >
-                  <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
+                <div style={{ maxWidth: '80%', background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                    <AgentDot agentId={activeAgent.response.agent_id} size={5} />
+                    <span style={{ fontSize: '11px', fontWeight: 500, color: agentConfig.color }}>
+                      {agentConfig.name}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
                     {msg.content}
                   </p>
                 </div>
@@ -198,17 +216,17 @@ export function DiscussMode({
 
           {/* Streaming agent response */}
           {isStreaming && streamingText && (
-            <div className="flex justify-start">
-              <div
-                className="max-w-[80%] rounded-lg px-4 py-3 border"
-                style={{
-                  backgroundColor: `${agentConfig.color}08`,
-                  borderColor: `${agentConfig.color}25`,
-                }}
-              >
-                <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <div style={{ maxWidth: '80%', background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                  <AgentDot agentId={activeAgent.response.agent_id} size={5} />
+                  <span style={{ fontSize: '11px', fontWeight: 500, color: agentConfig.color }}>
+                    {agentConfig.name}
+                  </span>
+                </div>
+                <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
                   {streamingText}
-                  <span className="inline-block w-0.5 h-3.5 ml-0.5 bg-text-secondary/50 animate-pulse align-text-bottom" />
+                  <span style={{ display: 'inline-block', width: '2px', height: '16px', marginLeft: '2px', background: 'rgba(107,100,96,0.5)', animation: 'breathe 1.2s ease-in-out infinite', verticalAlign: 'text-bottom' }} />
                 </p>
               </div>
             </div>
@@ -216,27 +234,11 @@ export function DiscussMode({
 
           {/* Streaming indicator when no text yet */}
           {isStreaming && !streamingText && (
-            <div className="flex justify-start">
-              <div
-                className="rounded-lg px-4 py-3 border"
-                style={{
-                  backgroundColor: `${agentConfig.color}08`,
-                  borderColor: `${agentConfig.color}25`,
-                }}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className="w-1.5 h-1.5 rounded-full animate-pulse"
-                    style={{ backgroundColor: agentConfig.color, animationDelay: '0s' }}
-                  />
-                  <span
-                    className="w-1.5 h-1.5 rounded-full animate-pulse"
-                    style={{ backgroundColor: agentConfig.color, animationDelay: '0.2s' }}
-                  />
-                  <span
-                    className="w-1.5 h-1.5 rounded-full animate-pulse"
-                    style={{ backgroundColor: agentConfig.color, animationDelay: '0.4s' }}
-                  />
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <div style={{ background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: agentConfig.color, animation: 'breathe 2.4s ease-in-out infinite' }} />
+                  <span style={{ fontSize: '11px', color: '#6B6460', fontStyle: 'italic' }}>Thinking...</span>
                 </div>
               </div>
             </div>
@@ -247,13 +249,13 @@ export function DiscussMode({
 
         {/* Error */}
         {error && (
-          <div className="mb-3 p-3 bg-surface border border-accent/30 rounded-lg">
-            <p className="text-xs text-text-secondary">{error}</p>
+          <div style={{ marginBottom: '0.75rem', padding: '0.75rem', background: '#FFFFFF', border: '0.5px solid rgba(196,149,106,0.3)', borderRadius: '10px' }}>
+            <p style={{ fontSize: '11px', color: '#6B6460' }}>{error}</p>
           </div>
         )}
 
         {/* Input */}
-        <div className="flex gap-2">
+        <div style={{ display: 'flex', gap: '8px' }}>
           <input
             ref={inputRef}
             type="text"
@@ -267,28 +269,52 @@ export function DiscussMode({
             }}
             placeholder={`Message ${agentConfig.name}...`}
             disabled={isStreaming}
-            className="flex-1 bg-surface border border-border rounded-lg px-4 py-3 text-sm
-                       text-text-primary placeholder:text-text-secondary/50
-                       focus:outline-none focus:border-accent/50
-                       disabled:opacity-50
-                       transition-colors duration-300"
+            style={{
+              flex: 1,
+              background: '#FFFFFF',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: '10px',
+              padding: '12px 16px',
+              fontSize: '14px',
+              color: '#1A1714',
+              outline: 'none',
+              opacity: isStreaming ? 0.5 : 1,
+              transition: 'border-color 200ms ease',
+            }}
+            onFocus={(e) => e.currentTarget.style.borderColor = '#C4956A'}
+            onBlur={(e) => e.currentTarget.style.borderColor = '#E0D8D0'}
           />
           <button
             onClick={handleSend}
             disabled={isStreaming || !input.trim()}
-            className="px-4 py-3 bg-surface border border-border rounded-lg
-                       text-text-secondary hover:text-text-primary hover:border-accent/50
-                       disabled:opacity-40 disabled:cursor-not-allowed
-                       transition-all duration-300"
+            style={{
+              padding: '12px 16px',
+              background: '#1A1714',
+              border: 'none',
+              borderRadius: '999px',
+              color: '#FAF7F4',
+              cursor: (isStreaming || !input.trim()) ? 'not-allowed' : 'pointer',
+              opacity: (isStreaming || !input.trim()) ? 0.4 : 1,
+              transition: 'all 150ms ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            onMouseEnter={(e) => {
+              if (!isStreaming && input.trim()) e.currentTarget.style.opacity = '0.85';
+            }}
+            onMouseLeave={(e) => {
+              if (!isStreaming && input.trim()) e.currentTarget.style.opacity = '1';
+            }}
           >
-            <Send className="w-4 h-4" />
+            <Send style={{ width: '16px', height: '16px' }} />
           </button>
         </div>
       </div>
 
       {/* Sidebar — other agents as tiles */}
-      <div className="hidden md:flex flex-col gap-3 w-52 shrink-0">
-        <p className="text-xs text-text-secondary font-medium mb-1">Other agents</p>
+      <div style={{ display: 'none' }} className="md:flex flex-col gap-3 w-52 shrink-0">
+        <p style={{ fontSize: '11px', color: '#6B6460', fontWeight: 500, marginBottom: '0.25rem' }}>Other agents</p>
         {otherAgents.map((scored) => {
           const other = AGENTS[scored.response.agent_id];
           const hasHistory = (histories[scored.response.agent_id] || []).length > 0;
@@ -298,20 +324,33 @@ export function DiscussMode({
               key={scored.response.agent_id}
               onClick={() => onSwitchAgent(scored.response.agent_id)}
               disabled={isStreaming}
-              className="text-left bg-surface border border-border rounded-lg p-3
-                         hover:border-text-secondary/30 disabled:opacity-50
-                         transition-all duration-300"
+              style={{
+                textAlign: 'left',
+                background: '#FFFFFF',
+                border: '0.5px solid #E0D8D0',
+                borderRadius: '12px',
+                padding: '0.75rem',
+                cursor: isStreaming ? 'not-allowed' : 'pointer',
+                opacity: isStreaming ? 0.5 : 1,
+                transition: 'all 200ms ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!isStreaming) e.currentTarget.style.borderColor = 'rgba(107,100,96,0.3)';
+              }}
+              onMouseLeave={(e) => {
+                if (!isStreaming) e.currentTarget.style.borderColor = '#E0D8D0';
+              }}
             >
-              <div className="flex items-center gap-2 mb-1.5">
-                <AgentDot agentId={scored.response.agent_id} size={10} />
-                <span className="text-xs font-medium text-text-primary">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.375rem' }}>
+                <AgentDot agentId={scored.response.agent_id} size={8} />
+                <span style={{ fontSize: '12px', fontWeight: 500, color: '#1A1714' }}>
                   {other.name}
                 </span>
                 {hasHistory && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(196,149,106,0.6)' }} />
                 )}
               </div>
-              <p className="text-xs text-text-secondary line-clamp-2 leading-relaxed">
+              <p style={{ fontSize: '11px', color: '#6B6460', lineHeight: '1.6', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                 {scored.response.one_liner}
               </p>
             </button>

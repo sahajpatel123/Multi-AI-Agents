@@ -146,9 +146,9 @@ Check it out: ${currentUrl}`;
       style={{
         ...getDropdownPosition(),
         background: '#FFFFFF',
-        border: '1px solid #E0D8D0',
-        borderRadius: '12px',
-        boxShadow: '0 4px 20px rgba(26,23,20,0.10)',
+        border: '0.5px solid #E0D8D0',
+        borderRadius: '10px',
+        boxShadow: '0 4px 20px rgba(26,23,20,0.08)',
         padding: '6px',
         minWidth: '200px',
         zIndex: 1000,
