@@ -6,7 +6,7 @@ from datetime import datetime
 
 import anthropic
 
-from arena.config import get_settings
+from arena.core.model_router import get_route_for_task
 from arena.models.schemas import (
     AgentResponse,
     ScoredAgent,
@@ -137,9 +137,9 @@ async def assemble_payload(
     - Regenerates bad one-liners
     - Guarantees every field in the data contract is present
     """
-    settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    model = settings.default_model
+    route = get_route_for_task("intent_extraction")
+    client = route["client"]
+    model = route["model_id"]
 
     final_session_id = session_id or str(uuid.uuid4())
 

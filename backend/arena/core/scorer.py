@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.agents import get_persona_id_for_agent
+from arena.core.model_router import get_route_for_prompt
 from arena.core.observability import log_scoring_result
 from arena.models.schemas import AgentResponse, ScoredAgent, IntegrityReport
 
@@ -42,8 +43,6 @@ class Scorer:
     
     def __init__(self):
         settings = get_settings()
-        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self.model = settings.default_model
         self.max_tokens = 512
         self.timeout = settings.timeout_seconds
     
@@ -90,11 +89,12 @@ class Scorer:
         started = time.monotonic()
         fallback_used = False
         criteria_breakdown: dict[str, Any] | None = None
+        route = get_route_for_prompt(prompt=prompt, task="scoring", category=prompt_category)
         
         try:
             result = await asyncio.wait_for(
-                self.client.messages.create(
-                    model=self.model,
+                route["client"].messages.create(
+                    model=route["model_id"],
                     max_tokens=self.max_tokens,
                     temperature=0.0,  # Deterministic scoring
                     system=SCORER_SYSTEM_PROMPT,

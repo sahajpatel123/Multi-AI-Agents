@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from arena.core.auth import get_current_user_optional, get_current_user_required
+from arena.core.model_router import get_all_routes_summary
 from arena.core.observability import log_ux_event
 from arena.database import get_db
 from arena.db_models import PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UXEvent, UserPreference
@@ -121,3 +122,10 @@ async def analytics_summary(
         "avg_winning_score": round(avg_winning_score, 1),
         "drift_rate": round(drift_rate, 2),
     }
+
+
+@router.get("/admin/routes")
+async def admin_routes_summary(
+    user: UserResponse = Depends(get_current_user_required),
+) -> dict:
+    return get_all_routes_summary()

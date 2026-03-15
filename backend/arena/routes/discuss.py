@@ -28,6 +28,7 @@ from arena.models.schemas import (
 )
 from arena.core.agents import get_agent_config, get_persona_id_for_agent, get_raw_persona_prompt, call_persona, get_model_for_persona
 from arena.core.memory import get_memory_manager
+from arena.core.model_router import get_route_for_persona
 
 
 router = APIRouter(prefix="/api", tags=["discuss"])
@@ -138,8 +139,6 @@ async def discuss_with_agent(
     if not agent:
         raise HTTPException(status_code=400, detail="Invalid agent ID")
 
-    settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     session_id = request.session_id or str(uuid.uuid4())
 
     # Get agent's previous responses from memory
@@ -243,8 +242,6 @@ async def stream_discuss(
     if not agent:
         raise HTTPException(status_code=400, detail="Invalid agent ID")
 
-    settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     session_id = request.session_id or str(uuid.uuid4())
 
     # Get agent's previous responses from memory
@@ -275,6 +272,7 @@ async def stream_discuss(
             # Get persona_id and check if it uses Grok
             persona_id = get_persona_id_for_agent(request.agent_id, request.persona_ids)
             model_type = get_model_for_persona(persona_id)
+            route = get_route_for_persona(persona_id)
             
             if model_type == 'grok':
                 # Grok doesn't support streaming - get full response
@@ -297,9 +295,9 @@ async def stream_discuss(
                 })
             else:
                 # Claude supports streaming
-                async with client.messages.stream(
-                    model=settings.default_model,
-                    max_tokens=settings.max_tokens,
+                async with route["client"].messages.stream(
+                    model=route["model_id"],
+                    max_tokens=route["max_tokens"],
                     temperature=agent.temperature,
                     system=system_prompt,
                     messages=messages,

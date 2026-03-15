@@ -36,6 +36,7 @@ from arena.core.agents import (
     call_persona,
     get_model_for_persona,
 )
+from arena.core.model_router import get_route_for_persona
 
 
 router = APIRouter(prefix="/api", tags=["debate"])
@@ -110,8 +111,6 @@ def _parse_json_from_llm(content: str) -> dict:
 
 
 async def _get_reaction(
-    client: anthropic.AsyncAnthropic,
-    model: str,
     agent_id: str,
     request: DebateRequest,
 ) -> DebateReaction:
@@ -212,9 +211,6 @@ async def run_debate_round(
     if request.round_number > 3:
         raise HTTPException(status_code=400, detail="Maximum 3 debate rounds")
 
-    settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    model = settings.default_model
     session_id = request.session_id or str(uuid.uuid4())
 
     # The 3 agents that are NOT the challenged one
@@ -223,7 +219,7 @@ async def run_debate_round(
     try:
         # Run all 3 reactions in parallel
         tasks = [
-            _get_reaction(client, model, aid, request)
+            _get_reaction(aid, request)
             for aid in reacting_ids
         ]
         reactions = await asyncio.gather(*tasks)
@@ -310,9 +306,6 @@ async def stream_debate_round(
     if request.challenged_agent_id not in active_agent_map:
         raise HTTPException(status_code=400, detail="Invalid challenged agent ID")
 
-    settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    model = settings.default_model
     session_id = request.session_id or str(uuid.uuid4())
 
     reacting_ids = [agent.agent_id for agent in active_agents if agent.agent_id != request.challenged_agent_id]
@@ -335,6 +328,7 @@ async def stream_debate_round(
                     # Get persona_id and check if it uses Grok
                     persona_id = get_persona_id_for_agent(agent_id, request.persona_ids)
                     model_type = get_model_for_persona(persona_id)
+                    route = get_route_for_persona(persona_id)
                     
                     if model_type == 'grok':
                         # Grok doesn't support streaming - get full response
@@ -353,9 +347,9 @@ async def stream_debate_round(
                         })
                     else:
                         # Claude supports streaming
-                        async with client.messages.stream(
-                            model=model,
-                            max_tokens=256,
+                        async with route["client"].messages.stream(
+                            model=route["model_id"],
+                            max_tokens=min(256, route["max_tokens"]),
                             temperature=agent.temperature,
                             system=system_prompt,
                             messages=[{"role": "user", "content": user_message}],

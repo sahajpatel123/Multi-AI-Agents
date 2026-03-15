@@ -4,9 +4,7 @@ import asyncio
 import json
 import re
 
-import anthropic
-
-from arena.config import get_settings
+from arena.core.model_router import get_route_for_prompt, get_route_for_task
 from arena.models.schemas import (
     PromptCategory,
     PromptClassification,
@@ -190,9 +188,9 @@ async def run_input_pipeline(prompt: str) -> InputPipelineResult:
     3. Classifier + intent extractor (in parallel)
     4. Build enriched prompt for agents
     """
-    settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    model = settings.default_model
+    toxicity_route = get_route_for_task("toxicity_check")
+    classifier_route = get_route_for_prompt(prompt, "prompt_classification")
+    intent_route = get_route_for_prompt(prompt, "intent_extraction")
 
     # Step 1: Rules-based toxicity — instant rejection
     rules_result = _rules_based_toxicity(prompt)
@@ -207,9 +205,9 @@ async def run_input_pipeline(prompt: str) -> InputPipelineResult:
         )
 
     # Step 2: Run LLM toxicity + classifier + intent in parallel
-    toxicity_task = check_toxicity_llm(client, model, prompt)
-    classifier_task = classify_prompt(client, model, prompt)
-    intent_task = extract_intent(client, model, prompt)
+    toxicity_task = check_toxicity_llm(toxicity_route["client"], toxicity_route["model_id"], prompt)
+    classifier_task = classify_prompt(classifier_route["client"], classifier_route["model_id"], prompt)
+    intent_task = extract_intent(intent_route["client"], intent_route["model_id"], prompt)
 
     toxicity, classification, intent = await asyncio.gather(
         toxicity_task, classifier_task, intent_task

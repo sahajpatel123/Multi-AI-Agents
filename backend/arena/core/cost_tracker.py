@@ -9,26 +9,18 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
+from arena.core.model_router import estimate_call_cost
 from arena.db_models import GuestRateLimit, User, UsageRecord, UserTier
 
 logger = logging.getLogger(__name__)
-
-# Anthropic pricing as of 2025 (per million tokens)
-# claude-sonnet-4-20250514
-_INPUT_COST_PER_M = 3.00   # $3.00 / 1M input tokens
-_OUTPUT_COST_PER_M = 15.00  # $15.00 / 1M output tokens
-
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def estimate_cost(input_tokens: int, output_tokens: int) -> float:
+def estimate_cost(input_tokens: int, output_tokens: int, model_key: str = "claude_sonnet") -> float:
     """Return estimated USD cost for a set of token counts."""
-    return (
-        input_tokens / 1_000_000 * _INPUT_COST_PER_M
-        + output_tokens / 1_000_000 * _OUTPUT_COST_PER_M
-    )
+    return estimate_call_cost(model_key=model_key, input_tokens=input_tokens, output_tokens=output_tokens)
 
 
 # ─────────────────────────────────────────────────
@@ -41,14 +33,16 @@ class RequestCostAccumulator:
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     input_tokens: int = 0
     output_tokens: int = 0
+    cost_by_model_usd: float = 0.0
 
-    def add(self, input_tokens: int, output_tokens: int) -> None:
+    def add(self, input_tokens: int, output_tokens: int, model_key: str = "claude_sonnet") -> None:
         self.input_tokens += input_tokens
         self.output_tokens += output_tokens
+        self.cost_by_model_usd += estimate_call_cost(model_key=model_key, input_tokens=input_tokens, output_tokens=output_tokens)
 
     @property
     def estimated_cost_usd(self) -> float:
-        return estimate_cost(self.input_tokens, self.output_tokens)
+        return round(self.cost_by_model_usd or estimate_cost(self.input_tokens, self.output_tokens), 6)
 
     def to_dict(self) -> dict:
         return {

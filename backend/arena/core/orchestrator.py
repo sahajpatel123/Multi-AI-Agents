@@ -13,6 +13,7 @@ from arena.config import get_settings
 from arena.models.schemas import AgentConfig, AgentResponse
 from arena.core.agents import AGENTS, get_all_agents, get_persona_id_for_agent, call_persona
 from arena.core.memory import MemoryRelevanceRanker, format_memory_for_injection
+from arena.core.model_router import get_route_for_persona
 from arena.core.observability import LatencyTracker
 from arena.core.stance_archive import extract_topic, save_agent_stance, summarize_stance_text
 from arena.core.tools.tool_router import ToolRouter
@@ -25,8 +26,6 @@ class Orchestrator:
     
     def __init__(self):
         settings = get_settings()
-        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self.model = settings.default_model
         self.max_tokens = settings.max_tokens
         self.timeout = settings.timeout_seconds
         self.tool_router = ToolRouter()
@@ -297,8 +296,8 @@ class Orchestrator:
             persona_id = get_persona_id_for_agent(agent.agent_id, persona_ids)
             
             # Check if this persona uses Grok (no streaming support for Grok)
-            from arena.core.agents import get_model_for_persona
-            model_type = get_model_for_persona(persona_id)
+            route = get_route_for_persona(persona_id)
+            model_type = route["provider"]
             
             if model_type == 'grok':
                 # Grok doesn't support streaming - get full response and simulate streaming
@@ -314,9 +313,9 @@ class Orchestrator:
                 await self._simulate_stream(content, agent.agent_id, output_queue)
             else:
                 # Claude supports streaming
-                async with self.client.messages.stream(
-                    model=self.model,
-                    max_tokens=self.max_tokens,
+                async with route["client"].messages.stream(
+                    model=route["model_id"],
+                    max_tokens=route["max_tokens"],
                     temperature=agent.temperature,
                     system=system_prompt,
                     messages=[{"role": "user", "content": prompt}],

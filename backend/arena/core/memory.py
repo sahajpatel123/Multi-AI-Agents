@@ -15,6 +15,7 @@ import anthropic
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
+from arena.core.model_router import get_route_for_prompt
 from arena.db_models import SessionSummary
 from arena.models.schemas import AgentResponse, MemoryContext, ScoredAgent, SessionData, SessionTurn
 
@@ -269,9 +270,7 @@ class SessionCompressor:
     """Compresses raw session exchanges into compact DB-ready summaries."""
 
     def __init__(self) -> None:
-        settings = get_settings()
-        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self.model = "claude-3-5-haiku-latest"
+        pass
 
     def _build_fallback(
         self,
@@ -338,8 +337,9 @@ class SessionCompressor:
         )
 
         try:
-            result = await self.client.messages.create(
-                model=self.model,
+            route = get_route_for_prompt(prompt=exchanges_json, task="session_compression")
+            result = await route["client"].messages.create(
+                model=route["model_id"],
                 max_tokens=600,
                 temperature=0.0,
                 system=system_prompt,

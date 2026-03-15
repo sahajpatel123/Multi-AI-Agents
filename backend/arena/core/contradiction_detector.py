@@ -4,9 +4,7 @@ import asyncio
 from difflib import SequenceMatcher
 from typing import Optional
 
-import anthropic
-
-from arena.config import get_settings
+from arena.core.model_router import get_route_for_task
 from arena.models.schemas import AgentResponse
 from arena.core.memory import get_memory_manager
 
@@ -36,9 +34,9 @@ class ContradictionDetector:
     """
     
     def __init__(self):
-        settings = get_settings()
-        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self.model = settings.default_model
+        route = get_route_for_task("contradiction_detection")
+        self.client = route["client"]
+        self.model = route["model_id"]
     
     def _calculate_similarity(self, text1: str, text2: str) -> float:
         """Calculate similarity between two texts using SequenceMatcher."""
