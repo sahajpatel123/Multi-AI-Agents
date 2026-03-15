@@ -23,10 +23,12 @@ export async function register(email: string, password: string): Promise<User> {
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
-    const err = await res.json();
+    const text = await res.text();
+    const err = text ? JSON.parse(text) : {};
     throw new Error(err.detail || 'Registration failed');
   }
-  return res.json();
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
 }
 
 export async function login(email: string, password: string): Promise<User> {
@@ -37,10 +39,12 @@ export async function login(email: string, password: string): Promise<User> {
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
-    const err = await res.json();
+    const text = await res.text();
+    const err = text ? JSON.parse(text) : {};
     throw new Error(err.detail || 'Login failed');
   }
-  return res.json();
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
 }
 
 export async function logout(): Promise<void> {
@@ -54,7 +58,8 @@ export async function getMe(): Promise<User | null> {
   try {
     const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
     if (!res.ok) return null;
-    return res.json();
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
   } catch {
     return null;
   }
@@ -67,7 +72,8 @@ export async function refreshToken(): Promise<User | null> {
       credentials: 'include',
     });
     if (!res.ok) return null;
-    return res.json();
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
   } catch {
     return null;
   }
@@ -114,16 +120,19 @@ export async function getPersonas(): Promise<ApiPersona[]> {
   if (!res.ok) {
     throw new Error('Failed to load personas');
   }
-  return res.json();
+  const text = await res.text();
+  return text ? JSON.parse(text) : [];
 }
 
 export async function getPanel(): Promise<SavedPanel> {
   const res = await fetch(`${API_BASE}/panel`, { credentials: 'include' });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
+    const text = await res.text();
+    const err = text ? JSON.parse(text) : {};
     throw new Error(err?.detail?.message || err?.detail || 'Failed to load panel');
   }
-  return res.json();
+  const text = await res.text();
+  return text ? JSON.parse(text) : { slot_1: '', slot_2: '', slot_3: '', slot_4: '' };
 }
 
 export async function savePanel(panel: SavedPanel): Promise<SavedPanel> {
@@ -134,20 +143,24 @@ export async function savePanel(panel: SavedPanel): Promise<SavedPanel> {
     body: JSON.stringify(panel),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
+    const text = await res.text();
+    const err = text ? JSON.parse(text) : {};
     throw new Error(err?.detail?.message || err?.detail || 'Failed to save panel');
   }
-  const data = await res.json();
-  return data.panel;
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
+  return data.panel || { slot_1: '', slot_2: '', slot_3: '', slot_4: '' };
 }
 
 export async function getSavedResponses(): Promise<SavedResponseItem[]> {
   const res = await fetch(`${API_BASE}/saved`, { credentials: 'include' });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
+    const text = await res.text();
+    const err = text ? JSON.parse(text) : {};
     throw new Error(err?.detail?.message || err?.detail || 'Failed to load saved responses');
   }
-  const data = (await res.json()) as Array<Record<string, unknown>>;
+  const text = await res.text();
+  const data = (text ? JSON.parse(text) : []) as Array<Record<string, unknown>>;
   return data.map((item) => ({
     id: Number(item.id),
     session_id: String(item.session_id || ''),
@@ -184,10 +197,12 @@ export async function saveResponse(payload: {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
+    const text = await res.text();
+    const err = text ? JSON.parse(text) : {};
     throw new Error(err?.detail?.message || err?.detail || 'Failed to save response');
   }
-  const data = await res.json();
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
   return Number(data.id);
 }
 
@@ -197,7 +212,8 @@ export async function deleteSavedResponse(id: number): Promise<void> {
     credentials: 'include',
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
+    const text = await res.text();
+    const err = text ? JSON.parse(text) : {};
     throw new Error(err?.detail?.message || err?.detail || 'Failed to delete saved response');
   }
 }
@@ -220,11 +236,13 @@ export async function submitPrompt(
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const text = await response.text();
+    const error = text ? JSON.parse(text) : {};
     throw new Error(error.detail || 'Failed to submit prompt');
   }
 
-  return response.json();
+  const text = await response.text();
+  return text ? JSON.parse(text) : {};
 }
 
 export interface StreamCallbacks {
@@ -271,7 +289,8 @@ export async function streamPrompt(
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const text = await response.text();
+    const error = text ? JSON.parse(text) : {};
     throw new Error(error.detail || 'Failed to start stream');
   }
 
@@ -358,7 +377,8 @@ export async function streamDebateRound(
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const text = await response.text();
+    const error = text ? JSON.parse(text) : {};
     throw new Error(error.detail || 'Failed to start debate stream');
   }
 
@@ -435,7 +455,8 @@ export async function streamDiscuss(
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const text = await response.text();
+    const error = text ? JSON.parse(text) : {};
     throw new Error(error.detail || 'Failed to start discuss stream');
   }
 
@@ -490,7 +511,8 @@ export async function getSession(sessionId: string): Promise<SessionData | null>
     if (!response.ok) {
       return null;
     }
-    return await response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
   } catch {
     return null;
   }
