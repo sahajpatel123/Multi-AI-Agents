@@ -6,6 +6,7 @@ import {
   DiscussResponse,
   SessionData,
   User,
+  SavedResponseItem,
 } from './types';
 
 const API_BASE = '/api';
@@ -85,6 +86,119 @@ export async function saveMemory(sessionId: string, trigger: 'session_end' | 'ne
 
   if (!res.ok) {
     throw new Error('Failed to save memory');
+  }
+}
+
+export interface ApiPersona {
+  persona_id: string;
+  name: string;
+  color: string;
+  bg_tint: string;
+  quote: string;
+  description: string;
+  temperature: number;
+  provider: string;
+  is_locked: boolean;
+  display_order: number;
+}
+
+export interface SavedPanel {
+  slot_1: string;
+  slot_2: string;
+  slot_3: string;
+  slot_4: string;
+}
+
+export async function getPersonas(): Promise<ApiPersona[]> {
+  const res = await fetch(`${API_BASE}/personas`);
+  if (!res.ok) {
+    throw new Error('Failed to load personas');
+  }
+  return res.json();
+}
+
+export async function getPanel(): Promise<SavedPanel> {
+  const res = await fetch(`${API_BASE}/panel`, { credentials: 'include' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || 'Failed to load panel');
+  }
+  return res.json();
+}
+
+export async function savePanel(panel: SavedPanel): Promise<SavedPanel> {
+  const res = await fetch(`${API_BASE}/panel/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(panel),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || 'Failed to save panel');
+  }
+  const data = await res.json();
+  return data.panel;
+}
+
+export async function getSavedResponses(): Promise<SavedResponseItem[]> {
+  const res = await fetch(`${API_BASE}/saved`, { credentials: 'include' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || 'Failed to load saved responses');
+  }
+  const data = (await res.json()) as Array<Record<string, unknown>>;
+  return data.map((item) => ({
+    id: Number(item.id),
+    session_id: String(item.session_id || ''),
+    turn_id: `${item.session_id || ''}:${item.agent_id || ''}`,
+    prompt: String(item.prompt || ''),
+    agent_id: String(item.agent_id || ''),
+    persona_id: item.persona_id ? String(item.persona_id) : undefined,
+    persona_name: item.persona_name ? String(item.persona_name) : undefined,
+    persona_color: item.persona_color ? String(item.persona_color) : undefined,
+    score: typeof item.score === 'number' ? item.score : null,
+    confidence: typeof item.confidence === 'number' ? item.confidence : null,
+    one_liner: String(item.one_liner || ''),
+    verdict: String(item.verdict || ''),
+    timestamp: String(item.saved_at || ''),
+  }));
+}
+
+export async function saveResponse(payload: {
+  session_id: string;
+  agent_id: string;
+  persona_id: string;
+  persona_name: string;
+  persona_color: string;
+  prompt: string;
+  one_liner: string;
+  verdict: string;
+  score?: number;
+  confidence?: number;
+}): Promise<number> {
+  const res = await fetch(`${API_BASE}/saved`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || 'Failed to save response');
+  }
+  const data = await res.json();
+  return Number(data.id);
+}
+
+export async function deleteSavedResponse(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/saved/${id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || 'Failed to delete saved response');
   }
 }
 

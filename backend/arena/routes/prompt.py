@@ -208,6 +208,18 @@ async def submit_prompt(
             guest_ip=_get_client_ip(request) if not user else None,
             prompt_category=pipeline_result.classification.category.value,
             winner_agent_id=winner.response.agent_id,
+            persona_ids=body.persona_ids,
+            panel_used=[
+                {
+                    "agent_id": agent.agent_id,
+                    "persona_id": agent.persona_id,
+                    "name": agent.name,
+                    "color": agent.color,
+                }
+                for agent in active_agents
+            ],
+            mode="arena",
+            winning_persona_id=get_persona_id_for_agent(winner.response.agent_id, body.persona_ids),
             total_processing_ms=total_ms,
         )
 
@@ -346,6 +358,18 @@ async def stream_prompt(
                 guest_ip=_get_client_ip(request) if not user else None,
                 prompt_category=pipeline_result.classification.category.value,
                 winner_agent_id=winner.response.agent_id,
+                persona_ids=body.persona_ids,
+                panel_used=[
+                    {
+                        "agent_id": agent.agent_id,
+                        "persona_id": agent.persona_id,
+                        "name": agent.name,
+                        "color": agent.color,
+                    }
+                    for agent in active_agents
+                ],
+                mode="arena",
+                winning_persona_id=get_persona_id_for_agent(winner.response.agent_id, body.persona_ids),
                 total_processing_ms=total_ms,
             )
 

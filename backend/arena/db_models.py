@@ -49,6 +49,8 @@ class User(Base):
     preferences = relationship("UserPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
     stance_entries = relationship("AgentStance", back_populates="user", cascade="all, delete-orphan")
     session_summaries = relationship("SessionSummary", back_populates="user", cascade="all, delete-orphan")
+    panel = relationship("UserPanel", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    saved_responses = relationship("SavedResponse", back_populates="user", cascade="all, delete-orphan")
 
 
 class DBSession(Base):
@@ -93,6 +95,10 @@ class UsageRecord(Base):
     estimated_cost_usd = Column(Float, default=0.0)
     prompt_category = Column(String(50), nullable=True)
     winner_agent_id = Column(String(20), nullable=True)
+    persona_ids = Column(JSON, nullable=True, comment="List of 4 persona_ids used in this exchange")
+    panel_used = Column(JSON, nullable=True, comment="Full panel config at time of exchange")
+    mode = Column(String(20), default="arena", nullable=False, comment="arena | agent")
+    winning_persona_id = Column(String(50), nullable=True, comment="persona_id of winner not just agent_id")
     total_processing_ms = Column(Integer, default=0)
     timestamp = Column(DateTime, default=_now, nullable=False, index=True)
 
@@ -167,3 +173,60 @@ class SessionSummary(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="session_summaries")
+
+
+class PersonaLibrary(Base):
+    __tablename__ = "persona_library"
+
+    id = Column(Integer, primary_key=True)
+    persona_id = Column(String(50), unique=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    color = Column(String(20), nullable=False)
+    bg_tint = Column(String(20), nullable=False)
+    quote = Column(String(255), nullable=False)
+    description = Column(String(500), nullable=False)
+    temperature = Column(Float, nullable=False)
+    system_prompt = Column(Text, nullable=False)
+    provider = Column(String(50), default="claude", nullable=False)
+    is_locked = Column(Boolean, default=False)
+    display_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+
+class UserPanel(Base):
+    __tablename__ = "user_panels"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    slot_1 = Column(String(50), default="analyst", nullable=False)
+    slot_2 = Column(String(50), default="philosopher", nullable=False)
+    slot_3 = Column(String(50), default="pragmatist", nullable=False)
+    slot_4 = Column(String(50), default="contrarian", nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
+
+    user = relationship("User", back_populates="panel")
+
+
+class SavedResponse(Base):
+    __tablename__ = "saved_responses"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    session_id = Column(String(36), nullable=False)
+    agent_id = Column(String(20), nullable=False)
+    persona_id = Column(String(50), nullable=False)
+    persona_name = Column(String(255), nullable=False)
+    persona_color = Column(String(20), nullable=False)
+    prompt = Column(String(1000), nullable=False)
+    one_liner = Column(String(1000), nullable=False)
+    verdict = Column(Text, nullable=False)
+    score = Column(Integer, nullable=True)
+    confidence = Column(Integer, nullable=True)
+    saved_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="saved_responses")
+
+    __table_args__ = (
+        Index("idx_saved_responses_user_session", "user_id", "session_id"),
+        Index("idx_saved_responses_user_saved_at", "user_id", "saved_at"),
+    )

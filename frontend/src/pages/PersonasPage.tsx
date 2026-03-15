@@ -4,13 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { AgentDot } from '../components/AgentDot';
 import { usePanel } from '../context/PanelContext';
-import { PERSONAS, UNLOCKED_PERSONAS, type Persona } from '../data/personas';
+import { type Persona } from '../data/personas';
 
 type SlotIndex = 0 | 1 | 2 | 3;
 
 interface ToastState {
-  persona: Persona;
-  slotIndex: SlotIndex;
+  message: string;
+  color: string;
+  iconColor?: string;
 }
 
 const eyebrowStyle = {
@@ -22,7 +23,7 @@ const eyebrowStyle = {
 
 export function PersonasPage() {
   const navigate = useNavigate();
-  const { panel, swapAgent, resetPanel, isDefaultPanel } = usePanel();
+  const { panel, personas, swapAgent, resetPanel, savePanel, isDefaultPanel } = usePanel();
   const [pageVisible, setPageVisible] = useState(false);
   const [activeSlot, setActiveSlot] = useState<SlotIndex | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -101,8 +102,8 @@ export function PersonasPage() {
 
   const modalOptions = useMemo(() => {
     if (activePersona === null) return [];
-    return UNLOCKED_PERSONAS.filter((persona) => persona.id !== activePersona.id);
-  }, [activePersona]);
+    return personas.filter((persona) => persona.id !== activePersona.id);
+  }, [activePersona, personas]);
 
   const closeModal = () => {
     setModalVisible(false);
@@ -111,8 +112,17 @@ export function PersonasPage() {
 
   const handleSwap = (slotIndex: SlotIndex, persona: Persona) => {
     swapAgent(slotIndex, persona);
-    setToast({ persona, slotIndex });
+    setToast({ message: `${persona.name} added to slot ${slotIndex + 1}`, color: '#1A1714', iconColor: persona.color });
     closeModal();
+  };
+
+  const handleSavePanel = async () => {
+    try {
+      await savePanel();
+      setToast({ message: 'Panel saved — loads every session', color: '#1A1714', iconColor: '#C4956A' });
+    } catch {
+      setToast({ message: 'Could not save panel', color: '#E57373', iconColor: '#FAF7F4' });
+    }
   };
 
   return (
@@ -234,8 +244,23 @@ export function PersonasPage() {
             ))}
           </div>
 
-          {!isDefaultPanel && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.9rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.9rem' }}>
+            <button
+              type="button"
+              onClick={handleSavePanel}
+              style={{
+                background: '#1A1714',
+                color: '#FAF7F4',
+                border: 'none',
+                borderRadius: '999px',
+                padding: '10px 24px',
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Save this panel
+            </button>
+            {!isDefaultPanel && (
               <button
                 type="button"
                 onClick={resetPanel}
@@ -257,8 +282,8 @@ export function PersonasPage() {
               >
                 Reset to default
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </section>
 
         <section>
@@ -271,7 +296,7 @@ export function PersonasPage() {
               gap: '10px',
             }}
           >
-            {PERSONAS.map((persona, index) => {
+            {personas.map((persona, index) => {
               const inSlot = unlockedSlotMap[persona.id];
               const isVisible = revealedLibraryIds[persona.id] || index < 4;
 
@@ -450,7 +475,7 @@ export function PersonasPage() {
             left: '50%',
             transform: `translateX(-50%) translateY(${toastVisible ? '0' : '8px'})`,
             zIndex: 200,
-            background: '#1A1714',
+            background: toast.color,
             color: '#FAF7F4',
             fontSize: '13px',
             padding: '10px 20px',
@@ -462,9 +487,9 @@ export function PersonasPage() {
             transition: 'opacity 300ms ease, transform 300ms ease',
           }}
         >
-          <Sparkles style={{ width: '14px', height: '14px', color: toast.persona.color }} />
-          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: toast.persona.color }} />
-          <span>{toast.persona.name} added to slot {toast.slotIndex + 1}</span>
+          <Sparkles style={{ width: '14px', height: '14px', color: toast.iconColor || '#FAF7F4' }} />
+          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: toast.iconColor || '#FAF7F4' }} />
+          <span>{toast.message}</span>
         </div>
       )}
     </div>

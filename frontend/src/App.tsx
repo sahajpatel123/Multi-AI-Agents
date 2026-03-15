@@ -9,7 +9,7 @@ import { Sidebar } from './components/Sidebar';
 import { AuthModal } from './components/AuthModal';
 import { UserMenu } from './components/UserMenu';
 import { AgentDot } from './components/AgentDot';
-import { streamPrompt, streamDiscuss, getSession, parseStreamedAgentPreview, saveMemory } from './api';
+import { streamPrompt, streamDiscuss, getSession, parseStreamedAgentPreview, saveMemory, getSavedResponses, saveResponse, deleteSavedResponse } from './api';
 import { useAuth } from './hooks/useAuth';
 import { usePanel } from './context/PanelContext';
 import {
@@ -84,6 +84,7 @@ function App() {
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [activeTurnId, setActiveTurnId] = useState<string | null>(null);
   const [savedItems, setSavedItems] = useState<SavedResponseItem[]>([]);
+  const [saveSyncMessage, setSaveSyncMessage] = useState<string | null>(null);
   const [responsePreferences, setResponsePreferences] = useState<Record<string, ResponsePreference>>({});
   const [copyFeedback, setCopyFeedback] = useState<Record<string, boolean>>({});
   const [shareFeedback, setShareFeedback] = useState<Record<string, boolean>>({});
@@ -308,6 +309,7 @@ function App() {
     if (!activeTurnId || !response) return;
 
     const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
+    const persona = getPersonaForAgentId(scoredAgent.response.agent_id);
     const nextItem: SavedResponseItem = {
       id: key,
       session_id: response.session_id,
@@ -315,19 +317,53 @@ function App() {
       prompt: response.prompt,
       prompt_category: response.prompt_category,
       agent_id: scoredAgent.response.agent_id,
+      persona_id: persona?.id,
+      persona_name: persona?.name,
+      persona_color: persona?.color,
+      score: scoredAgent.score,
+      confidence: scoredAgent.response.confidence,
       one_liner: scoredAgent.response.one_liner,
       verdict: scoredAgent.response.verdict,
       timestamp: response.timestamp,
     };
 
     setSavedItems((prev) => {
-      const exists = prev.some((item) => item.id === key);
-      if (exists) {
-        return prev.filter((item) => item.id !== key);
+      const existing = prev.find(
+        (item) => item.session_id === response.session_id && item.agent_id === scoredAgent.response.agent_id,
+      );
+      if (existing) {
+        void deleteSavedResponse(Number(existing.id)).catch(() => {
+          setSaveSyncMessage("Couldn't sync save — will retry next session");
+        });
+        return prev.filter(
+          (item) => !(item.session_id === response.session_id && item.agent_id === scoredAgent.response.agent_id),
+        );
       }
+
+      void saveResponse({
+        session_id: response.session_id,
+        agent_id: scoredAgent.response.agent_id,
+        persona_id: persona?.id || scoredAgent.response.agent_id,
+        persona_name: persona?.name || scoredAgent.response.agent_id,
+        persona_color: persona?.color || '#6B6460',
+        prompt: response.prompt,
+        one_liner: scoredAgent.response.one_liner,
+        verdict: scoredAgent.response.verdict,
+        score: scoredAgent.score,
+        confidence: scoredAgent.response.confidence,
+      })
+        .then((savedId) => {
+          setSavedItems((current) =>
+            current.map((item) => (item.id === key ? { ...item, id: savedId } : item)),
+          );
+        })
+        .catch(() => {
+          setSaveSyncMessage("Couldn't sync save — will retry next session");
+        });
+
       return [...prev, nextItem];
     });
-  }, [activeTurnId, getResponseKey, response]);
+  }, [activeTurnId, getPersonaForAgentId, getResponseKey, response]);
 
   const handleSavedItemClick = useCallback((item: SavedResponseItem) => {
     setViewMode('arena');
@@ -618,6 +654,31 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!user) {
+      setSavedItems([]);
+      return;
+    }
+    void getSavedResponses()
+      .then((items) => {
+        setSavedItems(
+          items.map((item) => ({
+            ...item,
+            turn_id: item.turn_id || `${item.session_id}:${item.agent_id}`,
+          })),
+        );
+      })
+      .catch(() => {
+        setSaveSyncMessage("Couldn't sync save — will retry next session");
+      });
+  }, [user]);
+
+  useEffect(() => {
+    if (!saveSyncMessage) return;
+    const timer = window.setTimeout(() => setSaveSyncMessage(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [saveSyncMessage]);
+
+  useEffect(() => {
     if (!focusedAgentId) return;
     setTimeout(() => {
       focusedMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -752,7 +813,7 @@ function App() {
   const sortedResponses = currentResponses
     ? [...currentResponses.all_responses].sort((a, b) => b.score - a.score)
     : [];
-  const savedIds = new Set(savedItems.map((item) => item.id));
+  const savedKeys = new Set(savedItems.map((item) => `${item.session_id}:${item.agent_id}`));
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1512;
   const modalW = Math.min(1200, vw - 48);
   const focusedTargetStyle = {
@@ -1004,7 +1065,7 @@ function App() {
                     ? getResponseKey(activeTurnId, scoredAgent.response.agent_id)
                     : null;
                   const preference = responseKey ? responsePreferences[responseKey]?.sentiment || null : null;
-                  const isSaved = responseKey ? savedIds.has(responseKey) : false;
+                  const isSaved = !!(currentResponses && savedKeys.has(`${currentResponses.session_id}:${scoredAgent.response.agent_id}`));
 
                   return (
                   <div
@@ -1388,6 +1449,26 @@ function App() {
               }}
             />
           )}
+        </div>
+      )}
+
+      {saveSyncMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '110px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#F0EBE3',
+            color: '#6B6460',
+            border: '0.5px solid #E0D8D0',
+            borderRadius: '999px',
+            padding: '8px 16px',
+            fontSize: '12px',
+            zIndex: 120,
+          }}
+        >
+          {saveSyncMessage}
         </div>
       )}
 

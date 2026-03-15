@@ -96,12 +96,17 @@ export interface SessionTurn {
 export type PromptCategory = 'question' | 'task' | 'statement' | 'debate';
 
 export interface SavedResponseItem {
-  id: string;
+  id: string | number;
   session_id: string;
   turn_id: string;
   prompt: string;
   prompt_category?: string;
   agent_id: string;
+  persona_id?: string;
+  persona_name?: string;
+  persona_color?: string;
+  score?: number | null;
+  confidence?: number | null;
   one_liner: string;
   verdict: string;
   timestamp: string;

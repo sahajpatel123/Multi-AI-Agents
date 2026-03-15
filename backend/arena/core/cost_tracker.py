@@ -178,6 +178,10 @@ def record_usage(
     guest_ip: Optional[str] = None,
     prompt_category: Optional[str] = None,
     winner_agent_id: Optional[str] = None,
+    persona_ids: Optional[list[str]] = None,
+    panel_used: Optional[list[dict]] = None,
+    mode: str = "arena",
+    winning_persona_id: Optional[str] = None,
     total_processing_ms: int = 0,
 ) -> None:
     """Persist a usage record to the database."""
@@ -192,6 +196,10 @@ def record_usage(
             estimated_cost_usd=cost.estimated_cost_usd,
             prompt_category=prompt_category,
             winner_agent_id=winner_agent_id,
+            persona_ids=persona_ids,
+            panel_used=panel_used,
+            mode=mode,
+            winning_persona_id=winning_persona_id,
             total_processing_ms=total_processing_ms,
             timestamp=_now_utc(),
         )
