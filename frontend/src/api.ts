@@ -38,13 +38,19 @@ export async function login(email: string, password: string): Promise<User> {
     credentials: 'include',
     body: JSON.stringify({ email, password }),
   });
+  console.log('Login status:', res.status);
   if (!res.ok) {
     const text = await res.text();
+    console.log('Login error response text:', text);
     const err = text ? JSON.parse(text) : {};
+    console.log('Login error parsed:', JSON.stringify(err));
     throw new Error(err.detail || 'Login failed');
   }
   const text = await res.text();
-  return text ? JSON.parse(text) : {};
+  console.log('Login response text:', text);
+  const data = text ? JSON.parse(text) : {};
+  console.log('Login parsed data:', JSON.stringify(data));
+  return data;
 }
 
 export async function logout(): Promise<void> {

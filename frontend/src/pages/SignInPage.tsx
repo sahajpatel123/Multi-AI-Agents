@@ -36,12 +36,17 @@ export function SignInPage() {
 
     try {
       const signedInUser = await login(email, password);
+      console.log('SignInPage received user:', JSON.stringify(signedInUser));
+      console.log('User has id?', signedInUser?.id);
+      console.log('User has email?', signedInUser?.email);
       setUser(signedInUser);
       setIsAuthenticated(true);
       const redirect = sessionStorage.getItem('redirectAfterLogin') || '/app';
       sessionStorage.removeItem('redirectAfterLogin');
       navigate(redirect);
     } catch (err) {
+      console.log('SignInPage caught error:', err);
+      console.log('Error message:', err instanceof Error ? err.message : 'Sign in failed');
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {
       setIsLoading(false);
