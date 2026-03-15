@@ -72,6 +72,22 @@ export async function refreshToken(): Promise<User | null> {
   }
 }
 
+export async function saveMemory(sessionId: string, trigger: 'session_end' | 'new_chat' | 'manual'): Promise<void> {
+  const res = await fetch(`${API_BASE}/memory/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      session_id: sessionId,
+      trigger,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to save memory');
+  }
+}
+
 export async function submitPrompt(
   prompt: string,
   sessionId?: string,

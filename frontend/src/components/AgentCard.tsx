@@ -7,6 +7,7 @@ import {
   ThumbsDown,
   Share2,
   Bookmark,
+  RotateCcw,
 } from 'lucide-react';
 import { ScoredAgent, AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
@@ -125,6 +126,9 @@ export function AgentCard({
   const [thinkingPhraseIndex, setThinkingPhraseIndex] = useState(0);
   const [thinkingPhrasePhase, setThinkingPhrasePhase] = useState<'visible' | 'exiting' | 'entering'>('visible');
   const prevConfidence = useRef(0);
+  const [showContradictionBanner, setShowContradictionBanner] = useState(false);
+  const [showContradictionTooltip, setShowContradictionTooltip] = useState(false);
+  const contradictionTooltipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (response?.confidence == null) {
@@ -146,6 +150,30 @@ export function AgentCard({
       return () => clearTimeout(timer);
     }
   }, [animateConfidenceBar, response?.confidence]);
+
+  // Show contradiction banner with delay after response arrives
+  useEffect(() => {
+    if (scoredAgent?.contradiction?.detected && response && !isStreaming) {
+      const timer = setTimeout(() => setShowContradictionBanner(true), 300);
+      return () => clearTimeout(timer);
+    } else {
+      setShowContradictionBanner(false);
+    }
+  }, [scoredAgent?.contradiction?.detected, response, isStreaming]);
+
+  // Close tooltip when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (contradictionTooltipRef.current && !contradictionTooltipRef.current.contains(event.target as Node)) {
+        setShowContradictionTooltip(false);
+      }
+    };
+
+    if (showContradictionTooltip) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showContradictionTooltip]);
 
   // Content height transition ref
   const contentRef = useRef<HTMLDivElement>(null);
@@ -307,6 +335,89 @@ export function AgentCard({
             </div>
           ) : response ? (
             <div>
+              {/* Contradiction Banner */}
+              {showContradictionBanner && scoredAgent?.contradiction?.detected && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: 'rgba(196,149,106,0.08)',
+                    border: '0.5px solid rgba(196,149,106,0.3)',
+                    borderRadius: '8px',
+                    padding: '7px 12px',
+                    marginBottom: '10px',
+                    fontSize: '12px',
+                    color: '#6B6460',
+                    opacity: showContradictionBanner ? 1 : 0,
+                    transform: showContradictionBanner ? 'translateY(0)' : 'translateY(-4px)',
+                    transition: 'opacity 300ms ease, transform 300ms ease',
+                    position: 'relative',
+                  }}
+                >
+                  <RotateCcw style={{ width: '13px', height: '13px', color: '#C4956A', flexShrink: 0 }} />
+                  <span style={{ fontSize: '12px', color: '#6B6460' }}>Changed stance since last session</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowContradictionTooltip(!showContradictionTooltip);
+                    }}
+                    style={{
+                      marginLeft: 'auto',
+                      fontSize: '11px',
+                      background: 'transparent',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: '999px',
+                      padding: '3px 10px',
+                      color: '#6B6460',
+                      cursor: 'pointer',
+                      transition: 'background 150ms ease',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#F0EBE3'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    Why?
+                  </button>
+                  
+                  {/* Tooltip */}
+                  {showContradictionTooltip && (
+                    <div
+                      ref={contradictionTooltipRef}
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 4px)',
+                        left: 0,
+                        right: 0,
+                        background: '#FFFFFF',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: '8px',
+                        padding: '10px 12px',
+                        fontSize: '12px',
+                        color: '#6B6460',
+                        lineHeight: 1.6,
+                        boxShadow: '0 4px 12px rgba(26,23,20,0.08)',
+                        zIndex: 10,
+                      }}
+                    >
+                      {scoredAgent.contradiction.previous_statement && scoredAgent.contradiction.current_statement ? (
+                        <>
+                          <div style={{ marginBottom: '8px' }}>
+                            <strong style={{ color: '#1A1714', fontSize: '11px' }}>Previous:</strong>
+                            <div style={{ marginTop: '4px' }}>{scoredAgent.contradiction.previous_statement}</div>
+                          </div>
+                          <div>
+                            <strong style={{ color: '#1A1714', fontSize: '11px' }}>Current:</strong>
+                            <div style={{ marginTop: '4px' }}>{scoredAgent.contradiction.current_statement}</div>
+                          </div>
+                        </>
+                      ) : (
+                        'This mind previously took a different position on a related question.'
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              
               <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7' }}>
                 {response.one_liner}
               </p>

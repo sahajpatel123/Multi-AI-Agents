@@ -29,7 +29,7 @@ from arena.core.observability import (
     log_unhandled_exception,
     new_request_id,
 )
-from arena.core.agents import get_all_agents
+from arena.core.agents import get_all_agents, get_persona_id_for_agent
 from arena.core.orchestrator import Orchestrator
 from arena.core.persona_integrity import check_integrity
 from arena.core.response_shaper import assemble_payload
@@ -134,6 +134,10 @@ async def submit_prompt(
         responses, tools_used = await orchestrator.run_all_agents(
             pipeline_result.enriched_prompt,
             agents=active_agents,
+            persona_ids=body.persona_ids,
+            user_id=user.id if user else None,
+            db=db if user else None,
+            session_id=session_id,
         )
         agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
 
@@ -171,14 +175,15 @@ async def submit_prompt(
         )
 
         memory = get_memory_manager()
-        agent_responses_dict = {
-            scored.response.agent_id: scored.response for scored in scored_responses
-        }
         memory.add_turn(
             session_id=session_id,
             prompt=body.prompt,
-            agent_responses=agent_responses_dict,
+            prompt_category=pipeline_result.classification.category.value,
+            scored_responses=scored_responses,
             winner_id=winner.response.agent_id,
+            winner_persona_id=get_persona_id_for_agent(winner.response.agent_id, body.persona_ids),
+            persona_ids=body.persona_ids,
+            user_id=str(user.id) if user else "anonymous",
         )
 
         total_ms = int((time.monotonic() - t_start) * 1000)
@@ -260,6 +265,10 @@ async def stream_prompt(
             queue, gather_task, tools_used = await orchestrator.stream_all_agents(
                 pipeline_result.enriched_prompt,
                 agents=active_agents,
+                persona_ids=body.persona_ids,
+                user_id=user.id if user else None,
+                db=db if user else None,
+                session_id=session_id,
             )
 
             while True:
@@ -299,6 +308,18 @@ async def stream_prompt(
                 winner=winner,
                 integrity=integrity_report,
                 tools_used=tools_used,
+            )
+
+            memory = get_memory_manager()
+            memory.add_turn(
+                session_id=session_id,
+                prompt=body.prompt,
+                prompt_category=pipeline_result.classification.category.value,
+                scored_responses=scored_responses,
+                winner_id=winner.response.agent_id,
+                winner_persona_id=get_persona_id_for_agent(winner.response.agent_id, body.persona_ids),
+                persona_ids=body.persona_ids,
+                user_id=str(user.id) if user else "anonymous",
             )
 
             yield _sse_event("result", final.model_dump(mode="json"))

@@ -12,6 +12,7 @@ from arena.routes.auth import router as auth_router
 from arena.routes.prompt import router as prompt_router
 from arena.routes.debate import router as debate_router
 from arena.routes.discuss import router as discuss_router
+from arena.routes.memory import memory_router
 from arena.routes.session import router as session_router
 
 
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(debate_router)
     app.include_router(discuss_router)
     app.include_router(session_router)
+    app.include_router(memory_router, prefix="/api/memory")
 
     @app.get("/api/health", tags=["health"])
     async def health_check(db: Session = Depends(get_db)):

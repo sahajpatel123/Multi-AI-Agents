@@ -26,7 +26,7 @@ from arena.models.schemas import (
     RateLimitError,
     UserResponse,
 )
-from arena.core.agents import get_agent_config, get_persona_id_for_agent, get_raw_persona_prompt
+from arena.core.agents import get_agent_config, get_persona_id_for_agent, get_raw_persona_prompt, call_persona, get_model_for_persona
 from arena.core.memory import get_memory_manager
 
 
@@ -165,14 +165,22 @@ async def discuss_with_agent(
     messages = _build_messages(request)
 
     try:
-        result = await client.messages.create(
-            model=settings.default_model,
-            max_tokens=settings.max_tokens,
-            temperature=agent.temperature,
-            system=system_prompt,
-            messages=messages,
+        # Get persona_id and route to appropriate API
+        persona_id = get_persona_id_for_agent(request.agent_id, request.persona_ids)
+        
+        # Build single user message from conversation history
+        conversation_text = "\n\n".join(
+            f"{msg.role.upper()}: {msg.content}" for msg in request.conversation_history
         )
-        reply = result.content[0].text.strip()
+        full_user_message = f"{conversation_text}\n\nUSER: {request.message}" if conversation_text else request.message
+        
+        reply_content = await call_persona(
+            persona_id=persona_id,
+            system_prompt=system_prompt,
+            user_prompt=full_user_message,
+            temperature=agent.temperature
+        )
+        reply = reply_content.strip()
 
         # Build updated history
         new_history = list(request.conversation_history)
@@ -264,19 +272,44 @@ async def stream_discuss(
     async def event_generator():
         full_text = ""
         try:
-            async with client.messages.stream(
-                model=settings.default_model,
-                max_tokens=settings.max_tokens,
-                temperature=agent.temperature,
-                system=system_prompt,
-                messages=messages,
-            ) as stream:
-                async for text in stream.text_stream:
-                    full_text += text
-                    yield _sse_event("token", {
-                        "agent_id": request.agent_id,
-                        "token": text,
-                    })
+            # Get persona_id and check if it uses Grok
+            persona_id = get_persona_id_for_agent(request.agent_id, request.persona_ids)
+            model_type = get_model_for_persona(persona_id)
+            
+            if model_type == 'grok':
+                # Grok doesn't support streaming - get full response
+                conversation_text = "\n\n".join(
+                    f"{msg.role.upper()}: {msg.content}" for msg in request.conversation_history
+                )
+                full_user_message = f"{conversation_text}\n\nUSER: {request.message}" if conversation_text else request.message
+                
+                content = await call_persona(
+                    persona_id=persona_id,
+                    system_prompt=system_prompt,
+                    user_prompt=full_user_message,
+                    temperature=agent.temperature
+                )
+                full_text = content
+                # Emit as single token
+                yield _sse_event("token", {
+                    "agent_id": request.agent_id,
+                    "token": content,
+                })
+            else:
+                # Claude supports streaming
+                async with client.messages.stream(
+                    model=settings.default_model,
+                    max_tokens=settings.max_tokens,
+                    temperature=agent.temperature,
+                    system=system_prompt,
+                    messages=messages,
+                ) as stream:
+                    async for text in stream.text_stream:
+                        full_text += text
+                        yield _sse_event("token", {
+                            "agent_id": request.agent_id,
+                            "token": text,
+                        })
 
             # Build final response
             reply = full_text.strip()

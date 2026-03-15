@@ -11,6 +11,9 @@ class Settings(BaseSettings):
 
     # Anthropic
     anthropic_api_key: str
+    
+    # Grok
+    grok_api_key: str
 
     # Server
     host: str = "0.0.0.0"

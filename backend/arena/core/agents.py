@@ -2,7 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
+
+import openai as openai_sdk
+from anthropic import AsyncAnthropic
+
+from arena.config import get_settings
 from arena.models.schemas import AgentConfig
+
+settings = get_settings()
+
+# Initialize API clients
+anthropic_client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+grok_client = openai_sdk.OpenAI(
+    api_key=settings.grok_api_key,
+    base_url="https://api.x.ai/v1"
+)
 
 
 RESPONSE_FORMAT_SUFFIX = """
@@ -187,6 +203,13 @@ PERSONA_METADATA: dict[str, dict[str, object]] = {
 DEFAULT_PERSONA_IDS = ["analyst", "philosopher", "pragmatist", "contrarian"]
 SLOT_AGENT_IDS = ["agent_1", "agent_2", "agent_3", "agent_4"]
 
+# Personas that route to Grok API
+GROK_PERSONAS = {
+    'devilsadvocate',
+    'futurist',
+    'contrarian'
+}
+
 
 def _build_system_prompt(persona_id: str) -> str:
     return f"{PERSONA_PROMPTS[persona_id]}{RESPONSE_FORMAT_SUFFIX}"
@@ -197,6 +220,7 @@ def _build_agent_config(agent_id: str, persona_id: str, slot_index: int) -> Agen
     return AgentConfig(
         agent_id=agent_id,
         agent_number=slot_index + 1,
+        persona_id=persona_id,
         name=str(metadata["name"]),
         color=str(metadata["color"]),
         temperature=float(metadata["temperature"]),
@@ -254,3 +278,77 @@ AGENTS: dict[str, AgentConfig] = {
     agent.agent_id: agent
     for agent in get_all_agents()
 }
+
+
+def get_model_for_persona(persona_id: str) -> str:
+    """Determine which API to use for a given persona."""
+    if persona_id in GROK_PERSONAS:
+        return 'grok'
+    return 'claude'
+
+
+async def call_claude(
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float
+) -> str:
+    """Call Claude API and return response text."""
+    response = await anthropic_client.messages.create(
+        model=settings.default_model,
+        max_tokens=settings.max_tokens,
+        temperature=temperature,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_prompt}]
+    )
+    return response.content[0].text
+
+
+async def call_grok(
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float
+) -> str:
+    """Call Grok API (OpenAI-compatible) and return response text."""
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(
+        None,
+        lambda: grok_client.chat.completions.create(
+            model="grok-3-latest",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_tokens=1000,
+            temperature=temperature
+        )
+    )
+    return response.choices[0].message.content
+
+
+async def call_persona(
+    persona_id: str,
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float
+) -> str:
+    """Route API call to appropriate model based on persona, with fallback to Claude."""
+    model = get_model_for_persona(persona_id)
+    if model == 'grok':
+        try:
+            return await call_grok(
+                system_prompt,
+                user_prompt,
+                temperature
+            )
+        except Exception as e:
+            print(f"Grok failed for {persona_id}, falling back to Claude: {e}")
+            return await call_claude(
+                system_prompt,
+                user_prompt,
+                temperature
+            )
+    return await call_claude(
+        system_prompt,
+        user_prompt,
+        temperature
+    )

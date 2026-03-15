@@ -9,7 +9,7 @@ import { Sidebar } from './components/Sidebar';
 import { AuthModal } from './components/AuthModal';
 import { UserMenu } from './components/UserMenu';
 import { AgentDot } from './components/AgentDot';
-import { streamPrompt, streamDiscuss, getSession, parseStreamedAgentPreview } from './api';
+import { streamPrompt, streamDiscuss, getSession, parseStreamedAgentPreview, saveMemory } from './api';
 import { useAuth } from './hooks/useAuth';
 import { usePanel } from './context/PanelContext';
 import {
@@ -349,7 +349,16 @@ function App() {
     }
   }, [activeTurnId, sessionData]);
 
-  const handleNewChat = useCallback(() => {
+  const handleNewChat = useCallback(async () => {
+    const currentSessionId = sessionData?.session_id || localStorage.getItem('arena_session_id');
+    if (user && currentSessionId) {
+      try {
+        await saveMemory(currentSessionId, 'new_chat');
+      } catch {
+        // Memory persistence is non-critical and should never block resetting the UI.
+      }
+    }
+
     if (flushTimer.current) clearInterval(flushTimer.current);
     if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
     if (currentResponseBarTimer.current) clearTimeout(currentResponseBarTimer.current);
@@ -382,7 +391,7 @@ function App() {
     tokenBuffers.current = {};
     focusedTokenBuffer.current = '';
     setIsSidebarOpen(false);
-  }, []);
+  }, [sessionData, user]);
 
   const handleSubmit = async (prompt: string) => {
     setHasSubmittedPrompt(true);
@@ -546,7 +555,7 @@ function App() {
     const matchedResponse = response?.all_responses.find(
       (s) => s.response.agent_id === agentId
     )?.response;
-    const seedFromResponse = matchedResponse?.one_liner || matchedResponse?.verdict;
+    const seedFromResponse = matchedResponse?.verdict || matchedResponse?.one_liner;
     setIsSidebarOpen(false);
     setFocusedAgentId(agentId);
     setFocusedCardRect(cardRect ? {
@@ -744,20 +753,21 @@ function App() {
     ? [...currentResponses.all_responses].sort((a, b) => b.score - a.score)
     : [];
   const savedIds = new Set(savedItems.map((item) => item.id));
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1512;
+  const modalW = Math.min(1200, vw - 48);
   const focusedTargetStyle = {
-    left: '50%',
+    left: `${(vw - modalW) / 2}px`,
     top: '50%',
-    width: 'min(920px, calc(100vw - 96px))',
-    height: 'min(620px, calc(100vh - 190px))',
-    transform: 'translate(-50%, -50%)',
+    width: `${modalW}px`,
+    height: 'min(660px, calc(100vh - 180px))',
+    transform: 'translateY(-50%)',
     borderRadius: '22px',
   };
-  const focusedPanelBackgrounds: Record<string, string> = {
-    agent_1: `linear-gradient(180deg, rgba(255,255,255,0.9) 0%, ${getPersonaForAgentId('agent_1')?.bgTint || 'rgba(238,240,242,0.92)'} 100%)`,
-    agent_2: `linear-gradient(180deg, rgba(255,255,255,0.9) 0%, ${getPersonaForAgentId('agent_2')?.bgTint || 'rgba(240,237,242,0.92)'} 100%)`,
-    agent_3: `linear-gradient(180deg, rgba(255,255,255,0.9) 0%, ${getPersonaForAgentId('agent_3')?.bgTint || 'rgba(237,242,239,0.92)'} 100%)`,
-    agent_4: `linear-gradient(180deg, rgba(255,255,255,0.9) 0%, ${getPersonaForAgentId('agent_4')?.bgTint || 'rgba(242,237,232,0.92)'} 100%)`,
-  };
+  const focusedPanelBackground = (() => {
+    if (!focusedAgentId || !focusedAgentConfig) return 'rgba(250, 247, 244, 0.95)';
+    const color = focusedAgentConfig.color;
+    return `linear-gradient(160deg, rgba(255,255,255,0.85) 0%, ${color}22 60%, ${color}40 100%)`;
+  })();
 
   return (
     <div
@@ -1088,22 +1098,32 @@ function App() {
                         }
                       : focusedTargetStyle),
                   transition: 'all 520ms cubic-bezier(0.22, 1, 0.36, 1)',
-                  background: focusedPanelBackgrounds[focusedAgentId] || 'rgba(250, 247, 244, 0.95)',
+                  background: focusedPanelBackground,
                   backdropFilter: 'blur(14px)',
-                  border: '0.5px solid #E0D8D0',
+                  border: `0.5px solid ${focusedAgentConfig?.color ? `${focusedAgentConfig.color}40` : '#E0D8D0'}`,
                   boxShadow: '0 24px 54px rgba(26, 23, 20, 0.15)',
                 }}
               >
                 <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '0.5px solid #E0D8D0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <AgentDot
-                        agentId={focusedAgentId}
-                        size={8}
-                        flashKey={dotFlashKeys[focusedAgentId] || 0}
-                        color={focusedPersona?.color}
-                      />
-                      <p style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714' }}>{focusedAgentConfig.name}</p>
+                  <div style={{ height: '3px', background: focusedAgentConfig.color, borderRadius: '999px', width: '100%' }} />
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '0.5px solid #E0D8D0' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <div style={{ paddingTop: '4px' }}>
+                        <AgentDot
+                          agentId={focusedAgentId}
+                          size={8}
+                          flashKey={dotFlashKeys[focusedAgentId] || 0}
+                          color={focusedPersona?.color}
+                        />
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '15px', fontWeight: 600, color: '#1A1714', letterSpacing: '0.01em' }}>{focusedAgentConfig.name}</p>
+                        {focusedScored?.response.one_liner && (
+                          <p style={{ fontSize: '13px', color: '#6B6460', fontStyle: 'italic', marginTop: '4px', marginBottom: '1rem' }}>
+                            {focusedScored.response.one_liner}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <button
                       onClick={closeFocusedAgent}
@@ -1122,22 +1142,22 @@ function App() {
                     </button>
                   </div>
 
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {focusedHistory.map((msg, idx) => (
                       <div key={idx} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                         {msg.role === 'user' ? (
-                          <div style={{ maxWidth: '82%', borderRadius: '12px', padding: '12px 14px', background: '#1A1714' }}>
-                            <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                          <div style={{ maxWidth: '82%', borderRadius: '14px', padding: '16px 20px', background: '#1A1714' }}>
+                            <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: '1.75', letterSpacing: '0.01em', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
                           </div>
                         ) : (
-                          <div style={{ maxWidth: '82%', borderRadius: '12px', padding: '12px 14px', border: '0.5px solid #E0D8D0', background: '#FFFFFF' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
-                              <AgentDot agentId={focusedAgentId} size={5} color={focusedPersona?.color} />
-                              <span style={{ fontSize: '11px', fontWeight: 500, color: focusedAgentConfig.color }}>
+                          <div style={{ maxWidth: '82%', borderRadius: '14px', padding: '16px 20px', border: '0.5px solid #E0D8D0', background: 'rgba(255,255,255,0.55)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '7px' }}>
+                              <AgentDot agentId={focusedAgentId} size={6} color={focusedPersona?.color} />
+                              <span style={{ fontSize: '13px', fontWeight: 500, color: focusedAgentConfig.color, letterSpacing: '0.02em' }}>
                                 {focusedAgentConfig.name}
                               </span>
                             </div>
-                            <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                            <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.75', letterSpacing: '0.01em', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
                           </div>
                         )}
                       </div>
@@ -1145,16 +1165,16 @@ function App() {
 
                     {isFocusedChatStreaming && (
                       <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                        <div style={{ maxWidth: '82%', borderRadius: '12px', padding: '12px 14px', border: '0.5px solid #E0D8D0', background: '#FFFFFF' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
-                            <AgentDot agentId={focusedAgentId} size={5} color={focusedPersona?.color} />
-                            <span style={{ fontSize: '11px', fontWeight: 500, color: focusedAgentConfig.color }}>
+                        <div style={{ maxWidth: '82%', borderRadius: '14px', padding: '16px 20px', border: '0.5px solid #E0D8D0', background: 'rgba(255,255,255,0.55)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '7px' }}>
+                            <AgentDot agentId={focusedAgentId} size={6} color={focusedPersona?.color} />
+                            <span style={{ fontSize: '13px', fontWeight: 500, color: focusedAgentConfig.color, letterSpacing: '0.02em' }}>
                               {focusedAgentConfig.name}
                             </span>
                           </div>
-                          <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
+                          <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.75', letterSpacing: '0.01em', whiteSpace: 'pre-wrap' }}>
                             {focusedStreamingText}
-                            <span style={{ display: 'inline-block', width: '2px', height: '16px', marginLeft: '2px', background: 'rgba(107,100,96,0.5)', animation: 'breathe 1.2s ease-in-out infinite', verticalAlign: 'text-bottom' }} />
+                            <span style={{ display: 'inline-block', width: '2px', height: '19px', marginLeft: '2px', background: 'rgba(107,100,96,0.5)', animation: 'breathe 1.2s ease-in-out infinite', verticalAlign: 'text-bottom' }} />
                           </p>
                         </div>
                       </div>

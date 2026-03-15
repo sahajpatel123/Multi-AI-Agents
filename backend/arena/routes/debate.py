@@ -33,6 +33,8 @@ from arena.core.agents import (
     get_all_agents,
     get_persona_id_for_agent,
     get_raw_persona_prompt,
+    call_persona,
+    get_model_for_persona,
 )
 
 
@@ -124,14 +126,15 @@ async def _get_reaction(
     user_message = _build_debate_context(request, agent_id)
 
     try:
-        result = await client.messages.create(
-            model=model,
-            max_tokens=256,
-            temperature=agent.temperature,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}],
+        # Get persona_id and route to appropriate API
+        persona_id = get_persona_id_for_agent(agent_id, request.persona_ids)
+        content = await call_persona(
+            persona_id=persona_id,
+            system_prompt=system_prompt,
+            user_prompt=user_message,
+            temperature=agent.temperature
         )
-        data = _parse_json_from_llm(result.content[0].text)
+        data = _parse_json_from_llm(content)
         return DebateReaction(
             agent_id=agent_id,
             agent_number=agent.agent_number,
@@ -329,20 +332,41 @@ async def stream_debate_round(
                 full_text = ""
 
                 try:
-                    async with client.messages.stream(
-                        model=model,
-                        max_tokens=256,
-                        temperature=agent.temperature,
-                        system=system_prompt,
-                        messages=[{"role": "user", "content": user_message}],
-                    ) as stream:
-                        async for text in stream.text_stream:
-                            full_text += text
-                            await queue.put({
-                                "type": "reaction_token",
-                                "agent_id": agent_id,
-                                "token": text,
-                            })
+                    # Get persona_id and check if it uses Grok
+                    persona_id = get_persona_id_for_agent(agent_id, request.persona_ids)
+                    model_type = get_model_for_persona(persona_id)
+                    
+                    if model_type == 'grok':
+                        # Grok doesn't support streaming - get full response
+                        content = await call_persona(
+                            persona_id=persona_id,
+                            system_prompt=system_prompt,
+                            user_prompt=user_message,
+                            temperature=agent.temperature
+                        )
+                        full_text = content
+                        # Emit as single token
+                        await queue.put({
+                            "type": "reaction_token",
+                            "agent_id": agent_id,
+                            "token": content,
+                        })
+                    else:
+                        # Claude supports streaming
+                        async with client.messages.stream(
+                            model=model,
+                            max_tokens=256,
+                            temperature=agent.temperature,
+                            system=system_prompt,
+                            messages=[{"role": "user", "content": user_message}],
+                        ) as stream:
+                            async for text in stream.text_stream:
+                                full_text += text
+                                await queue.put({
+                                    "type": "reaction_token",
+                                    "agent_id": agent_id,
+                                    "token": text,
+                                })
 
                     full_texts[agent_id] = full_text
                     await queue.put({

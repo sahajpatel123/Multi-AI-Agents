@@ -11,9 +11,11 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    JSON,
     String,
     Text,
     Enum,
+    Index,
 )
 from sqlalchemy.orm import relationship
 
@@ -44,6 +46,9 @@ class User(Base):
 
     sessions = relationship("DBSession", back_populates="user", cascade="all, delete-orphan")
     usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan")
+    preferences = relationship("UserPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    stance_entries = relationship("AgentStance", back_populates="user", cascade="all, delete-orphan")
+    session_summaries = relationship("SessionSummary", back_populates="user", cascade="all, delete-orphan")
 
 
 class DBSession(Base):
@@ -102,3 +107,63 @@ class GuestRateLimit(Base):
     ip_address = Column(String(45), unique=True, index=True, nullable=False)
     prompt_count_today = Column(Integer, default=0, nullable=False)
     reset_at = Column(DateTime, default=_now, nullable=False)
+
+
+class UserPreference(Base):
+    __tablename__ = "user_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    preferred_depth = Column(String(20), default="moderate", nullable=False)
+    trusted_persona_id = Column(String(50), nullable=True)
+    topic_interests = Column(JSON, default=list, nullable=False)
+    total_prompts = Column(Integer, default=0, nullable=False)
+    total_debates = Column(Integer, default=0, nullable=False)
+    total_discusses = Column(Integer, default=0, nullable=False)
+    most_used_panel = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=_now, nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
+
+    user = relationship("User", back_populates="preferences")
+
+
+class AgentStance(Base):
+    __tablename__ = "agent_stances"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    persona_id = Column(String(50), nullable=False)
+    topic = Column(String(50), nullable=False)
+    topic_normalized = Column(String(50), nullable=False)
+    stance = Column(String(200), nullable=False)
+    confidence = Column(Integer, default=0, nullable=False)
+    session_id = Column(String(36), nullable=False)
+    prompt_snippet = Column(String(100), nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
+
+    user = relationship("User", back_populates="stance_entries")
+
+    __table_args__ = (
+        Index("idx_agent_stances_user_persona_topic", "user_id", "persona_id", "topic_normalized"),
+    )
+
+
+class SessionSummary(Base):
+    __tablename__ = "session_summaries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(36), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    main_topics = Column(JSON, default=list, nullable=False)
+    dominant_category = Column(String(50), nullable=False)
+    preferred_depth = Column(String(20), nullable=False)
+    trusted_persona = Column(String(50), nullable=True)
+    key_positions_taken = Column(JSON, default=list, nullable=False)
+    session_summary = Column(Text, nullable=False)
+    exchange_count = Column(Integer, default=0, nullable=False)
+    raw_exchanges_count = Column(Integer, default=0, nullable=False)
+    compressed_at = Column(DateTime, default=_now, nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="session_summaries")
