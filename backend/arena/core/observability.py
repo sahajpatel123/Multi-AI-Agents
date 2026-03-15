@@ -9,6 +9,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from sqlalchemy.orm import Session
+
+from arena.db_models import PersonaDriftLog, ScoringAudit, UXEvent
 
 # ─────────────────────────────────────────────────
 # Log setup — daily rotating JSON log file
@@ -110,6 +113,7 @@ def log_request(
             "prompt_length_chars": prompt_length,
             "prompt_category": prompt_category,
             "agent_timings_ms": agent_timings_ms,
+            "stage_timings_ms": agent_timings_ms,
             "total_processing_ms": total_processing_ms,
             "winner_agent_id": winner_agent_id,
             "input_tokens": input_tokens,
@@ -119,6 +123,126 @@ def log_request(
             "warnings": warnings or [],
         },
     )
+
+
+class LatencyTracker:
+    def __init__(self):
+        self.stages: dict[str, int] = {}
+        self.start_time = time.monotonic()
+
+    def mark(self, stage: str):
+        self.stages[stage] = int((time.monotonic() - self.start_time) * 1000)
+
+    def get_all(self) -> dict:
+        return self.stages.copy()
+
+    def get_stage_duration(self, start_stage: str, end_stage: str) -> int | None:
+        start = self.stages.get(start_stage)
+        end = self.stages.get(end_stage)
+        if start is not None and end is not None:
+            return end - start
+        return None
+
+
+async def log_drift_result(
+    session_id: str,
+    user_id: int | None,
+    persona_id: str,
+    agent_id: str,
+    prompt_snippet: str,
+    drift_detected: bool,
+    overlap_detected: bool,
+    overlap_score: float | None,
+    reprompt_triggered: bool,
+    reprompt_success: bool | None,
+    original_response_snippet: str,
+    final_response_snippet: str | None,
+    db: Session,
+) -> None:
+    try:
+        log = PersonaDriftLog(
+            session_id=session_id,
+            user_id=user_id,
+            persona_id=persona_id,
+            agent_id=agent_id,
+            prompt_snippet=prompt_snippet,
+            drift_detected=drift_detected,
+            overlap_detected=overlap_detected,
+            overlap_score=overlap_score,
+            reprompt_triggered=reprompt_triggered,
+            reprompt_success=reprompt_success,
+            original_response_snippet=original_response_snippet,
+            final_response_snippet=final_response_snippet,
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        print(f"[OBS] drift log failed: {e}")
+        db.rollback()
+
+
+async def log_scoring_result(
+    session_id: str,
+    user_id: int | None,
+    prompt_snippet: str,
+    prompt_category: str | None,
+    winner_agent_id: str,
+    winner_persona_id: str,
+    winner_score: int,
+    scores: dict,
+    criteria_breakdown: dict | None,
+    confidence_values: list | None,
+    persona_ids_used: list | None,
+    scoring_duration_ms: int | None,
+    fallback_used: bool,
+    db: Session,
+) -> None:
+    try:
+        audit = ScoringAudit(
+            session_id=session_id,
+            user_id=user_id,
+            prompt_snippet=prompt_snippet,
+            prompt_category=prompt_category,
+            winner_agent_id=winner_agent_id,
+            winner_persona_id=winner_persona_id,
+            winner_score=winner_score,
+            scores=scores,
+            criteria_breakdown=criteria_breakdown,
+            confidence_values=confidence_values,
+            persona_ids_used=persona_ids_used,
+            scoring_duration_ms=scoring_duration_ms,
+            fallback_used=fallback_used,
+        )
+        db.add(audit)
+        db.commit()
+    except Exception as e:
+        print(f"[OBS] scoring audit failed: {e}")
+        db.rollback()
+
+
+async def log_ux_event(
+    session_id: str,
+    event_type: str,
+    user_id: int | None,
+    persona_id: str | None,
+    agent_id: str | None,
+    metadata: dict | None,
+    db: Session,
+) -> None:
+    try:
+        event = UXEvent(
+            user_id=user_id,
+            session_id=session_id,
+            event_type=event_type,
+            persona_id=persona_id,
+            agent_id=agent_id,
+            event_metadata=metadata,
+        )
+        db.add(event)
+        db.commit()
+    except Exception as e:
+        print(f"[OBS] ux event failed: {e}")
+        db.rollback()
 
 
 def log_toxicity_rejection(request_id: str, user_id: str, reason: str) -> None:

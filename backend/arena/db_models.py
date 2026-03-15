@@ -51,6 +51,9 @@ class User(Base):
     session_summaries = relationship("SessionSummary", back_populates="user", cascade="all, delete-orphan")
     panel = relationship("UserPanel", back_populates="user", uselist=False, cascade="all, delete-orphan")
     saved_responses = relationship("SavedResponse", back_populates="user", cascade="all, delete-orphan")
+    persona_drift_logs = relationship("PersonaDriftLog", back_populates="user", cascade="all, delete-orphan")
+    scoring_audits = relationship("ScoringAudit", back_populates="user", cascade="all, delete-orphan")
+    ux_events = relationship("UXEvent", back_populates="user", cascade="all, delete-orphan")
 
 
 class DBSession(Base):
@@ -230,3 +233,74 @@ class SavedResponse(Base):
         Index("idx_saved_responses_user_session", "user_id", "session_id"),
         Index("idx_saved_responses_user_saved_at", "user_id", "saved_at"),
     )
+
+
+class PersonaDriftLog(Base):
+    __tablename__ = "persona_drift_logs"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(String(36), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    persona_id = Column(String(50), nullable=False)
+    agent_id = Column(String(20), nullable=False)
+    prompt_snippet = Column(String(200), nullable=False, comment="First 200 chars of the prompt")
+    drift_detected = Column(Boolean, nullable=False, default=False)
+    overlap_detected = Column(Boolean, nullable=False, default=False)
+    overlap_score = Column(Float, nullable=True, comment="Similarity score 0.0 to 1.0")
+    reprompt_triggered = Column(Boolean, nullable=False, default=False)
+    reprompt_success = Column(Boolean, nullable=True, comment="True if reprompt fixed the drift")
+    original_response_snippet = Column(String(300), nullable=True)
+    final_response_snippet = Column(String(300), nullable=True)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="persona_drift_logs")
+
+    __table_args__ = (
+        Index("idx_persona_drift_persona_detected", "persona_id", "drift_detected"),
+        Index("idx_persona_drift_session", "session_id"),
+        Index("idx_persona_drift_created_at", "created_at"),
+    )
+
+
+class ScoringAudit(Base):
+    __tablename__ = "scoring_audits"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(String(36), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    prompt_snippet = Column(String(200), nullable=False)
+    prompt_category = Column(String(50), nullable=True)
+    winner_agent_id = Column(String(20), nullable=False)
+    winner_persona_id = Column(String(50), nullable=False)
+    winner_score = Column(Integer, nullable=False)
+    scores = Column(JSON, nullable=False, comment="All 4 agent scores")
+    criteria_breakdown = Column(JSON, nullable=True, comment="Per-criteria scores directness/logic/etc")
+    confidence_values = Column(JSON, nullable=True, comment="Self-reported confidence per agent")
+    persona_ids_used = Column(JSON, nullable=True, comment="4 persona_ids in this exchange")
+    scoring_duration_ms = Column(Integer, nullable=True, comment="How long scoring LLM call took")
+    fallback_used = Column(Boolean, default=False, comment="True if scoring failed and fallback used")
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="scoring_audits")
+
+    __table_args__ = (
+        Index("idx_scoring_audits_winner_persona", "winner_persona_id"),
+        Index("idx_scoring_audits_prompt_category", "prompt_category"),
+        Index("idx_scoring_audits_created_at", "created_at"),
+        Index("idx_scoring_audits_user_created", "user_id", "created_at"),
+    )
+
+
+class UXEvent(Base):
+    __tablename__ = "ux_events"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="Null for guest users")
+    session_id = Column(String(36), nullable=False)
+    event_type = Column(String(50), nullable=False, comment="See event types below")
+    persona_id = Column(String(50), nullable=True, comment="Which persona was involved")
+    agent_id = Column(String(20), nullable=True)
+    event_metadata = Column("metadata", JSON, nullable=True, comment="Extra event data")
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="ux_events")

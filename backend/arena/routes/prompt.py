@@ -23,6 +23,7 @@ from arena.core.cost_tracker import (
 from arena.core.input_pipeline import run_input_pipeline
 from arena.core.memory import get_memory_manager
 from arena.core.observability import (
+    LatencyTracker,
     log_rate_limit_hit,
     log_request,
     log_toxicity_rejection,
@@ -105,6 +106,8 @@ async def submit_prompt(
     """Submit a prompt to all 4 agents simultaneously."""
     request_id = new_request_id()
     t_start = time.monotonic()
+    tracker = LatencyTracker()
+    tracker.mark("pipeline_start")
     orchestrator = Orchestrator()
     scorer = Scorer()
     session_id = body.session_id or str(uuid.uuid4())
@@ -121,6 +124,7 @@ async def submit_prompt(
             raise HTTPException(status_code=400, detail=str(e)) from e
 
         pipeline_result = await run_input_pipeline(body.prompt)
+        tracker.mark("input_pipeline_done")
 
         if not pipeline_result.passed:
             log_toxicity_rejection(request_id, user_label, pipeline_result.rejection_reason or "")
@@ -138,14 +142,32 @@ async def submit_prompt(
             user_id=user.id if user else None,
             db=db if user else None,
             session_id=session_id,
+            tracker=tracker,
         )
         agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
 
-        integrity_report = check_integrity(responses, session_id)
+        integrity_report = await check_integrity(
+            responses,
+            session_id,
+            prompt=body.prompt,
+            user_id=user.id if user else None,
+            persona_ids=body.persona_ids,
+            db=db if user else None,
+        )
+        tracker.mark("integrity_done")
 
         scored_responses = await scorer.score_responses(
-            body.prompt, responses, integrity_report
+            body.prompt,
+            responses,
+            integrity_report,
+            session_id=session_id,
+            user_id=user.id if user else None,
+            prompt_category=pipeline_result.classification.category.value,
+            persona_ids=body.persona_ids,
+            db=db if user else None,
+            scoring_duration_ms=None,
         )
+        tracker.mark("scoring_done")
 
         winner = scorer.get_winner(scored_responses)
         if not winner:
@@ -173,6 +195,7 @@ async def submit_prompt(
             integrity=integrity_report,
             tools_used=tools_used,
         )
+        tracker.mark("response_shaped")
 
         memory = get_memory_manager()
         memory.add_turn(
@@ -187,12 +210,22 @@ async def submit_prompt(
         )
 
         total_ms = int((time.monotonic() - t_start) * 1000)
+        tracker.mark("pipeline_end")
+        stage_timings = {
+            "input_pipeline": tracker.get_stage_duration("pipeline_start", "input_pipeline_done") or 0,
+            "tool_router": tracker.get_stage_duration("input_pipeline_done", "tool_router_done") or 0,
+            "agents_total": tracker.get_stage_duration("agents_start", "agents_done") or agent_timings.get("all_agents", 0),
+            "integrity_check": tracker.get_stage_duration("agents_done", "integrity_done") or 0,
+            "scoring": tracker.get_stage_duration("integrity_done", "scoring_done") or 0,
+            "response_shaper": tracker.get_stage_duration("scoring_done", "response_shaped") or 0,
+            "total": tracker.get_stage_duration("pipeline_start", "pipeline_end") or total_ms,
+        }
         log_request(
             request_id=request_id,
             user_id=user_label,
             prompt_length=len(body.prompt),
             prompt_category=pipeline_result.classification.category.value,
-            agent_timings_ms=agent_timings,
+            agent_timings_ms=stage_timings,
             total_processing_ms=total_ms,
             winner_agent_id=winner.response.agent_id,
             input_tokens=cost.input_tokens,
@@ -242,6 +275,8 @@ async def stream_prompt(
     """SSE streaming endpoint — streams agent tokens in real-time."""
     request_id = new_request_id()
     t_start = time.monotonic()
+    tracker = LatencyTracker()
+    tracker.mark("pipeline_start")
     orchestrator = Orchestrator()
     scorer = Scorer()
     session_id = body.session_id or str(uuid.uuid4())
@@ -260,6 +295,7 @@ async def stream_prompt(
                 return
 
             pipeline_result = await run_input_pipeline(body.prompt)
+            tracker.mark("input_pipeline_done")
 
             yield _sse_event("pipeline", {
                 "passed": pipeline_result.passed,
@@ -281,6 +317,7 @@ async def stream_prompt(
                 user_id=user.id if user else None,
                 db=db if user else None,
                 session_id=session_id,
+                tracker=tracker,
             )
 
             while True:
@@ -303,10 +340,26 @@ async def stream_prompt(
                     break
 
             responses = await gather_task
-            integrity_report = check_integrity(responses, session_id)
-            scored_responses = await scorer.score_responses(
-                body.prompt, responses, integrity_report
+            integrity_report = await check_integrity(
+                responses,
+                session_id,
+                prompt=body.prompt,
+                user_id=user.id if user else None,
+                persona_ids=body.persona_ids,
+                db=db if user else None,
             )
+            tracker.mark("integrity_done")
+            scored_responses = await scorer.score_responses(
+                body.prompt,
+                responses,
+                integrity_report,
+                session_id=session_id,
+                user_id=user.id if user else None,
+                prompt_category=pipeline_result.classification.category.value,
+                persona_ids=body.persona_ids,
+                db=db if user else None,
+            )
+            tracker.mark("scoring_done")
             winner = scorer.get_winner(scored_responses)
             if not winner:
                 yield _sse_event("error", {"detail": "Failed to determine winner"})
@@ -321,6 +374,7 @@ async def stream_prompt(
                 integrity=integrity_report,
                 tools_used=tools_used,
             )
+            tracker.mark("response_shaped")
 
             memory = get_memory_manager()
             memory.add_turn(
@@ -337,12 +391,21 @@ async def stream_prompt(
             yield _sse_event("result", final.model_dump(mode="json"))
 
             total_ms = int((time.monotonic() - t_start) * 1000)
+            tracker.mark("pipeline_end")
             log_request(
                 request_id=request_id,
                 user_id=user_label,
                 prompt_length=len(body.prompt),
                 prompt_category=pipeline_result.classification.category.value,
-                agent_timings_ms={},
+                agent_timings_ms={
+                    "input_pipeline": tracker.get_stage_duration("pipeline_start", "input_pipeline_done") or 0,
+                    "tool_router": tracker.get_stage_duration("input_pipeline_done", "tool_router_done") or 0,
+                    "agents_total": tracker.get_stage_duration("agents_start", "agents_done") or 0,
+                    "integrity_check": tracker.get_stage_duration("agents_done", "integrity_done") or 0,
+                    "scoring": tracker.get_stage_duration("integrity_done", "scoring_done") or 0,
+                    "response_shaper": tracker.get_stage_duration("scoring_done", "response_shaped") or 0,
+                    "total": tracker.get_stage_duration("pipeline_start", "pipeline_end") or total_ms,
+                },
                 total_processing_ms=total_ms,
                 winner_agent_id=winner.response.agent_id,
                 input_tokens=cost.input_tokens,

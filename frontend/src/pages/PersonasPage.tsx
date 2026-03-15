@@ -5,6 +5,7 @@ import { Navbar } from '../components/Navbar';
 import { AgentDot } from '../components/AgentDot';
 import { usePanel } from '../context/PanelContext';
 import { type Persona } from '../data/personas';
+import track from '../utils/track';
 
 type SlotIndex = 0 | 1 | 2 | 3;
 
@@ -37,6 +38,7 @@ export function PersonasPage() {
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => setPageVisible(true));
+    void track('personas_viewed');
     return () => window.cancelAnimationFrame(frameId);
   }, []);
 
@@ -111,6 +113,11 @@ export function PersonasPage() {
   };
 
   const handleSwap = (slotIndex: SlotIndex, persona: Persona) => {
+    const replacedPersona = panel[slotIndex];
+    void track('persona_swapped', persona.id, undefined, {
+      slot: slotIndex + 1,
+      replaced: replacedPersona?.id || null,
+    });
     swapAgent(slotIndex, persona);
     setToast({ message: `${persona.name} added to slot ${slotIndex + 1}`, color: '#1A1714', iconColor: persona.color });
     closeModal();
@@ -119,6 +126,7 @@ export function PersonasPage() {
   const handleSavePanel = async () => {
     try {
       await savePanel();
+      void track('panel_saved');
       setToast({ message: 'Panel saved — loads every session', color: '#1A1714', iconColor: '#C4956A' });
     } catch {
       setToast({ message: 'Could not save panel', color: '#E57373', iconColor: '#FAF7F4' });

@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
 import { AgentDot } from './AgentDot';
 import { usePanel } from '../context/PanelContext';
+import track from '../utils/track';
 
 interface SidebarTurn {
   turn_id: string;
@@ -163,7 +164,10 @@ export function Sidebar({
             <MenuAction
               icon={<Trophy style={{ width: '14px', height: '14px', color: '#C4956A' }} />}
               label="Leaderboard"
-              onClick={onLeaderboardClick}
+              onClick={() => {
+                void track('leaderboard_viewed');
+                onLeaderboardClick();
+              }}
             />
           </div>
           <div className="mb-5">

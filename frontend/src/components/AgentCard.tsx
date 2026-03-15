@@ -12,6 +12,7 @@ import {
 import { ScoredAgent, AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
 import { ShareDropdown } from './ShareDropdown';
+import track from '../utils/track';
 
 interface AgentDisplayConfig {
   name: string;
@@ -48,6 +49,7 @@ interface AgentCardProps {
   isLoadingState?: boolean;
   animateConfidenceBar?: boolean;
   displayConfig?: AgentDisplayConfig;
+  displayPersonaId?: string;
 }
 
 const THINKING_PHRASES: Record<string, string[]> = {
@@ -100,6 +102,7 @@ export function AgentCard({
   isLoadingState = false,
   animateConfidenceBar = true,
   displayConfig,
+  displayPersonaId,
 }: AgentCardProps) {
   const agentConfig = AGENTS[agentId];
   const resolvedDisplay = {
@@ -236,6 +239,7 @@ export function AgentCard({
       onMouseLeave={() => setIsHovered(false)}
       onClick={(e) => {
         if (isLoadingState) return;
+        void track('deeper_opened', displayPersonaId, agentId);
         onToggle((e.currentTarget as HTMLDivElement).getBoundingClientRect());
       }}
     >
@@ -444,32 +448,47 @@ export function AgentCard({
           >
             <ActionButton
               icon={copyFeedbackActive ? <Check style={{ width: '15px', height: '15px' }} /> : <Copy style={{ width: '15px', height: '15px' }} />}
-              onClick={onCopy}
+              onClick={() => {
+                void track('response_copied', displayPersonaId, agentId);
+                onCopy?.();
+              }}
               active={copyFeedbackActive}
               activeColor="#C4956A"
             />
             <ActionButton
               icon={<ThumbsUp style={{ width: '15px', height: '15px', fill: isLiked ? 'currentColor' : 'none' }} />}
-              onClick={onLike}
+              onClick={() => {
+                void track('response_liked', displayPersonaId, agentId);
+                onLike?.();
+              }}
               active={isLiked}
               activeColor="#C4956A"
             />
             <ActionButton
               icon={<ThumbsDown style={{ width: '15px', height: '15px', fill: isDisliked ? 'currentColor' : 'none' }} />}
-              onClick={onDislike}
+              onClick={() => {
+                void track('response_disliked', displayPersonaId, agentId);
+                onDislike?.();
+              }}
               active={isDisliked}
               activeColor="#6B6460"
             />
             <ActionButton
               ref={shareButtonRef}
               icon={<Share2 style={{ width: '15px', height: '15px' }} />}
-              onClick={() => setIsShareDropdownOpen(!isShareDropdownOpen)}
+              onClick={() => {
+                void track('response_shared', displayPersonaId, agentId);
+                setIsShareDropdownOpen(!isShareDropdownOpen);
+              }}
               active={isShareDropdownOpen}
               activeColor="#C4956A"
             />
             <ActionButton
               icon={<Bookmark style={{ width: '15px', height: '15px', fill: isSaved ? 'currentColor' : 'none' }} />}
-              onClick={onSave}
+              onClick={() => {
+                void track('response_saved', displayPersonaId, agentId);
+                onSave?.();
+              }}
               active={isSaved}
               activeColor="#C4956A"
             />

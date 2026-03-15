@@ -12,6 +12,7 @@ import { AgentDot } from './components/AgentDot';
 import { streamPrompt, streamDiscuss, getSession, parseStreamedAgentPreview, saveMemory, getSavedResponses, saveResponse, deleteSavedResponse } from './api';
 import { useAuth } from './hooks/useAuth';
 import { usePanel } from './context/PanelContext';
+import track from './utils/track';
 import {
   AGENTS,
   DiscussChatMessage,
@@ -386,6 +387,7 @@ function App() {
   }, [activeTurnId, sessionData]);
 
   const handleNewChat = useCallback(async () => {
+    void track('new_chat_clicked');
     const currentSessionId = sessionData?.session_id || localStorage.getItem('arena_session_id');
     if (user && currentSessionId) {
       try {
@@ -565,11 +567,15 @@ function App() {
   };
 
   const handleChallenge = (scored: ScoredAgent) => {
+    const persona = getPersonaForAgentId(scored.response.agent_id);
+    void track('debate_started', persona?.id, scored.response.agent_id);
     setChallengedAgent(scored);
     setViewMode('debate');
   };
 
   const handleDiscuss = (scored: ScoredAgent) => {
+    const persona = getPersonaForAgentId(scored.response.agent_id);
+    void track('discuss_started', persona?.id, scored.response.agent_id);
     setDiscussAgent(scored);
     setViewMode('discuss');
   };
@@ -1040,6 +1046,7 @@ function App() {
                   key={id}
                   agentId={id}
                   displayConfig={getPersonaForAgentId(id) || undefined}
+                  displayPersonaId={getPersonaForAgentId(id)?.id}
                   isExpanded={false}
                   onToggle={() => {}}
                   isLoadingState={true}
@@ -1052,6 +1059,7 @@ function App() {
                   key={id}
                   agentId={id}
                   displayConfig={getPersonaForAgentId(id) || undefined}
+                  displayPersonaId={getPersonaForAgentId(id)?.id}
                   isExpanded={false}
                   onToggle={(cardRect) => openFocusedAgent(id, cardRect)}
                   streamingText={streamingTexts[id] || ''}
@@ -1078,6 +1086,7 @@ function App() {
                     <AgentCard
                       agentId={scoredAgent.response.agent_id}
                       displayConfig={getPersonaForAgentId(scoredAgent.response.agent_id) || undefined}
+                      displayPersonaId={getPersonaForAgentId(scoredAgent.response.agent_id)?.id}
                       scoredAgent={scoredAgent}
                       isExpanded={false}
                       onTitleClick={() => handleAgentTitleClick(scoredAgent.response.agent_id)}
@@ -1112,6 +1121,7 @@ function App() {
                   key={id}
                   agentId={id}
                   displayConfig={getPersonaForAgentId(id) || undefined}
+                  displayPersonaId={getPersonaForAgentId(id)?.id}
                   isExpanded={false}
                   onToggle={(cardRect) => openFocusedAgent(id, cardRect)}
                   isIdle={true}

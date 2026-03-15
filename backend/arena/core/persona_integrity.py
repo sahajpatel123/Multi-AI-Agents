@@ -2,7 +2,10 @@
 
 from difflib import SequenceMatcher
 from collections import defaultdict
+from sqlalchemy.orm import Session
 
+from arena.core.agents import get_persona_id_for_agent
+from arena.core.observability import log_drift_result
 from arena.models.schemas import AgentResponse, IntegrityReport
 
 
@@ -99,8 +102,13 @@ def compute_pairwise_overlap(
 # Main entry point
 # ──────────────────────────────────────────────────────────────
 
-def check_integrity(
-    responses: list[AgentResponse], session_id: str
+async def check_integrity(
+    responses: list[AgentResponse],
+    session_id: str,
+    prompt: str | None = None,
+    user_id: int | None = None,
+    persona_ids: list[str] | None = None,
+    db: Session | None = None,
 ) -> IntegrityReport:
     """
     Run both drift guard and overlap filter on a set of agent responses.
@@ -121,11 +129,37 @@ def check_integrity(
 
     # Overlap filter — pairwise
     overlap_pairs = compute_pairwise_overlap(responses)
+    overlap_map: dict[str, float] = {}
     for pair in overlap_pairs:
+        overlap_map[pair["agent_a"]] = max(overlap_map.get(pair["agent_a"], 0.0), pair["similarity"])
+        overlap_map[pair["agent_b"]] = max(overlap_map.get(pair["agent_b"], 0.0), pair["similarity"])
         flags.append(
             f"{pair['agent_a']} and {pair['agent_b']} have high overlap "
             f"(similarity={pair['similarity']:.2f})"
         )
+
+    if db is not None and prompt is not None:
+        for resp in responses:
+            try:
+                persona_id = get_persona_id_for_agent(resp.agent_id, persona_ids)
+                overlap_score = overlap_map.get(resp.agent_id)
+                await log_drift_result(
+                    session_id=session_id,
+                    user_id=user_id,
+                    persona_id=persona_id,
+                    agent_id=resp.agent_id,
+                    prompt_snippet=prompt[:200],
+                    drift_detected=drift_scores.get(resp.agent_id, 0.0) >= DRIFT_THRESHOLD,
+                    overlap_detected=overlap_score is not None,
+                    overlap_score=overlap_score,
+                    reprompt_triggered=False,
+                    reprompt_success=None,
+                    original_response_snippet=resp.verdict[:300],
+                    final_response_snippet=None,
+                    db=db,
+                )
+            except Exception:
+                pass
 
     # Record responses for future drift detection
     for resp in responses:

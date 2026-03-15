@@ -2,11 +2,15 @@
 
 import asyncio
 import json
+import time
 from typing import Any
 
 import anthropic
+from sqlalchemy.orm import Session
 
 from arena.config import get_settings
+from arena.core.agents import get_persona_id_for_agent
+from arena.core.observability import log_scoring_result
 from arena.models.schemas import AgentResponse, ScoredAgent, IntegrityReport
 
 
@@ -73,10 +77,19 @@ class Scorer:
         prompt: str,
         responses: list[AgentResponse],
         integrity: IntegrityReport | None = None,
+        session_id: str | None = None,
+        user_id: int | None = None,
+        prompt_category: str | None = None,
+        persona_ids: list[str] | None = None,
+        db: Session | None = None,
+        scoring_duration_ms: int | None = None,
     ) -> list[ScoredAgent]:
         """Score all responses and determine winner"""
         
         scoring_prompt = self._format_responses_for_scoring(prompt, responses, integrity)
+        started = time.monotonic()
+        fallback_used = False
+        criteria_breakdown: dict[str, Any] | None = None
         
         try:
             result = await asyncio.wait_for(
@@ -101,6 +114,7 @@ class Scorer:
             data = json.loads(content)
             scores = data.get("scores", {})
             winner_id = data.get("winner", "agent_1")
+            criteria_breakdown = data.get("criteria_breakdown")
             
             # Build scored responses
             scored: list[ScoredAgent] = []
@@ -114,14 +128,44 @@ class Scorer:
                     )
                 )
             
-            return scored
+            result_scored = scored
             
         except Exception as e:
             # Fallback: return responses with default scores
-            return [
+            fallback_used = True
+            result_scored = [
                 ScoredAgent(response=resp, score=50, is_winner=(i == 0))
                 for i, resp in enumerate(responses)
             ]
+
+        duration = scoring_duration_ms
+        if duration is None:
+            duration = int((time.monotonic() - started) * 1000)
+
+        if session_id and db is not None and result_scored:
+            winner = self.get_winner(result_scored)
+            if winner:
+                try:
+                    await log_scoring_result(
+                        session_id=session_id,
+                        user_id=user_id,
+                        prompt_snippet=prompt[:200],
+                        prompt_category=prompt_category,
+                        winner_agent_id=winner.response.agent_id,
+                        winner_persona_id=get_persona_id_for_agent(winner.response.agent_id, persona_ids),
+                        winner_score=winner.score,
+                        scores={item.response.agent_id: item.score for item in result_scored},
+                        criteria_breakdown=criteria_breakdown,
+                        confidence_values=[{"agent_id": item.response.agent_id, "confidence": item.response.confidence} for item in result_scored],
+                        persona_ids_used=persona_ids,
+                        scoring_duration_ms=duration,
+                        fallback_used=fallback_used,
+                        db=db,
+                    )
+                except Exception:
+                    pass
+
+        return result_scored
     
     def get_winner(self, scored_responses: list[ScoredAgent]) -> ScoredAgent | None:
         """Get the winning response from scored list"""

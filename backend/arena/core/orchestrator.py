@@ -13,6 +13,7 @@ from arena.config import get_settings
 from arena.models.schemas import AgentConfig, AgentResponse
 from arena.core.agents import AGENTS, get_all_agents, get_persona_id_for_agent, call_persona
 from arena.core.memory import MemoryRelevanceRanker, format_memory_for_injection
+from arena.core.observability import LatencyTracker
 from arena.core.stance_archive import extract_topic, save_agent_stance, summarize_stance_text
 from arena.core.tools.tool_router import ToolRouter
 
@@ -191,6 +192,7 @@ class Orchestrator:
         user_id: int | None = None,
         db: Session | None = None,
         session_id: str | None = None,
+        tracker: LatencyTracker | None = None,
     ) -> tuple[list[AgentResponse], list[str]]:
         """
         Run all agents in parallel and collect responses.
@@ -199,6 +201,8 @@ class Orchestrator:
         """
         # Execute tools first (in parallel)
         tool_results = await self.tool_router.execute_tools(prompt)
+        if tracker:
+            tracker.mark("tool_router_done")
         
         # Format tool context for injection
         tool_context = self.tool_router.format_tool_context(tool_results)
@@ -218,6 +222,8 @@ class Orchestrator:
         )
 
         # Create tasks for all agents with tool context and persona routing
+        if tracker:
+            tracker.mark("agents_start")
         tasks = [
             self._call_agent(
                 agent,
@@ -231,6 +237,8 @@ class Orchestrator:
         
         # Run all tasks concurrently
         responses = await asyncio.gather(*tasks, return_exceptions=False)
+        if tracker:
+            tracker.mark("agents_done")
 
         await self._archive_stances(
             prompt=prompt,
@@ -346,6 +354,7 @@ class Orchestrator:
         user_id: int | None = None,
         db: Session | None = None,
         session_id: str | None = None,
+        tracker: LatencyTracker | None = None,
     ) -> tuple[asyncio.Queue, list[asyncio.Task], list[str]]:
         """
         Start streaming all agents in parallel.
@@ -358,6 +367,8 @@ class Orchestrator:
         
         # Execute tools first (in parallel)
         tool_results = await self.tool_router.execute_tools(prompt)
+        if tracker:
+            tracker.mark("tool_router_done")
         
         # Format tool context for injection
         tool_context = self.tool_router.format_tool_context(tool_results)
@@ -376,6 +387,8 @@ class Orchestrator:
         )
 
         async def _run_all() -> list[AgentResponse]:
+            if tracker:
+                tracker.mark("agents_start")
             tasks = [
                 asyncio.create_task(
                     self._stream_agent(
@@ -390,6 +403,8 @@ class Orchestrator:
                 for agent in active_agents
             ]
             responses = await asyncio.gather(*tasks)
+            if tracker:
+                tracker.mark("agents_done")
             await self._archive_stances(
                 prompt=prompt,
                 responses=responses,
