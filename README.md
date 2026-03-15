@@ -27,7 +27,7 @@ A web platform where 4 AI agents — each with a distinct personality and reason
 
 - Python 3.13+
 - Node.js 18+
-- Anthropic API key
+- Anthropic API key, Grok API key
 
 ### Backend Setup
 
