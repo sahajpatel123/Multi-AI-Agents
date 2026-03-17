@@ -52,7 +52,7 @@ class Settings(BaseSettings):
 
     # Auth / JWT
     secret_key: str = "change-me-in-production-use-a-long-random-string"
-    access_token_expire_minutes: int = 60
+    access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "240"))
     refresh_token_expire_days: int = 30
 
     # CORS

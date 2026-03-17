@@ -309,9 +309,12 @@ async def stream_debate_round(
     session_id = request.session_id or str(uuid.uuid4())
 
     reacting_ids = [agent.agent_id for agent in active_agents if agent.agent_id != request.challenged_agent_id]
+    # Auth is resolved once, before the stream starts. Do not re-validate inside the generator.
+    authenticated_user = user
 
     async def event_generator():
         try:
+            _ = authenticated_user
             queue: asyncio.Queue = asyncio.Queue()
             full_texts: dict[str, str] = {}
 

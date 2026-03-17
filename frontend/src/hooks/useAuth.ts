@@ -10,7 +10,13 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { login as apiLogin, logout as apiLogout, register as apiRegister, getMe } from '../api';
+import {
+  login as apiLogin,
+  logout as apiLogout,
+  register as apiRegister,
+  getMe,
+  refreshSession,
+} from '../api';
 import { User } from '../types';
 
 export interface AuthState {
@@ -39,10 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
 
     try {
-      const timeoutPromise = new Promise<null>((resolve) => 
-        setTimeout(() => resolve(null), 5000)
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Auth refresh timed out')), 5000)
       );
-      
+
       const user = await Promise.race([
         getMe(),
         timeoutPromise
@@ -55,9 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setIsAuthenticated(false);
       }
-    } catch {
-      setUser(null);
-      setIsAuthenticated(false);
+    } catch (error) {
+      console.log('[AUTH] User refresh failed, keeping current session state', error);
     } finally {
       setIsLoading(false);
     }
@@ -87,6 +92,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(false);
     setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return undefined;
+
+    const refreshInterval = setInterval(async () => {
+      const result = await refreshSession();
+
+      if (result === 'unauthorized') {
+        console.log('[AUTH] Refresh failed, logging out');
+        await logout();
+        return;
+      }
+
+      if (result === 'network_error') {
+        console.log('[AUTH] Refresh network error, keeping session');
+      }
+    }, 45 * 60 * 1000);
+
+    return () => clearInterval(refreshInterval);
+  }, [isAuthenticated, logout]);
 
   const value = useMemo<UseAuth>(
     () => ({

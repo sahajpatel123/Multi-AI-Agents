@@ -14,87 +14,164 @@ import {
 const API_BASE =
   `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api`;
 
+type RefreshResult = 'success' | 'unauthorized' | 'network_error' | 'failed';
+
+export class ApiError extends Error {
+  status: number;
+  detail: unknown;
+
+  constructor(message: string, status: number, detail?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+let isRefreshing = false;
+let refreshPromise: Promise<RefreshResult> | null = null;
+
+async function parseJsonSafely<T>(response: Response): Promise<T | null> {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+function getErrorMessage(
+  error: { detail?: { message?: string } | string } | { detail?: string } | null,
+  fallback: string,
+): string {
+  const detail = error?.detail;
+  if (typeof detail === 'string') {
+    return detail || fallback;
+  }
+  if (detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string') {
+    return detail.message || fallback;
+  }
+  return fallback;
+}
+
+export async function attemptTokenRefresh(): Promise<RefreshResult> {
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  isRefreshing = true;
+  refreshPromise = fetch(`${API_BASE}/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+    .then((response) => {
+      isRefreshing = false;
+      refreshPromise = null;
+
+      if (response.ok) return 'success';
+      if (response.status === 401) return 'unauthorized';
+      return 'failed';
+    })
+    .catch(() => {
+      isRefreshing = false;
+      refreshPromise = null;
+      return 'network_error';
+    });
+
+  return refreshPromise;
+}
+
+export async function refreshSession(): Promise<RefreshResult> {
+  return attemptTokenRefresh();
+}
+
+export async function apiFetch(
+  url: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  const response = await fetch(url, {
+    ...options,
+    credentials: 'include',
+  });
+
+  if (response.status === 401) {
+    const refreshed = await attemptTokenRefresh();
+
+    if (refreshed === 'success') {
+      return fetch(url, {
+        ...options,
+        credentials: 'include',
+      });
+    }
+  }
+
+  return response;
+}
+
 // ──────────────────────────────────────────────────────────────
 // Auth
 // ──────────────────────────────────────────────────────────────
 
 export async function register(email: string, password: string): Promise<User> {
-  const res = await fetch(`${API_BASE}/auth/register`, {
+  const res = await apiFetch(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
-    const text = await res.text();
-    const err = text ? JSON.parse(text) : {};
-    throw new Error(err.detail || 'Registration failed');
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(err?.detail || 'Registration failed', res.status, err);
   }
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  const data = await parseJsonSafely<User>(res);
   if (!data) throw new Error('Empty response');
-  return data as User;
+  return data;
 }
 
 export async function login(email: string, password: string): Promise<User> {
-  const res = await fetch(`${API_BASE}/auth/login`, {
+  const res = await apiFetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify({ email, password }),
   });
-  console.log('Login status:', res.status);
   if (!res.ok) {
-    const text = await res.text();
-    console.log('Login error response text:', text);
-    const err = text ? JSON.parse(text) : {};
-    console.log('Login error parsed:', JSON.stringify(err));
-    throw new Error(err.detail || 'Login failed');
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(err?.detail || 'Login failed', res.status, err);
   }
-  const text = await res.text();
-  console.log('Login response text:', text);
-  const data = text ? JSON.parse(text) : {};
-  console.log('Login parsed data:', JSON.stringify(data));
+  const data = await parseJsonSafely<User>(res);
+  if (!data) throw new Error('Empty response');
   return data;
 }
 
 export async function logout(): Promise<void> {
-  await fetch(`${API_BASE}/auth/logout`, {
+  await apiFetch(`${API_BASE}/auth/logout`, {
     method: 'POST',
-    credentials: 'include',
   });
 }
 
 export async function getMe(): Promise<User | null> {
-  try {
-    const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
-    if (!res.ok) return null;
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
-  } catch {
-    return null;
+  const res = await apiFetch(`${API_BASE}/auth/me`);
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(err?.detail || 'Failed to fetch user', res.status, err);
   }
+  return parseJsonSafely<User>(res);
 }
 
 export async function refreshToken(): Promise<User | null> {
-  try {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    if (!res.ok) return null;
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
-  } catch {
+  const refreshResult = await refreshSession();
+  if (refreshResult !== 'success') {
     return null;
   }
+  return getMe();
 }
 
 export async function saveMemory(sessionId: string, trigger: 'session_end' | 'new_chat' | 'manual'): Promise<void> {
-  const res = await fetch(`${API_BASE}/memory/save`, {
+  const res = await apiFetch(`${API_BASE}/memory/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify({
       session_id: sessionId,
       trigger,
@@ -127,51 +204,43 @@ export interface SavedPanel {
 }
 
 export async function getPersonas(): Promise<ApiPersona[]> {
-  const res = await fetch(`${API_BASE}/personas`);
+  const res = await apiFetch(`${API_BASE}/personas`);
   if (!res.ok) {
     throw new Error('Failed to load personas');
   }
-  const text = await res.text();
-  return text ? JSON.parse(text) : [];
+  return (await parseJsonSafely<ApiPersona[]>(res)) || [];
 }
 
 export async function getPanel(): Promise<SavedPanel> {
-  const res = await fetch(`${API_BASE}/panel`, { credentials: 'include' });
+  const res = await apiFetch(`${API_BASE}/panel`);
   if (!res.ok) {
-    const text = await res.text();
-    const err = text ? JSON.parse(text) : {};
-    throw new Error(err?.detail?.message || err?.detail || 'Failed to load panel');
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(getErrorMessage(err, 'Failed to load panel'));
   }
-  const text = await res.text();
-  return text ? JSON.parse(text) : { slot_1: '', slot_2: '', slot_3: '', slot_4: '' };
+  return (await parseJsonSafely<SavedPanel>(res)) || { slot_1: '', slot_2: '', slot_3: '', slot_4: '' };
 }
 
 export async function savePanel(panel: SavedPanel): Promise<SavedPanel> {
-  const res = await fetch(`${API_BASE}/panel/save`, {
+  const res = await apiFetch(`${API_BASE}/panel/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(panel),
   });
   if (!res.ok) {
-    const text = await res.text();
-    const err = text ? JSON.parse(text) : {};
-    throw new Error(err?.detail?.message || err?.detail || 'Failed to save panel');
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(getErrorMessage(err, 'Failed to save panel'));
   }
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : {};
+  const data = (await parseJsonSafely<{ panel?: SavedPanel }>(res)) || {};
   return data.panel || { slot_1: '', slot_2: '', slot_3: '', slot_4: '' };
 }
 
 export async function getSavedResponses(): Promise<SavedResponseItem[]> {
-  const res = await fetch(`${API_BASE}/saved`, { credentials: 'include' });
+  const res = await apiFetch(`${API_BASE}/saved`);
   if (!res.ok) {
-    const text = await res.text();
-    const err = text ? JSON.parse(text) : {};
-    throw new Error(err?.detail?.message || err?.detail || 'Failed to load saved responses');
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(getErrorMessage(err, 'Failed to load saved responses'));
   }
-  const text = await res.text();
-  const data = (text ? JSON.parse(text) : []) as Array<Record<string, unknown>>;
+  const data = ((await parseJsonSafely<Array<Record<string, unknown>>>(res)) || []);
   return data.map((item) => ({
     id: Number(item.id),
     session_id: String(item.session_id || ''),
@@ -201,31 +270,26 @@ export async function saveResponse(payload: {
   score?: number;
   confidence?: number;
 }): Promise<number> {
-  const res = await fetch(`${API_BASE}/saved`, {
+  const res = await apiFetch(`${API_BASE}/saved`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const text = await res.text();
-    const err = text ? JSON.parse(text) : {};
-    throw new Error(err?.detail?.message || err?.detail || 'Failed to save response');
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(getErrorMessage(err, 'Failed to save response'));
   }
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : {};
+  const data = (await parseJsonSafely<{ id?: number }>(res)) || {};
   return Number(data.id);
 }
 
 export async function deleteSavedResponse(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/saved/${id}`, {
+  const res = await apiFetch(`${API_BASE}/saved/${id}`, {
     method: 'DELETE',
-    credentials: 'include',
   });
   if (!res.ok) {
-    const text = await res.text();
-    const err = text ? JSON.parse(text) : {};
-    throw new Error(err?.detail?.message || err?.detail || 'Failed to delete saved response');
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(getErrorMessage(err, 'Failed to delete saved response'));
   }
 }
 
@@ -234,7 +298,7 @@ export async function submitPrompt(
   sessionId?: string,
   personaIds?: string[],
 ): Promise<PromptResponse> {
-  const response = await fetch(`${API_BASE}/prompt`, {
+  const response = await apiFetch(`${API_BASE}/prompt`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -247,15 +311,13 @@ export async function submitPrompt(
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    const error = text ? JSON.parse(text) : {};
-    throw new Error(error.detail || 'Failed to submit prompt');
+    const error = await parseJsonSafely<{ detail?: string }>(response);
+    throw new Error(getErrorMessage(error, 'Failed to submit prompt'));
   }
 
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  const data = await parseJsonSafely<PromptResponse>(response);
   if (!data) throw new Error('Empty response');
-  return data as PromptResponse;
+  return data;
 }
 
 export interface StreamCallbacks {
@@ -295,16 +357,15 @@ export async function streamPrompt(
   sessionId?: string,
   personaIds?: string[],
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/prompt/stream`, {
+  const response = await apiFetch(`${API_BASE}/prompt/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt, session_id: sessionId, persona_ids: personaIds }),
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    const error = text ? JSON.parse(text) : {};
-    throw new Error(error.detail || 'Failed to start stream');
+    const error = await parseJsonSafely<{ detail?: string }>(response);
+    throw new Error(getErrorMessage(error, 'Failed to start stream'));
   }
 
   const reader = response.body?.getReader();
@@ -383,16 +444,15 @@ export async function streamDebateRound(
   },
   callbacks: DebateStreamCallbacks,
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/debate/stream`, {
+  const response = await apiFetch(`${API_BASE}/debate/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    const error = text ? JSON.parse(text) : {};
-    throw new Error(error.detail || 'Failed to start debate stream');
+    const error = await parseJsonSafely<{ detail?: string }>(response);
+    throw new Error(getErrorMessage(error, 'Failed to start debate stream'));
   }
 
   const reader = response.body?.getReader();
@@ -461,16 +521,15 @@ export async function streamDiscuss(
   },
   callbacks: DiscussStreamCallbacks,
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/discuss/stream`, {
+  const response = await apiFetch(`${API_BASE}/discuss/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    const error = text ? JSON.parse(text) : {};
-    throw new Error(error.detail || 'Failed to start discuss stream');
+    const error = await parseJsonSafely<{ detail?: string }>(response);
+    throw new Error(getErrorMessage(error, 'Failed to start discuss stream'));
   }
 
   const reader = response.body?.getReader();
@@ -520,12 +579,11 @@ export async function streamDiscuss(
 
 export async function getSession(sessionId: string): Promise<SessionData | null> {
   try {
-    const response = await fetch(`${API_BASE}/session/${sessionId}`);
+    const response = await apiFetch(`${API_BASE}/session/${sessionId}`);
     if (!response.ok) {
       return null;
     }
-    const text = await response.text();
-    return text ? JSON.parse(text) : null;
+    return parseJsonSafely<SessionData>(response);
   } catch {
     return null;
   }
@@ -533,7 +591,7 @@ export async function getSession(sessionId: string): Promise<SessionData | null>
 
 export async function healthCheck(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE}/health`);
+    const response = await apiFetch(`${API_BASE}/health`);
     return response.ok;
   } catch {
     return false;
