@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import {
   PromptResponse,
   DebateRoundResponse,
@@ -9,7 +11,9 @@ import {
   SavedResponseItem,
 } from './types';
 
-const API_BASE = '/api';
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  'http://localhost:8000';
 
 // ──────────────────────────────────────────────────────────────
 // Auth
@@ -28,7 +32,9 @@ export async function register(email: string, password: string): Promise<User> {
     throw new Error(err.detail || 'Registration failed');
   }
   const text = await res.text();
-  return text ? JSON.parse(text) : {};
+  const data = text ? JSON.parse(text) : null;
+  if (!data) throw new Error('Empty response');
+  return data as User;
 }
 
 export async function login(email: string, password: string): Promise<User> {
@@ -248,7 +254,9 @@ export async function submitPrompt(
   }
 
   const text = await response.text();
-  return text ? JSON.parse(text) : {};
+  const data = text ? JSON.parse(text) : null;
+  if (!data) throw new Error('Empty response');
+  return data as PromptResponse;
 }
 
 export interface StreamCallbacks {
