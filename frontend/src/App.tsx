@@ -67,7 +67,6 @@ function App() {
   const [animateCurrentResponseBars, setAnimateCurrentResponseBars] = useState(false);
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [rateLimitBanner, setRateLimitBanner] = useState<{ message: string; resetAt: string } | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [hasSubmittedPrompt, setHasSubmittedPrompt] = useState(false);
   const [presetPrompt, setPresetPrompt] = useState('');

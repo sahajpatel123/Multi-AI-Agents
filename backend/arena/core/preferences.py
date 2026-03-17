@@ -68,6 +68,13 @@ async def infer_preferences_from_session(user_id: int, session_data: dict[str, A
     preferences.topic_interests = topics[-12:]
 
     preferences.total_prompts = int(preferences.total_prompts or 0) + len(exchanges)
+    
+    # Track debate and discuss mode usage
+    debate_count = sum(1 for exchange in exchanges if exchange.get("mode") == "debate")
+    discuss_count = sum(1 for exchange in exchanges if exchange.get("mode") == "discuss")
+    
+    preferences.total_debates = int(preferences.total_debates or 0) + debate_count
+    preferences.total_discusses = int(preferences.total_discusses or 0) + discuss_count
 
     panel_counter: Counter[tuple[str, ...]] = Counter()
     for exchange in exchanges:
