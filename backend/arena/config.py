@@ -19,6 +19,10 @@ _WEAK_SECRET_KEYS = {
     "change-me-in-production-use-a-long-random-string",
 }
 
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///arena.db")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
@@ -43,7 +47,7 @@ class Settings(BaseSettings):
     timeout_seconds: int = 30
 
     # Database
-    database_url: Optional[str] = None
+    database_url: Optional[str] = DATABASE_URL
     database_url_fallback: Optional[str] = "sqlite:///./arena.db"
 
     # Auth / JWT
@@ -74,6 +78,15 @@ class Settings(BaseSettings):
                 return True
             if normalized in {"false", "0", "no", "off", "release", "prod", "production"}:
                 return False
+        return value
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value):
+        if value in (None, ""):
+            return DATABASE_URL
+        if isinstance(value, str) and value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql://", 1)
         return value
 
     def validate_secrets(self) -> None:
