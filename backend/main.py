@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from arena.config import get_settings
 from arena.core.seed_personas import seed_persona_library
@@ -26,9 +27,60 @@ from arena.routes.session import router as session_router
 
 logger = logging.getLogger(__name__)
 
+# ──────────────────────────────────────────────────────────────
+# Security middleware
+# ──────────────────────────────────────────────────────────────
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    """Reject requests whose Content-Length exceeds max_size bytes."""
+
+    def __init__(self, app, max_size: int = 10 * 1024):
+        super().__init__(app)
+        self.max_size = max_size
+
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > self.max_size:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "error": "payload_too_large",
+                    "message": "Request too large. Maximum 10KB allowed.",
+                },
+            )
+        return await call_next(request)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to every response."""
+
+    def __init__(self, app, is_production: bool = False):
+        super().__init__(app)
+        self.is_production = is_production
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
+        if self.is_production:
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+        return response
+
+
+# ──────────────────────────────────────────────────────────────
+# App factory
+# ──────────────────────────────────────────────────────────────
 
 def create_app() -> FastAPI:
     settings = get_settings()
+
+    # Validate secrets/API keys before starting
+    settings.validate_secrets()
 
     setup_logging()
     init_db()
@@ -40,27 +92,49 @@ def create_app() -> FastAPI:
         debug=settings.debug,
     )
 
+    # ── Global exception handler ──────────────────────────────
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         error_detail = traceback.format_exc()
-        print(f"[GLOBAL ERROR] {error_detail}")
+        # Always log full traceback server-side
+        logger.error(
+            "[GLOBAL ERROR] %s %s\n%s",
+            request.method,
+            request.url.path,
+            error_detail,
+        )
+        if settings.is_production:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "internal_server_error",
+                    "message": "Something went wrong. Please try again.",
+                },
+            )
+        # Development only — show detail for debugging
         return JSONResponse(
             status_code=500,
             content={
                 "error": "internal_server_error",
                 "message": str(exc),
-                "detail": error_detail[-500:],
+                "detail": error_detail[-1000:],
             },
         )
 
+    # ── Middleware (order matters — outermost runs first) ─────
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:5173"],
+        allow_origins=settings.allowed_origins_list,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
+        expose_headers=["X-Request-ID"],
+        max_age=3600,
     )
+    app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
+    app.add_middleware(RequestSizeLimitMiddleware, max_size=10 * 1024)
 
+    # ── Routers ───────────────────────────────────────────────
     app.include_router(auth_router)
     app.include_router(prompt_router)
     app.include_router(debate_router)
@@ -72,6 +146,7 @@ def create_app() -> FastAPI:
     app.include_router(saved_router, prefix="/api")
     app.include_router(analytics_router, prefix="/api")
 
+    # ── Startup ───────────────────────────────────────────────
     @app.on_event("startup")
     async def seed_personas_on_startup() -> None:
         db = SessionLocal()
@@ -82,6 +157,7 @@ def create_app() -> FastAPI:
         finally:
             db.close()
 
+    # ── Health check ──────────────────────────────────────────
     @app.get("/api/health", tags=["health"])
     async def health_check(db: Session = Depends(get_db)):
         db_ok = False

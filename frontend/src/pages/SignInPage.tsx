@@ -509,6 +509,10 @@ export function SignInPage() {
                 </button>
               </div>
 
+              <p style={{ fontSize: '11px', color: '#6B6460', marginTop: '4px', marginBottom: '1rem' }}>
+                Min 8 characters · One uppercase · One number
+              </p>
+
               {error && (
                 <p style={{ fontSize: '12px', color: '#E57373', marginBottom: '1rem' }}>{error}</p>
               )}

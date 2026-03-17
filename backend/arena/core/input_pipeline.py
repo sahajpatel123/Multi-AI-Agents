@@ -1,9 +1,11 @@
-"""Input Pipeline — classifier, intent extractor, toxicity gate"""
+"""Input Pipeline — sanitizer, classifier, intent extractor, toxicity gate"""
 
 import asyncio
+import html
 import json
 import re
 import anthropic
+from fastapi import HTTPException
 
 from arena.core.model_router import get_route_for_prompt, get_route_for_task
 from arena.models.schemas import (
@@ -13,6 +15,65 @@ from arena.models.schemas import (
     ToxicityResult,
     InputPipelineResult,
 )
+
+
+# ──────────────────────────────────────────────────────────────
+# Input sanitization
+# ──────────────────────────────────────────────────────────────
+
+_CONTROL_CHAR_RE = re.compile(r"[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_MAX_PROMPT_LENGTH = 2000
+
+
+def sanitize_input(text: str) -> str:
+    """Strip dangerous characters and enforce length limit."""
+    if not text:
+        return text
+    # Remove HTML tags
+    text = re.sub(r"<[^>]+>", "", text)
+    # Escape HTML entities
+    text = html.escape(text)
+    # Remove null bytes
+    text = text.replace("\x00", "")
+    # Remove control characters (keep \t and \n)
+    text = _CONTROL_CHAR_RE.sub("", text)
+    # Normalize whitespace
+    text = " ".join(text.split())
+    # Enforce max length
+    if len(text) > _MAX_PROMPT_LENGTH:
+        text = text[:_MAX_PROMPT_LENGTH]
+    return text.strip()
+
+
+# ──────────────────────────────────────────────────────────────
+# Prompt injection detection
+# ──────────────────────────────────────────────────────────────
+
+_INJECTION_PATTERNS: list[str] = [
+    "ignore previous instructions",
+    "ignore all instructions",
+    "disregard your instructions",
+    "forget your persona",
+    "you are now",
+    "act as if you are",
+    "pretend you are",
+    "your new instructions",
+    "system prompt",
+    "reveal your instructions",
+    "show me your prompt",
+    "what are your instructions",
+    "ignore your system prompt",
+    "bypass your restrictions",
+    "jailbreak",
+    "dan mode",
+    "developer mode",
+]
+
+
+def detect_prompt_injection(prompt: str) -> bool:
+    """Return True if the prompt contains a known injection pattern."""
+    lower = prompt.lower()
+    return any(pattern in lower for pattern in _INJECTION_PATTERNS)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -184,11 +245,25 @@ async def check_toxicity_llm(
 async def run_input_pipeline(prompt: str) -> InputPipelineResult:
     """
     Run the full input pipeline:
+    0. Sanitize input + detect prompt injection
     1. Rules-based toxicity gate (instant, no LLM cost)
     2. LLM toxicity check (for edge cases)
     3. Classifier + intent extractor (in parallel)
     4. Build enriched prompt for agents
     """
+    # Step 0a: Sanitize
+    prompt = sanitize_input(prompt)
+
+    # Step 0b: Prompt injection detection
+    if detect_prompt_injection(prompt):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_prompt",
+                "message": "This prompt contains content that cannot be processed.",
+            },
+        )
+
     toxicity_route = get_route_for_task("toxicity_check")
     classifier_route = get_route_for_prompt(prompt, "prompt_classification")
     intent_route = get_route_for_prompt(prompt, "intent_extraction")

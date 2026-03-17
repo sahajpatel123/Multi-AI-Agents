@@ -14,6 +14,7 @@ from arena.config import get_settings
 from arena.database import get_db
 from arena.db_models import User, UserTier
 from arena.models.schemas import UserResponse
+from arena.core.token_blacklist import token_blacklist
 
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
@@ -142,7 +143,9 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
 ACCESS_COOKIE = "arena_access"
 REFRESH_COOKIE = "arena_refresh"
 COOKIE_SAMESITE = "lax"
-COOKIE_SECURE = False  # Set True in production (HTTPS)
+# COOKIE_SECURE is intentionally left as False here; auth.py routes
+# derive secure= from settings.is_production at runtime.
+COOKIE_SECURE = False
 
 
 # ─────────────────────────────────────────────────
@@ -156,6 +159,8 @@ def get_current_user_optional(
     """Returns the authenticated user as Pydantic model or None (for guest)."""
     token = request.cookies.get(ACCESS_COOKIE)
     if not token:
+        return None
+    if token_blacklist.is_blacklisted(token):
         return None
     payload = decode_token(token)
     if not payload or payload.get("type") != ACCESS_TOKEN_TYPE:
