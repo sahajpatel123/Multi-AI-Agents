@@ -3,6 +3,12 @@
 from typing import Any
 
 
+def _get_claude_fallback() -> tuple[Any, str]:
+    from arena.core.model_router import MODEL_REGISTRY, claude_client
+
+    return claude_client, str(MODEL_REGISTRY["claude_sonnet"]["model_id"])
+
+
 async def call_llm(
     client: Any,
     provider: str,
@@ -39,6 +45,18 @@ async def call_llm(
         return response.content[0].text
     
     elif provider == "grok":
+        if client is None:
+            fallback_client, fallback_model_id = _get_claude_fallback()
+            print("[FALLBACK] Grok client not initialized, using Claude")
+            return await call_llm(
+                client=fallback_client,
+                provider="claude",
+                model_id=fallback_model_id,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
         # AsyncOpenAI compatible format
         response = await client.chat.completions.create(
             model=model_id,
@@ -92,6 +110,20 @@ async def call_llm_streaming(
                 yield text
     
     elif provider == "grok":
+        if client is None:
+            fallback_client, fallback_model_id = _get_claude_fallback()
+            print("[FALLBACK] Grok client not initialized, using Claude streaming fallback")
+            async for text in call_llm_streaming(
+                client=fallback_client,
+                provider="claude",
+                model_id=fallback_model_id,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                yield text
+            return
         # AsyncOpenAI compatible streaming format
         stream = await client.chat.completions.create(
             model=model_id,

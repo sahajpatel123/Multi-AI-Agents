@@ -1189,7 +1189,7 @@ export function HomePage() {
                           }}
                           className={!isSatisfied ? 'breathe' : undefined}
                         />
-                        <span style={{ fontSize: '12px', fontWeight: 500, color: '#1A1714' }}>{agent}</span>
+                        <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>{agent}</span>
                         <span
                           style={{
                             opacity: isWinning ? 1 : 0,
@@ -1209,7 +1209,7 @@ export function HomePage() {
                             color: isWinning ? '#FAF7F4' : '#6B6460',
                             padding: '2px 8px',
                             borderRadius: '999px',
-                            fontSize: '10px',
+                            fontSize: '11px',
                             opacity: isWinning ? 1 : 0.85,
                             transform: reaction === 'pragmatist' ? 'scale(1.15)' : isWinning ? 'scale(1)' : 'scale(0.96)',
                             transition: 'opacity 300ms ease, background 300ms ease, color 300ms ease, transform 300ms ease',
@@ -1221,17 +1221,17 @@ export function HomePage() {
 
                       <div style={{ minHeight: '16px', marginBottom: '4px' }}>
                         {isThinking ? (
-                          <span style={{ fontSize: '11px', color: '#C4B8AE', fontStyle: 'italic' }} className="debate-ellipsis" />
+                          <span style={{ fontSize: '12px', color: '#C4B8AE', fontStyle: 'italic' }} className="debate-ellipsis" />
                         ) : null}
                       </div>
 
                       <p
                         style={{
-                          fontSize: '11px',
+                          fontSize: '12px',
                           color: '#6B6460',
-                          lineHeight: 1.55,
+                          lineHeight: 1.6,
                           margin: '7px 0',
-                          minHeight: '36px',
+                          minHeight: '40px',
                           opacity: textOpacity,
                           transform: isTransitioning ? 'translateY(-8px)' : 'translateY(0)',
                           transition: `opacity 200ms ease ${idx * 60}ms, transform 200ms ease ${idx * 60}ms`,

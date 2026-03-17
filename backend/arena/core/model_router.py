@@ -10,10 +10,15 @@ from arena.config import get_settings
 settings = get_settings()
 
 claude_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-grok_client = openai_sdk.AsyncOpenAI(
-    api_key=settings.grok_api_key,
-    base_url="https://api.x.ai/v1",
-)
+grok_api_key = settings.grok_api_key
+if grok_api_key:
+    grok_client = openai_sdk.AsyncOpenAI(
+        api_key=grok_api_key,
+        base_url="https://api.x.ai/v1",
+    )
+else:
+    grok_client = None
+    print("[WARNING] GROK_API_KEY not set. Grok personas will fall back to Claude.")
 
 MODEL_REGISTRY = {
     "claude_haiku": {

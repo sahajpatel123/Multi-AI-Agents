@@ -2,8 +2,10 @@
 
 import asyncio
 import logging
-from fastapi import FastAPI, Depends
+import traceback
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -37,6 +39,19 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         debug=settings.debug,
     )
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        error_detail = traceback.format_exc()
+        print(f"[GLOBAL ERROR] {error_detail}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "internal_server_error",
+                "message": str(exc),
+                "detail": error_detail[-500:],
+            },
+        )
 
     app.add_middleware(
         CORSMiddleware,
