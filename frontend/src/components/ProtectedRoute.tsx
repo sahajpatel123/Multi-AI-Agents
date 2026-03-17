@@ -32,7 +32,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
   }, [isLoading]);
 
-  if (isLoading) {
+  if (isLoading && !isAuthenticated) {
     return (
       <div
         style={{

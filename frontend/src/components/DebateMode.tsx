@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { MessageSquare, ArrowLeft, Plus, X } from 'lucide-react';
 import { streamDebateRound } from '../api';
 import {
@@ -20,6 +20,8 @@ interface DebateModeProps {
 
 type DebatePhase = 'idle' | 'streaming' | 'done';
 
+const AGENT_SLOT_IDS = ['agent_1', 'agent_2', 'agent_3', 'agent_4'];
+
 interface DebateRound {
   roundNumber: number;
   reactions: DebateReaction[];
@@ -34,6 +36,22 @@ export function DebateMode({
   onSuccess,
 }: DebateModeProps) {
   const { panel } = usePanel();
+
+  // Map agent slots to the active panel personas (panel[0] → agent_1, etc.)
+  const panelByAgentId = useMemo(
+    () =>
+      AGENT_SLOT_IDS.reduce<Record<string, { name: string; color: string }>>((acc, id, i) => {
+        const persona = panel[i];
+        if (persona) acc[id] = { name: persona.name, color: persona.color };
+        return acc;
+      }, {}),
+    [panel],
+  );
+
+  const getAgentDisplay = (agentId: string) => {
+    return panelByAgentId[agentId] ?? AGENTS[agentId] ?? { name: agentId, color: '#888888' };
+  };
+
   const [phase, setPhase] = useState<DebatePhase>('idle');
   const [rounds, setRounds] = useState<DebateRound[]>([]);
   const [debateHistory, setDebateHistory] = useState<DebateMessage[]>([]);
@@ -50,8 +68,8 @@ export function DebateMode({
   const [interjection, setInterjection] = useState('');
   const threadEndRef = useRef<HTMLDivElement>(null);
 
-  const challengedConfig = AGENTS[challengedAgent.response.agent_id];
-  const reactingIds = Object.keys(AGENTS).filter(
+  const challengedConfig = getAgentDisplay(challengedAgent.response.agent_id);
+  const reactingIds = AGENT_SLOT_IDS.filter(
     (id) => id !== challengedAgent.response.agent_id
   );
 
@@ -266,7 +284,7 @@ export function DebateMode({
 
             {/* Agent reactions */}
             {round.reactions.map((reaction) => {
-              const agent = AGENTS[reaction.agent_id];
+              const agent = getAgentDisplay(reaction.agent_id);
               return (
                 <div
                   key={`${round.roundNumber}-${reaction.agent_id}`}
@@ -314,7 +332,7 @@ export function DebateMode({
             </div>
 
             {reactingIds.map((id) => {
-              const agent = AGENTS[id];
+              const agent = getAgentDisplay(id);
               const text = streamingTexts[id] || '';
               const isDone = doneAgents.has(id);
 

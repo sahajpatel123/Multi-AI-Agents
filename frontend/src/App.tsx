@@ -67,6 +67,7 @@ function App() {
   const [animateCurrentResponseBars, setAnimateCurrentResponseBars] = useState(false);
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimitBanner, setRateLimitBanner] = useState<{ message: string; resetAt: string } | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [hasSubmittedPrompt, setHasSubmittedPrompt] = useState(false);
   const [presetPrompt, setPresetPrompt] = useState('');
@@ -820,14 +821,12 @@ function App() {
     ? [...currentResponses.all_responses].sort((a, b) => b.score - a.score)
     : [];
   const savedKeys = new Set(savedItems.map((item) => `${item.session_id}:${item.agent_id}`));
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 1512;
-  const modalW = Math.min(1200, vw - 48);
   const focusedTargetStyle = {
-    left: `${(vw - modalW) / 2}px`,
+    left: '50%',
     top: '50%',
-    width: `${modalW}px`,
+    width: 'min(1200px, calc(100vw - 48px))',
     height: 'min(660px, calc(100vh - 180px))',
-    transform: 'translateY(-50%)',
+    transform: 'translate(-50%, -50%)',
     borderRadius: '22px',
   };
   const focusedPanelBackground = (() => {

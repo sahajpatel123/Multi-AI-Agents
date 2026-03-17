@@ -10,7 +10,7 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { login as apiLogin, logout as apiLogout, register as apiRegister } from '../api';
+import { login as apiLogin, logout as apiLogout, register as apiRegister, getMe } from '../api';
 import { User } from '../types';
 
 export interface AuthState {
@@ -39,19 +39,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/auth/me', {
-        credentials: 'include',
-      });
+      const timeoutPromise = new Promise<null>((resolve) => 
+        setTimeout(() => resolve(null), 5000)
+      );
+      
+      const user = await Promise.race([
+        getMe(),
+        timeoutPromise
+      ]);
 
-      if (res.ok) {
-        const data = (await res.json()) as User;
-        setUser(data);
+      if (user) {
+        setUser(user);
         setIsAuthenticated(true);
-        return;
+      } else {
+        setUser(null);
+        setIsAuthenticated(false);
       }
-
-      setUser(null);
-      setIsAuthenticated(false);
     } catch {
       setUser(null);
       setIsAuthenticated(false);

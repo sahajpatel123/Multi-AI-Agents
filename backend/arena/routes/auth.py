@@ -32,8 +32,12 @@ from arena.models.schemas import (
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+def _tier_value(user: User) -> str:
+    return user.tier.value if hasattr(user.tier, "value") else str(user.tier)
+
+
 def _set_auth_cookies(response: Response, user: User) -> None:
-    access_token = create_access_token(user.id, user.tier.value)
+    access_token = create_access_token(user.id, _tier_value(user))
     refresh_token = create_refresh_token(user.id)
 
     response.set_cookie(
@@ -65,7 +69,7 @@ def _user_to_response(user: User) -> UserResponse:
     return UserResponse(
         id=user.id,
         email=user.email,
-        tier=user.tier.value,
+        tier=_tier_value(user),
         created_at=user.created_at,
         prompt_count_today=user.prompt_count_today,
     )

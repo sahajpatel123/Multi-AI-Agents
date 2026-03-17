@@ -268,75 +268,40 @@ def get_model_for_persona(persona_id: str) -> str:
     return str(route["provider"])
 
 
-async def call_claude(
-    persona_id: str,
-    system_prompt: str,
-    user_prompt: str,
-    temperature: float
-) -> str:
-    """Call Claude API and return response text."""
-    route = get_route_for_persona(persona_id)
-    response = await route["client"].messages.create(
-        model=route["model_id"],
-        max_tokens=route["max_tokens"],
-        temperature=temperature,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}]
-    )
-    return response.content[0].text
-
-
-async def call_grok(
-    persona_id: str,
-    system_prompt: str,
-    user_prompt: str,
-    temperature: float
-) -> str:
-    """Call Grok API (OpenAI-compatible) and return response text."""
-    route = get_route_for_persona(persona_id)
-    loop = asyncio.get_event_loop()
-    response = await loop.run_in_executor(
-        None,
-        lambda: route["client"].chat.completions.create(
-            model=route["model_id"],
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            max_tokens=route["max_tokens"],
-            temperature=temperature
-        )
-    )
-    return response.choices[0].message.content
-
-
 async def call_persona(
     persona_id: str,
     system_prompt: str,
     user_prompt: str,
     temperature: float
 ) -> str:
-    """Route API call to appropriate model based on persona, with fallback to Claude."""
-    model = get_model_for_persona(persona_id)
-    if model == 'grok':
-        try:
-            return await call_grok(
-                persona_id,
-                system_prompt,
-                user_prompt,
-                temperature
-            )
-        except Exception as e:
+    """Route API call to appropriate model based on persona."""
+    from arena.core.llm_caller import call_llm
+    
+    route = get_route_for_persona(persona_id)
+    
+    try:
+        return await call_llm(
+            client=route["client"],
+            provider=route["provider"],
+            model_id=route["model_id"],
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=temperature,
+            max_tokens=route["max_tokens"],
+        )
+    except Exception as e:
+        # If Grok fails, fallback to Claude
+        if route["provider"] == "grok":
             print(f"Grok failed for {persona_id}, falling back to Claude: {e}")
-            return await call_claude(
-                persona_id,
-                system_prompt,
-                user_prompt,
-                temperature
+            from arena.core.model_router import get_route_for_task
+            fallback_route = get_route_for_task("scoring")  # Use Claude Sonnet as fallback
+            return await call_llm(
+                client=fallback_route["client"],
+                provider=fallback_route["provider"],
+                model_id=fallback_route["model_id"],
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=temperature,
+                max_tokens=fallback_route["max_tokens"],
             )
-    return await call_claude(
-        persona_id,
-        system_prompt,
-        user_prompt,
-        temperature
-    )
+        raise

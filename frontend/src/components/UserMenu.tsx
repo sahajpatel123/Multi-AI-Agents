@@ -9,7 +9,7 @@ interface UserMenuProps {
   onLogout: () => void;
 }
 
-const REGISTERED_LIMIT = 10;
+const REGISTERED_LIMIT = 7;
 
 export function UserMenu({
   user,
@@ -165,9 +165,14 @@ export function UserMenu({
           {/* Usage */}
           <div style={{ padding: '0.75rem 1rem', borderBottom: '0.5px solid #E0D8D0' }}>
             {isPro ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#6B6460' }}>
-                <Zap style={{ width: '12px', height: '12px', color: '#C4956A' }} />
-                <span>Unlimited prompts</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#6B6460' }}>
+                  <Zap style={{ width: '12px', height: '12px', color: '#C4956A' }} />
+                  <span>{used} / 45 messages this window</span>
+                </div>
+                <p style={{ fontSize: '11px', color: '#6B6460' }}>
+                  Rolling 5 hour window
+                </p>
               </div>
             ) : (
               <>

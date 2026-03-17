@@ -3,6 +3,7 @@
 import asyncio
 import json
 import re
+import anthropic
 
 from arena.core.model_router import get_route_for_prompt, get_route_for_task
 from arena.models.schemas import (

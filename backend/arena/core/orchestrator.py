@@ -299,34 +299,24 @@ class Orchestrator:
             route = get_route_for_persona(persona_id)
             model_type = route["provider"]
             
-            if model_type == 'grok':
-                # Grok doesn't support streaming - get full response and simulate streaming
-                content = await call_persona(
-                    persona_id=persona_id,
-                    system_prompt=system_prompt,
-                    user_prompt=prompt,
-                    temperature=agent.temperature
-                )
-                full_text = content
-                
-                # Simulate streaming by emitting word-by-word
-                await self._simulate_stream(content, agent.agent_id, output_queue)
-            else:
-                # Claude supports streaming
-                async with route["client"].messages.stream(
-                    model=route["model_id"],
-                    max_tokens=route["max_tokens"],
-                    temperature=agent.temperature,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": prompt}],
-                ) as stream:
-                    async for text in stream.text_stream:
-                        full_text += text
-                        await output_queue.put({
-                            "type": "token",
-                            "agent_id": agent.agent_id,
-                            "token": text,
-                        })
+            # Use provider-aware streaming
+            from arena.core.llm_caller import call_llm_streaming
+            
+            async for text in call_llm_streaming(
+                client=route["client"],
+                provider=route["provider"],
+                model_id=route["model_id"],
+                system_prompt=system_prompt,
+                user_prompt=prompt,
+                temperature=agent.temperature,
+                max_tokens=route["max_tokens"],
+            ):
+                full_text += text
+                await output_queue.put({
+                    "type": "token",
+                    "agent_id": agent.agent_id,
+                    "token": text,
+                })
 
             # Signal that this agent is done streaming
             await output_queue.put({

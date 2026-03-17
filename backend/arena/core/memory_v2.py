@@ -163,7 +163,7 @@ Return this exact JSON structure:
   "timestamp": "{datetime.now(timezone.utc).isoformat()}"
 }}"""
             
-            route = get_route_for_prompt(prompt=exchanges_json, task="session_compression")
+            route = get_route_for_prompt(prompt=prompt_text, task="session_compression")
             response = route["client"].messages.create(
                 model=route["model_id"],
                 max_tokens=800,

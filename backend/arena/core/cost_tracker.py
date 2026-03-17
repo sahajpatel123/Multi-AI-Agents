@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.model_router import estimate_call_cost
+from arena.core.rate_limiter_pro import check_pro_window_limit
 from arena.db_models import GuestRateLimit, User, UsageRecord, UserTier
 
 logger = logging.getLogger(__name__)
@@ -58,12 +59,14 @@ class RequestCostAccumulator:
 # ─────────────────────────────────────────────────
 
 class RateLimitExceeded(Exception):
-    def __init__(self, message: str, tier: str, used: int, limit: int):
+    def __init__(self, message: str, tier: str, used: int, limit: int, reset_at: Optional[str] = None, window_hours: Optional[int] = None):
         super().__init__(message)
         self.message = message
         self.tier = tier
         self.used = used
         self.limit = limit
+        self.reset_at = reset_at
+        self.window_hours = window_hours
 
 
 def _reset_if_new_day(reset_at: datetime) -> bool:
@@ -129,7 +132,17 @@ def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
     - Only successful responses count
     """
     if user_tier == UserTier.PRO.value:
-        return  # Unlimited
+        error_detail = check_pro_window_limit(db, user_id)
+        if error_detail:
+            raise RateLimitExceeded(
+                message=error_detail["message"],
+                tier="pro",
+                used=error_detail["current_count"],
+                limit=error_detail["limit"],
+                reset_at=error_detail["reset_at"],
+                window_hours=error_detail["window_hours"],
+            )
+        return
 
     # Fetch fresh User instance from DB to avoid detached instance issues
     user = db.query(User).filter(User.id == user_id).first()
@@ -147,8 +160,8 @@ def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
     if user.prompt_count_today >= limit:
         raise RateLimitExceeded(
             message=(
-                "You've reached your 10 daily messages. "
-                "Upgrade to Pro for unlimited access."
+                f"You've reached your {limit} daily messages. "
+                "Upgrade to Pro for 45 messages per 5 hour window."
             ),
             tier=user.tier.value,
             used=user.prompt_count_today,
