@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from arena.config import get_settings
-from arena.core.model_router import GROK_PERSONAS, get_route_for_persona
+from arena.core.model_router import GROK_PERSONAS, get_fallback_model, get_route_for_persona
 from arena.models.schemas import AgentConfig
 
 settings = get_settings()
@@ -276,32 +276,55 @@ async def call_persona(
 ) -> str:
     """Route API call to appropriate model based on persona."""
     from arena.core.llm_caller import call_llm
-    
+
     route = get_route_for_persona(persona_id)
-    
+
+    provider = route["provider"]
+    client = route["client"]
+    model_id = route["model_id"]
+
+    if client is None:
+        print(
+            f"[FALLBACK] {provider} client not initialized for {persona_id}, "
+            "falling back to Claude"
+        )
+        fallback = get_fallback_model()
+        return await call_llm(
+            client=fallback["client"],
+            provider=fallback["provider"],
+            model_id=fallback["model_id"],
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=temperature,
+            max_tokens=fallback["max_tokens"],
+        )
+
     try:
         return await call_llm(
-            client=route["client"],
-            provider=route["provider"],
-            model_id=route["model_id"],
+            client=client,
+            provider=provider,
+            model_id=model_id,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             temperature=temperature,
             max_tokens=route["max_tokens"],
         )
     except Exception as e:
-        # If Grok fails, fallback to Claude
-        if route["provider"] == "grok":
-            print(f"Grok failed for {persona_id}, falling back to Claude: {e}")
-            from arena.core.model_router import get_route_for_task
-            fallback_route = get_route_for_task("scoring")  # Use Claude Sonnet as fallback
+        print(
+            f"[FALLBACK] {provider} failed for {persona_id}: {e}. "
+            "Falling back to Claude."
+        )
+        fallback = get_fallback_model()
+        try:
             return await call_llm(
-                client=fallback_route["client"],
-                provider=fallback_route["provider"],
-                model_id=fallback_route["model_id"],
+                client=fallback["client"],
+                provider=fallback["provider"],
+                model_id=fallback["model_id"],
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 temperature=temperature,
-                max_tokens=fallback_route["max_tokens"],
+                max_tokens=fallback["max_tokens"],
             )
-        raise
+        except Exception as e2:
+            print(f"[ERROR] Fallback also failed: {e2}")
+            return "I was unable to generate a response at this time. Please try again."

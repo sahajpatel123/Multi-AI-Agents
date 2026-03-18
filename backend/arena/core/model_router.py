@@ -20,6 +20,25 @@ else:
     grok_client = None
     print("[WARNING] GROK_API_KEY not set. Grok personas will fall back to Claude.")
 
+openai_api_key = settings.openai_api_key or ""
+if openai_api_key:
+    openai_client = openai_sdk.AsyncOpenAI(
+        api_key=openai_api_key,
+    )
+else:
+    openai_client = None
+    print("[WARNING] OPENAI_API_KEY not set. OpenAI personas will fall back to Claude.")
+
+deepseek_api_key = settings.deepseek_api_key or ""
+if deepseek_api_key:
+    deepseek_client = openai_sdk.AsyncOpenAI(
+        api_key=deepseek_api_key,
+        base_url="https://api.deepseek.com",
+    )
+else:
+    deepseek_client = None
+    print("[WARNING] DEEPSEEK_API_KEY not set. DeepSeek personas will fall back to Claude.")
+
 MODEL_REGISTRY = {
     "claude_haiku": {
         "model_id": "claude-haiku-4-5-20251001",
@@ -50,14 +69,59 @@ MODEL_REGISTRY = {
         "enabled": False,
         "reason_disabled": "Reserved for Pro tier. Enable when Pro launches.",
     },
-    "grok": {
-        "model_id": "grok-3-latest",
+    "gpt_4o": {
+        "model_id": "gpt-4o",
+        "provider": "openai",
+        "client": openai_client,
+        "cost_per_1k_input": 0.0025,
+        "cost_per_1k_output": 0.01,
+        "max_tokens": 1000,
+        "strengths": ["philosophy", "history", "deep_reasoning", "accuracy"],
+    },
+    "gpt_4o_mini": {
+        "model_id": "gpt-4o-mini",
+        "provider": "openai",
+        "client": openai_client,
+        "cost_per_1k_input": 0.00015,
+        "cost_per_1k_output": 0.0006,
+        "max_tokens": 1000,
+        "strengths": ["pragmatic", "optimistic", "fast", "cheap"],
+    },
+    "grok_3": {
+        "model_id": "grok-3",
         "provider": "grok",
         "client": grok_client,
         "cost_per_1k_input": 0.005,
         "cost_per_1k_output": 0.015,
         "max_tokens": 1000,
-        "strengths": ["contrarian", "real_time_awareness", "bold_opinions", "x_discourse"],
+        "strengths": ["strategy", "deep_reasoning", "real_time"],
+    },
+    "grok_3_mini": {
+        "model_id": "grok-3-mini",
+        "provider": "grok",
+        "client": grok_client,
+        "cost_per_1k_input": 0.0003,
+        "cost_per_1k_output": 0.0005,
+        "max_tokens": 1000,
+        "strengths": ["contrarian", "fast", "real_time", "cheap"],
+    },
+    "grok": {
+        "model_id": "grok-3-mini",
+        "provider": "grok",
+        "client": grok_client,
+        "cost_per_1k_input": 0.0003,
+        "cost_per_1k_output": 0.0005,
+        "max_tokens": 1000,
+        "strengths": ["contrarian", "fast", "real_time", "cheap"],
+    },
+    "deepseek_v3": {
+        "model_id": "deepseek-chat",
+        "provider": "deepseek",
+        "client": deepseek_client,
+        "cost_per_1k_input": 0.00027,
+        "cost_per_1k_output": 0.0011,
+        "max_tokens": 1000,
+        "strengths": ["analytical", "mathematical", "systematic", "cheap"],
     },
 }
 
@@ -79,25 +143,27 @@ TASK_ROUTES = {
 }
 
 PERSONA_ROUTES = {
-    "analyst": "claude_sonnet",
-    "philosopher": "claude_sonnet",
-    "pragmatist": "claude_sonnet",
-    "contrarian": "grok",
-    "scientist": "claude_sonnet",
-    "historian": "claude_sonnet",
-    "economist": "claude_sonnet",
+    "analyst": "deepseek_v3",
+    "philosopher": "gpt_4o",
+    "pragmatist": "gpt_4o_mini",
+    "contrarian": "grok_3_mini",
+    "scientist": "deepseek_v3",
+    "historian": "gpt_4o",
+    "economist": "deepseek_v3",
     "ethicist": "claude_sonnet",
-    "stoic": "claude_sonnet",
-    "futurist": "grok",
-    "strategist": "claude_sonnet",
-    "engineer": "claude_sonnet",
-    "optimist": "claude_sonnet",
+    "stoic": "deepseek_v3",
+    "futurist": "grok_3_mini",
+    "strategist": "grok_3",
+    "engineer": "deepseek_v3",
+    "optimist": "gpt_4o_mini",
     "empath": "claude_sonnet",
-    "firstprinciples": "claude_sonnet",
-    "devilsadvocate": "grok",
+    "firstprinciples": "deepseek_v3",
+    "devilsadvocate": "grok_3_mini",
 }
 
-GROK_PERSONAS = {"contrarian", "futurist", "devilsadvocate"}
+GROK_PERSONAS = {"contrarian", "futurist", "devilsadvocate", "strategist"}
+OPENAI_PERSONAS = {"philosopher", "historian", "pragmatist", "optimist"}
+DEEPSEEK_PERSONAS = {"analyst", "scientist", "economist", "stoic", "engineer", "firstprinciples"}
 
 
 def score_prompt_complexity(prompt: str, category: str | None = None, intent: str | None = None) -> str:
@@ -161,7 +227,21 @@ def get_route_for_persona(persona_id: str) -> dict:
     model_key = PERSONA_ROUTES.get(persona_id, "claude_sonnet")
     payload = _route_payload(model_key)
     payload["is_grok"] = persona_id in GROK_PERSONAS
+    payload["is_openai"] = persona_id in OPENAI_PERSONAS
+    payload["is_deepseek"] = persona_id in DEEPSEEK_PERSONAS
     return payload
+
+
+def get_fallback_model() -> dict:
+    return {
+        "model_key": "claude_sonnet",
+        "model_id": "claude-sonnet-4-6",
+        "client": claude_client,
+        "provider": "claude",
+        "max_tokens": 1000,
+        "cost_per_1k_input": 0.003,
+        "cost_per_1k_output": 0.015,
+    }
 
 
 def get_route_for_prompt(prompt: str, task: str, category: str | None = None) -> dict:
@@ -203,6 +283,26 @@ def get_all_routes_summary() -> dict:
         },
         "persona_routes": PERSONA_ROUTES,
         "grok_personas": list(GROK_PERSONAS),
+        "openai_personas": list(OPENAI_PERSONAS),
+        "deepseek_personas": list(DEEPSEEK_PERSONAS),
+        "providers": {
+            "claude": {
+                "personas": ["ethicist", "empath"],
+                "status": "active",
+            },
+            "openai": {
+                "personas": ["philosopher", "historian", "pragmatist", "optimist"],
+                "status": "active" if openai_client else "no_key",
+            },
+            "grok": {
+                "personas": ["contrarian", "futurist", "strategist", "devilsadvocate"],
+                "status": "active" if grok_client else "no_key",
+            },
+            "deepseek": {
+                "personas": ["analyst", "scientist", "economist", "stoic", "engineer", "firstprinciples"],
+                "status": "active" if deepseek_client else "no_key",
+            },
+        },
         "models_available": list(MODEL_REGISTRY.keys()),
         "models_disabled": [key for key, val in MODEL_REGISTRY.items() if not val.get("enabled", True)],
     }

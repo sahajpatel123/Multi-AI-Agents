@@ -1,12 +1,13 @@
-"""Provider-aware LLM caller for both Claude and Grok APIs."""
+"""Provider-aware LLM caller for Claude and OpenAI-compatible APIs."""
 
 from typing import Any
 
 
 def _get_claude_fallback() -> tuple[Any, str]:
-    from arena.core.model_router import MODEL_REGISTRY, claude_client
+    from arena.core.model_router import get_fallback_model
 
-    return claude_client, str(MODEL_REGISTRY["claude_sonnet"]["model_id"])
+    fallback = get_fallback_model()
+    return fallback["client"], str(fallback["model_id"])
 
 
 async def call_llm(
@@ -23,7 +24,7 @@ async def call_llm(
     
     Args:
         client: Either AsyncAnthropic or AsyncOpenAI client
-        provider: "claude" or "grok"
+        provider: "claude", "grok", "openai", or "deepseek"
         model_id: Model identifier
         system_prompt: System prompt text
         user_prompt: User prompt text
@@ -44,10 +45,10 @@ async def call_llm(
         )
         return response.content[0].text
     
-    elif provider == "grok":
+    elif provider in {"grok", "openai", "deepseek"}:
         if client is None:
             fallback_client, fallback_model_id = _get_claude_fallback()
-            print("[FALLBACK] Grok client not initialized, using Claude")
+            print(f"[FALLBACK] {provider} client not initialized, using Claude")
             return await call_llm(
                 client=fallback_client,
                 provider="claude",
@@ -57,7 +58,7 @@ async def call_llm(
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
-        # AsyncOpenAI compatible format
+        # OpenAI-compatible chat completions format
         response = await client.chat.completions.create(
             model=model_id,
             max_tokens=max_tokens,
@@ -70,7 +71,9 @@ async def call_llm(
         return response.choices[0].message.content
     
     else:
-        raise ValueError(f"Unknown provider: {provider}")
+        raise ValueError(
+            f"Unknown provider: {provider}. Must be claude, grok, openai, or deepseek."
+        )
 
 
 async def call_llm_streaming(
@@ -87,7 +90,7 @@ async def call_llm_streaming(
     
     Args:
         client: Either AsyncAnthropic or AsyncOpenAI client
-        provider: "claude" or "grok"
+        provider: "claude", "grok", "openai", or "deepseek"
         model_id: Model identifier
         system_prompt: System prompt text
         user_prompt: User prompt text
@@ -109,10 +112,10 @@ async def call_llm_streaming(
             async for text in stream.text_stream:
                 yield text
     
-    elif provider == "grok":
+    elif provider in {"grok", "openai", "deepseek"}:
         if client is None:
             fallback_client, fallback_model_id = _get_claude_fallback()
-            print("[FALLBACK] Grok client not initialized, using Claude streaming fallback")
+            print(f"[FALLBACK] {provider} client not initialized, using Claude streaming fallback")
             async for text in call_llm_streaming(
                 client=fallback_client,
                 provider="claude",
@@ -124,7 +127,7 @@ async def call_llm_streaming(
             ):
                 yield text
             return
-        # AsyncOpenAI compatible streaming format
+        # OpenAI-compatible streaming format
         stream = await client.chat.completions.create(
             model=model_id,
             max_tokens=max_tokens,
@@ -140,4 +143,6 @@ async def call_llm_streaming(
                 yield chunk.choices[0].delta.content
     
     else:
-        raise ValueError(f"Unknown provider: {provider}")
+        raise ValueError(
+            f"Unknown provider: {provider}. Must be claude, grok, openai, or deepseek."
+        )

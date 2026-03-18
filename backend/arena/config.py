@@ -32,6 +32,8 @@ class Settings(BaseSettings):
 
     # Grok
     grok_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    deepseek_api_key: Optional[str] = None
 
     # Server
     host: str = "0.0.0.0"
@@ -125,9 +127,24 @@ class Settings(BaseSettings):
             print("[SECURITY ERROR] ANTHROPIC_API_KEY is a placeholder value")
             sys.exit(1)
 
-        # --- GROK_API_KEY (optional, warn only) ---
-        if not self.grok_api_key:
-            print("[WARNING] GROK_API_KEY not set. Grok personas will fall back to Claude.")
+        self.validate_api_keys()
+
+    def validate_api_keys(self) -> None:
+        if not self.anthropic_api_key:
+            print("[SECURITY ERROR] ANTHROPIC_API_KEY not set")
+            sys.exit(1)
+
+        optional_keys = {
+            "GROK_API_KEY": self.grok_api_key,
+            "OPENAI_API_KEY": self.openai_api_key,
+            "DEEPSEEK_API_KEY": self.deepseek_api_key,
+        }
+
+        for key_name, key_value in optional_keys.items():
+            if not key_value:
+                print(
+                    f"[WARNING] {key_name} not set. Related personas will fall back to Claude."
+                )
 
     @property
     def is_production(self) -> bool:
