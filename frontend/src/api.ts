@@ -9,9 +9,10 @@ import {
   SessionData,
   User,
   SavedResponseItem,
+  TierStatus,
 } from './types';
 
-const API_BASE =
+export const API_BASE =
   `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api`;
 
 type RefreshResult = 'success' | 'unauthorized' | 'network_error' | 'failed';
@@ -158,6 +159,16 @@ export async function getMe(): Promise<User | null> {
     throw new ApiError(err?.detail || 'Failed to fetch user', res.status, err);
   }
   return parseJsonSafely<User>(res);
+}
+
+export async function getUserTier(): Promise<TierStatus | null> {
+  const res = await apiFetch(`${API_BASE}/user/tier`);
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(err?.detail || 'Failed to fetch tier', res.status, err);
+  }
+  return parseJsonSafely<TierStatus>(res);
 }
 
 export async function refreshToken(): Promise<User | null> {

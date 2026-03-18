@@ -121,7 +121,7 @@ export interface SessionData {
   last_active: string;
 }
 
-export type UserTier = 'guest' | 'registered' | 'pro';
+export type UserTier = 'GUEST' | 'FREE' | 'PLUS' | 'PRO';
 
 export interface User {
   id: number;
@@ -129,6 +129,25 @@ export interface User {
   tier: UserTier;
   created_at: string;
   prompt_count_today: number;
+}
+
+export interface TierFeatures {
+  debate: boolean;
+  discuss: boolean;
+  memory: boolean;
+  saved_responses: boolean;
+  agent_mode: boolean;
+  scoring_audit: boolean;
+}
+
+export interface TierStatus {
+  tier: UserTier;
+  daily_limit: number;
+  messages_used_today: number;
+  messages_remaining: number;
+  allowed_personas: string[];
+  features: TierFeatures;
+  upgrade_to: string | null;
 }
 
 export const AGENTS: Record<string, AgentConfig> = {

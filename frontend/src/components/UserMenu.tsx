@@ -9,7 +9,9 @@ interface UserMenuProps {
   onLogout: () => void;
 }
 
-const REGISTERED_LIMIT = 7;
+const FREE_LIMIT = 5;
+const PLUS_LIMIT = 15;
+const PRO_LIMIT = 35;
 
 export function UserMenu({
   user,
@@ -96,10 +98,11 @@ export function UserMenu({
 
   // Logged-in state
   const initial = user.email[0].toUpperCase();
-  const isPro = user.tier === 'pro';
-  const limit = isPro ? null : REGISTERED_LIMIT;
+  const isPro = user.tier === 'PRO';
+  const isPlus = user.tier === 'PLUS';
+  const limit = isPro ? PRO_LIMIT : isPlus ? PLUS_LIMIT : FREE_LIMIT;
   const used = user.prompt_count_today;
-  const pct = limit ? Math.min((used / limit) * 100, 100) : 0;
+  const pct = Math.min((used / limit) * 100, 100);
 
   return (
     <div style={{ position: 'relative', zIndex: 90 }} ref={menuRef}>
@@ -153,7 +156,7 @@ export function UserMenu({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <p style={{ fontSize: '11px', color: '#6B6460', textTransform: 'capitalize' }}>{user.tier}</p>
+                  <p style={{ fontSize: '11px', color: '#6B6460', textTransform: 'capitalize' }}>{user.tier.toLowerCase()}</p>
                   {isPro && (
                     <span style={{ fontSize: '11px', fontWeight: 500, color: '#C4956A' }}>Pro</span>
                   )}
@@ -164,40 +167,29 @@ export function UserMenu({
 
           {/* Usage */}
           <div style={{ padding: '0.75rem 1rem', borderBottom: '0.5px solid #E0D8D0' }}>
-            {isPro ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#6B6460' }}>
-                  <Zap style={{ width: '12px', height: '12px', color: '#C4956A' }} />
-                  <span>{used} / 45 messages this window</span>
-                </div>
-                <p style={{ fontSize: '11px', color: '#6B6460' }}>
-                  Rolling 5 hour window
-                </p>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '11px', color: '#6B6460' }}>Today</span>
+                <span style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714' }}>
+                  {used} / {limit} messages used
+                </span>
               </div>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '11px', color: '#6B6460' }}>Today</span>
-                  <span style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714' }}>
-                    {used} / {limit} messages used
-                  </span>
-                </div>
-                <div style={{ height: '2px', background: '#E0D8D0', borderRadius: '999px', overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      height: '100%',
-                      background: '#C4956A',
-                      borderRadius: '999px',
-                      width: `${pct}%`,
-                      transition: 'width 300ms ease',
-                    }}
-                  />
-                </div>
-                <p style={{ fontSize: '11px', color: '#6B6460', marginTop: '6px' }}>
-                  Resets at midnight UTC
-                </p>
-              </>
-            )}
+              <div style={{ height: '2px', background: '#E0D8D0', borderRadius: '999px', overflow: 'hidden' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    background: isPro ? '#C4956A' : '#C4956A',
+                    borderRadius: '999px',
+                    width: `${pct}%`,
+                    transition: 'width 300ms ease',
+                  }}
+                />
+              </div>
+              <p style={{ fontSize: '11px', color: '#6B6460', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Zap style={{ width: '12px', height: '12px', color: '#C4956A' }} />
+                Resets daily
+              </p>
+            </>
           </div>
 
           {/* Actions */}

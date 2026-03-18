@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from arena.core.auth import get_current_user_required
+from arena.core.tier_config import normalize_tier, validate_persona_access
 from arena.database import get_db
 from arena.db_models import PersonaLibrary, UserPanel
 from arena.models.schemas import UserResponse
@@ -69,6 +70,18 @@ async def save_panel(
     invalid = [value for value in values if value not in valid_persona_ids]
     if invalid:
         raise HTTPException(status_code=422, detail={"error": "validation_error", "message": f"Invalid persona_id(s): {', '.join(invalid)}"})
+
+    is_allowed, blocked = validate_persona_access(normalize_tier(user.tier), values)
+    if not is_allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "persona_not_allowed",
+                "message": "Some personas in your panel require a Plus or Pro subscription.",
+                "blocked_personas": blocked,
+                "upgrade_required": "plus",
+            },
+        )
 
     panel = _get_or_create_panel(user.id, db)
     panel.slot_1 = body.slot_1

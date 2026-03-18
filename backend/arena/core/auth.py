@@ -11,6 +11,7 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
+from arena.core.tier_config import normalize_tier
 from arena.database import get_db
 from arena.db_models import User, UserTier
 from arena.models.schemas import UserResponse
@@ -73,7 +74,7 @@ def create_access_token(user_id: int, tier: str) -> str:
     expire = _now_utc() + timedelta(minutes=settings.access_token_expire_minutes)
     payload = {
         "sub": str(user_id),
-        "tier": tier,
+        "tier": normalize_tier(tier).value,
         "type": ACCESS_TOKEN_TYPE,
         "exp": expire,
         "iat": _now_utc(),
@@ -119,7 +120,7 @@ def create_user(db: Session, email: str, password: str) -> User:
     user = User(
         email=email.lower().strip(),
         password_hash=hash_password(password),
-        tier=UserTier.REGISTERED,
+        tier=UserTier.FREE,
     )
     db.add(user)
     db.commit()

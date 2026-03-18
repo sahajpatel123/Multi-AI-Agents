@@ -14,6 +14,7 @@ from arena.core.auth import get_current_user_required
 from arena.core.memory import get_memory_manager
 from arena.core.preferences import infer_preferences_from_session
 from arena.core.stance_archive import save_agent_stance
+from arena.core.tier_config import has_feature, normalize_tier
 from arena.database import get_db
 from arena.db_models import SessionSummary
 from arena.models.schemas import UserResponse
@@ -34,6 +35,9 @@ async def save_memory(
     db: Session = Depends(get_db),
     user: UserResponse = Depends(get_current_user_required),
 ) -> dict:
+    if not has_feature(normalize_tier(user.tier), "memory"):
+        return {"status": "skipped", "reason": "Memory requires Plus tier"}
+
     memory = get_memory_manager()
     session_state = memory.get_session_state(body.session_id)
     if not session_state or not session_state.get("exchanges"):

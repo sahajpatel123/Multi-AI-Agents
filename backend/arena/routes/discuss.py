@@ -17,6 +17,7 @@ from arena.core.cost_tracker import (
     check_and_increment_guest,
     check_and_increment_user,
 )
+from arena.core.tier_config import has_feature, normalize_tier
 from arena.database import get_db
 from arena.models.schemas import (
     DiscussRequest,
@@ -32,6 +33,20 @@ from arena.core.model_router import get_route_for_persona
 
 
 router = APIRouter(prefix="/api", tags=["discuss"])
+
+
+def _enforce_discuss_access(user: Optional[UserResponse]) -> str:
+    user_tier = normalize_tier(user.tier if user else "GUEST")
+    if not has_feature(user_tier, "discuss"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Focused chat requires a Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+    return user_tier.value
 
 
 # ──────────────────────────────────────────────────────────────
@@ -113,10 +128,12 @@ async def discuss_with_agent(
     Send a message to a single agent in a 1-on-1 conversation.
     The agent stays in character with full memory of the thread.
     """
+    user_tier = _enforce_discuss_access(user)
+
     # Check rate limit BEFORE any LLM calls
     try:
         if user:
-            check_and_increment_user(db, user.id, user.tier)
+            check_and_increment_user(db, user.id, user_tier)
         else:
             ip = _get_client_ip(http_request)
             check_and_increment_guest(db, ip)
@@ -216,10 +233,12 @@ async def stream_discuss(
     - "result" → final DiscussResponse with updated history
     - "error"  → something went wrong
     """
+    user_tier = _enforce_discuss_access(user)
+
     # Check rate limit BEFORE any LLM calls
     try:
         if user:
-            check_and_increment_user(db, user.id, user.tier)
+            check_and_increment_user(db, user.id, user_tier)
         else:
             ip = _get_client_ip(http_request)
             check_and_increment_guest(db, ip)
@@ -274,7 +293,7 @@ async def stream_discuss(
             model_type = get_model_for_persona(persona_id)
             route = get_route_for_persona(persona_id)
             
-            if model_type == 'grok':
+            if model_type != "claude":
                 # Grok doesn't support streaming - get full response
                 conversation_text = "\n\n".join(
                     f"{msg.role.upper()}: {msg.content}" for msg in request.conversation_history

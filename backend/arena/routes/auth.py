@@ -20,6 +20,7 @@ from arena.core.auth import (
     get_user_by_email,
     get_user_by_id,
 )
+from arena.core.tier_config import TIER_FEATURES, get_daily_limit, get_tier_personas, normalize_tier, upgrade_target
 from arena.core.login_limiter import login_limiter, registration_limiter
 from arena.core.token_blacklist import token_blacklist
 from arena.database import get_db
@@ -32,6 +33,7 @@ from arena.models.schemas import (
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+user_router = APIRouter(prefix="/api/user", tags=["auth"])
 
 _COMMON_PASSWORDS = {
     "password", "12345678", "password1",
@@ -44,7 +46,8 @@ _COMMON_PASSWORDS = {
 # ─────────────────────────────────────────────────
 
 def _tier_value(user: User) -> str:
-    return user.tier.value if hasattr(user.tier, "value") else str(user.tier)
+    raw = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
+    return normalize_tier(raw).value
 
 
 def _is_production() -> bool:
@@ -238,3 +241,30 @@ async def refresh(
 @router.get("/me", response_model=UserResponse)
 async def me(user: User = Depends(get_current_user_required)) -> UserResponse:
     return _user_to_response(user)
+
+
+@user_router.get("/tier")
+async def get_user_tier_summary(
+    user: User = Depends(get_current_user_required),
+) -> dict:
+    normalized_tier = normalize_tier(user.tier.value if hasattr(user.tier, "value") else str(user.tier))
+    daily_limit = get_daily_limit(normalized_tier)
+    messages_used_today = min(int(user.prompt_count_today or 0), daily_limit)
+    features = TIER_FEATURES[normalized_tier]
+
+    return {
+        "tier": normalized_tier.value,
+        "daily_limit": daily_limit,
+        "messages_used_today": messages_used_today,
+        "messages_remaining": max(daily_limit - messages_used_today, 0),
+        "allowed_personas": sorted(get_tier_personas(normalized_tier)),
+        "features": {
+            "debate": features["debate"],
+            "discuss": features["discuss"],
+            "memory": features["memory"],
+            "saved_responses": features["saved_responses"],
+            "agent_mode": features["agent_mode"],
+            "scoring_audit": features["scoring_audit"],
+        },
+        "upgrade_to": upgrade_target(normalized_tier),
+    }

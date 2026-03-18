@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
 import { AgentDot } from './AgentDot';
 import { usePanel } from '../context/PanelContext';
+import { useTier } from '../context/TierContext';
 import track from '../utils/track';
 
 interface SidebarTurn {
@@ -62,6 +63,7 @@ export function Sidebar({
 }: SidebarProps) {
   const navigate = useNavigate();
   const { isDefaultPanel, resetPanel } = usePanel();
+  const { messagesRemaining, dailyLimit, tier, isFree } = useTier();
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
@@ -82,6 +84,10 @@ export function Sidebar({
     () => reversedTurns.filter((turn) => activeFilter === 'all' || turn.prompt_category === activeFilter),
     [activeFilter, reversedTurns],
   );
+  const usedPercent = dailyLimit > 0
+    ? Math.min(((dailyLimit - messagesRemaining) / dailyLimit) * 100, 100)
+    : 0;
+  const usageColor = messagesRemaining <= 2 ? '#E57373' : '#C4956A';
 
   useEffect(() => {
     if (!openMenuTurnId && !confirmDeleteTurnId) return;
@@ -482,6 +488,58 @@ export function Sidebar({
               </div>
             )}
           </div>
+
+          {tier !== 'GUEST' && (
+            <div
+              style={{
+                padding: '12px',
+                borderTop: '0.5px solid #E0D8D0',
+                marginTop: 'auto',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', color: '#6B6460' }}>Messages today</span>
+                <span style={{ fontSize: '11px', color: '#6B6460' }}>{messagesRemaining} left</span>
+              </div>
+              <div style={{ height: '3px', background: '#E0D8D0', borderRadius: '999px', margin: '6px 0' }}>
+                <div
+                  style={{
+                    width: `${usedPercent}%`,
+                    height: '100%',
+                    background: usageColor,
+                    borderRadius: '999px',
+                    transition: 'width 300ms ease',
+                  }}
+                />
+              </div>
+              {messagesRemaining === 0 && (
+                <>
+                  <div style={{ fontSize: '11px', color: '#6B6460', marginBottom: '6px' }}>
+                    You've used all messages today
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/pricing')}
+                    style={{
+                      fontSize: '11px',
+                      color: '#C4956A',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    Upgrade for more →
+                  </button>
+                </>
+              )}
+              {isFree && (
+                <div style={{ fontSize: '10px', color: '#6B6460', letterSpacing: '.06em', marginTop: '4px' }}>
+                  Free plan · resets daily
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
       </div>

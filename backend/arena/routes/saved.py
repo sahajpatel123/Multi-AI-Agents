@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from arena.core.auth import get_current_user_required
+from arena.core.tier_config import has_feature, normalize_tier
 from arena.database import get_db
 from arena.db_models import SavedResponse
 from arena.models.schemas import UserResponse
@@ -30,6 +31,9 @@ async def get_saved(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> list[dict]:
+    if not has_feature(normalize_tier(user.tier), "saved_responses"):
+        return []
+
     rows = (
         db.query(SavedResponse)
         .filter(SavedResponse.user_id == user.id)
@@ -61,6 +65,16 @@ async def save_response(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> dict:
+    if not has_feature(normalize_tier(user.tier), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Saved responses require a Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+
     existing = (
         db.query(SavedResponse)
         .filter(
@@ -98,6 +112,16 @@ async def delete_saved(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> dict:
+    if not has_feature(normalize_tier(user.tier), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Saved responses require a Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+
     row = db.query(SavedResponse).filter(SavedResponse.id == saved_id).first()
     if row is None:
         raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Saved response not found"})

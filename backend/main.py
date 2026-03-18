@@ -14,7 +14,7 @@ from arena.config import get_settings
 from arena.core.seed_personas import seed_persona_library
 from arena.core.observability import get_health_data, setup_logging
 from arena.database import SessionLocal, get_db, init_db
-from arena.routes.auth import router as auth_router
+from arena.routes.auth import router as auth_router, user_router
 from arena.routes.analytics import router as analytics_router
 from arena.routes.personas import router as personas_router
 from arena.routes.panels import router as panels_router
@@ -136,6 +136,7 @@ def create_app() -> FastAPI:
 
     # ── Routers ───────────────────────────────────────────────
     app.include_router(auth_router)
+    app.include_router(user_router)
     app.include_router(prompt_router)
     app.include_router(debate_router)
     app.include_router(discuss_router)

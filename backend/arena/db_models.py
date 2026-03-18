@@ -23,9 +23,11 @@ from arena.database import Base
 
 
 class UserTier(str, PyEnum):
-    GUEST = "guest"
+    GUEST = "GUEST"
+    FREE = "FREE"
+    PLUS = "PLUS"
+    PRO = "PRO"
     REGISTERED = "registered"
-    PRO = "pro"
 
 
 def _now() -> datetime:
@@ -38,7 +40,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    tier = Column(Enum(UserTier), default=UserTier.REGISTERED, nullable=False)
+    tier = Column(Enum(UserTier), default=UserTier.FREE, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
     last_active = Column(DateTime, default=_now, onupdate=_now, nullable=False)
     prompt_count_today = Column(Integer, default=0, nullable=False)

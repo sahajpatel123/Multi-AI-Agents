@@ -142,7 +142,7 @@ export function AboutPage() {
               <div style={{ fontSize: '32px', fontWeight: 500, color: '#C4956A', marginBottom: '.8rem' }}>02</div>
               <h3 style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714', marginBottom: '.5rem' }}>The approach</h3>
               <p style={{ fontSize: '13px', color: '#6B6460', lineHeight: 1.65 }}>
-                Four AI personalities with genuinely different temperatures, reasoning mandates, and worldviews. They don't coordinate — they compete. A fifth AI scores and ranks them. The best answer wins on merit.
+                Arena is powered by a carefully selected combination of leading AI models, each matched to the reasoning style of its persona. The minds do not coordinate — they compete. A fifth system scores and ranks them. The best answer wins on merit.
               </p>
             </div>
 

@@ -7,11 +7,13 @@ import { DiscussMode } from './components/DiscussMode';
 import { LeaderboardView } from './components/LeaderboardView';
 import { Sidebar } from './components/Sidebar';
 import { AuthModal } from './components/AuthModal';
+import { UpgradeModal } from './components/UpgradeModal';
 import { UserMenu } from './components/UserMenu';
 import { AgentDot } from './components/AgentDot';
 import { streamPrompt, streamDiscuss, getSession, parseStreamedAgentPreview, saveMemory, getSavedResponses, saveResponse, deleteSavedResponse } from './api';
 import { useAuth } from './hooks/useAuth';
 import { usePanel } from './context/PanelContext';
+import { useTier } from './context/TierContext';
 import track from './utils/track';
 import {
   AGENTS,
@@ -47,6 +49,7 @@ function App() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, login, register, logout, refreshUser } = useAuth();
   const { panel } = usePanel();
+  const { canUseFeature, refreshTier } = useTier();
   const personaIds = panel.map((persona) => persona.id);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'signup'>('login');
@@ -60,6 +63,8 @@ function App() {
   const [focusedChatError, setFocusedChatError] = useState<string | null>(null);
   const [focusedStreamingText, setFocusedStreamingText] = useState('');
   const [isFocusedChatStreaming, setIsFocusedChatStreaming] = useState(false);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeModalSubtitle, setUpgradeModalSubtitle] = useState('Debate mode lets you challenge any mind and watch the others react in real time.');
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [response, setResponse] = useState<PromptResponse | null>(null);
@@ -80,6 +85,11 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('arena');
   const [challengedAgent, setChallengedAgent] = useState<ScoredAgent | null>(null);
   const [discussAgent, setDiscussAgent] = useState<ScoredAgent | null>(null);
+
+  const showPlusUpgrade = useCallback((subtitle: string) => {
+    setUpgradeModalSubtitle(subtitle);
+    setUpgradeModalOpen(true);
+  }, []);
 
   // Session management
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
@@ -307,6 +317,10 @@ function App() {
   }, [activeTurnId, getResponseKey]);
 
   const handleSaveResponse = useCallback((scoredAgent: ScoredAgent) => {
+    if (!canUseFeature('saved_responses')) {
+      showPlusUpgrade('Save your best responses, unlock all 16 minds, and build memory across sessions with Plus.');
+      return;
+    }
     if (!activeTurnId || !response) return;
 
     const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
@@ -364,7 +378,7 @@ function App() {
 
       return [...prev, nextItem];
     });
-  }, [activeTurnId, getPersonaForAgentId, getResponseKey, response]);
+  }, [activeTurnId, canUseFeature, getPersonaForAgentId, getResponseKey, response, showPlusUpgrade]);
 
   const handleSavedItemClick = useCallback((item: SavedResponseItem) => {
     setViewMode('arena');
@@ -551,6 +565,10 @@ function App() {
             }
           });
           setActiveTurnId(newTurn.turn_id);
+          if (user) {
+            void refreshUser();
+          }
+          void refreshTier();
         },
         onError: (data) => {
           if (flushTimer.current) clearInterval(flushTimer.current);
@@ -567,6 +585,10 @@ function App() {
   };
 
   const handleChallenge = (scored: ScoredAgent) => {
+    if (!canUseFeature('debate')) {
+      showPlusUpgrade('Debate mode lets you challenge any mind and watch the others react in real time.');
+      return;
+    }
     const persona = getPersonaForAgentId(scored.response.agent_id);
     void track('debate_started', persona?.id, scored.response.agent_id);
     setChallengedAgent(scored);
@@ -574,6 +596,10 @@ function App() {
   };
 
   const handleDiscuss = (scored: ScoredAgent) => {
+    if (!canUseFeature('discuss')) {
+      showPlusUpgrade('Focused chat gives you a private thread with one mind that remembers the conversation.');
+      return;
+    }
     const persona = getPersonaForAgentId(scored.response.agent_id);
     void track('discuss_started', persona?.id, scored.response.agent_id);
     setDiscussAgent(scored);
@@ -592,6 +618,10 @@ function App() {
   };
 
   const openFocusedAgent = (agentId: string, cardRect?: DOMRect) => {
+    if (!canUseFeature('discuss')) {
+      showPlusUpgrade('Focused chat gives you a private thread with one mind that remembers the conversation.');
+      return;
+    }
     if (phase === 'pipeline') return;
     if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
     const matchedResponse = response?.all_responses.find(
@@ -758,7 +788,8 @@ function App() {
               [focusedAgentId]: data.conversation_history,
             }));
             setIsFocusedChatStreaming(false);
-            if (user) refreshUser();
+            if (user) void refreshUser();
+            void refreshTier();
           },
           onError: (data) => {
             if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
@@ -1437,7 +1468,10 @@ function App() {
               challengedAgent={challengedAgent}
               sessionId={response.session_id}
               onExit={exitToArena}
-              onSuccess={refreshUser}
+              onSuccess={() => {
+                void refreshUser();
+                void refreshTier();
+              }}
             />
           )}
 
@@ -1448,7 +1482,10 @@ function App() {
               allResponses={response.all_responses}
               sessionId={response.session_id}
               onExit={exitToArena}
-              onSuccess={refreshUser}
+              onSuccess={() => {
+                void refreshUser();
+                void refreshTier();
+              }}
               onSwitchAgent={(agentId) => {
                 const found = response.all_responses.find(
                   (s) => s.response.agent_id === agentId
@@ -1459,6 +1496,12 @@ function App() {
           )}
         </div>
       )}
+
+      <UpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        subtitle={upgradeModalSubtitle}
+      />
 
       {saveSyncMessage && (
         <div

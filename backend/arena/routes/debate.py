@@ -18,6 +18,7 @@ from arena.core.cost_tracker import (
     check_and_increment_guest,
     check_and_increment_user,
 )
+from arena.core.tier_config import has_feature, normalize_tier
 from arena.database import get_db
 from arena.models.schemas import (
     DebateRequest,
@@ -40,6 +41,20 @@ from arena.core.model_router import get_route_for_persona
 
 
 router = APIRouter(prefix="/api", tags=["debate"])
+
+
+def _enforce_debate_access(user: Optional[UserResponse]) -> str:
+    user_tier = normalize_tier(user.tier if user else "GUEST")
+    if not has_feature(user_tier, "debate"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Debate mode requires a Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+    return user_tier.value
 
 
 # ──────────────────────────────────────────────────────────────
@@ -179,24 +194,27 @@ async def run_debate_round(
     Run one round of debate. The 3 non-challenged agents react
     to the challenged agent's verdict in parallel.
     """
+    user_tier = _enforce_debate_access(user)
+
     # Check rate limit BEFORE any LLM calls
-    try:
-        if user:
-            check_and_increment_user(db, user.id, user.tier)
-        else:
-            ip = _get_client_ip(http_request)
-            check_and_increment_guest(db, ip)
-    except RateLimitExceeded as e:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": "rate_limit_exceeded",
-                "message": e.message,
-                "tier": e.tier,
-                "prompts_used": e.used,
-                "daily_limit": e.limit,
-            },
-        )
+    if not has_feature(user_tier, "unlimited_debates"):
+        try:
+            if user:
+                check_and_increment_user(db, user.id, user_tier)
+            else:
+                ip = _get_client_ip(http_request)
+                check_and_increment_guest(db, ip)
+        except RateLimitExceeded as e:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "rate_limit_exceeded",
+                    "message": e.message,
+                    "tier": e.tier,
+                    "prompts_used": e.used,
+                    "daily_limit": e.limit,
+                },
+            )
     
     try:
         active_agents = get_all_agents(request.persona_ids)
@@ -277,24 +295,27 @@ async def stream_debate_round(
     - "result"         → final DebateRoundResponse
     - "error"          → something went wrong
     """
+    user_tier = _enforce_debate_access(user)
+
     # Check rate limit BEFORE any LLM calls
-    try:
-        if user:
-            check_and_increment_user(db, user.id, user.tier)
-        else:
-            ip = _get_client_ip(http_request)
-            check_and_increment_guest(db, ip)
-    except RateLimitExceeded as e:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": "rate_limit_exceeded",
-                "message": e.message,
-                "tier": e.tier,
-                "prompts_used": e.used,
-                "daily_limit": e.limit,
-            },
-        )
+    if not has_feature(user_tier, "unlimited_debates"):
+        try:
+            if user:
+                check_and_increment_user(db, user.id, user_tier)
+            else:
+                ip = _get_client_ip(http_request)
+                check_and_increment_guest(db, ip)
+        except RateLimitExceeded as e:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "rate_limit_exceeded",
+                    "message": e.message,
+                    "tier": e.tier,
+                    "prompts_used": e.used,
+                    "daily_limit": e.limit,
+                },
+            )
     
     try:
         active_agents = get_all_agents(request.persona_ids)
@@ -333,7 +354,7 @@ async def stream_debate_round(
                     model_type = get_model_for_persona(persona_id)
                     route = get_route_for_persona(persona_id)
                     
-                    if model_type == 'grok':
+                    if model_type != "claude":
                         # Grok doesn't support streaming - get full response
                         content = await call_persona(
                             persona_id=persona_id,

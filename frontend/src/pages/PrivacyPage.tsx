@@ -20,7 +20,11 @@ const SECTIONS = [
   },
   {
     title: 'Third Parties',
-    body: "Arena uses the Anthropic Claude API to generate responses. Your prompts are sent to Anthropic's API for processing. Please review Anthropic's privacy policy for details on how they handle data.",
+    body: 'Arena relies on trusted infrastructure and service providers to operate securely, including hosting, analytics, and authentication support. We only share the minimum information required for those services to function.',
+  },
+  {
+    title: 'AI Model Providers',
+    body: "Arena's minds are powered by a selection of leading AI models, each chosen to match the reasoning style of that specific persona. The AI providers we work with include Anthropic (Claude), OpenAI (GPT), xAI (Grok), and DeepSeek. Your prompts may be processed by any of these providers depending on which minds are in your active panel.\n\nEach provider has their own privacy policy and data handling practices. We encourage you to review the privacy policies of these providers if you have specific concerns about how your data is processed:\n\n· Anthropic: anthropic.com/privacy\n· OpenAI: openai.com/privacy\n· xAI: x.ai/privacy\n· DeepSeek: deepseek.com/privacy\n\nWe do not share your account information, email address, or any personally identifiable information with these providers. Only the text of your prompts is transmitted for the purpose of generating responses.",
   },
   {
     title: 'Data Deletion',
@@ -67,7 +71,17 @@ export function PrivacyPage() {
                 {section.title}
               </h2>
               <p style={{ fontSize: '14px', color: '#6B6460', lineHeight: 1.8 }}>
-                {section.body}
+                {section.body.split('\n').map((paragraph, paragraphIndex, paragraphs) => (
+                  <span key={`${section.title}-${paragraphIndex}`}>
+                    {paragraph}
+                    {paragraphIndex < paragraphs.length - 1 ? (
+                      <>
+                        <br />
+                        <br />
+                      </>
+                    ) : null}
+                  </span>
+                ))}
               </p>
             </div>
           ))}

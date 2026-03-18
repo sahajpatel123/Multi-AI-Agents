@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, X } from 'lucide-react';
+import { Lock, Sparkles, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { AgentDot } from '../components/AgentDot';
 import { usePanel } from '../context/PanelContext';
+import { useTier } from '../context/TierContext';
 import { type Persona } from '../data/personas';
 import track from '../utils/track';
 
@@ -25,6 +26,7 @@ const eyebrowStyle = {
 export function PersonasPage() {
   const navigate = useNavigate();
   const { panel, personas, swapAgent, resetPanel, savePanel, isDefaultPanel } = usePanel();
+  const { canUsePersona } = useTier();
   const [pageVisible, setPageVisible] = useState(false);
   const [activeSlot, setActiveSlot] = useState<SlotIndex | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -113,6 +115,10 @@ export function PersonasPage() {
   };
 
   const handleSwap = (slotIndex: SlotIndex, persona: Persona) => {
+    if (!canUsePersona(persona.id)) {
+      navigate('/pricing');
+      return;
+    }
     const replacedPersona = panel[slotIndex];
     void track('persona_swapped', persona.id, undefined, {
       slot: slotIndex + 1,
@@ -307,6 +313,7 @@ export function PersonasPage() {
             {personas.map((persona, index) => {
               const inSlot = unlockedSlotMap[persona.id];
               const isVisible = revealedLibraryIds[persona.id] || index < 4;
+              const isLocked = !canUsePersona(persona.id);
 
               return (
                 <div
@@ -317,7 +324,7 @@ export function PersonasPage() {
                   data-persona-id={persona.id}
                   style={{
                     background: persona.bgTint,
-                    opacity: isVisible ? 1 : 0,
+                    opacity: isVisible ? (isLocked ? 0.65 : 1) : 0,
                     border: '0.5px solid #E0D8D0',
                     borderRadius: '14px',
                     padding: '1.2rem',
@@ -326,18 +333,41 @@ export function PersonasPage() {
                     transform: isVisible ? 'translateY(0)' : 'translateY(16px)',
                     transition: `opacity 300ms ease ${index * 30}ms, transform 300ms ease ${index * 30}ms, box-shadow 200ms ease, background 150ms ease`,
                     boxShadow: 'none',
+                    cursor: isLocked ? 'pointer' : 'default',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-3px)';
+                    e.currentTarget.style.transform = isLocked ? 'translateY(0)' : 'translateY(-3px)';
                     e.currentTarget.style.boxShadow = '0 8px 20px rgba(26,23,20,0.07)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = 'translateY(0)';
                     e.currentTarget.style.boxShadow = 'none';
-                    e.currentTarget.style.opacity = '1';
+                    e.currentTarget.style.opacity = isLocked ? '0.65' : '1';
+                  }}
+                  onClick={() => {
+                    if (isLocked) navigate('/pricing');
                   }}
                 >
                   <div style={{ height: '2px', background: persona.color, borderRadius: '999px', marginBottom: '1rem' }} />
+                  {isLocked && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '12px',
+                        right: '12px',
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '50%',
+                        background: 'rgba(26,23,20,0.08)',
+                        color: '#1A1714',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Lock style={{ width: '14px', height: '14px' }} />
+                    </div>
+                  )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span
                       style={{
@@ -356,11 +386,33 @@ export function PersonasPage() {
                   <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.6, marginTop: '.7rem' }}>
                     {persona.description}
                   </p>
+                  {isLocked && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: '12px',
+                        bottom: '12px',
+                        background: '#1A1714',
+                        color: '#FAF7F4',
+                        fontSize: '11px',
+                        padding: '5px 12px',
+                        borderRadius: '999px',
+                      }}
+                    >
+                      Unlock with Plus — $12/month
+                    </div>
+                  )}
 
                   {inSlot ? (
                     <div style={{ position: 'absolute', left: '1.2rem', bottom: '1rem' }}>
                       <span style={{ background: '#F0EBE3', color: '#6B6460', fontSize: '10px', padding: '3px 8px', borderRadius: '999px' }}>
                         In slot {inSlot}
+                      </span>
+                    </div>
+                  ) : isLocked ? (
+                    <div style={{ position: 'absolute', left: '1.2rem', bottom: '1rem' }}>
+                      <span style={{ background: '#C4956A', color: '#FAF7F4', fontSize: '10px', padding: '3px 8px', borderRadius: '999px' }}>
+                        Plus
                       </span>
                     </div>
                   ) : null}
@@ -437,37 +489,61 @@ export function PersonasPage() {
 
             <p style={{ ...eyebrowStyle, marginBottom: '.8rem' }}>Available to swap</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
-              {modalOptions.map((persona) => (
-                <button
-                  key={persona.id}
-                  type="button"
-                  onClick={() => handleSwap(activeSlot, persona)}
-                  style={{
-                    background: persona.bgTint,
-                    border: '0.5px solid #E0D8D0',
-                    borderRadius: '12px',
-                    padding: '1rem',
-                    cursor: 'pointer',
-                    transition: 'all 150ms ease',
-                    textAlign: 'left',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = persona.color;
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#E0D8D0';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: persona.color, flexShrink: 0 }} />
-                    <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>{persona.name}</span>
-                  </div>
-                  <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.5, marginTop: '.4rem' }}>{persona.description}</p>
-                  <p style={{ fontSize: '11px', color: '#6B6460', fontStyle: 'italic', marginTop: '.4rem' }}>{persona.quote}</p>
-                </button>
-              ))}
+              {modalOptions.map((persona) => {
+                const isLocked = !canUsePersona(persona.id);
+
+                return (
+                  <button
+                    key={persona.id}
+                    type="button"
+                    onClick={() => {
+                      if (isLocked) {
+                        navigate('/pricing');
+                        return;
+                      }
+                      handleSwap(activeSlot, persona);
+                    }}
+                    style={{
+                      background: persona.bgTint,
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: '12px',
+                      padding: '1rem',
+                      cursor: 'pointer',
+                      transition: 'all 150ms ease',
+                      textAlign: 'left',
+                      opacity: isLocked ? 0.65 : 1,
+                      position: 'relative',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isLocked) {
+                        e.currentTarget.style.borderColor = persona.color;
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#E0D8D0';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    {isLocked && (
+                      <div style={{ position: 'absolute', top: '10px', right: '10px', color: '#1A1714' }}>
+                        <Lock style={{ width: '13px', height: '13px' }} />
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: persona.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>{persona.name}</span>
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.5, marginTop: '.4rem' }}>{persona.description}</p>
+                    <p style={{ fontSize: '11px', color: '#6B6460', fontStyle: 'italic', marginTop: '.4rem' }}>{persona.quote}</p>
+                    {isLocked && (
+                      <div style={{ marginTop: '.6rem', fontSize: '11px', color: '#1A1714' }}>
+                        Unlock with Plus — $12/month
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <div style={{ height: '0.5px', background: '#E0D8D0', margin: '1rem 0' }} />

@@ -35,6 +35,7 @@ from arena.core.orchestrator import Orchestrator
 from arena.core.persona_integrity import check_integrity
 from arena.core.response_shaper import assemble_payload
 from arena.core.scorer import Scorer
+from arena.core.tier_config import UserTier, get_tier_personas, has_feature, normalize_tier, validate_persona_access
 from arena.database import get_db
 from arena.models.schemas import (
     ContradictionFlag,
@@ -88,6 +89,30 @@ def _check_rate_limit(
         )
 
 
+def _get_request_tier(user: Optional[UserResponse]) -> UserTier:
+    if not user:
+        return UserTier.GUEST
+    return normalize_tier(user.tier)
+
+
+def _enforce_persona_access(user_tier: UserTier, persona_ids: list[str] | None) -> None:
+    if not persona_ids:
+        return
+
+    is_allowed, blocked = validate_persona_access(user_tier, persona_ids)
+    if not is_allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "persona_not_allowed",
+                "message": "Some personas in your panel require a Plus or Pro subscription.",
+                "blocked_personas": blocked,
+                "upgrade_required": "plus",
+                "allowed_personas": sorted(get_tier_personas(user_tier)),
+            },
+        )
+
+
 @router.post(
     "/prompt",
     response_model=PromptResponse,
@@ -114,6 +139,9 @@ async def submit_prompt(
     user_label = str(user.id) if user else "guest"
 
     _check_rate_limit(request, user, db, request_id)
+    user_tier = _get_request_tier(user)
+    _enforce_persona_access(user_tier, body.persona_ids)
+    memory_enabled = has_feature(user_tier, "memory")
 
     cost = RequestCostAccumulator(request_id=request_id)
 
@@ -139,8 +167,8 @@ async def submit_prompt(
             pipeline_result.enriched_prompt,
             agents=active_agents,
             persona_ids=body.persona_ids,
-            user_id=user.id if user else None,
-            db=db if user else None,
+            user_id=user.id if user and memory_enabled else None,
+            db=db if user and memory_enabled else None,
             session_id=session_id,
             tracker=tracker,
         )
@@ -283,6 +311,9 @@ async def stream_prompt(
     user_label = str(user.id) if user else "guest"
 
     _check_rate_limit(request, user, db, request_id)
+    user_tier = _get_request_tier(user)
+    _enforce_persona_access(user_tier, body.persona_ids)
+    memory_enabled = has_feature(user_tier, "memory")
 
     cost = RequestCostAccumulator(request_id=request_id)
 
@@ -314,8 +345,8 @@ async def stream_prompt(
                 pipeline_result.enriched_prompt,
                 agents=active_agents,
                 persona_ids=body.persona_ids,
-                user_id=user.id if user else None,
-                db=db if user else None,
+                user_id=user.id if user and memory_enabled else None,
+                db=db if user and memory_enabled else None,
                 session_id=session_id,
                 tracker=tracker,
             )

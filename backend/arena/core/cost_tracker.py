@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.model_router import estimate_call_cost
-from arena.core.rate_limiter_pro import check_pro_window_limit
-from arena.db_models import GuestRateLimit, User, UsageRecord, UserTier
+from arena.core.tier_config import get_daily_limit, normalize_tier, upgrade_target
+from arena.db_models import GuestRateLimit, User, UsageRecord
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +88,7 @@ def check_and_increment_guest(db: Session, ip: str) -> None:
     - Toxicity rejections do NOT count toward the limit
     - Only successful responses count
     """
-    settings = get_settings()
-    limit = settings.guest_daily_limit
+    limit = get_daily_limit("GUEST")
 
     record = db.query(GuestRateLimit).filter(GuestRateLimit.ip_address == ip).first()
     now = _now_utc()
@@ -107,9 +106,9 @@ def check_and_increment_guest(db: Session, ip: str) -> None:
         raise RateLimitExceeded(
             message=(
                 f"You've used your {limit} free messages today. "
-                "Sign up for 10 messages daily, free."
+                "Create an account or upgrade for more daily messages."
             ),
-            tier="guest",
+            tier="GUEST",
             used=record.prompt_count_today,
             limit=limit,
         )
@@ -131,26 +130,13 @@ def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
     - Toxicity rejections do NOT count toward the limit
     - Only successful responses count
     """
-    if user_tier == UserTier.PRO.value:
-        error_detail = check_pro_window_limit(db, user_id)
-        if error_detail:
-            raise RateLimitExceeded(
-                message=error_detail["message"],
-                tier="pro",
-                used=error_detail["current_count"],
-                limit=error_detail["limit"],
-                reset_at=error_detail["reset_at"],
-                window_hours=error_detail["window_hours"],
-            )
-        return
-
     # Fetch fresh User instance from DB to avoid detached instance issues
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return
 
-    settings = get_settings()
-    limit = settings.registered_daily_limit
+    normalized_tier = normalize_tier(user_tier or (user.tier.value if hasattr(user.tier, "value") else str(user.tier)))
+    limit = get_daily_limit(normalized_tier)
     now = _now_utc()
 
     if _reset_if_new_day(user.prompt_count_reset_at):
@@ -158,12 +144,13 @@ def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
         user.prompt_count_reset_at = now
 
     if user.prompt_count_today >= limit:
+        upgrade_to = upgrade_target(normalized_tier)
         raise RateLimitExceeded(
             message=(
                 f"You've reached your {limit} daily messages. "
-                "Upgrade to Pro for 45 messages per 5 hour window."
+                f"{'Upgrade to ' + upgrade_to.capitalize() + ' for more access.' if upgrade_to else 'Please try again tomorrow.'}"
             ),
-            tier=user.tier.value,
+            tier=normalized_tier.value,
             used=user.prompt_count_today,
             limit=limit,
         )
@@ -223,17 +210,8 @@ def record_usage(
 
 def get_user_usage_summary(db: Session, user: User) -> dict:
     """Return today's usage summary for display in the UI."""
-    from arena.db_models import UserTier
-
-    if user.tier == UserTier.PRO:
-        return {
-            "prompts_used": user.prompt_count_today,
-            "daily_limit": None,
-            "tier": "pro",
-        }
-
-    settings = get_settings()
-    limit = settings.registered_daily_limit
+    normalized_tier = normalize_tier(user.tier.value if hasattr(user.tier, "value") else str(user.tier))
+    limit = get_daily_limit(normalized_tier)
 
     # Reset if stale
     if _reset_if_new_day(user.prompt_count_reset_at):
@@ -244,5 +222,5 @@ def get_user_usage_summary(db: Session, user: User) -> dict:
     return {
         "prompts_used": count,
         "daily_limit": limit,
-        "tier": user.tier.value,
+        "tier": normalized_tier.value,
     }
