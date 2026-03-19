@@ -71,16 +71,16 @@ export function ChangelogPage() {
           <div style={{ position: 'absolute', left: '4px', top: 0, bottom: 0, width: '1px', background: '#E0D8D0' }} />
 
           {CHANGELOG_ENTRIES.map((entry, idx) => (
-            <div key={idx} style={{ position: 'relative', marginBottom: '2.5rem' }}>
+            <div key={idx} className="changelog-entry" style={{ position: 'relative', marginBottom: '2.5rem' }}>
               {/* Date dot */}
-              <div style={{ position: 'absolute', left: '-2rem', top: '8px', width: '8px', height: '8px', borderRadius: '50%', background: '#C4956A' }} className="breathe" />
+              <div className="timeline-dot breathe" style={{ position: 'absolute', left: '-2rem', top: '8px', width: '8px', height: '8px', borderRadius: '50%', background: '#C4956A' }} />
 
               {/* Content */}
               <div>
                 <p style={{ fontSize: '11px', letterSpacing: '.08em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '.4rem' }}>{entry.date}</p>
                 <div style={{ background: '#F0EBE3', color: '#1A1714', fontSize: '11px', padding: '3px 10px', borderRadius: '999px', display: 'inline-block', marginBottom: '.8rem' }}>{entry.version}</div>
 
-                <div style={{ background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '14px', padding: '1.5rem' }}>
+                <div className="changelog-card" style={{ background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '14px', padding: '1.5rem' }}>
                   <h3 style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714', marginBottom: '.5rem' }}>{entry.title}</h3>
                   <p style={{ fontSize: '13px', color: '#6B6460', lineHeight: 1.65, marginBottom: '1rem' }}>{entry.body}</p>
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>

@@ -99,7 +99,7 @@ export function SignInPage() {
       `}</style>
 
       {/* Left Column - Brand */}
-      <div style={{ flex: 1, background: '#1A1714', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '3rem', position: 'relative' }}>
+      <div className="signin-left" style={{ flex: 1, background: '#1A1714', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '3rem', position: 'relative' }}>
         {/* Top - Logo */}
         <div onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
           <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }} className="breathe" />
@@ -142,8 +142,17 @@ export function SignInPage() {
       </div>
 
       {/* Right Column - Form */}
-      <div style={{ flex: 1, background: '#FAF7F4', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '3rem' }}>
-        <div style={{ maxWidth: '380px', width: '100%' }}>
+      <div className="signin-right" style={{ flex: 1, background: '#FAF7F4', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '3rem' }}>
+        <div className="signin-form-container" style={{ maxWidth: '380px', width: '100%' }}>
+          <div className="signin-mobile-brand" style={{ display: 'none' }}>
+            <div style={{
+              width: 7, height: 7,
+              borderRadius: '50%',
+              background: '#C4956A',
+              animation: 'breathe 2.4s ease-in-out infinite'
+            }} />
+            Arena
+          </div>
           {/* Tab Switcher */}
           <div style={{ background: '#F0EBE3', borderRadius: '999px', padding: '4px', display: 'flex', gap: '4px', marginBottom: '2rem' }}>
             <button
@@ -284,6 +293,7 @@ export function SignInPage() {
               )}
 
               <button
+                className={`signin-submit${isLoading ? ' pulse' : ''}`}
                 type="submit"
                 disabled={isLoading}
                 style={{
@@ -302,7 +312,6 @@ export function SignInPage() {
                 }}
                 onMouseEnter={(e) => !isLoading && (e.currentTarget.style.opacity = '0.85')}
                 onMouseLeave={(e) => !isLoading && (e.currentTarget.style.opacity = '1')}
-                className={isLoading ? 'pulse' : ''}
               >
                 {isLoading ? 'Signing in...' : 'Sign in'}
               </button>
@@ -518,6 +527,7 @@ export function SignInPage() {
               )}
 
               <button
+                className={`signin-submit${isLoading ? ' pulse' : ''}`}
                 type="submit"
                 disabled={isLoading}
                 style={{
@@ -536,7 +546,6 @@ export function SignInPage() {
                 }}
                 onMouseEnter={(e) => !isLoading && (e.currentTarget.style.opacity = '0.85')}
                 onMouseLeave={(e) => !isLoading && (e.currentTarget.style.opacity = '1')}
-                className={isLoading ? 'pulse' : ''}
               >
                 {isLoading ? 'Creating account...' : 'Create account'}
               </button>

@@ -150,7 +150,7 @@ export function PricingPage() {
       <Navbar />
 
       <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '64px 24px' }}>
-        <section style={{ marginBottom: '3rem' }}>
+        <section className="pricing-hero" style={{ marginBottom: '3rem' }}>
           <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#6B6460', marginBottom: '1rem' }}>
             Simple, honest pricing
           </p>
@@ -163,6 +163,7 @@ export function PricingPage() {
         </section>
 
         <section
+          className="pricing-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
@@ -204,13 +205,13 @@ export function PricingPage() {
           </div>
 
           <div style={{ border: '1px solid #C4956A', borderRadius: '20px', padding: '2rem', position: 'relative', background: '#FFFFFF', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ position: 'absolute', top: '-12px', left: '50%', transform: 'translateX(-50%)', background: '#C4956A', color: '#FAF7F4', fontSize: '10px', padding: '4px 14px', borderRadius: '999px' }}>
+            <div className="featured-badge" style={{ position: 'absolute', top: '-12px', left: '50%', transform: 'translateX(-50%)', background: '#C4956A', color: '#FAF7F4', fontSize: '10px', padding: '4px 14px', borderRadius: '999px' }}>
               Most popular
             </div>
             <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: '#6B6460', letterSpacing: '.08em', marginBottom: '.8rem' }}>
               Thinker
             </p>
-            <div style={{ display: 'inline-flex', background: '#F0EBE3', borderRadius: '999px', padding: '4px', gap: '4px', marginBottom: '1rem' }}>
+            <div className="billing-toggle" style={{ display: 'inline-flex', background: '#F0EBE3', borderRadius: '999px', padding: '4px', gap: '4px', marginBottom: '1rem' }}>
               {(['monthly', 'annual'] as const).map((option) => (
                 <button
                   key={option}
@@ -311,8 +312,8 @@ export function PricingPage() {
 
         <section style={{ marginBottom: '3rem' }}>
           <h2 style={{ fontSize: '22px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>Compare plans</h2>
-          <div style={{ border: '0.5px solid #E0D8D0', borderRadius: '12px', overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', background: '#F0EBE3' }}>
+          <div className="comparison-table-wrapper" style={{ border: '0.5px solid #E0D8D0', borderRadius: '12px', overflow: 'hidden' }}>
+            <div className="comparison-table" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', background: '#F0EBE3' }}>
               {['Feature', 'Explorer', 'Thinker', 'Architect'].map((label) => (
                 <div key={label} style={{ padding: '14px 16px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.08em', color: '#6B6460' }}>
                   {label}
@@ -322,6 +323,7 @@ export function PricingPage() {
             {comparisonRows.map((row, index) => (
               <div
                 key={row[0]}
+                className="comparison-table"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
@@ -350,7 +352,7 @@ export function PricingPage() {
         <section style={{ maxWidth: '760px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>Common questions</h2>
           {faqs.map((faq) => (
-            <div key={faq.question} style={{ borderBottom: '0.5px solid #E0D8D0', padding: '1rem 0' }}>
+            <div key={faq.question} className="faq-item" style={{ borderBottom: '0.5px solid #E0D8D0', padding: '1rem 0' }}>
               <p style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714', marginBottom: '.45rem' }}>{faq.question}</p>
               <p style={{ fontSize: '13px', color: '#6B6460', lineHeight: 1.7 }}>{faq.answer}</p>
             </div>

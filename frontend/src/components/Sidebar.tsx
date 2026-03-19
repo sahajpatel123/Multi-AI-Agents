@@ -150,9 +150,13 @@ export function Sidebar({
   return (
     <>
       <div
-        className={`fixed left-0 z-40
+        className={`sidebar-overlay${isOpen ? ' visible' : ''}`}
+        onClick={onClose}
+      />
+      <div
+        className={`sidebar fixed left-0 z-40
                     transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
-                    ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+                    ${isOpen ? 'translate-x-0 open' : '-translate-x-full'}`}
         style={{
           top: '52px',
           height: 'calc(100% - 52px)',
@@ -544,13 +548,6 @@ export function Sidebar({
         </div>
       </div>
 
-      {isOpen && (
-        <div
-          className="fixed inset-x-0 bottom-0 bg-text-primary/8 backdrop-blur-[1px] z-30 transition-opacity duration-300"
-          style={{ top: '52px' }}
-          onClick={onClose}
-        />
-      )}
     </>
   );
 }

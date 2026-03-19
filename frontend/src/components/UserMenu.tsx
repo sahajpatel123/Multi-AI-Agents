@@ -71,6 +71,7 @@ export function UserMenu({
           Sign in
         </button>
         <button
+          className="desktop-only"
           onClick={onSignInClick}
           style={{
             fontSize: '13px',

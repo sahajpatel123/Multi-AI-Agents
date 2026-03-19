@@ -25,7 +25,7 @@ export function Footer() {
         .breathe-slow { animation: breathe 3.2s ease-in-out infinite; }
       `}</style>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 1fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
+      <div className="footer-top" style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 1fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
         <div>
           <button
             onClick={() => navigate('/')}
@@ -59,7 +59,7 @@ export function Footer() {
         </div>
       </div>
 
-      <div style={{ borderTop: '0.5px solid #E0D8D0', marginTop: '1.5rem', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="footer-bottom" style={{ borderTop: '0.5px solid #E0D8D0', marginTop: '1.5rem', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: '12px', color: '#6B6460' }}>© 2026 Arena. All rights reserved.</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#8AA899' }} className="breathe-slow" />

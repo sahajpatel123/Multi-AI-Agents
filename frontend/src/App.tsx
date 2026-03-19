@@ -12,6 +12,7 @@ import { UserMenu } from './components/UserMenu';
 import { AgentDot } from './components/AgentDot';
 import { streamPrompt, streamDiscuss, getSession, parseStreamedAgentPreview, saveMemory, getSavedResponses, saveResponse, deleteSavedResponse } from './api';
 import { useAuth } from './hooks/useAuth';
+import { useIsMobile } from './hooks/useIsMobile';
 import { usePanel } from './context/PanelContext';
 import { useTier } from './context/TierContext';
 import track from './utils/track';
@@ -65,6 +66,7 @@ function App() {
   const [isFocusedChatStreaming, setIsFocusedChatStreaming] = useState(false);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [upgradeModalSubtitle, setUpgradeModalSubtitle] = useState('Debate mode lets you challenge any mind and watch the others react in real time.');
+  const isMobile = useIsMobile();
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [response, setResponse] = useState<PromptResponse | null>(null);
@@ -852,12 +854,13 @@ function App() {
     : [];
   const savedKeys = new Set(savedItems.map((item) => `${item.session_id}:${item.agent_id}`));
   const focusedTargetStyle = {
-    left: '50%',
-    top: '50%',
-    width: 'min(1200px, calc(100vw - 48px))',
-    height: 'min(660px, calc(100vh - 180px))',
-    transform: 'translate(-50%, -50%)',
-    borderRadius: '22px',
+    left: isMobile ? '0' : '50%',
+    top: isMobile ? 'auto' : '50%',
+    bottom: isMobile ? '0' : 'auto',
+    width: isMobile ? '100%' : 'min(1200px, calc(100vw - 48px))',
+    height: isMobile ? '85vh' : 'min(660px, calc(100vh - 180px))',
+    transform: isMobile ? 'translate(0, 0)' : 'translate(-50%, -50%)',
+    borderRadius: isMobile ? '20px 20px 0 0' : '22px',
   };
   const focusedPanelBackground = (() => {
     if (!focusedAgentId || !focusedAgentConfig) return 'rgba(250, 247, 244, 0.95)';
@@ -947,6 +950,7 @@ function App() {
         <>
           {/* Top Bar: Sidebar Trigger + Auth */}
           <header
+            className="app-navbar"
             style={{
               position: 'sticky',
               top: 0,
@@ -958,7 +962,7 @@ function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '0 24px',
+              padding: isMobile ? '0 12px' : '0 24px',
               filter: focusedAgentId ? 'blur(4px)' : 'blur(0px)',
               transition: 'filter 320ms cubic-bezier(0.22, 1, 0.36, 1)',
               pointerEvents: focusedAgentId ? 'none' : 'auto',
@@ -970,21 +974,22 @@ function App() {
                 alignItems: 'center',
                 gap: '12px',
                 transition: 'transform 500ms cubic-bezier(0.22, 1, 0.36, 1)',
-                transform: isSidebarOpen
+                transform: !isMobile && isSidebarOpen
                   ? 'translateX(min(224px, calc(88vw - 84px)))'
                   : 'translateX(0)',
                 willChange: 'transform',
               }}
             >
               <button
+                className="sidebar-toggle"
                 onClick={() => setIsSidebarOpen((prev) => !prev)}
                 onMouseEnter={() => setIsSidebarToggleHovered(true)}
                 onMouseLeave={() => setIsSidebarToggleHovered(false)}
                 aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
                 title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
                 style={{
-                  width: '32px',
-                  height: '32px',
+                  width: isMobile ? '36px' : '32px',
+                  height: isMobile ? '36px' : '32px',
                   borderRadius: '8px',
                   border: 'none',
                   background: isSidebarToggleHovered ? '#F0EBE3' : 'transparent',
@@ -1006,7 +1011,7 @@ function App() {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => navigate('/')}>
                 <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }} className="breathe" />
-                <span style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
+                <span className="wordmark-text" style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
               </div>
             </div>
             <UserMenu
@@ -1023,7 +1028,7 @@ function App() {
               flex: 1,
               display: 'flex',
               flexDirection: 'column',
-              padding: '24px 32px 138px 32px',
+              padding: isMobile ? '16px 0 138px' : '24px 32px 138px 32px',
               background: '#FAF7F4',
               minHeight: 0,
               position: 'relative',
@@ -1055,17 +1060,18 @@ function App() {
 
               {/* Agent Cards - Always Visible in 2x2 Grid */}
               <div
+                className="agent-cards-grid"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
                   gridTemplateRows: 'minmax(0, 1fr) minmax(0, 1fr)',
-                  columnGap: '22px',
-                  rowGap: '24px',
+                  columnGap: isMobile ? '12px' : '22px',
+                  rowGap: isMobile ? '12px' : '24px',
                   flex: 1,
                   minHeight: 0,
                   marginBottom: '10px',
                   transition: 'transform 520ms cubic-bezier(0.22, 1, 0.36, 1)',
-                  transform: isSidebarOpen ? 'translateX(min(54px, 6vw))' : 'translateX(0)',
+                  transform: !isMobile && isSidebarOpen ? 'translateX(min(54px, 6vw))' : 'translateX(0)',
                   willChange: 'transform',
                 }}
               >
@@ -1294,23 +1300,25 @@ function App() {
           )}
 
           <div
+            className="prompt-container"
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               gap: '14px',
               position: 'fixed',
-              bottom: '24px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: 'calc(100% - 280px - 48px)',
-              maxWidth: '720px',
+              bottom: isMobile ? '0' : '24px',
+              left: isMobile ? '0' : '50%',
+              transform: isMobile ? 'none' : 'translateX(-50%)',
+              width: isMobile ? '100%' : 'calc(100% - 280px - 48px)',
+              maxWidth: isMobile ? 'none' : '720px',
               zIndex: 40,
               pointerEvents: 'none',
             }}
           >
             {viewMode === 'arena' && phase === 'idle' && !error && !hasSubmittedPrompt && (
               <button
+                className="rotating-chip"
                 type="button"
                 onClick={() => handleExamplePromptClick(EXAMPLE_PROMPTS[activeExamplePromptIndex])}
                 onMouseEnter={() => setIsExamplePromptHovered(true)}
@@ -1507,7 +1515,7 @@ function App() {
         <div
           style={{
             position: 'fixed',
-            bottom: '110px',
+            bottom: isMobile ? '96px' : '110px',
             left: '50%',
             transform: 'translateX(-50%)',
             background: '#F0EBE3',
@@ -1517,6 +1525,8 @@ function App() {
             padding: '8px 16px',
             fontSize: '12px',
             zIndex: 120,
+            maxWidth: isMobile ? 'calc(100vw - 24px)' : undefined,
+            textAlign: 'center',
           }}
         >
           {saveSyncMessage}

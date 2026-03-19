@@ -24,6 +24,7 @@ export function UpgradeModal({
 
   return (
     <div
+      className="upgrade-modal-overlay"
       onClick={onClose}
       style={{
         position: 'fixed',
@@ -38,6 +39,7 @@ export function UpgradeModal({
       }}
     >
       <div
+        className="upgrade-modal"
         onClick={(e) => e.stopPropagation()}
         style={{
           background: '#FAF7F4',

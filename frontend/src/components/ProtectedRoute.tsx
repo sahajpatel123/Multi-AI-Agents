@@ -35,6 +35,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (isLoading && !isAuthenticated) {
     return (
       <div
+        className="gate-giant-num"
         style={{
           height: '100vh',
           background: '#FAF7F4',
@@ -103,6 +104,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
       {/* Ambient Orbs */}
       <div
+        className="gate-content"
         style={{
           position: 'fixed',
           top: '-300px',
@@ -204,6 +206,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
         {/* Headline */}
         <h1
+          className="gate-headline"
           style={{
             fontSize: '38px',
             fontWeight: 500,
@@ -254,6 +257,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
         {/* Buttons */}
         <div
+          className="gate-buttons"
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -329,6 +333,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
       {/* Agent Pills at Bottom */}
       <div
+        className="gate-agent-pills"
         style={{
           position: 'absolute',
           bottom: '2rem',

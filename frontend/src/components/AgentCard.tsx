@@ -217,6 +217,7 @@ export function AgentCard({
   return (
     <div
       ref={cardRef}
+      className="agent-card"
       style={{
         background: isWinner ? '#FFFCF9' : (isLoadingState ? `linear-gradient(90deg, ${agentBackgrounds[agentId]} 0%, rgba(255,255,255,0.6) 50%, ${agentBackgrounds[agentId]} 100%)` : agentBackgrounds[agentId]),
         backgroundSize: isLoadingState ? '200% 100%' : 'auto',
@@ -278,7 +279,7 @@ export function AgentCard({
           </div>
           {score != null && !isIdle && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '11px', color: '#1A1714', background: isWinner ? '#C4956A' : '#F0EBE3', padding: '3px 10px', borderRadius: '999px', fontWeight: isWinner ? 500 : 400 }}>
+              <span className="agent-score" style={{ fontSize: '11px', color: '#1A1714', background: isWinner ? '#C4956A' : '#F0EBE3', padding: '3px 10px', borderRadius: '999px', fontWeight: isWinner ? 500 : 400 }}>
                 {isWinner ? `Winner · ${score}` : score}
               </span>
             </div>
@@ -332,7 +333,7 @@ export function AgentCard({
             </div>
           ) : isStreaming ? (
             <div>
-              <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
+              <p className="agent-response-text" style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
                 {displayText}
                 <span style={{ display: 'inline-block', width: '2px', height: '16px', marginLeft: '2px', background: 'rgba(107,100,96,0.5)', animation: 'breathe 1.2s ease-in-out infinite', verticalAlign: 'text-bottom' }} />
               </p>
@@ -422,7 +423,7 @@ export function AgentCard({
                 </div>
               )}
               
-              <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7' }}>
+              <p className="agent-response-text" style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7' }}>
                 {response.one_liner}
               </p>
             </div>

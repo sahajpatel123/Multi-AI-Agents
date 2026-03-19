@@ -71,6 +71,7 @@ export function AuthModal({
     <>
       {/* Backdrop */}
       <div
+        className="auth-modal-overlay"
         style={{
           position: 'fixed',
           inset: 0,
@@ -85,6 +86,7 @@ export function AuthModal({
       >
         {/* Modal card */}
         <div
+          className="auth-modal-card"
           style={{
             background: '#FFFFFF',
             border: '0.5px solid #E0D8D0',

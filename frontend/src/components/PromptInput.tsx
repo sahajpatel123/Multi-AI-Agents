@@ -144,6 +144,7 @@ export function PromptInput({
         >
           {/* Gradient-border shell — 1.5px padding creates the animated border */}
           <div
+            className="prompt-input-wrapper"
             style={{
               borderRadius: '16px',
               padding: '1.5px',

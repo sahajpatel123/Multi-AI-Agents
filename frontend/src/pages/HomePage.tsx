@@ -958,9 +958,9 @@ export function HomePage() {
       {/* Hero Section */}
       <section style={{ position: 'relative', padding: '64px 0 48px' }}>
         <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '0 24px' }}>
-          <div ref={giant4Ref} style={{ position: 'absolute', top: '-20px', right: '15%', fontSize: '280px', fontWeight: 500, color: '#F0EBE3', pointerEvents: 'none', zIndex: 0, userSelect: 'none', letterSpacing: '-0.06em', animation: 'slowRotate 40s linear infinite', willChange: 'transform' }}>4</div>
+          <div className="hero-giant-num" ref={giant4Ref} style={{ position: 'absolute', top: '-20px', right: '15%', fontSize: '280px', fontWeight: 500, color: '#F0EBE3', pointerEvents: 'none', zIndex: 0, userSelect: 'none', letterSpacing: '-0.06em', animation: 'slowRotate 40s linear infinite', willChange: 'transform' }}>4</div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '64px', alignItems: 'start', position: 'relative', zIndex: 1 }}>
+          <div className="hero-content" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '64px', alignItems: 'start', position: 'relative', zIndex: 1 }}>
             {/* Left Column */}
             <div>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: '0.5px solid #E0D8D0', borderRadius: '999px', padding: '5px 14px', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '1.4rem', animation: 'heroTagPill 400ms ease 0ms backwards' }}>
@@ -968,7 +968,7 @@ export function HomePage() {
                 Now live · Free to try
               </div>
 
-              <h1 style={{ marginBottom: '1.2rem' }}>
+              <h1 className="hero-h1" style={{ marginBottom: '1.2rem' }}>
                 <span aria-label={line1} style={{ display: 'block', color: '#1A1714', fontSize: '58px', fontWeight: 500, letterSpacing: '-0.035em', lineHeight: 1.0 }}>
                   {springText(line1, 0)}
                 </span>
@@ -984,7 +984,7 @@ export function HomePage() {
                 Four AI personalities with opposing worldviews compete to answer your question. Scored on logic, directness, and originality. The best answer wins — automatically.
               </p>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '2rem', animation: 'heroSubtext 500ms ease 400ms backwards' }}>
+              <div className="hero-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '2rem', animation: 'heroSubtext 500ms ease 400ms backwards' }}>
                 <button
                   onClick={() => navigate('/app')}
                   style={{
@@ -1036,7 +1036,7 @@ export function HomePage() {
             </div>
 
             {/* Right Column - Live Example */}
-            <div style={{ position: 'relative', height: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className="hero-right" style={{ position: 'relative', height: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
                 <span style={{ fontSize: '12px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#6B6460' }}>Live example</span>
                 <span
@@ -1139,7 +1139,7 @@ export function HomePage() {
                       onMouseMove={(e) => handleHeroCardMouseMove(idx, e)}
                       onMouseEnter={() => setHeroCardHovered(idx)}
                       onMouseLeave={() => handleHeroCardMouseLeave(idx)}
-                      className="home-hero-card"
+                      className="home-hero-card debate-card"
                       style={{
                         background: isWinning ? '#FFFCF9' : '#FFFFFF',
                         border: isWinning ? '1px solid #C4956A' : '0.5px solid #E0D8D0',
@@ -1226,6 +1226,7 @@ export function HomePage() {
                       </div>
 
                       <p
+                        className="dc-text"
                         style={{
                           fontSize: '12px',
                           color: '#6B6460',
@@ -1295,6 +1296,7 @@ export function HomePage() {
       {/* Manifesto Strip */}
       <section ref={manifestoReveal.ref} style={{ ...manifestoReveal.style, maxWidth: '1080px', margin: '0 auto', padding: '48px 24px', borderTop: '0.5px solid #E0D8D0' }} className={manifestoReveal.className}>
         <div
+          className="manifesto-line"
           onMouseEnter={() => setManifestoHovered(1)}
           onMouseLeave={() => setManifestoHovered(null)}
           style={{
@@ -1311,13 +1313,14 @@ export function HomePage() {
           }}
         >
           <span style={{ fontSize: '13px', color: '#C4956A', letterSpacing: '.1em', width: '32px' }}>01</span>
-          <p style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-.02em', flex: 1, lineHeight: 1.2, padding: '0 2rem', color: '#1A1714' }}>
+          <p className="ml-text" style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-.02em', flex: 1, lineHeight: 1.2, padding: '0 2rem', color: '#1A1714' }}>
             <span style={{ color: '#C4B8AE' }}>One</span> AI gives you one answer.
           </p>
-          <span style={{ fontSize: '13px', color: '#6B6460', border: '0.5px solid #E0D8D0', padding: '4px 12px', borderRadius: '999px' }}>The old way</span>
+          <span className="ml-tag" style={{ fontSize: '13px', color: '#6B6460', border: '0.5px solid #E0D8D0', padding: '4px 12px', borderRadius: '999px' }}>The old way</span>
         </div>
 
         <div
+          className="manifesto-line"
           onMouseEnter={() => setManifestoHovered(2)}
           onMouseLeave={() => setManifestoHovered(null)}
           style={{
@@ -1334,13 +1337,14 @@ export function HomePage() {
           }}
         >
           <span style={{ fontSize: '13px', color: '#C4956A', letterSpacing: '.1em', width: '32px' }}>02</span>
-          <p style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-.02em', flex: 1, lineHeight: 1.2, padding: '0 2rem', color: '#1A1714' }}>
+          <p className="ml-text" style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-.02em', flex: 1, lineHeight: 1.2, padding: '0 2rem', color: '#1A1714' }}>
             Arena gives you <span style={{ fontWeight: 500, letterSpacing: manifestoHovered === 2 ? '0.01em' : '-.02em', transition: 'letter-spacing 300ms ease' }}><CountUp target={4} /></span> that compete.
           </p>
-          <span style={{ fontSize: '13px', color: '#6B6460', border: '0.5px solid #E0D8D0', padding: '4px 12px', borderRadius: '999px' }}>The Arena way</span>
+          <span className="ml-tag" style={{ fontSize: '13px', color: '#6B6460', border: '0.5px solid #E0D8D0', padding: '4px 12px', borderRadius: '999px' }}>The Arena way</span>
         </div>
 
         <div
+          className="manifesto-line"
           onMouseEnter={() => setManifestoHovered(3)}
           onMouseLeave={() => setManifestoHovered(null)}
           style={{
@@ -1357,10 +1361,10 @@ export function HomePage() {
           }}
         >
           <span style={{ fontSize: '13px', color: '#C4956A', letterSpacing: '.1em', width: '32px' }}>03</span>
-          <p style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-.02em', flex: 1, lineHeight: 1.2, padding: '0 2rem', color: '#1A1714' }}>
+          <p className="ml-text" style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-.02em', flex: 1, lineHeight: 1.2, padding: '0 2rem', color: '#1A1714' }}>
             The best one <span style={{ color: '#C4956A', fontStyle: 'italic', letterSpacing: manifestoHovered === 3 ? '0.01em' : '-.02em', transition: 'letter-spacing 300ms ease' }}>wins.</span>
           </p>
-          <span style={{ fontSize: '13px', color: '#6B6460', border: '0.5px solid #E0D8D0', padding: '4px 12px', borderRadius: '999px' }}>Always</span>
+          <span className="ml-tag" style={{ fontSize: '13px', color: '#6B6460', border: '0.5px solid #E0D8D0', padding: '4px 12px', borderRadius: '999px' }}>Always</span>
         </div>
       </section>
 
@@ -1368,7 +1372,7 @@ export function HomePage() {
       <section ref={comparisonReveal.ref} style={{ ...comparisonReveal.style, maxWidth: '1080px', margin: '5rem auto 0', padding: '0 24px' }} className={comparisonReveal.className}>
         <p style={{ fontSize: '12px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '1.2rem' }}>Why Arena beats asking one AI</p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div className="compare-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           {/* One AI Card */}
           <div
             onMouseEnter={() => setComparisonHovered('left')}
@@ -1443,7 +1447,7 @@ export function HomePage() {
       <section id="how-it-works" ref={howItWorksReveal.ref} style={{ ...howItWorksReveal.style, maxWidth: '1080px', margin: '5rem auto 0', padding: '0 24px' }} className={howItWorksReveal.className}>
         <p style={{ fontSize: '12px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '1.2rem' }}>How it works</p>
 
-        <div style={{ display: 'flex', border: '0.5px solid #E0D8D0', borderRadius: '16px', overflow: 'hidden' }}>
+        <div className="how-steps" style={{ display: 'flex', border: '0.5px solid #E0D8D0', borderRadius: '16px', overflow: 'hidden' }}>
           {[
             { num: '01', title: 'Ask anything', body: 'A question, a decision, a debate. No restrictions.' },
             { num: '02', title: 'Four minds fire', body: 'All four respond simultaneously, each from a radically different angle.' },
@@ -1451,6 +1455,7 @@ export function HomePage() {
             { num: '04', title: 'Go deeper', body: 'Challenge, debate, or go 1-on-1. You control the depth.' },
           ].map((step, idx) => (
             <div
+              className="how-step"
               key={step.num}
               onMouseEnter={() => setHowItWorksHovered(idx)}
               onMouseLeave={() => setHowItWorksHovered(null)}
@@ -1463,9 +1468,9 @@ export function HomePage() {
                 transition: 'all 200ms ease',
               }}
             >
-              <div style={{ fontSize: '48px', fontWeight: 500, color: howItWorksHovered === idx ? 'rgba(196,149,106,0.2)' : '#F0EBE3', lineHeight: 1, marginBottom: '.8rem', transition: 'color 200ms ease' }}>{step.num}</div>
+              <div className="hs-num" style={{ fontSize: '48px', fontWeight: 500, color: howItWorksHovered === idx ? 'rgba(196,149,106,0.2)' : '#F0EBE3', lineHeight: 1, marginBottom: '.8rem', transition: 'color 200ms ease' }}>{step.num}</div>
               {idx < 3 && (
-                <div style={{ position: 'absolute', right: '-10px', top: '1.5rem', width: '20px', height: '20px', borderRadius: '50%', background: '#FAF7F4', border: '0.5px solid #E0D8D0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: howItWorksHovered === idx ? '#1A1714' : '#C4956A', zIndex: 2, transform: howItWorksHovered === idx ? 'scale(1.2)' : 'scale(1)', transition: 'all 200ms ease' }}>→</div>
+                <div className="hs-arrow" style={{ position: 'absolute', right: '-10px', top: '1.5rem', width: '20px', height: '20px', borderRadius: '50%', background: '#FAF7F4', border: '0.5px solid #E0D8D0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: howItWorksHovered === idx ? '#1A1714' : '#C4956A', zIndex: 2, transform: howItWorksHovered === idx ? 'scale(1.2)' : 'scale(1)', transition: 'all 200ms ease' }}>→</div>
               )}
               <h4 style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714', marginBottom: '.5rem' }}>{step.title}</h4>
               <p style={{ fontSize: '13px', color: '#6B6460', lineHeight: 1.55 }}>{step.body}</p>
@@ -1476,17 +1481,17 @@ export function HomePage() {
 
       {/* Persona Library */}
       <section ref={personaLibraryReveal.ref} style={{ ...personaLibraryReveal.style, maxWidth: '1080px', margin: '5rem auto 0', padding: '0 24px' }} className={personaLibraryReveal.className}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
+        <div className="persona-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
           <div>
             <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#C4956A', marginBottom: '.4rem' }}>Coming soon</p>
             <h2 style={{ fontSize: '24px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714' }}>The Persona Library</h2>
           </div>
-          <p style={{ fontSize: '14px', color: '#6B6460', maxWidth: '240px', textAlign: 'right', lineHeight: 1.6 }}>
+          <p className="persona-subtitle" style={{ fontSize: '14px', color: '#6B6460', maxWidth: '240px', textAlign: 'right', lineHeight: 1.6 }}>
             16 distinct minds. Pick any four to build your panel. Different problems call for different thinkers.
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+        <div className="persona-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
           {ACTIVE_PERSONAS.map((persona, idx) => (
             <div
               key={persona.name}
@@ -1544,7 +1549,7 @@ export function HomePage() {
         <h2 style={{ fontSize: '22px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', marginBottom: '.4rem' }}>Meet the four minds</h2>
         <p style={{ fontSize: '14px', color: '#6B6460', marginBottom: '1.5rem' }}>Active now. Each built with a different temperature and reasoning mandate.</p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+        <div className="agents-deep-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
           {[
             { name: 'The Analyst', color: '#8C9BAB', bg: '#EEF0F2', temp: 0.2, quote: 'I find the flaw in everything.' },
             { name: 'The Philosopher', color: '#9B8FAA', bg: '#F0EDF2', temp: 0.7, quote: 'I question the premise first.' },
@@ -1573,15 +1578,16 @@ export function HomePage() {
 
       {/* CTA Band */}
       <section ref={ctaBandReveal.ref} style={{ ...ctaBandReveal.style, maxWidth: '1080px', margin: '4rem auto 0', padding: '0 24px' }} className={ctaBandReveal.className}>
-        <div style={{ background: '#1A1714', borderRadius: '20px', padding: '2.5rem 3rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="cta-band" style={{ background: '#1A1714', borderRadius: '20px', padding: '2.5rem 3rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <p style={{ fontSize: '10px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'rgba(250,247,244,0.4)', marginBottom: '.6rem' }}>Ready to think differently?</p>
-            <h2 style={{ fontSize: '28px', fontWeight: 500, color: '#FAF7F4', letterSpacing: '-.02em', lineHeight: 1.2 }}>
+            <h2 className="cta-band-title" style={{ fontSize: '28px', fontWeight: 500, color: '#FAF7F4', letterSpacing: '-.02em', lineHeight: 1.2 }}>
               Stop asking one AI. Start asking <span style={{ color: '#C4956A', fontStyle: 'italic' }}>four.</span>
             </h2>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
+          <div className="cta-band-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
             <button
+              className="cta-main"
               ref={ctaButtonRef}
               onClick={() => navigate('/app')}
               onMouseMove={handleCTAButtonMouseMove}

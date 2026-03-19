@@ -61,6 +61,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
 
   return (
     <div
+      className="leaderboard-container"
       style={{
         maxWidth: '680px',
         margin: '0 auto',
@@ -120,6 +121,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
 
             return (
               <div
+                className="agent-row"
                 key={agent.agent_id}
                 style={{
                   padding: '18px 20px',
@@ -171,7 +173,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                     }}>
                       {Math.round(percentage)}%
                     </span>
-                    <span style={{
+                    <span className="win-badge" style={{
                       background: isFirst ? '#F5EEE6' : '#F0EBE3',
                       border: `0.5px solid ${isFirst ? 'rgba(196,149,106,0.2)' : '#E0D8D0'}`,
                       borderRadius: '999px',

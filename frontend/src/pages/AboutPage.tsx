@@ -24,10 +24,10 @@ export function AboutPage() {
 
       <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '64px 24px' }}>
         {/* Hero */}
-        <div className="animate-fade-up" style={{ marginBottom: '4rem' }}>
+        <div className="animate-fade-up about-hero" style={{ marginBottom: '4rem' }}>
           <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#6B6460', marginBottom: '1rem' }}>The story behind Arena</p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '48px', alignItems: 'start' }}>
+          <div className="about-hero-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '48px', alignItems: 'start' }}>
             {/* Left Column */}
             <div>
               <h1 style={{ fontSize: '52px', fontWeight: 500, letterSpacing: '-.03em', lineHeight: 1.1, marginBottom: '1.5rem' }}>
@@ -49,7 +49,7 @@ export function AboutPage() {
             </div>
 
             {/* Right Column - Profile Card */}
-            <div style={{ background: '#1A1714', borderRadius: '20px', padding: '2rem' }}>
+            <div className="about-profile-card" style={{ background: '#1A1714', borderRadius: '20px', padding: '2rem' }}>
               <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#C4956A', color: '#FAF7F4', fontSize: '18px', fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.2rem' }}>
                 SP
               </div>
@@ -127,7 +127,7 @@ export function AboutPage() {
         <div style={{ marginTop: '4rem' }}>
           <h2 style={{ fontSize: '22px', fontWeight: 500, color: '#1A1714', marginBottom: '1.5rem' }}>What Arena actually is</h2>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+          <div className="story-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
             {/* Card 1 */}
             <div style={{ background: '#F0EBE3', borderRadius: '16px', padding: '1.5rem' }}>
               <div style={{ fontSize: '32px', fontWeight: 500, color: '#C4956A', marginBottom: '.8rem' }}>01</div>

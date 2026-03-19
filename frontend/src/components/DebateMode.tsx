@@ -202,7 +202,7 @@ export function DebateMode({
     return (
       <div
         key={`${cardType}-${reaction.agent_id}-${index}`}
-        className={`debate-colosseum-card ${isStreaming ? 'debate-reaction-enter' : ''}`}
+        className={`debate-colosseum-card reaction-card ${isStreaming ? 'debate-reaction-enter' : ''}`}
         style={{
           marginLeft: '64px',
           maxWidth: '600px',
@@ -225,6 +225,7 @@ export function DebateMode({
           }}
         />
         <div
+          className="timeline-line"
           style={{
             position: 'absolute',
             left: 0,
@@ -320,7 +321,7 @@ export function DebateMode({
   );
 
   const challengedCard = (
-    <div className="debate-colosseum-enter" style={{ maxWidth: '680px', margin: '0 auto 40px', width: '100%' }}>
+    <div className="debate-colosseum-enter challenged-card" style={{ maxWidth: '680px', margin: '0 auto 40px', width: '100%' }}>
       <div
         style={{
           background: '#FFFFFF',
@@ -391,7 +392,7 @@ export function DebateMode({
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: '#FAF7F4', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+    <div className="debate-layout" style={{ minHeight: '100vh', background: '#FAF7F4', position: 'relative', display: 'flex', flexDirection: 'column' }}>
       <div className="noise-overlay" />
       <div
         style={{
@@ -727,8 +728,8 @@ export function DebateMode({
                   />
                   <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
                     <button
+                      className="debate-action-btn debate-shimmer-button debate-shimmer-button-light"
                       onClick={() => runRound()}
-                      className="debate-shimmer-button debate-shimmer-button-light"
                       style={{
                         minWidth: '280px',
                         padding: '14px 32px',
@@ -755,6 +756,7 @@ export function DebateMode({
                       Next round — push further
                     </button>
                     <button
+                      className="debate-action-btn"
                       onClick={handleInterjection}
                       disabled={!interjection.trim()}
                       style={{
@@ -778,6 +780,7 @@ export function DebateMode({
             ) : (
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
                 <button
+                  className="debate-action-btn"
                   onClick={onExit}
                   style={{
                     padding: '14px 24px',
@@ -792,6 +795,7 @@ export function DebateMode({
                   Back to Arena
                 </button>
                 <button
+                  className="debate-action-btn"
                   onClick={onExit}
                   style={{
                     padding: '14px 24px',

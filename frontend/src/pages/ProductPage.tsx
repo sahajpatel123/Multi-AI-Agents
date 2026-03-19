@@ -35,10 +35,11 @@ export function ProductPage() {
         </div>
 
         {/* Two Product Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '2rem' }}>
+        <div className="product-cards-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '2rem' }}>
           {/* Arena Mode Card */}
           <button
             onClick={() => navigate('/app')}
+            className="product-card"
             style={{
               background: '#1A1714',
               borderRadius: '20px',
@@ -56,9 +57,9 @@ export function ProductPage() {
           >
             <div style={{ background: '#C4956A', color: '#FAF7F4', fontSize: '11px', padding: '4px 12px', borderRadius: '999px', display: 'inline-block', alignSelf: 'flex-start', marginBottom: '1.5rem' }}>Active now</div>
 
-            <div style={{ fontSize: '64px', fontWeight: 500, color: 'rgba(250,247,244,0.1)', lineHeight: 1, marginBottom: '.5rem' }}>01</div>
+            <div className="product-card-num" style={{ fontSize: '64px', fontWeight: 500, color: 'rgba(250,247,244,0.1)', lineHeight: 1, marginBottom: '.5rem' }}>01</div>
 
-            <h2 style={{ fontSize: '28px', fontWeight: 500, color: '#FAF7F4', letterSpacing: '-.02em', marginBottom: '.5rem' }}>Arena Mode</h2>
+            <h2 className="product-card-title" style={{ fontSize: '28px', fontWeight: 500, color: '#FAF7F4', letterSpacing: '-.02em', marginBottom: '.5rem' }}>Arena Mode</h2>
             <p style={{ fontSize: '14px', color: 'rgba(250,247,244,0.5)', marginBottom: '1.5rem' }}>Four minds. One question.</p>
 
             <div style={{ marginBottom: 'auto' }}>
@@ -79,6 +80,7 @@ export function ProductPage() {
 
           {/* Agent Mode Card */}
           <div
+            className="product-card"
             style={{
               background: '#F0EBE3',
               borderRadius: '20px',
@@ -94,9 +96,9 @@ export function ProductPage() {
           >
             <div style={{ position: 'absolute', top: '20px', right: '-28px', transform: 'rotate(45deg)', background: '#1A1714', color: '#FAF7F4', fontSize: '10px', padding: '4px 40px', letterSpacing: '.08em', textTransform: 'uppercase' }}>Coming Soon</div>
 
-            <div style={{ fontSize: '64px', fontWeight: 500, color: 'rgba(26,23,20,0.08)', lineHeight: 1, marginBottom: '.5rem' }}>02</div>
+            <div className="product-card-num" style={{ fontSize: '64px', fontWeight: 500, color: 'rgba(26,23,20,0.08)', lineHeight: 1, marginBottom: '.5rem' }}>02</div>
 
-            <h2 style={{ fontSize: '28px', fontWeight: 500, color: '#1A1714', letterSpacing: '-.02em', marginBottom: '.5rem' }}>Agent Mode</h2>
+            <h2 className="product-card-title" style={{ fontSize: '28px', fontWeight: 500, color: '#1A1714', letterSpacing: '-.02em', marginBottom: '.5rem' }}>Agent Mode</h2>
             <p style={{ fontSize: '14px', color: '#6B6460', marginBottom: '1.5rem' }}>Plan. Research. Solve. Verify.</p>
 
             <div style={{ marginBottom: 'auto' }}>
@@ -119,7 +121,7 @@ export function ProductPage() {
         {/* Comparison Pills */}
         <div style={{ textAlign: 'center', marginTop: '2rem' }}>
           <p style={{ fontSize: '14px', color: '#6B6460', marginBottom: '1rem' }}>Not sure which to use?</p>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <div className="product-comparison" style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <div style={{ background: '#F0EBE3', border: '0.5px solid #E0D8D0', borderRadius: '999px', padding: '6px 16px', fontSize: '12px', color: '#6B6460' }}>
               Arena → opinions, decisions, debate
             </div>

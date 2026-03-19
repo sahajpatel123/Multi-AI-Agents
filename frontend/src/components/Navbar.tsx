@@ -30,24 +30,37 @@ export function Navbar() {
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [menuOpen]);
 
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
   const isActive = (path: string) => location.pathname === path;
   const avatarLabel = (user?.email?.trim().charAt(0) || 'A').toUpperCase();
 
   return (
-    <nav
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        background: scrolled ? '#FAF7F4' : 'transparent',
-        borderBottom: scrolled ? '1px solid #E0D8D0' : '1px solid transparent',
-        backdropFilter: scrolled ? 'blur(12px)' : 'none',
-        transition: 'all 300ms ease',
-        animation: 'fadeUp 500ms ease forwards',
-      }}
-    >
-      <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '0 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
+    <>
+      <nav
+        className="navbar-shell"
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+          background: scrolled ? '#FAF7F4' : 'transparent',
+          borderBottom: scrolled ? '1px solid #E0D8D0' : '1px solid transparent',
+          backdropFilter: scrolled ? 'blur(12px)' : 'none',
+          transition: 'all 300ms ease',
+          animation: 'fadeUp 500ms ease forwards',
+        }}
+      >
+        <div className="navbar-inner" style={{ maxWidth: '1080px', margin: '0 auto', padding: '0 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
           <button
             onClick={() => navigate('/')}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
@@ -56,7 +69,7 @@ export function Navbar() {
             <span style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
+          <div className="desktop-only" style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
             <button
               onClick={() => navigate('/product')}
               style={{
@@ -110,6 +123,7 @@ export function Navbar() {
           {!isAuthenticated ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <button
+                className="mobile-block"
                 onClick={() => navigate('/signin')}
                 style={{
                   fontSize: '13px',
@@ -126,6 +140,7 @@ export function Navbar() {
                 Sign in
               </button>
               <button
+                className="desktop-only"
                 onClick={() => navigate('/app')}
                 style={{
                   fontSize: '12px',
@@ -142,9 +157,32 @@ export function Navbar() {
               >
                 Try Arena →
               </button>
+              <button
+                type="button"
+                className="mobile-flex navbar-menu-button"
+                onClick={() => setMenuOpen(true)}
+                aria-label="Open navigation menu"
+                style={{
+                  display: 'none',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  transition: 'background 150ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#F0EBE3';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                <span style={{ fontSize: '20px', lineHeight: 1, color: '#1A1714' }}>☰</span>
+              </button>
             </div>
           ) : (
-            <div ref={menuRef} style={{ position: 'relative' }}>
+            <div ref={menuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button
                 type="button"
                 onClick={() => setMenuOpen((prev) => !prev)}
@@ -166,8 +204,33 @@ export function Navbar() {
                 {avatarLabel}
               </button>
 
+              <button
+                type="button"
+                className="mobile-flex navbar-menu-button"
+                onClick={() => setMenuOpen(true)}
+                aria-label="Open navigation menu"
+                style={{
+                  display: 'none',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  transition: 'background 150ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#F0EBE3';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                <span style={{ fontSize: '20px', lineHeight: 1, color: '#1A1714' }}>☰</span>
+              </button>
+
               {menuOpen && (
                 <div
+                  className="desktop-only"
                   style={{
                     background: '#FFFFFF',
                     border: '0.5px solid #E0D8D0',
@@ -249,8 +312,73 @@ export function Navbar() {
             </div>
           )}
         </div>
+        </div>
+        <div className="desktop-only" style={{ height: '0.5px', background: '#E0D8D0' }} />
+      </nav>
+
+      {menuOpen && <div className="mobile-only navbar-mobile-overlay" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+      <div
+        className={`mobile-only navbar-mobile-panel${menuOpen ? ' open' : ''}`}
+        aria-hidden={!menuOpen}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <button
+            onClick={() => navigate('/')}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, minHeight: 'auto', minWidth: 'auto' }}
+          >
+            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }} className="breathe" />
+            <span style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMenuOpen(false)}
+            aria-label="Close navigation menu"
+            style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '999px',
+              border: 'none',
+              background: '#F0EBE3',
+              color: '#1A1714',
+              fontSize: '20px',
+              cursor: 'pointer',
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        <div ref={menuRef} style={{ display: 'flex', flexDirection: 'column' }}>
+          {[
+            { label: 'Product', path: '/product' },
+            { label: 'Pricing', path: '/pricing' },
+            { label: 'About', path: '/about' },
+          ].map((item) => (
+            <button
+              key={item.path}
+              type="button"
+              className="navbar-mobile-link"
+              onClick={() => {
+                setMenuOpen(false);
+                navigate(item.path);
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          className="navbar-mobile-cta"
+          onClick={() => {
+            setMenuOpen(false);
+            navigate('/app');
+          }}
+        >
+          Try Arena →
+        </button>
       </div>
-      <div style={{ height: '0.5px', background: '#E0D8D0' }} />
-    </nav>
+    </>
   );
 }

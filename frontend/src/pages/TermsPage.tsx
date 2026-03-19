@@ -53,14 +53,14 @@ export function TermsPage() {
 
       <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '64px 24px' }}>
         {/* Hero */}
-        <div className="animate-fade-up" style={{ marginBottom: '3rem' }}>
+        <div className="animate-fade-up legal-hero" style={{ marginBottom: '3rem' }}>
           <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#6B6460', marginBottom: '1rem' }}>Legal</p>
           <h1 style={{ fontSize: '48px', fontWeight: 500, letterSpacing: '-.03em', color: '#1A1714', lineHeight: 1.1, marginBottom: '.8rem' }}>Terms of Service</h1>
           <p style={{ fontSize: '12px', color: '#6B6460' }}>Last updated: March 2026</p>
         </div>
 
         {/* Content */}
-        <div style={{ maxWidth: '680px', margin: '0 auto' }}>
+        <div className="legal-content" style={{ maxWidth: '680px', margin: '0 auto' }}>
           {SECTIONS.map((section, idx) => (
             <div key={idx}>
               <h2 style={{ fontSize: '16px', fontWeight: 500, color: '#1A1714', marginBottom: '.6rem', marginTop: idx === 0 ? 0 : '2.5rem' }}>

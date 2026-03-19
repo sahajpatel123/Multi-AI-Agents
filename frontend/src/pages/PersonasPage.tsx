@@ -200,6 +200,7 @@ export function PersonasPage() {
         <section style={{ marginBottom: '3rem' }}>
           <p style={{ ...eyebrowStyle, marginBottom: '1rem' }}>Your current panel</p>
           <div
+            className="current-panel-grid"
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -258,10 +259,11 @@ export function PersonasPage() {
             ))}
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.9rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.9rem', gap: '12px', flexWrap: 'wrap' }}>
             <button
               type="button"
               onClick={handleSavePanel}
+              className="save-panel-btn"
               style={{
                 background: '#1A1714',
                 color: '#FAF7F4',
@@ -304,6 +306,7 @@ export function PersonasPage() {
           <p style={{ ...eyebrowStyle, margin: '3rem 0 1rem' }}>Full library · 16 personas</p>
 
           <div
+            className="persona-library-grid"
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -439,6 +442,7 @@ export function PersonasPage() {
           }}
         >
           <div
+            className="swap-modal"
             onClick={(e) => e.stopPropagation()}
             style={{
               background: '#FAF7F4',
@@ -488,7 +492,7 @@ export function PersonasPage() {
             <div style={{ height: '0.5px', background: '#E0D8D0', margin: '1rem 0' }} />
 
             <p style={{ ...eyebrowStyle, marginBottom: '.8rem' }}>Available to swap</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+            <div className="current-panel-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
               {modalOptions.map((persona) => {
                 const isLocked = !canUsePersona(persona.id);
 
