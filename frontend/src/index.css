@@ -281,6 +281,201 @@ canvas {
   }
 }
 
+/* ─── Marketing Navbar (fixed layout; avoids .desktop-only display:initial killing flex) ─── */
+@keyframes navbar-dot-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.6;
+  }
+}
+
+.navbar-shell {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  width: 100%;
+  background: rgba(250, 247, 244, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 0.5px solid #e0d8d0;
+  transition: background 200ms ease;
+}
+
+.navbar-shell.navbar-shell--scrolled {
+  background: rgba(250, 247, 244, 0.95);
+}
+
+.navbar-inner-container {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.navbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 52px;
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.navbar-brand-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c4956a;
+  flex-shrink: 0;
+  animation: navbar-dot-breathe 2.4s ease-in-out infinite;
+}
+
+.navbar-brand-text {
+  font-size: 15px;
+  font-weight: 500;
+  color: #1a1714;
+}
+
+.navbar-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-shrink: 0;
+}
+
+.navbar-nav-link {
+  font-size: 13px;
+  color: #6b6460;
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 4px 0;
+  text-decoration: none;
+  border: none;
+  background: none;
+  transition: color 150ms ease;
+}
+
+.navbar-nav-link:hover,
+.navbar-nav-link:focus-visible {
+  color: #1a1714;
+}
+
+.navbar-nav-link--active {
+  color: #1a1714;
+}
+
+.navbar-auth {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.navbar-signin-link {
+  font-size: 13px;
+  color: #6b6460;
+  cursor: pointer;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  white-space: nowrap;
+  transition: color 150ms ease;
+}
+
+.navbar-signin-link:hover,
+.navbar-signin-link:focus-visible {
+  color: #1a1714;
+}
+
+.navbar-cta-pill {
+  font-size: 12px;
+  padding: 7px 18px;
+  border-radius: 999px;
+  background: #1a1714;
+  color: #faf7f4;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 150ms ease;
+}
+
+.navbar-cta-pill:hover,
+.navbar-cta-pill:focus-visible {
+  opacity: 0.85;
+}
+
+.navbar-hamburger {
+  display: none;
+  width: 36px;
+  height: 36px;
+  min-height: 36px !important;
+  min-width: 36px !important;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 150ms ease;
+}
+
+.navbar-hamburger:hover,
+.navbar-hamburger:focus-visible {
+  background: #f0ebe3;
+}
+
+.navbar-user-avatar {
+  width: 32px;
+  height: 32px;
+  min-height: 32px !important;
+  min-width: 32px !important;
+  border-radius: 50%;
+  background: #f0ebe3;
+  color: #1a1714;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #e0d8d0;
+  padding: 0;
+}
+
+.navbar-user-dropdown {
+  background: #fff;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(26, 23, 20, 0.08);
+  padding: 6px;
+  min-width: 160px;
+  position: absolute;
+  right: 0;
+  top: 40px;
+  z-index: 100;
+}
+
+.navbar-divider-line {
+  height: 0.5px;
+  background: #e0d8d0;
+}
+
 @media (max-width: 768px) {
   button,
   a,
@@ -314,11 +509,42 @@ canvas {
     display: grid !important;
   }
 
+  .navbar-inner-container {
+    padding: 0 16px;
+  }
+
+  .navbar-nav-links {
+    display: none !important;
+  }
+
+  .navbar-cta-pill {
+    display: none !important;
+  }
+
+  .navbar-hamburger {
+    display: flex !important;
+  }
+
+  .navbar-user-dropdown {
+    display: none !important;
+  }
+
+  .navbar-divider-line {
+    display: none !important;
+  }
+
+  .navbar-signin-link {
+    min-height: auto !important;
+    min-width: auto !important;
+    padding: 4px 8px;
+  }
+
   .navbar-shell {
     height: 52px !important;
     background: rgba(250, 247, 244, 0.95) !important;
     backdrop-filter: blur(12px) !important;
-    border-bottom: 0.5px solid #E0D8D0 !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-bottom: 0.5px solid #e0d8d0 !important;
   }
 
   .navbar-inner {
