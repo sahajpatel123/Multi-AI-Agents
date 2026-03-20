@@ -53,9 +53,9 @@ export function Footer() {
 
         <div>
           <h4 style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714', marginBottom: '.8rem', textTransform: 'uppercase', letterSpacing: '.08em' }}>Connect</h4>
-          <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', textDecoration: 'none', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>X / Twitter</a>
-          <a href="https://github.com" target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', textDecoration: 'none', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>GitHub</a>
-          <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', textDecoration: 'none', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>LinkedIn</a>
+          <a href="https://x.com/sahajp001" target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', textDecoration: 'none', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>X / Twitter</a>
+          <a href="https://github.com/sahajpatel123" target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', textDecoration: 'none', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>GitHub</a>
+          <a href="https://www.linkedin.com/in/sahajpatel1703/" target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', textDecoration: 'none', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>LinkedIn</a>
         </div>
       </div>
 
