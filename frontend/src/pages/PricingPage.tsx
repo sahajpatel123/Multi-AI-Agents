@@ -75,6 +75,16 @@ const architectFeatures = [
   'Early access to new minds',
 ];
 
+function isSubFeature(item: string) {
+  return (
+    item.startsWith('· ') ||
+    item === 'Challenge any mind, watch the others react' ||
+    item === 'Minds remember your history' ||
+    item === '7-stage AI pipeline for complex tasks' ||
+    item === 'See exactly why a mind won'
+  );
+}
+
 function FeatureList({
   items,
   dotColor,
@@ -89,21 +99,22 @@ function FeatureList({
   badgeDark?: boolean;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '.55rem' }}>
+    <div>
       {items.map((item) => {
-        const isSub = item.startsWith('· ') || item === 'Challenge any mind, watch the others react' || item === 'Minds remember your history' || item === '7-stage AI pipeline for complex tasks' || item === 'See exactly why a mind won';
-
+        const sub = isSubFeature(item);
         return (
           <div
             key={item}
             style={{
               display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginLeft: isSub ? '12px' : 0,
+              alignItems: 'flex-start',
+              gap: '10px',
+              marginBottom: '10px',
+              marginLeft: sub ? '15px' : 0,
+              marginTop: sub ? '3px' : 0,
             }}
           >
-            {!isSub ? (
+            {!sub ? (
               <span
                 style={{
                   width: '5px',
@@ -111,12 +122,19 @@ function FeatureList({
                   borderRadius: '50%',
                   background: dotColor,
                   flexShrink: 0,
+                  marginTop: '6px',
                 }}
               />
             ) : (
               <span style={{ width: '5px', flexShrink: 0 }} />
             )}
-            <span style={{ fontSize: '13px', color: isSub ? subColor : textColor, lineHeight: 1.6 }}>
+            <span
+              style={{
+                fontSize: sub ? '12px' : '13px',
+                color: sub ? subColor : textColor,
+                lineHeight: 1.5,
+              }}
+            >
               {item === 'Agent mode access' ? (
                 <>
                   Agent mode access{' '}
@@ -132,7 +150,9 @@ function FeatureList({
                     Coming soon
                   </span>
                 </>
-              ) : item}
+              ) : (
+                item
+              )}
             </span>
           </div>
         );
@@ -140,6 +160,13 @@ function FeatureList({
     </div>
   );
 }
+
+const trustSignals: Array<{ icon: string; label: string }> = [
+  { icon: '🔒', label: 'Secure payments via Razorpay' },
+  { icon: '↩', label: '30-day money back guarantee' },
+  { icon: '✓', label: 'Cancel anytime' },
+  { icon: '🇮🇳', label: 'Made in India' },
+];
 
 export function PricingPage() {
   const navigate = useNavigate();
@@ -150,9 +177,7 @@ export function PricingPage() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
   const [upgradeSuccessLabel, setUpgradeSuccessLabel] = useState('');
-
-  const thinkerPrice = billing === 'monthly' ? '₹999/mo' : '₹8,299/yr';
-  const architectPrice = billing === 'monthly' ? '₹1,999/mo' : '₹16,599/yr';
+  const [freeCtaHover, setFreeCtaHover] = useState(false);
 
   const handleUpgrade = (planKey: string) => {
     if (!isAuthenticated) {
@@ -182,6 +207,30 @@ export function PricingPage() {
   const onCheckoutClose = useCallback(() => {
     setCheckoutPlan(null);
   }, []);
+
+  const toggleBtnActive = {
+    background: '#FFFFFF',
+    borderRadius: '999px',
+    padding: '8px 24px',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#1A1714',
+    boxShadow: '0 1px 4px rgba(26,23,20,0.08)',
+    transition: 'all 150ms ease',
+    border: 'none',
+    cursor: 'pointer',
+  } as const;
+
+  const toggleBtnInactive = {
+    background: 'transparent',
+    borderRadius: '999px',
+    padding: '8px 24px',
+    fontSize: '13px',
+    color: '#6B6460',
+    cursor: 'pointer',
+    border: 'none',
+    transition: 'all 150ms ease',
+  } as const;
 
   return (
     <div style={{ background: '#FAF7F4', minHeight: '100vh' }}>
@@ -265,6 +314,52 @@ export function PricingPage() {
           </p>
         </section>
 
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2.5rem' }}>
+          <div
+            style={{
+              background: '#F0EBE3',
+              borderRadius: '999px',
+              padding: '4px',
+              display: 'inline-flex',
+              gap: '4px',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setBilling('monthly')}
+              style={billing === 'monthly' ? toggleBtnActive : toggleBtnInactive}
+            >
+              Monthly
+            </button>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
+              <button
+                type="button"
+                onClick={() => setBilling('annual')}
+                style={billing === 'annual' ? toggleBtnActive : toggleBtnInactive}
+              >
+                Annual
+              </button>
+              {billing === 'annual' && (
+                <span
+                  style={{
+                    background: '#EDF2EF',
+                    color: '#8AA899',
+                    fontSize: '11px',
+                    padding: '3px 8px',
+                    borderRadius: '999px',
+                    marginLeft: '6px',
+                    fontWeight: 500,
+                  }}
+                >
+                  Save 31%
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
         <section
           className="pricing-grid"
           style={{
@@ -272,10 +367,34 @@ export function PricingPage() {
             gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
             gap: '14px',
             alignItems: 'stretch',
-            marginBottom: '3rem',
+            marginBottom: '0',
           }}
         >
-          <div style={{ background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '20px', padding: '2rem', display: 'flex', flexDirection: 'column' }}>
+          <div
+            style={{
+              position: 'relative',
+              background: '#FFFFFF',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: '20px',
+              padding: '2rem',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '3px',
+                height: '60px',
+                background: '#C4B8AE',
+                borderRadius: '999px',
+              }}
+            />
             <div style={{ display: 'inline-flex', background: '#F0EBE3', color: '#6B6460', borderRadius: '999px', padding: '4px 10px', fontSize: '11px', marginBottom: '1rem' }}>
               Free forever
             </div>
@@ -291,60 +410,86 @@ export function PricingPage() {
             <button
               type="button"
               onClick={() => navigate('/app')}
+              onMouseEnter={() => setFreeCtaHover(true)}
+              onMouseLeave={() => setFreeCtaHover(false)}
               style={{
                 width: '100%',
-                border: '0.5px solid #1A1714',
-                color: '#1A1714',
-                background: 'transparent',
+                padding: '12px',
                 borderRadius: '999px',
-                padding: '12px 22px',
+                border: '0.5px solid #E0D8D0',
+                background: freeCtaHover ? '#F0EBE3' : 'transparent',
+                color: '#1A1714',
                 fontSize: '14px',
                 cursor: 'pointer',
                 marginTop: '1.5rem',
+                transition: 'background 150ms ease',
               }}
             >
               Start exploring
             </button>
           </div>
 
-          <div style={{ border: '1px solid #C4956A', borderRadius: '20px', padding: '2rem', position: 'relative', background: '#FFFFFF', display: 'flex', flexDirection: 'column' }}>
-            <div className="featured-badge" style={{ position: 'absolute', top: '-12px', left: '50%', transform: 'translateX(-50%)', background: '#C4956A', color: '#FAF7F4', fontSize: '10px', padding: '4px 14px', borderRadius: '999px' }}>
+          <div
+            style={{
+              border: '1.5px solid #C4956A',
+              borderRadius: '20px',
+              padding: '2rem',
+              position: 'relative',
+              background: '#FFFFFF',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 0 0 4px rgba(196,149,106,0.08)',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: '-14px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: '#C4956A',
+                color: '#FAF7F4',
+                fontSize: '11px',
+                fontWeight: 500,
+                padding: '5px 16px',
+                borderRadius: '999px',
+                whiteSpace: 'nowrap',
+              }}
+            >
               Most popular
             </div>
             <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: '#6B6460', letterSpacing: '.08em', marginBottom: '.8rem' }}>
               Thinker
             </p>
-            <div className="billing-toggle" style={{ display: 'inline-flex', background: '#F0EBE3', borderRadius: '999px', padding: '4px', gap: '4px', marginBottom: '1rem' }}>
-              {(['monthly', 'annual'] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setBilling(option)}
-                  style={{
-                    border: 'none',
-                    borderRadius: '999px',
-                    padding: '6px 12px',
-                    background: billing === option ? '#1A1714' : '#F0EBE3',
-                    color: billing === option ? '#FAF7F4' : '#6B6460',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {option === 'monthly' ? 'Monthly' : 'Annual'}
-                </button>
-              ))}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '.35rem' }}>
-              <div style={{ fontSize: '44px', fontWeight: 500, color: '#1A1714', lineHeight: 1 }}>{thinkerPrice}</div>
-              {billing === 'annual' && (
-                <span style={{ background: '#EDF2EF', color: '#8AA899', fontSize: '11px', padding: '3px 8px', borderRadius: '999px' }}>
-                  Save 31%
-                </span>
-              )}
-            </div>
-            <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1.5rem' }}>
-              {billing === 'monthly' ? 'per month, billed monthly' : 'per year, billed annually'}
-            </p>
+
+            {billing === 'monthly' ? (
+              <>
+                <div style={{ fontSize: '42px', fontWeight: 500, color: '#1A1714', lineHeight: 1, marginBottom: '.35rem' }}>₹999/mo</div>
+                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1.5rem' }}>per month, billed monthly</p>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '.35rem' }}>
+                  <span style={{ fontSize: '42px', fontWeight: 500, color: '#1A1714', lineHeight: 1 }}>₹693/mo</span>
+                  <span
+                    style={{
+                      background: '#EDF2EF',
+                      color: '#8AA899',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      padding: '4px 10px',
+                      borderRadius: '999px',
+                      verticalAlign: 'middle',
+                    }}
+                  >
+                    -31%
+                  </span>
+                </div>
+                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '4px' }}>₹8,299 billed annually</p>
+                <p style={{ fontSize: '12px', color: '#C4B8AE', textDecoration: 'line-through', marginBottom: '1.5rem' }}>vs ₹11,988 monthly</p>
+              </>
+            )}
+
             <div style={{ height: '0.5px', background: '#E0D8D0', marginBottom: '1.5rem' }} />
             <div style={{ flex: 1 }}>
               <FeatureList items={thinkerFeatures} dotColor="#C4956A" textColor="#1A1714" subColor="#6B6460" />
@@ -357,38 +502,76 @@ export function PricingPage() {
                 background: '#1A1714',
                 color: '#FAF7F4',
                 borderRadius: '999px',
-                padding: '12px 22px',
+                padding: '13px',
                 fontSize: '14px',
+                fontWeight: 500,
                 border: 'none',
                 cursor: 'pointer',
                 marginTop: '1.5rem',
+                transition: 'opacity 150ms ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '0.85';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '1';
               }}
             >
               Start with Plus
             </button>
-            <p style={{ fontSize: '12px', color: '#6B6460', marginTop: '.8rem', textAlign: 'center' }}>
-              No credit card required to start
-            </p>
+            <p style={{ fontSize: '12px', color: '#6B6460', marginTop: '.8rem', textAlign: 'center' }}>No credit card required to start</p>
           </div>
 
           <div style={{ background: '#1A1714', borderRadius: '20px', padding: '2rem', display: 'flex', flexDirection: 'column' }}>
             <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: 'rgba(250,247,244,0.5)', letterSpacing: '.08em', marginBottom: '.8rem' }}>
               Architect
             </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '.35rem' }}>
-              <div style={{ fontSize: '44px', fontWeight: 500, color: '#FAF7F4', lineHeight: 1 }}>{architectPrice}</div>
-              {billing === 'annual' && (
-                <span style={{ background: 'rgba(250,247,244,0.1)', color: 'rgba(250,247,244,0.6)', fontSize: '11px', padding: '3px 8px', borderRadius: '999px' }}>
-                  Save 31%
-                </span>
-              )}
-            </div>
-            <p style={{ fontSize: '13px', color: 'rgba(250,247,244,0.5)', marginBottom: '1.5rem' }}>
-              {billing === 'monthly' ? 'per month, billed monthly' : 'per year, billed annually'}
-            </p>
+
+            {billing === 'monthly' ? (
+              <>
+                <div style={{ fontSize: '42px', fontWeight: 500, color: '#FAF7F4', lineHeight: 1, marginBottom: '.35rem' }}>₹1,999/mo</div>
+                <p style={{ fontSize: '13px', color: 'rgba(250,247,244,0.5)', marginBottom: '1.5rem' }}>per month, billed monthly</p>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '.35rem' }}>
+                  <span style={{ fontSize: '42px', fontWeight: 500, color: '#FAF7F4', lineHeight: 1 }}>₹1,383/mo</span>
+                  <span
+                    style={{
+                      background: '#EDF2EF',
+                      color: '#8AA899',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      padding: '4px 10px',
+                      borderRadius: '999px',
+                    }}
+                  >
+                    -31%
+                  </span>
+                </div>
+                <p style={{ fontSize: '13px', color: 'rgba(250,247,244,0.6)', marginBottom: '4px' }}>₹16,599 billed annually</p>
+                <p
+                  style={{
+                    fontSize: '12px',
+                    color: 'rgba(250,247,244,0.45)',
+                    textDecoration: 'line-through',
+                    marginBottom: '1.5rem',
+                  }}
+                >
+                  vs ₹23,988 monthly
+                </p>
+              </>
+            )}
+
             <div style={{ height: '0.5px', background: 'rgba(250,247,244,0.1)', marginBottom: '1.5rem' }} />
             <div style={{ flex: 1 }}>
-              <FeatureList items={architectFeatures} dotColor="rgba(250,247,244,0.3)" textColor="#FAF7F4" subColor="rgba(250,247,244,0.6)" badgeDark />
+              <FeatureList
+                items={architectFeatures}
+                dotColor="rgba(196,149,106,0.6)"
+                textColor="#FAF7F4"
+                subColor="rgba(250,247,244,0.6)"
+                badgeDark
+              />
             </div>
             <button
               type="button"
@@ -398,11 +581,19 @@ export function PricingPage() {
                 background: '#C4956A',
                 color: '#FAF7F4',
                 borderRadius: '999px',
-                padding: '12px 22px',
+                padding: '13px',
                 fontSize: '14px',
+                fontWeight: 500,
                 border: 'none',
                 cursor: 'pointer',
                 marginTop: '1.5rem',
+                transition: 'opacity 150ms ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '0.85';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '1';
               }}
             >
               Upgrade to Pro
@@ -413,7 +604,26 @@ export function PricingPage() {
           </div>
         </section>
 
-        <section style={{ marginBottom: '3rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '32px',
+            marginTop: '2rem',
+            flexWrap: 'wrap',
+          }}
+        >
+          {trustSignals.map((s) => (
+            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '14px', lineHeight: 1 }} aria-hidden>
+                {s.icon}
+              </span>
+              <span style={{ fontSize: '12px', color: '#6B6460' }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+
+        <section style={{ marginBottom: '3rem', marginTop: '3rem' }}>
           <h2 style={{ fontSize: '22px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>Compare plans</h2>
           <div className="comparison-table-wrapper" style={{ border: '0.5px solid #E0D8D0', borderRadius: '12px', overflow: 'hidden' }}>
             <div className="comparison-table" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', background: '#F0EBE3' }}>

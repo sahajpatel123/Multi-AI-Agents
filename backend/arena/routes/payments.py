@@ -145,6 +145,8 @@ async def create_subscription(
     client = _get_razorpay_client()
     customer_id = _ensure_razorpay_customer(client, db, user)
 
+    total_count = 10 if plan["billing_period"] == "annual" else 120
+
     try:
         rzp_sub = client.subscription.create(
             {
@@ -152,7 +154,7 @@ async def create_subscription(
                 "customer_id": customer_id,
                 "customer_notify": 1,
                 "quantity": 1,
-                "total_count": 120,
+                "total_count": total_count,
                 "notes": {
                     "user_id": str(user.id),
                     "email": user.email,
