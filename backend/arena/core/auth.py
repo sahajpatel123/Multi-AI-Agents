@@ -7,6 +7,7 @@ from typing import Optional
 
 import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException, Request, status
+from starlette.responses import Response
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
@@ -180,6 +181,72 @@ def get_current_user_required(
     user: Optional[UserResponse] = Depends(get_current_user_optional),
 ) -> UserResponse:
     """Requires an authenticated user; raises 401 if not."""
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    return user
+
+
+def set_auth_cookies_on_response(response: Response, user: User) -> None:
+    """Re-issue access + refresh cookies (e.g. after tier changes from payment verify)."""
+    settings = get_settings()
+    tier_raw = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
+    tier_val = normalize_tier(tier_raw).value
+    access_token = create_access_token(user.id, tier_val)
+    refresh_token = create_refresh_token(user.id)
+    secure = settings.is_production
+
+    response.set_cookie(
+        key=ACCESS_COOKIE,
+        value=access_token,
+        httponly=True,
+        secure=secure,
+        samesite=COOKIE_SAMESITE,
+        max_age=60 * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key=REFRESH_COOKIE,
+        value=refresh_token,
+        httponly=True,
+        secure=secure,
+        samesite=COOKIE_SAMESITE,
+        max_age=60 * 60 * 24 * 30,
+        path="/api/auth/refresh",
+    )
+
+
+def get_current_user_required_orm(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> User:
+    """Same auth as cookie JWT, but returns the SQLAlchemy User row (for DB updates)."""
+    token = request.cookies.get(ACCESS_COOKIE)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    if token_blacklist.is_blacklisted(token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    payload = decode_token(token)
+    if not payload or payload.get("type") != ACCESS_TOKEN_TYPE:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    user = get_user_by_id(db, int(user_id))
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

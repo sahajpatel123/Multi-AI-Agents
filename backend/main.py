@@ -24,6 +24,7 @@ from arena.routes.discuss import router as discuss_router
 from arena.routes.memory import memory_router
 from arena.routes.saved import router as saved_router
 from arena.routes.session import router as session_router
+from arena.routes.payments import router as payments_router
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,9 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         self.max_size = max_size
 
     async def dispatch(self, request: Request, call_next):
+        # Razorpay webhooks can exceed the default API body limit
+        if request.url.path.rstrip("/").endswith("/api/payments/webhook"):
+            return await call_next(request)
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > self.max_size:
             return JSONResponse(
@@ -146,6 +150,7 @@ def create_app() -> FastAPI:
     app.include_router(panels_router, prefix="/api")
     app.include_router(saved_router, prefix="/api")
     app.include_router(analytics_router, prefix="/api")
+    app.include_router(payments_router, prefix="/api/payments")
 
     # ── Startup ───────────────────────────────────────────────
     @app.on_event("startup")

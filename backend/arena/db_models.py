@@ -46,6 +46,15 @@ class User(Base):
     prompt_count_today = Column(Integer, default=0, nullable=False)
     prompt_count_reset_at = Column(DateTime, default=_now, nullable=False)
 
+    razorpay_customer_id = Column(String(64), nullable=True)
+    subscription_id = Column(
+        Integer,
+        ForeignKey("subscriptions.id", use_alter=True, name="fk_users_subscription_id"),
+        nullable=True,
+    )
+    subscription_status = Column(String(32), nullable=True)
+    subscription_end_date = Column(DateTime, nullable=True)
+
     sessions = relationship("DBSession", back_populates="user", cascade="all, delete-orphan")
     usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan")
     preferences = relationship("UserPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -56,6 +65,34 @@ class User(Base):
     persona_drift_logs = relationship("PersonaDriftLog", back_populates="user", cascade="all, delete-orphan")
     scoring_audits = relationship("ScoringAudit", back_populates="user", cascade="all, delete-orphan")
     ux_events = relationship("UXEvent", back_populates="user", cascade="all, delete-orphan")
+    subscriptions = relationship(
+        "Subscription",
+        back_populates="user",
+        foreign_keys="Subscription.user_id",
+    )
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    razorpay_subscription_id = Column(String(64), unique=True, nullable=False)
+    razorpay_customer_id = Column(String(64), nullable=True)
+    plan_id = Column(String(64), nullable=False)
+    plan_name = Column(String(128), nullable=False)
+    tier = Column(String(16), nullable=False)
+    billing_period = Column(String(16), nullable=False)
+    status = Column(String(32), nullable=False, default="created")
+    current_start = Column(DateTime, nullable=True)
+    current_end = Column(DateTime, nullable=True)
+    amount = Column(Integer, nullable=False)
+    currency = Column(String(8), default="INR", nullable=False)
+    payment_count = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
+
+    user = relationship("User", back_populates="subscriptions", foreign_keys=[user_id])
 
 
 class DBSession(Base):

@@ -28,6 +28,9 @@ python-multipart>=0.0.9
 # Utils
 python-dotenv==1.0.1
 
+# Payments
+razorpay>=1.4.0
+
 # Tools
 duckduckgo-search>=4.0.0
 

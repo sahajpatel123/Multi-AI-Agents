@@ -249,6 +249,21 @@ class TokenResponse(BaseModel):
 
 
 # ─────────────────────────────────────────────────
+# Payments (Razorpay subscriptions)
+# ─────────────────────────────────────────────────
+
+
+class SubscribePlanRequest(BaseModel):
+    plan_key: str
+
+
+class VerifyPaymentRequest(BaseModel):
+    razorpay_payment_id: str
+    razorpay_subscription_id: str
+    razorpay_signature: str
+
+
+# ─────────────────────────────────────────────────
 # Rate limit error schema
 # ─────────────────────────────────────────────────
 

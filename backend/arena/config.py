@@ -69,6 +69,15 @@ class Settings(BaseSettings):
     # App
     app_version: str = "1.0.0"
 
+    # Razorpay (subscriptions) — set in .env; optional until you enable billing
+    razorpay_api_key: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
+    razorpay_plus_monthly_plan_id: str = ""
+    razorpay_plus_annual_plan_id: str = ""
+    razorpay_pro_monthly_plan_id: str = ""
+    razorpay_pro_annual_plan_id: str = ""
+
     @field_validator("debug", mode="before")
     @classmethod
     def parse_debug(cls, value):
@@ -145,6 +154,11 @@ class Settings(BaseSettings):
                 print(
                     f"[WARNING] {key_name} not set. Related personas will fall back to Claude."
                 )
+
+        if not self.razorpay_api_key:
+            print(
+                "[WARNING] RAZORPAY_API_KEY not set. Payments disabled."
+            )
 
     @property
     def is_production(self) -> bool:
