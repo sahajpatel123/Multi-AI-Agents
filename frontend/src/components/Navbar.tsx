@@ -282,6 +282,32 @@ export function Navbar() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      navigate('/account');
+                    }}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      fontSize: '13px',
+                      color: '#1A1714',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#F0EBE3';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    Subscription
+                  </button>
+                  <button
+                    type="button"
                     onClick={async () => {
                       setMenuOpen(false);
                       await logout();
@@ -366,18 +392,55 @@ export function Navbar() {
               {item.label}
             </button>
           ))}
+          {isAuthenticated && (
+            <>
+              <button
+                type="button"
+                className="navbar-mobile-link"
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate('/personas');
+                }}
+              >
+                My Panel
+              </button>
+              <button
+                type="button"
+                className="navbar-mobile-link"
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate('/account');
+                }}
+              >
+                Subscription
+              </button>
+              <button
+                type="button"
+                className="navbar-mobile-link"
+                onClick={async () => {
+                  setMenuOpen(false);
+                  await logout();
+                  navigate('/');
+                }}
+              >
+                Sign out
+              </button>
+            </>
+          )}
         </div>
 
-        <button
-          type="button"
-          className="navbar-mobile-cta"
-          onClick={() => {
-            setMenuOpen(false);
-            navigate('/app');
-          }}
-        >
-          Try Arena →
-        </button>
+        {!isAuthenticated && (
+          <button
+            type="button"
+            className="navbar-mobile-cta"
+            onClick={() => {
+              setMenuOpen(false);
+              navigate('/app');
+            }}
+          >
+            Try Arena →
+          </button>
+        )}
       </div>
     </>
   );

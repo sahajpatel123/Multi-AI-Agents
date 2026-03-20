@@ -11,6 +11,7 @@ import { ChangelogPage } from './pages/ChangelogPage'
 import { TermsPage } from './pages/TermsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { PersonasPage } from './pages/PersonasPage'
+import { AccountPage } from './pages/AccountPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthProvider } from './hooks/useAuth'
 import { PanelProvider } from './context/PanelContext'
@@ -73,6 +74,11 @@ if (!rootElement) {
                   <Route path="/personas" element={
                     <ProtectedRoute>
                       <PersonasPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/account" element={
+                    <ProtectedRoute>
+                      <AccountPage />
                     </ProtectedRoute>
                   } />
                 </Routes>

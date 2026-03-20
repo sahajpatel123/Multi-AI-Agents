@@ -12,6 +12,7 @@ import {
   Bookmark,
   Pencil,
   Trash2,
+  CreditCard,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
@@ -216,6 +217,16 @@ export function Sidebar({
                 </button>
               </div>
             )}
+            <div style={{ marginTop: '10px' }}>
+              <MenuAction
+                icon={<CreditCard style={{ width: '14px', height: '14px', color: '#6B6460' }} />}
+                label="Manage subscription"
+                onClick={() => {
+                  onClose();
+                  navigate('/account');
+                }}
+              />
+            </div>
           </div>
 
           <div style={{ margin: '1.2rem 0 0.6rem' }}>

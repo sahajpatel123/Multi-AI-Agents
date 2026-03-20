@@ -346,8 +346,6 @@ export function SignInPage() {
           {activeTab === 'signup' && (
             <form onSubmit={handleSignUp}>
               <h2 style={{ fontSize: '22px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', marginBottom: '.4rem' }}>Create your account</h2>
-              <p style={{ fontSize: '13px', color: '#C4956A', marginBottom: '2rem' }}>Free forever. No credit card needed.</p>
-
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '12px', color: '#6B6460', marginBottom: '.4rem' }}>Email</label>
                 <input

@@ -1,5 +1,9 @@
+import { useCallback, useState } from 'react';
 import { Lock, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { RazorpayCheckout } from './RazorpayCheckout';
+import { useAuth } from '../hooks/useAuth';
+import { useTier } from '../context/TierContext';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -19,6 +23,33 @@ export function UpgradeModal({
   subtitle = 'Debate mode lets you challenge any mind and watch the others react in real time.',
 }: UpgradeModalProps) {
   const navigate = useNavigate();
+  const { isAuthenticated, refreshUser, user } = useAuth();
+  const { refreshTier } = useTier();
+  const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
+
+  const handleUpgradePlusMonthly = () => {
+    if (!isAuthenticated) {
+      navigate('/signin');
+      onClose();
+      return;
+    }
+    setCheckoutPlan('plus_monthly');
+  };
+
+  const onCheckoutSuccess = useCallback(async () => {
+    setCheckoutPlan(null);
+    onClose();
+    await refreshTier();
+    await refreshUser();
+  }, [onClose, refreshTier, refreshUser]);
+
+  const onCheckoutError = useCallback((_message: string) => {
+    setCheckoutPlan(null);
+  }, []);
+
+  const onCheckoutDismiss = useCallback(() => {
+    setCheckoutPlan(null);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -38,6 +69,16 @@ export function UpgradeModal({
         padding: '24px',
       }}
     >
+      {checkoutPlan && (
+        <RazorpayCheckout
+          key={checkoutPlan}
+          planKey={checkoutPlan}
+          prefillEmail={user?.email}
+          onSuccess={onCheckoutSuccess}
+          onError={onCheckoutError}
+          onClose={onCheckoutDismiss}
+        />
+      )}
       <div
         className="upgrade-modal"
         onClick={(e) => e.stopPropagation()}
@@ -121,7 +162,7 @@ export function UpgradeModal({
 
         <button
           type="button"
-          onClick={() => navigate('/pricing')}
+          onClick={handleUpgradePlusMonthly}
           style={{
             width: '100%',
             padding: '13px 24px',
@@ -134,7 +175,27 @@ export function UpgradeModal({
             cursor: 'pointer',
           }}
         >
-          Upgrade to Plus — $12/month
+          Upgrade to Plus — ₹999/mo
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            navigate('/pricing');
+          }}
+          style={{
+            width: '100%',
+            padding: '11px 24px',
+            borderRadius: '999px',
+            background: 'transparent',
+            color: '#6B6460',
+            fontSize: '13px',
+            marginTop: '0.65rem',
+            border: '0.5px solid #E0D8D0',
+            cursor: 'pointer',
+          }}
+        >
+          See all plans
         </button>
         <button
           type="button"

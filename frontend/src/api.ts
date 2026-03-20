@@ -608,3 +608,89 @@ export async function healthCheck(): Promise<boolean> {
     return false;
   }
 }
+
+// ──────────────────────────────────────────────────────────────
+// Payments (Razorpay subscriptions)
+// ──────────────────────────────────────────────────────────────
+
+export type CreateSubscriptionResponse = {
+  subscription_id: string;
+  key_id: string;
+  plan_name: string;
+  amount: number;
+  currency: string;
+};
+
+export async function createSubscription(planKey: string): Promise<CreateSubscriptionResponse> {
+  const response = await apiFetch(`${API_BASE}/payments/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan_key: planKey }),
+  });
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } } & CreateSubscriptionResponse>(response);
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Subscription failed'), response.status, data);
+  }
+  return data as CreateSubscriptionResponse;
+}
+
+export async function verifyPayment(
+  paymentId: string,
+  subscriptionId: string,
+  signature: string,
+): Promise<{ status: string; tier: string; message?: string }> {
+  const response = await apiFetch(`${API_BASE}/payments/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      razorpay_payment_id: paymentId,
+      razorpay_subscription_id: subscriptionId,
+      razorpay_signature: signature,
+    }),
+  });
+  const data = await parseJsonSafely<{ detail?: string; status?: string; tier?: string }>(response);
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Verification failed'), response.status, data);
+  }
+  return data as { status: string; tier: string; message?: string };
+}
+
+export type SubscriptionStatusResponse = {
+  has_subscription: boolean;
+  tier: string;
+  plan_name?: string;
+  status?: string;
+  billing_period?: string;
+  amount?: number;
+  currency?: string;
+  current_end?: string;
+  payment_count?: number;
+  razorpay_subscription_id?: string;
+};
+
+export async function getSubscriptionStatus(): Promise<SubscriptionStatusResponse> {
+  const response = await apiFetch(`${API_BASE}/payments/subscription`);
+  const data = await parseJsonSafely<SubscriptionStatusResponse>(response);
+  if (!data) {
+    return { has_subscription: false, tier: 'FREE' };
+  }
+  return data;
+}
+
+export async function cancelSubscription(): Promise<{
+  status: string;
+  message: string;
+  access_until: string;
+}> {
+  const response = await apiFetch(`${API_BASE}/payments/cancel`, { method: 'POST' });
+  const data = await parseJsonSafely<{ detail?: string; status?: string; message?: string; access_until?: string }>(
+    response,
+  );
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Cancel failed'), response.status, data);
+  }
+  return data as { status: string; message: string; access_until: string };
+}

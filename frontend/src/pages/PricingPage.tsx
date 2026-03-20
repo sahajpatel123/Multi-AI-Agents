@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
+import { RazorpayCheckout } from '../components/RazorpayCheckout';
+import { useAuth } from '../hooks/useAuth';
+import { useTier } from '../context/TierContext';
 
 const comparisonRows = [
   ['Questions per day', '5', '15', '35'],
@@ -140,16 +143,116 @@ function FeatureList({
 
 export function PricingPage() {
   const navigate = useNavigate();
+  const { isAuthenticated, refreshUser, user } = useAuth();
+  const { refreshTier } = useTier();
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
+  const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [upgradeSuccess, setUpgradeSuccess] = useState(false);
+  const [upgradeSuccessLabel, setUpgradeSuccessLabel] = useState('');
 
-  const thinkerPrice = billing === 'monthly' ? '$12/mo' : '$99/yr';
-  const architectPrice = billing === 'monthly' ? '$24/mo' : '$199/yr';
+  const thinkerPrice = billing === 'monthly' ? '₹999/mo' : '₹8,299/yr';
+  const architectPrice = billing === 'monthly' ? '₹1,999/mo' : '₹16,599/yr';
+
+  const handleUpgrade = (planKey: string) => {
+    if (!isAuthenticated) {
+      navigate('/signin');
+      return;
+    }
+    setCheckoutPlan(planKey);
+    setCheckoutError(null);
+  };
+
+  const handleCheckoutSuccess = async (planKey: string) => {
+    setUpgradeSuccessLabel(planKey.startsWith('pro') ? 'Pro' : 'Plus');
+    setCheckoutPlan(null);
+    setUpgradeSuccess(true);
+    await refreshTier();
+    await refreshUser();
+    window.setTimeout(() => {
+      navigate('/app');
+    }, 2000);
+  };
+
+  const onCheckoutError = useCallback((error: string) => {
+    setCheckoutPlan(null);
+    setCheckoutError(error);
+  }, []);
+
+  const onCheckoutClose = useCallback(() => {
+    setCheckoutPlan(null);
+  }, []);
 
   return (
     <div style={{ background: '#FAF7F4', minHeight: '100vh' }}>
       <Navbar />
 
       <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '64px 24px' }}>
+        {upgradeSuccess && (
+          <div
+            style={{
+              background: '#EDF2EF',
+              border: '0.5px solid #8AA899',
+              borderRadius: '12px',
+              padding: '14px 20px',
+              fontSize: '14px',
+              color: '#1A1714',
+              textAlign: 'center',
+              marginBottom: '1.5rem',
+            }}
+          >
+            🎉 Welcome to {upgradeSuccessLabel}! Your account has been upgraded.
+          </div>
+        )}
+
+        {checkoutError && (
+          <div
+            style={{
+              background: '#FEF2F2',
+              border: '0.5px solid #E57373',
+              borderRadius: '12px',
+              padding: '14px 20px',
+              fontSize: '13px',
+              color: '#C0392B',
+              marginBottom: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+            }}
+          >
+            <span style={{ flex: 1 }}>{checkoutError}</span>
+            <button
+              type="button"
+              aria-label="Dismiss"
+              onClick={() => setCheckoutError(null)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#C0392B',
+                fontSize: '18px',
+                cursor: 'pointer',
+                lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {checkoutPlan && (
+          <RazorpayCheckout
+            key={checkoutPlan}
+            planKey={checkoutPlan}
+            prefillEmail={user?.email}
+            onSuccess={() => {
+              void handleCheckoutSuccess(checkoutPlan);
+            }}
+            onError={onCheckoutError}
+            onClose={onCheckoutClose}
+          />
+        )}
+
         <section className="pricing-hero" style={{ marginBottom: '3rem' }}>
           <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#6B6460', marginBottom: '1rem' }}>
             Simple, honest pricing
@@ -248,7 +351,7 @@ export function PricingPage() {
             </div>
             <button
               type="button"
-              onClick={() => navigate('/signin')}
+              onClick={() => handleUpgrade(billing === 'monthly' ? 'plus_monthly' : 'plus_annual')}
               style={{
                 width: '100%',
                 background: '#1A1714',
@@ -289,7 +392,7 @@ export function PricingPage() {
             </div>
             <button
               type="button"
-              onClick={() => navigate('/signin')}
+              onClick={() => handleUpgrade(billing === 'monthly' ? 'pro_monthly' : 'pro_annual')}
               style={{
                 width: '100%',
                 background: '#C4956A',
