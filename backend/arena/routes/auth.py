@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 from arena.config import get_settings
 from arena.core.auth import (
     ACCESS_COOKIE,
-    COOKIE_SAMESITE,
     REFRESH_COOKIE,
     REFRESH_TOKEN_TYPE,
+    auth_cookie_samesite_and_secure,
     authenticate_user,
     create_access_token,
     create_refresh_token,
@@ -50,22 +50,20 @@ def _tier_value(user: User) -> str:
     return normalize_tier(raw).value
 
 
-def _is_production() -> bool:
-    return get_settings().is_production
-
-
 def _set_auth_cookies(response: Response, user: User) -> None:
     access_token = create_access_token(user.id, _tier_value(user))
     refresh_token = create_refresh_token(user.id)
-    secure = _is_production()
+    samesite, secure = auth_cookie_samesite_and_secure()
+    settings = get_settings()
+    access_max_age = 60 * int(settings.access_token_expire_minutes)
 
     response.set_cookie(
         key=ACCESS_COOKIE,
         value=access_token,
         httponly=True,
         secure=secure,
-        samesite=COOKIE_SAMESITE,
-        max_age=60 * 60,
+        samesite=samesite,
+        max_age=access_max_age,
         path="/",
     )
     response.set_cookie(
@@ -73,15 +71,29 @@ def _set_auth_cookies(response: Response, user: User) -> None:
         value=refresh_token,
         httponly=True,
         secure=secure,
-        samesite=COOKIE_SAMESITE,
-        max_age=60 * 60 * 24 * 30,
+        samesite=samesite,
+        max_age=60 * 60 * 24 * int(settings.refresh_token_expire_days),
         path="/api/auth/refresh",
     )
 
 
 def _clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie(ACCESS_COOKIE, path="/")
-    response.delete_cookie(REFRESH_COOKIE, path="/api/auth/refresh")
+    """Clear cookies with the same flags used when setting (required for cross-site cookies)."""
+    samesite, secure = auth_cookie_samesite_and_secure()
+    response.delete_cookie(
+        ACCESS_COOKIE,
+        path="/",
+        secure=secure,
+        httponly=True,
+        samesite=samesite,
+    )
+    response.delete_cookie(
+        REFRESH_COOKIE,
+        path="/api/auth/refresh",
+        secure=secure,
+        httponly=True,
+        samesite=samesite,
+    )
 
 
 def _user_to_response(user: User) -> UserResponse:

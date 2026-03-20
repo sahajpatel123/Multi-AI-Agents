@@ -92,6 +92,8 @@ export async function apiFetch(
   url: string,
   options: RequestInit = {},
 ): Promise<Response> {
+  // Cross-origin session cookies (e.g. Vercel → Render): always send credentials;
+  // spread options first so `credentials` cannot be overridden to 'omit'.
   const response = await fetch(url, {
     ...options,
     credentials: 'include',

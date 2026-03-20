@@ -126,13 +126,15 @@ def create_app() -> FastAPI:
         )
 
     # ── Middleware (order matters — outermost runs first) ─────
+    # Explicit origins only — required when allow_credentials=True (no "*")
+    _cors_origins = settings.allowed_origins_list
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.allowed_origins_list,
+        allow_origins=_cors_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
-        expose_headers=["X-Request-ID"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["Set-Cookie", "X-Request-ID"],
         max_age=3600,
     )
     app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)

@@ -144,10 +144,17 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
 
 ACCESS_COOKIE = "arena_access"
 REFRESH_COOKIE = "arena_refresh"
+# Default for dev; production uses SameSite=None + Secure for cross-site (e.g. Vercel + Render).
 COOKIE_SAMESITE = "lax"
-# COOKIE_SECURE is intentionally left as False here; auth.py routes
-# derive secure= from settings.is_production at runtime.
 COOKIE_SECURE = False
+
+
+def auth_cookie_samesite_and_secure() -> tuple[str, bool]:
+    """(samesite, secure). Production: none+True for cross-origin credentialed requests."""
+    settings = get_settings()
+    if settings.is_production:
+        return ("none", True)
+    return ("lax", False)
 
 
 # ─────────────────────────────────────────────────
@@ -191,20 +198,21 @@ def get_current_user_required(
 
 def set_auth_cookies_on_response(response: Response, user: User) -> None:
     """Re-issue access + refresh cookies (e.g. after tier changes from payment verify)."""
-    settings = get_settings()
     tier_raw = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
     tier_val = normalize_tier(tier_raw).value
     access_token = create_access_token(user.id, tier_val)
     refresh_token = create_refresh_token(user.id)
-    secure = settings.is_production
+    samesite, secure = auth_cookie_samesite_and_secure()
+    settings = get_settings()
+    access_max_age = 60 * int(settings.access_token_expire_minutes)
 
     response.set_cookie(
         key=ACCESS_COOKIE,
         value=access_token,
         httponly=True,
         secure=secure,
-        samesite=COOKIE_SAMESITE,
-        max_age=60 * 60,
+        samesite=samesite,
+        max_age=access_max_age,
         path="/",
     )
     response.set_cookie(
@@ -212,8 +220,8 @@ def set_auth_cookies_on_response(response: Response, user: User) -> None:
         value=refresh_token,
         httponly=True,
         secure=secure,
-        samesite=COOKIE_SAMESITE,
-        max_age=60 * 60 * 24 * 30,
+        samesite=samesite,
+        max_age=60 * 60 * 24 * int(settings.refresh_token_expire_days),
         path="/api/auth/refresh",
     )
 
