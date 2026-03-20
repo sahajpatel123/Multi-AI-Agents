@@ -1338,7 +1338,7 @@ export function HomePage() {
         >
           <span style={{ fontSize: '13px', color: '#C4956A', letterSpacing: '.1em', width: '32px' }}>02</span>
           <p className="ml-text" style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-.02em', flex: 1, lineHeight: 1.2, padding: '0 2rem', color: '#1A1714' }}>
-            Arena gives you <span style={{ fontWeight: 500, letterSpacing: manifestoHovered === 2 ? '0.01em' : '-.02em', transition: 'letter-spacing 300ms ease' }}><CountUp target={4} /></span> that compete.
+            Arena gives you{' '}<span style={{ fontWeight: 500, letterSpacing: manifestoHovered === 2 ? '0.01em' : '-.02em', transition: 'letter-spacing 300ms ease' }}><CountUp target={4} /></span>{' '}that compete.
           </p>
           <span className="ml-tag" style={{ fontSize: '13px', color: '#6B6460', border: '0.5px solid #E0D8D0', padding: '4px 12px', borderRadius: '999px' }}>The Arena way</span>
         </div>
