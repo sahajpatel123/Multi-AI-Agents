@@ -24,10 +24,10 @@ export function AboutPage() {
 
       <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '64px 24px' }}>
         {/* Hero */}
-        <div className="animate-fade-up about-hero" style={{ marginBottom: '4rem' }}>
+        <div className="animate-fade-up about-hero" style={{ marginBottom: '4rem', maxWidth: '680px', marginInline: 'auto' }}>
           <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#6B6460', marginBottom: '1rem' }}>The story behind Arena</p>
 
-          <div className="about-hero-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '48px', alignItems: 'start' }}>
+          <div className="about-hero-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '48px', alignItems: 'start' }}>
             {/* Left Column */}
             <div>
               <h1 style={{ fontSize: '52px', fontWeight: 500, letterSpacing: '-.03em', lineHeight: 1.1, marginBottom: '1.5rem' }}>
@@ -45,79 +45,6 @@ export function AboutPage() {
                 <p style={{ fontSize: '14px', color: '#6B6460', lineHeight: 1.8 }}>
                   Arena is the first product in a larger vision — a platform where multiple AI agents don't just answer questions, but debate, verify, and challenge each other to surface the truth. The persona library, Agent mode, and the full dual-mode architecture are all in active development.
                 </p>
-              </div>
-            </div>
-
-            {/* Right Column - Profile Card */}
-            <div className="about-profile-card" style={{ background: '#1A1714', borderRadius: '20px', padding: '2rem' }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#C4956A', color: '#FAF7F4', fontSize: '18px', fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.2rem' }}>
-                SP
-              </div>
-
-              <h3 style={{ fontSize: '18px', fontWeight: 500, color: '#FAF7F4', marginBottom: '.3rem' }}>Sahaj Patel</h3>
-              <p style={{ fontSize: '13px', color: 'rgba(250,247,244,0.5)', marginBottom: '1.5rem' }}>Builder · BCA (AI & ML Honours)</p>
-
-              <div style={{ height: '0.5px', background: 'rgba(250,247,244,0.1)', marginBottom: '1.5rem' }} />
-
-              <div>
-                {[
-                  { label: 'Degree', value: 'BCA — AI & ML Honours' },
-                  { label: 'Focus', value: 'AI/ML Development in India' },
-                  { label: 'Status', value: 'Actively building' },
-                  { label: 'Vision', value: 'General Purpose Scientific AI' },
-                ].map((stat, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '.5rem 0', borderBottom: '0.5px solid rgba(250,247,244,0.08)' }}>
-                    <span style={{ fontSize: '12px', color: 'rgba(250,247,244,0.4)' }}>{stat.label}</span>
-                    <span style={{ fontSize: '13px', color: 'rgba(250,247,244,0.8)', fontWeight: 500 }}>{stat.value}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', marginTop: '1.5rem' }}>
-                <button
-                  style={{
-                    border: '0.5px solid rgba(250,247,244,0.2)',
-                    color: 'rgba(250,247,244,0.6)',
-                    padding: '7px 16px',
-                    borderRadius: '999px',
-                    fontSize: '12px',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    transition: 'all 150ms',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(250,247,244,0.1)';
-                    e.currentTarget.style.color = 'rgba(250,247,244,0.9)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = 'rgba(250,247,244,0.6)';
-                  }}
-                >
-                  GitHub ↗
-                </button>
-                <button
-                  style={{
-                    border: '0.5px solid rgba(250,247,244,0.2)',
-                    color: 'rgba(250,247,244,0.6)',
-                    padding: '7px 16px',
-                    borderRadius: '999px',
-                    fontSize: '12px',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    transition: 'all 150ms',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(250,247,244,0.1)';
-                    e.currentTarget.style.color = 'rgba(250,247,244,0.9)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = 'rgba(250,247,244,0.6)';
-                  }}
-                >
-                  LinkedIn ↗
-                </button>
               </div>
             </div>
           </div>

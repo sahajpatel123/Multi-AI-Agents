@@ -65,7 +65,6 @@ export function Footer() {
           <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#8AA899' }} className="breathe-slow" />
           <span style={{ fontSize: '12px', color: '#8AA899' }}>All systems operational</span>
         </div>
-        <span style={{ fontSize: '12px', color: '#6B6460' }}>Built by Sahaj Patel</span>
       </div>
     </footer>
   );
