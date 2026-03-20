@@ -28,10 +28,6 @@ const faqs = [
     answer: 'Thinker gives you everything Arena currently offers — all 16 minds, debate mode, memory, and focused chat. Architect adds Agent mode (coming soon), unlimited debates, scoring audit visibility, and priority response speed. If you are unsure, start with Thinker.',
   },
   {
-    question: 'How does the money back guarantee work?',
-    answer: 'If you upgrade to Pro and are not satisfied within 30 days, contact us for a full refund. No questions asked.',
-  },
-  {
     question: 'Can I change plans anytime?',
     answer: 'Yes. Upgrade or downgrade at any time. Changes take effect immediately.',
   },
@@ -163,7 +159,6 @@ function FeatureList({
 
 const trustSignals: Array<{ icon: string; label: string }> = [
   { icon: '🔒', label: 'Secure payments via Razorpay' },
-  { icon: '↩', label: '30-day money back guarantee' },
   { icon: '✓', label: 'Cancel anytime' },
   { icon: '🇮🇳', label: 'Made in India' },
 ];
@@ -310,7 +305,7 @@ export function PricingPage() {
             Start <span style={{ color: '#C4956A', fontStyle: 'italic' }}>free.</span>
           </h1>
           <p style={{ fontSize: '14px', color: '#6B6460', maxWidth: '420px', lineHeight: 1.8 }}>
-            No credit card to start. Upgrade when Arena becomes part of how you think.
+            Upgrade when Arena becomes part of how you think.
           </p>
         </section>
 
@@ -519,7 +514,6 @@ export function PricingPage() {
             >
               Start with Plus
             </button>
-            <p style={{ fontSize: '12px', color: '#6B6460', marginTop: '.8rem', textAlign: 'center' }}>No credit card required to start</p>
           </div>
 
           <div style={{ background: '#1A1714', borderRadius: '20px', padding: '2rem', display: 'flex', flexDirection: 'column' }}>
@@ -598,9 +592,6 @@ export function PricingPage() {
             >
               Upgrade to Pro
             </button>
-            <p style={{ fontSize: '12px', color: 'rgba(250,247,244,0.4)', marginTop: '.8rem', textAlign: 'center' }}>
-              30-day money back guarantee
-            </p>
           </div>
         </section>
 
