@@ -23,11 +23,11 @@ const comparisonRows = [
 const faqs = [
   {
     question: 'Which minds do I get for free?',
-    answer: 'The Explorer plan includes 6 minds: The Analyst, Philosopher, Pragmatist, Contrarian, Futurist, and Empath. These cover analytical, philosophical, practical, contrarian, future-focused, and empathetic perspectives. Upgrade to Thinker to unlock all 16.',
+    answer: 'The Explorer plan includes 6 minds: The Analyst, Philosopher, Pragmatist, Contrarian, Futurist, and Empath. These cover analytical, philosophical, practical, contrarian, future-focused, and empathetic perspectives. Upgrade to Plus to unlock all 16.',
   },
   {
-    question: 'What is the difference between Thinker and Architect?',
-    answer: 'Thinker gives you everything Arena currently offers — all 16 minds, debate mode, memory, and focused chat. Architect adds Agent mode (coming soon), unlimited debates, scoring audit visibility, and priority response speed. If you are unsure, start with Thinker.',
+    question: 'What is the difference between Plus and Pro?',
+    answer: 'Plus gives you everything Arena currently offers — all 16 minds, debate mode, memory, and focused chat. Pro adds Agent mode (coming soon), unlimited debates, scoring audit visibility, and priority response speed. If you are unsure, start with Plus.',
   },
   {
     question: 'Can I change plans anytime?',
@@ -396,7 +396,7 @@ export function PricingPage() {
           >
             <CheckCircle size={16} color="#5A8A5A" />
             <span>
-              You are on the <strong>{isPro ? 'Architect (Pro)' : 'Thinker (Plus)'}</strong> plan.
+              You are on the <strong>{isPro ? 'Pro' : 'Plus'}</strong> plan.
             </span>
             <button
               type="button"
@@ -536,7 +536,7 @@ export function PricingPage() {
               Most popular
             </div>
             <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: '#6B6460', letterSpacing: '.08em', marginBottom: '.8rem' }}>
-              Thinker
+              Plus
             </p>
 
             {billing === 'monthly' ? (
@@ -645,38 +645,47 @@ export function PricingPage() {
             )}
           </div>
 
-          <div style={{ background: '#1A1714', borderRadius: '20px', padding: '2rem', display: 'flex', flexDirection: 'column' }}>
-            <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: 'rgba(250,247,244,0.5)', letterSpacing: '.08em', marginBottom: '.8rem' }}>
-              Architect
+          <div
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid rgba(196,149,106,0.35)',
+              borderRadius: '20px',
+              padding: '2rem',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: '#6B6460', letterSpacing: '.08em', marginBottom: '.8rem' }}>
+              Pro
             </p>
 
             {billing === 'monthly' ? (
               <>
-                <div style={{ fontSize: '42px', fontWeight: 500, color: 'rgba(250,247,244,0.88)', lineHeight: 1, marginBottom: '.35rem' }}>₹1,999/mo</div>
-                <p style={{ fontSize: '13px', color: 'rgba(250,247,244,0.5)', marginBottom: '1.5rem' }}>per month, billed monthly</p>
+                <div style={{ fontSize: '40px', fontWeight: 400, color: '#1A1714', lineHeight: 1, marginBottom: '.35rem' }}>₹1,999/mo</div>
+                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1.5rem' }}>per month, billed monthly</p>
               </>
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '.35rem' }}>
-                  <span style={{ fontSize: '42px', fontWeight: 500, color: '#FAF7F4', lineHeight: 1 }}>₹1,383/mo</span>
+                  <span style={{ fontSize: '40px', fontWeight: 400, color: '#1A1714', lineHeight: 1 }}>₹1,383/mo</span>
                   <span
                     style={{
-                      background: 'rgba(255,255,255,0.08)',
-                      color: 'rgba(250,247,244,0.6)',
-                      fontSize: '12px',
+                      background: '#EFF4EF',
+                      color: '#7A9B7A',
+                      fontSize: '11px',
                       fontWeight: 400,
-                      padding: '4px 10px',
+                      padding: '3px 9px',
                       borderRadius: '999px',
                     }}
                   >
                     -31%
                   </span>
                 </div>
-                <p style={{ fontSize: '13px', color: 'rgba(250,247,244,0.6)', marginBottom: '4px' }}>₹16,599 billed annually</p>
+                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '4px' }}>₹16,599 billed annually</p>
                 <p
                   style={{
                     fontSize: '12px',
-                    color: 'rgba(250,247,244,0.45)',
+                    color: '#C4B8AE',
                     textDecoration: 'line-through',
                     marginBottom: '1.5rem',
                   }}
@@ -690,10 +699,9 @@ export function PricingPage() {
             <div style={{ flex: 1 }}>
               <FeatureList
                 items={architectFeatures}
-                dotColor="rgba(196,149,106,0.35)"
-                textColor="rgba(250,247,244,0.7)"
-                subColor="rgba(250,247,244,0.45)"
-                badgeDark
+                dotColor="rgba(196,149,106,0.5)"
+                textColor="#1A1714"
+                subColor="#6B6460"
               />
             </div>
             {isCurrentPlan('pro') ? (
@@ -702,7 +710,7 @@ export function PricingPage() {
                   width: '100%',
                   padding: '12px',
                   borderRadius: '999px',
-                  background: 'rgba(196,149,106,0.2)',
+                  background: 'rgba(196,149,106,0.15)',
                   color: '#C4956A',
                   fontSize: '14px',
                   fontWeight: 500,
@@ -729,14 +737,13 @@ export function PricingPage() {
                   border: 'none',
                   cursor: 'pointer',
                   marginTop: '1.5rem',
-                  opacity: 0.92,
                   transition: 'opacity 150ms ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.opacity = '1';
+                  e.currentTarget.style.opacity = '0.88';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.opacity = '0.92';
+                  e.currentTarget.style.opacity = '1';
                 }}
               >
                 Upgrade to Pro
@@ -865,7 +872,7 @@ export function PricingPage() {
           <h2 style={{ fontSize: '22px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>Compare plans</h2>
           <div className="comparison-table-wrapper" style={{ border: '0.5px solid #E0D8D0', borderRadius: '12px', overflow: 'hidden' }}>
             <div className="comparison-table" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', background: '#F0EBE3' }}>
-              {['Feature', 'Explorer', 'Thinker', 'Architect'].map((label) => (
+              {['Feature', 'Explorer', 'Plus', 'Pro'].map((label) => (
                 <div key={label} style={{ padding: '14px 16px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.08em', color: '#6B6460' }}>
                   {label}
                 </div>
