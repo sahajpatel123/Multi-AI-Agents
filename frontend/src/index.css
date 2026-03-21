@@ -245,6 +245,26 @@ canvas {
   }
 }
 
+@keyframes pillBreathe {
+  0%, 100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 14px 2px rgba(196,149,106,0.12);
+  }
+}
+
+@keyframes mindEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes trophyPop {
   0% {
     transform: scale(0) rotate(-20deg);

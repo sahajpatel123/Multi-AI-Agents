@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Check, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getSubscriptionStatus } from '../api';
@@ -73,26 +73,42 @@ const architectFeatures = [
   'Early access to new minds',
 ];
 
-const personaNames = [
-  'Analyst',
-  'Philosopher',
-  'Pragmatist',
-  'Contrarian',
-  'Futurist',
-  'Empath',
-  'Scientist',
-  'Historian',
-  'Economist',
-  'Ethicist',
-  'Stoic',
-  'Strategist',
-  'Engineer',
-  'Optimist',
-  'First Principles',
-  "Devil's Advocate",
+const MINDS = [
+  { name: 'The Analyst', locked: false, color: '#8C9BAB' },
+  { name: 'The Philosopher', locked: false, color: '#9B8FAA' },
+  { name: 'The Pragmatist', locked: false, color: '#8AA899' },
+  { name: 'The Contrarian', locked: false, color: '#B0977E' },
+  { name: 'The Futurist', locked: false, color: '#9B8FAA' },
+  { name: 'The Empath', locked: false, color: '#AA8F8F' },
+  { name: 'The Scientist', locked: true, color: '#8C9BAB' },
+  { name: 'The Historian', locked: true, color: '#A89B8C' },
+  { name: 'The Economist', locked: true, color: '#8AA899' },
+  { name: 'The Ethicist', locked: true, color: '#9B8FAA' },
+  { name: 'The Stoic', locked: true, color: '#8C9BAB' },
+  { name: 'The Strategist', locked: true, color: '#B0977E' },
+  { name: 'The Engineer', locked: true, color: '#8C9BAB' },
+  { name: 'The Optimist', locked: true, color: '#8AA899' },
+  { name: 'First Principles', locked: true, color: '#9B8FAA' },
+  { name: "Devil's Advocate", locked: true, color: '#B0977E' },
+] as const;
+
+const unlockedPillTimings = [
+  '3.2s 0s',
+  '2.8s 0.3s',
+  '3.5s 0.6s',
+  '2.6s 0.9s',
+  '3.0s 0.2s',
+  '2.4s 0.7s',
 ];
 
-const unlockedDotDurations = ['2.4s', '2.8s', '3.2s', '2.0s', '2.6s', '3.0s'];
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace('#', '');
+  const bigint = Number.parseInt(normalized, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 function isSubFeature(item: string) {
   return (
@@ -192,8 +208,10 @@ export function PricingPage() {
   const [upgradeSuccessLabel, setUpgradeSuccessLabel] = useState('');
   const [freeCtaHover, setFreeCtaHover] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
-  const [mindsHovered, setMindsHovered] = useState(false);
+  const [sectionHovered, setSectionHovered] = useState(false);
   const [hoveredMind, setHoveredMind] = useState<number | null>(null);
+  const [mindsInView, setMindsInView] = useState(false);
+  const mindsSectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -207,6 +225,25 @@ export function PricingPage() {
 
     setSubscriptionStatus(null);
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    const node = mindsSectionRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setMindsInView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.2 },
+    );
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, []);
 
   const getCurrentPlanKey = () => {
     if (isPro) return 'pro';
@@ -286,18 +323,6 @@ export function PricingPage() {
         minHeight: '100vh',
       }}
     >
-      <style>{`
-        @keyframes dotBreathe {
-          0%, 100% {
-            box-shadow: 0 0 6px rgba(196,149,106,0.15);
-            transform: scale(1);
-          }
-          50% {
-            box-shadow: 0 0 14px rgba(196,149,106,0.35);
-            transform: scale(1.08);
-          }
-        }
-      `}</style>
       <Navbar />
 
       <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '2rem 24px 1.5rem' }}>
@@ -746,120 +771,191 @@ export function PricingPage() {
           </div>
         </section>
 
-        <section style={{ maxWidth: '680px', margin: '2rem auto 0', textAlign: 'center' }}>
+        <section ref={mindsSectionRef} style={{ maxWidth: '760px', margin: '2.5rem auto 0', textAlign: 'center' }}>
           <p
             style={{
-              fontSize: '11px',
-              letterSpacing: '.14em',
+              fontSize: '10px',
+              letterSpacing: '.18em',
               textTransform: 'uppercase',
               color: '#B0A9A2',
-              marginBottom: '1.5rem',
+              marginBottom: '0.5rem',
             }}
           >
-            16 minds waiting
+            THE MINDS
           </p>
+          <p style={{ fontSize: '13px', color: '#C4B8AE', marginBottom: '2rem' }}>Your panel. Your perspective.</p>
 
           <div
-            onMouseEnter={() => setMindsHovered(true)}
+            onMouseEnter={() => setSectionHovered(true)}
             onMouseLeave={() => {
-              setMindsHovered(false);
+              setSectionHovered(false);
               setHoveredMind(null);
             }}
             style={{
-              maxWidth: '320px',
-              margin: '0 auto',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '10px',
+              justifyContent: 'center',
+              padding: '2rem 2.5rem',
+              background: 'rgba(26,23,20,0.02)',
+              border: '0.5px solid rgba(26,23,20,0.05)',
+              borderRadius: '24px',
+              position: 'relative',
+              overflow: 'hidden',
             }}
           >
             <div
+              aria-hidden
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(8, 1fr)',
-                gap: '16px',
-                maxWidth: '320px',
-                margin: '0 auto',
-                padding: '2rem',
-                background: 'rgba(26,23,20,0.02)',
-                borderRadius: '20px',
-                border: '0.5px solid rgba(26,23,20,0.05)',
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '300px',
+                height: '200px',
+                background: 'radial-gradient(ellipse, rgba(196,149,106,0.06) 0%, transparent 70%)',
+                pointerEvents: 'none',
+                zIndex: 0,
               }}
-            >
-              {personaNames.map((name, index) => {
-                const unlocked = index < 6 || isPlus || isPro;
-                const litLocked = !unlocked && mindsHovered;
-                const lockedDelay = `${Math.max(index - 6, 0) * 60}ms`;
+            />
 
-                return (
+            {MINDS.map((mind, index) => {
+              const locked = (isPlus || isPro) ? false : mind.locked;
+              const isWaveLit = locked && sectionHovered;
+              const isUnlockedHover = !locked && hoveredMind === index;
+              const enterDelay = `${index * 40}ms`;
+              const lockedDelay = `${Math.max(index - 6, 0) * 50}ms`;
+
+              return (
+                <Fragment key={mind.name}>
                   <div
-                    key={name}
-                    style={{ position: 'relative', width: '28px', height: '28px', justifySelf: 'center' }}
                     onMouseEnter={() => setHoveredMind(index)}
                     onMouseLeave={() => setHoveredMind((current) => (current === index ? null : current))}
+                    style={{
+                      position: 'relative',
+                      zIndex: 1,
+                      padding: '7px 14px',
+                      borderRadius: '999px',
+                      cursor: 'default',
+                      transition: 'all 400ms ease',
+                      transitionDelay: locked ? (sectionHovered ? lockedDelay : '0ms') : '0ms',
+                      border: locked
+                        ? isWaveLit
+                          ? `1px solid ${hexToRgba(mind.color, 0.2)}`
+                          : '1px solid rgba(26,23,20,0.08)'
+                        : `1px solid ${hexToRgba(mind.color, isUnlockedHover ? 0.5 : 0.35)}`,
+                      background: locked
+                        ? isWaveLit
+                          ? hexToRgba(mind.color, 0.05)
+                          : 'transparent'
+                        : hexToRgba(mind.color, isUnlockedHover ? 0.12 : 0.07),
+                      transform: isUnlockedHover ? 'translateY(-1px)' : 'translateY(0)',
+                      boxShadow: locked
+                        ? 'none'
+                        : isUnlockedHover
+                          ? `0 4px 12px ${hexToRgba(mind.color, 0.15)}`
+                          : undefined,
+                      animation: `${mindsInView ? 'mindEnter 400ms cubic-bezier(0.16,1,0.3,1) both' : 'none'}${!locked ? `, pillBreathe ${unlockedPillTimings[Math.min(index, 5)]} ease-in-out infinite` : ''}`,
+                      animationDelay: mindsInView ? `${enterDelay}${!locked ? ', 0s' : ''}` : undefined,
+                      opacity: mindsInView ? 1 : 0,
+                    }}
                   >
-                    <div
+                    <span
                       style={{
-                        width: '28px',
-                        height: '28px',
+                        width: '5px',
+                        height: '5px',
                         borderRadius: '50%',
-                        position: 'relative',
-                        cursor: 'default',
-                        transition: 'all 400ms ease',
-                        transitionDelay: litLocked ? lockedDelay : '0ms',
-                        background: unlocked ? 'rgba(196,149,106,0.15)' : litLocked ? 'rgba(196,149,106,0.1)' : 'rgba(26,23,20,0.04)',
-                        border: unlocked
-                          ? '1.5px solid rgba(196,149,106,0.4)'
-                          : litLocked
-                            ? '1.5px solid rgba(196,149,106,0.25)'
-                            : '1.5px solid rgba(26,23,20,0.08)',
-                        boxShadow: unlocked
-                          ? '0 0 8px rgba(196,149,106,0.15)'
-                          : litLocked
-                            ? '0 0 10px rgba(196,149,106,0.1)'
-                            : 'none',
-                        transform: litLocked ? 'scale(1.05)' : 'scale(1)',
-                        animation: unlocked ? `dotBreathe ${unlockedDotDurations[Math.min(index, 5)]} ease-in-out infinite` : 'none',
+                        background: mind.color,
+                        opacity: locked ? (isWaveLit ? 0.35 : 0.15) : 0.7,
+                        display: 'inline-block',
+                        marginRight: '6px',
+                        verticalAlign: 'middle',
                       }}
                     />
-                    <div
+                    <span
                       style={{
-                        position: 'absolute',
-                        bottom: '36px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        background: '#1A1714',
-                        color: '#FAF7F4',
-                        fontSize: '10px',
-                        padding: '4px 8px',
-                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 400,
+                        color: locked ? (isWaveLit ? 'rgba(26,23,20,0.5)' : 'rgba(26,23,20,0.2)') : '#1A1714',
+                        letterSpacing: '0.01em',
                         whiteSpace: 'nowrap',
-                        pointerEvents: 'none',
-                        opacity: hoveredMind === index ? 1 : 0,
-                        transition: 'opacity 150ms ease',
-                        zIndex: 10,
                       }}
                     >
-                      {name}
-                    </div>
+                      {mind.name}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
 
-            <p
-              style={{
-                opacity: mindsHovered ? 1 : 0,
-                fontSize: '12px',
-                color: isPlus || isPro ? '#5A8A5A' : '#C4956A',
-                marginTop: '1rem',
-                transition: 'opacity 300ms ease',
-              }}
-            >
-              {isPlus || isPro ? 'All 16 minds unlocked' : 'Unlock all 16 minds with Plus'}
-            </p>
+                  {!isPlus && !isPro && index === 5 ? (
+                    <Fragment>
+                      <div
+                        style={{
+                          width: '100%',
+                          height: 0,
+                          margin: '2px 0',
+                          opacity: mindsInView ? 1 : 0,
+                          animation: mindsInView ? 'mindEnter 400ms cubic-bezier(0.16,1,0.3,1) both' : 'none',
+                          animationDelay: '240ms',
+                        }}
+                      />
+                      <div
+                        style={{
+                          width: '100%',
+                          textAlign: 'center',
+                          fontSize: '10px',
+                          letterSpacing: '.12em',
+                          textTransform: 'uppercase',
+                          color: 'rgba(26,23,20,0.15)',
+                          margin: '4px 0 6px',
+                          opacity: mindsInView ? 1 : 0,
+                          animation: mindsInView ? 'mindEnter 400ms cubic-bezier(0.16,1,0.3,1) both' : 'none',
+                          animationDelay: '280ms',
+                        }}
+                      >
+                        · · · Plus · · ·
+                      </div>
+                    </Fragment>
+                  ) : null}
+                </Fragment>
+              );
+            })}
           </div>
 
-          <p style={{ marginTop: '1.2rem', fontSize: '12px', color: '#B0A9A2' }}>
-            {isPlus || isPro ? 'All 16 minds available in your panel' : '6 minds available now · 10 more with Plus'}
-          </p>
+          <div style={{ marginTop: '1.2rem' }}>
+            {isPlus || isPro ? (
+              <p style={{ fontSize: '12px', color: '#8AA899' }}>All 16 minds available in your panel</p>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <span
+                    style={{
+                      background: 'rgba(196,149,106,0.1)',
+                      border: '0.5px solid rgba(196,149,106,0.25)',
+                      color: '#C4956A',
+                      fontSize: '11px',
+                      padding: '4px 12px',
+                      borderRadius: '999px',
+                    }}
+                  >
+                    6 unlocked
+                  </span>
+                  <span style={{ color: '#C4B8AE' }}>·</span>
+                  <span
+                    style={{
+                      background: 'rgba(26,23,20,0.04)',
+                      border: '0.5px solid rgba(26,23,20,0.08)',
+                      color: '#6B6460',
+                      fontSize: '11px',
+                      padding: '4px 12px',
+                      borderRadius: '999px',
+                    }}
+                  >
+                    10 with Plus
+                  </span>
+                </div>
+                <p style={{ marginTop: '0.5rem', fontSize: '11px', color: '#B0A9A2' }}>Hover to preview the locked minds</p>
+              </>
+            )}
+          </div>
         </section>
 
         <section style={{ marginBottom: '3rem', marginTop: '1.5rem' }}>
