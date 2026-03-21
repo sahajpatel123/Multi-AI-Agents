@@ -73,6 +73,27 @@ const architectFeatures = [
   'Early access to new minds',
 ];
 
+const personaNames = [
+  'Analyst',
+  'Philosopher',
+  'Pragmatist',
+  'Contrarian',
+  'Futurist',
+  'Empath',
+  'Scientist',
+  'Historian',
+  'Economist',
+  'Ethicist',
+  'Stoic',
+  'Strategist',
+  'Engineer',
+  'Optimist',
+  'First Principles',
+  "Devil's Advocate",
+];
+
+const unlockedDotDurations = ['2.4s', '2.8s', '3.2s', '2.0s', '2.6s', '3.0s'];
+
 function isSubFeature(item: string) {
   return (
     item.startsWith('· ') ||
@@ -160,12 +181,6 @@ function FeatureList({
   );
 }
 
-const trustSignals: Array<{ icon: string; label: string }> = [
-  { icon: '🔒', label: 'Secure payments via Razorpay' },
-  { icon: '✓', label: 'Cancel anytime' },
-  { icon: '🇮🇳', label: 'Made in India' },
-];
-
 export function PricingPage() {
   const navigate = useNavigate();
   const { isAuthenticated, refreshUser, user } = useAuth();
@@ -177,6 +192,8 @@ export function PricingPage() {
   const [upgradeSuccessLabel, setUpgradeSuccessLabel] = useState('');
   const [freeCtaHover, setFreeCtaHover] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+  const [mindsHovered, setMindsHovered] = useState(false);
+  const [hoveredMind, setHoveredMind] = useState<number | null>(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -269,6 +286,18 @@ export function PricingPage() {
         minHeight: '100vh',
       }}
     >
+      <style>{`
+        @keyframes dotBreathe {
+          0%, 100% {
+            box-shadow: 0 0 6px rgba(196,149,106,0.15);
+            transform: scale(1);
+          }
+          50% {
+            box-shadow: 0 0 14px rgba(196,149,106,0.35);
+            transform: scale(1.08);
+          }
+        }
+      `}</style>
       <Navbar />
 
       <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '64px 24px' }}>
@@ -716,24 +745,121 @@ export function PricingPage() {
           </div>
         </section>
 
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '28px',
-            marginTop: '2rem',
-            flexWrap: 'wrap',
-          }}
-        >
-          {trustSignals.map((s) => (
-            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '14px', lineHeight: 1, opacity: 0.6 }} aria-hidden>
-                {s.icon}
-              </span>
-              <span style={{ fontSize: '12px', color: '#9B9490' }}>{s.label}</span>
+        <section style={{ maxWidth: '680px', margin: '3rem auto 0', textAlign: 'center' }}>
+          <p
+            style={{
+              fontSize: '11px',
+              letterSpacing: '.14em',
+              textTransform: 'uppercase',
+              color: '#B0A9A2',
+              marginBottom: '1.5rem',
+            }}
+          >
+            16 minds waiting
+          </p>
+
+          <div
+            onMouseEnter={() => setMindsHovered(true)}
+            onMouseLeave={() => {
+              setMindsHovered(false);
+              setHoveredMind(null);
+            }}
+            style={{
+              maxWidth: '320px',
+              margin: '0 auto',
+            }}
+          >
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(8, 1fr)',
+                gap: '16px',
+                maxWidth: '320px',
+                margin: '0 auto',
+                padding: '2rem',
+                background: 'rgba(26,23,20,0.02)',
+                borderRadius: '20px',
+                border: '0.5px solid rgba(26,23,20,0.05)',
+              }}
+            >
+              {personaNames.map((name, index) => {
+                const unlocked = index < 6 || isPlus || isPro;
+                const litLocked = !unlocked && mindsHovered;
+                const lockedDelay = `${Math.max(index - 6, 0) * 60}ms`;
+
+                return (
+                  <div
+                    key={name}
+                    style={{ position: 'relative', width: '28px', height: '28px', justifySelf: 'center' }}
+                    onMouseEnter={() => setHoveredMind(index)}
+                    onMouseLeave={() => setHoveredMind((current) => (current === index ? null : current))}
+                  >
+                    <div
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '50%',
+                        position: 'relative',
+                        cursor: 'default',
+                        transition: 'all 400ms ease',
+                        transitionDelay: litLocked ? lockedDelay : '0ms',
+                        background: unlocked ? 'rgba(196,149,106,0.15)' : litLocked ? 'rgba(196,149,106,0.1)' : 'rgba(26,23,20,0.04)',
+                        border: unlocked
+                          ? '1.5px solid rgba(196,149,106,0.4)'
+                          : litLocked
+                            ? '1.5px solid rgba(196,149,106,0.25)'
+                            : '1.5px solid rgba(26,23,20,0.08)',
+                        boxShadow: unlocked
+                          ? '0 0 8px rgba(196,149,106,0.15)'
+                          : litLocked
+                            ? '0 0 10px rgba(196,149,106,0.1)'
+                            : 'none',
+                        transform: litLocked ? 'scale(1.05)' : 'scale(1)',
+                        animation: unlocked ? `dotBreathe ${unlockedDotDurations[Math.min(index, 5)]} ease-in-out infinite` : 'none',
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: '36px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: '#1A1714',
+                        color: '#FAF7F4',
+                        fontSize: '10px',
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        whiteSpace: 'nowrap',
+                        pointerEvents: 'none',
+                        opacity: hoveredMind === index ? 1 : 0,
+                        transition: 'opacity 150ms ease',
+                        zIndex: 10,
+                      }}
+                    >
+                      {name}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
+
+            <p
+              style={{
+                opacity: mindsHovered ? 1 : 0,
+                fontSize: '12px',
+                color: isPlus || isPro ? '#5A8A5A' : '#C4956A',
+                marginTop: '1rem',
+                transition: 'opacity 300ms ease',
+              }}
+            >
+              {isPlus || isPro ? 'All 16 minds unlocked' : 'Unlock all 16 minds with Plus'}
+            </p>
+          </div>
+
+          <p style={{ marginTop: '1.2rem', fontSize: '12px', color: '#B0A9A2' }}>
+            {isPlus || isPro ? 'All 16 minds available in your panel' : '6 minds available now · 10 more with Plus'}
+          </p>
+        </section>
 
         <section style={{ marginBottom: '3rem', marginTop: '3rem' }}>
           <h2 style={{ fontSize: '22px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>Compare plans</h2>
