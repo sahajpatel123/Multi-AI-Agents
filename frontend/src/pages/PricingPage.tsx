@@ -118,7 +118,7 @@ function FeatureList({
   badgeDark?: boolean;
 }) {
   return (
-    <div>
+    <div style={{ flex: 1 }}>
       {items.map((item) => {
         const sub = isSubFeature(item);
         return (
@@ -127,10 +127,10 @@ function FeatureList({
             style={{
               display: 'flex',
               alignItems: 'flex-start',
-              gap: '10px',
-              marginBottom: '10px',
+              gap: '7px',
+              marginBottom: '7px',
               marginLeft: sub ? '15px' : 0,
-              marginTop: sub ? '3px' : 0,
+              marginTop: sub ? '2px' : 0,
             }}
           >
             {!sub ? (
@@ -149,7 +149,7 @@ function FeatureList({
             )}
             <span
               style={{
-                fontSize: sub ? '12px' : '13px',
+                fontSize: sub ? '11px' : '13px',
                 color: sub ? subColor : textColor,
                 lineHeight: 1.5,
                 fontWeight: 400,
@@ -300,7 +300,7 @@ export function PricingPage() {
       `}</style>
       <Navbar />
 
-      <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '64px 24px' }}>
+      <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '2rem 24px 1.5rem' }}>
         {upgradeSuccess && (
           <div
             style={{
@@ -366,14 +366,14 @@ export function PricingPage() {
           />
         )}
 
-        <section className="pricing-hero" style={{ marginBottom: '3rem' }}>
-          <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.14em', color: '#B0A9A2', marginBottom: '1rem' }}>
+        <section className="pricing-hero" style={{ marginBottom: 0, paddingTop: '2rem', paddingBottom: '1.5rem' }}>
+          <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.14em', color: '#B0A9A2', marginBottom: '0.5rem' }}>
             Simple, honest pricing
           </p>
-          <h1 style={{ fontSize: '48px', fontWeight: 400, letterSpacing: '-.03em', color: '#1A1714', lineHeight: 1.05, marginBottom: '1rem' }}>
+          <h1 style={{ fontSize: '42px', fontWeight: 400, letterSpacing: '-.03em', color: '#1A1714', lineHeight: 1.1, marginBottom: '0.5rem' }}>
             Start <span style={{ color: '#C4956A', fontStyle: 'italic', opacity: 0.9 }}>free.</span>
           </h1>
-          <p style={{ fontSize: '14px', color: '#8B8480', maxWidth: '420px', lineHeight: 1.8 }}>
+          <p style={{ fontSize: '13px', color: '#8B8480', maxWidth: '420px', lineHeight: 1.8, marginBottom: '1.5rem' }}>
             Upgrade when Arena becomes part of how you think.
           </p>
         </section>
@@ -417,7 +417,7 @@ export function PricingPage() {
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
           <div
             style={{
               background: '#EFEFED',
@@ -455,9 +455,9 @@ export function PricingPage() {
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '14px',
+            gap: '16px',
             alignItems: 'stretch',
-            marginBottom: '0',
+            marginBottom: '1.5rem',
           }}
         >
           <div
@@ -465,7 +465,7 @@ export function PricingPage() {
               background: '#FDFCFB',
               border: '0.5px solid #E8E2DA',
               borderRadius: '20px',
-              padding: '2rem',
+              padding: '1.5rem',
               display: 'flex',
               flexDirection: 'column',
             }}
@@ -476,12 +476,10 @@ export function PricingPage() {
             <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: '#6B6460', letterSpacing: '.08em', marginBottom: '.8rem' }}>
               Explorer
             </p>
-            <div style={{ fontSize: '48px', fontWeight: 500, color: '#1A1714', lineHeight: 1, marginBottom: '.35rem' }}>$0</div>
-            <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1.5rem' }}>forever</p>
-            <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', marginBottom: '1.5rem' }} />
-            <div style={{ flex: 1 }}>
-              <FeatureList items={explorerFeatures} dotColor="#D4CCC4" textColor="#1A1714" subColor="#8B8480" />
-            </div>
+            <div style={{ fontSize: '48px', fontWeight: 500, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>$0</div>
+            <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>forever</p>
+            <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', margin: '0.75rem 0' }} />
+            <FeatureList items={explorerFeatures} dotColor="#D4CCC4" textColor="#1A1714" subColor="#8B8480" />
             <button
               type="button"
               onClick={isCurrentPlan('free') ? undefined : () => navigate('/app')}
@@ -489,14 +487,14 @@ export function PricingPage() {
               onMouseLeave={isCurrentPlan('free') ? undefined : () => setFreeCtaHover(false)}
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '11px',
                 borderRadius: '999px',
                 border: isCurrentPlan('free') ? '0.5px solid #E0D8D0' : '0.5px solid #DDD7D0',
                 background: isCurrentPlan('free') ? '#F0EBE3' : freeCtaHover ? '#F5F2EF' : 'transparent',
                 color: '#6B6460',
                 fontSize: '14px',
                 cursor: isCurrentPlan('free') ? 'default' : 'pointer',
-                marginTop: '1.5rem',
+                marginTop: 'auto',
                 transition: 'background 150ms ease',
                 textAlign: 'center',
               }}
@@ -509,7 +507,7 @@ export function PricingPage() {
             style={{
               border: '1px solid rgba(196,149,106,0.35)',
               borderRadius: '20px',
-              padding: '2rem',
+              padding: '1.5rem',
               position: 'relative',
               background: '#FFFFFF',
               display: 'flex',
@@ -541,8 +539,8 @@ export function PricingPage() {
 
             {billing === 'monthly' ? (
               <>
-                <div style={{ fontSize: '40px', fontWeight: 400, letterSpacing: '-.02em', color: '#1A1714', lineHeight: 1, marginBottom: '.35rem' }}>₹999/mo</div>
-                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1.5rem' }}>per month, billed monthly</p>
+                <div style={{ fontSize: '40px', fontWeight: 400, letterSpacing: '-.02em', color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹999/mo</div>
+                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>per month, billed monthly</p>
               </>
             ) : (
               <>
@@ -563,19 +561,17 @@ export function PricingPage() {
                   </span>
                 </div>
                 <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '4px' }}>₹8,299 billed annually</p>
-                <p style={{ fontSize: '12px', color: '#C4B8AE', textDecoration: 'line-through', marginBottom: '1.5rem' }}>vs ₹11,988 monthly</p>
+                <p style={{ fontSize: '12px', color: '#C4B8AE', textDecoration: 'line-through', marginBottom: '1rem' }}>vs ₹11,988 monthly</p>
               </>
             )}
 
-            <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', marginBottom: '1.5rem' }} />
-            <div style={{ flex: 1 }}>
-              <FeatureList items={thinkerFeatures} dotColor="rgba(196,149,106,0.5)" textColor="#1A1714" subColor="#8B8480" />
-            </div>
+            <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', margin: '0.75rem 0' }} />
+            <FeatureList items={thinkerFeatures} dotColor="rgba(196,149,106,0.5)" textColor="#1A1714" subColor="#8B8480" />
             {isCurrentPlan('plus') ? (
               <div
                 style={{
                   width: '100%',
-                  padding: '12px',
+                  padding: '11px',
                   borderRadius: '999px',
                   background: '#EDF2EF',
                   color: '#5A8A5A',
@@ -588,7 +584,7 @@ export function PricingPage() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '6px',
-                  marginTop: '1.5rem',
+                  marginTop: 'auto',
                 }}
               >
                 <Check size={16} color="#5A8A5A" />
@@ -598,7 +594,7 @@ export function PricingPage() {
               <div
                 style={{
                   width: '100%',
-                  padding: '12px',
+                  padding: '11px',
                   borderRadius: '999px',
                   background: '#F0EBE3',
                   color: '#6B6460',
@@ -611,7 +607,7 @@ export function PricingPage() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '6px',
-                  marginTop: '1.5rem',
+                  marginTop: 'auto',
                 }}
               >
                 Included in your plan
@@ -625,12 +621,12 @@ export function PricingPage() {
                   background: '#1A1714',
                   color: '#FAF7F4',
                   borderRadius: '999px',
-                  padding: '13px',
+                  padding: '11px',
                   fontSize: '14px',
                   fontWeight: 500,
                   border: 'none',
                   cursor: 'pointer',
-                  marginTop: '1.5rem',
+                  marginTop: 'auto',
                   transition: 'opacity 150ms ease',
                 }}
                 onMouseEnter={(e) => {
@@ -650,7 +646,7 @@ export function PricingPage() {
               background: '#FFFFFF',
               border: '1px solid rgba(196,149,106,0.35)',
               borderRadius: '20px',
-              padding: '2rem',
+              padding: '1.5rem',
               display: 'flex',
               flexDirection: 'column',
             }}
@@ -661,8 +657,8 @@ export function PricingPage() {
 
             {billing === 'monthly' ? (
               <>
-                <div style={{ fontSize: '40px', fontWeight: 400, color: '#1A1714', lineHeight: 1, marginBottom: '.35rem' }}>₹1,999/mo</div>
-                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1.5rem' }}>per month, billed monthly</p>
+                <div style={{ fontSize: '40px', fontWeight: 400, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹1,999/mo</div>
+                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>per month, billed monthly</p>
               </>
             ) : (
               <>
@@ -687,7 +683,7 @@ export function PricingPage() {
                     fontSize: '12px',
                     color: '#C4B8AE',
                     textDecoration: 'line-through',
-                    marginBottom: '1.5rem',
+                    marginBottom: '1rem',
                   }}
                 >
                   vs ₹23,988 monthly
@@ -695,20 +691,18 @@ export function PricingPage() {
               </>
             )}
 
-            <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', marginBottom: '1.5rem' }} />
-            <div style={{ flex: 1 }}>
-              <FeatureList
-                items={architectFeatures}
-                dotColor="rgba(196,149,106,0.5)"
-                textColor="#1A1714"
-                subColor="#6B6460"
-              />
-            </div>
+            <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', margin: '0.75rem 0' }} />
+            <FeatureList
+              items={architectFeatures}
+              dotColor="rgba(196,149,106,0.5)"
+              textColor="#1A1714"
+              subColor="#6B6460"
+            />
             {isCurrentPlan('pro') ? (
               <div
                 style={{
                   width: '100%',
-                  padding: '12px',
+                  padding: '11px',
                   borderRadius: '999px',
                   background: 'rgba(196,149,106,0.15)',
                   color: '#C4956A',
@@ -717,7 +711,7 @@ export function PricingPage() {
                   cursor: 'default',
                   border: '0.5px solid rgba(196,149,106,0.3)',
                   textAlign: 'center',
-                  marginTop: '1.5rem',
+                  marginTop: 'auto',
                 }}
               >
                 ✓ Current plan
@@ -731,12 +725,12 @@ export function PricingPage() {
                   background: '#C4956A',
                   color: '#FAF7F4',
                   borderRadius: '999px',
-                  padding: '13px',
+                  padding: '11px',
                   fontSize: '14px',
                   fontWeight: 500,
                   border: 'none',
                   cursor: 'pointer',
-                  marginTop: '1.5rem',
+                  marginTop: 'auto',
                   transition: 'opacity 150ms ease',
                 }}
                 onMouseEnter={(e) => {
@@ -752,7 +746,7 @@ export function PricingPage() {
           </div>
         </section>
 
-        <section style={{ maxWidth: '680px', margin: '3rem auto 0', textAlign: 'center' }}>
+        <section style={{ maxWidth: '680px', margin: '2rem auto 0', textAlign: 'center' }}>
           <p
             style={{
               fontSize: '11px',
@@ -868,7 +862,7 @@ export function PricingPage() {
           </p>
         </section>
 
-        <section style={{ marginBottom: '3rem', marginTop: '3rem' }}>
+        <section style={{ marginBottom: '3rem', marginTop: '1.5rem' }}>
           <h2 style={{ fontSize: '22px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>Compare plans</h2>
           <div className="comparison-table-wrapper" style={{ border: '0.5px solid #E0D8D0', borderRadius: '12px', overflow: 'hidden' }}>
             <div className="comparison-table" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', background: '#F0EBE3' }}>
@@ -907,7 +901,7 @@ export function PricingPage() {
           </div>
         </section>
 
-        <section style={{ maxWidth: '760px' }}>
+        <section style={{ maxWidth: '760px', marginTop: '1.5rem' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>Common questions</h2>
           {faqs.map((faq) => (
             <div key={faq.question} className="faq-item" style={{ borderBottom: '0.5px solid rgba(26,23,20,0.06)', padding: '1rem 0' }}>
