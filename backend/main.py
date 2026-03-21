@@ -43,6 +43,9 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         # Razorpay webhooks can exceed the default API body limit
         if request.url.path.rstrip("/").endswith("/api/payments/webhook"):
             return await call_next(request)
+        # Skip size check for OPTIONS preflight requests
+        if request.method == "OPTIONS":
+            return await call_next(request)
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > self.max_size:
             return JSONResponse(
