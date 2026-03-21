@@ -1,5 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { Check, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getSubscriptionStatus } from '../api';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
 import { RazorpayCheckout } from '../components/RazorpayCheckout';
@@ -167,13 +169,44 @@ const trustSignals: Array<{ icon: string; label: string }> = [
 export function PricingPage() {
   const navigate = useNavigate();
   const { isAuthenticated, refreshUser, user } = useAuth();
-  const { refreshTier } = useTier();
+  const { tier, isPlus, isPro, refreshTier } = useTier();
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
   const [upgradeSuccessLabel, setUpgradeSuccessLabel] = useState('');
   const [freeCtaHover, setFreeCtaHover] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      getSubscriptionStatus()
+        .then((data) => {
+          setSubscriptionStatus(data.status || null);
+        })
+        .catch(() => {});
+      return;
+    }
+
+    setSubscriptionStatus(null);
+  }, [isAuthenticated]);
+
+  const getCurrentPlanKey = () => {
+    if (isPro) return 'pro';
+    if (isPlus) return 'plus';
+    if (tier === 'FREE' || tier === 'GUEST') return 'free';
+    return 'free';
+  };
+
+  const isCurrentPlan = (planName: string) => {
+    const current = getCurrentPlanKey();
+    return current === planName;
+  };
+
+  const hasActiveSubscription =
+    isAuthenticated &&
+    (isPlus || isPro) &&
+    (subscriptionStatus == null || ['created', 'authenticated', 'active', 'halted'].includes(subscriptionStatus));
 
   const handleUpgrade = (planKey: string) => {
     if (!isAuthenticated) {
@@ -316,6 +349,45 @@ export function PricingPage() {
           </p>
         </section>
 
+        {hasActiveSubscription && (
+          <div
+            style={{
+              maxWidth: '680px',
+              margin: '0 auto 2rem',
+              background: '#EDF2EF',
+              border: '0.5px solid rgba(90,138,90,0.2)',
+              borderRadius: '12px',
+              padding: '12px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              fontSize: '13px',
+              color: '#5A8A5A',
+            }}
+          >
+            <CheckCircle size={16} color="#5A8A5A" />
+            <span>
+              You are on the <strong>{isPro ? 'Architect (Pro)' : 'Thinker (Plus)'}</strong> plan.
+            </span>
+            <button
+              type="button"
+              onClick={() => navigate('/account')}
+              style={{
+                marginLeft: 'auto',
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                fontSize: '12px',
+                color: '#5A8A5A',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+              }}
+            >
+              Manage subscription →
+            </button>
+          </div>
+        )}
+
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2.5rem' }}>
           <div
             style={{
@@ -383,23 +455,24 @@ export function PricingPage() {
             </div>
             <button
               type="button"
-              onClick={() => navigate('/app')}
-              onMouseEnter={() => setFreeCtaHover(true)}
-              onMouseLeave={() => setFreeCtaHover(false)}
+              onClick={isCurrentPlan('free') ? undefined : () => navigate('/app')}
+              onMouseEnter={isCurrentPlan('free') ? undefined : () => setFreeCtaHover(true)}
+              onMouseLeave={isCurrentPlan('free') ? undefined : () => setFreeCtaHover(false)}
               style={{
                 width: '100%',
                 padding: '12px',
                 borderRadius: '999px',
-                border: '0.5px solid #DDD7D0',
-                background: freeCtaHover ? '#F5F2EF' : 'transparent',
+                border: isCurrentPlan('free') ? '0.5px solid #E0D8D0' : '0.5px solid #DDD7D0',
+                background: isCurrentPlan('free') ? '#F0EBE3' : freeCtaHover ? '#F5F2EF' : 'transparent',
                 color: '#6B6460',
                 fontSize: '14px',
-                cursor: 'pointer',
+                cursor: isCurrentPlan('free') ? 'default' : 'pointer',
                 marginTop: '1.5rem',
                 transition: 'background 150ms ease',
+                textAlign: 'center',
               }}
             >
-              Start exploring
+              {isCurrentPlan('free') ? 'Current plan' : 'Start exploring'}
             </button>
           </div>
 
@@ -469,31 +542,78 @@ export function PricingPage() {
             <div style={{ flex: 1 }}>
               <FeatureList items={thinkerFeatures} dotColor="rgba(196,149,106,0.5)" textColor="#1A1714" subColor="#8B8480" />
             </div>
-            <button
-              type="button"
-              onClick={() => handleUpgrade(billing === 'monthly' ? 'plus_monthly' : 'plus_annual')}
-              style={{
-                width: '100%',
-                background: '#1A1714',
-                color: '#FAF7F4',
-                borderRadius: '999px',
-                padding: '13px',
-                fontSize: '14px',
-                fontWeight: 500,
-                border: 'none',
-                cursor: 'pointer',
-                marginTop: '1.5rem',
-                transition: 'opacity 150ms ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = '0.88';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = '1';
-              }}
-            >
-              Start with Plus
-            </button>
+            {isCurrentPlan('plus') ? (
+              <div
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '999px',
+                  background: '#EDF2EF',
+                  color: '#5A8A5A',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'default',
+                  border: '0.5px solid rgba(90,138,90,0.2)',
+                  textAlign: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  marginTop: '1.5rem',
+                }}
+              >
+                <Check size={16} color="#5A8A5A" />
+                <span>Current plan</span>
+              </div>
+            ) : isPro ? (
+              <div
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '999px',
+                  background: '#F0EBE3',
+                  color: '#6B6460',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'default',
+                  border: '0.5px solid rgba(90,138,90,0.2)',
+                  textAlign: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  marginTop: '1.5rem',
+                }}
+              >
+                Included in your plan
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleUpgrade(billing === 'monthly' ? 'plus_monthly' : 'plus_annual')}
+                style={{
+                  width: '100%',
+                  background: '#1A1714',
+                  color: '#FAF7F4',
+                  borderRadius: '999px',
+                  padding: '13px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  border: 'none',
+                  cursor: 'pointer',
+                  marginTop: '1.5rem',
+                  transition: 'opacity 150ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = '0.88';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = '1';
+                }}
+              >
+                Start with Plus
+              </button>
+            )}
           </div>
 
           <div style={{ background: '#1A1714', borderRadius: '20px', padding: '2rem', display: 'flex', flexDirection: 'column' }}>
@@ -547,32 +667,52 @@ export function PricingPage() {
                 badgeDark
               />
             </div>
-            <button
-              type="button"
-              onClick={() => handleUpgrade(billing === 'monthly' ? 'pro_monthly' : 'pro_annual')}
-              style={{
-                width: '100%',
-                background: '#C4956A',
-                color: '#FAF7F4',
-                borderRadius: '999px',
-                padding: '13px',
-                fontSize: '14px',
-                fontWeight: 500,
-                border: 'none',
-                cursor: 'pointer',
-                marginTop: '1.5rem',
-                opacity: 0.92,
-                transition: 'opacity 150ms ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = '1';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = '0.92';
-              }}
-            >
-              Upgrade to Pro
-            </button>
+            {isCurrentPlan('pro') ? (
+              <div
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '999px',
+                  background: 'rgba(196,149,106,0.2)',
+                  color: '#C4956A',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'default',
+                  border: '0.5px solid rgba(196,149,106,0.3)',
+                  textAlign: 'center',
+                  marginTop: '1.5rem',
+                }}
+              >
+                ✓ Current plan
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleUpgrade(billing === 'monthly' ? 'pro_monthly' : 'pro_annual')}
+                style={{
+                  width: '100%',
+                  background: '#C4956A',
+                  color: '#FAF7F4',
+                  borderRadius: '999px',
+                  padding: '13px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  border: 'none',
+                  cursor: 'pointer',
+                  marginTop: '1.5rem',
+                  opacity: 0.92,
+                  transition: 'opacity 150ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = '1';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = '0.92';
+                }}
+              >
+                Upgrade to Pro
+              </button>
+            )}
           </div>
         </section>
 
