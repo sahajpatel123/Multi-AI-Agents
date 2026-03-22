@@ -89,4 +89,12 @@ if (!rootElement) {
       </ErrorBoundary>
     </React.StrictMode>,
   );
+
+  const loader = document.getElementById('initial-loader');
+  if (loader) {
+    loader.classList.add('hidden');
+    setTimeout(() => {
+      loader.remove();
+    }, 300);
+  }
 }

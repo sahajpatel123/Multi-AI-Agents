@@ -2,14 +2,61 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Arena</title>
+    <title>Arena — Four minds. One question.</title>
+    <meta name="description" content="Arena — Four AI minds with opposing worldviews compete to answer your question. The best answer wins." />
+    <meta name="keywords" content="AI, debate, multiple perspectives, Arena, artificial intelligence" />
+    <meta property="og:title" content="Arena — Four minds. One question." />
+    <meta property="og:description" content="Four AI personalities compete to answer your question. Scored on logic, directness, and originality." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Arena" />
+    <meta name="twitter:description" content="Four AI minds. One question. The best answer wins." />
+    <meta name="twitter:site" content="@sahajp001" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
   </head>
   <body>
+    <style>
+      #initial-loader {
+        position: fixed;
+        inset: 0;
+        background: #FAF7F4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 300ms ease;
+      }
+      #initial-loader.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .loader-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #C4956A;
+        animation: loaderBreathe 1.5s ease-in-out infinite;
+      }
+      @keyframes loaderBreathe {
+        0%, 100% { 
+          transform: scale(1);
+          opacity: 0.4;
+        }
+        50% { 
+          transform: scale(1.5);
+          opacity: 1;
+        }
+      }
+    </style>
+
+    <div id="initial-loader">
+      <div class="loader-dot"></div>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
