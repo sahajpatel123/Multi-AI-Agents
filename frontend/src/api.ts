@@ -615,16 +615,28 @@ export async function healthCheck(): Promise<boolean> {
 // Agent Mode (7-stage pipeline)
 // ──────────────────────────────────────────────────────────────
 
-export async function runAgentTask(task: string): Promise<unknown> {
+export type AgentStartResponse = {
+  task_id: string;
+  status: string;
+  message?: string;
+};
+
+export type AgentStatusPayload = {
+  task_id: string;
+  status: string;
+  current_stage?: string;
+  stages?: Record<string, { status?: string }>;
+};
+
+export async function runAgentTask(task: string): Promise<AgentStartResponse> {
   const response = await apiFetch(`${API_BASE}/agent/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task }),
   });
-  const data = await parseJsonSafely<{
-    detail?: string | { message?: string; error?: string };
-    message?: string;
-  }>(response);
+  const data = await parseJsonSafely<
+    AgentStartResponse & { detail?: string | { message?: string; error?: string } }
+  >(response);
   if (!data) throw new Error('Empty response');
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data, 'Agent task failed'), response.status, data);
@@ -632,14 +644,26 @@ export async function runAgentTask(task: string): Promise<unknown> {
   return data;
 }
 
-export async function getAgentStatus(taskId: string): Promise<unknown> {
+export async function getAgentStatus(taskId: string): Promise<AgentStatusPayload> {
   const response = await apiFetch(`${API_BASE}/agent/status/${taskId}`);
-  return parseJsonSafely(response);
+  const data = await parseJsonSafely<AgentStatusPayload & { detail?: string | { message?: string } }>(
+    response,
+  );
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Status request failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty status response');
+  return data;
 }
 
 export async function getAgentResult(taskId: string): Promise<unknown> {
   const response = await apiFetch(`${API_BASE}/agent/result/${taskId}`);
-  return parseJsonSafely(response);
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Result request failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty result response');
+  return data;
 }
 
 // ──────────────────────────────────────────────────────────────

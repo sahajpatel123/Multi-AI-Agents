@@ -13,14 +13,14 @@ from arena.core.stages.verifier import run_verifier
 logger = logging.getLogger("arena.agent_pipeline")
 
 
-async def run_agent_pipeline(user_id: int, task: str) -> Blackboard:
-    bb = create_blackboard(user_id=user_id, task=task)
+async def run_agent_pipeline_on_blackboard(bb: Blackboard) -> Blackboard:
+    """Run the full agent pipeline on an existing blackboard (already in active_tasks)."""
     bb.status = AgentStatus.RUNNING
 
     logger.info(
         "[AGENT] Starting pipeline task_id=%s user_id=%s",
         bb.task_id,
-        user_id,
+        bb.user_id,
     )
 
     try:
@@ -62,3 +62,9 @@ async def run_agent_pipeline(user_id: int, task: str) -> Blackboard:
         )
 
     return bb
+
+
+async def run_agent_pipeline(user_id: int, task: str) -> Blackboard:
+    """Create a new blackboard and run the pipeline (blocking / tests)."""
+    bb = create_blackboard(user_id=user_id, task=task)
+    return await run_agent_pipeline_on_blackboard(bb)

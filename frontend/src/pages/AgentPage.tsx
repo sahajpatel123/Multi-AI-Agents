@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ArrowLeft, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { runAgentTask } from '../api';
+import { ApiError, getAgentResult, getAgentStatus, runAgentTask } from '../api';
 import { useTier } from '../context/TierContext';
 import { useAuth } from '../hooks/useAuth';
 import { UserMenu } from '../components/UserMenu';
@@ -17,6 +17,20 @@ const STAGES = [
 ] as const;
 
 type StageId = (typeof STAGES)[number]['id'];
+
+const STAGE_ORDER: StageId[] = [
+  'planner',
+  'researcher',
+  'solver',
+  'critic',
+  'verifier',
+  'synthesizer',
+  'judge',
+];
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 type StagePayload = {
   status?: string;
@@ -54,15 +68,9 @@ export function AgentPage() {
   const [result, setResult] = useState<AgentResult | null>(null);
   const [expandedStages, setExpandedStages] = useState<Set<StageId>>(new Set());
   const [pipelineOpen, setPipelineOpen] = useState(false);
-  const [fakeStageIndex, setFakeStageIndex] = useState(0);
-
-  useEffect(() => {
-    if (!isRunning) return;
-    const t = window.setInterval(() => {
-      setFakeStageIndex((i) => (i + 1) % STAGES.length);
-    }, 1600);
-    return () => window.clearInterval(t);
-  }, [isRunning]);
+  const [completedStages, setCompletedStages] = useState<string[]>([]);
+  const [currentStage, setCurrentStage] = useState<string>('planner');
+  const [liveStages, setLiveStages] = useState<Partial<Record<StageId, string>>>({});
 
   const toggleStage = useCallback((id: StageId) => {
     setExpandedStages((prev) => {
@@ -80,14 +88,82 @@ export function AgentPage() {
     setResult(null);
     setExpandedStages(new Set());
     setPipelineOpen(false);
+    setCompletedStages([]);
+    setCurrentStage('planner');
+    setLiveStages({});
     setIsRunning(true);
-    setFakeStageIndex(0);
+
+    const pollForResult = async (taskId: string) => {
+      const maxAttempts = 60;
+      for (let attempts = 0; attempts < maxAttempts; attempts++) {
+        try {
+          const statusData = await getAgentStatus(taskId);
+          const stages = statusData.stages || {};
+
+          const next: Partial<Record<StageId, string>> = {};
+          for (const sid of STAGE_ORDER) {
+            next[sid] = (stages[sid]?.status as string) || 'pending';
+          }
+          setLiveStages(next);
+
+          let runningStage: string | null = null;
+          for (const stage of STAGE_ORDER) {
+            if (stages[stage]?.status === 'running') {
+              runningStage = stage;
+              break;
+            }
+          }
+          const cur = runningStage || statusData.current_stage || 'planner';
+          setCurrentStage(cur);
+
+          setCompletedStages(STAGE_ORDER.filter((s) => stages[s]?.status === 'complete'));
+
+          const st = String(statusData.status || '').toLowerCase();
+          if (st === 'complete' || st === 'failed') {
+            try {
+              const resultData = (await getAgentResult(taskId)) as AgentResult;
+              if (resultData) {
+                setResult(resultData);
+                setCompletedStages([...STAGE_ORDER]);
+                setCurrentStage('done');
+                if (resultData.stages) {
+                  const fromResult: Partial<Record<StageId, string>> = {};
+                  for (const sid of STAGE_ORDER) {
+                    const ps = resultData.stages[sid]?.status;
+                    if (ps) fromResult[sid] = ps as string;
+                  }
+                  setLiveStages(fromResult);
+                }
+              }
+            } catch (resultErr) {
+              setError(resultErr instanceof Error ? resultErr.message : 'Could not load agent result');
+            }
+            setIsRunning(false);
+            return;
+          }
+        } catch (pollErr) {
+          if (pollErr instanceof ApiError && (pollErr.status === 401 || pollErr.status === 403)) {
+            setError(pollErr.message || 'Authentication required');
+            setIsRunning(false);
+            return;
+          }
+          await wait(5000);
+          continue;
+        }
+        await wait(3000);
+      }
+      setError('Task timed out. Please try again.');
+      setIsRunning(false);
+    };
+
     try {
-      const data = (await runAgentTask(t)) as AgentResult;
-      setResult(data);
+      const startData = await runAgentTask(t);
+      if (!startData.task_id) {
+        throw new Error('No task ID received');
+      }
+      await pollForResult(startData.task_id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Agent task failed');
-    } finally {
       setIsRunning(false);
     }
   };
@@ -97,6 +173,9 @@ export function AgentPage() {
     setError(null);
     setExpandedStages(new Set());
     setPipelineOpen(false);
+    setCompletedStages([]);
+    setCurrentStage('planner');
+    setLiveStages({});
   };
 
   const stageVisual = useMemo(() => {
@@ -106,11 +185,22 @@ export function AgentPage() {
         state: (result.stages?.[s.id]?.status || 'pending') as string,
       }));
     }
-    return STAGES.map((s, i) => ({
-      id: s.id,
-      state: i === fakeStageIndex ? 'running' : i < fakeStageIndex ? 'complete' : 'pending',
-    }));
-  }, [isRunning, result, fakeStageIndex]);
+    if (isRunning) {
+      return STAGES.map((s) => {
+        let st = liveStages[s.id] || 'pending';
+        if (st === 'pending' && completedStages.includes(s.id)) {
+          st = 'complete';
+        }
+        if (st === 'running') return { id: s.id, state: 'running' };
+        if (st === 'complete') return { id: s.id, state: 'complete' };
+        if (st === 'skipped') return { id: s.id, state: 'skipped' };
+        if (st === 'failed') return { id: s.id, state: 'failed' };
+        if (currentStage === s.id) return { id: s.id, state: 'running' };
+        return { id: s.id, state: 'pending' };
+      });
+    }
+    return STAGES.map((s) => ({ id: s.id, state: 'pending' }));
+  }, [isRunning, result, liveStages, currentStage, completedStages]);
 
   const expandedId = expandedStages.size === 1 ? [...expandedStages][0] : null;
 

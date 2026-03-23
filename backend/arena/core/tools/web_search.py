@@ -72,8 +72,11 @@ class WebSearchTool(Tool):
     async def execute(self, prompt: str, **kwargs) -> ToolResult:
         """Execute web search"""
         try:
-            from duckduckgo_search import DDGS
-            
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS
+
             # Extract search query from prompt
             query = self._extract_query(prompt)
             

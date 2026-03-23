@@ -32,7 +32,7 @@ python-dotenv==1.0.1
 razorpay>=1.4.0
 
 # Tools
-duckduckgo-search>=4.0.0
+ddgs>=8.0.0
 
 # Dev
 pytest==8.3.3

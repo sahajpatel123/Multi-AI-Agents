@@ -1,18 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from arena.core.agent_pipeline import run_agent_pipeline
+from arena.core.agent_pipeline import run_agent_pipeline_on_blackboard
 from arena.core.auth import get_current_user_required
-from arena.core.blackboard import Blackboard, get_blackboard
+from arena.core.blackboard import AgentStatus, Blackboard, create_blackboard, get_blackboard
 from arena.core.tier_config import has_feature, normalize_tier
 from arena.models.schemas import UserResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
 class AgentTaskRequest(BaseModel):
     task: str
+
+
+def _stage_status_value(status) -> str:
+    return status.value if hasattr(status, "value") else str(status)
 
 
 def _ensure_agent_access(user: UserResponse) -> None:
@@ -33,9 +41,29 @@ def _ensure_task_owner(bb: Blackboard, user: UserResponse) -> None:
         raise HTTPException(status_code=404, detail="Task not found")
 
 
+async def run_agent_pipeline_background(task_id: str, user_id: int, task: str) -> None:
+    """Run pipeline for an existing blackboard (same task_id as POST /run)."""
+    bb = get_blackboard(task_id)
+    if not bb:
+        logger.error("[AGENT] Background: no blackboard for task_id=%s", task_id)
+        return
+    if bb.user_id != user_id or bb.task != task:
+        logger.error("[AGENT] Background: blackboard mismatch task_id=%s", task_id)
+        return
+    try:
+        await run_agent_pipeline_on_blackboard(bb)
+    except Exception as e:
+        bb2 = get_blackboard(task_id)
+        if bb2:
+            bb2.status = AgentStatus.FAILED
+            bb2.error = str(e)
+        logger.exception("[AGENT] Background pipeline error task_id=%s", task_id)
+
+
 @router.post("/run")
 async def run_agent_task(
     body: AgentTaskRequest,
+    background_tasks: BackgroundTasks,
     user: UserResponse = Depends(get_current_user_required),
 ):
     _ensure_agent_access(user)
@@ -49,8 +77,23 @@ async def run_agent_task(
             detail="Task too long. Maximum 2000 characters.",
         )
 
-    bb = await run_agent_pipeline(user_id=user.id, task=task)
-    return JSONResponse(content=bb.to_dict())
+    bb = create_blackboard(user_id=user.id, task=task)
+    bb.status = AgentStatus.RUNNING
+
+    background_tasks.add_task(
+        run_agent_pipeline_background,
+        bb.task_id,
+        user.id,
+        task,
+    )
+
+    return JSONResponse(
+        content={
+            "task_id": bb.task_id,
+            "status": "running",
+            "message": "Pipeline started",
+        }
+    )
 
 
 @router.get("/status/{task_id}")
@@ -67,16 +110,16 @@ async def get_agent_status(
     return JSONResponse(
         content={
             "task_id": bb.task_id,
-            "status": bb.status.value if hasattr(bb.status, "value") else bb.status,
+            "status": _stage_status_value(bb.status),
             "current_stage": bb.current_stage,
             "stages": {
-                "planner": {"status": bb.plan.status.value},
-                "researcher": {"status": bb.research.status.value},
-                "solver": {"status": bb.solution.status.value},
-                "critic": {"status": bb.critique.status.value},
-                "verifier": {"status": bb.verification.status.value},
-                "synthesizer": {"status": bb.synthesis.status.value},
-                "judge": {"status": bb.judgment.status.value},
+                "planner": {"status": _stage_status_value(bb.plan.status)},
+                "researcher": {"status": _stage_status_value(bb.research.status)},
+                "solver": {"status": _stage_status_value(bb.solution.status)},
+                "critic": {"status": _stage_status_value(bb.critique.status)},
+                "verifier": {"status": _stage_status_value(bb.verification.status)},
+                "synthesizer": {"status": _stage_status_value(bb.synthesis.status)},
+                "judge": {"status": _stage_status_value(bb.judgment.status)},
             },
         }
     )
