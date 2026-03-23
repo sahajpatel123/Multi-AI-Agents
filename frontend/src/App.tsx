@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { PromptInput } from './components/PromptInput';
 import { AgentCard } from './components/AgentCard';
 import { DebateMode } from './components/DebateMode';
@@ -48,6 +48,7 @@ interface ScrollTarget {
 
 function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isLoading: authLoading, login, register, logout, refreshUser } = useAuth();
   const { panel } = usePanel();
   const { canUseFeature, refreshTier } = useTier();
@@ -78,6 +79,16 @@ function App() {
   const [hasSubmittedPrompt, setHasSubmittedPrompt] = useState(false);
   const [presetPrompt, setPresetPrompt] = useState('');
   const [presetPromptNonce, setPresetPromptNonce] = useState(0);
+
+  useEffect(() => {
+    const st = location.state as { agentStressPrompt?: string } | null | undefined;
+    const prompt = st?.agentStressPrompt;
+    if (typeof prompt === 'string' && prompt.trim()) {
+      setPresetPrompt(prompt.trim());
+      setPresetPromptNonce((n) => n + 1);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate]);
   const [showPromptChips, setShowPromptChips] = useState(false);
   const [activeExamplePromptIndex, setActiveExamplePromptIndex] = useState(0);
   const [isExamplePromptHovered, setIsExamplePromptHovered] = useState(false);

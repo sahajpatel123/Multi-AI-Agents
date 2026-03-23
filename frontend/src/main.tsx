@@ -12,6 +12,7 @@ import { TermsPage } from './pages/TermsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { PersonasPage } from './pages/PersonasPage'
 import { AccountPage } from './pages/AccountPage'
+import { AgentPage } from './pages/AgentPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthProvider } from './hooks/useAuth'
 import { PanelProvider } from './context/PanelContext'
@@ -79,6 +80,11 @@ if (!rootElement) {
                   <Route path="/account" element={
                     <ProtectedRoute>
                       <AccountPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/agent" element={
+                    <ProtectedRoute>
+                      <AgentPage />
                     </ProtectedRoute>
                   } />
                 </Routes>

@@ -13,6 +13,7 @@ import {
   Pencil,
   Trash2,
   CreditCard,
+  Bot,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
@@ -64,7 +65,7 @@ export function Sidebar({
 }: SidebarProps) {
   const navigate = useNavigate();
   const { isDefaultPanel, resetPanel } = usePanel();
-  const { messagesRemaining, dailyLimit, tier, isFree } = useTier();
+  const { messagesRemaining, dailyLimit, tier, isFree, isPro } = useTier();
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
@@ -190,6 +191,58 @@ export function Sidebar({
                 navigate('/personas');
               }}
             />
+            <div style={{ marginTop: '8px' }}>
+              <div
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onClose();
+                    navigate('/agent');
+                  }
+                }}
+                onClick={() => {
+                  onClose();
+                  navigate('/agent');
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 12px',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  color: '#6B6460',
+                  fontSize: 13,
+                  transition: 'all 150ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#F0EBE3';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                <Bot style={{ width: '14px', height: '14px', flexShrink: 0, color: '#C4956A' }} />
+                Agent Mode
+                {!isPro && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      background: '#F0EBE3',
+                      color: '#C4956A',
+                      borderRadius: 999,
+                      padding: '2px 6px',
+                      marginLeft: 'auto',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    PRO
+                  </span>
+                )}
+              </div>
+            </div>
             {!isDefaultPanel && (
               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px' }}>
                 <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#C4956A', flexShrink: 0 }} />

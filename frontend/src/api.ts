@@ -612,6 +612,37 @@ export async function healthCheck(): Promise<boolean> {
 }
 
 // ──────────────────────────────────────────────────────────────
+// Agent Mode (7-stage pipeline)
+// ──────────────────────────────────────────────────────────────
+
+export async function runAgentTask(task: string): Promise<unknown> {
+  const response = await apiFetch(`${API_BASE}/agent/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task }),
+  });
+  const data = await parseJsonSafely<{
+    detail?: string | { message?: string; error?: string };
+    message?: string;
+  }>(response);
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Agent task failed'), response.status, data);
+  }
+  return data;
+}
+
+export async function getAgentStatus(taskId: string): Promise<unknown> {
+  const response = await apiFetch(`${API_BASE}/agent/status/${taskId}`);
+  return parseJsonSafely(response);
+}
+
+export async function getAgentResult(taskId: string): Promise<unknown> {
+  const response = await apiFetch(`${API_BASE}/agent/result/${taskId}`);
+  return parseJsonSafely(response);
+}
+
+// ──────────────────────────────────────────────────────────────
 // Payments (Razorpay subscriptions)
 // ──────────────────────────────────────────────────────────────
 
