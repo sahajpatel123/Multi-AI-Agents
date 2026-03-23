@@ -130,6 +130,7 @@ async def get_agent_result(
     task_id: str,
     user: UserResponse = Depends(get_current_user_required),
 ):
+    """Returns full blackboard including per-stage output, model, and duration_ms for revision trace."""
     _ensure_agent_access(user)
     bb = get_blackboard(task_id)
     if not bb:

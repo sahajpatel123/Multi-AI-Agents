@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, getAgentResult, getAgentStatus, runAgentTask } from '../api';
@@ -36,12 +36,14 @@ type StagePayload = {
   status?: string;
   output?: string;
   model?: string;
+  duration_ms?: number;
 };
 
 type AgentResult = {
   task_id?: string;
   status?: string;
   current_stage?: string;
+  iterations?: number;
   stages?: Record<string, StagePayload>;
   final_answer?: string;
   final_confidence?: number;
@@ -49,6 +51,69 @@ type AgentResult = {
   flags?: string[];
   error?: string;
 };
+
+type ParsedSentence = {
+  text: string;
+  confidence?: number;
+  type?: string;
+};
+
+type ParsedSynthesis = {
+  sentences: ParsedSentence[];
+  overall_confidence?: number;
+  flags?: string[];
+  sources_referenced?: string[];
+};
+
+const TRACE_STAGE_META: Record<
+  StageId,
+  { label: string; letter: string; bg: string; color: string }
+> = {
+  planner: { label: 'Planner', letter: 'P', bg: '#EEF0F2', color: '#8C9BAB' },
+  researcher: { label: 'Researcher', letter: 'R', bg: '#F0EBE3', color: '#B0977E' },
+  solver: { label: 'Solver', letter: 'S', bg: '#F0EDF2', color: '#9B8FAA' },
+  critic: { label: 'Critic', letter: 'C', bg: '#FEF2F2', color: '#E57373' },
+  verifier: { label: 'Verifier', letter: 'V', bg: '#EDF2EF', color: '#8AA899' },
+  synthesizer: { label: 'Synthesizer', letter: 'Sy', bg: '#F5F0EC', color: '#C4956A' },
+  judge: { label: 'Judge', letter: 'J', bg: '#EFEFED', color: '#6B6460' },
+};
+
+function formatDurationMs(ms: number | undefined): string {
+  if (ms == null || Number.isNaN(ms)) return '—';
+  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${ms}ms`;
+}
+
+function buildRevisionSummary(result: AgentResult): string {
+  const cOut = result.stages?.critic?.output || '';
+  const vOut = result.stages?.verifier?.output || '';
+  const criticWeak = (cOut.match(/\bweakness(es)?\b/gi) || []).length;
+  const criticGaps = (cOut.match(/\bgaps?\b|\bflaws?\b/gi) || []).length;
+  const criticHits = Math.min(12, criticWeak + criticGaps) || (cOut.length > 200 ? 1 : 0);
+  const verUnc = (vOut.match(/\buncertain\b|\bunverifiable\b/gi) || []).length;
+  const verFlag = (vOut.match(/\bflag(s|ged)?\b|\below\s*50\b/gi) || []).length;
+  const verHits = Math.min(12, verUnc + verFlag) || (vOut.length > 200 ? 1 : 0);
+  const parts: string[] = [];
+  if (criticHits > 0) {
+    parts.push(`The Critic identified ${criticHits} potential weaknesses or gaps.`);
+  }
+  if (verHits > 0) {
+    parts.push(`The Verifier flagged ${verHits} uncertain or low-confidence items.`);
+  }
+  if (parts.length === 0) {
+    return 'Each stage refined the draft: planning, evidence, solution, critique, verification, and synthesis.';
+  }
+  parts.push('The Synthesizer resolved these into the final answer.');
+  return parts.join(' ');
+}
+
+function plainTextFromFinalAnswer(finalAnswer: string | undefined, parsed: ParsedSynthesis | null): string {
+  if (!finalAnswer) return '';
+  if (parsed?.sentences?.length) {
+    return parsed.sentences.map((s) => s.text).join(' ');
+  }
+  return finalAnswer;
+}
 
 const EXAMPLES = [
   'Research the top 5 AI startups funded this month',
@@ -67,7 +132,8 @@ export function AgentPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AgentResult | null>(null);
   const [expandedStages, setExpandedStages] = useState<Set<StageId>>(new Set());
-  const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [traceOpen, setTraceOpen] = useState(false);
+  const [traceOutputExpanded, setTraceOutputExpanded] = useState<Set<StageId>>(new Set());
   const [completedStages, setCompletedStages] = useState<string[]>([]);
   const [currentStage, setCurrentStage] = useState<string>('planner');
   const [liveStages, setLiveStages] = useState<Partial<Record<StageId, string>>>({});
@@ -87,7 +153,8 @@ export function AgentPage() {
     setError(null);
     setResult(null);
     setExpandedStages(new Set());
-    setPipelineOpen(false);
+    setTraceOpen(false);
+    setTraceOutputExpanded(new Set());
     setCompletedStages([]);
     setCurrentStage('planner');
     setLiveStages({});
@@ -172,7 +239,8 @@ export function AgentPage() {
     setResult(null);
     setError(null);
     setExpandedStages(new Set());
-    setPipelineOpen(false);
+    setTraceOpen(false);
+    setTraceOutputExpanded(new Set());
     setCompletedStages([]);
     setCurrentStage('planner');
     setLiveStages({});
@@ -208,7 +276,47 @@ export function AgentPage() {
     expandedId && result?.stages ? (result.stages[expandedId] as StagePayload) : null;
 
   const score = result?.final_score ?? 0;
-  const confidence = result?.final_confidence ?? 0;
+
+  const parsedAnswer = useMemo((): ParsedSynthesis | null => {
+    if (!result?.final_answer) return null;
+    try {
+      const parsed = JSON.parse(result.final_answer) as ParsedSynthesis;
+      if (parsed && Array.isArray(parsed.sentences)) return parsed;
+      return null;
+    } catch {
+      return null;
+    }
+  }, [result]);
+
+  const displayOverallConfidence = parsedAnswer?.overall_confidence ?? result?.final_confidence ?? 0;
+
+  const plainAnswerText = useMemo(
+    () => plainTextFromFinalAnswer(result?.final_answer, parsedAnswer),
+    [result?.final_answer, parsedAnswer],
+  );
+
+  const mergedFlags = useMemo(() => {
+    const fromParsed = parsedAnswer?.flags?.filter((f) => typeof f === 'string' && f.trim()) || [];
+    const fromResult = result?.flags?.filter((f) => typeof f === 'string' && f.trim()) || [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const f of [...fromParsed, ...fromResult]) {
+      if (!seen.has(f)) {
+        seen.add(f);
+        out.push(f);
+      }
+    }
+    return out;
+  }, [parsedAnswer, result?.flags]);
+
+  const toggleTraceOutputExpand = useCallback((id: StageId) => {
+    setTraceOutputExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   return (
     <div
@@ -227,6 +335,16 @@ export function AgentPage() {
         @keyframes breatheDot {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.15); }
+        }
+        .agent-trace-expand {
+          max-height: 0;
+          opacity: 0;
+          overflow: hidden;
+          transition: max-height 400ms ease, opacity 400ms ease;
+        }
+        .agent-trace-expand.agent-trace-expand-open {
+          max-height: 12000px;
+          opacity: 1;
         }
       `}</style>
 
@@ -545,27 +663,189 @@ export function AgentPage() {
                       <span
                         style={{
                           background:
-                            confidence >= 80
+                            displayOverallConfidence >= 80
                               ? 'rgba(138,168,153,0.15)'
-                              : confidence >= 50
+                              : displayOverallConfidence >= 50
                                 ? 'rgba(196,149,106,0.12)'
                                 : 'rgba(229,115,115,0.1)',
                           color:
-                            confidence >= 80 ? '#5A8A5A' : confidence >= 50 ? '#C4956A' : '#E57373',
+                            displayOverallConfidence >= 80
+                              ? '#5A8A5A'
+                              : displayOverallConfidence >= 50
+                                ? '#C4956A'
+                                : '#E57373',
                           borderRadius: 999,
                           padding: '4px 12px',
                           fontSize: 11,
                           fontWeight: 500,
                         }}
                       >
-                        {Math.round(confidence)}% confident
+                        {Math.round(displayOverallConfidence)}% confident
                       </span>
                     </div>
                   </div>
-                  <div style={{ fontSize: 15, lineHeight: 1.8, color: '#1A1714', whiteSpace: 'pre-wrap' }}>
-                    {result.final_answer || 'No final answer returned.'}
-                  </div>
-                  {result.flags && result.flags.length > 0 && (
+                  {parsedAnswer ? (
+                    <div style={{ fontSize: 15, lineHeight: 2.0, color: '#1A1714' }}>
+                      {parsedAnswer.sentences.map((sent, idx) => {
+                        const cRaw = sent.confidence;
+                        const c =
+                          typeof cRaw === 'number' && !Number.isNaN(cRaw)
+                            ? cRaw
+                            : typeof cRaw === 'string'
+                              ? Number.parseFloat(cRaw) || 70
+                              : 70;
+                        const muted = c < 50;
+                        let dot: ReactNode = null;
+                        if (c >= 90) {
+                          dot = null;
+                        } else if (c >= 70) {
+                          dot = (
+                            <span
+                              title={`${c}% confident`}
+                              style={{
+                                display: 'inline-block',
+                                width: 5,
+                                height: 5,
+                                borderRadius: '50%',
+                                marginLeft: 4,
+                                marginBottom: 2,
+                                verticalAlign: 'middle',
+                                background: 'rgba(138,168,153,0.8)',
+                                cursor: 'help',
+                              }}
+                            />
+                          );
+                        } else if (c >= 50) {
+                          dot = (
+                            <span
+                              title={`${c}% confident`}
+                              style={{
+                                display: 'inline-block',
+                                width: 5,
+                                height: 5,
+                                borderRadius: '50%',
+                                marginLeft: 4,
+                                marginBottom: 2,
+                                verticalAlign: 'middle',
+                                background: 'rgba(196,149,106,0.8)',
+                                cursor: 'help',
+                              }}
+                            />
+                          );
+                        } else {
+                          dot = (
+                            <span
+                              title={`${c}% confident — uncertain`}
+                              style={{
+                                display: 'inline-block',
+                                width: 5,
+                                height: 5,
+                                borderRadius: '50%',
+                                marginLeft: 4,
+                                marginBottom: 2,
+                                verticalAlign: 'middle',
+                                background: 'rgba(229,115,115,0.7)',
+                                cursor: 'help',
+                              }}
+                            />
+                          );
+                        }
+                        return (
+                          <span key={`${idx}-${sent.text.slice(0, 24)}`}>
+                            <span style={{ color: muted ? '#6B6460' : '#1A1714' }}>{sent.text}</span>
+                            {dot}
+                            {idx < parsedAnswer.sentences.length - 1 ? ' ' : null}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 15, lineHeight: 1.8, color: '#1A1714', whiteSpace: 'pre-wrap' }}>
+                      {result.final_answer || 'No final answer returned.'}
+                    </div>
+                  )}
+                  {parsedAnswer && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          letterSpacing: '0.1em',
+                          textTransform: 'uppercase',
+                          color: '#B0A9A2',
+                          marginBottom: 6,
+                        }}
+                      >
+                        Confidence indicators
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              background: '#8AA899',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span style={{ fontSize: 11, color: '#6B6460' }}>Verified (90%+)</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              background: '#C4956A',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span style={{ fontSize: 11, color: '#6B6460' }}>Supported (70–89%)</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              background: '#E57373',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span style={{ fontSize: 11, color: '#6B6460' }}>Uncertain (&lt;70%)</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {parsedAnswer?.sources_referenced && parsedAnswer.sources_referenced.length > 0 && (
+                    <div style={{ marginTop: '1.25rem' }}>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.1em',
+                          color: '#B0A9A2',
+                          marginBottom: 8,
+                        }}
+                      >
+                        Sources & context used
+                      </div>
+                      {parsedAnswer.sources_referenced.map((src, i) => (
+                        <div
+                          key={`${i}-${src.slice(0, 40)}`}
+                          style={{
+                            fontSize: 12,
+                            color: '#6B6460',
+                            padding: '4px 0',
+                            borderBottom: '0.5px solid #F0EBE3',
+                          }}
+                        >
+                          {src}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {mergedFlags.length > 0 && (
                     <div
                       style={{
                         marginTop: '1.5rem',
@@ -586,7 +866,7 @@ export function AgentPage() {
                       >
                         Note
                       </div>
-                      {result.flags.map((f) => (
+                      {mergedFlags.map((f) => (
                         <p key={f} style={{ fontSize: 12, color: '#6B6460', margin: '4px 0 0' }}>
                           {f}
                         </p>
@@ -597,7 +877,7 @@ export function AgentPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        void navigator.clipboard.writeText(result.final_answer || '');
+                        void navigator.clipboard.writeText(plainAnswerText);
                       }}
                       style={{
                         background: 'transparent',
@@ -631,7 +911,7 @@ export function AgentPage() {
                       onClick={() =>
                         navigate('/app', {
                           state: {
-                            agentStressPrompt: `Stress-test this agent response in Arena:\n\n${result.final_answer || ''}`,
+                            agentStressPrompt: `Stress-test this agent response in Arena:\n\n${plainAnswerText}`,
                           },
                         })
                       }
@@ -650,69 +930,191 @@ export function AgentPage() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setPipelineOpen((o) => !o)}
-                  style={{
-                    marginTop: '1rem',
-                    background: 'none',
-                    border: 'none',
-                    color: '#C4956A',
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                >
-                  {pipelineOpen ? 'Hide full pipeline ↑' : 'See full pipeline →'}
-                </button>
-                {pipelineOpen && result.stages && (
-                  <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {STAGES.map((s) => {
-                      const st = result.stages?.[s.id] as StagePayload | undefined;
-                      return (
-                        <div
-                          key={s.id}
+                <div style={{ marginTop: '2rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setTraceOpen((o) => !o)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 11,
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        color: '#B0A9A2',
+                      }}
+                    >
+                      How this answer was built
+                    </span>
+                    <span style={{ fontSize: 11, color: '#C4956A' }}>
+                      {traceOpen ? 'Hide trace ↑' : 'See trace ↓'}
+                    </span>
+                  </button>
+                  <div
+                    className={`agent-trace-expand${traceOpen ? ' agent-trace-expand-open' : ''}`}
+                    style={{ marginTop: traceOpen ? 16 : 0 }}
+                  >
+                    {result.stages && (
+                      <div style={{ paddingTop: 4 }}>
+                        <p
                           style={{
-                            background: '#FFFFFF',
-                            border: '0.5px solid #E0D8D0',
-                            borderRadius: 12,
-                            padding: '1.25rem',
+                            fontSize: 13,
+                            color: '#6B6460',
+                            lineHeight: 1.6,
+                            marginTop: 0,
+                            marginBottom: 16,
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <span style={{ fontSize: 14, fontWeight: 500, color: '#1A1714' }}>{s.label}</span>
-                            {st?.model && (
-                              <span
-                                style={{
-                                  fontSize: 10,
-                                  background: '#F0EBE3',
-                                  color: '#6B6460',
-                                  borderRadius: 999,
-                                  padding: '2px 8px',
-                                }}
-                              >
-                                {st.model}
-                              </span>
-                            )}
-                            <span style={{ fontSize: 11, color: '#B0A9A2', marginLeft: 'auto' }}>{st?.status}</span>
-                          </div>
-                          <pre
+                          {buildRevisionSummary(result)}
+                        </p>
+                        {(result.iterations ?? 0) > 1 && (
+                          <div
                             style={{
-                              fontSize: 13,
-                              color: '#1A1714',
-                              lineHeight: 1.7,
-                              whiteSpace: 'pre-wrap',
-                              margin: 0,
-                              fontFamily: 'inherit',
+                              fontSize: 11,
+                              color: '#C4956A',
+                              textAlign: 'center',
+                              padding: '8px 0',
+                              borderTop: '0.5px dashed #E0D8D0',
+                              borderBottom: '0.5px dashed #E0D8D0',
+                              margin: '8px 0',
                             }}
                           >
-                            {st?.output || '—'}
-                          </pre>
-                        </div>
-                      );
-                    })}
+                            ↻ Revision triggered — answer improved
+                          </div>
+                        )}
+                        {STAGE_ORDER.filter((id) => result.stages?.[id]?.status !== 'skipped').map((id, traceIdx, arr) => {
+                          const st = result.stages?.[id] as StagePayload | undefined;
+                          if (!st) return null;
+                          const meta = TRACE_STAGE_META[id];
+                          const out = st.output || '';
+                          const isLong = out.length > 480 || out.split('\n').length > 8;
+                          const expanded = traceOutputExpanded.has(id);
+                          return (
+                            <div
+                              key={id}
+                              style={{
+                                display: 'flex',
+                                gap: 16,
+                                marginBottom: '1rem',
+                                position: 'relative',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 32,
+                                  flexShrink: 0,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 11,
+                                    fontWeight: 500,
+                                    background: meta.bg,
+                                    color: meta.color,
+                                  }}
+                                >
+                                  {meta.letter}
+                                </div>
+                                {traceIdx < arr.length - 1 ? (
+                                  <div
+                                    style={{
+                                      width: 1,
+                                      minHeight: 36,
+                                      background: '#E0D8D0',
+                                      marginTop: 4,
+                                    }}
+                                  />
+                                ) : null}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    marginBottom: 6,
+                                    flexWrap: 'wrap',
+                                  }}
+                                >
+                                  <span style={{ fontSize: 12, fontWeight: 500, color: '#1A1714' }}>
+                                    {meta.label}
+                                  </span>
+                                  {st.model ? (
+                                    <span
+                                      style={{
+                                        fontSize: 10,
+                                        background: '#F0EBE3',
+                                        color: '#6B6460',
+                                        borderRadius: 999,
+                                        padding: '2px 8px',
+                                      }}
+                                    >
+                                      {st.model}
+                                    </span>
+                                  ) : null}
+                                  <span style={{ fontSize: 10, color: '#B0A9A2' }}>
+                                    {formatDurationMs(st.duration_ms)}
+                                  </span>
+                                </div>
+                                <div style={{ position: 'relative' }}>
+                                  <pre
+                                    style={{
+                                      fontSize: 13,
+                                      color: '#6B6460',
+                                      lineHeight: 1.7,
+                                      maxHeight: expanded || !isLong ? 'none' : 120,
+                                      overflow: expanded || !isLong ? 'visible' : 'hidden',
+                                      margin: 0,
+                                      fontFamily: 'inherit',
+                                      whiteSpace: 'pre-wrap',
+                                    }}
+                                  >
+                                    {out || '—'}
+                                  </pre>
+                                  {isLong ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleTraceOutputExpand(id)}
+                                      style={{
+                                        marginTop: 6,
+                                        background: 'none',
+                                        border: 'none',
+                                        padding: 0,
+                                        color: '#C4956A',
+                                        fontSize: 12,
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      {expanded ? 'Show less' : 'Show more'}
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </>
             )}
           </>
