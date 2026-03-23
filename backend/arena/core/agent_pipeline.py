@@ -90,6 +90,169 @@ async def run_agent_pipeline_on_blackboard(
     return bb
 
 
+def _format_refinement_conversation(conversation: list) -> str:
+    if not conversation:
+        return "No prior messages"
+    lines: list[str] = []
+    for msg in conversation[-4:]:
+        role = msg.get("role", "?")
+        content = str(msg.get("content", ""))[:200]
+        lines.append(f"{str(role).upper()}: {content}")
+    return "\n".join(lines)
+
+
+def _mark_stage_pending(bb: Blackboard, stage: str) -> None:
+    mapping = {
+        "researcher": bb.research,
+        "critic": bb.critique,
+        "solver": bb.solution,
+        "verifier": bb.verification,
+        "synthesizer": bb.synthesis,
+        "judge": bb.judgment,
+    }
+    if stage in mapping:
+        mapping[stage].status = StageStatus.PENDING
+
+
+async def run_refinement_pipeline(
+    existing_bb: Blackboard,
+    user_message: str,
+    user_id: int,
+) -> Blackboard:
+    """Refine an existing Agent answer in-place on the same blackboard."""
+    from arena.core.refinement_classifier import classify_refinement
+
+    _ = user_id
+
+    logger.info(
+        "[REFINEMENT] Starting refinement for task %s message=%r",
+        existing_bb.task_id,
+        user_message[:50],
+    )
+
+    existing_bb.add_message(role="user", content=user_message, refinement_type=None)
+
+    current_answer = existing_bb.final_answer or ""
+    try:
+        parsed = json.loads(current_answer)
+        if isinstance(parsed, dict) and parsed.get("sentences"):
+            current_answer = " ".join(
+                str(s.get("text", "")) for s in parsed["sentences"] if isinstance(s, dict)
+            )
+    except (json.JSONDecodeError, TypeError, KeyError):
+        pass
+
+    intent = await classify_refinement(
+        user_message=user_message,
+        current_answer=current_answer,
+    )
+
+    logger.info(
+        "[REFINEMENT] Intent: %s stages: %s",
+        intent.get("type"),
+        intent.get("stages_needed"),
+    )
+
+    base_task = (existing_bb.original_task or existing_bb.task or "").strip()
+    if not existing_bb.parent_task_id:
+        existing_bb.parent_task_id = existing_bb.task_id
+
+    refinement_context = f"""
+REFINEMENT REQUEST:
+Original task: {base_task}
+User follow-up: {user_message}
+Refinement type: {intent.get("type")}
+Focus: {intent.get("focus")}
+Instruction: {intent.get("instruction")}
+
+Previous answer summary:
+{current_answer[:1000]}
+
+Conversation history:
+{_format_refinement_conversation(existing_bb.conversation[:-1])}
+
+IMPORTANT: This is a refinement of an existing answer.
+Build on what already exists.
+Do not start from scratch.
+Address specifically: {intent.get("instruction")}
+"""
+
+    existing_bb.is_refinement = True
+    existing_bb.refinement_count += 1
+    existing_bb.status = AgentStatus.RUNNING
+    existing_bb.current_stage = "refining"
+    existing_bb.plan.reasoning = refinement_context
+
+    stages_needed = list(intent.get("stages_needed") or ["solver", "synthesizer"])
+    stages_set = set(stages_needed)
+    if "synthesizer" not in stages_set:
+        stages_set.add("synthesizer")
+
+    execution_order = ["researcher", "critic", "solver", "verifier"]
+    to_run = [s for s in execution_order if s in stages_set]
+
+    try:
+        saved_task = existing_bb.task
+
+        for stage in to_run:
+            _mark_stage_pending(existing_bb, stage)
+
+        if "researcher" in stages_set:
+            existing_bb.task = f"{base_task}\n\nFOCUS: {intent.get('focus')}"
+            existing_bb = await run_researcher(existing_bb)
+            existing_bb.task = saved_task
+
+        if "critic" in stages_set:
+            existing_bb.solution.output = current_answer
+            existing_bb = await run_critic(existing_bb)
+
+        if "solver" in stages_set:
+            existing_bb.plan.reasoning = refinement_context
+            existing_bb = await run_solver(existing_bb)
+
+        if "verifier" in stages_set:
+            existing_bb = await run_verifier(existing_bb)
+
+        _mark_stage_pending(existing_bb, "synthesizer")
+        existing_bb.plan.reasoning = refinement_context
+        existing_bb = await run_synthesizer(existing_bb)
+
+        _mark_stage_pending(existing_bb, "judge")
+        existing_bb = await run_judge(existing_bb)
+        if existing_bb.status == AgentStatus.NEEDS_REVISION:
+            existing_bb.status = AgentStatus.COMPLETE
+            existing_bb.completed_at = datetime.now(timezone.utc)
+
+        plain_new = existing_bb.final_answer or ""
+        try:
+            parsed_new = json.loads(plain_new)
+            if isinstance(parsed_new, dict) and parsed_new.get("sentences"):
+                plain_new = " ".join(
+                    str(s.get("text", "")) for s in parsed_new["sentences"] if isinstance(s, dict)
+                )
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass
+
+        existing_bb.add_message(
+            role="agent",
+            content=plain_new,
+            refinement_type=str(intent.get("type") or "followup"),
+        )
+
+        logger.info(
+            "[REFINEMENT] Complete task=%s refinement_count=%s",
+            existing_bb.task_id,
+            existing_bb.refinement_count,
+        )
+
+    except Exception as e:
+        existing_bb.status = AgentStatus.FAILED
+        existing_bb.error = str(e)
+        logger.exception("[REFINEMENT] Failed: %s", e)
+
+    return existing_bb
+
+
 async def run_agent_pipeline(
     user_id: int,
     task: str,

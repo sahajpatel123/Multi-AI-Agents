@@ -779,6 +779,67 @@ export async function getAgentSavedTask(taskId: string): Promise<unknown> {
   return data;
 }
 
+function agentDetailMessage(data: unknown, fallback: string): string {
+  if (!data || typeof data !== 'object') return fallback;
+  const d = (data as { detail?: unknown }).detail;
+  if (typeof d === 'string') return d;
+  if (d && typeof d === 'object' && 'message' in d && typeof (d as { message: string }).message === 'string') {
+    return (d as { message: string }).message;
+  }
+  return getErrorMessage(data as { detail?: string | { message?: string } }, fallback);
+}
+
+export type RefineAgentResponse = {
+  task_id: string;
+  status: string;
+  refinement_count?: number;
+  message?: string;
+};
+
+export async function refineAgentAnswer(taskId: string, message: string): Promise<RefineAgentResponse> {
+  const response = await apiFetch(`${API_BASE}/agent/refine`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id: taskId, message }),
+  });
+  const data = await parseJsonSafely<RefineAgentResponse & { detail?: unknown }>(response);
+  if (!response.ok) {
+    throw new ApiError(agentDetailMessage(data, 'Refinement failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty refinement response');
+  return data;
+}
+
+export type BridgeAgentResponse = {
+  task_id: string;
+  status: string;
+  message?: string;
+};
+
+export async function verifyArenaAnswerInAgent(
+  arenaAnswer: string,
+  originalQuestion: string,
+  winningPersona: string = '',
+  arenaScore: number = 0,
+): Promise<BridgeAgentResponse> {
+  const response = await apiFetch(`${API_BASE}/agent/verify-from-arena`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      arena_answer: arenaAnswer,
+      original_question: originalQuestion,
+      winning_persona: winningPersona,
+      arena_score: arenaScore,
+    }),
+  });
+  const data = await parseJsonSafely<BridgeAgentResponse & { detail?: unknown }>(response);
+  if (!response.ok) {
+    throw new ApiError(agentDetailMessage(data, 'Verification failed'), response.status, data);
+  }
+  if (!data?.task_id) throw new Error('Empty bridge response');
+  return data;
+}
+
 // ──────────────────────────────────────────────────────────────
 // Payments (Razorpay subscriptions)
 // ──────────────────────────────────────────────────────────────

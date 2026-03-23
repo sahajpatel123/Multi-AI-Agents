@@ -8,7 +8,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from arena.core.agent_pipeline import run_agent_pipeline_on_blackboard
+from arena.core.agent_pipeline import (
+    run_agent_pipeline_on_blackboard,
+    run_refinement_pipeline,
+)
 from arena.core.auth import get_current_user_required
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard
 from arena.core.llm_caller import call_llm
@@ -43,6 +46,18 @@ class AgentFeedbackRequest(BaseModel):
     task_id: str
     feedback: str
     note: Optional[str] = None
+
+
+class RefinementRequest(BaseModel):
+    task_id: str
+    message: str
+
+
+class BridgeRequest(BaseModel):
+    arena_answer: str
+    original_question: str
+    winning_persona: str = ""
+    arena_score: int = 0
 
 
 ANALYST_CHALLENGE_PROMPT = """
@@ -247,6 +262,15 @@ async def run_agent_pipeline_background(task_id: str, user_id: int, task: str) -
     if bb.status != AgentStatus.COMPLETE:
         return
 
+    await _save_completed_task_to_memory(bb, user_id, task)
+
+
+async def _save_completed_task_to_memory(
+    bb: Blackboard,
+    user_id: int,
+    task_text_for_memory: str,
+) -> None:
+    """Persist completed agent run to research memory (non-fatal on failure)."""
     try:
         from arena.core.agent_memory import save_task_to_memory
 
@@ -281,8 +305,8 @@ async def run_agent_pipeline_background(task_id: str, user_id: int, task: str) -
             await save_task_to_memory(
                 db=db,
                 user_id=user_id,
-                task_id=task_id,
-                task_text=task,
+                task_id=bb.task_id,
+                task_text=task_text_for_memory,
                 final_answer=bb.final_answer or "",
                 final_score=bb.final_score,
                 final_confidence=bb.final_confidence,
@@ -292,7 +316,7 @@ async def run_agent_pipeline_background(task_id: str, user_id: int, task: str) -
 
             rows = (
                 db.query(AgentContradiction)
-                .filter(AgentContradiction.new_task_id == task_id)
+                .filter(AgentContradiction.new_task_id == bb.task_id)
                 .all()
             )
             bb.contradictions = [
@@ -308,6 +332,50 @@ async def run_agent_pipeline_background(task_id: str, user_id: int, task: str) -
             db.close()
     except Exception as e:
         logger.warning("[AGENT] Memory save failed (non-fatal): %s", e)
+
+
+async def run_refinement_background(
+    task_id: str,
+    user_message: str,
+    user_id: int,
+) -> None:
+    bb = get_blackboard(task_id)
+    if not bb:
+        logger.error("[REFINEMENT] No blackboard for task_id=%s", task_id)
+        return
+    try:
+        await run_refinement_pipeline(
+            existing_bb=bb,
+            user_message=user_message,
+            user_id=user_id,
+        )
+    except Exception as e:
+        bb2 = get_blackboard(task_id)
+        if bb2:
+            bb2.status = AgentStatus.FAILED
+            bb2.error = str(e)
+        logger.exception("[REFINEMENT] Background failed task_id=%s", task_id)
+
+
+async def run_bridge_pipeline_background(task_id: str, user_id: int) -> None:
+    bb = get_blackboard(task_id)
+    if not bb or bb.user_id != user_id:
+        logger.error("[BRIDGE] Invalid blackboard task_id=%s", task_id)
+        return
+    try:
+        await run_agent_pipeline_on_blackboard(bb, memory_context=None)
+    except Exception as e:
+        bb2 = get_blackboard(task_id)
+        if bb2:
+            bb2.status = AgentStatus.FAILED
+            bb2.error = str(e)
+        logger.exception("[BRIDGE] Pipeline error task_id=%s", task_id)
+        return
+
+    if bb.status != AgentStatus.COMPLETE:
+        return
+
+    await _save_completed_task_to_memory(bb, user_id, bb.task)
 
 
 @router.post("/run")
@@ -594,5 +662,113 @@ async def submit_task_feedback(
             "status": "saved",
             "task_id": body.task_id,
             "feedback": body.feedback,
+        }
+    )
+
+
+@router.post("/refine")
+async def refine_agent_answer(
+    body: RefinementRequest,
+    background_tasks: BackgroundTasks,
+    user: UserResponse = Depends(get_current_user_required),
+):
+    _ensure_agent_access(user)
+
+    message = body.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    if len(message) > 1000:
+        raise HTTPException(
+            status_code=400,
+            detail="Message too long. Max 1000 characters.",
+        )
+
+    bb = get_blackboard(body.task_id.strip())
+    if not bb:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "task_not_found",
+                "message": "Original task not found. It may have expired. Please run a new task.",
+            },
+        )
+
+    if bb.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if bb.refinement_count >= 10:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "refinement_limit",
+                "message": "Maximum refinements reached for this task. Start a new task to continue.",
+            },
+        )
+
+    bb.status = AgentStatus.RUNNING
+
+    background_tasks.add_task(
+        run_refinement_background,
+        body.task_id.strip(),
+        message,
+        user.id,
+    )
+
+    return JSONResponse(
+        content={
+            "task_id": body.task_id.strip(),
+            "status": "refining",
+            "refinement_count": bb.refinement_count + 1,
+            "message": "Refinement started",
+        }
+    )
+
+
+@router.post("/verify-from-arena")
+async def verify_arena_answer(
+    body: BridgeRequest,
+    background_tasks: BackgroundTasks,
+    user: UserResponse = Depends(get_current_user_required),
+):
+    _ensure_agent_access(user)
+
+    arena_answer = body.arena_answer.strip()
+    original_question = body.original_question.strip()
+    if not arena_answer or not original_question:
+        raise HTTPException(
+            status_code=400,
+            detail="Answer and question required",
+        )
+
+    persona = body.winning_persona.strip() or "Arena winner"
+    verification_task = (
+        f"VERIFICATION TASK:\n"
+        f"Original question: {original_question}\n\n"
+        f"Answer to verify (from {persona} with score {body.arena_score}/100):\n"
+        f"{arena_answer}\n\n"
+        f"Your job: rigorously verify this answer. Find supporting evidence. "
+        f"Attack assumptions. Score every claim. Produce a verified, refined version."
+    )
+
+    bb = create_blackboard(user_id=user.id, task=verification_task)
+    bb.status = AgentStatus.RUNNING
+    bb.bridge_from_arena = True
+    bb.plan.reasoning = (
+        "This is a verification task for an Arena answer. "
+        "Focus on fact-checking and assumption testing. "
+        f"The original question was: {original_question}"
+    )
+
+    background_tasks.add_task(
+        run_bridge_pipeline_background,
+        bb.task_id,
+        user.id,
+    )
+
+    return JSONResponse(
+        content={
+            "task_id": bb.task_id,
+            "status": "running",
+            "message": "Agent is verifying the Arena answer",
         }
     )

@@ -8,6 +8,8 @@ import {
   Share2,
   Bookmark,
   RotateCcw,
+  Loader2,
+  ArrowUpRight,
 } from 'lucide-react';
 import { ScoredAgent, AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
@@ -50,6 +52,9 @@ interface AgentCardProps {
   animateConfidenceBar?: boolean;
   displayConfig?: AgentDisplayConfig;
   displayPersonaId?: string;
+  onVerifyInAgent?: () => void;
+  verifyInAgentLoading?: boolean;
+  verifyInAgentDisabled?: boolean;
 }
 
 const THINKING_PHRASES: Record<string, string[]> = {
@@ -103,6 +108,9 @@ export function AgentCard({
   animateConfidenceBar = true,
   displayConfig,
   displayPersonaId,
+  onVerifyInAgent,
+  verifyInAgentLoading = false,
+  verifyInAgentDisabled = false,
 }: AgentCardProps) {
   const agentConfig = AGENTS[agentId];
   const resolvedDisplay = {
@@ -445,6 +453,7 @@ export function AgentCard({
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
+              flexWrap: 'wrap',
             }}
           >
             <ActionButton
@@ -493,6 +502,53 @@ export function AgentCard({
               active={isSaved}
               activeColor="#C4956A"
             />
+            {isWinner && onVerifyInAgent && (
+              <button
+                type="button"
+                title={
+                  verifyInAgentDisabled
+                    ? 'Pro feature — upgrade to verify answers in Agent Mode'
+                    : undefined
+                }
+                disabled={verifyInAgentDisabled || verifyInAgentLoading}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!verifyInAgentDisabled && !verifyInAgentLoading) onVerifyInAgent();
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 14px',
+                  borderRadius: 999,
+                  background: 'rgba(196,149,106,0.1)',
+                  border: '0.5px solid rgba(196,149,106,0.3)',
+                  color: '#C4956A',
+                  fontSize: 12,
+                  cursor:
+                    verifyInAgentDisabled || verifyInAgentLoading ? 'not-allowed' : 'pointer',
+                  transition: 'all 150ms ease',
+                  whiteSpace: 'nowrap',
+                  opacity: verifyInAgentDisabled ? 0.45 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (verifyInAgentDisabled || verifyInAgentLoading) return;
+                  e.currentTarget.style.background = 'rgba(196,149,106,0.18)';
+                  e.currentTarget.style.borderColor = 'rgba(196,149,106,0.5)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(196,149,106,0.1)';
+                  e.currentTarget.style.borderColor = 'rgba(196,149,106,0.3)';
+                }}
+              >
+                {verifyInAgentLoading ? (
+                  <Loader2 className="animate-spin" style={{ width: 14, height: 14 }} />
+                ) : (
+                  <ArrowUpRight style={{ width: 14, height: 14 }} />
+                )}
+                {verifyInAgentLoading ? 'Sending to Agent...' : 'Verify in Agent'}
+              </button>
+            )}
             {!isIdle && (
               <div style={{ marginLeft: 'auto', fontSize: '11px', color: '#6B6460', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span>Click</span>

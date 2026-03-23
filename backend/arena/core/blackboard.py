@@ -68,11 +68,34 @@ class Blackboard:
     source_integrity: dict = field(default_factory=dict)
     memory_saved: bool = False
 
+    # Collaborative refinement (in-memory; not persisted to agent_tasks rows per turn)
+    conversation: list = field(default_factory=list)
+    is_refinement: bool = False
+    parent_task_id: str = ""
+    refinement_count: int = 0
+    original_task: str = ""
+    bridge_from_arena: bool = False
+
     total_tokens: int = 0
     total_cost_usd: float = 0.0
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error: Optional[str] = None
+
+    def add_message(
+        self,
+        role: str,
+        content: str,
+        refinement_type: Optional[str] = None,
+    ) -> None:
+        self.conversation.append(
+            {
+                "role": role,
+                "content": content,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "refinement_type": refinement_type,
+            }
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -134,6 +157,12 @@ class Blackboard:
             "source_integrity": self.source_integrity,
             "contradictions": self.contradictions,
             "memory_saved": self.memory_saved,
+            "conversation": self.conversation,
+            "is_refinement": self.is_refinement,
+            "parent_task_id": self.parent_task_id,
+            "refinement_count": self.refinement_count,
+            "original_task": self.original_task or self.task,
+            "bridge_from_arena": self.bridge_from_arena,
             "total_tokens": self.total_tokens,
             "total_cost_usd": self.total_cost_usd,
             "error": self.error,
@@ -147,6 +176,7 @@ def create_blackboard(user_id: int, task: str) -> Blackboard:
     bb = Blackboard(
         user_id=user_id,
         task=task,
+        original_task=task,
         started_at=datetime.now(timezone.utc),
     )
     active_tasks[bb.task_id] = bb

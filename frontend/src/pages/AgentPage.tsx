@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeft, Lock, Zap } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ArrowLeft, Loader2, Lock, Zap } from 'lucide-react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
   challengeAgentAnswer,
@@ -9,6 +9,7 @@ import {
   getAgentSavedTask,
   getAgentStatus,
   getMemoryContext,
+  refineAgentAnswer,
   runAgentTask,
   type AgentChallengeItem,
 } from '../api';
@@ -49,9 +50,17 @@ type StagePayload = {
   duration_ms?: number;
 };
 
+type ConversationEntry = {
+  role: string;
+  content: string;
+  timestamp?: string;
+  refinement_type?: string | null;
+};
+
 type AgentResult = {
   task_id?: string;
   task?: string;
+  original_task?: string;
   status?: string;
   current_stage?: string;
   iterations?: number;
@@ -64,6 +73,11 @@ type AgentResult = {
   source_integrity?: SourceIntegrityPayload;
   contradictions?: ContradictionItem[];
   memory_saved?: boolean;
+  conversation?: ConversationEntry[];
+  is_refinement?: boolean;
+  refinement_count?: number;
+  parent_task_id?: string;
+  bridge_from_arena?: boolean;
 };
 
 type ContradictionItem = {
@@ -168,6 +182,7 @@ const EXAMPLES = [
 
 export function AgentPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, isLoading: authLoading, logout } = useAuth();
   const { canUseFeature, isPro } = useTier();
@@ -175,6 +190,7 @@ export function AgentPage() {
 
   const [task, setTask] = useState('');
   const [isRunning, setIsRunning] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AgentResult | null>(null);
   const [expandedStages, setExpandedStages] = useState<Set<StageId>>(new Set());
@@ -190,6 +206,11 @@ export function AgentPage() {
   const [rebuttals, setRebuttals] = useState<Record<string, string>>({});
   const [rebuttalLoadingFor, setRebuttalLoadingFor] = useState<string | null>(null);
   const [memoryContext, setMemoryContext] = useState<MemoryContextPayload | null>(null);
+  const [refinementInput, setRefinementInput] = useState('');
+  const [refinementError, setRefinementError] = useState<string | null>(null);
+  const [bridgeMeta, setBridgeMeta] = useState<{ taskId: string; originalQuestion: string } | null>(null);
+  const [refineFocus, setRefineFocus] = useState(false);
+  const answerAnchorRef = useRef<HTMLDivElement>(null);
 
   const urlTaskId = searchParams.get('task_id');
 
@@ -234,6 +255,111 @@ export function AgentPage() {
     };
   }, [urlTaskId, canAgent, authLoading]);
 
+  useEffect(() => {
+    const st = location.state as {
+      bridgeTaskId?: string;
+      bridgeMode?: boolean;
+      originalQuestion?: string;
+    } | null;
+    if (st?.bridgeTaskId && st.bridgeMode && canAgent && !authLoading) {
+      setBridgeMeta({
+        taskId: st.bridgeTaskId,
+        originalQuestion: typeof st.originalQuestion === 'string' ? st.originalQuestion : '',
+      });
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate, canAgent, authLoading]);
+
+  const pollAgentTaskUntilDone = useCallback(async (taskId: string) => {
+    const maxAttempts = 60;
+    for (let attempts = 0; attempts < maxAttempts; attempts++) {
+      try {
+        const statusData = await getAgentStatus(taskId);
+        const stages = statusData.stages || {};
+
+        const next: Partial<Record<StageId, string>> = {};
+        for (const sid of STAGE_ORDER) {
+          next[sid] = (stages[sid]?.status as string) || 'pending';
+        }
+        setLiveStages(next);
+
+        let runningStage: string | null = null;
+        for (const stage of STAGE_ORDER) {
+          if (stages[stage]?.status === 'running') {
+            runningStage = stage;
+            break;
+          }
+        }
+        const cur = runningStage || statusData.current_stage || 'planner';
+        setCurrentStage(cur);
+
+        setCompletedStages(STAGE_ORDER.filter((s) => stages[s]?.status === 'complete'));
+
+        const st = String(statusData.status || '').toLowerCase();
+        if (st === 'complete' || st === 'failed') {
+          try {
+            const resultData = (await getAgentResult(taskId)) as AgentResult;
+            if (resultData) {
+              setResult(resultData);
+              setCompletedStages([...STAGE_ORDER]);
+              setCurrentStage('done');
+              if (resultData.stages) {
+                const fromResult: Partial<Record<StageId, string>> = {};
+                for (const sid of STAGE_ORDER) {
+                  const ps = resultData.stages[sid]?.status;
+                  if (ps) fromResult[sid] = ps as string;
+                }
+                setLiveStages(fromResult);
+              }
+            }
+          } catch (resultErr) {
+            setError(resultErr instanceof Error ? resultErr.message : 'Could not load agent result');
+          }
+          setIsRunning(false);
+          setIsRefining(false);
+          return;
+        }
+      } catch (pollErr) {
+        if (pollErr instanceof ApiError && (pollErr.status === 401 || pollErr.status === 403)) {
+          setError(pollErr.message || 'Authentication required');
+          setIsRunning(false);
+          setIsRefining(false);
+          return;
+        }
+        await wait(5000);
+        continue;
+      }
+      await wait(3000);
+    }
+    setError('Task timed out. Please try again.');
+    setIsRunning(false);
+    setIsRefining(false);
+  }, []);
+
+  useEffect(() => {
+    if (!bridgeMeta?.taskId || !canAgent || authLoading) return;
+    let cancelled = false;
+    setError(null);
+    setIsRunning(true);
+    setIsRefining(false);
+    (async () => {
+      try {
+        await pollAgentTaskUntilDone(bridgeMeta.taskId);
+      } catch {
+        if (!cancelled) setError('Verification failed to complete.');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bridgeMeta, canAgent, authLoading, pollAgentTaskUntilDone]);
+
+  useEffect(() => {
+    if (result?.bridge_from_arena && bridgeMeta) {
+      setBridgeMeta(null);
+    }
+  }, [result?.bridge_from_arena, bridgeMeta]);
+
   const toggleStage = useCallback((id: StageId) => {
     setExpandedStages((prev) => {
       const next = new Set(prev);
@@ -260,76 +386,14 @@ export function AgentPage() {
     setRebuttals({});
     setRebuttalLoadingFor(null);
     setIsRunning(true);
-
-    const pollForResult = async (taskId: string) => {
-      const maxAttempts = 60;
-      for (let attempts = 0; attempts < maxAttempts; attempts++) {
-        try {
-          const statusData = await getAgentStatus(taskId);
-          const stages = statusData.stages || {};
-
-          const next: Partial<Record<StageId, string>> = {};
-          for (const sid of STAGE_ORDER) {
-            next[sid] = (stages[sid]?.status as string) || 'pending';
-          }
-          setLiveStages(next);
-
-          let runningStage: string | null = null;
-          for (const stage of STAGE_ORDER) {
-            if (stages[stage]?.status === 'running') {
-              runningStage = stage;
-              break;
-            }
-          }
-          const cur = runningStage || statusData.current_stage || 'planner';
-          setCurrentStage(cur);
-
-          setCompletedStages(STAGE_ORDER.filter((s) => stages[s]?.status === 'complete'));
-
-          const st = String(statusData.status || '').toLowerCase();
-          if (st === 'complete' || st === 'failed') {
-            try {
-              const resultData = (await getAgentResult(taskId)) as AgentResult;
-              if (resultData) {
-                setResult(resultData);
-                setCompletedStages([...STAGE_ORDER]);
-                setCurrentStage('done');
-                if (resultData.stages) {
-                  const fromResult: Partial<Record<StageId, string>> = {};
-                  for (const sid of STAGE_ORDER) {
-                    const ps = resultData.stages[sid]?.status;
-                    if (ps) fromResult[sid] = ps as string;
-                  }
-                  setLiveStages(fromResult);
-                }
-              }
-            } catch (resultErr) {
-              setError(resultErr instanceof Error ? resultErr.message : 'Could not load agent result');
-            }
-            setIsRunning(false);
-            return;
-          }
-        } catch (pollErr) {
-          if (pollErr instanceof ApiError && (pollErr.status === 401 || pollErr.status === 403)) {
-            setError(pollErr.message || 'Authentication required');
-            setIsRunning(false);
-            return;
-          }
-          await wait(5000);
-          continue;
-        }
-        await wait(3000);
-      }
-      setError('Task timed out. Please try again.');
-      setIsRunning(false);
-    };
+    setIsRefining(false);
 
     try {
       const startData = await runAgentTask(t);
       if (!startData.task_id) {
         throw new Error('No task ID received');
       }
-      await pollForResult(startData.task_id);
+      await pollAgentTaskUntilDone(startData.task_id);
       try {
         const ctx = (await getMemoryContext('')) as MemoryContextPayload;
         setMemoryContext(ctx);
@@ -339,13 +403,44 @@ export function AgentPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Agent task failed');
       setIsRunning(false);
+      setIsRefining(false);
+    }
+  };
+
+  const handleRefine = async () => {
+    const msg = refinementInput.trim();
+    if (!msg || !result?.task_id || isRefining || isRunning) return;
+    setRefinementInput('');
+    setIsRunning(true);
+    setIsRefining(true);
+    setRefinementError(null);
+    try {
+      await refineAgentAnswer(result.task_id, msg);
+      await pollAgentTaskUntilDone(result.task_id);
+      try {
+        const ctx = (await getMemoryContext('')) as MemoryContextPayload;
+        setMemoryContext(ctx);
+      } catch {
+        /* ignore */
+      }
+    } catch (err) {
+      setRefinementError(
+        err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Refinement failed.',
+      );
+    } finally {
+      setIsRunning(false);
+      setIsRefining(false);
     }
   };
 
   const resetRun = () => {
     setSearchParams({});
+    setBridgeMeta(null);
     setResult(null);
     setError(null);
+    setRefinementInput('');
+    setRefinementError(null);
+    setIsRefining(false);
     setExpandedStages(new Set());
     setTraceOpen(false);
     setTraceOutputExpanded(new Set());
@@ -523,6 +618,9 @@ export function AgentPage() {
           0%, 100% { opacity: 0.35; transform: scale(1); }
           50% { opacity: 1; transform: scale(1.15); }
         }
+        @keyframes agentSpin {
+          to { transform: rotate(360deg); }
+        }
         .agent-chal-dot {
           width: 8px;
           height: 8px;
@@ -668,6 +766,43 @@ export function AgentPage() {
           </div>
         ) : (
           <>
+            {bridgeMeta && isRunning && (
+              <div
+                style={{
+                  background: 'rgba(196,149,106,0.08)',
+                  border: '0.5px solid rgba(196,149,106,0.25)',
+                  borderRadius: 12,
+                  padding: '10px 16px',
+                  marginBottom: '1.5rem',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                }}
+              >
+                <span
+                  className="breathe"
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: '#C4956A',
+                    marginTop: 5,
+                    flexShrink: 0,
+                  }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#1A1714' }}>
+                    Verifying Arena winner in Agent
+                  </div>
+                  {bridgeMeta.originalQuestion ? (
+                    <div style={{ fontSize: 12, color: '#6B6460', marginTop: 4 }}>
+                      Original question: {bridgeMeta.originalQuestion}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
             <div style={{ marginBottom: '2rem' }}>
               <p
                 style={{
@@ -847,7 +982,13 @@ export function AgentPage() {
 
             {isRunning && (
               <div style={{ margin: '1.5rem 0' }}>
-                <p style={{ fontSize: 12, color: '#6B6460', marginBottom: 12 }}>Pipeline progress</p>
+                <p style={{ fontSize: 12, color: '#6B6460', marginBottom: 12 }}>
+                  {bridgeMeta
+                    ? 'Verifying Arena answer...'
+                    : isRefining
+                      ? 'Refining your answer...'
+                      : 'Pipeline progress'}
+                </p>
                 <StageDotsRow
                   stages={STAGES}
                   stageVisual={stageVisual}
@@ -859,9 +1000,119 @@ export function AgentPage() {
               </div>
             )}
 
-            {result && (result.final_answer || result.stages) && !isRunning && (
+            {result && (result.final_answer || result.stages) && (!isRunning || isRefining) && (
               <>
+                {(result.original_task || result.task) && (
+                  <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.1em',
+                        color: '#B0A9A2',
+                        marginBottom: 6,
+                      }}
+                    >
+                      Your task
+                    </div>
+                    <p style={{ fontSize: 14, color: '#1A1714', lineHeight: 1.6, margin: 0 }}>
+                      {result.original_task || result.task}
+                    </p>
+                  </div>
+                )}
+
+                {(result.refinement_count ?? 0) > 0 && (
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: '#B0A9A2',
+                      textAlign: 'center',
+                      marginBottom: 10,
+                      marginTop: 0,
+                    }}
+                  >
+                    Refined {result.refinement_count} time{result.refinement_count === 1 ? '' : 's'}
+                  </p>
+                )}
+
+                {result.conversation && result.conversation.length >= 2 && (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    {result.conversation.map((msg, idx) => {
+                      const isUser = msg.role === 'user';
+                      const text = msg.content || '';
+                      const short = text.length > 200 ? `${text.slice(0, 200)}…` : text;
+                      return (
+                        <div
+                          key={`${msg.timestamp || idx}-${idx}`}
+                          style={{
+                            display: 'flex',
+                            justifyContent: isUser ? 'flex-end' : 'flex-start',
+                            marginBottom: 10,
+                            alignItems: 'flex-start',
+                            gap: 10,
+                          }}
+                        >
+                          {!isUser && (
+                            <span
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                background: '#C4956A',
+                                marginTop: 8,
+                                flexShrink: 0,
+                              }}
+                            />
+                          )}
+                          <div style={{ maxWidth: isUser ? '80%' : '88%' }}>
+                            <div
+                              style={{
+                                background: isUser ? '#F0EBE3' : '#FFFFFF',
+                                border: isUser ? 'none' : '0.5px solid #E0D8D0',
+                                borderRadius: isUser ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                                padding: '10px 14px',
+                                fontSize: 13,
+                                color: '#1A1714',
+                                lineHeight: 1.6,
+                              }}
+                            >
+                              {short}
+                              {!isUser && text.length > 200 ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    answerAnchorRef.current?.scrollIntoView({ behavior: 'smooth' })
+                                  }
+                                  style={{
+                                    display: 'block',
+                                    marginTop: 6,
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: 0,
+                                    color: '#C4956A',
+                                    fontSize: 11,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  See full answer below
+                                </button>
+                              ) : null}
+                            </div>
+                            {!isUser && msg.refinement_type ? (
+                              <div style={{ fontSize: 10, color: '#B0A9A2', marginTop: 3 }}>
+                                {msg.refinement_type}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <div
+                  ref={answerAnchorRef}
+                  id="agent-current-answer"
                   style={{
                     background: '#FFFFFF',
                     border: '0.5px solid #E0D8D0',
@@ -870,6 +1121,21 @@ export function AgentPage() {
                     marginTop: '1.5rem',
                   }}
                 >
+                  {result.bridge_from_arena && !isRunning && (
+                    <div
+                      style={{
+                        background: 'rgba(196,149,106,0.06)',
+                        borderRadius: 10,
+                        padding: '10px 14px',
+                        marginBottom: '1rem',
+                        fontSize: 12,
+                        color: '#6B6460',
+                      }}
+                    >
+                      This is Agent&apos;s verification of the Arena winner. Confidence and accuracy scores reflect
+                      rigorous fact-checking of that answer.
+                    </div>
+                  )}
                   {result.contradictions && result.contradictions.length > 0 && (
                       <div
                         style={{
@@ -1329,7 +1595,8 @@ export function AgentPage() {
                       onClick={() =>
                         navigate('/app', {
                           state: {
-                            agentStressPrompt: `Stress-test this agent response in Arena:\n\n${plainAnswerText}`,
+                            agentStressPrompt: plainAnswerText,
+                            fromAgent: true,
                           },
                         })
                       }
@@ -1533,6 +1800,163 @@ export function AgentPage() {
                     )}
                   </div>
                 </div>
+
+                {result?.task_id &&
+                  (result.refinement_count ?? 0) < 10 &&
+                  (result.final_answer || result.stages) &&
+                  (!isRunning || isRefining) && (
+                    <div style={{ marginTop: '1.5rem' }}>
+                      <div
+                        style={{
+                          margin: '1.5rem 0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                        }}
+                      >
+                        <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
+                        <span
+                          style={{
+                            fontSize: 11,
+                            letterSpacing: '0.1em',
+                            textTransform: 'uppercase',
+                            color: '#B0A9A2',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Continue the research
+                        </span>
+                        <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
+                      </div>
+
+                      {!isRefining ? (
+                        <>
+                          <div
+                            style={{
+                              display: 'flex',
+                              gap: 8,
+                              flexWrap: 'wrap',
+                              marginBottom: 12,
+                            }}
+                          >
+                            {[
+                              'Go deeper on this',
+                              'Challenge the main assumption',
+                              'Summarise in 3 points',
+                              "What's the opposing view?",
+                            ].map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => setRefinementInput(s)}
+                                style={{
+                                  background: '#F5F2EF',
+                                  border: '0.5px solid #E0D8D0',
+                                  borderRadius: 999,
+                                  padding: '6px 14px',
+                                  fontSize: 12,
+                                  color: '#6B6460',
+                                  cursor: 'pointer',
+                                  transition: 'background 150ms ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#F0EBE3';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = '#F5F2EF';
+                                }}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div
+                            style={{
+                              background: '#FFFFFF',
+                              border: refineFocus ? '0.5px solid #C4956A' : '0.5px solid #E0D8D0',
+                              borderRadius: 14,
+                              padding: '12px 14px',
+                              display: 'flex',
+                              gap: 10,
+                              alignItems: 'flex-end',
+                              transition: 'border-color 200ms ease',
+                            }}
+                          >
+                            <textarea
+                              value={refinementInput}
+                              onChange={(e) => setRefinementInput(e.target.value.slice(0, 1000))}
+                              onFocus={() => setRefineFocus(true)}
+                              onBlur={() => setRefineFocus(false)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  void handleRefine();
+                                }
+                              }}
+                              placeholder="Ask a follow-up, request more depth, challenge an assumption..."
+                              disabled={isRefining}
+                              style={{
+                                flex: 1,
+                                border: 'none',
+                                outline: 'none',
+                                resize: 'none',
+                                fontSize: 14,
+                                color: '#1A1714',
+                                background: 'transparent',
+                                minHeight: 44,
+                                maxHeight: 120,
+                                fontFamily: 'inherit',
+                              }}
+                            />
+                            <button
+                              type="button"
+                              disabled={!refinementInput.trim() || isRefining}
+                              onClick={() => void handleRefine()}
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: '50%',
+                                background: refinementInput.trim() ? '#1A1714' : '#F0EBE3',
+                                border: 'none',
+                                cursor: refinementInput.trim() ? 'pointer' : 'default',
+                                transition: 'all 150ms ease',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: refinementInput.trim() ? '#FAF7F4' : '#C4B8AE',
+                                fontSize: 16,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {isRefining ? (
+                                <span style={{ display: 'inline-flex', animation: 'agentSpin 0.9s linear infinite' }}>
+                                  <Loader2 style={{ width: 18, height: 18 }} />
+                                </span>
+                              ) : (
+                                '→'
+                              )}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <p style={{ fontSize: 12, color: '#6B6460', marginBottom: 0 }}>
+                          Refining your answer...
+                        </p>
+                      )}
+                      {refinementError ? (
+                        <p style={{ color: '#E57373', fontSize: 12, marginTop: 8, marginBottom: 0 }}>
+                          {refinementError}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+
+                {(result?.refinement_count ?? 0) >= 10 && (result?.final_answer || result?.stages) && !isRunning && (
+                  <p style={{ fontSize: 12, color: '#6B6460', textAlign: 'center', marginTop: '1.5rem' }}>
+                    Maximum refinements reached. Start a new task to continue.
+                  </p>
+                )}
 
                 <div
                   aria-expanded={challengesVisible || challenges.length > 0 || isChallengingAnswer}

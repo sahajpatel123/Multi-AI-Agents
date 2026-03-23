@@ -10,7 +10,17 @@ import { AuthModal } from './components/AuthModal';
 import { UpgradeModal } from './components/UpgradeModal';
 import { UserMenu } from './components/UserMenu';
 import { AgentDot } from './components/AgentDot';
-import { streamPrompt, streamDiscuss, getSession, parseStreamedAgentPreview, saveMemory, getSavedResponses, saveResponse, deleteSavedResponse } from './api';
+import {
+  streamPrompt,
+  streamDiscuss,
+  getSession,
+  parseStreamedAgentPreview,
+  saveMemory,
+  getSavedResponses,
+  saveResponse,
+  deleteSavedResponse,
+  verifyArenaAnswerInAgent,
+} from './api';
 import { useAuth } from './hooks/useAuth';
 import { useIsMobile } from './hooks/useIsMobile';
 import { usePanel } from './context/PanelContext';
@@ -79,13 +89,16 @@ function App() {
   const [hasSubmittedPrompt, setHasSubmittedPrompt] = useState(false);
   const [presetPrompt, setPresetPrompt] = useState('');
   const [presetPromptNonce, setPresetPromptNonce] = useState(0);
+  const [stressFromAgentBanner, setStressFromAgentBanner] = useState(false);
+  const [verifyingWinnerAgentId, setVerifyingWinnerAgentId] = useState<string | null>(null);
 
   useEffect(() => {
-    const st = location.state as { agentStressPrompt?: string } | null | undefined;
+    const st = location.state as { agentStressPrompt?: string; fromAgent?: boolean } | null | undefined;
     const prompt = st?.agentStressPrompt;
     if (typeof prompt === 'string' && prompt.trim()) {
       setPresetPrompt(prompt.trim());
       setPresetPromptNonce((n) => n + 1);
+      if (st?.fromAgent) setStressFromAgentBanner(true);
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, navigate]);
@@ -393,6 +406,36 @@ function App() {
     });
   }, [activeTurnId, canUseFeature, getPersonaForAgentId, getResponseKey, response, showPlusUpgrade]);
 
+  const handleVerifyWinnerInAgent = useCallback(
+    async (scoredAgent: ScoredAgent) => {
+      if (!canUseFeature('agent_mode')) {
+        showPlusUpgrade('Agent verification requires a Pro subscription.');
+        return;
+      }
+      const aid = scoredAgent.response.agent_id;
+      const persona = getPersonaForAgentId(aid);
+      const personaName = persona?.name || AGENTS[aid].name;
+      const answer = scoredAgent.response.one_liner?.trim() || '';
+      const question = (response?.prompt || currentPrompt).trim() || 'Arena discussion';
+      setVerifyingWinnerAgentId(aid);
+      try {
+        const data = await verifyArenaAnswerInAgent(answer, question, personaName, scoredAgent.score);
+        navigate('/agent', {
+          state: {
+            bridgeTaskId: data.task_id,
+            bridgeMode: true,
+            originalQuestion: question,
+          },
+        });
+      } catch (e) {
+        console.error('Bridge failed:', e);
+      } finally {
+        setVerifyingWinnerAgentId(null);
+      }
+    },
+    [canUseFeature, currentPrompt, getPersonaForAgentId, navigate, response?.prompt, showPlusUpgrade],
+  );
+
   const handleSavedItemClick = useCallback((item: SavedResponseItem) => {
     setViewMode('arena');
     setIsSidebarOpen(false);
@@ -459,6 +502,7 @@ function App() {
   }, [sessionData, user]);
 
   const handleSubmit = async (prompt: string) => {
+    setStressFromAgentBanner(false);
     setHasSubmittedPrompt(true);
 
     // Reset all state
@@ -1069,6 +1113,25 @@ function App() {
                 </div>
               )}
 
+              {stressFromAgentBanner && phase === 'idle' && (
+                <div
+                  style={{
+                    background: 'rgba(196,149,106,0.08)',
+                    borderRadius: 12,
+                    padding: '10px 14px',
+                    marginBottom: '1rem',
+                    maxWidth: 600,
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                    fontSize: 13,
+                    color: '#C4956A',
+                    textAlign: 'center',
+                  }}
+                >
+                  Stress testing Agent answer in Arena — 4 minds will challenge this →
+                </div>
+              )}
+
               {/* Agent Cards - Always Visible in 2x2 Grid */}
               <div
                 className="agent-cards-grid"
@@ -1149,6 +1212,15 @@ function App() {
                       onDislike={() => handleDislikeResponse(scoredAgent)}
                       onShare={() => { void handleShareResponse(scoredAgent); }}
                       onSave={() => handleSaveResponse(scoredAgent)}
+                      onVerifyInAgent={
+                        scoredAgent.is_winner
+                          ? () => void handleVerifyWinnerInAgent(scoredAgent)
+                          : undefined
+                      }
+                      verifyInAgentDisabled={!canUseFeature('agent_mode')}
+                      verifyInAgentLoading={
+                        verifyingWinnerAgentId === scoredAgent.response.agent_id
+                      }
                       isLiked={preference === 'like'}
                       isDisliked={preference === 'dislike'}
                       isSaved={isSaved}
