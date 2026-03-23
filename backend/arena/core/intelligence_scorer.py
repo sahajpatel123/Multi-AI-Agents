@@ -2,7 +2,7 @@ import json
 import logging
 import re
 
-from arena.core.agents import call_llm
+from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 
 logger = logging.getLogger("arena.intelligence_scorer")
