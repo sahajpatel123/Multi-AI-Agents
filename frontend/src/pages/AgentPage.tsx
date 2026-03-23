@@ -1,7 +1,15 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeft, Lock } from 'lucide-react';
+import { ArrowLeft, Lock, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, getAgentResult, getAgentStatus, runAgentTask } from '../api';
+import {
+  ApiError,
+  challengeAgentAnswer,
+  getAgentRebuttal,
+  getAgentResult,
+  getAgentStatus,
+  runAgentTask,
+  type AgentChallengeItem,
+} from '../api';
 import { useTier } from '../context/TierContext';
 import { useAuth } from '../hooks/useAuth';
 import { UserMenu } from '../components/UserMenu';
@@ -41,6 +49,7 @@ type StagePayload = {
 
 type AgentResult = {
   task_id?: string;
+  task?: string;
   status?: string;
   current_stage?: string;
   iterations?: number;
@@ -115,6 +124,12 @@ function plainTextFromFinalAnswer(finalAnswer: string | undefined, parsed: Parse
   return finalAnswer;
 }
 
+const CHALLENGER_CARD_STYLES: Record<string, { accent: string; dot: string }> = {
+  'The Analyst': { accent: '#8C9BAB', dot: '#8C9BAB' },
+  'The Contrarian': { accent: '#B0977E', dot: '#B0977E' },
+  'The Philosopher': { accent: '#9B8FAA', dot: '#9B8FAA' },
+};
+
 const EXAMPLES = [
   'Research the top 5 AI startups funded this month',
   'Write a go-to-market strategy for a SaaS product',
@@ -137,6 +152,12 @@ export function AgentPage() {
   const [completedStages, setCompletedStages] = useState<string[]>([]);
   const [currentStage, setCurrentStage] = useState<string>('planner');
   const [liveStages, setLiveStages] = useState<Partial<Record<StageId, string>>>({});
+  const [challenges, setChallenges] = useState<AgentChallengeItem[]>([]);
+  const [isChallengingAnswer, setIsChallengingAnswer] = useState(false);
+  const [challengesVisible, setChallengesVisible] = useState(false);
+  const [challengeSectionError, setChallengeSectionError] = useState<string | null>(null);
+  const [rebuttals, setRebuttals] = useState<Record<string, string>>({});
+  const [rebuttalLoadingFor, setRebuttalLoadingFor] = useState<string | null>(null);
 
   const toggleStage = useCallback((id: StageId) => {
     setExpandedStages((prev) => {
@@ -158,6 +179,11 @@ export function AgentPage() {
     setCompletedStages([]);
     setCurrentStage('planner');
     setLiveStages({});
+    setChallenges([]);
+    setChallengesVisible(false);
+    setChallengeSectionError(null);
+    setRebuttals({});
+    setRebuttalLoadingFor(null);
     setIsRunning(true);
 
     const pollForResult = async (taskId: string) => {
@@ -244,6 +270,12 @@ export function AgentPage() {
     setCompletedStages([]);
     setCurrentStage('planner');
     setLiveStages({});
+    setChallenges([]);
+    setChallengesVisible(false);
+    setChallengeSectionError(null);
+    setRebuttals({});
+    setRebuttalLoadingFor(null);
+    setIsChallengingAnswer(false);
   };
 
   const stageVisual = useMemo(() => {
@@ -293,6 +325,49 @@ export function AgentPage() {
   const plainAnswerText = useMemo(
     () => plainTextFromFinalAnswer(result?.final_answer, parsedAnswer),
     [result?.final_answer, parsedAnswer],
+  );
+
+  const handleChallengeAnswer = useCallback(async () => {
+    if (!result) return;
+    setChallengesVisible(true);
+    setIsChallengingAnswer(true);
+    setChallengeSectionError(null);
+    try {
+      const plainAnswer = plainAnswerText || result.final_answer || '';
+      const data = await challengeAgentAnswer(
+        result.task_id || '',
+        plainAnswer,
+        result.task || task,
+      );
+      setChallenges(data.challenges || []);
+    } catch (err) {
+      console.error('Challenge failed:', err);
+      setChallengeSectionError(err instanceof Error ? err.message : 'Challenge failed');
+      setChallenges([]);
+    } finally {
+      setIsChallengingAnswer(false);
+    }
+  }, [result, plainAnswerText, task]);
+
+  const handleGetRebuttal = useCallback(
+    async (challengeText: string, challengerKey: string) => {
+      if (!result) return;
+      setRebuttalLoadingFor(challengerKey);
+      try {
+        const plainAnswer = plainAnswerText || result.final_answer || '';
+        const data = await getAgentRebuttal(result.task || task, plainAnswer, challengeText);
+        setRebuttals((prev) => ({ ...prev, [challengerKey]: data.rebuttal }));
+      } catch (err) {
+        console.error('Rebuttal failed:', err);
+        setRebuttals((prev) => ({
+          ...prev,
+          [challengerKey]: `Rebuttal failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        }));
+      } finally {
+        setRebuttalLoadingFor(null);
+      }
+    },
+    [result, plainAnswerText, task],
   );
 
   const mergedFlags = useMemo(() => {
@@ -345,6 +420,30 @@ export function AgentPage() {
         .agent-trace-expand.agent-trace-expand-open {
           max-height: 12000px;
           opacity: 1;
+        }
+        @keyframes agentChallengeCardIn {
+          from {
+            opacity: 0;
+            transform: translateX(-16px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        .agent-challenge-card-in {
+          animation: agentChallengeCardIn 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          opacity: 0;
+        }
+        @keyframes agentChalDotPulse {
+          0%, 100% { opacity: 0.35; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.15); }
+        }
+        .agent-chal-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          animation: agentChalDotPulse 1.2s ease-in-out infinite;
         }
       `}</style>
 
@@ -1114,6 +1213,280 @@ export function AgentPage() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                <div
+                  aria-expanded={challengesVisible || challenges.length > 0 || isChallengingAnswer}
+                  style={{
+                    marginTop: '2rem',
+                    paddingTop: '1.5rem',
+                    borderTop: '0.5px solid #F0EBE3',
+                  }}
+                >
+                  {!isChallengingAnswer && challenges.length === 0 ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleChallengeAnswer()}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          background: 'transparent',
+                          border: '0.5px solid #E0D8D0',
+                          borderRadius: 999,
+                          padding: '9px 20px',
+                          fontSize: 13,
+                          color: '#6B6460',
+                          cursor: 'pointer',
+                          transition: 'all 150ms ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = '#C4956A';
+                          e.currentTarget.style.color = '#C4956A';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = '#E0D8D0';
+                          e.currentTarget.style.color = '#6B6460';
+                        }}
+                      >
+                        <Zap style={{ width: 16, height: 16 }} />
+                        Challenge this answer
+                      </button>
+                      <p style={{ fontSize: 11, color: '#B0A9A2', marginTop: 6, marginBottom: 0 }}>
+                        3 opposing minds will attack this answer
+                      </p>
+                      {challengeSectionError ? (
+                        <p style={{ color: '#E57373', fontSize: 13, marginTop: 10, marginBottom: 0 }}>
+                          {challengeSectionError}
+                        </p>
+                      ) : null}
+                    </>
+                  ) : null}
+
+                  {isChallengingAnswer ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#6B6460' }}>
+                      <span className="agent-chal-dot" style={{ background: '#8C9BAB', animationDelay: '0ms' }} />
+                      <span className="agent-chal-dot" style={{ background: '#9B8FAA', animationDelay: '0.15s' }} />
+                      <span className="agent-chal-dot" style={{ background: '#B0977E', animationDelay: '0.3s' }} />
+                      <span>Three minds are challenging this answer...</span>
+                    </div>
+                  ) : null}
+
+                  {challenges.length > 0 && !isChallengingAnswer ? (
+                    <div style={{ marginTop: 12 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: '1.5rem',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 10,
+                            letterSpacing: '0.16em',
+                            textTransform: 'uppercase',
+                            color: '#B0A9A2',
+                          }}
+                        >
+                          THE CHALLENGES
+                        </span>
+                        <span
+                          style={{
+                            background: 'rgba(229,115,115,0.08)',
+                            color: '#E57373',
+                            borderRadius: 999,
+                            fontSize: 11,
+                            padding: '3px 10px',
+                          }}
+                        >
+                          3 objections
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {challenges.map((ch, idx) => {
+                          const styles = CHALLENGER_CARD_STYLES[ch.challenger] || {
+                            accent: '#C4956A',
+                            dot: '#C4956A',
+                          };
+                          const rebuttalText = rebuttals[ch.challenger];
+                          const showRefined =
+                            rebuttalText && /##\s*Refined Answer/i.test(rebuttalText);
+                          return (
+                            <div
+                              key={`${ch.challenger}-${idx}`}
+                              className="agent-challenge-card-in"
+                              style={{
+                                animationDelay: `${idx * 100}ms`,
+                                background: '#FFFFFF',
+                                border: '0.5px solid #E0D8D0',
+                                borderRadius: 16,
+                                padding: '1.25rem 1.5rem',
+                                position: 'relative',
+                                paddingLeft: 'calc(1.5rem + 3px)',
+                                transition: 'transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'translateX(3px)';
+                                e.currentTarget.style.borderColor = styles.accent;
+                                e.currentTarget.style.boxShadow = '0 2px 12px rgba(26,23,20,0.06)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'translateX(0)';
+                                e.currentTarget.style.borderColor = '#E0D8D0';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                            >
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  top: 12,
+                                  bottom: 12,
+                                  width: 3,
+                                  borderRadius: '2px 0 0 2px',
+                                  background: styles.accent,
+                                }}
+                              />
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  marginBottom: 10,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 6,
+                                    height: 6,
+                                    borderRadius: '50%',
+                                    background: styles.dot,
+                                    flexShrink: 0,
+                                    animation: 'breathe 2.4s ease-in-out infinite',
+                                  }}
+                                />
+                                <span style={{ fontSize: 13, fontWeight: 500, color: '#1A1714' }}>
+                                  {ch.challenger}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    background: '#F0EBE3',
+                                    color: '#6B6460',
+                                    borderRadius: 999,
+                                    padding: '2px 8px',
+                                    marginLeft: 'auto',
+                                  }}
+                                >
+                                  {ch.model}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 13, color: '#1A1714', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                                {ch.challenge}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleGetRebuttal(ch.challenge, ch.challenger);
+                                }}
+                                style={{
+                                  marginTop: 8,
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  fontSize: 12,
+                                  color: '#C4956A',
+                                  cursor: 'pointer',
+                                  display: 'inline-block',
+                                }}
+                              >
+                                Make Agent respond to this
+                              </button>
+                              {rebuttalLoadingFor === ch.challenger ? (
+                                <div
+                                  style={{
+                                    marginTop: 12,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    fontSize: 13,
+                                    color: '#6B6460',
+                                  }}
+                                >
+                                  <span className="agent-chal-dot" style={{ background: '#C4956A' }} />
+                                  <span className="agent-chal-dot" style={{ background: '#C4956A', animationDelay: '0.15s' }} />
+                                  <span className="agent-chal-dot" style={{ background: '#C4956A', animationDelay: '0.3s' }} />
+                                  Agent is responding...
+                                </div>
+                              ) : null}
+                              {rebuttalText && rebuttalLoadingFor !== ch.challenger ? (
+                                <div
+                                  style={{
+                                    marginTop: 12,
+                                    padding: '14px 16px',
+                                    background: 'rgba(196,149,106,0.05)',
+                                    border: '0.5px solid rgba(196,149,106,0.2)',
+                                    borderRadius: 12,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 8,
+                                      marginBottom: 8,
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        width: 6,
+                                        height: 6,
+                                        borderRadius: '50%',
+                                        background: '#C4956A',
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                    <span
+                                      style={{
+                                        fontSize: 11,
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.1em',
+                                        color: '#C4956A',
+                                      }}
+                                    >
+                                      Agent responds
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: 13, color: '#1A1714', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                                    {rebuttalText}
+                                  </div>
+                                  {showRefined ? (
+                                    <div
+                                      style={{
+                                        marginTop: 8,
+                                        background: 'rgba(138,168,153,0.1)',
+                                        border: '0.5px solid rgba(138,168,153,0.3)',
+                                        borderRadius: 8,
+                                        padding: '8px 12px',
+                                        fontSize: 12,
+                                        color: '#5A8A5A',
+                                      }}
+                                    >
+                                      ↑ Answer was refined based on this challenge
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </>
             )}

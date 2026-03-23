@@ -666,6 +666,68 @@ export async function getAgentResult(taskId: string): Promise<unknown> {
   return data;
 }
 
+export type AgentChallengeItem = {
+  challenger: string;
+  challenge: string;
+  model: string;
+  status: string;
+};
+
+export type AgentChallengeResponse = {
+  task_id: string;
+  challenges: AgentChallengeItem[];
+  challenger_count: number;
+};
+
+export async function challengeAgentAnswer(
+  taskId: string,
+  answer: string,
+  taskContext: string,
+): Promise<AgentChallengeResponse> {
+  const response = await apiFetch(`${API_BASE}/agent/challenge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      task_id: taskId,
+      answer,
+      task: taskContext,
+    }),
+  });
+  const data = await parseJsonSafely<
+    AgentChallengeResponse & { detail?: string | { message?: string } }
+  >(response);
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Challenge failed'), response.status, data);
+  }
+  return data;
+}
+
+export type AgentRebuttalResponse = {
+  rebuttal: string;
+  status: string;
+};
+
+export async function getAgentRebuttal(
+  task: string,
+  answer: string,
+  challenge: string,
+): Promise<AgentRebuttalResponse> {
+  const response = await apiFetch(`${API_BASE}/agent/rebuttal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task, answer, challenge }),
+  });
+  const data = await parseJsonSafely<AgentRebuttalResponse & { detail?: string | { message?: string } }>(
+    response,
+  );
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Rebuttal failed'), response.status, data);
+  }
+  return data;
+}
+
 // ──────────────────────────────────────────────────────────────
 // Payments (Razorpay subscriptions)
 // ──────────────────────────────────────────────────────────────
