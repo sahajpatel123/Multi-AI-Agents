@@ -14,6 +14,20 @@ from arena.core.stages.verifier import run_verifier
 logger = logging.getLogger("arena.agent_pipeline")
 
 
+def _plain_answer_text(answer: str) -> str:
+    if not answer:
+        return ""
+    try:
+        parsed = json.loads(answer)
+        if isinstance(parsed, dict) and parsed.get("sentences"):
+            return " ".join(
+                str(s.get("text", "")) for s in parsed["sentences"] if isinstance(s, dict)
+            )
+    except (json.JSONDecodeError, TypeError, KeyError):
+        pass
+    return answer
+
+
 async def run_agent_pipeline_on_blackboard(
     bb: Blackboard,
     memory_context: dict | None = None,
@@ -69,6 +83,10 @@ async def run_agent_pipeline_on_blackboard(
         if bb.status == AgentStatus.COMPLETE and bb.completed_at is None:
             bb.completed_at = datetime.now(timezone.utc)
 
+        if bb.status == AgentStatus.COMPLETE and not bb.conversation:
+            bb.add_message("user", bb.original_task or bb.task)
+            bb.add_message("agent", _plain_answer_text(bb.final_answer))
+
         logger.info(
             "[AGENT] Pipeline complete task_id=%s score=%s confidence=%s",
             bb.task_id,
@@ -103,6 +121,7 @@ def _format_refinement_conversation(conversation: list) -> str:
 
 def _mark_stage_pending(bb: Blackboard, stage: str) -> None:
     mapping = {
+        "planner": bb.plan,
         "researcher": bb.research,
         "critic": bb.critique,
         "solver": bb.solution,
@@ -132,15 +151,7 @@ async def run_refinement_pipeline(
 
     existing_bb.add_message(role="user", content=user_message, refinement_type=None)
 
-    current_answer = existing_bb.final_answer or ""
-    try:
-        parsed = json.loads(current_answer)
-        if isinstance(parsed, dict) and parsed.get("sentences"):
-            current_answer = " ".join(
-                str(s.get("text", "")) for s in parsed["sentences"] if isinstance(s, dict)
-            )
-    except (json.JSONDecodeError, TypeError, KeyError):
-        pass
+    current_answer = _plain_answer_text(existing_bb.final_answer or "")
 
     intent = await classify_refinement(
         user_message=user_message,
@@ -188,7 +199,7 @@ Address specifically: {intent.get("instruction")}
     if "synthesizer" not in stages_set:
         stages_set.add("synthesizer")
 
-    execution_order = ["researcher", "critic", "solver", "verifier"]
+    execution_order = ["planner", "researcher", "critic", "solver", "verifier"]
     to_run = [s for s in execution_order if s in stages_set]
 
     try:
@@ -196,6 +207,10 @@ Address specifically: {intent.get("instruction")}
 
         for stage in to_run:
             _mark_stage_pending(existing_bb, stage)
+
+        if "planner" in stages_set:
+            existing_bb.plan.reasoning = refinement_context
+            existing_bb = await run_planner(existing_bb)
 
         if "researcher" in stages_set:
             existing_bb.task = f"{base_task}\n\nFOCUS: {intent.get('focus')}"
@@ -223,19 +238,9 @@ Address specifically: {intent.get("instruction")}
             existing_bb.status = AgentStatus.COMPLETE
             existing_bb.completed_at = datetime.now(timezone.utc)
 
-        plain_new = existing_bb.final_answer or ""
-        try:
-            parsed_new = json.loads(plain_new)
-            if isinstance(parsed_new, dict) and parsed_new.get("sentences"):
-                plain_new = " ".join(
-                    str(s.get("text", "")) for s in parsed_new["sentences"] if isinstance(s, dict)
-                )
-        except (json.JSONDecodeError, TypeError, KeyError):
-            pass
-
         existing_bb.add_message(
             role="agent",
-            content=plain_new,
+            content=_plain_answer_text(existing_bb.final_answer or ""),
             refinement_type=str(intent.get("type") or "followup"),
         )
 

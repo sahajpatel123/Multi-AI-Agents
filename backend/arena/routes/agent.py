@@ -689,7 +689,7 @@ async def refine_agent_answer(
             status_code=404,
             detail={
                 "error": "task_not_found",
-                "message": "Original task not found. It may have expired. Please run a new task.",
+                "message": "Task expired. Start new task.",
             },
         )
 
@@ -706,6 +706,7 @@ async def refine_agent_answer(
         )
 
     bb.status = AgentStatus.RUNNING
+    bb.error = None
 
     background_tasks.add_task(
         run_refinement_background,
@@ -752,6 +753,7 @@ async def verify_arena_answer(
 
     bb = create_blackboard(user_id=user.id, task=verification_task)
     bb.status = AgentStatus.RUNNING
+    bb.error = None
     bb.bridge_from_arena = True
     bb.plan.reasoning = (
         "This is a verification task for an Arena answer. "

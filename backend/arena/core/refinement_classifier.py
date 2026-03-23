@@ -1,13 +1,8 @@
-"""Classify user follow-up intent for Agent collaborative refinement."""
-
-from __future__ import annotations
-
 import json
 import logging
 import re
-from typing import Any
 
-from arena.core.llm_caller import call_llm
+from arena.core.agents import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 
 logger = logging.getLogger("arena.refinement")
@@ -35,44 +30,22 @@ new_angle: approach from a completely different perspective
 followup: a new question that builds on the existing context
 
 stages_needed should be the minimum stages required to handle this:
-- deeper/expand: ["researcher", "solver", "verifier", "synthesizer"]
+- deeper/expand: ["solver", "verifier", "synthesizer"]
 - challenge: ["critic", "synthesizer"]
 - rewrite/summarise: ["synthesizer"]
 - clarify: ["synthesizer"]
 - new_angle: ["researcher", "solver", "synthesizer"]
-- followup: ["solver", "synthesizer"]
+- followup: ["planner", "solver", "synthesizer"]
 """
 
 
-def _normalize_stages(raw: Any) -> list[str]:
-    allowed = {
-        "researcher",
-        "critic",
-        "solver",
-        "verifier",
-        "synthesizer",
-        "planner",
-    }
-    if not isinstance(raw, list):
-        return ["solver", "synthesizer"]
-    out: list[str] = []
-    for x in raw:
-        s = str(x).strip().lower()
-        if s in allowed and s not in out:
-            out.append(s)
-    out = [s for s in out if s != "planner"]
-    if "synthesizer" not in out:
-        out.append("synthesizer")
-    return out
-
-
-async def classify_refinement(user_message: str, current_answer: str) -> dict[str, Any]:
+async def classify_refinement(user_message: str, current_answer: str) -> dict:
     try:
         model = MODEL_REGISTRY.get("gpt_4o_mini", MODEL_REGISTRY["claude_sonnet"])
-        provider = str(model.get("provider", "openai"))
+
         response = await call_llm(
             client=model["client"],
-            provider=provider,
+            provider=model.get("provider", "openai"),
             model_id=model["model_id"],
             system_prompt=CLASSIFIER_PROMPT,
             user_prompt=(
@@ -80,14 +53,12 @@ async def classify_refinement(user_message: str, current_answer: str) -> dict[st
                 f"Current answer summary: {current_answer[:500]}"
             ),
             temperature=0.1,
-            max_tokens=250,
+            max_tokens=200,
         )
+
         match = re.search(r"\{.*\}", response, re.DOTALL)
         if match:
-            data = json.loads(match.group())
-            if isinstance(data, dict):
-                data["stages_needed"] = _normalize_stages(data.get("stages_needed"))
-                return data
+            return json.loads(match.group())
     except Exception as e:
         logger.warning("Classifier failed: %s", e)
 

@@ -373,6 +373,7 @@ export function AgentPage() {
     const t = task.trim();
     if (t.length < 10 || isRunning) return;
     setError(null);
+    setBridgeMeta(null);
     setResult(null);
     setExpandedStages(new Set());
     setTraceOpen(false);
@@ -1013,7 +1014,7 @@ export function AgentPage() {
                         marginBottom: 6,
                       }}
                     >
-                      Your task
+                      Original task
                     </div>
                     <p style={{ fontSize: 14, color: '#1A1714', lineHeight: 1.6, margin: 0 }}>
                       {result.original_task || result.task}
@@ -1035,12 +1036,12 @@ export function AgentPage() {
                   </p>
                 )}
 
-                {result.conversation && result.conversation.length >= 2 && (
+                {result.conversation && result.conversation.length > 2 && (
                   <div style={{ marginBottom: '1.5rem' }}>
                     {result.conversation.map((msg, idx) => {
                       const isUser = msg.role === 'user';
                       const text = msg.content || '';
-                      const short = text.length > 200 ? `${text.slice(0, 200)}…` : text;
+                      const short = !isUser && text.length > 200 ? `${text.slice(0, 200)}…` : text;
                       return (
                         <div
                           key={`${msg.timestamp || idx}-${idx}`}
@@ -1098,8 +1099,15 @@ export function AgentPage() {
                                 </button>
                               ) : null}
                             </div>
-                            {!isUser && msg.refinement_type ? (
-                              <div style={{ fontSize: 10, color: '#B0A9A2', marginTop: 3 }}>
+                            {msg.refinement_type ? (
+                              <div
+                                style={{
+                                  fontSize: 10,
+                                  color: '#B0A9A2',
+                                  marginTop: 3,
+                                  textAlign: isUser ? 'right' : 'left',
+                                }}
+                              >
                                 {msg.refinement_type}
                               </div>
                             ) : null}
