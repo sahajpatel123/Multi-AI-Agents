@@ -66,6 +66,8 @@ class Blackboard:
     flags: list = field(default_factory=list)
     contradictions: list = field(default_factory=list)
     source_integrity: dict = field(default_factory=dict)
+    intelligence_score: dict = field(default_factory=dict)
+    assumptions: dict = field(default_factory=dict)
     memory_saved: bool = False
 
     # Collaborative refinement (in-memory; not persisted to agent_tasks rows per turn)
@@ -156,6 +158,8 @@ class Blackboard:
             "flags": self.flags,
             "source_integrity": self.source_integrity,
             "contradictions": self.contradictions,
+            "intelligence_score": self.intelligence_score,
+            "assumptions": self.assumptions,
             "memory_saved": self.memory_saved,
             "conversation": self.conversation,
             "is_refinement": self.is_refinement,

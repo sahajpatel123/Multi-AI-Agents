@@ -57,6 +57,37 @@ type ConversationEntry = {
   refinement_type?: string | null;
 };
 
+type IntelligenceDimension = {
+  score?: number;
+  label?: string;
+  reason?: string;
+};
+
+type IntelligenceScorePayload = {
+  research_depth?: IntelligenceDimension;
+  logical_soundness?: IntelligenceDimension;
+  consensus_level?: IntelligenceDimension;
+  answer_durability?: IntelligenceDimension;
+  total_score?: number;
+  score_label?: string;
+  one_line_verdict?: string;
+};
+
+type AssumptionItem = {
+  assumption?: string;
+  category?: string;
+  criticality?: string;
+  if_wrong?: string;
+  flag?: boolean;
+};
+
+type AssumptionsPayload = {
+  assumptions?: AssumptionItem[];
+  most_critical?: number;
+  assumption_count?: number;
+  summary?: string;
+};
+
 type AgentResult = {
   task_id?: string;
   task?: string;
@@ -78,6 +109,8 @@ type AgentResult = {
   refinement_count?: number;
   parent_task_id?: string;
   bridge_from_arena?: boolean;
+  intelligence_score?: IntelligenceScorePayload;
+  assumptions?: AssumptionsPayload;
 };
 
 type ContradictionItem = {
@@ -168,6 +201,18 @@ function plainTextFromFinalAnswer(finalAnswer: string | undefined, parsed: Parse
   return finalAnswer;
 }
 
+function totalScoreColor(score: number): string {
+  if (score >= 80) return '#5A8A5A';
+  if (score >= 60) return '#C4956A';
+  return '#E57373';
+}
+
+function dimensionScoreColor(score: number): string {
+  if (score >= 20) return '#8AA899';
+  if (score >= 13) return '#C4956A';
+  return '#E57373';
+}
+
 const CHALLENGER_CARD_STYLES: Record<string, { accent: string; dot: string }> = {
   'The Analyst': { accent: '#8C9BAB', dot: '#8C9BAB' },
   'The Contrarian': { accent: '#B0977E', dot: '#B0977E' },
@@ -210,6 +255,9 @@ export function AgentPage() {
   const [refinementError, setRefinementError] = useState<string | null>(null);
   const [bridgeMeta, setBridgeMeta] = useState<{ taskId: string; originalQuestion: string } | null>(null);
   const [refineFocus, setRefineFocus] = useState(false);
+  const [scoreTooltip, setScoreTooltip] = useState<string | null>(null);
+  const [scoreCopied, setScoreCopied] = useState(false);
+  const [showAllAssumptions, setShowAllAssumptions] = useState(false);
   const answerAnchorRef = useRef<HTMLDivElement>(null);
 
   const urlTaskId = searchParams.get('task_id');
@@ -485,8 +533,6 @@ export function AgentPage() {
   const expandedPayload: StagePayload | null =
     expandedId && result?.stages ? (result.stages[expandedId] as StagePayload) : null;
 
-  const score = result?.final_score ?? 0;
-
   const parsedAnswer = useMemo((): ParsedSynthesis | null => {
     if (!result?.final_answer) return null;
     try {
@@ -498,12 +544,80 @@ export function AgentPage() {
     }
   }, [result]);
 
-  const displayOverallConfidence = parsedAnswer?.overall_confidence ?? result?.final_confidence ?? 0;
-
   const plainAnswerText = useMemo(
     () => plainTextFromFinalAnswer(result?.final_answer, parsedAnswer),
     [result?.final_answer, parsedAnswer],
   );
+
+  const intelligenceScore = useMemo(() => {
+    const candidate = result?.intelligence_score;
+    if (!candidate || Object.keys(candidate).length === 0) return null;
+    return candidate;
+  }, [result?.intelligence_score]);
+
+  const assumptions = useMemo(() => {
+    const candidate = result?.assumptions;
+    if (!candidate?.assumptions || candidate.assumptions.length === 0) return null;
+    return candidate;
+  }, [result?.assumptions]);
+
+  const hasRefinementMetadataNote = (result?.refinement_count ?? 0) > 0;
+  const flaggedAssumptions = useMemo(
+    () => assumptions?.assumptions?.filter((assumption) => assumption.flag) || [],
+    [assumptions],
+  );
+  const visibleAssumptions = useMemo(() => {
+    if (!assumptions?.assumptions) return [];
+    if (showAllAssumptions || flaggedAssumptions.length === 0) {
+      return assumptions.assumptions;
+    }
+    return flaggedAssumptions;
+  }, [assumptions, flaggedAssumptions, showAllAssumptions]);
+  const hiddenAssumptionCount = Math.max(
+    0,
+    (assumptions?.assumptions?.length || 0) - visibleAssumptions.length,
+  );
+
+  const intelligenceRows = useMemo(
+    () =>
+      intelligenceScore
+        ? [
+            { key: 'research', label: 'Research', data: intelligenceScore.research_depth },
+            { key: 'reasoning', label: 'Reasoning', data: intelligenceScore.logical_soundness },
+            { key: 'consensus', label: 'Consensus', data: intelligenceScore.consensus_level },
+            { key: 'durability', label: 'Durability', data: intelligenceScore.answer_durability },
+          ]
+        : [],
+    [intelligenceScore],
+  );
+
+  useEffect(() => {
+    setShowAllAssumptions(false);
+    setScoreTooltip(null);
+    setScoreCopied(false);
+  }, [result?.task_id, result?.refinement_count]);
+
+  const handleShareScore = useCallback(async () => {
+    if (!intelligenceScore) return;
+    const total = Number(intelligenceScore.total_score || 0);
+    const label = intelligenceScore.score_label || 'Unscored';
+    const lines = [
+      `Intelligence Score: ${total}/100 (${label})`,
+      '',
+      `Research: ${Number(intelligenceScore.research_depth?.score || 0)}/25`,
+      `Reasoning: ${Number(intelligenceScore.logical_soundness?.score || 0)}/25`,
+      `Consensus: ${Number(intelligenceScore.consensus_level?.score || 0)}/25`,
+      `Durability: ${Number(intelligenceScore.answer_durability?.score || 0)}/25`,
+      '',
+      intelligenceScore.one_line_verdict || '',
+      '',
+      'Analysed by Arena Agent',
+      'try.arena.ai',
+    ];
+    await navigator.clipboard.writeText(lines.join('\n'));
+    setScoreCopied(true);
+    window.setTimeout(() => setScoreCopied(false), 2000);
+  }, [intelligenceScore]);
 
   const handleChallengeAnswer = useCallback(async () => {
     if (!result) return;
@@ -1181,10 +1295,7 @@ export function AgentPage() {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
                       marginBottom: '1.5rem',
-                      flexWrap: 'wrap',
-                      gap: 10,
                     }}
                   >
                     <span
@@ -1197,47 +1308,6 @@ export function AgentPage() {
                     >
                       Agent Response
                     </span>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <span
-                        style={{
-                          background:
-                            score >= 80
-                              ? 'rgba(138,168,153,0.15)'
-                              : score >= 60
-                                ? 'rgba(196,149,106,0.12)'
-                                : 'rgba(229,115,115,0.1)',
-                          color: score >= 80 ? '#5A8A5A' : score >= 60 ? '#C4956A' : '#E57373',
-                          borderRadius: 999,
-                          padding: '4px 12px',
-                          fontSize: 11,
-                          fontWeight: 500,
-                        }}
-                      >
-                        {score}/100
-                      </span>
-                      <span
-                        style={{
-                          background:
-                            displayOverallConfidence >= 80
-                              ? 'rgba(138,168,153,0.15)'
-                              : displayOverallConfidence >= 50
-                                ? 'rgba(196,149,106,0.12)'
-                                : 'rgba(229,115,115,0.1)',
-                          color:
-                            displayOverallConfidence >= 80
-                              ? '#5A8A5A'
-                              : displayOverallConfidence >= 50
-                                ? '#C4956A'
-                                : '#E57373',
-                          borderRadius: 999,
-                          padding: '4px 12px',
-                          fontSize: 11,
-                          fontWeight: 500,
-                        }}
-                      >
-                        {Math.round(displayOverallConfidence)}% confident
-                      </span>
-                    </div>
                   </div>
                   {parsedAnswer ? (
                     <div style={{ fontSize: 15, lineHeight: 2.0, color: '#1A1714' }}>
@@ -1319,6 +1389,187 @@ export function AgentPage() {
                       {result.final_answer || 'No final answer returned.'}
                     </div>
                   )}
+                  {intelligenceScore ? (
+                    <div style={{ marginTop: '1.5rem', marginBottom: parsedAnswer ? '1rem' : 0 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: '1.5rem',
+                          flexWrap: 'wrap',
+                          gap: 12,
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-end',
+                              color: totalScoreColor(Number(intelligenceScore.total_score || 0)),
+                              lineHeight: 1,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 42,
+                                fontWeight: 400,
+                                letterSpacing: '-0.03em',
+                              }}
+                            >
+                              {Number(intelligenceScore.total_score || 0)}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 18,
+                                color: '#B0A9A2',
+                                marginLeft: 2,
+                                marginBottom: 4,
+                              }}
+                            >
+                              /100
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              letterSpacing: '0.08em',
+                              textTransform: 'uppercase',
+                              color: totalScoreColor(Number(intelligenceScore.total_score || 0)),
+                              marginTop: -2,
+                            }}
+                          >
+                            {intelligenceScore.score_label || 'Solid'}
+                          </div>
+                        </div>
+                        <div style={{ width: 220, maxWidth: '100%' }}>
+                          {intelligenceRows.map((row) => {
+                            const value = Number(row.data?.score || 0);
+                            const color = dimensionScoreColor(value);
+                            const tooltipKey = `${row.key}-${value}`;
+                            return (
+                              <div
+                                key={row.key}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  marginBottom: 6,
+                                  position: 'relative',
+                                }}
+                                onMouseEnter={() => setScoreTooltip(tooltipKey)}
+                                onMouseLeave={() => setScoreTooltip((current) => (current === tooltipKey ? null : current))}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    color: '#B0A9A2',
+                                    width: 80,
+                                    flexShrink: 0,
+                                    textAlign: 'right',
+                                  }}
+                                >
+                                  {row.label}
+                                </span>
+                                <div
+                                  style={{
+                                    flex: 1,
+                                    height: 4,
+                                    background: '#F0EBE3',
+                                    borderRadius: 999,
+                                    overflow: 'hidden',
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: `${Math.max(0, Math.min(100, (value / 25) * 100))}%`,
+                                      height: 4,
+                                      borderRadius: 999,
+                                      background: color,
+                                      transition: 'width 600ms cubic-bezier(0.16,1,0.3,1)',
+                                    }}
+                                  />
+                                </div>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 500,
+                                    color,
+                                    width: 24,
+                                    textAlign: 'right',
+                                  }}
+                                >
+                                  {value}
+                                </span>
+                                {scoreTooltip === tooltipKey && row.data?.reason ? (
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      right: 0,
+                                      top: 'calc(100% + 6px)',
+                                      background: '#1A1714',
+                                      color: '#FAF7F4',
+                                      fontSize: 11,
+                                      padding: '6px 10px',
+                                      borderRadius: 8,
+                                      maxWidth: 200,
+                                      zIndex: 10,
+                                      lineHeight: 1.5,
+                                    }}
+                                  >
+                                    {row.data.reason}
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {intelligenceScore.one_line_verdict ? (
+                        <p
+                          style={{
+                            fontSize: 13,
+                            color: '#6B6460',
+                            fontStyle: 'italic',
+                            marginTop: 0,
+                            marginBottom: '1rem',
+                          }}
+                        >
+                          {intelligenceScore.one_line_verdict}
+                        </p>
+                      ) : null}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => void handleShareScore()}
+                          style={{
+                            background: 'transparent',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 999,
+                            padding: '5px 14px',
+                            fontSize: 11,
+                            color: scoreCopied ? '#C4956A' : '#6B6460',
+                            cursor: 'pointer',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#C4956A';
+                            e.currentTarget.style.color = '#C4956A';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#E0D8D0';
+                            e.currentTarget.style.color = scoreCopied ? '#C4956A' : '#6B6460';
+                          }}
+                        >
+                          {scoreCopied ? 'Copied!' : 'Share this score'}
+                        </button>
+                        {hasRefinementMetadataNote ? (
+                          <span style={{ fontSize: 10, color: '#B0A9A2', fontStyle: 'italic' }}>
+                            Updated after refinement
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                   {parsedAnswer && (
                     <div style={{ marginTop: '1rem' }}>
                       <div
@@ -1565,6 +1816,196 @@ export function AgentPage() {
                         </div>
                       );
                     })()}
+                  {assumptions ? (
+                    <div
+                      style={{
+                        background: '#FFFFFF',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 14,
+                        padding: '1rem 1.25rem',
+                        marginTop: '1.25rem',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: 12,
+                          gap: 10,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 10,
+                            letterSpacing: '0.14em',
+                            textTransform: 'uppercase',
+                            color: '#B0A9A2',
+                          }}
+                        >
+                          This answer assumes
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            background: 'rgba(196,149,106,0.1)',
+                            color: '#C4956A',
+                            borderRadius: 999,
+                            padding: '2px 10px',
+                          }}
+                        >
+                          {assumptions.assumption_count || assumptions.assumptions?.length || 0} assumptions
+                        </span>
+                      </div>
+                      {assumptions.summary ? (
+                        <p
+                          style={{
+                            fontSize: 13,
+                            color: '#6B6460',
+                            fontStyle: 'italic',
+                            marginTop: 0,
+                            marginBottom: 14,
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          {assumptions.summary}
+                        </p>
+                      ) : null}
+                      {hasRefinementMetadataNote ? (
+                        <div style={{ fontSize: 10, color: '#B0A9A2', fontStyle: 'italic', marginBottom: 10 }}>
+                          Updated after refinement
+                        </div>
+                      ) : null}
+                      {visibleAssumptions.map((assumption, idx) => {
+                        const criticality = (assumption.criticality || 'medium').toLowerCase();
+                        const criticalityStyle =
+                          criticality === 'high'
+                            ? { bg: 'rgba(229,115,115,0.1)', color: '#E57373', text: 'High' }
+                            : criticality === 'low'
+                              ? { bg: 'rgba(138,168,153,0.1)', color: '#8AA899', text: 'Low' }
+                              : { bg: 'rgba(196,149,106,0.1)', color: '#C4956A', text: 'Medium' };
+                        return (
+                          <div
+                            key={`${assumption.assumption || 'assumption'}-${idx}`}
+                            style={{
+                              display: 'flex',
+                              gap: 10,
+                              alignItems: 'flex-start',
+                              padding: '10px 0',
+                              borderBottom:
+                                idx === visibleAssumptions.length - 1 ? 'none' : '0.5px solid #F0EBE3',
+                              position: 'relative',
+                              paddingLeft: assumption.flag ? 10 : 0,
+                            }}
+                          >
+                            {assumption.flag ? (
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  top: 8,
+                                  bottom: 8,
+                                  width: 2.5,
+                                  background: '#C4956A',
+                                  borderRadius: 999,
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              style={{
+                                width: 20,
+                                flexShrink: 0,
+                                fontSize: 11,
+                                fontWeight: 500,
+                                color: '#B0A9A2',
+                                marginTop: 1,
+                              }}
+                            >
+                              {idx + 1}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  color: '#1A1714',
+                                  fontWeight: 400,
+                                  lineHeight: 1.5,
+                                  marginBottom: 4,
+                                }}
+                              >
+                                {assumption.assumption}
+                              </div>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'flex-start',
+                                  gap: 6,
+                                  marginTop: 5,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    background: 'rgba(229,115,115,0.08)',
+                                    color: '#E57373',
+                                    borderRadius: 4,
+                                    padding: '1px 6px',
+                                    flexShrink: 0,
+                                    marginTop: 1,
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  If wrong
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    color: '#6B6460',
+                                    lineHeight: 1.5,
+                                  }}
+                                >
+                                  {assumption.if_wrong}
+                                </span>
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                flexShrink: 0,
+                                padding: '2px 8px',
+                                borderRadius: 999,
+                                fontSize: 10,
+                                fontWeight: 500,
+                                background: criticalityStyle.bg,
+                                color: criticalityStyle.color,
+                              }}
+                            >
+                              {criticalityStyle.text}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {hiddenAssumptionCount > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllAssumptions((current) => !current)}
+                          style={{
+                            marginTop: 8,
+                            fontSize: 12,
+                            color: '#C4956A',
+                            cursor: 'pointer',
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                          }}
+                        >
+                          {showAllAssumptions
+                            ? 'Show fewer assumptions'
+                            : `Show ${hiddenAssumptionCount} more assumptions`}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div style={{ display: 'flex', gap: 10, marginTop: '1.5rem', flexWrap: 'wrap' }}>
                     <button
                       type="button"

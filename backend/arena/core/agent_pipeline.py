@@ -1,8 +1,11 @@
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
 
+from arena.core.assumption_surfacer import surface_assumptions
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard
+from arena.core.intelligence_scorer import calculate_intelligence_score
 from arena.core.stages.critic import run_critic
 from arena.core.stages.judge import run_judge
 from arena.core.stages.planner import run_planner
@@ -76,6 +79,38 @@ async def run_agent_pipeline_on_blackboard(
             bb = await run_solver(bb)
             bb = await run_synthesizer(bb)
             bb = await run_judge(bb)
+
+        if bb.status != AgentStatus.FAILED and bb.final_answer:
+            try:
+                intelligence_score, assumptions_result = await asyncio.gather(
+                    calculate_intelligence_score(
+                        task=bb.task,
+                        final_answer=bb.final_answer,
+                        research_output=bb.research.output or "",
+                        judgment_output=bb.judgment.output or "",
+                    ),
+                    surface_assumptions(
+                        task=bb.task,
+                        final_answer=bb.final_answer,
+                    ),
+                )
+
+                bb.intelligence_score = intelligence_score
+                bb.assumptions = assumptions_result
+
+                for assumption in assumptions_result.get("assumptions", []):
+                    if assumption.get("criticality") == "high" and assumption.get("flag"):
+                        bb.flags.append(f"Assumption: {assumption['assumption']}")
+
+                logger.info(
+                    "[PIPELINE] Intelligence=%s/100 Assumptions=%s",
+                    intelligence_score.get("total_score"),
+                    assumptions_result.get("assumption_count", 0),
+                )
+            except Exception as e:
+                logger.warning("Post-processing failed, continuing: %s", e)
+                bb.intelligence_score = {}
+                bb.assumptions = {}
 
         if bb.status == AgentStatus.NEEDS_REVISION:
             bb.status = AgentStatus.COMPLETE
