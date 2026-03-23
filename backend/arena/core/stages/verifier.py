@@ -50,11 +50,23 @@ async def run_verifier(bb: Blackboard) -> Blackboard:
     try:
         model = MODEL_REGISTRY["claude_sonnet"]
 
+        source_integrity_context = ""
+        if bb.source_integrity:
+            integrity = bb.source_integrity
+            n_contra = len(integrity.get("contradictions") or [])
+            source_integrity_context = f"""
+Source Integrity Analysis:
+Overall source reliability: {integrity.get("integrity_label", "unknown")} ({integrity.get("overall_source_integrity", "?")}%)
+Source contradictions found: {n_contra}
+"""
+
         user_prompt = f"""
 Original Task: {bb.task}
 
 Research Findings:
 {bb.research.output or "None"}
+
+{source_integrity_context}
 
 Proposed Solution:
 {bb.solution.output or "None"}
@@ -63,6 +75,7 @@ Critique Received:
 {bb.critique.output or "None"}
 
 Verify the solution and assign confidence scores to all claims.
+Use the source integrity analysis when assigning confidence where relevant.
 """
 
         response = await call_llm(

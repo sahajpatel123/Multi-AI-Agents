@@ -33,6 +33,21 @@ Output format:
 
 ## Gaps
 [what you could not find or verify]
+
+## Sources Found
+For each piece of information found, label sources clearly:
+SOURCE_1: [what this source says]
+SOURCE_2: [what this source says]
+SOURCE_3: [what this source says]
+
+If sources AGREE on a point:
+AGREEMENT: [the agreed point]
+AGREEMENT_COUNT: [number]
+
+If sources DISAGREE on a point:
+DISAGREEMENT: [the contested point]
+SOURCE_A_SAYS: [position A]
+SOURCE_B_SAYS: [position B]
 """
 
 

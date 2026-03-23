@@ -728,6 +728,57 @@ export async function getAgentRebuttal(
   return data;
 }
 
+export async function getAgentHistory(page: number = 1): Promise<unknown> {
+  const response = await apiFetch(`${API_BASE}/agent/history?page=${page}`);
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'History request failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty history response');
+  return data;
+}
+
+export async function getMemoryContext(task: string = ''): Promise<unknown> {
+  const q = encodeURIComponent(task);
+  const response = await apiFetch(`${API_BASE}/agent/memory/context?task=${q}`);
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Memory context failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty memory context');
+  return data;
+}
+
+export async function submitTaskFeedback(
+  taskId: string,
+  feedback: string,
+  note?: string,
+): Promise<unknown> {
+  const response = await apiFetch(`${API_BASE}/agent/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id: taskId, feedback, note }),
+  });
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Feedback failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty feedback response');
+  return data;
+}
+
+export async function getAgentSavedTask(taskId: string): Promise<unknown> {
+  const response = await apiFetch(
+    `${API_BASE}/agent/saved/${encodeURIComponent(taskId)}`,
+  );
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Saved task not found'), response.status, data);
+  }
+  if (!data) throw new Error('Empty saved task response');
+  return data;
+}
+
 // ──────────────────────────────────────────────────────────────
 // Payments (Razorpay subscriptions)
 // ──────────────────────────────────────────────────────────────

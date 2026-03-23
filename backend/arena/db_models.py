@@ -65,6 +65,12 @@ class User(Base):
     persona_drift_logs = relationship("PersonaDriftLog", back_populates="user", cascade="all, delete-orphan")
     scoring_audits = relationship("ScoringAudit", back_populates="user", cascade="all, delete-orphan")
     ux_events = relationship("UXEvent", back_populates="user", cascade="all, delete-orphan")
+    agent_tasks = relationship("AgentTask", back_populates="user", cascade="all, delete-orphan")
+    agent_contradictions = relationship(
+        "AgentContradiction",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     subscriptions = relationship(
         "Subscription",
         back_populates="user",
@@ -343,3 +349,43 @@ class UXEvent(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="ux_events")
+
+
+class AgentTask(Base):
+    """Persistent record of Agent Mode runs (research memory)."""
+
+    __tablename__ = "agent_tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    task_id = Column(String(64), unique=True, nullable=False, index=True)
+    task_text = Column(Text, nullable=False)
+    final_answer = Column(Text, nullable=True)
+    final_score = Column(Integer, nullable=True)
+    final_confidence = Column(Float, nullable=True)
+    sources_used = Column(Text, nullable=True)
+    topics = Column(Text, nullable=True)
+    key_conclusions = Column(Text, nullable=True)
+    stages_run = Column(Text, nullable=True)
+    user_feedback = Column(String(32), nullable=True)
+    feedback_note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="agent_tasks")
+
+
+class AgentContradiction(Base):
+    """When a new Agent answer may contradict a prior conclusion."""
+
+    __tablename__ = "agent_contradictions"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    new_task_id = Column(String(64), nullable=False)
+    old_task_id = Column(String(64), nullable=False, default="")
+    contradiction_summary = Column(Text, nullable=False)
+    severity = Column(String(32), default="moderate", nullable=False)
+    resolved = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="agent_contradictions")

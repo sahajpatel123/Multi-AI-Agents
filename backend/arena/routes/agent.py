@@ -1,16 +1,21 @@
 import asyncio
+import json
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from arena.core.agent_pipeline import run_agent_pipeline_on_blackboard
 from arena.core.auth import get_current_user_required
-from arena.core.blackboard import AgentStatus, Blackboard, create_blackboard, get_blackboard
+from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 from arena.core.tier_config import has_feature, normalize_tier
+from arena.database import SessionLocal, get_db
+from arena.db_models import AgentContradiction, AgentTask as AgentTaskRow
 from arena.models.schemas import UserResponse
 
 logger = logging.getLogger(__name__)
@@ -32,6 +37,12 @@ class AgentRebuttalRequest(BaseModel):
     task: str = ""
     answer: str = ""
     challenge: str = ""
+
+
+class AgentFeedbackRequest(BaseModel):
+    task_id: str
+    feedback: str
+    note: Optional[str] = None
 
 
 ANALYST_CHALLENGE_PROMPT = """
@@ -208,14 +219,95 @@ async def run_agent_pipeline_background(task_id: str, user_id: int, task: str) -
     if bb.user_id != user_id or bb.task != task:
         logger.error("[AGENT] Background: blackboard mismatch task_id=%s", task_id)
         return
+
+    memory_context = None
     try:
-        await run_agent_pipeline_on_blackboard(bb)
+        db_ctx = SessionLocal()
+        try:
+            from arena.core.agent_memory import get_user_memory_context
+
+            memory_context = get_user_memory_context(
+                db_ctx, user_id, current_task=task, limit=5
+            )
+        finally:
+            db_ctx.close()
+    except Exception as e:
+        logger.warning("[AGENT] Memory context load failed (non-fatal): %s", e)
+
+    try:
+        await run_agent_pipeline_on_blackboard(bb, memory_context=memory_context)
     except Exception as e:
         bb2 = get_blackboard(task_id)
         if bb2:
             bb2.status = AgentStatus.FAILED
             bb2.error = str(e)
         logger.exception("[AGENT] Background pipeline error task_id=%s", task_id)
+        return
+
+    if bb.status != AgentStatus.COMPLETE:
+        return
+
+    try:
+        from arena.core.agent_memory import save_task_to_memory
+
+        db = SessionLocal()
+        try:
+            sources = list(bb.sources or [])
+            try:
+                parsed = json.loads(bb.final_answer)
+                if isinstance(parsed, dict) and parsed.get("sources_referenced"):
+                    for s in parsed["sources_referenced"]:
+                        s = str(s)
+                        if s not in sources:
+                            sources.append(s)
+            except Exception:
+                pass
+
+            stage_pairs = [
+                ("planner", bb.plan),
+                ("researcher", bb.research),
+                ("solver", bb.solution),
+                ("critic", bb.critique),
+                ("verifier", bb.verification),
+                ("synthesizer", bb.synthesis),
+                ("judge", bb.judgment),
+            ]
+            stages_run = [
+                name
+                for name, sr in stage_pairs
+                if sr.status in (StageStatus.COMPLETE, StageStatus.SKIPPED)
+            ]
+
+            await save_task_to_memory(
+                db=db,
+                user_id=user_id,
+                task_id=task_id,
+                task_text=task,
+                final_answer=bb.final_answer or "",
+                final_score=bb.final_score,
+                final_confidence=bb.final_confidence,
+                sources_used=sources,
+                stages_run=stages_run,
+            )
+
+            rows = (
+                db.query(AgentContradiction)
+                .filter(AgentContradiction.new_task_id == task_id)
+                .all()
+            )
+            bb.contradictions = [
+                {
+                    "summary": r.contradiction_summary,
+                    "severity": r.severity,
+                    "old_task_id": r.old_task_id or "",
+                }
+                for r in rows
+            ]
+            bb.memory_saved = True
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("[AGENT] Memory save failed (non-fatal): %s", e)
 
 
 @router.post("/run")
@@ -395,3 +487,112 @@ Respond to this challenge now.
         return JSONResponse(content={"rebuttal": response, "status": "complete"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/history")
+async def get_agent_history(
+    page: int = Query(1, ge=1),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    from arena.core.agent_memory import get_user_task_history
+
+    history = get_user_task_history(db=db, user_id=user.id, page=page, per_page=20)
+    return JSONResponse(content=history)
+
+
+@router.get("/memory/context")
+async def get_memory_context(
+    task: str = "",
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    from arena.core.agent_memory import get_user_memory_context
+
+    context = get_user_memory_context(
+        db=db, user_id=user.id, current_task=task, limit=5
+    )
+    return JSONResponse(content=context)
+
+
+@router.get("/saved/{task_id}")
+async def get_saved_agent_task(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Load a persisted Agent task from DB (when in-memory blackboard expired)."""
+    _ensure_agent_access(user)
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+    contra = (
+        db.query(AgentContradiction)
+        .filter(
+            AgentContradiction.new_task_id == task_id,
+            AgentContradiction.user_id == user.id,
+        )
+        .all()
+    )
+    contradictions = [
+        {
+            "summary": c.contradiction_summary,
+            "severity": c.severity,
+            "old_task_id": c.old_task_id or "",
+        }
+        for c in contra
+    ]
+    return JSONResponse(
+        content={
+            "task_id": row.task_id,
+            "task": row.task_text,
+            "final_answer": row.final_answer,
+            "final_score": row.final_score,
+            "final_confidence": row.final_confidence,
+            "topics": json.loads(row.topics or "[]"),
+            "user_feedback": row.user_feedback,
+            "created_at": row.created_at.isoformat() if row.created_at else "",
+            "source_integrity": {},
+            "contradictions": contradictions,
+            "memory_saved": True,
+            "status": "complete",
+        }
+    )
+
+
+@router.post("/feedback")
+async def submit_task_feedback(
+    body: AgentFeedbackRequest,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    task_record = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == body.task_id, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not task_record:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    valid_feedback = ("accurate", "inaccurate", "partial")
+    if body.feedback not in valid_feedback:
+        raise HTTPException(status_code=400, detail="Invalid feedback value")
+
+    task_record.user_feedback = body.feedback
+    task_record.feedback_note = body.note
+    db.commit()
+
+    return JSONResponse(
+        content={
+            "status": "saved",
+            "task_id": body.task_id,
+            "feedback": body.feedback,
+        }
+    )

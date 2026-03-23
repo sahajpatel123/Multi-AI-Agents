@@ -64,6 +64,9 @@ class Blackboard:
     final_score: int = 0
     sources: list = field(default_factory=list)
     flags: list = field(default_factory=list)
+    contradictions: list = field(default_factory=list)
+    source_integrity: dict = field(default_factory=dict)
+    memory_saved: bool = False
 
     total_tokens: int = 0
     total_cost_usd: float = 0.0
@@ -128,6 +131,9 @@ class Blackboard:
             "final_score": self.final_score,
             "sources": self.sources,
             "flags": self.flags,
+            "source_integrity": self.source_integrity,
+            "contradictions": self.contradictions,
+            "memory_saved": self.memory_saved,
             "total_tokens": self.total_tokens,
             "total_cost_usd": self.total_cost_usd,
             "error": self.error,

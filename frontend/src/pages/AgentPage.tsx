@@ -1,12 +1,14 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, Lock, Zap } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
   challengeAgentAnswer,
   getAgentRebuttal,
   getAgentResult,
+  getAgentSavedTask,
   getAgentStatus,
+  getMemoryContext,
   runAgentTask,
   type AgentChallengeItem,
 } from '../api';
@@ -59,6 +61,34 @@ type AgentResult = {
   final_score?: number;
   flags?: string[];
   error?: string;
+  source_integrity?: SourceIntegrityPayload;
+  contradictions?: ContradictionItem[];
+  memory_saved?: boolean;
+};
+
+type ContradictionItem = {
+  summary?: string;
+  severity?: string;
+  old_task_id?: string;
+};
+
+type SourceIntegrityPayload = {
+  source_count?: number;
+  overall_source_integrity?: number;
+  integrity_label?: string;
+  summary?: string;
+  contradictions?: Array<{
+    topic?: string;
+    position_a?: string;
+    position_b?: string;
+    severity?: string;
+  }>;
+};
+
+type MemoryContextPayload = {
+  task_count?: number;
+  top_topics?: string[];
+  unresolved_contradictions?: Array<{ summary?: string; severity?: string }>;
 };
 
 type ParsedSentence = {
@@ -138,6 +168,7 @@ const EXAMPLES = [
 
 export function AgentPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, isLoading: authLoading, logout } = useAuth();
   const { canUseFeature, isPro } = useTier();
   const canAgent = canUseFeature('agent_mode');
@@ -158,6 +189,50 @@ export function AgentPage() {
   const [challengeSectionError, setChallengeSectionError] = useState<string | null>(null);
   const [rebuttals, setRebuttals] = useState<Record<string, string>>({});
   const [rebuttalLoadingFor, setRebuttalLoadingFor] = useState<string | null>(null);
+  const [memoryContext, setMemoryContext] = useState<MemoryContextPayload | null>(null);
+
+  const urlTaskId = searchParams.get('task_id');
+
+  useEffect(() => {
+    if (!canAgent || authLoading) return;
+    (async () => {
+      try {
+        const ctx = (await getMemoryContext('')) as MemoryContextPayload;
+        setMemoryContext(ctx);
+      } catch {
+        setMemoryContext(null);
+      }
+    })();
+  }, [canAgent, authLoading]);
+
+  useEffect(() => {
+    if (!urlTaskId || !canAgent || authLoading) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = (await getAgentResult(urlTaskId)) as AgentResult;
+        if (!cancelled) {
+          setResult({ ...data, task_id: data.task_id || urlTaskId });
+          if (data.task) setTask(data.task);
+          setError(null);
+        }
+      } catch {
+        try {
+          const saved = (await getAgentSavedTask(urlTaskId)) as AgentResult & { task?: string };
+          if (!cancelled) {
+            setResult(saved);
+            if (saved.task) setTask(saved.task);
+            setError(null);
+          }
+        } catch {
+          if (!cancelled) setError('Could not load this task.');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [urlTaskId, canAgent, authLoading]);
 
   const toggleStage = useCallback((id: StageId) => {
     setExpandedStages((prev) => {
@@ -255,6 +330,12 @@ export function AgentPage() {
         throw new Error('No task ID received');
       }
       await pollForResult(startData.task_id);
+      try {
+        const ctx = (await getMemoryContext('')) as MemoryContextPayload;
+        setMemoryContext(ctx);
+      } catch {
+        /* ignore */
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Agent task failed');
       setIsRunning(false);
@@ -262,6 +343,7 @@ export function AgentPage() {
   };
 
   const resetRun = () => {
+    setSearchParams({});
     setResult(null);
     setError(null);
     setExpandedStages(new Set());
@@ -383,6 +465,8 @@ export function AgentPage() {
     }
     return out;
   }, [parsedAnswer, result?.flags]);
+
+  const sourceIntegrity = result?.source_integrity;
 
   const toggleTraceOutputExpand = useCallback((id: StageId) => {
     setTraceOutputExpanded((prev) => {
@@ -641,6 +725,71 @@ export function AgentPage() {
               ))}
             </div>
 
+            {canAgent &&
+              !isRunning &&
+              !result &&
+              memoryContext &&
+              (memoryContext.task_count ?? 0) > 0 && (
+                <div
+                  style={{
+                    background: '#F5F2EF',
+                    borderRadius: 12,
+                    padding: '10px 14px',
+                    marginBottom: 12,
+                    fontSize: 12,
+                    color: '#6B6460',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                      color: '#B0A9A2',
+                      marginBottom: 6,
+                    }}
+                  >
+                    Based on your research history:
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {(memoryContext.top_topics || []).map((topic) => (
+                      <span
+                        key={topic}
+                        style={{
+                          background: '#F0EBE3',
+                          color: '#6B6460',
+                          borderRadius: 999,
+                          padding: '3px 10px',
+                          fontSize: 11,
+                        }}
+                      >
+                        {topic}
+                      </span>
+                    ))}
+                  </div>
+                  {(memoryContext.unresolved_contradictions?.length ?? 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/agent/history')}
+                      style={{
+                        marginTop: 8,
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
+                        color: '#C4956A',
+                        fontSize: 11,
+                        textAlign: 'left',
+                      }}
+                    >
+                      You have {memoryContext.unresolved_contradictions?.length} unresolved contradiction
+                      {(memoryContext.unresolved_contradictions?.length ?? 0) === 1 ? '' : 's'} in your
+                      history
+                    </button>
+                  )}
+                </div>
+              )}
+
             <div
               style={{
                 background: '#FFFFFF',
@@ -721,6 +870,39 @@ export function AgentPage() {
                     marginTop: '1.5rem',
                   }}
                 >
+                  {result.contradictions && result.contradictions.length > 0 && (
+                      <div
+                        style={{
+                          background: 'rgba(196,149,106,0.08)',
+                          border: '0.5px solid rgba(196,149,106,0.3)',
+                          borderRadius: 12,
+                          padding: '10px 14px',
+                          marginBottom: '1rem',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 10,
+                        }}
+                      >
+                        <span style={{ color: '#C4956A', fontSize: 16, lineHeight: 1.2 }}>↺</span>
+                        <div>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              color: '#1A1714',
+                              fontWeight: 500,
+                            }}
+                          >
+                            This answer may contradict a past conclusion
+                          </div>
+                          <div style={{ fontSize: 12, color: '#6B6460', marginTop: 2 }}>
+                            {result.contradictions
+                              .map((c) => c.summary)
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   <div
                     style={{
                       display: 'flex',
@@ -972,6 +1154,143 @@ export function AgentPage() {
                       ))}
                     </div>
                   )}
+                  {sourceIntegrity &&
+                    (sourceIntegrity.source_count ?? 0) > 0 &&
+                    (() => {
+                      const label = (sourceIntegrity.integrity_label || 'moderate').toLowerCase();
+                      const badge =
+                        label === 'high'
+                          ? {
+                              bg: 'rgba(138,168,153,0.15)',
+                              color: '#5A8A5A',
+                              text: 'High',
+                              bar: '#8AA899',
+                            }
+                          : label === 'low'
+                            ? {
+                                bg: 'rgba(229,115,115,0.1)',
+                                color: '#E57373',
+                                text: 'Low',
+                                bar: '#E57373',
+                              }
+                            : label === 'contested'
+                              ? {
+                                  bg: 'rgba(229,115,115,0.1)',
+                                  color: '#E57373',
+                                  text: 'Contested',
+                                  bar: '#E57373',
+                                }
+                              : {
+                                  bg: 'rgba(196,149,106,0.12)',
+                                  color: '#C4956A',
+                                  text: 'Moderate',
+                                  bar: '#C4956A',
+                                };
+                      const pct = Math.min(
+                        100,
+                        Math.max(0, Number(sourceIntegrity.overall_source_integrity) || 0),
+                      );
+                      const iconContra = sourceIntegrity.contradictions || [];
+                      return (
+                        <div
+                          style={{
+                            background: '#FFFFFF',
+                            border: '0.5px solid #E0D8D0',
+                            borderRadius: 14,
+                            padding: '1rem 1.25rem',
+                            marginTop: '1.25rem',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 12,
+                              marginBottom: 8,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 10,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.14em',
+                                color: '#B0A9A2',
+                              }}
+                            >
+                              Source integrity
+                            </span>
+                            <span
+                              style={{
+                                background: badge.bg,
+                                color: badge.color,
+                                borderRadius: 999,
+                                padding: '3px 10px',
+                                fontSize: 11,
+                                fontWeight: 500,
+                              }}
+                            >
+                              {badge.text}
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              width: '100%',
+                              height: 4,
+                              background: '#F0EBE3',
+                              borderRadius: 999,
+                              margin: '8px 0',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${pct}%`,
+                                height: '100%',
+                                background: badge.bar,
+                                borderRadius: 999,
+                                transition: 'width 600ms ease',
+                              }}
+                            />
+                          </div>
+                          {sourceIntegrity.summary ? (
+                            <p style={{ fontSize: 12, color: '#6B6460', marginTop: 6, marginBottom: 0 }}>
+                              {sourceIntegrity.summary}
+                            </p>
+                          ) : null}
+                          {iconContra.length > 0 ? (
+                            <div
+                              style={{
+                                marginTop: 10,
+                                paddingTop: 10,
+                                borderTop: '0.5px solid #F0EBE3',
+                              }}
+                            >
+                              {iconContra.map((c, idx) => (
+                                <div
+                                  key={`${c.topic}-${idx}`}
+                                  style={{
+                                    display: 'flex',
+                                    gap: 8,
+                                    marginBottom: 6,
+                                    fontSize: 12,
+                                    color: '#6B6460',
+                                  }}
+                                >
+                                  <span style={{ color: '#C4956A', flexShrink: 0 }}>⚠</span>
+                                  <span>
+                                    {c.topic || 'Source conflict'}
+                                    {c.position_a || c.position_b
+                                      ? ` — ${c.position_a || ''} vs ${c.position_b || ''}`
+                                      : ''}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   <div style={{ display: 'flex', gap: 10, marginTop: '1.5rem', flexWrap: 'wrap' }}>
                     <button
                       type="button"

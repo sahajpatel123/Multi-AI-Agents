@@ -24,6 +24,12 @@ Available stages:
 - synthesizer: always needed
 - judge: always runs
 
+You may also receive context about the user's research history.
+Use this to:
+1. Avoid repeating conclusions already established
+2. Build on prior research
+3. Note if this task relates to past topics
+
 Output your plan as JSON only.
 No preamble. No explanation.
 Just valid JSON.
@@ -43,7 +49,7 @@ Format:
 """
 
 
-async def run_planner(bb: Blackboard) -> Blackboard:
+async def run_planner(bb: Blackboard, memory_context: dict | None = None) -> Blackboard:
     start = time.time()
     bb.current_stage = "planner"
     bb.plan.status = StageStatus.RUNNING
@@ -51,12 +57,23 @@ async def run_planner(bb: Blackboard) -> Blackboard:
     try:
         model = MODEL_REGISTRY["claude_sonnet"]
 
+        user_prompt = f"Task: {bb.task}"
+        if memory_context and memory_context.get("task_count", 0) > 0:
+            top = memory_context.get("top_topics") or []
+            topics_str = ", ".join(str(t) for t in top) if top else "(none listed)"
+            memory_str = f"""
+User research history context:
+- Past tasks completed: {memory_context.get("task_count", 0)}
+- Top research topics: {topics_str}
+"""
+            user_prompt = f"Task: {bb.task}\n\n{memory_str}"
+
         response = await call_llm(
             client=model["client"],
             provider="claude",
             model_id=model["model_id"],
             system_prompt=PLANNER_SYSTEM_PROMPT,
-            user_prompt=f"Task: {bb.task}",
+            user_prompt=user_prompt,
             temperature=0.3,
             max_tokens=AGENT_MAX_TOKENS,
         )
