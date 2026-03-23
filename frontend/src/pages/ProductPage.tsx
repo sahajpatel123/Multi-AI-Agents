@@ -79,43 +79,49 @@ export function ProductPage() {
           </button>
 
           {/* Agent Mode Card */}
-          <div
+          <button
+            type="button"
+            onClick={() => navigate('/agent')}
             className="product-card"
             style={{
-              background: '#F0EBE3',
+              background: '#1A1714',
               borderRadius: '20px',
               padding: '2.5rem',
-              cursor: 'not-allowed',
-              opacity: 0.75,
+              cursor: 'pointer',
+              transition: 'transform 200ms ease',
+              border: 'none',
+              textAlign: 'left',
               display: 'flex',
               flexDirection: 'column',
               minHeight: '420px',
-              position: 'relative',
-              overflow: 'hidden',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-4px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
-            <div style={{ position: 'absolute', top: '20px', right: '-28px', transform: 'rotate(45deg)', background: '#1A1714', color: '#FAF7F4', fontSize: '10px', padding: '4px 40px', letterSpacing: '.08em', textTransform: 'uppercase' }}>Coming Soon</div>
+            <div style={{ background: '#C4956A', color: '#FAF7F4', fontSize: '11px', padding: '4px 12px', borderRadius: '999px', display: 'inline-block', alignSelf: 'flex-start', marginBottom: '1.5rem' }}>Active now</div>
 
-            <div className="product-card-num" style={{ fontSize: '64px', fontWeight: 500, color: 'rgba(26,23,20,0.08)', lineHeight: 1, marginBottom: '.5rem' }}>02</div>
+            <div className="product-card-num" style={{ fontSize: '64px', fontWeight: 500, color: 'rgba(250,247,244,0.1)', lineHeight: 1, marginBottom: '.5rem' }}>02</div>
 
-            <h2 className="product-card-title" style={{ fontSize: '28px', fontWeight: 500, color: '#1A1714', letterSpacing: '-.02em', marginBottom: '.5rem' }}>Agent Mode</h2>
-            <p style={{ fontSize: '14px', color: '#6B6460', marginBottom: '1.5rem' }}>Plan. Research. Solve. Verify.</p>
+            <h2 className="product-card-title" style={{ fontSize: '28px', fontWeight: 500, color: '#FAF7F4', letterSpacing: '-.02em', marginBottom: '.5rem' }}>Agent Mode</h2>
+            <p style={{ fontSize: '14px', color: 'rgba(250,247,244,0.5)', marginBottom: '1.5rem' }}>Plan. Research. Solve. Verify.</p>
 
             <div style={{ marginBottom: 'auto' }}>
               {['7-stage intelligent pipeline', 'Planner → Researcher → Solver → Critic', 'Verifier checks every claim', 'Synthesizer builds the final answer'].map((feature, idx) => (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '.6rem' }}>
-                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#E0D8D0', color: '#6B6460', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>✓</div>
-                  <span style={{ fontSize: '13px', color: '#6B6460' }}>{feature}</span>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#C4956A', color: '#FAF7F4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>✓</div>
+                  <span style={{ fontSize: '13px', color: 'rgba(250,247,244,0.75)' }}>{feature}</span>
                 </div>
               ))}
             </div>
 
-            <div style={{ borderTop: '0.5px solid #E0D8D0', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
-              <div style={{ fontSize: '13px', color: '#6B6460' }}>
-                Coming soon — join waitlist
-              </div>
+            <div style={{ borderTop: '0.5px solid rgba(250,247,244,0.1)', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
+              <div style={{ fontSize: '13px', color: '#C4956A', display: 'flex', alignItems: 'center', gap: '6px' }}>Enter Agent →</div>
             </div>
-          </div>
+          </button>
         </div>
 
         {/* Comparison Pills */}
