@@ -39,6 +39,16 @@ const STAGE_ORDER: StageId[] = [
   'judge',
 ];
 
+const STAGE_RUNNING_MESSAGES: Record<StageId, string> = {
+  planner: 'Breaking down your task and deciding which stages to run...',
+  researcher: 'Searching for relevant information and sources...',
+  solver: 'Building the primary answer using all available context...',
+  critic: 'Finding weaknesses, gaps, and flaws in the answer...',
+  verifier: 'Cross-checking facts and assigning confidence scores to each claim...',
+  synthesizer: 'Producing the final clean answer from all pipeline output...',
+  judge: 'Scoring the answer and deciding if it passes the quality bar...',
+};
+
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -238,7 +248,7 @@ export function AgentPage() {
   const [isRefining, setIsRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AgentResult | null>(null);
-  const [expandedStages, setExpandedStages] = useState<Set<StageId>>(new Set());
+  const [expandedStage, setExpandedStage] = useState<StageId | null>(null);
   const [traceOpen, setTraceOpen] = useState(false);
   const [traceOutputExpanded, setTraceOutputExpanded] = useState<Set<StageId>>(new Set());
   const [completedStages, setCompletedStages] = useState<string[]>([]);
@@ -409,12 +419,7 @@ export function AgentPage() {
   }, [result?.bridge_from_arena, bridgeMeta]);
 
   const toggleStage = useCallback((id: StageId) => {
-    setExpandedStages((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setExpandedStage((current) => (current === id ? null : id));
   }, []);
 
   const handleRunTask = async () => {
@@ -423,7 +428,7 @@ export function AgentPage() {
     setError(null);
     setBridgeMeta(null);
     setResult(null);
-    setExpandedStages(new Set());
+    setExpandedStage(null);
     setTraceOpen(false);
     setTraceOutputExpanded(new Set());
     setCompletedStages([]);
@@ -490,7 +495,7 @@ export function AgentPage() {
     setRefinementInput('');
     setRefinementError(null);
     setIsRefining(false);
-    setExpandedStages(new Set());
+    setExpandedStage(null);
     setTraceOpen(false);
     setTraceOutputExpanded(new Set());
     setCompletedStages([]);
@@ -528,10 +533,10 @@ export function AgentPage() {
     return STAGES.map((s) => ({ id: s.id, state: 'pending' }));
   }, [isRunning, result, liveStages, currentStage, completedStages]);
 
-  const expandedId = expandedStages.size === 1 ? [...expandedStages][0] : null;
-
   const expandedPayload: StagePayload | null =
-    expandedId && result?.stages ? (result.stages[expandedId] as StagePayload) : null;
+    expandedStage && result?.stages ? (result.stages[expandedStage] as StagePayload) : null;
+  const expandedStageState =
+    expandedStage ? stageVisual.find((stage) => stage.id === expandedStage)?.state || 'pending' : 'pending';
 
   const parsedAnswer = useMemo((): ParsedSynthesis | null => {
     if (!result?.final_answer) return null;
@@ -735,6 +740,10 @@ export function AgentPage() {
         }
         @keyframes agentSpin {
           to { transform: rotate(360deg); }
+        }
+        @keyframes stagePulse {
+          0%, 100% { opacity: 0.35; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.15); }
         }
         .agent-chal-dot {
           width: 8px;
@@ -1107,10 +1116,10 @@ export function AgentPage() {
                 <StageDotsRow
                   stages={STAGES}
                   stageVisual={stageVisual}
-                  expandedId={expandedId}
+                  expandedStage={expandedStage}
                   onToggle={toggleStage}
-                  isRunning={isRunning}
                   expandedPayload={expandedPayload}
+                  expandedStageState={expandedStageState}
                 />
               </div>
             )}
@@ -2071,27 +2080,18 @@ export function AgentPage() {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
+                      gap: 12,
+                      margin: '1.5rem 0',
+                      cursor: 'pointer',
                       width: '100%',
                       background: 'none',
                       border: 'none',
                       padding: 0,
-                      cursor: 'pointer',
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: 11,
-                        letterSpacing: '0.12em',
-                        textTransform: 'uppercase',
-                        color: '#B0A9A2',
-                      }}
-                    >
-                      How this answer was built
-                    </span>
-                    <span style={{ fontSize: 11, color: '#C4956A' }}>
-                      {traceOpen ? 'Hide trace ↑' : 'See trace ↓'}
-                    </span>
+                    <div style={{ flex: 1, height: '0.5px', background: '#F0EBE3' }} />
+                    <span style={{ fontSize: 12, color: '#C4B8AE' }}>{traceOpen ? '▴' : '▾'}</span>
+                    <div style={{ flex: 1, height: '0.5px', background: '#F0EBE3' }} />
                   </button>
                   <div
                     className={`agent-trace-expand${traceOpen ? ' agent-trace-expand-open' : ''}`}
@@ -2255,28 +2255,7 @@ export function AgentPage() {
                   (result.final_answer || result.stages) &&
                   (!isRunning || isRefining) && (
                     <div style={{ marginTop: '1.5rem' }}>
-                      <div
-                        style={{
-                          margin: '1.5rem 0',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                        }}
-                      >
-                        <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
-                        <span
-                          style={{
-                            fontSize: 11,
-                            letterSpacing: '0.1em',
-                            textTransform: 'uppercase',
-                            color: '#B0A9A2',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          Continue the research
-                        </span>
-                        <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
-                      </div>
+                      <div style={{ margin: '1.5rem 0', height: '0.5px', background: '#F0EBE3' }} />
 
                       {!isRefining ? (
                         <>
@@ -2692,18 +2671,56 @@ export function AgentPage() {
 function StageDotsRow({
   stages,
   stageVisual,
-  expandedId,
+  expandedStage,
   onToggle,
-  isRunning,
   expandedPayload,
+  expandedStageState,
 }: {
   stages: typeof STAGES;
   stageVisual: { id: StageId; state: string }[];
-  expandedId: StageId | null;
+  expandedStage: StageId | null;
   onToggle: (id: StageId) => void;
-  isRunning: boolean;
   expandedPayload: StagePayload | null;
+  expandedStageState: string;
 }) {
+  const expandedStageMeta = expandedStage ? stages.find((x) => x.id === expandedStage) : null;
+  const detailBody =
+    expandedStageState === 'running' ? (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {[0, 1, 2].map((idx) => (
+            <span
+              key={idx}
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: '#C4956A',
+                display: 'inline-block',
+                animation: 'stagePulse 1.2s infinite',
+                animationDelay: `${idx * 0.2}s`,
+              }}
+            />
+          ))}
+        </div>
+        <div style={{ fontSize: 13, color: '#6B6460', lineHeight: 1.7 }}>
+          {expandedStage ? STAGE_RUNNING_MESSAGES[expandedStage] : ''}
+        </div>
+      </div>
+    ) : expandedStageState === 'skipped' ? (
+      <div style={{ fontSize: 13, color: '#B0A9A2', fontStyle: 'italic', lineHeight: 1.7 }}>
+        This stage was skipped by the Planner — not needed for this task.
+      </div>
+    ) : expandedStageState === 'pending' ? (
+      <div style={{ fontSize: 13, color: '#B0A9A2', fontStyle: 'italic', lineHeight: 1.7 }}>
+        Waiting to run...
+      </div>
+    ) : (
+      <div style={{ fontSize: 13, color: '#1A1714', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+        {expandedPayload?.output || '—'}
+      </div>
+    );
+
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
@@ -2729,6 +2746,7 @@ function StageDotsRow({
                     position: 'relative',
                     cursor: 'pointer',
                     padding: 0,
+                    transition: 'transform 150ms ease',
                     background:
                       vis === 'running'
                         ? '#FAF7F4'
@@ -2752,6 +2770,12 @@ function StageDotsRow({
                     opacity: vis === 'skipped' ? 0.5 : 1,
                     animation: vis === 'running' ? 'breatheDot 1s ease-in-out infinite' : undefined,
                   }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
                 >
                   {vis === 'running' && (
                     <span
@@ -2769,18 +2793,7 @@ function StageDotsRow({
                   )}
                   {vis === 'skipped' && <span style={{ color: '#C4B8AE', fontSize: 14 }}>–</span>}
                   {vis === 'failed' && <span style={{ color: '#E57373', fontSize: 14 }}>×</span>}
-                  {vis === 'pending' && isRunning && (
-                    <span
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        background: '#E0D8D0',
-                        display: 'block',
-                      }}
-                    />
-                  )}
-                  {vis === 'pending' && !isRunning && <span style={{ color: '#C4B8AE', fontSize: 10 }}>·</span>}
+                  {vis === 'pending' && <span style={{ color: '#C4B8AE', fontSize: 10 }}>·</span>}
                 </button>
                 <span
                   style={{
@@ -2816,7 +2829,7 @@ function StageDotsRow({
       </div>
       <div style={{ height: 48 }} />
 
-      {expandedId && (
+      {expandedStage && (
         <div
           style={{
             background: '#FFFFFF',
@@ -2828,7 +2841,7 @@ function StageDotsRow({
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 500, color: '#1A1714' }}>
-              {stages.find((x) => x.id === expandedId)?.label}
+              {expandedStageMeta?.label}
             </span>
             {expandedPayload?.model && (
               <span
@@ -2844,9 +2857,7 @@ function StageDotsRow({
               </span>
             )}
           </div>
-          <div style={{ fontSize: 13, color: '#1A1714', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-            {isRunning ? '…' : expandedPayload?.output || '—'}
-          </div>
+          {detailBody}
         </div>
       )}
     </>
