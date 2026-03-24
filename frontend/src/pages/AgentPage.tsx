@@ -40,16 +40,6 @@ const STAGE_ORDER: StageId[] = [
   'judge',
 ];
 
-const STAGE_RUNNING_MESSAGES: Record<StageId, string> = {
-  planner: 'Breaking down your task and deciding which stages to run...',
-  researcher: 'Searching for relevant information and sources...',
-  solver: 'Building the primary answer using all available context...',
-  critic: 'Finding weaknesses, gaps, and flaws in the answer...',
-  verifier: 'Cross-checking facts and assigning confidence scores to each claim...',
-  synthesizer: 'Producing the final clean answer from all pipeline output...',
-  judge: 'Scoring the answer and deciding if it passes the quality bar...',
-};
-
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -199,6 +189,12 @@ function formatDurationMs(ms: number | undefined): string {
   return `${ms}ms`;
 }
 
+function formatElapsedSeconds(elapsedSeconds: number): string {
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 function buildRevisionSummary(result: AgentResult): string {
   const cOut = result.stages?.critic?.output || '';
   const vOut = result.stages?.verifier?.output || '';
@@ -274,11 +270,11 @@ export function AgentPage() {
   const [isRefining, setIsRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AgentResult | null>(null);
-  const [expandedStage, setExpandedStage] = useState<StageId | null>(null);
   const [traceOpen, setTraceOpen] = useState(false);
   const [traceOutputExpanded, setTraceOutputExpanded] = useState<Set<StageId>>(new Set());
   const [completedStages, setCompletedStages] = useState<string[]>([]);
   const [currentStage, setCurrentStage] = useState<string>('planner');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [liveStages, setLiveStages] = useState<Partial<Record<StageId, string>>>({});
   const [challenges, setChallenges] = useState<AgentChallengeItem[]>([]);
   const [isChallengingAnswer, setIsChallengingAnswer] = useState(false);
@@ -487,9 +483,18 @@ export function AgentPage() {
     }
   }, [result?.bridge_from_arena, bridgeMeta]);
 
-  const toggleStage = useCallback((id: StageId) => {
-    setExpandedStage((current) => (current === id ? null : id));
-  }, []);
+  useEffect(() => {
+    if (!isRunning) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    setElapsedSeconds(0);
+    const intervalId = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [isRunning]);
 
   const handleRunTask = async () => {
     const t = task.trim();
@@ -498,7 +503,6 @@ export function AgentPage() {
     setBridgeMeta(null);
     setSidebarOpen(false);
     setResult(null);
-    setExpandedStage(null);
     setTraceOpen(false);
     setTraceOutputExpanded(new Set());
     setCompletedStages([]);
@@ -568,7 +572,6 @@ export function AgentPage() {
     setRefinementInput('');
     setRefinementError(null);
     setIsRefining(false);
-    setExpandedStage(null);
     setTraceOpen(false);
     setTraceOutputExpanded(new Set());
     setCompletedStages([]);
@@ -606,11 +609,6 @@ export function AgentPage() {
     }
     return STAGES.map((s) => ({ id: s.id, state: 'pending' }));
   }, [isRunning, result, liveStages, currentStage, completedStages]);
-
-  const expandedPayload: StagePayload | null =
-    expandedStage && result?.stages ? (result.stages[expandedStage] as StagePayload) : null;
-  const expandedStageState =
-    expandedStage ? stageVisual.find((stage) => stage.id === expandedStage)?.state || 'pending' : 'pending';
 
   const parsedAnswer = useMemo((): ParsedSynthesis | null => {
     if (!result?.final_answer) return null;
@@ -844,9 +842,15 @@ export function AgentPage() {
         @keyframes agentSpin {
           to { transform: rotate(360deg); }
         }
-        @keyframes stagePulse {
-          0%, 100% { opacity: 0.35; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.15); }
+        @keyframes ringPulse {
+          from {
+            opacity: 0.8;
+            transform: translate(-50%, -50%) scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(1.5);
+          }
         }
         .agent-chal-dot {
           width: 8px;
@@ -1369,10 +1373,8 @@ export function AgentPage() {
                 <StageDotsRow
                   stages={STAGES}
                   stageVisual={stageVisual}
-                  expandedStage={expandedStage}
-                  onToggle={toggleStage}
-                  expandedPayload={expandedPayload}
-                  expandedStageState={expandedStageState}
+                  currentStage={currentStage}
+                  elapsedSeconds={elapsedSeconds}
                 />
               </div>
             )}
@@ -2925,55 +2927,25 @@ export function AgentPage() {
 function StageDotsRow({
   stages,
   stageVisual,
-  expandedStage,
-  onToggle,
-  expandedPayload,
-  expandedStageState,
+  currentStage,
+  elapsedSeconds,
 }: {
   stages: typeof STAGES;
   stageVisual: { id: StageId; state: string }[];
-  expandedStage: StageId | null;
-  onToggle: (id: StageId) => void;
-  expandedPayload: StagePayload | null;
-  expandedStageState: string;
+  currentStage: string;
+  elapsedSeconds: number;
 }) {
-  const expandedStageMeta = expandedStage ? stages.find((x) => x.id === expandedStage) : null;
-  const detailBody =
-    expandedStageState === 'running' ? (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {[0, 1, 2].map((idx) => (
-            <span
-              key={idx}
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: '#C4956A',
-                display: 'inline-block',
-                animation: 'stagePulse 1.2s infinite',
-                animationDelay: `${idx * 0.2}s`,
-              }}
-            />
-          ))}
-        </div>
-        <div style={{ fontSize: 13, color: '#6B6460', lineHeight: 1.7 }}>
-          {expandedStage ? STAGE_RUNNING_MESSAGES[expandedStage] : ''}
-        </div>
-      </div>
-    ) : expandedStageState === 'skipped' ? (
-      <div style={{ fontSize: 13, color: '#B0A9A2', fontStyle: 'italic', lineHeight: 1.7 }}>
-        This stage was skipped by the Planner — not needed for this task.
-      </div>
-    ) : expandedStageState === 'pending' ? (
-      <div style={{ fontSize: 13, color: '#B0A9A2', fontStyle: 'italic', lineHeight: 1.7 }}>
-        Waiting to run...
-      </div>
-    ) : (
-      <div style={{ fontSize: 13, color: '#1A1714', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-        {expandedPayload?.output || '—'}
-      </div>
-    );
+  const statusText =
+    {
+      planner: 'Planning your task...',
+      researcher: 'Researching sources...',
+      solver: 'Building the answer...',
+      critic: 'Stress-testing logic...',
+      verifier: 'Verifying claims...',
+      synthesizer: 'Synthesizing insights...',
+      judge: 'Final judgement...',
+    }[currentStage as StageId] || 'Thinking...';
+  const ringSizes = [16, 32, 48, 64];
 
   return (
     <>
@@ -2986,9 +2958,7 @@ function StageDotsRow({
           return (
             <div key={s.id} style={{ display: 'flex', alignItems: 'center', flex: isLast ? '0 0 auto' : 1, minWidth: 0 }}>
               <div style={{ position: 'relative', flex: '0 0 auto' }}>
-                <button
-                  type="button"
-                  onClick={() => onToggle(s.id)}
+                <div
                   title={s.description}
                   style={{
                     width: 32,
@@ -2998,9 +2968,7 @@ function StageDotsRow({
                     alignItems: 'center',
                     justifyContent: 'center',
                     position: 'relative',
-                    cursor: 'pointer',
                     padding: 0,
-                    transition: 'transform 150ms ease',
                     background:
                       vis === 'running'
                         ? '#FAF7F4'
@@ -3024,12 +2992,6 @@ function StageDotsRow({
                     opacity: vis === 'skipped' ? 0.5 : 1,
                     animation: vis === 'running' ? 'breatheDot 1s ease-in-out infinite' : undefined,
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
                 >
                   {vis === 'running' && (
                     <span
@@ -3048,7 +3010,7 @@ function StageDotsRow({
                   {vis === 'skipped' && <span style={{ color: '#C4B8AE', fontSize: 14 }}>–</span>}
                   {vis === 'failed' && <span style={{ color: '#E57373', fontSize: 14 }}>×</span>}
                   {vis === 'pending' && <span style={{ color: '#C4B8AE', fontSize: 10 }}>·</span>}
-                </button>
+                </div>
                 <span
                   style={{
                     position: 'absolute',
@@ -3082,38 +3044,42 @@ function StageDotsRow({
         })}
       </div>
       <div style={{ height: 48 }} />
-
-      {expandedStage && (
-        <div
-          style={{
-            background: '#FFFFFF',
-            border: '0.5px solid #E0D8D0',
-            borderRadius: 12,
-            padding: '1.25rem',
-            marginTop: '1rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 500, color: '#1A1714' }}>
-              {expandedStageMeta?.label}
-            </span>
-            {expandedPayload?.model && (
-              <span
-                style={{
-                  fontSize: 10,
-                  background: '#F0EBE3',
-                  color: '#6B6460',
-                  borderRadius: 999,
-                  padding: '2px 8px',
-                }}
-              >
-                {expandedPayload.model}
-              </span>
-            )}
-          </div>
-          {detailBody}
+      <div
+        style={{
+          width: '100%',
+          height: 64,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 12,
+        }}
+      >
+        <div style={{ position: 'relative', width: 64, height: 64 }}>
+          {ringSizes.map((size, idx) => (
+            <span
+              key={size}
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                width: size,
+                height: size,
+                border: '1.5px solid #C4956A',
+                borderRadius: '50%',
+                transform: 'translate(-50%, -50%) scale(1)',
+                opacity: 0.8,
+                animation: 'ringPulse 2s ease-out infinite',
+                animationDelay: `${idx * 0.4}s`,
+              }}
+            />
+          ))}
         </div>
-      )}
+        <div style={{ fontSize: 13, color: '#8C7355', letterSpacing: '0.05em' }}>{statusText}</div>
+        <div style={{ fontSize: 11, color: '#A89070', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
+          {formatElapsedSeconds(elapsedSeconds)} elapsed
+        </div>
+      </div>
     </>
   );
 }
