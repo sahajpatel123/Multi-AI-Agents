@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, Loader2, Lock, Zap } from 'lucide-react';
+import { Loader2, Lock, PanelLeft, X, Zap } from 'lucide-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
   challengeAgentAnswer,
+  getAgentHistory,
   getAgentRebuttal,
   getAgentResult,
   getAgentSavedTask,
@@ -148,6 +149,24 @@ type MemoryContextPayload = {
   unresolved_contradictions?: Array<{ summary?: string; severity?: string }>;
 };
 
+type HistoryTask = {
+  task_id: string;
+  task_text: string;
+  final_score: number | null;
+  final_confidence: number | null;
+  topics: string[];
+  user_feedback: string | null;
+  created_at: string;
+};
+
+type HistoryPayload = {
+  tasks: HistoryTask[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+};
+
 type ParsedSentence = {
   text: string;
   confidence?: number;
@@ -211,6 +230,13 @@ function plainTextFromFinalAnswer(finalAnswer: string | undefined, parsed: Parse
   return finalAnswer;
 }
 
+function formatShortDate(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 function totalScoreColor(score: number): string {
   if (score >= 80) return '#5A8A5A';
   if (score >= 60) return '#C4956A';
@@ -268,9 +294,52 @@ export function AgentPage() {
   const [scoreTooltip, setScoreTooltip] = useState<string | null>(null);
   const [scoreCopied, setScoreCopied] = useState(false);
   const [showAllAssumptions, setShowAllAssumptions] = useState(false);
+  const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const answerAnchorRef = useRef<HTMLDivElement>(null);
 
   const urlTaskId = searchParams.get('task_id');
+
+  const loadTaskHistory = useCallback(async () => {
+    if (!canAgent || authLoading) return;
+    setHistoryLoading(true);
+    try {
+      const raw = (await getAgentHistory(1)) as HistoryPayload;
+      setTaskHistory(raw.tasks || []);
+    } catch {
+      setTaskHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [authLoading, canAgent]);
+
+  useEffect(() => {
+    const onResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = window.setTimeout(() => setToastMessage(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toastMessage]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setSidebarOpen(false);
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
+    void loadTaskHistory();
+  }, [loadTaskHistory]);
 
   useEffect(() => {
     if (!canAgent || authLoading) return;
@@ -427,6 +496,7 @@ export function AgentPage() {
     if (t.length < 10 || isRunning) return;
     setError(null);
     setBridgeMeta(null);
+    setSidebarOpen(false);
     setResult(null);
     setExpandedStage(null);
     setTraceOpen(false);
@@ -448,6 +518,7 @@ export function AgentPage() {
         throw new Error('No task ID received');
       }
       await pollAgentTaskUntilDone(startData.task_id);
+      await loadTaskHistory();
       try {
         const ctx = (await getMemoryContext('')) as MemoryContextPayload;
         setMemoryContext(ctx);
@@ -492,6 +563,8 @@ export function AgentPage() {
     setBridgeMeta(null);
     setResult(null);
     setError(null);
+    setTask('');
+    setToastMessage(null);
     setRefinementInput('');
     setRefinementError(null);
     setIsRefining(false);
@@ -507,6 +580,7 @@ export function AgentPage() {
     setRebuttals({});
     setRebuttalLoadingFor(null);
     setIsChallengingAnswer(false);
+    setSidebarOpen(false);
   };
 
   const stageVisual = useMemo(() => {
@@ -596,6 +670,17 @@ export function AgentPage() {
     [intelligenceScore],
   );
 
+  const currentTaskLabel = useMemo(() => {
+    const raw = (result?.original_task || result?.task || task || '').trim();
+    if (!raw) return '';
+    return raw.length > 60 ? `${raw.slice(0, 60)}…` : raw;
+  }, [result?.original_task, result?.task, task]);
+
+  const currentStageLabel = useMemo(() => {
+    const active = STAGES.find((stage) => stage.id === currentStage);
+    return active?.label || 'Running';
+  }, [currentStage]);
+
   useEffect(() => {
     setShowAllAssumptions(false);
     setScoreTooltip(null);
@@ -623,6 +708,23 @@ export function AgentPage() {
     setScoreCopied(true);
     window.setTimeout(() => setScoreCopied(false), 2000);
   }, [intelligenceScore]);
+
+  const handleHistorySelect = useCallback(
+    async (item: HistoryTask) => {
+      try {
+        const data = (await getAgentResult(item.task_id)) as AgentResult;
+        setResult({ ...data, task_id: data.task_id || item.task_id });
+        setTask(data.task || item.task_text);
+        setError(null);
+        setToastMessage(null);
+        setSidebarOpen(false);
+        setSearchParams({ task_id: item.task_id });
+      } catch {
+        setToastMessage('This task has expired. Start a new task.');
+      }
+    },
+    [setSearchParams],
+  );
 
   const handleChallengeAnswer = useCallback(async () => {
     if (!result) return;
@@ -695,10 +797,11 @@ export function AgentPage() {
   return (
     <div
       style={{
-        minHeight: '100vh',
+        height: isMobile ? 'auto' : '100vh',
         background: '#FAF7F4',
         display: 'flex',
-        flexDirection: 'column',
+        overflow: 'hidden',
+        position: 'relative',
       }}
     >
       <style>{`
@@ -752,7 +855,180 @@ export function AgentPage() {
           animation: agentChalDotPulse 1.2s ease-in-out infinite;
         }
       `}</style>
+      {!isMobile ? (
+        <aside
+          style={{
+            width: 260,
+            flexShrink: 0,
+            background: '#F5F2EF',
+            borderRight: '0.5px solid #E0D8D0',
+            height: '100vh',
+            position: 'sticky',
+            top: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => navigate('/app')}
+              style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#6B6460', cursor: 'pointer' }}
+            >
+              ← Arena
+            </button>
+          </div>
+          <div style={{ height: '0.5px', background: '#E8E2DA', margin: '0 16px 12px' }} />
+          <div style={{ padding: '0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: '#1A1714' }}>Agent</span>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C4956A', animation: 'breathe 2.4s infinite' }} />
+          </div>
+          <button
+            type="button"
+            onClick={resetRun}
+            style={{
+              margin: '12px 16px',
+              width: 'calc(100% - 32px)',
+              padding: '9px 16px',
+              background: '#1A1714',
+              color: '#FAF7F4',
+              borderRadius: 10,
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer',
+              border: 'none',
+              textAlign: 'center',
+            }}
+          >
+            New task
+          </button>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 16px' }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A9A2', padding: '12px 4px 6px', marginBottom: 4 }}>
+              History
+            </div>
+            {historyLoading ? (
+              <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>Loading…</div>
+            ) : taskHistory.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>No tasks yet</div>
+            ) : (
+              taskHistory.map((item) => {
+                const score = item.final_score ?? 0;
+                const active = result?.task_id === item.task_id;
+                const scoreBg =
+                  score >= 80
+                    ? 'rgba(138,168,153,0.15)'
+                    : score >= 60
+                      ? 'rgba(196,149,106,0.12)'
+                      : 'rgba(229,115,115,0.1)';
+                const scoreColor = score >= 80 ? '#5A8A5A' : score >= 60 ? '#B07840' : '#D9534F';
+                return (
+                  <button
+                    key={item.task_id}
+                    type="button"
+                    onClick={() => void handleHistorySelect(item)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '8px 10px',
+                      borderRadius: 10,
+                      cursor: 'pointer',
+                      marginBottom: 4,
+                      transition: 'background 150ms ease',
+                      background: active ? '#EDEAE6' : 'transparent',
+                      border: 'none',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!active) e.currentTarget.style.background = 'rgba(26,23,20,0.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!active) e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: '#1A1714',
+                        lineHeight: 1.4,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {item.task_text}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <span style={{ fontSize: 10, borderRadius: 999, padding: '1px 7px', background: scoreBg, color: scoreColor }}>
+                        {item.final_score != null ? `${item.final_score}/100` : '—'}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#C4B8AE' }}>{formatShortDate(item.created_at)}</span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </aside>
+      ) : (
+        <>
+          {sidebarOpen && (
+            <div
+              onClick={() => setSidebarOpen(false)}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(26,23,20,0.28)', zIndex: 59 }}
+            />
+          )}
+          <aside
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: 260,
+              maxWidth: '85vw',
+              background: '#F5F2EF',
+              borderRight: '0.5px solid #E0D8D0',
+              zIndex: 60,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+              transition: 'transform 200ms ease',
+            }}
+          >
+            <div style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <button type="button" onClick={() => navigate('/app')} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#6B6460', cursor: 'pointer' }}>
+                ← Arena
+              </button>
+              <button type="button" onClick={() => setSidebarOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6460' }}>
+                <X style={{ width: 16, height: 16 }} />
+              </button>
+            </div>
+            <div style={{ height: '0.5px', background: '#E8E2DA', margin: '0 16px 12px' }} />
+            <button
+              type="button"
+              onClick={resetRun}
+              style={{ margin: '0 16px 12px', padding: '9px 16px', background: '#1A1714', color: '#FAF7F4', borderRadius: 10, border: 'none' }}
+            >
+              New task
+            </button>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 16px' }}>
+              {taskHistory.map((item) => (
+                <button
+                  key={item.task_id}
+                  type="button"
+                  onClick={() => void handleHistorySelect(item)}
+                  style={{ width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 10, border: 'none', background: result?.task_id === item.task_id ? '#EDEAE6' : 'transparent', marginBottom: 4 }}
+                >
+                  <div style={{ fontSize: 12, color: '#1A1714', lineHeight: 1.4 }}>{item.task_text}</div>
+                </button>
+              ))}
+            </div>
+          </aside>
+        </>
+      )}
 
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : '100vh' }}>
       <header
         style={{
           height: '52px',
@@ -760,70 +1036,47 @@ export function AgentPage() {
           top: 0,
           zIndex: 50,
           backdropFilter: 'blur(12px)',
-          background: 'rgba(250,247,244,0.85)',
+          background: 'rgba(250,247,244,0.9)',
           borderBottom: '0.5px solid #E0D8D0',
-          display: 'grid',
-          gridTemplateColumns: '1fr auto 1fr',
+          display: 'flex',
           alignItems: 'center',
-          padding: '0 24px',
-          gap: '16px',
+          padding: '0 20px',
+          gap: 12,
+          flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-          <button
-            type="button"
-            onClick={() => navigate('/app')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: '#F0EBE3',
-              border: '0.5px solid #E0D8D0',
-              borderRadius: '999px',
-              padding: '6px 14px',
-              fontSize: '13px',
-              color: '#6B6460',
-              cursor: 'pointer',
-              transition: 'background 150ms ease, color 150ms ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#E0D8D0';
-              e.currentTarget.style.color = '#1A1714';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#F0EBE3';
-              e.currentTarget.style.color = '#6B6460';
-            }}
-          >
-            <ArrowLeft style={{ width: '14px', height: '14px' }} />
-            Arena
+        {isMobile ? (
+          <button type="button" onClick={() => setSidebarOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6460', padding: 0 }}>
+            <PanelLeft style={{ width: 16, height: 16 }} />
           </button>
+        ) : null}
+        <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: currentTaskLabel ? 12 : 13, color: currentTaskLabel ? '#6B6460' : '#1A1714', fontStyle: currentTaskLabel ? 'italic' : 'normal', fontWeight: currentTaskLabel ? 400 : 500 }}>
+          {currentTaskLabel || 'Agent Mode'}
         </div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifySelf: 'center' }}>
-          <div
-            style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              background: '#C4956A',
-              animation: 'breathe 2.4s ease-in-out infinite',
-            }}
-          />
-          <span style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>Agent</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        {isRunning ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 14, height: 14, border: '2px solid #F0EBE3', borderTopColor: '#C4956A', borderRadius: '50%', animation: 'agentSpin 1s linear infinite' }} />
+            <span style={{ fontSize: 12, color: '#C4956A' }}>{currentStageLabel}</span>
+          </div>
+        ) : null}
+        <div style={{ marginLeft: 'auto' }}>
           <UserMenu user={user} isLoading={authLoading} onSignInClick={() => navigate('/signin')} onLogout={logout} />
         </div>
       </header>
 
+      {toastMessage ? (
+        <div style={{ position: 'fixed', top: 64, right: 20, zIndex: 80, background: '#1A1714', color: '#FAF7F4', padding: '10px 14px', borderRadius: 10, fontSize: 12 }}>
+          {toastMessage}
+        </div>
+      ) : null}
+
       <main
         style={{
-          maxWidth: 720,
-          margin: '0 auto',
-          padding: '2rem 1.5rem',
           flex: 1,
           width: '100%',
           boxSizing: 'border-box',
+          overflowY: isMobile ? 'auto' : 'auto',
+          padding: isMobile ? '1rem' : '1.5rem',
         }}
       >
         {!canAgent ? (
@@ -2664,6 +2917,7 @@ export function AgentPage() {
           </>
         )}
       </main>
+      </div>
     </div>
   );
 }

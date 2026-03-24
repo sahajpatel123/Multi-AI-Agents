@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import App from './App'
 import { HomePage } from './pages/HomePage'
 import { ProductPage } from './pages/ProductPage'
@@ -13,7 +13,6 @@ import { PrivacyPage } from './pages/PrivacyPage'
 import { PersonasPage } from './pages/PersonasPage'
 import { AccountPage } from './pages/AccountPage'
 import { AgentPage } from './pages/AgentPage'
-import { AgentHistoryPage } from './pages/AgentHistoryPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthProvider } from './hooks/useAuth'
 import { PanelProvider } from './context/PanelContext'
@@ -90,7 +89,7 @@ if (!rootElement) {
                   } />
                   <Route path="/agent/history" element={
                     <ProtectedRoute>
-                      <AgentHistoryPage />
+                      <Navigate to="/agent" replace />
                     </ProtectedRoute>
                   } />
                 </Routes>

@@ -242,38 +242,6 @@ export function Sidebar({
                   </span>
                 )}
               </div>
-              <div
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onClose();
-                    navigate('/agent/history');
-                  }
-                }}
-                onClick={() => {
-                  onClose();
-                  navigate('/agent/history');
-                }}
-                style={{
-                  marginTop: 4,
-                  padding: '6px 12px 8px 12px',
-                  borderRadius: 10,
-                  cursor: 'pointer',
-                  color: '#6B6460',
-                  fontSize: 12,
-                  transition: 'all 150ms ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#F0EBE3';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                }}
-              >
-                Research history
-              </div>
             </div>
             {!isDefaultPanel && (
               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px' }}>
