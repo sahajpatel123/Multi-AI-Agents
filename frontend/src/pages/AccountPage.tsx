@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import MicroLoader from '../components/MicroLoader';
 import { cancelSubscription, getSubscriptionStatus, getUserTier, type SubscriptionStatusResponse } from '../api';
 import { useTier } from '../context/TierContext';
 
@@ -86,7 +87,9 @@ export function AccountPage() {
         <p style={{ fontSize: '14px', color: '#6B6460', marginBottom: '2rem' }}>Subscription and usage</p>
 
         {loading ? (
-          <p style={{ fontSize: '14px', color: '#6B6460' }}>Loading…</p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '120px' }}>
+            <MicroLoader />
+          </div>
         ) : (
           <>
             <section

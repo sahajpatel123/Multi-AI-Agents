@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import MicroLoader from './components/MicroLoader'
 import App from './App'
 import { HomePage } from './pages/HomePage'
 import { ProductPage } from './pages/ProductPage'
@@ -58,6 +59,17 @@ if (!rootElement) {
           <TierProvider>
             <PanelProvider>
               <BrowserRouter>
+                <Suspense fallback={
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '100vh',
+                    background: '#F5F0E8',
+                  }}>
+                    <MicroLoader />
+                  </div>
+                }>
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/product" element={<ProductPage />} />
@@ -93,6 +105,7 @@ if (!rootElement) {
                     </ProtectedRoute>
                   } />
                 </Routes>
+                </Suspense>
               </BrowserRouter>
             </PanelProvider>
           </TierProvider>

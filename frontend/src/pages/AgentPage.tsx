@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Loader2, Lock, PanelLeft, X, Zap } from 'lucide-react';
+import { Lock, PanelLeft, X, Zap } from 'lucide-react';
+import { CalligraphyLoader } from '../components/CalligraphyLoader';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
@@ -189,12 +190,6 @@ function formatDurationMs(ms: number | undefined): string {
   return `${ms}ms`;
 }
 
-function formatElapsedSeconds(elapsedSeconds: number): string {
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = elapsedSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
 function buildRevisionSummary(result: AgentResult): string {
   const cOut = result.stages?.critic?.output || '';
   const vOut = result.stages?.verifier?.output || '';
@@ -272,10 +267,9 @@ export function AgentPage() {
   const [result, setResult] = useState<AgentResult | null>(null);
   const [traceOpen, setTraceOpen] = useState(false);
   const [traceOutputExpanded, setTraceOutputExpanded] = useState<Set<StageId>>(new Set());
-  const [completedStages, setCompletedStages] = useState<string[]>([]);
+  const [_completedStages, setCompletedStages] = useState<string[]>([]);
   const [currentStage, setCurrentStage] = useState<string>('planner');
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [liveStages, setLiveStages] = useState<Partial<Record<StageId, string>>>({});
+  const [_liveStages, setLiveStages] = useState<Partial<Record<StageId, string>>>({});
   const [challenges, setChallenges] = useState<AgentChallengeItem[]>([]);
   const [isChallengingAnswer, setIsChallengingAnswer] = useState(false);
   const [challengesVisible, setChallengesVisible] = useState(false);
@@ -483,18 +477,6 @@ export function AgentPage() {
     }
   }, [result?.bridge_from_arena, bridgeMeta]);
 
-  useEffect(() => {
-    if (!isRunning) {
-      setElapsedSeconds(0);
-      return;
-    }
-    const startedAt = Date.now();
-    setElapsedSeconds(0);
-    const intervalId = window.setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
-    }, 1000);
-    return () => window.clearInterval(intervalId);
-  }, [isRunning]);
 
   const handleRunTask = async () => {
     const t = task.trim();
@@ -586,29 +568,6 @@ export function AgentPage() {
     setSidebarOpen(false);
   };
 
-  const stageVisual = useMemo(() => {
-    if (!isRunning && result?.stages) {
-      return STAGES.map((s) => ({
-        id: s.id,
-        state: (result.stages?.[s.id]?.status || 'pending') as string,
-      }));
-    }
-    if (isRunning) {
-      return STAGES.map((s) => {
-        let st = liveStages[s.id] || 'pending';
-        if (st === 'pending' && completedStages.includes(s.id)) {
-          st = 'complete';
-        }
-        if (st === 'running') return { id: s.id, state: 'running' };
-        if (st === 'complete') return { id: s.id, state: 'complete' };
-        if (st === 'skipped') return { id: s.id, state: 'skipped' };
-        if (st === 'failed') return { id: s.id, state: 'failed' };
-        if (currentStage === s.id) return { id: s.id, state: 'running' };
-        return { id: s.id, state: 'pending' };
-      });
-    }
-    return STAGES.map((s) => ({ id: s.id, state: 'pending' }));
-  }, [isRunning, result, liveStages, currentStage, completedStages]);
 
   const parsedAnswer = useMemo((): ParsedSynthesis | null => {
     if (!result?.final_answer) return null;
@@ -842,17 +801,7 @@ export function AgentPage() {
         @keyframes agentSpin {
           to { transform: rotate(360deg); }
         }
-        @keyframes ringPulse {
-          from {
-            opacity: 0.8;
-            transform: translate(-50%, -50%) scale(1);
-          }
-          to {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(1.5);
-          }
-        }
-        .agent-chal-dot {
+.agent-chal-dot {
           width: 8px;
           height: 8px;
           border-radius: 50%;
@@ -1059,7 +1008,6 @@ export function AgentPage() {
         </div>
         {isRunning ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 14, height: 14, border: '2px solid #F0EBE3', borderTopColor: '#C4956A', borderRadius: '50%', animation: 'agentSpin 1s linear infinite' }} />
             <span style={{ fontSize: 12, color: '#C4956A' }}>{currentStageLabel}</span>
           </div>
         ) : null}
@@ -1362,20 +1310,15 @@ export function AgentPage() {
             )}
 
             {isRunning && (
-              <div style={{ margin: '1.5rem 0' }}>
-                <p style={{ fontSize: 12, color: '#6B6460', marginBottom: 12 }}>
-                  {bridgeMeta
-                    ? 'Verifying Arena answer...'
-                    : isRefining
-                      ? 'Refining your answer...'
-                      : 'Pipeline progress'}
-                </p>
-                <StageDotsRow
-                  stages={STAGES}
-                  stageVisual={stageVisual}
-                  currentStage={currentStage}
-                  elapsedSeconds={elapsedSeconds}
-                />
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '60vh',
+                background: '#F5F0E8',
+              }}>
+                <CalligraphyLoader stage={currentStage} />
               </div>
             )}
 
@@ -2613,9 +2556,7 @@ export function AgentPage() {
                               }}
                             >
                               {isRefining ? (
-                                <span style={{ display: 'inline-flex', animation: 'agentSpin 0.9s linear infinite' }}>
-                                  <Loader2 style={{ width: 18, height: 18 }} />
-                                </span>
+                                <span style={{ width: 14, height: 14, border: '2px solid #F0EBE3', borderTopColor: '#C4956A', borderRadius: '50%', animation: 'agentSpin 0.9s linear infinite', display: 'inline-block' }} />
                               ) : (
                                 '→'
                               )}
@@ -2921,165 +2862,5 @@ export function AgentPage() {
       </main>
       </div>
     </div>
-  );
-}
-
-function StageDotsRow({
-  stages,
-  stageVisual,
-  currentStage,
-  elapsedSeconds,
-}: {
-  stages: typeof STAGES;
-  stageVisual: { id: StageId; state: string }[];
-  currentStage: string;
-  elapsedSeconds: number;
-}) {
-  const statusText =
-    {
-      planner: 'Planning your task...',
-      researcher: 'Researching sources...',
-      solver: 'Building the answer...',
-      critic: 'Stress-testing logic...',
-      verifier: 'Verifying claims...',
-      synthesizer: 'Synthesizing insights...',
-      judge: 'Final judgement...',
-    }[currentStage as StageId] || 'Thinking...';
-  const ringSizes = [16, 32, 48, 64];
-
-  return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-        {stages.map((s, idx) => {
-          const vis = stageVisual[idx]?.state || 'pending';
-          const isLast = idx === stages.length - 1;
-          const lineDone = vis === 'complete' || vis === 'skipped';
-
-          return (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', flex: isLast ? '0 0 auto' : 1, minWidth: 0 }}>
-              <div style={{ position: 'relative', flex: '0 0 auto' }}>
-                <div
-                  title={s.description}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    position: 'relative',
-                    padding: 0,
-                    background:
-                      vis === 'running'
-                        ? '#FAF7F4'
-                        : vis === 'complete'
-                          ? '#C4956A'
-                          : vis === 'failed'
-                            ? '#FEF2F2'
-                            : vis === 'skipped'
-                              ? '#F0EBE3'
-                              : '#F0EBE3',
-                    border:
-                      vis === 'running'
-                        ? '1.5px solid #C4956A'
-                        : vis === 'complete'
-                          ? '1.5px solid #C4956A'
-                          : vis === 'failed'
-                            ? '1.5px solid #E57373'
-                            : vis === 'skipped'
-                              ? '1.5px dashed #E0D8D0'
-                              : '1.5px solid #E0D8D0',
-                    opacity: vis === 'skipped' ? 0.5 : 1,
-                    animation: vis === 'running' ? 'breatheDot 1s ease-in-out infinite' : undefined,
-                  }}
-                >
-                  {vis === 'running' && (
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        background: '#C4956A',
-                        display: 'block',
-                      }}
-                    />
-                  )}
-                  {vis === 'complete' && (
-                    <span style={{ color: '#FAF7F4', fontSize: 12 }}>✓</span>
-                  )}
-                  {vis === 'skipped' && <span style={{ color: '#C4B8AE', fontSize: 14 }}>–</span>}
-                  {vis === 'failed' && <span style={{ color: '#E57373', fontSize: 14 }}>×</span>}
-                  {vis === 'pending' && <span style={{ color: '#C4B8AE', fontSize: 10 }}>·</span>}
-                </div>
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 36,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    fontSize: 9,
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
-                    color: vis === 'running' ? '#C4956A' : '#B0A9A2',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {s.label}
-                </span>
-              </div>
-              {!isLast && (
-                <div
-                  style={{
-                    flex: 1,
-                    height: 1.5,
-                    minWidth: 4,
-                    background: lineDone ? '#C4956A' : '#E0D8D0',
-                    transition: 'background 300ms ease',
-                    alignSelf: 'center',
-                  }}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ height: 48 }} />
-      <div
-        style={{
-          width: '100%',
-          height: 64,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 12,
-        }}
-      >
-        <div style={{ position: 'relative', width: 64, height: 64 }}>
-          {ringSizes.map((size, idx) => (
-            <span
-              key={size}
-              style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                width: size,
-                height: size,
-                border: '1.5px solid #C4956A',
-                borderRadius: '50%',
-                transform: 'translate(-50%, -50%) scale(1)',
-                opacity: 0.8,
-                animation: 'ringPulse 2s ease-out infinite',
-                animationDelay: `${idx * 0.4}s`,
-              }}
-            />
-          ))}
-        </div>
-        <div style={{ fontSize: 13, color: '#8C7355', letterSpacing: '0.05em' }}>{statusText}</div>
-        <div style={{ fontSize: 11, color: '#A89070', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
-          {formatElapsedSeconds(elapsedSeconds)} elapsed
-        </div>
-      </div>
-    </>
   );
 }
