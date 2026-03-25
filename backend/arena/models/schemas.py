@@ -3,7 +3,7 @@
 from typing import Optional, List, Any, Dict, Literal
 from datetime import datetime
 from enum import Enum
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class PromptCategory(str, Enum):
@@ -234,6 +234,8 @@ class LoginRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, extra="ignore")
+
     id: int
     email: str
     tier: str
@@ -243,7 +245,22 @@ class UserResponse(BaseModel):
     expertise_level: str = "curious"
     expertise_domain: str = ""
 
-    model_config = {"from_attributes": True}
+    @field_validator("name", mode="before")
+    @classmethod
+    def _name_default(cls, v: object) -> str:
+        return "" if v is None else str(v)
+
+    @field_validator("expertise_level", mode="before")
+    @classmethod
+    def _expertise_level_default(cls, v: object) -> str:
+        if v is None or v == "":
+            return "curious"
+        return str(v)
+
+    @field_validator("expertise_domain", mode="before")
+    @classmethod
+    def _expertise_domain_default(cls, v: object) -> str:
+        return "" if v is None else str(v)
 
 
 class UserProfilePatch(BaseModel):

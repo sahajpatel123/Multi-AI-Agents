@@ -117,6 +117,21 @@ def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
     return db.query(User).filter(User.id == user_id).first()
 
 
+def orm_user_to_response(user: User) -> UserResponse:
+    """Build UserResponse from SQLAlchemy User (avoid model_validate on ORM quirks / NULLs)."""
+    tier_raw = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        tier=normalize_tier(tier_raw).value,
+        created_at=user.created_at,
+        prompt_count_today=user.prompt_count_today,
+        name=getattr(user, "name", None) or "",
+        expertise_level=getattr(user, "expertise_level", None) or "curious",
+        expertise_domain=getattr(user, "expertise_domain", None) or "",
+    )
+
+
 def create_user(db: Session, email: str, password: str) -> User:
     user = User(
         email=email.lower().strip(),
@@ -180,8 +195,7 @@ def get_current_user_optional(
     user = get_user_by_id(db, int(user_id))
     if not user:
         return None
-    # Convert ORM model to Pydantic before session closes
-    return UserResponse.model_validate(user)
+    return orm_user_to_response(user)
 
 
 def get_current_user_required(

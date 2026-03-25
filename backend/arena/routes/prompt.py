@@ -359,9 +359,9 @@ async def stream_prompt(
                 responses,
                 session_id,
                 prompt=body.prompt,
-                user_id=user.id if user else None,
+                user_id=user.id,
                 persona_ids=body.persona_ids,
-                db=db if user else None,
+                db=db,
             )
             tracker.mark("integrity_done")
             scored_responses = await scorer.score_responses(
@@ -369,10 +369,10 @@ async def stream_prompt(
                 responses,
                 integrity_report,
                 session_id=session_id,
-                user_id=user.id if user else None,
+                user_id=user.id,
                 prompt_category=pipeline_result.classification.category.value,
                 persona_ids=body.persona_ids,
-                db=db if user else None,
+                db=db,
             )
             tracker.mark("scoring_done")
             winner = scorer.get_winner(scored_responses)
@@ -400,7 +400,7 @@ async def stream_prompt(
                 winner_id=winner.response.agent_id,
                 winner_persona_id=get_persona_id_for_agent(winner.response.agent_id, body.persona_ids),
                 persona_ids=body.persona_ids,
-                user_id=str(user.id) if user else "anonymous",
+                user_id=str(user.id),
             )
 
             yield _sse_event("result", final.model_dump(mode="json"))
@@ -432,8 +432,8 @@ async def stream_prompt(
                 db=db,
                 cost=cost,
                 session_id=session_id,
-                user_id=user.id if user else None,
-                guest_ip=_get_client_ip(request) if not user else None,
+                user_id=user.id,
+                guest_ip=None,
                 prompt_category=pipeline_result.classification.category.value,
                 winner_agent_id=winner.response.agent_id,
                 persona_ids=body.persona_ids,

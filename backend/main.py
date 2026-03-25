@@ -1,20 +1,18 @@
 """FastAPI application entry point"""
 
 import logging
-import sys
 import traceback
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from arena.config import get_settings
-from arena.core.migrate import run_safe_migrations
 from arena.core.seed_personas import seed_persona_library
 from arena.core.observability import get_health_data, setup_logging
-from arena.database import SessionLocal, engine, get_db, init_db
+from arena.database import SessionLocal, get_db, init_db
 from arena.routes.auth import router as auth_router, user_router
 from arena.routes.analytics import router as analytics_router
 from arena.routes.personas import router as personas_router
@@ -29,34 +27,6 @@ from arena.routes.payments import router as payments_router
 from arena.routes.agent import router as agent_router
 
 logger = logging.getLogger(__name__)
-
-
-def _verify_users_schema() -> None:
-    """Fail fast if ORM-required columns are missing (migrations not applied)."""
-    try:
-        insp = inspect(engine)
-        if not insp.has_table("users"):
-            raise RuntimeError(
-                "DB schema missing table: users. Run: alembic upgrade head",
-            )
-        columns = {c["name"] for c in insp.get_columns("users")}
-        required = (
-            "id",
-            "email",
-            "password_hash",
-            "expertise_level",
-            "expertise_domain",
-        )
-        missing = [c for c in required if c not in columns]
-        if missing:
-            raise RuntimeError(
-                f"DB schema missing columns: {missing}. "
-                f"Add them via arena.core.migrate.run_safe_migrations or alembic upgrade head",
-            )
-        logger.info("Schema check passed.")
-    except Exception as e:
-        logger.error("STARTUP SCHEMA ERROR: %s", e)
-        sys.exit(1)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -192,8 +162,6 @@ def create_app() -> FastAPI:
     # ── Startup ───────────────────────────────────────────────
     @app.on_event("startup")
     async def run_startup_tasks() -> None:
-        run_safe_migrations()
-        _verify_users_schema()
         db = SessionLocal()
         try:
             await seed_persona_library(db)

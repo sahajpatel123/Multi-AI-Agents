@@ -3,8 +3,6 @@
 import asyncio
 import json
 import uuid
-from typing import Optional
-
 import anthropic
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,10 +10,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
-from arena.core.auth import get_current_user_optional
+from arena.core.auth import get_current_user_required
 from arena.core.cost_tracker import (
     RateLimitExceeded,
-    check_and_increment_guest,
     check_and_increment_user,
 )
 from arena.core.tier_config import has_feature, normalize_tier
@@ -43,8 +40,8 @@ from arena.core.model_router import get_route_for_persona
 router = APIRouter(prefix="/api", tags=["debate"])
 
 
-def _enforce_debate_access(user: Optional[UserResponse]) -> str:
-    user_tier = normalize_tier(user.tier if user else "GUEST")
+def _enforce_debate_access(user: UserResponse) -> str:
+    user_tier = normalize_tier(user.tier)
     if not has_feature(user_tier, "debate"):
         raise HTTPException(
             status_code=403,
@@ -168,13 +165,6 @@ async def _get_reaction(
 # POST /api/debate — batch endpoint
 # ──────────────────────────────────────────────────────────────
 
-def _get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
 @router.post(
     "/debate",
     response_model=DebateRoundResponse,
@@ -188,7 +178,7 @@ async def run_debate_round(
     http_request: Request,
     request: DebateRequest,
     db: Session = Depends(get_db),
-    user: Optional[UserResponse] = Depends(get_current_user_optional),
+    user: UserResponse = Depends(get_current_user_required),
 ) -> DebateRoundResponse:
     """
     Run one round of debate. The 3 non-challenged agents react
@@ -199,11 +189,7 @@ async def run_debate_round(
     # Check rate limit BEFORE any LLM calls
     if not has_feature(user_tier, "unlimited_debates"):
         try:
-            if user:
-                check_and_increment_user(db, user.id, user_tier)
-            else:
-                ip = _get_client_ip(http_request)
-                check_and_increment_guest(db, ip)
+            check_and_increment_user(db, user.id, user_tier)
         except RateLimitExceeded as e:
             raise HTTPException(
                 status_code=429,
@@ -215,7 +201,7 @@ async def run_debate_round(
                     "daily_limit": e.limit,
                 },
             )
-    
+
     try:
         active_agents = get_all_agents(request.persona_ids)
     except ValueError as e:
@@ -284,7 +270,7 @@ async def stream_debate_round(
     http_request: Request,
     request: DebateRequest,
     db: Session = Depends(get_db),
-    user: Optional[UserResponse] = Depends(get_current_user_optional),
+    user: UserResponse = Depends(get_current_user_required),
 ):
     """
     SSE streaming debate — streams each agent's reaction token by token.
@@ -300,11 +286,7 @@ async def stream_debate_round(
     # Check rate limit BEFORE any LLM calls
     if not has_feature(user_tier, "unlimited_debates"):
         try:
-            if user:
-                check_and_increment_user(db, user.id, user_tier)
-            else:
-                ip = _get_client_ip(http_request)
-                check_and_increment_guest(db, ip)
+            check_and_increment_user(db, user.id, user_tier)
         except RateLimitExceeded as e:
             raise HTTPException(
                 status_code=429,
@@ -316,7 +298,7 @@ async def stream_debate_round(
                     "daily_limit": e.limit,
                 },
             )
-    
+
     try:
         active_agents = get_all_agents(request.persona_ids)
     except ValueError as e:

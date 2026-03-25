@@ -2,7 +2,6 @@
 
 import json
 import uuid
-from typing import Optional
 
 import anthropic
 
@@ -11,10 +10,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
-from arena.core.auth import get_current_user_optional
+from arena.core.auth import get_current_user_required
 from arena.core.cost_tracker import (
     RateLimitExceeded,
-    check_and_increment_guest,
     check_and_increment_user,
 )
 from arena.core.tier_config import has_feature, normalize_tier
@@ -35,8 +33,8 @@ from arena.core.model_router import get_route_for_persona
 router = APIRouter(prefix="/api", tags=["discuss"])
 
 
-def _enforce_discuss_access(user: Optional[UserResponse]) -> str:
-    user_tier = normalize_tier(user.tier if user else "GUEST")
+def _enforce_discuss_access(user: UserResponse) -> str:
+    user_tier = normalize_tier(user.tier)
     if not has_feature(user_tier, "discuss"):
         raise HTTPException(
             status_code=403,
@@ -102,13 +100,6 @@ def _build_messages(
 # POST /api/discuss — batch endpoint
 # ──────────────────────────────────────────────────────────────
 
-def _get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
 @router.post(
     "/discuss",
     response_model=DiscussResponse,
@@ -122,7 +113,7 @@ async def discuss_with_agent(
     http_request: Request,
     request: DiscussRequest,
     db: Session = Depends(get_db),
-    user: Optional[UserResponse] = Depends(get_current_user_optional),
+    user: UserResponse = Depends(get_current_user_required),
 ) -> DiscussResponse:
     """
     Send a message to a single agent in a 1-on-1 conversation.
@@ -132,11 +123,7 @@ async def discuss_with_agent(
 
     # Check rate limit BEFORE any LLM calls
     try:
-        if user:
-            check_and_increment_user(db, user.id, user_tier)
-        else:
-            ip = _get_client_ip(http_request)
-            check_and_increment_guest(db, ip)
+        check_and_increment_user(db, user.id, user_tier)
     except RateLimitExceeded as e:
         raise HTTPException(
             status_code=429,
@@ -148,7 +135,7 @@ async def discuss_with_agent(
                 "daily_limit": e.limit,
             },
         )
-    
+
     try:
         agent = get_agent_config(request.agent_id, request.persona_ids)
     except ValueError as e:
@@ -223,7 +210,7 @@ async def stream_discuss(
     http_request: Request,
     request: DiscussRequest,
     db: Session = Depends(get_db),
-    user: Optional[UserResponse] = Depends(get_current_user_optional),
+    user: UserResponse = Depends(get_current_user_required),
 ):
     """
     SSE streaming 1-on-1 discussion — streams the agent's reply token by token.
@@ -237,11 +224,7 @@ async def stream_discuss(
 
     # Check rate limit BEFORE any LLM calls
     try:
-        if user:
-            check_and_increment_user(db, user.id, user_tier)
-        else:
-            ip = _get_client_ip(http_request)
-            check_and_increment_guest(db, ip)
+        check_and_increment_user(db, user.id, user_tier)
     except RateLimitExceeded as e:
         raise HTTPException(
             status_code=429,
@@ -253,7 +236,7 @@ async def stream_discuss(
                 "daily_limit": e.limit,
             },
         )
-    
+
     try:
         agent = get_agent_config(request.agent_id, request.persona_ids)
     except ValueError as e:

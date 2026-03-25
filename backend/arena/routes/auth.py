@@ -22,6 +22,7 @@ from arena.core.auth import (
     get_current_user_required_orm,
     get_user_by_email,
     get_user_by_id,
+    orm_user_to_response,
 )
 from arena.core.tier_config import (
     TIER_FEATURES,
@@ -108,16 +109,7 @@ def _clear_auth_cookies(response: Response) -> None:
 
 
 def _user_to_response(user: User) -> UserResponse:
-    return UserResponse(
-        id=user.id,
-        email=user.email,
-        tier=_tier_value(user),
-        created_at=user.created_at,
-        prompt_count_today=user.prompt_count_today,
-        name=getattr(user, "name", None) or "",
-        expertise_level=getattr(user, "expertise_level", None) or "curious",
-        expertise_domain=getattr(user, "expertise_domain", None) or "",
-    )
+    return orm_user_to_response(user)
 
 
 def _utc_now_naive() -> datetime:
