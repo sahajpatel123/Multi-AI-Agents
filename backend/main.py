@@ -11,6 +11,7 @@ from sqlalchemy import inspect, text
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from arena.config import get_settings
+from arena.core.migrate import run_safe_migrations
 from arena.core.seed_personas import seed_persona_library
 from arena.core.observability import get_health_data, setup_logging
 from arena.database import SessionLocal, engine, get_db, init_db
@@ -49,7 +50,8 @@ def _verify_users_schema() -> None:
         missing = [c for c in required if c not in columns]
         if missing:
             raise RuntimeError(
-                f"DB schema missing columns: {missing}. Run: alembic upgrade head",
+                f"DB schema missing columns: {missing}. "
+                f"Add them via arena.core.migrate.run_safe_migrations or alembic upgrade head",
             )
         logger.info("Schema check passed.")
     except Exception as e:
@@ -190,6 +192,7 @@ def create_app() -> FastAPI:
     # ── Startup ───────────────────────────────────────────────
     @app.on_event("startup")
     async def run_startup_tasks() -> None:
+        run_safe_migrations()
         _verify_users_schema()
         db = SessionLocal()
         try:
