@@ -3,5 +3,4 @@ set -e
 
 cd "$(dirname "$0")"
 
-# Migrations + schema check run inside migrate_and_start.py before uvicorn binds the port.
-exec python migrate_and_start.py
+exec uvicorn main:app --host 0.0.0.0 --port "${PORT:-8000}"

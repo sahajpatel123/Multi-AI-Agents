@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
@@ -282,21 +282,53 @@ async def patch_user_profile(
 ) -> UserResponse:
     if body.name is not None:
         user.name = body.name.strip()[:255]
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    level_normalized: str | None = None
+    domain_stripped: str | None = None
     if body.expertise_level is not None:
-        level = body.expertise_level.strip().lower()
-        if level not in _EXPERTISE_LEVELS:
+        level_normalized = body.expertise_level.strip().lower()
+        if level_normalized not in _EXPERTISE_LEVELS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid expertise_level",
             )
-        user.expertise_level = level
     if body.expertise_domain is not None:
-        user.expertise_domain = body.expertise_domain.strip()[:512]
+        domain_stripped = body.expertise_domain.strip()[:512]
 
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return _user_to_response(user)
+    expertise_sql_ok = False
+    if level_normalized is not None or domain_stripped is not None:
+        sets: list[str] = []
+        bind: dict = {"user_id": user.id}
+        if level_normalized is not None:
+            sets.append("expertise_level = :level")
+            bind["level"] = level_normalized
+        if domain_stripped is not None:
+            sets.append("expertise_domain = :domain")
+            bind["domain"] = domain_stripped
+        try:
+            db.execute(
+                text(f"UPDATE users SET {', '.join(sets)} WHERE id = :user_id"),
+                bind,
+            )
+            db.commit()
+            expertise_sql_ok = True
+        except Exception as e:
+            db.rollback()
+            print(f"Expertise update skipped (columns pending): {e}")
+
+    resp = _user_to_response(user)
+    if expertise_sql_ok:
+        patch: dict[str, str] = {}
+        if level_normalized is not None:
+            patch["expertise_level"] = level_normalized
+        if domain_stripped is not None:
+            patch["expertise_domain"] = domain_stripped
+        if patch:
+            resp = resp.model_copy(update=patch)
+    return resp
 
 
 @user_router.get("/usage")

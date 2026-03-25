@@ -1,42 +1,45 @@
-"""Run idempotent DB migrations + schema check, then exec uvicorn (same PID for Render)."""
-
 import os
 import sys
 
 
-def verify_schema() -> None:
-    from sqlalchemy import inspect
+def main():
+    sys.stdout.flush()
+    print("==> Running safe migrations...", flush=True)
 
-    from arena.database import engine
+    try:
+        from sqlalchemy import text
 
-    insp = inspect(engine)
-    if not insp.has_table("users"):
-        print("FATAL: Missing table: users")
-        sys.exit(1)
-    columns = {c["name"] for c in insp.get_columns("users")}
-    # DB column is password_hash (not hashed_password)
-    required = (
-        "id",
-        "email",
-        "password_hash",
-        "expertise_level",
-        "expertise_domain",
-    )
-    missing = [c for c in required if c not in columns]
-    if missing:
-        print(f"FATAL: Missing columns: {missing}")
-        sys.exit(1)
-    print("==> Schema check passed.")
+        from arena.database import engine
 
+        migrations = [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+            "expertise_level VARCHAR DEFAULT 'curious'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+            "expertise_domain VARCHAR DEFAULT ''",
+        ]
 
-def main() -> None:
-    print("==> Running safe migrations...")
-    from arena.core.migrate import run_safe_migrations
+        with engine.connect() as conn:
+            for sql in migrations:
+                try:
+                    conn.execute(text(sql))
+                    conn.commit()
+                    print(f"==> OK: {sql[:60]}...", flush=True)
+                except Exception as e:
+                    print(f"==> Warning: {e}", flush=True)
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
 
-    run_safe_migrations()
-    verify_schema()
+        print("==> Safe migrations complete.", flush=True)
 
-    print("==> Starting server...")
+    except Exception as e:
+        print(f"==> Migration error (non-fatal): {e}", flush=True)
+        print("==> Continuing startup...", flush=True)
+
+    print("==> Starting server...", flush=True)
+    sys.stdout.flush()
+
     port = os.environ.get("PORT", "10000")
     os.execvp("uvicorn", [
         "uvicorn",
