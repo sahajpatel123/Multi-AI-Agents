@@ -1,5 +1,6 @@
 """Auth routes — /api/auth/*"""
 
+import traceback
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -147,38 +148,43 @@ async def register(
     response: Response,
     db: Session = Depends(get_db),
 ) -> UserResponse:
-    # Rate-limit registrations per IP (3/hour, 24h lockout)
-    registration_limiter.check_and_record(request, success=False)
-
     try:
-        is_valid, error_msg = _validate_password_strength(body.password)
-        if not is_valid:
+        # Rate-limit registrations per IP (3/hour, 24h lockout)
+        registration_limiter.check_and_record(request, success=False)
+
+        try:
+            is_valid, error_msg = _validate_password_strength(body.password)
+            if not is_valid:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"error": "weak_password", "message": error_msg},
+                )
+
+            if get_user_by_email(db, body.email):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="An account with that email already exists",
+                )
+
+            user = create_user(db, body.email, body.password)
+            user_response = _user_to_response(user)
+            _set_auth_cookies(response, user)
+
+            # Registration succeeded — clear attempt record
+            registration_limiter.check_and_record(request, success=True)
+            return user_response
+
+        except HTTPException:
+            raise
+        except Exception:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "weak_password", "message": error_msg},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Registration failed",
             )
-
-        if get_user_by_email(db, body.email):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="An account with that email already exists",
-            )
-
-        user = create_user(db, body.email, body.password)
-        user_response = _user_to_response(user)
-        _set_auth_cookies(response, user)
-
-        # Registration succeeded — clear attempt record
-        registration_limiter.check_and_record(request, success=True)
-        return user_response
-
-    except HTTPException:
+    except Exception as e:
+        traceback.print_exc()
+        print(f"REGISTER ERROR: {type(e).__name__}: {e}", flush=True)
         raise
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration failed",
-        )
 
 
 @router.post("/login", response_model=UserResponse)
@@ -188,31 +194,36 @@ async def login(
     response: Response,
     db: Session = Depends(get_db),
 ) -> UserResponse:
-    # Rate-limit login attempts per IP (5/hour, 1h lockout)
-    login_limiter.check_and_record(request, success=False)
-
     try:
-        user = authenticate_user(db, body.email, body.password)
-        if not user:
+        # Rate-limit login attempts per IP (5/hour, 1h lockout)
+        login_limiter.check_and_record(request, success=False)
+
+        try:
+            user = authenticate_user(db, body.email, body.password)
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid email or password",
+                )
+
+            user_response = _user_to_response(user)
+            _set_auth_cookies(response, user)
+
+            # Auth succeeded — clear failed-attempt record
+            login_limiter.check_and_record(request, success=True)
+            return user_response
+
+        except HTTPException:
+            raise
+        except Exception:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Login failed",
             )
-
-        user_response = _user_to_response(user)
-        _set_auth_cookies(response, user)
-
-        # Auth succeeded — clear failed-attempt record
-        login_limiter.check_and_record(request, success=True)
-        return user_response
-
-    except HTTPException:
+    except Exception as e:
+        traceback.print_exc()
+        print(f"LOGIN ERROR: {type(e).__name__}: {e}", flush=True)
         raise
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Login failed",
-        )
 
 
 @router.post("/logout")
@@ -236,35 +247,40 @@ async def refresh(
     arena_refresh: Optional[str] = Cookie(default=None),
 ) -> UserResponse:
     try:
-        if not arena_refresh:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="No refresh token",
-            )
-        payload = decode_token(arena_refresh)
-        if not payload or payload.get("type") != REFRESH_TOKEN_TYPE:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired refresh token",
-            )
-        user = get_user_by_id(db, int(payload["sub"]))
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found",
-            )
+        try:
+            if not arena_refresh:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="No refresh token",
+                )
+            payload = decode_token(arena_refresh)
+            if not payload or payload.get("type") != REFRESH_TOKEN_TYPE:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired refresh token",
+                )
+            user = get_user_by_id(db, int(payload["sub"]))
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="User not found",
+                )
 
-        user_response = _user_to_response(user)
-        _set_auth_cookies(response, user)
-        return user_response
+            user_response = _user_to_response(user)
+            _set_auth_cookies(response, user)
+            return user_response
 
-    except HTTPException:
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Token refresh failed",
+            )
+    except Exception as e:
+        traceback.print_exc()
+        print(f"REFRESH ERROR: {type(e).__name__}: {e}", flush=True)
         raise
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Token refresh failed",
-        )
 
 
 @router.get("/me", response_model=UserResponse)
