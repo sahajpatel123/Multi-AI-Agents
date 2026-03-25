@@ -26,6 +26,7 @@ import { useIsMobile } from './hooks/useIsMobile';
 import { usePanel } from './context/PanelContext';
 import { useTier } from './context/TierContext';
 import track from './utils/track';
+import { setRedirectIntent } from './utils/redirectIntent';
 import {
   AGENTS,
   DiscussChatMessage,
@@ -1072,7 +1073,11 @@ function App() {
             <UserMenu
               user={user}
               isLoading={authLoading}
-              onSignInClick={() => { setAuthModalTab('login'); setAuthModalOpen(true); }}
+              onSignInClick={() => {
+                setRedirectIntent('/app');
+                setAuthModalTab('login');
+                setAuthModalOpen(true);
+              }}
               onLogout={logout}
             />
           </header>
@@ -1477,7 +1482,11 @@ function App() {
             <div style={{ position: 'fixed', bottom: '80px', left: 0, right: 0, zIndex: 40, pointerEvents: 'none' }}>
               <p style={{ textAlign: 'center', fontSize: '11px', color: '#6B6460' }}>
                 <button
-                  onClick={() => { setAuthModalTab('signup'); setAuthModalOpen(true); }}
+                  onClick={() => {
+                  setRedirectIntent('/app');
+                  setAuthModalTab('signup');
+                  setAuthModalOpen(true);
+                }}
                   style={{
                     color: '#C4956A',
                     background: 'none',
@@ -1517,7 +1526,11 @@ function App() {
             <UserMenu
               user={user}
               isLoading={authLoading}
-              onSignInClick={() => { setAuthModalTab('login'); setAuthModalOpen(true); }}
+              onSignInClick={() => {
+                setRedirectIntent('/app');
+                setAuthModalTab('login');
+                setAuthModalOpen(true);
+              }}
               onLogout={logout}
             />
           </header>
@@ -1536,7 +1549,11 @@ function App() {
               <UserMenu
                 user={user}
                 isLoading={authLoading}
-                onSignInClick={() => { setAuthModalTab('login'); setAuthModalOpen(true); }}
+                onSignInClick={() => {
+                  setRedirectIntent('/app');
+                  setAuthModalTab('login');
+                  setAuthModalOpen(true);
+                }}
                 onLogout={logout}
               />
             </div>

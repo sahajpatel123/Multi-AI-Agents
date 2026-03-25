@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { RazorpayCheckout } from './RazorpayCheckout';
 import { useAuth } from '../hooks/useAuth';
 import { useTier } from '../context/TierContext';
+import { setRedirectIntent } from '../utils/redirectIntent';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export function UpgradeModal({
 
   const handleUpgradePlusMonthly = () => {
     if (!isAuthenticated) {
+      setRedirectIntent('/arena');
       navigate('/signin');
       onClose();
       return;

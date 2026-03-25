@@ -14,10 +14,12 @@ import { PrivacyPage } from './pages/PrivacyPage'
 import { PersonasPage } from './pages/PersonasPage'
 import { AccountPage } from './pages/AccountPage'
 import { AgentPage } from './pages/AgentPage'
-import { ProtectedRoute } from './components/ProtectedRoute'
+import { AuthRequiredRoute, ProtectedRoute } from './components/ProtectedRoute'
 import { AuthProvider } from './hooks/useAuth'
 import { PanelProvider } from './context/PanelContext'
 import { TierProvider } from './context/TierContext'
+import { ProfileModalProvider } from './context/ProfileModalContext'
+import { ProfileModal } from './components/ProfileModal'
 import './index.css'
 
 class ErrorBoundary extends React.Component<
@@ -59,6 +61,8 @@ if (!rootElement) {
           <TierProvider>
             <PanelProvider>
               <BrowserRouter>
+                <ProfileModalProvider>
+                <ProfileModal />
                 <Suspense fallback={
                   <div style={{
                     display: 'flex',
@@ -72,6 +76,7 @@ if (!rootElement) {
                 }>
                 <Routes>
                   <Route path="/" element={<HomePage />} />
+                  <Route path="/arena" element={<Navigate to="/app" replace />} />
                   <Route path="/product" element={<ProductPage />} />
                   <Route path="/pricing" element={<PricingPage />} />
                   <Route path="/about" element={<AboutPage />} />
@@ -79,25 +84,21 @@ if (!rootElement) {
                   <Route path="/changelog" element={<ChangelogPage />} />
                   <Route path="/terms" element={<TermsPage />} />
                   <Route path="/privacy" element={<PrivacyPage />} />
-                  <Route path="/app" element={
-                    <ProtectedRoute>
-                      <App />
-                    </ProtectedRoute>
-                  } />
+                  <Route path="/app" element={<App />} />
                   <Route path="/personas" element={
-                    <ProtectedRoute>
+                    <ProtectedRoute signInReturnTo="/personas">
                       <PersonasPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/account" element={
-                    <ProtectedRoute>
+                    <ProtectedRoute signInReturnTo="/account">
                       <AccountPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/agent" element={
-                    <ProtectedRoute>
+                    <AuthRequiredRoute redirectTo="/agent">
                       <AgentPage />
-                    </ProtectedRoute>
+                    </AuthRequiredRoute>
                   } />
                   <Route path="/agent/history" element={
                     <ProtectedRoute>

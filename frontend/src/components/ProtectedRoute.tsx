@@ -1,10 +1,20 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { AgentDot } from './AgentDot';
+import { setRedirectIntent } from '../utils/redirectIntent';
+import MicroLoader from './MicroLoader';
 
 interface ProtectedRouteProps {
   children: ReactNode;
+  /** Stored when the gate sends the user to `/signin` so they return here after auth. */
+  signInReturnTo?: string;
+}
+
+interface AuthRequiredRouteProps {
+  children: ReactNode;
+  /** Path stored before redirecting anonymous users to sign-in (e.g. `/agent`). */
+  redirectTo: string;
 }
 
 const AGENTS = [
@@ -14,16 +24,37 @@ const AGENTS = [
   { id: 'agent_4', name: 'The Contrarian', color: '#B0977E' },
 ];
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function AuthRequiredRoute({ children, redirectTo }: AuthRequiredRouteProps) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          height: '100vh',
+          background: '#FAF7F4',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <MicroLoader />
+      </div>
+    );
+  }
+
+  if (!user) {
+    setRedirectIntent(redirectTo);
+    return <Navigate to="/signin" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+export function ProtectedRoute({ children, signInReturnTo = '/arena' }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const [showContent, setShowContent] = useState(false);
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      sessionStorage.setItem('redirectAfterLogin', '/app');
-    }
-  }, [isAuthenticated, isLoading]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -66,6 +97,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (isAuthenticated) {
     return <>{children}</>;
   }
+
+  const goToSignIn = () => {
+    setRedirectIntent(signInReturnTo);
+    navigate('/signin');
+  };
 
   return (
     <div
@@ -269,7 +305,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           }}
         >
           <button
-            onClick={() => navigate('/signin')}
+            type="button"
+            onClick={goToSignIn}
             style={{
               width: '100%',
               padding: '13px 24px',
@@ -289,7 +326,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           </button>
 
           <button
-            onClick={() => navigate('/signin')}
+            type="button"
+            onClick={goToSignIn}
             style={{
               width: '100%',
               padding: '13px 24px',

@@ -2,6 +2,8 @@ import { useEffect, useState, useRef, useCallback, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { setRedirectIntent } from '../utils/redirectIntent';
+import { useAuth } from '../hooks/useAuth';
 
 function useScrollReveal<T extends HTMLElement>(delay = 0) {
   const [isVisible, setIsVisible] = useState(false);
@@ -546,6 +548,7 @@ function debateReducer(state: DebateState, action: DebateAction): DebateState {
 
 export function HomePage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [activePromptIndex, setActivePromptIndex] = useState(0);
   const [, setPromptPhase] = useState<'visible' | 'exiting' | 'entering'>('visible');
   const [isPromptHovered] = useState(false);
@@ -1589,7 +1592,15 @@ export function HomePage() {
             <button
               className="cta-main"
               ref={ctaButtonRef}
-              onClick={() => navigate('/app')}
+              onClick={() => {
+                if (isAuthenticated) {
+                  setRedirectIntent('/arena');
+                  navigate('/app');
+                  return;
+                }
+                setRedirectIntent('/arena');
+                navigate('/signin');
+              }}
               onMouseMove={handleCTAButtonMouseMove}
               onMouseLeave={handleCTAButtonMouseLeave}
               style={{

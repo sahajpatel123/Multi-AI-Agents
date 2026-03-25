@@ -17,6 +17,7 @@ import {
 } from '../api';
 import { useTier } from '../context/TierContext';
 import { useAuth } from '../hooks/useAuth';
+import { setRedirectIntent } from '../utils/redirectIntent';
 import { UserMenu } from '../components/UserMenu';
 
 const STAGES = [
@@ -1012,7 +1013,15 @@ export function AgentPage() {
           </div>
         ) : null}
         <div style={{ marginLeft: 'auto' }}>
-          <UserMenu user={user} isLoading={authLoading} onSignInClick={() => navigate('/signin')} onLogout={logout} />
+          <UserMenu
+            user={user}
+            isLoading={authLoading}
+            onSignInClick={() => {
+              setRedirectIntent('/agent');
+              navigate('/signin');
+            }}
+            onLogout={logout}
+          />
         </div>
       </header>
 

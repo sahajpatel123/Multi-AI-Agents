@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { setRedirectIntent } from '../utils/redirectIntent';
 
 export function Navbar() {
   const navigate = useNavigate();
@@ -93,10 +94,20 @@ export function Navbar() {
                 >
                   <span style={{ fontSize: '20px', lineHeight: 1, color: '#1A1714' }}>☰</span>
                 </button>
-                <button type="button" className="navbar-signin-link" onClick={() => navigate('/signin')}>
+                <button type="button" className="navbar-signin-link" onClick={() => {
+                  setRedirectIntent('/');
+                  navigate('/signin');
+                }}>
                   Sign in
                 </button>
-                <button type="button" className="navbar-cta-pill" onClick={() => navigate('/app')}>
+                <button type="button" className="navbar-cta-pill" onClick={() => {
+                  if (isAuthenticated) {
+                    navigate('/app');
+                    return;
+                  }
+                  setRedirectIntent('/arena');
+                  navigate('/signin');
+                }}>
                   Try Arena →
                 </button>
               </div>
@@ -325,7 +336,12 @@ export function Navbar() {
             className="navbar-mobile-cta"
             onClick={() => {
               setMenuOpen(false);
-              navigate('/app');
+              if (isAuthenticated) {
+                navigate('/app');
+                return;
+              }
+              setRedirectIntent('/arena');
+              navigate('/signin');
             }}
           >
             Try Arena →

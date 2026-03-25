@@ -20,7 +20,9 @@ import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
 import { AgentDot } from './AgentDot';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
+import { useAuth } from '../hooks/useAuth';
 import track from '../utils/track';
+import { setRedirectIntent } from '../utils/redirectIntent';
 
 interface SidebarTurn {
   turn_id: string;
@@ -64,6 +66,7 @@ export function Sidebar({
   onSavedItemClick,
 }: SidebarProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { isDefaultPanel, resetPanel } = usePanel();
   const { messagesRemaining, dailyLimit, tier, isFree, isPro } = useTier();
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
@@ -199,11 +202,21 @@ export function Sidebar({
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     onClose();
+                    if (!user) {
+                      setRedirectIntent('/agent');
+                      navigate('/signin');
+                      return;
+                    }
                     navigate('/agent');
                   }
                 }}
                 onClick={() => {
                   onClose();
+                  if (!user) {
+                    setRedirectIntent('/agent');
+                    navigate('/signin');
+                    return;
+                  }
                   navigate('/agent');
                 }}
                 style={{

@@ -1,15 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { login, register } from '../api';
 import { useAuth } from '../hooks/useAuth';
+import { getRedirectIntent, clearRedirectIntent } from '../utils/redirectIntent';
 
 type Tab = 'signin' | 'signup';
 type PasswordStrength = 'weak' | 'fair' | 'good' | 'strong' | null;
 
 export function SignInPage() {
   const navigate = useNavigate();
-  const { setUser, setIsAuthenticated } = useAuth();
+  const { user, setUser, setIsAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,6 +30,13 @@ export function SignInPage() {
 
   const passwordStrength = activeTab === 'signup' ? getPasswordStrength(password) : null;
 
+  useEffect(() => {
+    if (!user) return;
+    const destination = getRedirectIntent();
+    clearRedirectIntent();
+    navigate(destination, { replace: true });
+  }, [user, navigate]);
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -41,9 +49,6 @@ export function SignInPage() {
       console.log('User has email?', signedInUser?.email);
       setUser(signedInUser);
       setIsAuthenticated(true);
-      const redirect = sessionStorage.getItem('redirectAfterLogin') || '/app';
-      sessionStorage.removeItem('redirectAfterLogin');
-      navigate(redirect);
     } catch (err) {
       console.log('SignInPage caught error:', err);
       console.log('Error message:', err instanceof Error ? err.message : 'Sign in failed');
@@ -73,9 +78,6 @@ export function SignInPage() {
       const registeredUser = await register(email, password);
       setUser(registeredUser);
       setIsAuthenticated(true);
-      const redirect = sessionStorage.getItem('redirectAfterLogin') || '/app';
-      sessionStorage.removeItem('redirectAfterLogin');
-      navigate(redirect);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Account creation failed');
     } finally {

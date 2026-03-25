@@ -7,6 +7,7 @@ import { Navbar } from '../components/Navbar';
 import { RazorpayCheckout } from '../components/RazorpayCheckout';
 import { useAuth } from '../hooks/useAuth';
 import { useTier } from '../context/TierContext';
+import { setRedirectIntent } from '../utils/redirectIntent';
 
 const comparisonRows = [
   ['Questions per day', '5', '15', '35'],
@@ -264,6 +265,7 @@ export function PricingPage() {
 
   const handleUpgrade = (planKey: string) => {
     if (!isAuthenticated) {
+      setRedirectIntent('/arena');
       navigate('/signin');
       return;
     }

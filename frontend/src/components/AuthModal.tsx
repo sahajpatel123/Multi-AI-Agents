@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import { clearRedirectIntent } from '../utils/redirectIntent';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -59,6 +60,7 @@ export function AuthModal({
       } else {
         await onRegister(email, password);
       }
+      clearRedirectIntent();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');

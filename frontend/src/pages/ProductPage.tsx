@@ -1,9 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { setRedirectIntent } from '../utils/redirectIntent';
+import { useAuth } from '../hooks/useAuth';
+import { setRedirectIntent } from '../utils/redirectIntent';
 
 export function ProductPage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   return (
     <div style={{ background: '#FAF7F4', minHeight: '100vh' }}>
@@ -81,7 +85,14 @@ export function ProductPage() {
           {/* Agent Mode Card */}
           <button
             type="button"
-            onClick={() => navigate('/agent')}
+            onClick={() => {
+              if (!isAuthenticated) {
+                setRedirectIntent('/agent');
+                navigate('/signin');
+                return;
+              }
+              navigate('/agent');
+            }}
             className="product-card"
             style={{
               background: '#1A1714',
