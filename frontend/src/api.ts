@@ -163,6 +163,47 @@ export async function getMe(): Promise<User | null> {
   return parseJsonSafely<User>(res);
 }
 
+export type UserUsageResponse = {
+  credits_used_today: number;
+  credits_remaining_today: number;
+  daily_limit: number;
+  credits_used_week: number;
+  credits_remaining_week: number;
+  weekly_limit: number;
+  total_tasks_month: number;
+  usage_history: number[];
+};
+
+export async function getUserUsage(): Promise<UserUsageResponse> {
+  const res = await apiFetch(`${API_BASE}/user/usage`);
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(err?.detail || 'Failed to load usage', res.status, err);
+  }
+  const data = await parseJsonSafely<UserUsageResponse>(res);
+  if (!data) throw new Error('Empty usage response');
+  return data;
+}
+
+export async function patchUserProfile(body: {
+  name?: string;
+  expertise_level?: string;
+  expertise_domain?: string;
+}): Promise<User> {
+  const res = await apiFetch(`${API_BASE}/user/profile`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(err?.detail || 'Failed to save profile', res.status, err);
+  }
+  const data = await parseJsonSafely<User>(res);
+  if (!data) throw new Error('Empty response');
+  return data;
+}
+
 export async function getUserTier(): Promise<TierStatus | null> {
   const res = await apiFetch(`${API_BASE}/user/tier`);
   if (res.status === 401) return null;

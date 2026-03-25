@@ -10,15 +10,18 @@ import {
   getAgentResult,
   getAgentSavedTask,
   getAgentStatus,
+  getMe,
   getMemoryContext,
   refineAgentAnswer,
   runAgentTask,
   type AgentChallengeItem,
 } from '../api';
 import { useTier } from '../context/TierContext';
+import { useProfileModal } from '../context/ProfileModalContext';
 import { useAuth } from '../hooks/useAuth';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { UserMenu } from '../components/UserMenu';
+import { User } from '../types';
 
 const STAGES = [
   { id: 'planner', label: 'Planning', description: 'Breaking down your task' },
@@ -253,6 +256,86 @@ const EXAMPLES = [
   'Analyse the pros and cons of moving from SQL to NoSQL',
 ];
 
+function agentProfileInitials(u: User): string {
+  const n = u.name?.trim();
+  if (n) {
+    const parts = n.split(/\s+/).filter(Boolean);
+    const first = parts[0]?.[0] ?? '';
+    const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '';
+    const s = `${first}${last}`.toUpperCase();
+    if (s) return s.slice(0, 2);
+  }
+  const e = u.email?.trim() ?? '';
+  return e ? e[0]!.toUpperCase() : 'U';
+}
+
+function AgentProfileSidebarRow({ user }: { user: User | null }) {
+  const { openModal } = useProfileModal();
+  if (!user?.email) return null;
+  const label = user.name?.trim() || user.email;
+  return (
+    <button
+      type="button"
+      onClick={() => openModal('bottom-left')}
+      style={{
+        marginTop: 'auto',
+        padding: '12px 16px',
+        borderTop: '0.5px solid #E0D5C5',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        cursor: 'pointer',
+        transition: 'background 0.15s',
+        background: 'transparent',
+        borderLeft: 'none',
+        borderRight: 'none',
+        borderBottom: 'none',
+        width: '100%',
+        textAlign: 'left',
+        font: 'inherit',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = '#EDE4D8';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+      }}
+    >
+      <div
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: '50%',
+          background: '#C4956A',
+          color: '#FAF7F2',
+          fontSize: 11,
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        {agentProfileInitials(user)}
+      </div>
+      <span
+        style={{
+          fontSize: 12,
+          color: '#4A3728',
+          fontFamily: 'Georgia, serif',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          minWidth: 0,
+          flex: 1,
+        }}
+      >
+        {label}
+      </span>
+    </button>
+  );
+}
+
 export function AgentPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -291,6 +374,10 @@ export function AgentPage() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const answerAnchorRef = useRef<HTMLDivElement>(null);
+  const { openModal } = useProfileModal();
+
+  const [expertiseLevel, setExpertiseLevel] = useState(() => localStorage.getItem('arena_expertise_level') || 'curious');
+  const [expertiseDomain, setExpertiseDomain] = useState(() => localStorage.getItem('arena_expertise_domain') || '');
 
   const urlTaskId = searchParams.get('task_id');
 
@@ -315,6 +402,28 @@ export function AgentPage() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  useEffect(() => {
+    if (!user?.email || authLoading) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const me = await getMe();
+        if (cancelled || !me) return;
+        const lvl = (me.expertise_level || 'curious').toLowerCase();
+        const dom = me.expertise_domain || '';
+        localStorage.setItem('arena_expertise_level', lvl);
+        localStorage.setItem('arena_expertise_domain', dom);
+        setExpertiseLevel(lvl);
+        setExpertiseDomain(dom);
+      } catch {
+        // keep localStorage / initial state
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.email, authLoading]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -761,6 +870,8 @@ export function AgentPage() {
         overflow: 'hidden',
         position: 'relative',
       }}
+      data-expertise-level={expertiseLevel}
+      data-expertise-domain={expertiseDomain}
     >
       <style>{`
         @keyframes breathe {
@@ -923,6 +1034,7 @@ export function AgentPage() {
               })
             )}
           </div>
+          <AgentProfileSidebarRow user={user} />
         </aside>
       ) : (
         <>
@@ -978,6 +1090,7 @@ export function AgentPage() {
                 </button>
               ))}
             </div>
+            <AgentProfileSidebarRow user={user} />
           </aside>
         </>
       )}
@@ -1021,6 +1134,7 @@ export function AgentPage() {
               navigate('/signin');
             }}
             onLogout={logout}
+            onProfileClick={() => openModal('top-right')}
           />
         </div>
       </header>

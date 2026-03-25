@@ -3,7 +3,6 @@ import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
-import { setRedirectIntent } from '../utils/redirectIntent';
 
 export function ProductPage() {
   const navigate = useNavigate();

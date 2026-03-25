@@ -21,6 +21,7 @@ import { AgentDot } from './AgentDot';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { useAuth } from '../hooks/useAuth';
+import { useProfileModal } from '../context/ProfileModalContext';
 import track from '../utils/track';
 import { setRedirectIntent } from '../utils/redirectIntent';
 
@@ -67,6 +68,7 @@ export function Sidebar({
 }: SidebarProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { openModal } = useProfileModal();
   const { isDefaultPanel, resetPanel } = usePanel();
   const { messagesRemaining, dailyLimit, tier, isFree, isPro } = useTier();
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
@@ -289,7 +291,7 @@ export function Sidebar({
                 label="Manage subscription"
                 onClick={() => {
                   onClose();
-                  navigate('/account');
+                  openModal('bottom-left', 'plan');
                 }}
               />
             </div>
@@ -621,6 +623,76 @@ export function Sidebar({
               )}
             </div>
           )}
+
+          {user ? (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                openModal('bottom-left');
+              }}
+              style={{
+                padding: '12px 16px',
+                borderTop: '0.5px solid #E0D5C5',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                transition: 'background 0.15s',
+                background: 'transparent',
+                border: 'none',
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderBottom: 'none',
+                width: '100%',
+                textAlign: 'left',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#EDE4D8';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <div
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: '50%',
+                  background: '#C4956A',
+                  color: '#FAF7F2',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                {(() => {
+                  const n = (user.name || '').trim();
+                  if (n) {
+                    const parts = n.split(/\s+/).filter(Boolean);
+                    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                    return n.slice(0, 2).toUpperCase();
+                  }
+                  return (user.email.split('@')[0] || 'A').slice(0, 2).toUpperCase();
+                })()}
+              </div>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: '#4A3728',
+                  fontFamily: 'Georgia, serif',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {(user.name || '').trim() || user.email.split('@')[0]}
+              </span>
+            </button>
+          ) : null}
 
         </div>
       </div>

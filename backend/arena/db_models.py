@@ -39,6 +39,9 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
+    name = Column(String(255), default="", nullable=False)
+    expertise_level = Column(String(32), default="curious", nullable=False)
+    expertise_domain = Column(String(512), default="", nullable=False)
     password_hash = Column(String(255), nullable=False)
     tier = Column(Enum(UserTier), default=UserTier.FREE, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)

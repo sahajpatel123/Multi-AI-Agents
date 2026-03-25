@@ -7,6 +7,7 @@ import { Navbar } from '../components/Navbar';
 import { RazorpayCheckout } from '../components/RazorpayCheckout';
 import { useAuth } from '../hooks/useAuth';
 import { useTier } from '../context/TierContext';
+import { useProfileModal } from '../context/ProfileModalContext';
 import { setRedirectIntent } from '../utils/redirectIntent';
 
 const comparisonRows = [
@@ -200,6 +201,7 @@ function FeatureList({
 
 export function PricingPage() {
   const navigate = useNavigate();
+  const { openModal } = useProfileModal();
   const { isAuthenticated, refreshUser, user } = useAuth();
   const { tier, isPlus, isPro, refreshTier } = useTier();
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
@@ -427,7 +429,7 @@ export function PricingPage() {
             </span>
             <button
               type="button"
-              onClick={() => navigate('/account')}
+              onClick={() => openModal('top-right', 'plan')}
               style={{
                 marginLeft: 'auto',
                 background: 'transparent',

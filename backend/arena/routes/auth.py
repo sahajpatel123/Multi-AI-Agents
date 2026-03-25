@@ -1,8 +1,10 @@
 """Auth routes — /api/auth/*"""
 
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
@@ -17,19 +19,28 @@ from arena.core.auth import (
     create_user,
     decode_token,
     get_current_user_required,
+    get_current_user_required_orm,
     get_user_by_email,
     get_user_by_id,
 )
-from arena.core.tier_config import TIER_FEATURES, get_daily_limit, get_tier_personas, normalize_tier, upgrade_target
+from arena.core.tier_config import (
+    TIER_FEATURES,
+    get_credit_budget,
+    get_daily_limit,
+    get_tier_personas,
+    normalize_tier,
+    upgrade_target,
+)
 from arena.core.login_limiter import login_limiter, registration_limiter
 from arena.core.token_blacklist import token_blacklist
 from arena.database import get_db
-from arena.db_models import User
+from arena.db_models import UsageRecord, User
 from arena.models.schemas import (
     LoginRequest,
     RegisterRequest,
-    UserResponse,
     TokenResponse,
+    UserProfilePatch,
+    UserResponse,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -103,7 +114,21 @@ def _user_to_response(user: User) -> UserResponse:
         tier=_tier_value(user),
         created_at=user.created_at,
         prompt_count_today=user.prompt_count_today,
+        name=getattr(user, "name", None) or "",
+        expertise_level=getattr(user, "expertise_level", None) or "curious",
+        expertise_domain=getattr(user, "expertise_domain", None) or "",
     )
+
+
+def _utc_now_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _day_start_utc(d: datetime) -> datetime:
+    return d.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+_EXPERTISE_LEVELS = {"none", "curious", "practitioner", "expert", "researcher"}
 
 
 def _validate_password_strength(password: str) -> tuple[bool, str]:
@@ -251,13 +276,109 @@ async def refresh(
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(user: User = Depends(get_current_user_required)) -> UserResponse:
+async def me(
+    user: User = Depends(get_current_user_required_orm),
+) -> UserResponse:
     return _user_to_response(user)
+
+
+@user_router.patch("/profile", response_model=UserResponse)
+async def patch_user_profile(
+    body: UserProfilePatch,
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    if body.name is not None:
+        user.name = body.name.strip()[:255]
+    if body.expertise_level is not None:
+        level = body.expertise_level.strip().lower()
+        if level not in _EXPERTISE_LEVELS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid expertise_level",
+            )
+        user.expertise_level = level
+    if body.expertise_domain is not None:
+        user.expertise_domain = body.expertise_domain.strip()[:512]
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return _user_to_response(user)
+
+
+@user_router.get("/usage")
+async def get_user_usage(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+) -> dict:
+    normalized = normalize_tier(user.tier.value if hasattr(user.tier, "value") else str(user.tier))
+    daily_limit = get_credit_budget(normalized)
+    weekly_limit = daily_limit * 7
+
+    now = _utc_now_naive()
+    today_start = _day_start_utc(now)
+    week_start = now - timedelta(days=7)
+    month_start = now - timedelta(days=30)
+
+    token_sum = UsageRecord.input_tokens + UsageRecord.output_tokens
+
+    credits_used_today = int(
+        db.query(func.coalesce(func.sum(token_sum), 0))
+        .filter(UsageRecord.user_id == user.id, UsageRecord.timestamp >= today_start)
+        .scalar()
+        or 0,
+    )
+    credits_used_week = int(
+        db.query(func.coalesce(func.sum(token_sum), 0))
+        .filter(UsageRecord.user_id == user.id, UsageRecord.timestamp >= week_start)
+        .scalar()
+        or 0,
+    )
+
+    credits_remaining_today = max(daily_limit - credits_used_today, 0)
+    credits_remaining_week = max(weekly_limit - credits_used_week, 0)
+
+    total_tasks_month = (
+        db.query(func.count(UsageRecord.id))
+        .filter(UsageRecord.user_id == user.id, UsageRecord.timestamp >= month_start)
+        .scalar()
+        or 0
+    )
+    total_tasks_month = int(total_tasks_month)
+
+    usage_history: list[int] = []
+    for i in range(13, -1, -1):
+        day = now - timedelta(days=i)
+        d0 = _day_start_utc(day)
+        d1 = d0 + timedelta(days=1)
+        day_total = int(
+            db.query(func.coalesce(func.sum(token_sum), 0))
+            .filter(
+                UsageRecord.user_id == user.id,
+                UsageRecord.timestamp >= d0,
+                UsageRecord.timestamp < d1,
+            )
+            .scalar()
+            or 0,
+        )
+        usage_history.append(day_total)
+
+    return {
+        "credits_used_today": credits_used_today,
+        "credits_remaining_today": credits_remaining_today,
+        "daily_limit": daily_limit,
+        "credits_used_week": credits_used_week,
+        "credits_remaining_week": credits_remaining_week,
+        "weekly_limit": weekly_limit,
+        "total_tasks_month": total_tasks_month,
+        "usage_history": usage_history,
+    }
 
 
 @user_router.get("/tier")
 async def get_user_tier_summary(
-    user: User = Depends(get_current_user_required),
+    user: UserResponse = Depends(get_current_user_required),
 ) -> dict:
     normalized_tier = normalize_tier(user.tier.value if hasattr(user.tier, "value") else str(user.tier))
     daily_limit = get_daily_limit(normalized_tier)

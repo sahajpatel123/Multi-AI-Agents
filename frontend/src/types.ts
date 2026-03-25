@@ -129,6 +129,9 @@ export interface User {
   tier: UserTier;
   created_at: string;
   prompt_count_today: number;
+  name?: string;
+  expertise_level?: string;
+  expertise_domain?: string;
 }
 
 export interface TierFeatures {

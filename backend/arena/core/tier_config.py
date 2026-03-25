@@ -54,6 +54,14 @@ TIER_DAILY_LIMITS = {
     UserTier.PRO: 35,
 }
 
+# Display / usage budget credits (approximate token budgets per day for UI).
+TIER_CREDIT_BUDGETS = {
+    UserTier.GUEST: 25_000,
+    UserTier.FREE: 25_000,
+    UserTier.PLUS: 100_000,
+    UserTier.PRO: 300_000,
+}
+
 TIER_FEATURES = {
     UserTier.GUEST: {
         "debate": False,
@@ -120,6 +128,10 @@ def get_tier_personas(tier: UserTier | str | None) -> set[str]:
 
 def get_daily_limit(tier: UserTier | str | None) -> int:
     return TIER_DAILY_LIMITS.get(normalize_tier(tier), TIER_DAILY_LIMITS[UserTier.FREE])
+
+
+def get_credit_budget(tier: UserTier | str | None) -> int:
+    return TIER_CREDIT_BUDGETS.get(normalize_tier(tier), TIER_CREDIT_BUDGETS[UserTier.FREE])
 
 
 def has_feature(tier: UserTier | str | None, feature: str) -> bool:

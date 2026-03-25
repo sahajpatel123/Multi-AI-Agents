@@ -7,6 +7,8 @@ interface UserMenuProps {
   isLoading: boolean;
   onSignInClick: () => void;
   onLogout: () => void;
+  /** Opens universal profile modal (e.g. Agent header). */
+  onProfileClick?: () => void;
 }
 
 const FREE_LIMIT = 5;
@@ -18,6 +20,7 @@ export function UserMenu({
   isLoading,
   onSignInClick,
   onLogout,
+  onProfileClick,
 }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -194,6 +197,39 @@ export function UserMenu({
           </div>
 
           {/* Actions */}
+          {onProfileClick ? (
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onProfileClick();
+              }}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px 1rem',
+                fontSize: '13px',
+                color: '#6B6460',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'all 150ms ease',
+                borderRadius: '6px',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#1A1714';
+                e.currentTarget.style.background = '#F0EBE3';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = '#6B6460';
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              {'Profile & account'}
+            </button>
+          ) : null}
           <button
             onClick={() => { setIsOpen(false); onLogout(); }}
             style={{

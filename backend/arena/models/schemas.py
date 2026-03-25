@@ -239,8 +239,17 @@ class UserResponse(BaseModel):
     tier: str
     created_at: datetime
     prompt_count_today: int
+    name: str = ""
+    expertise_level: str = "curious"
+    expertise_domain: str = ""
 
     model_config = {"from_attributes": True}
+
+
+class UserProfilePatch(BaseModel):
+    name: str | None = Field(None, max_length=255)
+    expertise_level: str | None = Field(None, max_length=32)
+    expertise_domain: str | None = Field(None, max_length=512)
 
 
 class TokenResponse(BaseModel):

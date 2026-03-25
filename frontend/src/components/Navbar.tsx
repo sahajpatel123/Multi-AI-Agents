@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useProfileModal } from '../context/ProfileModalContext';
 import { setRedirectIntent } from '../utils/redirectIntent';
 
 export function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuth();
+  const { openModal } = useProfileModal();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -46,7 +48,16 @@ export function Navbar() {
   }, [location.pathname]);
 
   const isActive = (path: string) => location.pathname === path;
-  const avatarLabel = (user?.email?.trim().charAt(0) || 'A').toUpperCase();
+  const profileInitials = (() => {
+    const email = user?.email || '';
+    const n = (user?.name || '').trim();
+    if (n) {
+      const parts = n.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      return n.slice(0, 2).toUpperCase();
+    }
+    return (email.split('@')[0] || 'A').slice(0, 2).toUpperCase();
+  })();
 
   const shellClass = `navbar-shell${scrolled ? ' navbar-shell--scrolled' : ''}`;
 
@@ -112,7 +123,7 @@ export function Navbar() {
                 </button>
               </div>
             ) : (
-              <div ref={menuRef} className="navbar-auth" style={{ position: 'relative' }}>
+              <div ref={menuRef} className="navbar-auth" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
                   type="button"
                   className="navbar-hamburger"
@@ -123,107 +134,35 @@ export function Navbar() {
                 </button>
                 <button
                   type="button"
-                  className="navbar-user-avatar"
-                  onClick={() => setMenuOpen((prev) => !prev)}
-                  aria-label="Account menu"
-                  aria-expanded={menuOpen}
+                  className="desktop-only"
+                  onClick={() => openModal('top-right')}
+                  aria-label="Profile and settings"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    background: '#C4956A',
+                    color: '#FAF7F2',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    border: '1.5px solid transparent',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'border-color 0.15s, background 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = '#C4956A';
+                    e.currentTarget.style.background = '#B8845A';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'transparent';
+                    e.currentTarget.style.background = '#C4956A';
+                  }}
                 >
-                  {avatarLabel}
+                  {profileInitials}
                 </button>
-
-                {menuOpen && (
-                  <div className="navbar-user-dropdown">
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color: '#6B6460',
-                        padding: '8px 12px',
-                        borderBottom: '0.5px solid #F0EBE3',
-                      }}
-                    >
-                      {user?.email}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        navigate('/personas');
-                      }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        fontSize: '13px',
-                        color: '#1A1714',
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        border: 'none',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#F0EBE3';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent';
-                      }}
-                    >
-                      My Panel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        navigate('/account');
-                      }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        fontSize: '13px',
-                        color: '#1A1714',
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        border: 'none',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#F0EBE3';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent';
-                      }}
-                    >
-                      Subscription
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        setMenuOpen(false);
-                        await logout();
-                        navigate('/');
-                      }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        fontSize: '13px',
-                        color: '#1A1714',
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        border: 'none',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#F0EBE3';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent';
-                      }}
-                    >
-                      Sign out
-                    </button>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -310,7 +249,7 @@ export function Navbar() {
                 className="navbar-mobile-link"
                 onClick={() => {
                   setMenuOpen(false);
-                  navigate('/account');
+                  openModal('top-right', 'plan');
                 }}
               >
                 Subscription

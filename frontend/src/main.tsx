@@ -100,13 +100,10 @@ if (!rootElement) {
                       <AgentPage />
                     </AuthRequiredRoute>
                   } />
-                  <Route path="/agent/history" element={
-                    <ProtectedRoute>
-                      <Navigate to="/agent" replace />
-                    </ProtectedRoute>
-                  } />
+                  <Route path="/agent/history" element={<Navigate to="/agent" replace />} />
                 </Routes>
                 </Suspense>
+                </ProfileModalProvider>
               </BrowserRouter>
             </PanelProvider>
           </TierProvider>
