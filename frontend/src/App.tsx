@@ -66,7 +66,6 @@ function App() {
   const personaIds = panel.map((persona) => persona.id);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'signup'>('login');
-  const [guestPromptCount, setGuestPromptCount] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarToggleHovered, setIsSidebarToggleHovered] = useState(false);
   const [focusedAgentId, setFocusedAgentId] = useState<string | null>(null);
@@ -580,11 +579,6 @@ function App() {
           setExpandedAgent(data.winner_agent_id);
           setPhase('done');
 
-          // Track guest usage for nudge
-          if (!user) {
-            setGuestPromptCount((c) => c + 1);
-          }
-
           // Save session ID to localStorage
           localStorage.setItem('arena_session_id', data.session_id);
 
@@ -614,7 +608,7 @@ function App() {
               // New session or first turn
               return {
                 session_id: data.session_id,
-                user_id: 'anonymous',
+                user_id: String(user!.id),
                 turns: prev ? [...prev.turns, newTurn] : [newTurn],
                 topics: [],
                 created_at: prev?.created_at || currentTimestamp,
@@ -623,9 +617,7 @@ function App() {
             }
           });
           setActiveTurnId(newTurn.turn_id);
-          if (user) {
-            void refreshUser();
-          }
+          void refreshUser();
           void refreshTier();
         },
         onError: (data) => {
@@ -1476,35 +1468,6 @@ function App() {
               }
             />
           </div>
-          
-          {/* Guest nudge after 3rd use */}
-          {!user && !authLoading && guestPromptCount >= 3 && (
-            <div style={{ position: 'fixed', bottom: '80px', left: 0, right: 0, zIndex: 40, pointerEvents: 'none' }}>
-              <p style={{ textAlign: 'center', fontSize: '11px', color: '#6B6460' }}>
-                <button
-                  onClick={() => {
-                  setRedirectIntent('/app');
-                  setAuthModalTab('signup');
-                  setAuthModalOpen(true);
-                }}
-                  style={{
-                    color: '#C4956A',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    pointerEvents: 'auto',
-                    textDecoration: 'none',
-                    transition: 'text-decoration 150ms ease',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
-                  onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
-                >
-                  Sign up
-                </button>
-                {' '}to save your history and get 20 prompts per day.
-              </p>
-            </div>
-          )}
         </>
       )}
 

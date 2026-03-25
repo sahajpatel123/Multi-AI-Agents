@@ -1617,7 +1617,7 @@ export function HomePage() {
             >
               Try Arena free →
             </button>
-            <span style={{ fontSize: '12px', color: 'rgba(250,247,244,0.4)' }}>No signup · 5 free questions</span>
+            <span style={{ fontSize: '12px', color: 'rgba(250,247,244,0.4)' }}>Free account required</span>
           </div>
         </div>
       </section>

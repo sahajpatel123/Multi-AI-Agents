@@ -5,18 +5,15 @@ import json
 import time
 import uuid
 from datetime import datetime
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from arena.core.auth import get_current_user_optional
+from arena.core.auth import get_current_user_required
 from arena.core.contradiction_detector import get_contradiction_detector
 from arena.core.cost_tracker import (
     RateLimitExceeded,
     RequestCostAccumulator,
-    check_and_increment_guest,
     check_and_increment_user,
     record_usage,
 )
@@ -49,30 +46,19 @@ from arena.models.schemas import (
 router = APIRouter(prefix="/api", tags=["prompt"])
 
 
-def _get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
 def _check_rate_limit(
     request: Request,
-    user: Optional[UserResponse],
+    user: UserResponse,
     db: Session,
     request_id: str,
 ) -> None:
     """Enforce rate limits BEFORE touching the input pipeline. Raises HTTPException if exceeded."""
     try:
-        if user:
-            check_and_increment_user(db, user.id, user.tier)
-        else:
-            ip = _get_client_ip(request)
-            check_and_increment_guest(db, ip)
+        check_and_increment_user(db, user.id, user.tier)
     except RateLimitExceeded as e:
         log_rate_limit_hit(
             request_id=request_id,
-            user_id=str(user.id) if user else _get_client_ip(request),
+            user_id=str(user.id),
             tier=e.tier,
             used=e.used,
             limit=e.limit,
@@ -89,9 +75,7 @@ def _check_rate_limit(
         )
 
 
-def _get_request_tier(user: Optional[UserResponse]) -> UserTier:
-    if not user:
-        return UserTier.GUEST
+def _get_request_tier(user: UserResponse) -> UserTier:
     return normalize_tier(user.tier)
 
 
@@ -126,7 +110,7 @@ async def submit_prompt(
     request: Request,
     body: PromptRequest,
     db: Session = Depends(get_db),
-    user: Optional[UserResponse] = Depends(get_current_user_optional),
+    user: UserResponse = Depends(get_current_user_required),
 ) -> PromptResponse:
     """Submit a prompt to all 4 agents simultaneously."""
     request_id = new_request_id()
@@ -136,7 +120,7 @@ async def submit_prompt(
     orchestrator = Orchestrator()
     scorer = Scorer()
     session_id = body.session_id or str(uuid.uuid4())
-    user_label = str(user.id) if user else "guest"
+    user_label = str(user.id)
 
     _check_rate_limit(request, user, db, request_id)
     user_tier = _get_request_tier(user)
@@ -167,8 +151,8 @@ async def submit_prompt(
             pipeline_result.enriched_prompt,
             agents=active_agents,
             persona_ids=body.persona_ids,
-            user_id=user.id if user and memory_enabled else None,
-            db=db if user and memory_enabled else None,
+            user_id=user.id if memory_enabled else None,
+            db=db if memory_enabled else None,
             session_id=session_id,
             tracker=tracker,
         )
@@ -178,9 +162,9 @@ async def submit_prompt(
             responses,
             session_id,
             prompt=body.prompt,
-            user_id=user.id if user else None,
+            user_id=user.id,
             persona_ids=body.persona_ids,
-            db=db if user else None,
+            db=db,
         )
         tracker.mark("integrity_done")
 
@@ -189,10 +173,10 @@ async def submit_prompt(
             responses,
             integrity_report,
             session_id=session_id,
-            user_id=user.id if user else None,
+            user_id=user.id,
             prompt_category=pipeline_result.classification.category.value,
             persona_ids=body.persona_ids,
-            db=db if user else None,
+            db=db,
             scoring_duration_ms=None,
         )
         tracker.mark("scoring_done")
@@ -234,7 +218,7 @@ async def submit_prompt(
             winner_id=winner.response.agent_id,
             winner_persona_id=get_persona_id_for_agent(winner.response.agent_id, body.persona_ids),
             persona_ids=body.persona_ids,
-            user_id=str(user.id) if user else "anonymous",
+            user_id=str(user.id),
         )
 
         total_ms = int((time.monotonic() - t_start) * 1000)
@@ -265,8 +249,8 @@ async def submit_prompt(
             db=db,
             cost=cost,
             session_id=session_id,
-            user_id=user.id if user else None,
-            guest_ip=_get_client_ip(request) if not user else None,
+            user_id=user.id,
+            guest_ip=None,
             prompt_category=pipeline_result.classification.category.value,
             winner_agent_id=winner.response.agent_id,
             persona_ids=body.persona_ids,
@@ -298,7 +282,7 @@ async def stream_prompt(
     request: Request,
     body: PromptRequest,
     db: Session = Depends(get_db),
-    user: Optional[UserResponse] = Depends(get_current_user_optional),
+    user: UserResponse = Depends(get_current_user_required),
 ):
     """SSE streaming endpoint — streams agent tokens in real-time."""
     request_id = new_request_id()
@@ -308,7 +292,7 @@ async def stream_prompt(
     orchestrator = Orchestrator()
     scorer = Scorer()
     session_id = body.session_id or str(uuid.uuid4())
-    user_label = str(user.id) if user else "guest"
+    user_label = str(user.id)
 
     _check_rate_limit(request, user, db, request_id)
     user_tier = _get_request_tier(user)
@@ -345,8 +329,8 @@ async def stream_prompt(
                 pipeline_result.enriched_prompt,
                 agents=active_agents,
                 persona_ids=body.persona_ids,
-                user_id=user.id if user and memory_enabled else None,
-                db=db if user and memory_enabled else None,
+                user_id=user.id if memory_enabled else None,
+                db=db if memory_enabled else None,
                 session_id=session_id,
                 tracker=tracker,
             )

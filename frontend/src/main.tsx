@@ -14,7 +14,7 @@ import { PrivacyPage } from './pages/PrivacyPage'
 import { PersonasPage } from './pages/PersonasPage'
 import { AccountPage } from './pages/AccountPage'
 import { AgentPage } from './pages/AgentPage'
-import { AuthRequiredRoute, ProtectedRoute } from './components/ProtectedRoute'
+import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './hooks/useAuth'
 import { PanelProvider } from './context/PanelContext'
 import { TierProvider } from './context/TierContext'
@@ -76,7 +76,11 @@ if (!rootElement) {
                 }>
                 <Routes>
                   <Route path="/" element={<HomePage />} />
-                  <Route path="/arena" element={<Navigate to="/app" replace />} />
+                  <Route path="/arena" element={
+                    <ProtectedRoute>
+                      <Navigate to="/app" replace />
+                    </ProtectedRoute>
+                  } />
                   <Route path="/product" element={<ProductPage />} />
                   <Route path="/pricing" element={<PricingPage />} />
                   <Route path="/about" element={<AboutPage />} />
@@ -84,23 +88,27 @@ if (!rootElement) {
                   <Route path="/changelog" element={<ChangelogPage />} />
                   <Route path="/terms" element={<TermsPage />} />
                   <Route path="/privacy" element={<PrivacyPage />} />
-                  <Route path="/app" element={<App />} />
-                  <Route path="/personas" element={
-                    <ProtectedRoute signInReturnTo="/personas">
-                      <PersonasPage />
+                  <Route path="/personas" element={<PersonasPage />} />
+                  <Route path="/app" element={
+                    <ProtectedRoute>
+                      <App />
                     </ProtectedRoute>
                   } />
                   <Route path="/account" element={
-                    <ProtectedRoute signInReturnTo="/account">
+                    <ProtectedRoute>
                       <AccountPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/agent" element={
-                    <AuthRequiredRoute redirectTo="/agent">
+                    <ProtectedRoute>
                       <AgentPage />
-                    </AuthRequiredRoute>
+                    </ProtectedRoute>
                   } />
-                  <Route path="/agent/history" element={<Navigate to="/agent" replace />} />
+                  <Route path="/agent/history" element={
+                    <ProtectedRoute>
+                      <Navigate to="/agent" replace />
+                    </ProtectedRoute>
+                  } />
                 </Routes>
                 </Suspense>
                 </ProfileModalProvider>

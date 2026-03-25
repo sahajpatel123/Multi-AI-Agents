@@ -62,7 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsAuthenticated(false);
       }
     } catch (error) {
-      console.log('[AUTH] User refresh failed, keeping current session state', error);
+      console.log('[AUTH] User refresh failed, clearing session state', error);
+      setUser(null);
+      setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
     }
