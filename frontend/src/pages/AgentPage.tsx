@@ -1463,10 +1463,10 @@ export function AgentPage() {
           <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
               type="button"
-              onClick={() => navigate('/app')}
+              onClick={() => navigate('/')}
               style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#6B6460', cursor: 'pointer' }}
             >
-              ← Arena
+              ← Home
             </button>
           </div>
           <div style={{ height: '0.5px', background: '#E8E2DA', margin: '0 16px 12px' }} />
@@ -1534,8 +1534,8 @@ export function AgentPage() {
             }}
           >
             <div style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <button type="button" onClick={() => navigate('/app')} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#6B6460', cursor: 'pointer' }}>
-                ← Arena
+              <button type="button" onClick={() => navigate('/')} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#6B6460', cursor: 'pointer' }}>
+                ← Home
               </button>
               <button type="button" onClick={closeSidebar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6460' }}>
                 <X style={{ width: 16, height: 16 }} />

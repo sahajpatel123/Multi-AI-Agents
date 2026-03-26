@@ -581,7 +581,6 @@ async def rename_agent_task(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
@@ -604,7 +603,6 @@ async def delete_agent_task(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
