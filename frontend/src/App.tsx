@@ -10,6 +10,7 @@ import { AuthModal } from './components/AuthModal';
 import { UpgradeModal } from './components/UpgradeModal';
 import { UserMenu } from './components/UserMenu';
 import { AgentDot } from './components/AgentDot';
+import { CollapsiblePrompt } from './components/CollapsiblePrompt';
 import {
   streamPrompt,
   streamDiscuss,
@@ -1093,13 +1094,7 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               {/* Current Prompt Display (when active) */}
               {currentPrompt && phase !== 'idle' && (
-                <div style={{ textAlign: 'center', marginBottom: '1.5rem', maxWidth: '600px', margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
-                  <p style={{ fontSize: '14px', color: '#6B6460', fontStyle: 'italic' }}>
-                    "{currentPrompt}"
-                  </p>
-                  <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
-                </div>
+                <CollapsiblePrompt text={currentPrompt} />
               )}
 
               {/* Error */}
