@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Lock, PanelLeft, X, Zap } from 'lucide-react';
+import { Lock, X, Zap } from 'lucide-react';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -19,8 +19,6 @@ import {
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { useAuth } from '../hooks/useAuth';
-import { setRedirectIntent } from '../utils/redirectIntent';
-import { UserMenu } from '../components/UserMenu';
 import { User } from '../types';
 
 const STAGES = [
@@ -340,7 +338,7 @@ export function AgentPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, isLoading: authLoading, logout } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { canUseFeature, isPro } = useTier();
   const canAgent = canUseFeature('agent_mode');
 
@@ -372,9 +370,27 @@ export function AgentPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem('agent_sidebar') !== 'closed');
+  const [navToggleHovered, setNavToggleHovered] = useState(false);
   const answerAnchorRef = useRef<HTMLDivElement>(null);
-  const { openModal } = useProfileModal();
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((current) => {
+      const next = !current;
+      localStorage.setItem('agent_sidebar', next ? 'open' : 'closed');
+      return next;
+    });
+  }, []);
+
+  const openSidebar = useCallback(() => {
+    setSidebarOpen(true);
+    localStorage.setItem('agent_sidebar', 'open');
+  }, []);
+
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+    localStorage.setItem('agent_sidebar', 'closed');
+  }, []);
 
   const [expertiseLevel, setExpertiseLevel] = useState(() => localStorage.getItem('arena_expertise_level') || 'curious');
   const [expertiseDomain, setExpertiseDomain] = useState(() => localStorage.getItem('arena_expertise_domain') || '');
@@ -430,12 +446,6 @@ export function AgentPage() {
     const timer = window.setTimeout(() => setToastMessage(null), 3000);
     return () => window.clearTimeout(timer);
   }, [toastMessage]);
-
-  useEffect(() => {
-    if (!isMobile) {
-      setSidebarOpen(false);
-    }
-  }, [isMobile]);
 
   useEffect(() => {
     void loadTaskHistory();
@@ -593,7 +603,7 @@ export function AgentPage() {
     if (t.length < 10 || isRunning) return;
     setError(null);
     setBridgeMeta(null);
-    setSidebarOpen(false);
+    if (isMobile) setSidebarOpen(false);
     setResult(null);
     setTraceOpen(false);
     setTraceOutputExpanded(new Set());
@@ -675,7 +685,7 @@ export function AgentPage() {
     setRebuttals({});
     setRebuttalLoadingFor(null);
     setIsChallengingAnswer(false);
-    setSidebarOpen(false);
+    if (isMobile) setSidebarOpen(false);
   };
 
 
@@ -784,13 +794,13 @@ export function AgentPage() {
         setTask(data.task || item.task_text);
         setError(null);
         setToastMessage(null);
-        setSidebarOpen(false);
+        if (isMobile) setSidebarOpen(false);
         setSearchParams({ task_id: item.task_id });
       } catch {
         setToastMessage('This task has expired. Start a new task.');
       }
     },
-    [setSearchParams],
+    [isMobile, setSearchParams],
   );
 
   const handleChallengeAnswer = useCallback(async () => {
@@ -923,16 +933,21 @@ export function AgentPage() {
       {!isMobile ? (
         <aside
           style={{
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            bottom: 0,
             width: 260,
-            flexShrink: 0,
+            maxWidth: '88vw',
             background: '#F5F2EF',
             borderRight: '0.5px solid #E0D8D0',
-            height: '100vh',
-            position: 'sticky',
-            top: 0,
+            zIndex: 40,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 500ms cubic-bezier(0.22, 1, 0.36, 1)',
+            pointerEvents: sidebarOpen ? 'auto' : 'none',
           }}
         >
           <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1038,9 +1053,9 @@ export function AgentPage() {
         </aside>
       ) : (
         <>
-          {sidebarOpen && (
+          {isMobile && sidebarOpen && (
             <div
-              onClick={() => setSidebarOpen(false)}
+              onClick={closeSidebar}
               style={{ position: 'fixed', inset: 0, background: 'rgba(26,23,20,0.28)', zIndex: 59 }}
             />
           )}
@@ -1059,14 +1074,14 @@ export function AgentPage() {
               flexDirection: 'column',
               overflow: 'hidden',
               transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
-              transition: 'transform 200ms ease',
+              transition: 'transform 500ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
           >
             <div style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <button type="button" onClick={() => navigate('/app')} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#6B6460', cursor: 'pointer' }}>
                 ← Arena
               </button>
-              <button type="button" onClick={() => setSidebarOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6460' }}>
+              <button type="button" onClick={closeSidebar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6460' }}>
                 <X style={{ width: 16, height: 16 }} />
               </button>
             </div>
@@ -1095,7 +1110,17 @@ export function AgentPage() {
         </>
       )}
 
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : '100vh' }}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          marginLeft: !isMobile ? (sidebarOpen ? 260 : 0) : 0,
+          transition: 'margin-left 500ms cubic-bezier(0.22, 1, 0.36, 1)',
+          display: 'flex',
+          flexDirection: 'column',
+          height: isMobile ? 'auto' : '100vh',
+        }}
+      >
       <header
         style={{
           height: '52px',
@@ -1112,11 +1137,28 @@ export function AgentPage() {
           flexShrink: 0,
         }}
       >
-        {isMobile ? (
-          <button type="button" onClick={() => setSidebarOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6460', padding: 0 }}>
-            <PanelLeft style={{ width: 16, height: 16 }} />
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={isMobile ? openSidebar : toggleSidebar}
+          onMouseEnter={() => setNavToggleHovered(true)}
+          onMouseLeave={() => setNavToggleHovered(false)}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 8,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M3 5H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M3 9H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M3 13H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
         <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: currentTaskLabel ? 12 : 13, color: currentTaskLabel ? '#6B6460' : '#1A1714', fontStyle: currentTaskLabel ? 'italic' : 'normal', fontWeight: currentTaskLabel ? 400 : 500 }}>
           {currentTaskLabel || 'Agent Mode'}
         </div>
@@ -1125,18 +1167,6 @@ export function AgentPage() {
             <span style={{ fontSize: 12, color: '#C4956A' }}>{currentStageLabel}</span>
           </div>
         ) : null}
-        <div style={{ marginLeft: 'auto' }}>
-          <UserMenu
-            user={user}
-            isLoading={authLoading}
-            onSignInClick={() => {
-              setRedirectIntent('/agent');
-              navigate('/signin');
-            }}
-            onLogout={logout}
-            onProfileClick={() => openModal('top-right')}
-          />
-        </div>
       </header>
 
       {toastMessage ? (

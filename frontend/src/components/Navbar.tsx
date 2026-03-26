@@ -48,6 +48,11 @@ export function Navbar() {
   }, [location.pathname]);
 
   const isActive = (path: string) => location.pathname === path;
+  const isChatPage =
+    location.pathname === '/app' ||
+    location.pathname === '/arena' ||
+    location.pathname === '/agent' ||
+    location.pathname.startsWith('/agent');
   const profileInitials = (() => {
     const email = user?.email || '';
     const n = (user?.name || '').trim();
@@ -132,37 +137,39 @@ export function Navbar() {
                 >
                   <span style={{ fontSize: '20px', lineHeight: 1, color: '#1A1714' }}>☰</span>
                 </button>
-                <button
-                  type="button"
-                  className="desktop-only"
-                  onClick={() => openModal('top-right')}
-                  aria-label="Profile and settings"
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
-                    background: '#C4956A',
-                    color: '#FAF7F2',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    border: '1.5px solid transparent',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'border-color 0.15s, background 0.15s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#C4956A';
-                    e.currentTarget.style.background = '#B8845A';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'transparent';
-                    e.currentTarget.style.background = '#C4956A';
-                  }}
-                >
-                  {profileInitials}
-                </button>
+                {!isChatPage && (
+                  <button
+                    type="button"
+                    className="desktop-only"
+                    onClick={() => openModal('top-right')}
+                    aria-label="Profile and settings"
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      background: '#C4956A',
+                      color: '#FAF7F2',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      border: '1.5px solid transparent',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'border-color 0.15s, background 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#C4956A';
+                      e.currentTarget.style.background = '#B8845A';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'transparent';
+                      e.currentTarget.style.background = '#C4956A';
+                    }}
+                  >
+                    {profileInitials}
+                  </button>
+                )}
               </div>
             )}
           </div>

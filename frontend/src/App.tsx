@@ -1063,16 +1063,6 @@ function App() {
                 <span className="wordmark-text" style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
               </div>
             </div>
-            <UserMenu
-              user={user}
-              isLoading={authLoading}
-              onSignInClick={() => {
-                setRedirectIntent('/app');
-                setAuthModalTab('login');
-                setAuthModalOpen(true);
-              }}
-              onLogout={logout}
-            />
           </header>
 
           {/* Main Content Area */}
