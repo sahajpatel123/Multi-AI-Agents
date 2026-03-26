@@ -16,7 +16,7 @@ from arena.core.auth import get_current_user_required
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
-from arena.core.tier_config import has_feature, normalize_tier
+from arena.core.tier_config import UserTier, has_feature, normalize_tier
 from arena.database import SessionLocal, get_db
 from arena.db_models import AgentContradiction, AgentTask as AgentTaskRow
 from arena.models.schemas import UserResponse
@@ -24,6 +24,86 @@ from arena.models.schemas import UserResponse
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Sidebar history window by subscription tier (not related to temporal_profile / recheck_by).
+AGENT_HISTORY_RETENTION_DAYS: dict[UserTier, int] = {
+    UserTier.GUEST: 30,
+    UserTier.FREE: 30,
+    UserTier.PLUS: 180,
+    UserTier.PRO: 365,
+}
+
+
+def _load_task_contradictions(db: Session, task_id: str, user_id: int) -> list[dict]:
+    rows = (
+        db.query(AgentContradiction)
+        .filter(
+            AgentContradiction.new_task_id == task_id,
+            AgentContradiction.user_id == user_id,
+        )
+        .all()
+    )
+    return [
+        {
+            "summary": c.contradiction_summary,
+            "severity": c.severity,
+            "old_task_id": c.old_task_id or "",
+        }
+        for c in rows
+    ]
+
+
+def _persisted_agent_task_result_dict(row: AgentTaskRow, contradictions: list[dict]) -> dict:
+    """Shape aligned with Blackboard.to_dict() for clients that call GET /result."""
+    sources: list = []
+    if row.sources_used:
+        try:
+            raw = json.loads(row.sources_used)
+            if isinstance(raw, list):
+                sources = raw
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    def _stage_complete() -> dict:
+        return {"status": "complete", "output": "", "model": "", "duration_ms": 0}
+
+    stage_ids = (
+        "planner",
+        "researcher",
+        "solver",
+        "critic",
+        "verifier",
+        "synthesizer",
+        "judge",
+    )
+    return {
+        "task_id": row.task_id,
+        "user_id": row.user_id,
+        "task": row.task_text,
+        "original_task": row.task_text,
+        "status": "complete",
+        "current_stage": "done",
+        "iterations": 0,
+        "stages": {sid: _stage_complete() for sid in stage_ids},
+        "final_answer": row.final_answer or "",
+        "final_confidence": float(row.final_confidence or 0.0),
+        "final_score": int(row.final_score or 0),
+        "sources": sources,
+        "flags": [],
+        "source_integrity": {},
+        "contradictions": contradictions,
+        "intelligence_score": {},
+        "assumptions": {},
+        "memory_saved": True,
+        "conversation": [],
+        "is_refinement": False,
+        "parent_task_id": "",
+        "refinement_count": 0,
+        "bridge_from_arena": False,
+        "total_tokens": 0,
+        "total_cost_usd": 0.0,
+        "error": None,
+    }
 
 
 class AgentTaskRequest(BaseModel):
@@ -422,26 +502,51 @@ async def run_agent_task(
 async def get_agent_status(
     task_id: str,
     user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user)
     bb = get_blackboard(task_id)
-    if not bb:
-        raise HTTPException(status_code=404, detail="Task not found")
-    _ensure_task_owner(bb, user)
+    if bb:
+        _ensure_task_owner(bb, user)
+        return JSONResponse(
+            content={
+                "task_id": bb.task_id,
+                "status": _stage_status_value(bb.status),
+                "current_stage": bb.current_stage,
+                "stages": {
+                    "planner": {"status": _stage_status_value(bb.plan.status)},
+                    "researcher": {"status": _stage_status_value(bb.research.status)},
+                    "solver": {"status": _stage_status_value(bb.solution.status)},
+                    "critic": {"status": _stage_status_value(bb.critique.status)},
+                    "verifier": {"status": _stage_status_value(bb.verification.status)},
+                    "synthesizer": {"status": _stage_status_value(bb.synthesis.status)},
+                    "judge": {"status": _stage_status_value(bb.judgment.status)},
+                },
+            }
+        )
 
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    complete = "complete"
     return JSONResponse(
         content={
-            "task_id": bb.task_id,
-            "status": _stage_status_value(bb.status),
-            "current_stage": bb.current_stage,
+            "task_id": row.task_id,
+            "status": complete,
+            "current_stage": "done",
             "stages": {
-                "planner": {"status": _stage_status_value(bb.plan.status)},
-                "researcher": {"status": _stage_status_value(bb.research.status)},
-                "solver": {"status": _stage_status_value(bb.solution.status)},
-                "critic": {"status": _stage_status_value(bb.critique.status)},
-                "verifier": {"status": _stage_status_value(bb.verification.status)},
-                "synthesizer": {"status": _stage_status_value(bb.synthesis.status)},
-                "judge": {"status": _stage_status_value(bb.judgment.status)},
+                "planner": {"status": complete},
+                "researcher": {"status": complete},
+                "solver": {"status": complete},
+                "critic": {"status": complete},
+                "verifier": {"status": complete},
+                "synthesizer": {"status": complete},
+                "judge": {"status": complete},
             },
         }
     )
@@ -451,15 +556,25 @@ async def get_agent_status(
 async def get_agent_result(
     task_id: str,
     user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     """Returns full blackboard including per-stage output, model, and duration_ms for revision trace."""
     _ensure_agent_access(user)
     bb = get_blackboard(task_id)
-    if not bb:
-        raise HTTPException(status_code=404, detail="Task not found or expired")
-    _ensure_task_owner(bb, user)
+    if bb:
+        _ensure_task_owner(bb, user)
+        return JSONResponse(content=bb.to_dict())
 
-    return JSONResponse(content=bb.to_dict())
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    contra = _load_task_contradictions(db, task_id, user.id)
+    return JSONResponse(content=_persisted_agent_task_result_dict(row, contra))
 
 
 @router.post("/challenge")
@@ -564,13 +679,22 @@ Respond to this challenge now.
 @router.get("/history")
 async def get_agent_history(
     page: int = Query(1, ge=1),
+    per_page: int = Query(200, ge=1, le=200),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user)
     from arena.core.agent_memory import get_user_task_history
 
-    history = get_user_task_history(db=db, user_id=user.id, page=page, per_page=20)
+    tier = normalize_tier(user.tier)
+    retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
+    history = get_user_task_history(
+        db=db,
+        user_id=user.id,
+        page=page,
+        per_page=per_page,
+        retention_days=retention_days,
+    )
     return JSONResponse(content=history)
 
 
@@ -636,7 +760,7 @@ async def get_saved_agent_task(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Load a persisted Agent task from DB (when in-memory blackboard expired)."""
+    """Load a persisted Agent task from DB when no in-memory blackboard exists."""
     _ensure_agent_access(user)
     row = (
         db.query(AgentTaskRow)
@@ -645,22 +769,7 @@ async def get_saved_agent_task(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Task not found")
-    contra = (
-        db.query(AgentContradiction)
-        .filter(
-            AgentContradiction.new_task_id == task_id,
-            AgentContradiction.user_id == user.id,
-        )
-        .all()
-    )
-    contradictions = [
-        {
-            "summary": c.contradiction_summary,
-            "severity": c.severity,
-            "old_task_id": c.old_task_id or "",
-        }
-        for c in contra
-    ]
+    contradictions = _load_task_contradictions(db, task_id, user.id)
     return JSONResponse(
         content={
             "task_id": row.task_id,
@@ -734,7 +843,7 @@ async def refine_agent_answer(
             status_code=404,
             detail={
                 "error": "task_not_found",
-                "message": "Task expired. Start new task.",
+                "message": "No active session for this task. Start a new task to continue.",
             },
         )
 

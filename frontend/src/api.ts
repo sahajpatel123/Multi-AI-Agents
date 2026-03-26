@@ -769,8 +769,10 @@ export async function getAgentRebuttal(
   return data;
 }
 
-export async function getAgentHistory(page: number = 1): Promise<unknown> {
-  const response = await apiFetch(`${API_BASE}/agent/history?page=${page}`);
+export async function getAgentHistory(page: number = 1, perPage: number = 200): Promise<unknown> {
+  const response = await apiFetch(
+    `${API_BASE}/agent/history?page=${page}&per_page=${perPage}`,
+  );
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data, 'History request failed'), response.status, data);

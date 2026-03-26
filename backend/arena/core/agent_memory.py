@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import re
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
@@ -373,10 +374,15 @@ def get_user_task_history(
     user_id: int,
     page: int = 1,
     per_page: int = 20,
+    retention_days: int = 30,
 ) -> dict[str, Any]:
     offset = (page - 1) * per_page
 
-    q = db.query(AgentTask).filter(AgentTask.user_id == user_id)
+    cutoff = datetime.utcnow() - timedelta(days=max(0, retention_days))
+    q = db.query(AgentTask).filter(
+        AgentTask.user_id == user_id,
+        AgentTask.created_at >= cutoff,
+    )
     total = q.count()
     tasks = (
         q.order_by(AgentTask.created_at.desc())

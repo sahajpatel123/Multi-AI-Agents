@@ -646,8 +646,14 @@ export function AgentPage() {
             if (saved.task) setTask(saved.task);
             setError(null);
           }
-        } catch {
-          if (!cancelled) setError('Could not load this task.');
+        } catch (e) {
+          if (!cancelled) {
+            const msg =
+              e instanceof ApiError && e.status === 404
+                ? 'Task not found.'
+                : 'Could not load this task.';
+            setError(msg);
+          }
         }
       }
     })();
@@ -987,8 +993,13 @@ export function AgentPage() {
         setToastMessage(null);
         if (isMobile) setSidebarOpen(false);
         setSearchParams({ task_id: item.task_id });
-      } catch {
-        setToastMessage('This task has expired. Start a new task.');
+      } catch (e) {
+        const msg =
+          e instanceof ApiError && e.status === 404
+            ? 'Task not found.'
+            : 'Could not load this task.';
+        setError(msg);
+        setToastMessage(null);
       }
     },
     [isMobile, setSearchParams],
