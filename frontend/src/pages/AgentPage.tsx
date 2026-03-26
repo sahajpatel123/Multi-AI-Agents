@@ -516,27 +516,21 @@ export function AgentPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [confActive, setConfActive] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem('agent_sidebar') !== 'closed');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navToggleHovered, setNavToggleHovered] = useState(false);
   const answerAnchorRef = useRef<HTMLDivElement>(null);
   const followUpInputRef = useRef<HTMLInputElement | null>(null);
 
   const toggleSidebar = useCallback(() => {
-    setSidebarOpen((current) => {
-      const next = !current;
-      localStorage.setItem('agent_sidebar', next ? 'open' : 'closed');
-      return next;
-    });
+    setSidebarOpen((current) => !current);
   }, []);
 
   const openSidebar = useCallback(() => {
     setSidebarOpen(true);
-    localStorage.setItem('agent_sidebar', 'open');
   }, []);
 
   const closeSidebar = useCallback(() => {
     setSidebarOpen(false);
-    localStorage.setItem('agent_sidebar', 'closed');
   }, []);
 
   const [expertiseLevel, setExpertiseLevel] = useState(() => localStorage.getItem('arena_expertise_level') || 'curious');
@@ -954,12 +948,6 @@ export function AgentPage() {
         : [],
     [intelligenceScore],
   );
-
-  const currentTaskLabel = useMemo(() => {
-    const raw = (result?.original_task || result?.task || task || '').trim();
-    if (!raw) return '';
-    return raw.length > 60 ? `${raw.slice(0, 60)}…` : raw;
-  }, [result?.original_task, result?.task, task]);
 
   const currentStageLabel = useMemo(() => {
     const active = STAGES.find((stage) => stage.id === currentStage);
@@ -1462,7 +1450,7 @@ export function AgentPage() {
             maxWidth: '88vw',
             background: '#F5F2EF',
             borderRight: '0.5px solid #E0D8D0',
-            zIndex: 40,
+            zIndex: 50,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -1523,7 +1511,7 @@ export function AgentPage() {
           {isMobile && sidebarOpen && (
             <div
               onClick={closeSidebar}
-              style={{ position: 'fixed', inset: 0, background: 'rgba(26,23,20,0.28)', zIndex: 59 }}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(26,23,20,0.28)', zIndex: 65 }}
             />
           )}
           <aside
@@ -1536,7 +1524,7 @@ export function AgentPage() {
               maxWidth: '85vw',
               background: '#F5F2EF',
               borderRight: '0.5px solid #E0D8D0',
-              zIndex: 60,
+              zIndex: 70,
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
@@ -1588,53 +1576,69 @@ export function AgentPage() {
           height: isMobile ? 'auto' : '100vh',
         }}
       >
-      <header
-        style={{
-          height: '52px',
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
-          backdropFilter: 'blur(12px)',
-          background: 'rgba(250,247,244,0.9)',
-          borderBottom: '0.5px solid #E0D8D0',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 20px',
-          gap: 12,
-          flexShrink: 0,
-        }}
-      >
-        <button
-          type="button"
-          onClick={isMobile ? openSidebar : toggleSidebar}
-          onMouseEnter={() => setNavToggleHovered(true)}
-          onMouseLeave={() => setNavToggleHovered(false)}
+        <div
           style={{
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 8,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            position: 'relative',
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
           }}
-          aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
         >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <path d="M3 5H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M3 9H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M3 13H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
-        <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: currentTaskLabel ? 12 : 13, color: currentTaskLabel ? '#6B6460' : '#1A1714', fontStyle: currentTaskLabel ? 'italic' : 'normal', fontWeight: currentTaskLabel ? 400 : 500 }}>
-          {currentTaskLabel || 'Agent Mode'}
-        </div>
-        {isRunning ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: '#C4956A' }}>{currentStageLabel}</span>
-          </div>
-        ) : null}
-      </header>
+          <header
+            style={{
+              height: '52px',
+              position: 'sticky',
+              top: 0,
+              zIndex: 5,
+              backdropFilter: 'blur(12px)',
+              background: 'rgba(250,247,244,0.9)',
+              borderBottom: '0.5px solid #E0D8D0',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 20px',
+              gap: 12,
+              flexShrink: 0,
+            }}
+          >
+            <button
+              type="button"
+              onClick={isMobile ? openSidebar : toggleSidebar}
+              onMouseEnter={() => setNavToggleHovered(true)}
+              onMouseLeave={() => setNavToggleHovered(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 8,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <path d="M3 5H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M3 9H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M3 13H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+              <div
+                style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }}
+                className="breathe"
+              />
+              <span className="wordmark-text" style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>
+                Agent
+              </span>
+            </div>
+            {isRunning ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, color: '#C4956A' }}>{currentStageLabel}</span>
+              </div>
+            ) : null}
+          </header>
 
       {toastMessage ? (
         <div style={{ position: 'fixed', top: 64, right: 20, zIndex: 80, background: '#1A1714', color: '#FAF7F4', padding: '10px 14px', borderRadius: 10, fontSize: 12 }}>
@@ -1663,7 +1667,7 @@ export function AgentPage() {
             <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
               <Lock style={{ width: 32, height: 32, color: '#C4956A' }} />
             </div>
-            <h1 style={{ fontSize: 28, fontWeight: 400, color: '#1A1714', marginBottom: '0.5rem' }}>Agent Mode</h1>
+            <h1 style={{ fontSize: 28, fontWeight: 400, color: '#1A1714', marginBottom: '0.5rem' }}>Agent</h1>
             <p style={{ fontSize: 14, color: '#6B6460', lineHeight: 1.7, marginBottom: '2rem' }}>
               A 7-stage AI pipeline that researches, solves, critiques, verifies, and synthesises. Not just an answer — a
               process.
@@ -1762,7 +1766,7 @@ export function AgentPage() {
                   marginBottom: '0.5rem',
                 }}
               >
-                AGENT MODE
+                MODE
               </p>
               <h1
                 style={{
@@ -4152,6 +4156,23 @@ export function AgentPage() {
           </>
         )}
       </main>
+          {sidebarOpen && (
+            <div
+              onClick={() => setSidebarOpen(false)}
+              role="presentation"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(245, 240, 232, 0.6)',
+                backdropFilter: 'blur(3px)',
+                WebkitBackdropFilter: 'blur(3px)',
+                zIndex: 10,
+                cursor: 'pointer',
+                transition: 'opacity 0.3s ease',
+              }}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
