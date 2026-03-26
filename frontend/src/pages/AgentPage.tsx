@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Ellipsis, Lock, Pencil, Trash2, X, Zap } from 'lucide-react';
+import { Ellipsis, Lock, Pencil, Trash2, X } from 'lucide-react';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -22,6 +22,30 @@ import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { useAuth } from '../hooks/useAuth';
 import { User } from '../types';
+import { setRedirectIntent } from '../utils/redirectIntent';
+
+/** Agent result view — shared palette (mockup) */
+const AR = {
+  CREAM: '#F5F0E8',
+  SURFACE: '#FAF7F2',
+  SURFACE_ALT: '#FDFAF6',
+  BORDER: '#E0D5C5',
+  BORDER_INNER: '#EDE4D8',
+  GOLD: '#C4956A',
+  GOLD_MUTED: '#C4A882',
+  DARK: '#2C1810',
+  TEXT_PRIMARY: '#2C1810',
+  TEXT_MID: '#4A3728',
+  TEXT_MUTED: '#8C7355',
+  TEXT_FAINT: '#A89070',
+} as const;
+
+const TEMPORAL_DECAY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  permanent: { bg: '#1A2E1A', text: '#6FCF6F', label: 'TIMELESS' },
+  durable: { bg: '#1A2433', text: '#7AB8E8', label: 'DURABLE' },
+  seasonal: { bg: '#2E2210', text: '#E8B86D', label: 'SEASONAL' },
+  perishable: { bg: '#2E1010', text: '#E87D7D', label: 'PERISHABLE' },
+};
 
 const STAGES = [
   { id: 'planner', label: 'Planning', description: 'Breaking down your task' },
@@ -117,6 +141,10 @@ type AgentResult = {
   bridge_from_arena?: boolean;
   intelligence_score?: IntelligenceScorePayload;
   assumptions?: AssumptionsPayload;
+  /** Extended blackboard fields (optional until backend persists all) */
+  steelman?: unknown;
+  temporal_profile?: unknown;
+  dissent_report?: unknown;
 };
 
 type ContradictionItem = {
@@ -130,6 +158,7 @@ type SourceIntegrityPayload = {
   overall_source_integrity?: number;
   integrity_label?: string;
   summary?: string;
+  sources?: Array<Record<string, unknown>>;
   contradictions?: Array<{
     topic?: string;
     position_a?: string;
@@ -206,48 +235,6 @@ function sentenceConfidenceLevel(sent: ParsedSentence): AnswerSentenceConfidence
   return 'supported';
 }
 
-const TRACE_STAGE_META: Record<
-  StageId,
-  { label: string; letter: string; bg: string; color: string }
-> = {
-  planner: { label: 'Planner', letter: 'P', bg: '#EEF0F2', color: '#8C9BAB' },
-  researcher: { label: 'Researcher', letter: 'R', bg: '#F0EBE3', color: '#B0977E' },
-  solver: { label: 'Solver', letter: 'S', bg: '#F0EDF2', color: '#9B8FAA' },
-  critic: { label: 'Critic', letter: 'C', bg: '#FEF2F2', color: '#E57373' },
-  verifier: { label: 'Verifier', letter: 'V', bg: '#EDF2EF', color: '#8AA899' },
-  synthesizer: { label: 'Synthesizer', letter: 'Sy', bg: '#F5F0EC', color: '#C4956A' },
-  judge: { label: 'Judge', letter: 'J', bg: '#EFEFED', color: '#6B6460' },
-};
-
-function formatDurationMs(ms: number | undefined): string {
-  if (ms == null || Number.isNaN(ms)) return '—';
-  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${ms}ms`;
-}
-
-function buildRevisionSummary(result: AgentResult): string {
-  const cOut = result.stages?.critic?.output || '';
-  const vOut = result.stages?.verifier?.output || '';
-  const criticWeak = (cOut.match(/\bweakness(es)?\b/gi) || []).length;
-  const criticGaps = (cOut.match(/\bgaps?\b|\bflaws?\b/gi) || []).length;
-  const criticHits = Math.min(12, criticWeak + criticGaps) || (cOut.length > 200 ? 1 : 0);
-  const verUnc = (vOut.match(/\buncertain\b|\bunverifiable\b/gi) || []).length;
-  const verFlag = (vOut.match(/\bflag(s|ged)?\b|\below\s*50\b/gi) || []).length;
-  const verHits = Math.min(12, verUnc + verFlag) || (vOut.length > 200 ? 1 : 0);
-  const parts: string[] = [];
-  if (criticHits > 0) {
-    parts.push(`The Critic identified ${criticHits} potential weaknesses or gaps.`);
-  }
-  if (verHits > 0) {
-    parts.push(`The Verifier flagged ${verHits} uncertain or low-confidence items.`);
-  }
-  if (parts.length === 0) {
-    return 'Each stage refined the draft: planning, evidence, solution, critique, verification, and synthesis.';
-  }
-  parts.push('The Synthesizer resolved these into the final answer.');
-  return parts.join(' ');
-}
-
 function plainTextFromFinalAnswer(finalAnswer: string | undefined, parsed: ParsedSynthesis | null): string {
   if (!finalAnswer) return '';
   if (parsed?.sentences?.length) {
@@ -263,16 +250,86 @@ function formatShortDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function totalScoreColor(score: number): string {
-  if (score >= 80) return '#5A8A5A';
-  if (score >= 60) return '#C4956A';
-  return '#E57373';
+function splitPlainAnswerToSentences(text: string): AnswerSentenceView[] {
+  const t = text.trim();
+  if (!t) return [];
+  const parts = t.split(/\.\s+/).filter((p) => p.trim().length > 0);
+  return parts.map((p, i) => {
+    const withDot = i < parts.length - 1 || t.endsWith('.') ? (p.endsWith('.') ? p : `${p}.`) : p;
+    return { text: withDot.trim(), confidence: 'supported' as const };
+  });
 }
 
-function dimensionScoreColor(score: number): string {
-  if (score >= 20) return '#8AA899';
-  if (score >= 13) return '#C4956A';
-  return '#E57373';
+type JudgeRemarkRow = { category: string; text: string; severity: 'hi' | 'md' | 'lo' };
+
+function remarkSeverityForIndex(i: number, n: number): JudgeRemarkRow['severity'] {
+  if (n <= 1) return 'hi';
+  if (n === 2) return i === 0 ? 'hi' : 'lo';
+  if (i === 0) return 'hi';
+  if (i >= n - 2) return 'lo';
+  return 'md';
+}
+
+function buildJudgeRemarksFromResult(result: AgentResult | null, mergedFlagLines: string[]): JudgeRemarkRow[] {
+  if (!result) return [];
+  const base: Array<{ category: string; text: string; severity?: JudgeRemarkRow['severity'] }> = [];
+  const jOut = result.stages?.judge?.output?.trim() || '';
+  if (jOut) {
+    try {
+      const parsed = JSON.parse(jOut) as unknown;
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          const rec = item as Record<string, unknown>;
+          const text =
+            typeof rec.remark === 'string'
+              ? rec.remark
+              : typeof rec.text === 'string'
+                ? rec.text
+                : typeof rec.caveat === 'string'
+                  ? rec.caveat
+                  : '';
+          const cat =
+            typeof rec.category === 'string'
+              ? rec.category
+              : typeof rec.title === 'string'
+                ? rec.title
+                : 'Caveat';
+          const sevRaw = typeof rec.severity === 'string' ? rec.severity.toLowerCase() : '';
+          let severity: JudgeRemarkRow['severity'] | undefined;
+          if (sevRaw === 'high' || sevRaw === 'hi') severity = 'hi';
+          else if (sevRaw === 'medium' || sevRaw === 'md') severity = 'md';
+          else if (sevRaw === 'low' || sevRaw === 'lo') severity = 'lo';
+          if (text.trim()) base.push({ category: cat, text: text.trim(), severity });
+        }
+      }
+    } catch {
+      /* fall through */
+    }
+    if (base.length === 0) {
+      const lines = jOut
+        .split(/\n+/)
+        .map((l) => l.replace(/^[-*•]\s*/, '').trim())
+        .filter(Boolean);
+      for (const line of lines) base.push({ category: 'Caveat', text: line });
+    }
+  }
+  for (const f of mergedFlagLines) {
+    base.push({ category: 'Note', text: f });
+  }
+  const n = base.length;
+  return base.map((r, i) => ({
+    category: r.category,
+    text: r.text,
+    severity: r.severity ?? remarkSeverityForIndex(i, n),
+  }));
+}
+
+function intelligenceLabelFromTotal(score: number): string {
+  if (score >= 90) return 'Exceptional';
+  if (score >= 75) return 'Strong';
+  if (score >= 60) return 'Solid';
+  if (score >= 45) return 'Mixed';
+  return 'Weak';
 }
 
 const CHALLENGER_CARD_STYLES: Record<string, { accent: string; dot: string }> = {
@@ -426,8 +483,6 @@ export function AgentPage() {
   const [isRefining, setIsRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AgentResult | null>(null);
-  const [traceOpen, setTraceOpen] = useState(false);
-  const [traceOutputExpanded, setTraceOutputExpanded] = useState<Set<StageId>>(new Set());
   const [_completedStages, setCompletedStages] = useState<string[]>([]);
   const [currentStage, setCurrentStage] = useState<string>('planner');
   const [_liveStages, setLiveStages] = useState<Partial<Record<StageId, string>>>({});
@@ -438,13 +493,18 @@ export function AgentPage() {
   const [rebuttals, setRebuttals] = useState<Record<string, string>>({});
   const [rebuttalLoadingFor, setRebuttalLoadingFor] = useState<string | null>(null);
   const [memoryContext, setMemoryContext] = useState<MemoryContextPayload | null>(null);
-  const [refinementInput, setRefinementInput] = useState('');
+  const [followUp, setFollowUp] = useState('');
   const [refinementError, setRefinementError] = useState<string | null>(null);
   const [bridgeMeta, setBridgeMeta] = useState<{ taskId: string; originalQuestion: string } | null>(null);
-  const [refineFocus, setRefineFocus] = useState(false);
-  const [scoreTooltip, setScoreTooltip] = useState<string | null>(null);
-  const [scoreCopied, setScoreCopied] = useState(false);
   const [showAllAssumptions, setShowAllAssumptions] = useState(false);
+  const [panelSteelmanOpen, setPanelSteelmanOpen] = useState(false);
+  const [panelIntelOpen, setPanelIntelOpen] = useState(false);
+  const [panelAssumptionsOpen, setPanelAssumptionsOpen] = useState(false);
+  const [panelDissentOpen, setPanelDissentOpen] = useState(false);
+  const [panelJudgeOpen, setPanelJudgeOpen] = useState(false);
+  const [panelSourcesOpen, setPanelSourcesOpen] = useState(false);
+  const [steelmanInnerExpanded, setSteelmanInnerExpanded] = useState(false);
+  const [sourcesListExpanded, setSourcesListExpanded] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
@@ -455,11 +515,11 @@ export function AgentPage() {
   const editInputRef = useRef<HTMLInputElement>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [confActive, setConfActive] = useState(false);
-  const [confToggleHovered, setConfToggleHovered] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem('agent_sidebar') !== 'closed');
   const [navToggleHovered, setNavToggleHovered] = useState(false);
   const answerAnchorRef = useRef<HTMLDivElement>(null);
+  const followUpInputRef = useRef<HTMLInputElement | null>(null);
 
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((current) => {
@@ -709,8 +769,6 @@ export function AgentPage() {
     setBridgeMeta(null);
     if (isMobile) setSidebarOpen(false);
     setResult(null);
-    setTraceOpen(false);
-    setTraceOutputExpanded(new Set());
     setCompletedStages([]);
     setCurrentStage('planner');
     setLiveStages({});
@@ -743,9 +801,9 @@ export function AgentPage() {
   };
 
   const handleRefine = async () => {
-    const msg = refinementInput.trim();
+    const msg = followUp.trim();
     if (!msg || !result?.task_id || isRefining || isRunning) return;
-    setRefinementInput('');
+    setFollowUp('');
     setIsRunning(true);
     setIsRefining(true);
     setRefinementError(null);
@@ -779,11 +837,9 @@ export function AgentPage() {
     setError(null);
     setTask('');
     setToastMessage(null);
-    setRefinementInput('');
+    setFollowUp('');
     setRefinementError(null);
     setIsRefining(false);
-    setTraceOpen(false);
-    setTraceOutputExpanded(new Set());
     setCompletedStages([]);
     setCurrentStage('planner');
     setLiveStages({});
@@ -796,6 +852,11 @@ export function AgentPage() {
     if (isMobile) setSidebarOpen(false);
   };
 
+  const runAgainWithSameQuestion = () => {
+    const q = (result?.original_task || result?.task || '').trim();
+    resetRun();
+    if (q) setTask(q);
+  };
 
   const parsedAnswer = useMemo((): ParsedSynthesis | null => {
     if (!result?.final_answer) return null;
@@ -814,12 +875,16 @@ export function AgentPage() {
   );
 
   const answerSentences = useMemo((): AnswerSentenceView[] => {
-    if (!parsedAnswer?.sentences?.length) return [];
-    return parsedAnswer.sentences.map((s) => ({
-      text: s.text,
-      confidence: sentenceConfidenceLevel(s),
-    }));
-  }, [parsedAnswer]);
+    if (parsedAnswer?.sentences?.length) {
+      return parsedAnswer.sentences.map((s) => ({
+        text: s.text,
+        confidence: sentenceConfidenceLevel(s),
+      }));
+    }
+    const raw = plainTextFromFinalAnswer(result?.final_answer, parsedAnswer);
+    if (raw.trim()) return splitPlainAnswerToSentences(raw);
+    return [];
+  }, [parsedAnswer, result?.final_answer]);
 
   const confidenceLegendStats = useMemo(() => {
     const total = answerSentences.length;
@@ -851,17 +916,21 @@ export function AgentPage() {
   }, [result?.assumptions]);
 
   const hasRefinementMetadataNote = (result?.refinement_count ?? 0) > 0;
+  const sortedAssumptionItems = useMemo(() => {
+    if (!assumptions?.assumptions?.length) return [];
+    return [...assumptions.assumptions].sort((a, b) => Number(!!b.flag) - Number(!!a.flag));
+  }, [assumptions]);
   const flaggedAssumptions = useMemo(
-    () => assumptions?.assumptions?.filter((assumption) => assumption.flag) || [],
-    [assumptions],
+    () => sortedAssumptionItems.filter((assumption) => assumption.flag),
+    [sortedAssumptionItems],
   );
   const visibleAssumptions = useMemo(() => {
-    if (!assumptions?.assumptions) return [];
+    if (!sortedAssumptionItems.length) return [];
     if (showAllAssumptions || flaggedAssumptions.length === 0) {
-      return assumptions.assumptions;
+      return sortedAssumptionItems;
     }
     return flaggedAssumptions;
-  }, [assumptions, flaggedAssumptions, showAllAssumptions]);
+  }, [sortedAssumptionItems, flaggedAssumptions, showAllAssumptions]);
   const hiddenAssumptionCount = Math.max(
     0,
     (assumptions?.assumptions?.length || 0) - visibleAssumptions.length,
@@ -871,10 +940,10 @@ export function AgentPage() {
     () =>
       intelligenceScore
         ? [
-            { key: 'research', label: 'Research', data: intelligenceScore.research_depth },
-            { key: 'reasoning', label: 'Reasoning', data: intelligenceScore.logical_soundness },
-            { key: 'consensus', label: 'Consensus', data: intelligenceScore.consensus_level },
-            { key: 'durability', label: 'Durability', data: intelligenceScore.answer_durability },
+            { key: 'research', label: 'Research depth', data: intelligenceScore.research_depth },
+            { key: 'reasoning', label: 'Logical soundness', data: intelligenceScore.logical_soundness },
+            { key: 'consensus', label: 'Consensus level', data: intelligenceScore.consensus_level },
+            { key: 'durability', label: 'Answer durability', data: intelligenceScore.answer_durability },
           ]
         : [],
     [intelligenceScore],
@@ -893,35 +962,20 @@ export function AgentPage() {
 
   useEffect(() => {
     setShowAllAssumptions(false);
-    setScoreTooltip(null);
-    setScoreCopied(false);
+    setPanelSteelmanOpen(false);
+    setPanelIntelOpen(false);
+    setPanelAssumptionsOpen(false);
+    setPanelDissentOpen(false);
+    setPanelJudgeOpen(false);
+    setPanelSourcesOpen(false);
+    setSteelmanInnerExpanded(false);
+    setSourcesListExpanded(false);
+    setFollowUp('');
   }, [result?.task_id, result?.refinement_count]);
 
   useEffect(() => {
     setConfActive(false);
   }, [result?.task_id]);
-
-  const handleShareScore = useCallback(async () => {
-    if (!intelligenceScore) return;
-    const total = Number(intelligenceScore.total_score || 0);
-    const label = intelligenceScore.score_label || 'Unscored';
-    const lines = [
-      `Intelligence Score: ${total}/100 (${label})`,
-      '',
-      `Research: ${Number(intelligenceScore.research_depth?.score || 0)}/25`,
-      `Reasoning: ${Number(intelligenceScore.logical_soundness?.score || 0)}/25`,
-      `Consensus: ${Number(intelligenceScore.consensus_level?.score || 0)}/25`,
-      `Durability: ${Number(intelligenceScore.answer_durability?.score || 0)}/25`,
-      '',
-      intelligenceScore.one_line_verdict || '',
-      '',
-      'Analysed by Arena Agent',
-      'try.arena.ai',
-    ];
-    await navigator.clipboard.writeText(lines.join('\n'));
-    setScoreCopied(true);
-    window.setTimeout(() => setScoreCopied(false), 2000);
-  }, [intelligenceScore]);
 
   const handleHistorySelect = useCallback(
     async (item: HistoryTask) => {
@@ -1042,14 +1096,47 @@ export function AgentPage() {
 
   const sourceIntegrity = result?.source_integrity;
 
-  const toggleTraceOutputExpand = useCallback((id: StageId) => {
-    setTraceOutputExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const judgeRemarks = useMemo(
+    () => buildJudgeRemarksFromResult(result, mergedFlags),
+    [result, mergedFlags],
+  );
+
+  type SourceCardRow = { title: string; meta: string; category: string };
+
+  const sourcesList = useMemo((): SourceCardRow[] => {
+    const si = result?.source_integrity;
+    const rawSources = si?.sources;
+    if (Array.isArray(rawSources) && rawSources.length > 0) {
+      return rawSources.map((item, i) => {
+        const o = item as Record<string, unknown>;
+        const title =
+          (typeof o.title === 'string' && o.title) ||
+          (typeof o.name === 'string' && o.name) ||
+          (typeof o.url === 'string' && o.url) ||
+          `Source ${i + 1}`;
+        const meta =
+          (typeof o.meta === 'string' && o.meta) ||
+          (typeof o.note === 'string' && o.note) ||
+          (typeof o.description === 'string' && o.description) ||
+          '';
+        const cat = (typeof o.category === 'string' && o.category) || 'Primary';
+        return { title, meta, category: cat };
+      });
+    }
+    const refs = parsedAnswer?.sources_referenced || [];
+    return refs.map((s) => ({ title: s, meta: '', category: 'Primary' }));
+  }, [result?.source_integrity, parsedAnswer?.sources_referenced]);
+
+  const steelmanData = result?.steelman as any;
+  const temporalProfile = result?.temporal_profile as any;
+  const dissentReport = result?.dissent_report as any;
+
+  const sourceIntegrityScore = Number(sourceIntegrity?.overall_source_integrity);
+  const showSourceIntegrityBar =
+    !!sourceIntegrity &&
+    ((sourceIntegrity.source_count ?? 0) > 0 ||
+      !!sourceIntegrity.summary ||
+      (!Number.isNaN(sourceIntegrityScore) && sourceIntegrityScore >= 0));
 
   const renderAgentHistoryRow = (item: HistoryTask) => {
     const score = item.final_score ?? 0;
@@ -1321,9 +1408,27 @@ export function AgentPage() {
           border-radius: 50%;
           animation: agentChalDotPulse 1.2s ease-in-out infinite;
         }
+        .answer-text {
+          font-size: 15px;
+          line-height: 1.82;
+          color: #2C1810;
+          font-family: Georgia, 'Times New Roman', serif;
+          margin-bottom: 8px;
+        }
         .answer-text span {
           color: #2C1810;
           transition: color 0.45s ease;
+        }
+        @media (max-width: 768px) {
+          .agent-confidence-legend-rows > div {
+            flex-wrap: wrap;
+          }
+        }
+        .agent-follow-shell:focus-within {
+          border-color: #c4956a !important;
+        }
+        .agent-follow-shell input::placeholder {
+          color: #c4a882;
         }
         .answer-text.conf-active span.verified {
           color: #2D6A0A;
@@ -1947,8 +2052,8 @@ export function AgentPage() {
                   ref={answerAnchorRef}
                   id="agent-current-answer"
                   style={{
-                    background: '#FFFFFF',
-                    border: '0.5px solid #E0D8D0',
+                    background: AR.SURFACE,
+                    border: `0.5px solid ${AR.BORDER}`,
                     borderRadius: 20,
                     padding: '2rem',
                     marginTop: '1.5rem',
@@ -2002,81 +2107,35 @@ export function AgentPage() {
                         </div>
                       </div>
                     )}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      marginBottom: '1.5rem',
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 11,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.12em',
-                        color: '#6B6460',
-                      }}
-                    >
-                      Agent Response
-                    </span>
-                  </div>
                   {answerSentences.length > 0 ? (
                     <>
-                      <div
-                        className={`answer-text ${confActive ? 'conf-active' : ''}`}
-                        style={{
-                          fontSize: '15px',
-                          lineHeight: '1.8',
-                          color: '#2C1810',
-                          fontFamily: 'Georgia, serif',
-                          fontStyle: 'italic',
-                          marginBottom: '24px',
-                        }}
-                      >
+                      <div className={`answer-text ${confActive ? 'conf-active' : ''}`}>
                         {answerSentences.map((sentence, i) => (
-                          <span
-                            key={`${i}-${sentence.text.slice(0, 32)}`}
-                            className={sentence.confidence}
-                            style={{ transition: 'color 0.45s ease' }}
-                          >
+                          <span key={`${i}-${sentence.text.slice(0, 32)}`} className={sentence.confidence}>
                             {sentence.text}{' '}
                           </span>
                         ))}
                       </div>
                       {confidenceLegendStats && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 0,
-                            marginBottom: '24px',
-                          }}
-                        >
+                        <div style={{ marginBottom: 28 }}>
                           <button
                             type="button"
                             onClick={() => setConfActive((v) => !v)}
-                            onMouseEnter={() => setConfToggleHovered(true)}
-                            onMouseLeave={() => setConfToggleHovered(false)}
                             style={{
-                              display: 'flex',
+                              display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '7px',
+                              gap: 7,
                               padding: '6px 14px',
                               border: '0.5px solid',
-                              borderColor: confToggleHovered
-                                ? '#C4956A'
-                                : confActive
-                                  ? '#C4956A'
-                                  : '#D4C4B0',
-                              borderRadius: '20px',
+                              borderColor: confActive ? AR.GOLD : '#D4C4B0',
+                              borderRadius: 20,
                               background: confActive ? '#FAF3EA' : 'transparent',
                               cursor: 'pointer',
-                              fontSize: '12px',
-                              color: confToggleHovered || confActive ? '#C4956A' : '#8C7355',
+                              fontSize: 12,
+                              color: AR.TEXT_MUTED,
                               fontFamily: 'Georgia, serif',
                               letterSpacing: '0.04em',
-                              transition: 'all 0.2s ease',
-                              alignSelf: 'flex-start',
+                              transition: 'all 0.2s',
                             }}
                           >
                             <svg
@@ -2116,15 +2175,15 @@ export function AgentPage() {
                               overflow: 'hidden',
                               transition:
                                 'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease',
+                              marginTop: confActive ? 10 : 0,
                             }}
                           >
                             <div
                               style={{
-                                background: '#FDFAF6',
-                                border: '0.5px solid #E0D5C5',
+                                background: AR.SURFACE_ALT,
+                                border: `0.5px solid ${AR.BORDER}`,
                                 borderRadius: 8,
                                 padding: '14px 16px',
-                                marginTop: 8,
                               }}
                             >
                               <div
@@ -2132,97 +2191,95 @@ export function AgentPage() {
                                   fontSize: 10,
                                   letterSpacing: '0.16em',
                                   textTransform: 'uppercase',
-                                  color: '#C4A882',
-                                  marginBottom: 8,
+                                  color: AR.GOLD_MUTED,
+                                  marginBottom: 10,
                                 }}
                               >
                                 Confidence key
                               </div>
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 10,
-                                  marginBottom: 6,
-                                }}
-                              >
-                                <span
+                              <div className="agent-confidence-legend-rows">
+                                <div
                                   style={{
-                                    width: 10,
-                                    height: 10,
-                                    borderRadius: '50%',
-                                    background: '#639922',
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                <span style={{ fontSize: 12, color: '#4A3728' }}>
-                                  Verified — supported at 90%+
-                                </span>
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    color: '#A89070',
-                                    fontFamily: 'ui-monospace, monospace',
-                                    marginLeft: 'auto',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    marginBottom: 6,
                                   }}
                                 >
-                                  {confidenceLegendStats.verifiedPct}%
-                                </span>
-                              </div>
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 10,
-                                  marginBottom: 6,
-                                }}
-                              >
-                                <span
+                                  <span
+                                    style={{
+                                      width: 9,
+                                      height: 9,
+                                      borderRadius: '50%',
+                                      background: '#639922',
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                  <span style={{ fontSize: 12, color: AR.TEXT_MID }}>Verified — 90%+</span>
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      color: AR.TEXT_FAINT,
+                                      fontFamily: 'ui-monospace, monospace',
+                                      marginLeft: 'auto',
+                                    }}
+                                  >
+                                    {confidenceLegendStats.verifiedPct}%
+                                  </span>
+                                </div>
+                                <div
                                   style={{
-                                    width: 10,
-                                    height: 10,
-                                    borderRadius: '50%',
-                                    background: '#BA7517',
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                <span style={{ fontSize: 12, color: '#4A3728' }}>
-                                  Supported — plausible, 70–89%
-                                </span>
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    color: '#A89070',
-                                    fontFamily: 'ui-monospace, monospace',
-                                    marginLeft: 'auto',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    marginBottom: 6,
                                   }}
                                 >
-                                  {confidenceLegendStats.supportedPct}%
-                                </span>
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                                <span
-                                  style={{
-                                    width: 10,
-                                    height: 10,
-                                    borderRadius: '50%',
-                                    background: '#D85A30',
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                <span style={{ fontSize: 12, color: '#4A3728' }}>
-                                  Uncertain — contested or unverified
-                                </span>
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    color: '#A89070',
-                                    fontFamily: 'ui-monospace, monospace',
-                                    marginLeft: 'auto',
-                                  }}
-                                >
-                                  {confidenceLegendStats.uncertainPct}%
-                                </span>
+                                  <span
+                                    style={{
+                                      width: 9,
+                                      height: 9,
+                                      borderRadius: '50%',
+                                      background: '#BA7517',
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                  <span style={{ fontSize: 12, color: AR.TEXT_MID }}>Supported — 70–89%</span>
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      color: AR.TEXT_FAINT,
+                                      fontFamily: 'ui-monospace, monospace',
+                                      marginLeft: 'auto',
+                                    }}
+                                  >
+                                    {confidenceLegendStats.supportedPct}%
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                  <span
+                                    style={{
+                                      width: 9,
+                                      height: 9,
+                                      borderRadius: '50%',
+                                      background: '#D85A30',
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                  <span style={{ fontSize: 12, color: AR.TEXT_MID }}>
+                                    Uncertain — {'<'}70%
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      color: AR.TEXT_FAINT,
+                                      fontFamily: 'ui-monospace, monospace',
+                                      marginLeft: 'auto',
+                                    }}
+                                  >
+                                    {confidenceLegendStats.uncertainPct}%
+                                  </span>
+                                </div>
                               </div>
                               <div
                                 style={{
@@ -2281,922 +2338,1495 @@ export function AgentPage() {
                       {plainAnswerText || result.final_answer || 'No final answer returned.'}
                     </div>
                   )}
-                  {intelligenceScore ? (
-                    <div style={{ marginTop: '1.5rem', marginBottom: answerSentences.length > 0 ? '1rem' : 0 }}>
-                      <div
+                  {steelmanData?.opposing_position ? (
+                    <div
+                      style={{
+                        background: AR.SURFACE,
+                        border: `0.5px solid ${AR.BORDER}`,
+                        borderRadius: 10,
+                        overflow: 'hidden',
+                        marginBottom: 16,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPanelSteelmanOpen((o) => !o)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          marginBottom: '1.5rem',
-                          flexWrap: 'wrap',
-                          gap: 12,
+                          width: '100%',
+                          padding: '11px 16px',
+                          cursor: 'pointer',
+                          transition: 'background 0.12s',
+                          background: 'transparent',
+                          border: 'none',
+                          textAlign: 'left',
+                          font: 'inherit',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#F5EFE6';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
                         }}
                       >
-                        <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              letterSpacing: '0.16em',
+                              textTransform: 'uppercase',
+                              color: AR.TEXT_MUTED,
+                            }}
+                          >
+                            The steelman
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              padding: '2px 8px',
+                              borderRadius: 8,
+                              border: '0.5px solid #D4C4B0',
+                              color: AR.TEXT_MUTED,
+                              background: '#F0E8DC',
+                            }}
+                          >
+                            strongest opposing view
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: AR.GOLD_MUTED,
+                            transform: panelSteelmanOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.25s',
+                          }}
+                        >
+                          ▾
+                        </span>
+                      </button>
+                      <div
+                        style={{
+                          maxHeight: panelSteelmanOpen ? 1000 : 0,
+                          overflow: 'hidden',
+                          transition: 'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                          borderTop: panelSteelmanOpen ? `0.5px solid ${AR.BORDER_INNER}` : 'none',
+                        }}
+                      >
+                        <div style={{ padding: '14px 16px' }}>
                           <div
                             style={{
-                              display: 'flex',
-                              alignItems: 'flex-end',
-                              color: totalScoreColor(Number(intelligenceScore.total_score || 0)),
-                              lineHeight: 1,
+                              fontSize: 14,
+                              color: AR.TEXT_PRIMARY,
+                              fontStyle: 'italic',
+                              lineHeight: 1.65,
+                              marginBottom: 12,
+                              paddingLeft: 4,
                             }}
                           >
                             <span
                               style={{
-                                fontSize: 42,
-                                fontWeight: 400,
-                                letterSpacing: '-0.03em',
+                                fontSize: 28,
+                                color: '#D4C4B0',
+                                lineHeight: 0,
+                                verticalAlign: '-10px',
+                                marginRight: 3,
                               }}
+                              aria-hidden
                             >
-                              {Number(intelligenceScore.total_score || 0)}
+                              &ldquo;
                             </span>
+                            {String(steelmanData.opposing_position)}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSteelmanInnerExpanded((v) => !v)}
+                            style={{
+                              fontSize: 12,
+                              color: AR.TEXT_MUTED,
+                              cursor: 'pointer',
+                              textDecoration: 'underline dotted',
+                              display: 'inline-block',
+                              marginTop: 6,
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              fontFamily: 'Georgia, serif',
+                            }}
+                          >
+                            {steelmanInnerExpanded ? 'Collapse ↑' : 'See full steelman ↓'}
+                          </button>
+                          {steelmanInnerExpanded ? (
+                            <div style={{ marginTop: 14 }}>
+                              {Array.isArray(steelmanData.key_arguments) &&
+                              steelmanData.key_arguments.length > 0 ? (
+                                <div style={{ marginBottom: 14 }}>
+                                  <div
+                                    style={{
+                                      fontSize: 10,
+                                      textTransform: 'uppercase',
+                                      color: AR.TEXT_FAINT,
+                                      marginBottom: 7,
+                                    }}
+                                  >
+                                    Core arguments
+                                  </div>
+                                  {steelmanData.key_arguments.slice(0, 3).map((arg: string, ai: number) => (
+                                    <div
+                                      key={ai}
+                                      style={{ display: 'flex', gap: 8, marginBottom: 8 }}
+                                    >
+                                      <span
+                                        style={{
+                                          width: 5,
+                                          height: 5,
+                                          borderRadius: '50%',
+                                          background: AR.GOLD,
+                                          flexShrink: 0,
+                                          marginTop: 6,
+                                        }}
+                                      />
+                                      <span style={{ fontSize: 13, color: AR.TEXT_MID, lineHeight: 1.55 }}>
+                                        {arg}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {steelmanData.strongest_evidence ? (
+                                <div style={{ marginBottom: 14 }}>
+                                  <div
+                                    style={{
+                                      fontSize: 10,
+                                      textTransform: 'uppercase',
+                                      color: AR.TEXT_FAINT,
+                                      marginBottom: 7,
+                                    }}
+                                  >
+                                    Most compelling evidence
+                                  </div>
+                                  <div
+                                    style={{
+                                      background: '#F5EFE6',
+                                      padding: '8px 12px',
+                                      borderRadius: 4,
+                                      borderLeft: `2px solid ${AR.GOLD}`,
+                                      fontSize: 13,
+                                      color: AR.TEXT_MID,
+                                      lineHeight: 1.55,
+                                    }}
+                                  >
+                                    {String(steelmanData.strongest_evidence)}
+                                  </div>
+                                </div>
+                              ) : null}
+                              {steelmanData.concession ? (
+                                <div>
+                                  <div
+                                    style={{
+                                      fontSize: 10,
+                                      textTransform: 'uppercase',
+                                      color: AR.TEXT_FAINT,
+                                      marginBottom: 7,
+                                    }}
+                                  >
+                                    What it gets right
+                                  </div>
+                                  <div style={{ fontSize: 13, color: '#6B4A2A', lineHeight: 1.55 }}>
+                                    <span style={{ color: AR.TEXT_MUTED }}>✓ </span>
+                                    {String(steelmanData.concession)}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  {temporalProfile ? (
+                    <>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 14,
+                          padding: '10px 16px',
+                          background: AR.SURFACE,
+                          borderTop: '1px solid #E8DDD0',
+                          borderBottom: '1px solid #E8DDD0',
+                          marginBottom: 0,
+                        }}
+                      >
+                        {(() => {
+                          const dc = String(temporalProfile.decay_class || 'durable').toLowerCase();
+                          const cfg = TEMPORAL_DECAY_STYLES[dc] || TEMPORAL_DECAY_STYLES.durable;
+                          return (
                             <span
                               style={{
-                                fontSize: 18,
-                                color: '#B0A9A2',
-                                marginLeft: 2,
-                                marginBottom: 4,
+                                padding: '3px 10px',
+                                borderRadius: 4,
+                                fontSize: 10,
+                                letterSpacing: '0.14em',
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                                background: cfg.bg,
+                                color: cfg.text,
                               }}
                             >
-                              /100
+                              {cfg.label}
                             </span>
+                          );
+                        })()}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: AR.TEXT_MUTED,
+                              fontWeight: 500,
+                            }}
+                          >
+                            {String(temporalProfile.half_life || '—')}
+                            {' · '}
+                            {String(temporalProfile.decay_reason || '').slice(0, 40)}
+                            {String(temporalProfile.decay_reason || '').length > 40 ? '…' : ''}
                           </div>
                           <div
                             style={{
-                              fontSize: 11,
-                              letterSpacing: '0.08em',
-                              textTransform: 'uppercase',
-                              color: totalScoreColor(Number(intelligenceScore.total_score || 0)),
-                              marginTop: -2,
+                              fontSize: 12,
+                              color: AR.TEXT_FAINT,
+                              fontStyle: 'italic',
                             }}
                           >
-                            {intelligenceScore.score_label || 'Solid'}
+                            {String(temporalProfile.decay_reason || '').length > 40
+                              ? String(temporalProfile.decay_reason).slice(40)
+                              : ''}
                           </div>
                         </div>
-                        <div style={{ width: 220, maxWidth: '100%' }}>
-                          {intelligenceRows.map((row) => {
-                            const value = Number(row.data?.score || 0);
-                            const color = dimensionScoreColor(value);
-                            const tooltipKey = `${row.key}-${value}`;
-                            return (
-                              <div
-                                key={row.key}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 8,
-                                  marginBottom: 6,
-                                  position: 'relative',
-                                }}
-                                onMouseEnter={() => setScoreTooltip(tooltipKey)}
-                                onMouseLeave={() => setScoreTooltip((current) => (current === tooltipKey ? null : current))}
-                              >
-                                <span
-                                  style={{
-                                    fontSize: 10,
-                                    color: '#B0A9A2',
-                                    width: 80,
-                                    flexShrink: 0,
-                                    textAlign: 'right',
-                                  }}
-                                >
-                                  {row.label}
-                                </span>
+                        {temporalProfile.recheck_by ? (
+                          <span style={{ fontSize: 11, color: AR.TEXT_MUTED, whiteSpace: 'nowrap' }}>
+                            ◷ Re-check by {String(temporalProfile.recheck_by)}
+                          </span>
+                        ) : null}
+                      </div>
+                      {Array.isArray(temporalProfile.time_sensitive_claims) &&
+                      temporalProfile.time_sensitive_claims.length > 0 ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 5,
+                            padding: '8px 16px 10px',
+                            background: AR.SURFACE,
+                            borderBottom: '1px solid #E8DDD0',
+                            marginBottom: 16,
+                          }}
+                        >
+                          {temporalProfile.time_sensitive_claims.map((c: string, ci: number) => (
+                            <span
+                              key={ci}
+                              style={{
+                                fontSize: 11,
+                                color: AR.TEXT_MUTED,
+                                background: '#F0E8DC',
+                                borderRadius: 12,
+                                padding: '2px 10px',
+                                border: '0.5px solid #DDD0BC',
+                              }}
+                            >
+                              <span style={{ fontSize: 10, color: AR.GOLD }}>⚑ </span>
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ marginBottom: 16 }} />
+                      )}
+                    </>
+                  ) : null}
+                  {showSourceIntegrityBar ? (
+                    <>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          margin: '28px 0 16px',
+                        }}
+                      >
+                        <div style={{ flex: 1, height: 0.5, background: AR.BORDER }} />
+                        <span
+                          style={{
+                            fontSize: 10,
+                            letterSpacing: '0.18em',
+                            textTransform: 'uppercase',
+                            color: AR.GOLD_MUTED,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Source integrity
+                        </span>
+                        <div style={{ flex: 1, height: 0.5, background: AR.BORDER }} />
+                      </div>
+                      <div
+                        style={{
+                          background: AR.SURFACE,
+                          border: `0.5px solid ${AR.BORDER}`,
+                          borderRadius: 8,
+                          padding: '12px 16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 14,
+                          marginBottom: 16,
+                        }}
+                      >
+                        {(() => {
+                          const sc = Number(sourceIntegrity?.overall_source_integrity) || 0;
+                          const pct = Math.min(100, Math.max(0, sc));
+                          const fill =
+                            sc < 50 ? '#D85A30' : sc < 75 ? '#BA7517' : '#639922';
+                          const tierLabel = sc >= 75 ? 'High' : sc >= 50 ? 'Medium' : 'Low';
+                          const tierColor = sc >= 75 ? '#3B6D11' : sc >= 50 ? '#854F0B' : '#993C1D';
+                          return (
+                            <>
+                              <div style={{ flex: 1, minWidth: 0 }}>
                                 <div
                                   style={{
-                                    flex: 1,
-                                    height: 4,
-                                    background: '#F0EBE3',
-                                    borderRadius: 999,
+                                    height: 5,
+                                    background: AR.BORDER_INNER,
+                                    borderRadius: 3,
                                     overflow: 'hidden',
+                                    marginBottom: 6,
                                   }}
                                 >
                                   <div
                                     style={{
-                                      width: `${Math.max(0, Math.min(100, (value / 25) * 100))}%`,
-                                      height: 4,
-                                      borderRadius: 999,
-                                      background: color,
-                                      transition: 'width 600ms cubic-bezier(0.16,1,0.3,1)',
+                                      width: `${pct}%`,
+                                      height: '100%',
+                                      background: fill,
+                                      transition: 'width 0.5s ease',
                                     }}
                                   />
                                 </div>
-                                <span
+                                <div style={{ fontSize: 12, color: AR.TEXT_MID }}>
+                                  {sourceIntegrity?.summary ||
+                                    'Sources assessed for consistency and credibility.'}
+                                </div>
+                              </div>
+                              <span
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: 500,
+                                  whiteSpace: 'nowrap',
+                                  color: tierColor,
+                                }}
+                              >
+                                {tierLabel}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </>
+                  ) : null}
+                  {intelligenceScore ? (
+                    <div
+                      style={{
+                        background: AR.SURFACE,
+                        border: `0.5px solid ${AR.BORDER}`,
+                        borderRadius: 10,
+                        overflow: 'hidden',
+                        marginBottom: 16,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPanelIntelOpen((o) => !o)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          width: '100%',
+                          padding: '11px 16px',
+                          cursor: 'pointer',
+                          transition: 'background 0.12s',
+                          background: 'transparent',
+                          border: 'none',
+                          textAlign: 'left',
+                          font: 'inherit',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#F5EFE6';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              letterSpacing: '0.16em',
+                              textTransform: 'uppercase',
+                              color: AR.TEXT_MUTED,
+                            }}
+                          >
+                            Intelligence score
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              padding: '2px 8px',
+                              borderRadius: 8,
+                              border: '0.5px solid #D4C4B0',
+                              color: AR.TEXT_MUTED,
+                              background: '#F0E8DC',
+                            }}
+                          >
+                            {Number(intelligenceScore.total_score || 0)} / 100
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: AR.GOLD_MUTED,
+                            transform: panelIntelOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.25s',
+                          }}
+                        >
+                          ▾
+                        </span>
+                      </button>
+                      <div
+                        style={{
+                          maxHeight: panelIntelOpen ? 1000 : 0,
+                          overflow: 'hidden',
+                          transition: 'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                          borderTop: panelIntelOpen ? `0.5px solid ${AR.BORDER_INNER}` : 'none',
+                        }}
+                      >
+                        <div style={{ padding: '14px 16px' }}>
+                          {(() => {
+                            const total = Number(intelligenceScore.total_score || 0);
+                            return (
+                              <>
+                                <div
                                   style={{
-                                    fontSize: 11,
-                                    fontWeight: 500,
-                                    color,
-                                    width: 24,
-                                    textAlign: 'right',
+                                    display: 'grid',
+                                    gridTemplateColumns: 'auto 1fr',
+                                    gridTemplateRows: 'auto auto',
+                                    gap: '12px 20px',
+                                    alignItems: 'center',
                                   }}
                                 >
-                                  {value}
-                                </span>
-                                {scoreTooltip === tooltipKey && row.data?.reason ? (
                                   <div
                                     style={{
-                                      position: 'absolute',
-                                      right: 0,
-                                      top: 'calc(100% + 6px)',
-                                      background: '#1A1714',
-                                      color: '#FAF7F4',
-                                      fontSize: 11,
-                                      padding: '6px 10px',
-                                      borderRadius: 8,
-                                      maxWidth: 200,
-                                      zIndex: 10,
-                                      lineHeight: 1.5,
+                                      gridRow: '1 / 3',
+                                      gridColumn: 1,
+                                      fontSize: 42,
+                                      color: AR.TEXT_PRIMARY,
+                                      fontWeight: 500,
+                                      lineHeight: 1,
                                     }}
                                   >
-                                    {row.data.reason}
+                                    {total}
                                   </div>
+                                  <span
+                                    style={{
+                                      gridRow: 1,
+                                      gridColumn: 2,
+                                      fontSize: 11,
+                                      letterSpacing: '0.10em',
+                                      textTransform: 'uppercase',
+                                      color: AR.TEXT_FAINT,
+                                      alignSelf: 'end',
+                                    }}
+                                  >
+                                    {intelligenceLabelFromTotal(total)}
+                                  </span>
+                                  {intelligenceScore.one_line_verdict ? (
+                                    <span
+                                      style={{
+                                        gridRow: 2,
+                                        gridColumn: 2,
+                                        fontSize: 13,
+                                        color: AR.TEXT_MUTED,
+                                        fontStyle: 'italic',
+                                        alignSelf: 'start',
+                                      }}
+                                    >
+                                      {intelligenceScore.one_line_verdict}
+                                    </span>
+                                  ) : (
+                                    <span style={{ gridRow: 2, gridColumn: 2 }} />
+                                  )}
+                                </div>
+                                <div style={{ marginTop: 14 }}>
+                                  {intelligenceRows.map((row) => {
+                                    const value = Number(row.data?.score || 0);
+                                    return (
+                                      <div
+                                        key={row.key}
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: 10,
+                                          marginBottom: 6,
+                                        }}
+                                      >
+                                        <span
+                                          style={{
+                                            fontSize: 11,
+                                            color: AR.TEXT_MUTED,
+                                            width: 120,
+                                            flexShrink: 0,
+                                          }}
+                                        >
+                                          {row.label}
+                                        </span>
+                                        <div
+                                          style={{
+                                            flex: 1,
+                                            height: 4,
+                                            background: AR.BORDER_INNER,
+                                            borderRadius: 2,
+                                            overflow: 'hidden',
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              width: `${Math.max(0, Math.min(100, (value / 25) * 100))}%`,
+                                              height: 4,
+                                              background: AR.GOLD,
+                                              transition: 'width 0.6s cubic-bezier(0.16,1,0.3,1)',
+                                            }}
+                                          />
+                                        </div>
+                                        <span
+                                          style={{
+                                            fontSize: 11,
+                                            color: AR.TEXT_FAINT,
+                                            fontFamily: 'ui-monospace, monospace',
+                                            width: 28,
+                                            textAlign: 'right',
+                                            flexShrink: 0,
+                                          }}
+                                        >
+                                          {value}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                {hasRefinementMetadataNote ? (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      color: AR.TEXT_FAINT,
+                                      fontStyle: 'italic',
+                                      display: 'block',
+                                      marginTop: 8,
+                                    }}
+                                  >
+                                    Updated after refinement
+                                  </span>
                                 ) : null}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  {assumptions ? (
+                    <div
+                      style={{
+                        background: AR.SURFACE,
+                        border: `0.5px solid ${AR.BORDER}`,
+                        borderRadius: 10,
+                        overflow: 'hidden',
+                        marginBottom: 16,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPanelAssumptionsOpen((o) => !o)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          width: '100%',
+                          padding: '11px 16px',
+                          cursor: 'pointer',
+                          transition: 'background 0.12s',
+                          background: 'transparent',
+                          border: 'none',
+                          textAlign: 'left',
+                          font: 'inherit',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#F5EFE6';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              letterSpacing: '0.16em',
+                              textTransform: 'uppercase',
+                              color: AR.TEXT_MUTED,
+                            }}
+                          >
+                            This answer assumes
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              padding: '2px 8px',
+                              borderRadius: 8,
+                              border: '0.5px solid #D4C4B0',
+                              color: AR.TEXT_MUTED,
+                              background: '#F0E8DC',
+                            }}
+                          >
+                            {assumptions.assumption_count || assumptions.assumptions?.length || 0} assumptions
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: AR.GOLD_MUTED,
+                            transform: panelAssumptionsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.25s',
+                          }}
+                        >
+                          ▾
+                        </span>
+                      </button>
+                      <div
+                        style={{
+                          maxHeight: panelAssumptionsOpen ? 1000 : 0,
+                          overflow: 'hidden',
+                          transition: 'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                          borderTop: panelAssumptionsOpen ? `0.5px solid ${AR.BORDER_INNER}` : 'none',
+                        }}
+                      >
+                        <div style={{ padding: '14px 16px' }}>
+                          {assumptions.summary ? (
+                            <p
+                              style={{
+                                fontSize: 13,
+                                color: AR.TEXT_FAINT,
+                                fontStyle: 'italic',
+                                marginTop: 0,
+                                marginBottom: 12,
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              {assumptions.summary}
+                            </p>
+                          ) : null}
+                          {visibleAssumptions.map((assumption, idx) => {
+                            const criticality = (assumption.criticality || 'medium').toLowerCase();
+                            const critBadge =
+                              criticality === 'high'
+                                ? {
+                                    bg: '#FCF0EE',
+                                    color: '#993C1D',
+                                    border: '0.5px solid #F0997B',
+                                    label: 'HIGH',
+                                  }
+                                : criticality === 'low'
+                                  ? {
+                                      bg: '#F5F5F0',
+                                      color: '#5F5E5A',
+                                      border: '0.5px solid #D3D1C7',
+                                      label: 'LOW',
+                                    }
+                                  : {
+                                      bg: '#FDF6EC',
+                                      color: '#854F0B',
+                                      border: '0.5px solid #E8C87A',
+                                      label: 'MEDIUM',
+                                    };
+                            return (
+                              <div
+                                key={`${assumption.assumption || 'assumption'}-${idx}`}
+                                style={{
+                                  display: 'flex',
+                                  gap: 10,
+                                  marginBottom: 10,
+                                  padding: '10px 13px',
+                                  background: AR.SURFACE_ALT,
+                                  borderRadius: assumption.flag ? 0 : 6,
+                                  border: `0.5px solid ${AR.BORDER_INNER}`,
+                                  borderLeft: assumption.flag ? `3px solid ${AR.GOLD}` : undefined,
+                                }}
+                              >
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div
+                                    style={{
+                                      fontSize: 9,
+                                      letterSpacing: '0.10em',
+                                      textTransform: 'uppercase',
+                                      padding: '1px 7px',
+                                      borderRadius: 8,
+                                      display: 'inline-block',
+                                      marginBottom: 4,
+                                      background: critBadge.bg,
+                                      color: critBadge.color,
+                                      border: critBadge.border,
+                                    }}
+                                  >
+                                    {critBadge.label}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 13,
+                                      color: AR.TEXT_PRIMARY,
+                                      lineHeight: 1.5,
+                                      marginBottom: 4,
+                                    }}
+                                  >
+                                    {assumption.assumption}
+                                  </div>
+                                  {assumption.if_wrong ? (
+                                    <div style={{ fontSize: 11, color: '#C0392B' }}>
+                                      <span style={{ color: AR.TEXT_MUTED }}>If wrong: </span>
+                                      {assumption.if_wrong}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {hiddenAssumptionCount > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowAllAssumptions((current) => !current)}
+                              style={{
+                                marginTop: 4,
+                                fontSize: 11,
+                                color: AR.GOLD,
+                                cursor: 'pointer',
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                letterSpacing: '0.06em',
+                              }}
+                            >
+                              {showAllAssumptions ? 'Show less ↑' : `Show all (${hiddenAssumptionCount} more) ↓`}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  {dissentReport?.positions?.length > 0 ? (
+                    <div
+                      style={{
+                        background: AR.SURFACE,
+                        border: `0.5px solid ${AR.BORDER}`,
+                        borderRadius: 10,
+                        overflow: 'hidden',
+                        marginBottom: 16,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPanelDissentOpen((o) => !o)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          width: '100%',
+                          padding: '11px 16px',
+                          cursor: 'pointer',
+                          transition: 'background 0.12s',
+                          background: 'transparent',
+                          border: 'none',
+                          textAlign: 'left',
+                          font: 'inherit',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#F5EFE6';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              letterSpacing: '0.16em',
+                              textTransform: 'uppercase',
+                              color: AR.TEXT_MUTED,
+                            }}
+                          >
+                            Minority report
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              padding: '2px 8px',
+                              borderRadius: 8,
+                              border: '0.5px solid #D4C4B0',
+                              color: AR.TEXT_MUTED,
+                              background: '#F0E8DC',
+                            }}
+                          >
+                            dissent
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: AR.GOLD_MUTED,
+                            transform: panelDissentOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.25s',
+                          }}
+                        >
+                          ▾
+                        </span>
+                      </button>
+                      <div
+                        style={{
+                          maxHeight: panelDissentOpen ? 1000 : 0,
+                          overflow: 'hidden',
+                          transition: 'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                          borderTop: panelDissentOpen ? `0.5px solid ${AR.BORDER_INNER}` : 'none',
+                        }}
+                      >
+                        <div style={{ padding: '14px 16px' }}>
+                          {dissentReport.minority_view_summary ? (
+                            <p
+                              style={{
+                                fontSize: 13,
+                                color: AR.TEXT_FAINT,
+                                fontStyle: 'italic',
+                                marginTop: 0,
+                                marginBottom: 12,
+                              }}
+                            >
+                              {String(dissentReport.minority_view_summary)}
+                            </p>
+                          ) : null}
+                          {dissentReport.positions.map((pos: any, pi: number) => {
+                            const str = String(pos.strength || 'moderate').toLowerCase();
+                            const border =
+                              str === 'strong'
+                                ? AR.GOLD
+                                : str === 'weak'
+                                  ? '#B8A898'
+                                  : AR.TEXT_MUTED;
+                            const strColor =
+                              str === 'strong' ? AR.GOLD : str === 'weak' ? '#B8A898' : AR.TEXT_MUTED;
+                            const impact = Number(pos.confidence_impact ?? 0);
+                            const impactColor = Math.abs(impact) >= 15 ? '#C0392B' : '#BA7517';
+                            return (
+                              <div
+                                key={pi}
+                                style={{
+                                  padding: '12px 14px',
+                                  background: AR.SURFACE_ALT,
+                                  borderRadius: 6,
+                                  marginBottom: 10,
+                                  borderLeft: `3px solid ${border}`,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: 13,
+                                    color: AR.TEXT_PRIMARY,
+                                    lineHeight: 1.55,
+                                    marginBottom: 7,
+                                  }}
+                                >
+                                  {String(pos.claim || pos.position || '')}
+                                </div>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    gap: 14,
+                                    alignItems: 'baseline',
+                                    flexWrap: 'wrap',
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.12em',
+                                      color: strColor,
+                                    }}
+                                  >
+                                    {str}
+                                  </span>
+                                  {pos.why_excluded ? (
+                                    <span style={{ fontSize: 12, color: AR.TEXT_FAINT }}>
+                                      <span style={{ color: AR.TEXT_MUTED }}>Excluded: </span>
+                                      {String(pos.why_excluded)}
+                                    </span>
+                                  ) : null}
+                                  <span
+                                    style={{
+                                      fontSize: 12,
+                                      fontFamily: 'ui-monospace, monospace',
+                                      color: impactColor,
+                                    }}
+                                  >
+                                    −{Math.abs(Math.round(impact))} pts
+                                  </span>
+                                </div>
                               </div>
                             );
                           })}
                         </div>
                       </div>
-                      {intelligenceScore.one_line_verdict ? (
-                        <p
-                          style={{
-                            fontSize: 13,
-                            color: '#6B6460',
-                            fontStyle: 'italic',
-                            marginTop: 0,
-                            marginBottom: '1rem',
-                          }}
-                        >
-                          {intelligenceScore.one_line_verdict}
-                        </p>
-                      ) : null}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <button
-                          type="button"
-                          onClick={() => void handleShareScore()}
-                          style={{
-                            background: 'transparent',
-                            border: '0.5px solid #E0D8D0',
-                            borderRadius: 999,
-                            padding: '5px 14px',
-                            fontSize: 11,
-                            color: scoreCopied ? '#C4956A' : '#6B6460',
-                            cursor: 'pointer',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = '#C4956A';
-                            e.currentTarget.style.color = '#C4956A';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = '#E0D8D0';
-                            e.currentTarget.style.color = scoreCopied ? '#C4956A' : '#6B6460';
-                          }}
-                        >
-                          {scoreCopied ? 'Copied!' : 'Share this score'}
-                        </button>
-                        {hasRefinementMetadataNote ? (
-                          <span style={{ fontSize: 10, color: '#B0A9A2', fontStyle: 'italic' }}>
-                            Updated after refinement
-                          </span>
-                        ) : null}
-                      </div>
                     </div>
                   ) : null}
-                  {parsedAnswer?.sources_referenced && parsedAnswer.sources_referenced.length > 0 && (
-                    <div style={{ marginTop: '1.25rem' }}>
-                      <div
-                        style={{
-                          fontSize: 10,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.1em',
-                          color: '#B0A9A2',
-                          marginBottom: 8,
-                        }}
-                      >
-                        Sources & context used
-                      </div>
-                      {parsedAnswer.sources_referenced.map((src, i) => (
-                        <div
-                          key={`${i}-${src.slice(0, 40)}`}
-                          style={{
-                            fontSize: 12,
-                            color: '#6B6460',
-                            padding: '4px 0',
-                            borderBottom: '0.5px solid #F0EBE3',
-                          }}
-                        >
-                          {src}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {mergedFlags.length > 0 && (
+                  {judgeRemarks.length > 0 ? (
                     <div
                       style={{
-                        marginTop: '1.5rem',
-                        padding: '12px 16px',
-                        background: 'rgba(196,149,106,0.06)',
+                        background: AR.SURFACE,
+                        border: `0.5px solid ${AR.BORDER}`,
                         borderRadius: 10,
-                        borderLeft: '2px solid #C4956A',
+                        overflow: 'hidden',
+                        marginBottom: 16,
                       }}
                     >
-                      <div
-                        style={{
-                          fontSize: 10,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.1em',
-                          color: '#C4956A',
-                          marginBottom: 4,
-                        }}
-                      >
-                        Note
-                      </div>
-                      {mergedFlags.map((f) => (
-                        <p key={f} style={{ fontSize: 12, color: '#6B6460', margin: '4px 0 0' }}>
-                          {f}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                  {sourceIntegrity &&
-                    (sourceIntegrity.source_count ?? 0) > 0 &&
-                    (() => {
-                      const label = (sourceIntegrity.integrity_label || 'moderate').toLowerCase();
-                      const badge =
-                        label === 'high'
-                          ? {
-                              bg: 'rgba(138,168,153,0.15)',
-                              color: '#5A8A5A',
-                              text: 'High',
-                              bar: '#8AA899',
-                            }
-                          : label === 'low'
-                            ? {
-                                bg: 'rgba(229,115,115,0.1)',
-                                color: '#E57373',
-                                text: 'Low',
-                                bar: '#E57373',
-                              }
-                            : label === 'contested'
-                              ? {
-                                  bg: 'rgba(229,115,115,0.1)',
-                                  color: '#E57373',
-                                  text: 'Contested',
-                                  bar: '#E57373',
-                                }
-                              : {
-                                  bg: 'rgba(196,149,106,0.12)',
-                                  color: '#C4956A',
-                                  text: 'Moderate',
-                                  bar: '#C4956A',
-                                };
-                      const pct = Math.min(
-                        100,
-                        Math.max(0, Number(sourceIntegrity.overall_source_integrity) || 0),
-                      );
-                      const iconContra = sourceIntegrity.contradictions || [];
-                      return (
-                        <div
-                          style={{
-                            background: '#FFFFFF',
-                            border: '0.5px solid #E0D8D0',
-                            borderRadius: 14,
-                            padding: '1rem 1.25rem',
-                            marginTop: '1.25rem',
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 12,
-                              marginBottom: 8,
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: 10,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.14em',
-                                color: '#B0A9A2',
-                              }}
-                            >
-                              Source integrity
-                            </span>
-                            <span
-                              style={{
-                                background: badge.bg,
-                                color: badge.color,
-                                borderRadius: 999,
-                                padding: '3px 10px',
-                                fontSize: 11,
-                                fontWeight: 500,
-                              }}
-                            >
-                              {badge.text}
-                            </span>
-                          </div>
-                          <div
-                            style={{
-                              width: '100%',
-                              height: 4,
-                              background: '#F0EBE3',
-                              borderRadius: 999,
-                              margin: '8px 0',
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: `${pct}%`,
-                                height: '100%',
-                                background: badge.bar,
-                                borderRadius: 999,
-                                transition: 'width 600ms ease',
-                              }}
-                            />
-                          </div>
-                          {sourceIntegrity.summary ? (
-                            <p style={{ fontSize: 12, color: '#6B6460', marginTop: 6, marginBottom: 0 }}>
-                              {sourceIntegrity.summary}
-                            </p>
-                          ) : null}
-                          {iconContra.length > 0 ? (
-                            <div
-                              style={{
-                                marginTop: 10,
-                                paddingTop: 10,
-                                borderTop: '0.5px solid #F0EBE3',
-                              }}
-                            >
-                              {iconContra.map((c, idx) => (
-                                <div
-                                  key={`${c.topic}-${idx}`}
-                                  style={{
-                                    display: 'flex',
-                                    gap: 8,
-                                    marginBottom: 6,
-                                    fontSize: 12,
-                                    color: '#6B6460',
-                                  }}
-                                >
-                                  <span style={{ color: '#C4956A', flexShrink: 0 }}>⚠</span>
-                                  <span>
-                                    {c.topic || 'Source conflict'}
-                                    {c.position_a || c.position_b
-                                      ? ` — ${c.position_a || ''} vs ${c.position_b || ''}`
-                                      : ''}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })()}
-                  {assumptions ? (
-                    <div
-                      style={{
-                        background: '#FFFFFF',
-                        border: '0.5px solid #E0D8D0',
-                        borderRadius: 14,
-                        padding: '1rem 1.25rem',
-                        marginTop: '1.25rem',
-                      }}
-                    >
-                      <div
+                      <button
+                        type="button"
+                        onClick={() => setPanelJudgeOpen((o) => !o)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          marginBottom: 12,
-                          gap: 10,
-                          flexWrap: 'wrap',
+                          width: '100%',
+                          padding: '11px 16px',
+                          cursor: 'pointer',
+                          background: AR.DARK,
+                          border: 'none',
+                          textAlign: 'left',
+                          font: 'inherit',
                         }}
                       >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke={AR.GOLD}
+                            strokeWidth="1.5"
+                            opacity={0.8}
+                            aria-hidden
+                          >
+                            <path d="M12 3v18M3 12h18M5 5l14 14M19 5L5 19" />
+                          </svg>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              letterSpacing: '0.16em',
+                              textTransform: 'uppercase',
+                              color: AR.GOLD,
+                            }}
+                          >
+                            Analytical caveats
+                          </span>
+                        </div>
                         <span
                           style={{
                             fontSize: 10,
-                            letterSpacing: '0.14em',
-                            textTransform: 'uppercase',
-                            color: '#B0A9A2',
+                            background: 'rgba(196,149,106,0.2)',
+                            color: AR.GOLD,
+                            padding: '2px 8px',
+                            borderRadius: 8,
+                            border: '0.5px solid rgba(196,149,106,0.3)',
                           }}
                         >
-                          This answer assumes
+                          {judgeRemarks.length} caveats
                         </span>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            background: 'rgba(196,149,106,0.1)',
-                            color: '#C4956A',
-                            borderRadius: 999,
-                            padding: '2px 10px',
-                          }}
-                        >
-                          {assumptions.assumption_count || assumptions.assumptions?.length || 0} assumptions
-                        </span>
-                      </div>
-                      {assumptions.summary ? (
-                        <p
-                          style={{
-                            fontSize: 13,
-                            color: '#6B6460',
-                            fontStyle: 'italic',
-                            marginTop: 0,
-                            marginBottom: 14,
-                            lineHeight: 1.6,
-                          }}
-                        >
-                          {assumptions.summary}
-                        </p>
-                      ) : null}
-                      {hasRefinementMetadataNote ? (
-                        <div style={{ fontSize: 10, color: '#B0A9A2', fontStyle: 'italic', marginBottom: 10 }}>
-                          Updated after refinement
-                        </div>
-                      ) : null}
-                      {visibleAssumptions.map((assumption, idx) => {
-                        const criticality = (assumption.criticality || 'medium').toLowerCase();
-                        const criticalityStyle =
-                          criticality === 'high'
-                            ? { bg: 'rgba(229,115,115,0.1)', color: '#E57373', text: 'High' }
-                            : criticality === 'low'
-                              ? { bg: 'rgba(138,168,153,0.1)', color: '#8AA899', text: 'Low' }
-                              : { bg: 'rgba(196,149,106,0.1)', color: '#C4956A', text: 'Medium' };
-                        return (
-                          <div
-                            key={`${assumption.assumption || 'assumption'}-${idx}`}
-                            style={{
-                              display: 'flex',
-                              gap: 10,
-                              alignItems: 'flex-start',
-                              padding: '10px 0',
-                              borderBottom:
-                                idx === visibleAssumptions.length - 1 ? 'none' : '0.5px solid #F0EBE3',
-                              position: 'relative',
-                              paddingLeft: assumption.flag ? 10 : 0,
-                            }}
-                          >
-                            {assumption.flag ? (
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  left: 0,
-                                  top: 8,
-                                  bottom: 8,
-                                  width: 2.5,
-                                  background: '#C4956A',
-                                  borderRadius: 999,
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              style={{
-                                width: 20,
-                                flexShrink: 0,
-                                fontSize: 11,
-                                fontWeight: 500,
-                                color: '#B0A9A2',
-                                marginTop: 1,
-                              }}
-                            >
-                              {idx + 1}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div
-                                style={{
-                                  fontSize: 13,
-                                  color: '#1A1714',
-                                  fontWeight: 400,
-                                  lineHeight: 1.5,
-                                  marginBottom: 4,
-                                }}
-                              >
-                                {assumption.assumption}
-                              </div>
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'flex-start',
-                                  gap: 6,
-                                  marginTop: 5,
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    fontSize: 10,
-                                    background: 'rgba(229,115,115,0.08)',
-                                    color: '#E57373',
-                                    borderRadius: 4,
-                                    padding: '1px 6px',
-                                    flexShrink: 0,
-                                    marginTop: 1,
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  If wrong
-                                </span>
-                                <span
-                                  style={{
-                                    fontSize: 12,
-                                    color: '#6B6460',
-                                    lineHeight: 1.5,
-                                  }}
-                                >
-                                  {assumption.if_wrong}
-                                </span>
-                              </div>
-                            </div>
-                            <div
-                              style={{
-                                flexShrink: 0,
-                                padding: '2px 8px',
-                                borderRadius: 999,
-                                fontSize: 10,
-                                fontWeight: 500,
-                                background: criticalityStyle.bg,
-                                color: criticalityStyle.color,
-                              }}
-                            >
-                              {criticalityStyle.text}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {hiddenAssumptionCount > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => setShowAllAssumptions((current) => !current)}
-                          style={{
-                            marginTop: 8,
-                            fontSize: 12,
-                            color: '#C4956A',
-                            cursor: 'pointer',
-                            background: 'none',
-                            border: 'none',
-                            padding: 0,
-                          }}
-                        >
-                          {showAllAssumptions
-                            ? 'Show fewer assumptions'
-                            : `Show ${hiddenAssumptionCount} more assumptions`}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <div style={{ display: 'flex', gap: 10, marginTop: '1.5rem', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(plainAnswerText);
-                      }}
-                      style={{
-                        background: 'transparent',
-                        border: '0.5px solid #E0D8D0',
-                        borderRadius: 999,
-                        padding: '8px 18px',
-                        fontSize: 13,
-                        color: '#6B6460',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Copy answer
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetRun}
-                      style={{
-                        background: 'transparent',
-                        border: '0.5px solid #E0D8D0',
-                        borderRadius: 999,
-                        padding: '8px 18px',
-                        fontSize: 13,
-                        color: '#6B6460',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Run again
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate('/app', {
-                          state: {
-                            agentStressPrompt: plainAnswerText,
-                            fromAgent: true,
-                          },
-                        })
-                      }
-                      style={{
-                        background: '#F0EBE3',
-                        border: '0.5px solid rgba(196,149,106,0.3)',
-                        borderRadius: 999,
-                        padding: '8px 18px',
-                        fontSize: 13,
-                        color: '#C4956A',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Stress test in Arena →
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: '2rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => setTraceOpen((o) => !o)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      margin: '1.5rem 0',
-                      cursor: 'pointer',
-                      width: '100%',
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                    }}
-                  >
-                    <div style={{ flex: 1, height: '0.5px', background: '#F0EBE3' }} />
-                    <span style={{ fontSize: 12, color: '#C4B8AE' }}>{traceOpen ? '▴' : '▾'}</span>
-                    <div style={{ flex: 1, height: '0.5px', background: '#F0EBE3' }} />
-                  </button>
-                  <div
-                    className={`agent-trace-expand${traceOpen ? ' agent-trace-expand-open' : ''}`}
-                    style={{ marginTop: traceOpen ? 16 : 0 }}
-                  >
-                    {result.stages && (
-                      <div style={{ paddingTop: 4 }}>
-                        <p
-                          style={{
-                            fontSize: 13,
-                            color: '#6B6460',
-                            lineHeight: 1.6,
-                            marginTop: 0,
-                            marginBottom: 16,
-                          }}
-                        >
-                          {buildRevisionSummary(result)}
-                        </p>
-                        {(result.iterations ?? 0) > 1 && (
-                          <div
-                            style={{
-                              fontSize: 11,
-                              color: '#C4956A',
-                              textAlign: 'center',
-                              padding: '8px 0',
-                              borderTop: '0.5px dashed #E0D8D0',
-                              borderBottom: '0.5px dashed #E0D8D0',
-                              margin: '8px 0',
-                            }}
-                          >
-                            ↻ Revision triggered — answer improved
-                          </div>
-                        )}
-                        {STAGE_ORDER.filter((id) => result.stages?.[id]?.status !== 'skipped').map((id, traceIdx, arr) => {
-                          const st = result.stages?.[id] as StagePayload | undefined;
-                          if (!st) return null;
-                          const meta = TRACE_STAGE_META[id];
-                          const out = st.output || '';
-                          const isLong = out.length > 480 || out.split('\n').length > 8;
-                          const expanded = traceOutputExpanded.has(id);
+                      </button>
+                      <div
+                        style={{
+                          maxHeight: panelJudgeOpen ? 1000 : 0,
+                          overflow: 'hidden',
+                          transition: 'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                        }}
+                      >
+                        {judgeRemarks.map((row, ri) => {
+                          const bar =
+                            row.severity === 'hi'
+                              ? '#D85A30'
+                              : row.severity === 'md'
+                                ? '#BA7517'
+                                : AR.TEXT_MUTED;
+                          const catColor = bar;
+                          const isLast = ri === judgeRemarks.length - 1;
                           return (
                             <div
-                              key={id}
+                              key={ri}
                               style={{
                                 display: 'flex',
-                                gap: 16,
-                                marginBottom: '1rem',
-                                position: 'relative',
+                                borderBottom: isLast ? 'none' : `0.5px solid ${AR.BORDER_INNER}`,
                               }}
                             >
-                              <div
-                                style={{
-                                  width: 32,
-                                  flexShrink: 0,
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                }}
-                              >
+                              <div style={{ width: 3, flexShrink: 0, background: bar }} />
+                              <div style={{ padding: '9px 14px', flex: 1 }}>
                                 <div
                                   style={{
-                                    width: 28,
-                                    height: 28,
-                                    borderRadius: '50%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: 11,
-                                    fontWeight: 500,
-                                    background: meta.bg,
-                                    color: meta.color,
+                                    fontSize: 9,
+                                    letterSpacing: '0.13em',
+                                    textTransform: 'uppercase',
+                                    marginBottom: 3,
+                                    color: catColor,
                                   }}
                                 >
-                                  {meta.letter}
+                                  {row.category}
                                 </div>
-                                {traceIdx < arr.length - 1 ? (
-                                  <div
-                                    style={{
-                                      width: 1,
-                                      minHeight: 36,
-                                      background: '#E0D8D0',
-                                      marginTop: 4,
-                                    }}
-                                  />
-                                ) : null}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                    marginBottom: 6,
-                                    flexWrap: 'wrap',
-                                  }}
-                                >
-                                  <span style={{ fontSize: 12, fontWeight: 500, color: '#1A1714' }}>
-                                    {meta.label}
-                                  </span>
-                                  {st.model ? (
-                                    <span
-                                      style={{
-                                        fontSize: 10,
-                                        background: '#F0EBE3',
-                                        color: '#6B6460',
-                                        borderRadius: 999,
-                                        padding: '2px 8px',
-                                      }}
-                                    >
-                                      {st.model}
-                                    </span>
-                                  ) : null}
-                                  <span style={{ fontSize: 10, color: '#B0A9A2' }}>
-                                    {formatDurationMs(st.duration_ms)}
-                                  </span>
-                                </div>
-                                <div style={{ position: 'relative' }}>
-                                  <pre
-                                    style={{
-                                      fontSize: 13,
-                                      color: '#6B6460',
-                                      lineHeight: 1.7,
-                                      maxHeight: expanded || !isLong ? 'none' : 120,
-                                      overflow: expanded || !isLong ? 'visible' : 'hidden',
-                                      margin: 0,
-                                      fontFamily: 'inherit',
-                                      whiteSpace: 'pre-wrap',
-                                    }}
-                                  >
-                                    {out || '—'}
-                                  </pre>
-                                  {isLong ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleTraceOutputExpand(id)}
-                                      style={{
-                                        marginTop: 6,
-                                        background: 'none',
-                                        border: 'none',
-                                        padding: 0,
-                                        color: '#C4956A',
-                                        fontSize: 12,
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      {expanded ? 'Show less' : 'Show more'}
-                                    </button>
-                                  ) : null}
+                                <div style={{ fontSize: 12, color: AR.TEXT_MID, lineHeight: 1.5 }}>
+                                  {row.text}
                                 </div>
                               </div>
                             </div>
                           );
                         })}
                       </div>
-                    )}
+                    </div>
+                  ) : null}
+                  {sourcesList.length > 0 ? (
+                    <div
+                      style={{
+                        background: AR.SURFACE,
+                        border: `0.5px solid ${AR.BORDER}`,
+                        borderRadius: 10,
+                        overflow: 'hidden',
+                        marginBottom: 16,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPanelSourcesOpen((o) => !o)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          width: '100%',
+                          padding: '11px 16px',
+                          cursor: 'pointer',
+                          transition: 'background 0.12s',
+                          background: 'transparent',
+                          border: 'none',
+                          textAlign: 'left',
+                          font: 'inherit',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#F5EFE6';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              letterSpacing: '0.16em',
+                              textTransform: 'uppercase',
+                              color: AR.TEXT_MUTED,
+                            }}
+                          >
+                            Sources used
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              padding: '2px 8px',
+                              borderRadius: 8,
+                              border: '0.5px solid #D4C4B0',
+                              color: AR.TEXT_MUTED,
+                              background: '#F0E8DC',
+                            }}
+                          >
+                            {sourcesList.length} sources
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: AR.GOLD_MUTED,
+                            transform: panelSourcesOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.25s',
+                          }}
+                        >
+                          ▾
+                        </span>
+                      </button>
+                      <div
+                        style={{
+                          maxHeight: panelSourcesOpen ? 1000 : 0,
+                          overflow: 'hidden',
+                          transition: 'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                          borderTop: panelSourcesOpen ? `0.5px solid ${AR.BORDER_INNER}` : 'none',
+                        }}
+                      >
+                        <div style={{ padding: '14px 16px' }}>
+                          {(() => {
+                            const vis = sourcesListExpanded
+                              ? sourcesList
+                              : sourcesList.slice(0, 4);
+                            const tagStyle = (cat: string) => {
+                              const c = cat.toLowerCase();
+                              if (c.includes('historical'))
+                                return { bg: '#EAF0F7', color: '#185FA5' };
+                              if (c.includes('theory') || c.includes('philosophy'))
+                                return { bg: '#EEEDFE', color: '#534AB7' };
+                              return { bg: '#F0E8DC', color: AR.TEXT_MUTED };
+                            };
+                            return (
+                              <>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                                  {vis.map((src, si) => (
+                                    <div
+                                      key={`${si}-${src.title.slice(0, 24)}`}
+                                      style={{
+                                        background: AR.SURFACE_ALT,
+                                        border: `0.5px solid ${AR.BORDER}`,
+                                        borderRadius: 7,
+                                        padding: '10px 13px',
+                                        display: 'flex',
+                                        gap: 11,
+                                        alignItems: 'flex-start',
+                                        transition: 'border-color 0.15s',
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor = AR.GOLD;
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = AR.BORDER;
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          width: 22,
+                                          height: 22,
+                                          borderRadius: '50%',
+                                          background: '#F0E8DC',
+                                          flexShrink: 0,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          fontSize: 10,
+                                          color: AR.TEXT_MUTED,
+                                          marginTop: 1,
+                                          fontFamily: 'ui-monospace, monospace',
+                                        }}
+                                      >
+                                        {String(si + 1).padStart(2, '0')}
+                                      </div>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div>
+                                          <span
+                                            style={{
+                                              fontSize: 13,
+                                              color: AR.TEXT_PRIMARY,
+                                              verticalAlign: 'middle',
+                                            }}
+                                          >
+                                            {src.title}
+                                          </span>
+                                          <span
+                                            style={{
+                                              fontSize: 9,
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.10em',
+                                              padding: '1px 6px',
+                                              borderRadius: 8,
+                                              marginLeft: 7,
+                                              verticalAlign: 'middle',
+                                              ...tagStyle(src.category),
+                                            }}
+                                          >
+                                            {src.category}
+                                          </span>
+                                        </div>
+                                        {src.meta ? (
+                                          <div
+                                            style={{
+                                              fontSize: 11,
+                                              color: AR.TEXT_FAINT,
+                                              fontStyle: 'italic',
+                                              marginTop: 2,
+                                            }}
+                                          >
+                                            {src.meta}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                {sourcesList.length > 4 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSourcesListExpanded((v) => !v)}
+                                    style={{
+                                      width: '100%',
+                                      fontSize: 11,
+                                      color: AR.GOLD,
+                                      textAlign: 'center',
+                                      padding: 8,
+                                      cursor: 'pointer',
+                                      background: 'none',
+                                      border: 'none',
+                                      borderTop: `0.5px solid ${AR.BORDER_INNER}`,
+                                      marginTop: 4,
+                                      letterSpacing: '0.06em',
+                                    }}
+                                  >
+                                    {sourcesListExpanded
+                                      ? 'Show less ↑'
+                                      : `Show ${sourcesList.length - 4} more sources ↓`}
+                                  </button>
+                                ) : null}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 10,
+                      flexWrap: 'wrap',
+                      marginTop: 4,
+                      paddingTop: 20,
+                      borderTop: `0.5px solid ${AR.BORDER_INNER}`,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(plainAnswerText);
+                      }}
+                      style={{
+                        padding: '9px 18px',
+                        border: '0.5px solid #D4C4B0',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'Georgia, serif',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = AR.GOLD;
+                        e.currentTarget.style.color = AR.GOLD;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = '#D4C4B0';
+                        e.currentTarget.style.color = '#6B5040';
+                      }}
+                    >
+                      Copy answer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={runAgainWithSameQuestion}
+                      style={{
+                        padding: '9px 18px',
+                        border: '0.5px solid #D4C4B0',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'Georgia, serif',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = AR.GOLD;
+                        e.currentTarget.style.color = AR.GOLD;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = '#D4C4B0';
+                        e.currentTarget.style.color = '#6B5040';
+                      }}
+                    >
+                      Run again
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRedirectIntent('/arena');
+                        navigate('/app', {
+                          state: {
+                            agentStressPrompt: plainAnswerText,
+                            fromAgent: true,
+                          },
+                        });
+                      }}
+                      style={{
+                        padding: '9px 18px',
+                        border: `0.5px solid ${AR.GOLD}`,
+                        borderRadius: 6,
+                        background: '#FAF3EA',
+                        color: AR.GOLD,
+                        fontSize: 13,
+                        fontFamily: 'Georgia, serif',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Stress test in Arena →
+                    </button>
                   </div>
-                </div>
-
-                {result?.task_id &&
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 8,
+                      flexWrap: 'wrap',
+                      marginTop: 28,
+                      marginBottom: 12,
+                    }}
+                  >
+                    {[
+                      'Go deeper on this',
+                      'Challenge the main assumption',
+                      'Summarise in 3 points',
+                      "What's the opposing view?",
+                    ].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => {
+                          setFollowUp(s);
+                          requestAnimationFrame(() => followUpInputRef.current?.focus());
+                        }}
+                        style={{
+                          padding: '7px 16px',
+                          borderRadius: 20,
+                          border: '0.5px solid #D4C4B0',
+                          background: 'transparent',
+                          color: '#6B5040',
+                          fontSize: 13,
+                          fontFamily: 'Georgia, serif',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = AR.GOLD;
+                          e.currentTarget.style.color = AR.GOLD;
+                          e.currentTarget.style.background = '#FAF3EA';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = '#D4C4B0';
+                          e.currentTarget.style.color = '#6B5040';
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                  {result?.task_id &&
                   (result.refinement_count ?? 0) < 10 &&
                   (result.final_answer || result.stages) &&
-                  (!isRunning || isRefining) && (
-                    <div style={{ marginTop: '1.5rem' }}>
-                      <div style={{ margin: '1.5rem 0', height: '0.5px', background: '#F0EBE3' }} />
-
+                  (!isRunning || isRefining) ? (
+                    <div style={{ marginBottom: 20 }}>
                       {!isRefining ? (
-                        <>
-                          <div
+                        <div
+                          className="agent-follow-shell"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            border: '0.5px solid #D4C4B0',
+                            borderRadius: 12,
+                            padding: '12px 16px',
+                            background: AR.SURFACE_ALT,
+                            transition: 'border-color 0.2s',
+                            marginBottom: 8,
+                          }}
+                        >
+                          <input
+                            ref={followUpInputRef}
+                            type="text"
+                            value={followUp}
+                            onChange={(e) => setFollowUp(e.target.value.slice(0, 1000))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void handleRefine();
+                              }
+                            }}
+                            placeholder="Ask a follow-up, request more depth, challenge an assumption..."
+                            disabled={isRefining}
                             style={{
+                              flex: 1,
+                              border: 'none',
+                              background: 'transparent',
+                              outline: 'none',
+                              fontSize: 14,
+                              color: AR.TEXT_PRIMARY,
+                              fontFamily: 'Georgia, serif',
+                            }}
+                          />
+                          <button
+                            type="button"
+                            disabled={!followUp.trim() || isRefining}
+                            onClick={() => void handleRefine()}
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: '50%',
+                              border: 'none',
+                              background: followUp.trim() ? AR.GOLD : '#E8DDD0',
+                              transition: 'background 0.2s, cursor 0.2s',
+                              cursor: followUp.trim() ? 'pointer' : 'default',
                               display: 'flex',
-                              gap: 8,
-                              flexWrap: 'wrap',
-                              marginBottom: 12,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
                             }}
                           >
-                            {[
-                              'Go deeper on this',
-                              'Challenge the main assumption',
-                              'Summarise in 3 points',
-                              "What's the opposing view?",
-                            ].map((s) => (
-                              <button
-                                key={s}
-                                type="button"
-                                onClick={() => setRefinementInput(s)}
+                            {isRefining ? (
+                              <span
                                 style={{
-                                  background: '#F5F2EF',
-                                  border: '0.5px solid #E0D8D0',
-                                  borderRadius: 999,
-                                  padding: '6px 14px',
-                                  fontSize: 12,
-                                  color: '#6B6460',
-                                  cursor: 'pointer',
-                                  transition: 'background 150ms ease',
+                                  width: 14,
+                                  height: 14,
+                                  border: '2px solid #F0EBE3',
+                                  borderTopColor: AR.GOLD,
+                                  borderRadius: '50%',
+                                  animation: 'agentSpin 0.9s linear infinite',
+                                  display: 'inline-block',
                                 }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = '#F0EBE3';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = '#F5F2EF';
-                                }}
+                              />
+                            ) : (
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                aria-hidden
                               >
-                                {s}
-                              </button>
-                            ))}
-                          </div>
-
-                          <div
-                            style={{
-                              background: '#FFFFFF',
-                              border: refineFocus ? '0.5px solid #C4956A' : '0.5px solid #E0D8D0',
-                              borderRadius: 14,
-                              padding: '12px 14px',
-                              display: 'flex',
-                              gap: 10,
-                              alignItems: 'flex-end',
-                              transition: 'border-color 200ms ease',
-                            }}
-                          >
-                            <textarea
-                              value={refinementInput}
-                              onChange={(e) => setRefinementInput(e.target.value.slice(0, 1000))}
-                              onFocus={() => setRefineFocus(true)}
-                              onBlur={() => setRefineFocus(false)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                  e.preventDefault();
-                                  void handleRefine();
-                                }
-                              }}
-                              placeholder="Ask a follow-up, request more depth, challenge an assumption..."
-                              disabled={isRefining}
-                              style={{
-                                flex: 1,
-                                border: 'none',
-                                outline: 'none',
-                                resize: 'none',
-                                fontSize: 14,
-                                color: '#1A1714',
-                                background: 'transparent',
-                                minHeight: 44,
-                                maxHeight: 120,
-                                fontFamily: 'inherit',
-                              }}
-                            />
-                            <button
-                              type="button"
-                              disabled={!refinementInput.trim() || isRefining}
-                              onClick={() => void handleRefine()}
-                              style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: '50%',
-                                background: refinementInput.trim() ? '#1A1714' : '#F0EBE3',
-                                border: 'none',
-                                cursor: refinementInput.trim() ? 'pointer' : 'default',
-                                transition: 'all 150ms ease',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: refinementInput.trim() ? '#FAF7F4' : '#C4B8AE',
-                                fontSize: 16,
-                                flexShrink: 0,
-                              }}
-                            >
-                              {isRefining ? (
-                                <span style={{ width: 14, height: 14, border: '2px solid #F0EBE3', borderTopColor: '#C4956A', borderRadius: '50%', animation: 'agentSpin 0.9s linear infinite', display: 'inline-block' }} />
-                              ) : (
-                                '→'
-                              )}
-                            </button>
-                          </div>
-                        </>
+                                <path
+                                  d="M5 12h14M13 6l6 6-6 6"
+                                  stroke={followUp.trim() ? AR.SURFACE : '#B8A898'}
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
                       ) : (
-                        <p style={{ fontSize: 12, color: '#6B6460', marginBottom: 0 }}>
+                        <p style={{ fontSize: 12, color: AR.TEXT_MUTED, marginBottom: 0 }}>
                           Refining your answer...
                         </p>
                       )}
@@ -3206,21 +3836,11 @@ export function AgentPage() {
                         </p>
                       ) : null}
                     </div>
-                  )}
-
-                {(result?.refinement_count ?? 0) >= 10 && (result?.final_answer || result?.stages) && !isRunning && (
-                  <p style={{ fontSize: 12, color: '#6B6460', textAlign: 'center', marginTop: '1.5rem' }}>
-                    Maximum refinements reached. Start a new task to continue.
-                  </p>
-                )}
+                  ) : null}
 
                 <div
                   aria-expanded={challengesVisible || challenges.length > 0 || isChallengingAnswer}
-                  style={{
-                    marginTop: '2rem',
-                    paddingTop: '1.5rem',
-                    borderTop: '0.5px solid #F0EBE3',
-                  }}
+                  style={{ marginTop: 0 }}
                 >
                   {!isChallengingAnswer && challenges.length === 0 ? (
                     <>
@@ -3228,31 +3848,44 @@ export function AgentPage() {
                         type="button"
                         onClick={() => void handleChallengeAnswer()}
                         style={{
-                          display: 'flex',
+                          display: 'inline-flex',
                           alignItems: 'center',
-                          gap: 8,
+                          gap: 7,
+                          padding: '9px 18px',
+                          border: '0.5px solid #D4C4B0',
+                          borderRadius: 20,
                           background: 'transparent',
-                          border: '0.5px solid #E0D8D0',
-                          borderRadius: 999,
-                          padding: '9px 20px',
+                          color: '#6B5040',
                           fontSize: 13,
-                          color: '#6B6460',
+                          fontFamily: 'Georgia, serif',
                           cursor: 'pointer',
-                          transition: 'all 150ms ease',
+                          transition: 'all 0.2s',
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = '#C4956A';
-                          e.currentTarget.style.color = '#C4956A';
+                          e.currentTarget.style.borderColor = AR.GOLD;
+                          e.currentTarget.style.color = AR.GOLD;
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = '#E0D8D0';
-                          e.currentTarget.style.color = '#6B6460';
+                          e.currentTarget.style.borderColor = '#D4C4B0';
+                          e.currentTarget.style.color = '#6B5040';
                         }}
                       >
-                        <Zap style={{ width: 16, height: 16 }} />
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden
+                        >
+                          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                        </svg>
                         Challenge this answer
                       </button>
-                      <p style={{ fontSize: 11, color: '#B0A9A2', marginTop: 6, marginBottom: 0 }}>
+                      <p style={{ fontSize: 12, color: AR.TEXT_FAINT, marginTop: 4, marginBottom: 0 }}>
                         3 opposing minds will attack this answer
                       </p>
                       {challengeSectionError ? (
@@ -3486,6 +4119,22 @@ export function AgentPage() {
                       </div>
                     </div>
                   ) : null}
+                </div>
+
+                {(result?.refinement_count ?? 0) >= 10 &&
+                  (result?.final_answer || result?.stages) &&
+                  !isRunning && (
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: AR.TEXT_MUTED,
+                        textAlign: 'center',
+                        marginTop: '1.5rem',
+                      }}
+                    >
+                      Maximum refinements reached. Start a new task to continue.
+                    </p>
+                  )}
                 </div>
               </>
             )}
