@@ -13,14 +13,14 @@ You are the Synthesizer stage of an AI reasoning pipeline.
 
 You receive the full pipeline output.
 Your job: produce the final answer in a structured JSON format where
-each sentence has a confidence score.
+each sentence has a confidence label.
 
-Confidence scoring guide:
-90-100: Verified fact, multiple sources
-70-89:  Well-supported claim
-50-69:  Reasonable inference
-30-49:  Uncertain, limited support
-0-29:   Speculation, flag clearly
+For EACH sentence, set "confidence" to exactly one of these strings:
+- "verified" — 90%+ equivalent: verified fact, multiple sources
+- "supported" — 70–89% equivalent: well-supported claim
+- "uncertain" — below 70% or contested: inference, limited support, or speculation
+
+Do not use numeric confidence, "high"/"medium"/"low", or any other value.
 
 Output valid JSON only. No preamble.
 
@@ -28,7 +28,7 @@ Output valid JSON only. No preamble.
   "sentences": [
     {
       "text": "sentence text here",
-      "confidence": 85,
+      "confidence": "supported",
       "type": "fact|inference|recommendation|caveat"
     }
   ],
@@ -45,12 +45,54 @@ Output valid JSON only. No preamble.
 """
 
 
+def _numeric_to_confidence_label(n: float) -> str:
+    if n >= 90:
+        return "verified"
+    if n >= 70:
+        return "supported"
+    return "uncertain"
+
+
+def _normalize_sentence_confidence(raw) -> str:
+    if isinstance(raw, str):
+        k = raw.lower().strip()
+        if k in ("verified", "high"):
+            return "verified"
+        if k in ("supported", "medium"):
+            return "supported"
+        if k in ("uncertain", "low"):
+            return "uncertain"
+        try:
+            return _numeric_to_confidence_label(float(k))
+        except (TypeError, ValueError):
+            return "supported"
+    if isinstance(raw, (int, float)):
+        return _numeric_to_confidence_label(float(raw))
+    return "supported"
+
+
+def _normalize_synthesis_payload(data: dict) -> dict:
+    out = dict(data)
+    sents = out.get("sentences")
+    if not isinstance(sents, list):
+        return out
+    new_sents: list[dict] = []
+    for item in sents:
+        if not isinstance(item, dict):
+            continue
+        row = dict(item)
+        row["confidence"] = _normalize_sentence_confidence(item.get("confidence"))
+        new_sents.append(row)
+    out["sentences"] = new_sents
+    return out
+
+
 def _default_synthesis_payload(full_text: str, overall: float = 70.0) -> dict:
     return {
         "sentences": [
             {
                 "text": full_text,
-                "confidence": int(overall),
+                "confidence": _numeric_to_confidence_label(float(overall)),
                 "type": "fact",
             }
         ],
@@ -70,6 +112,7 @@ def _parse_synthesizer_response(response: str) -> tuple[dict, str]:
         try:
             data = json.loads(json_match.group())
             if isinstance(data, dict) and "sentences" in data:
+                data = _normalize_synthesis_payload(data)
                 out = json.dumps(data, ensure_ascii=False)
                 return data, out
         except json.JSONDecodeError:
@@ -77,6 +120,7 @@ def _parse_synthesizer_response(response: str) -> tuple[dict, str]:
     try:
         data = json.loads(text)
         if isinstance(data, dict) and "sentences" in data:
+            data = _normalize_synthesis_payload(data)
             out = json.dumps(data, ensure_ascii=False)
             return data, out
     except json.JSONDecodeError:

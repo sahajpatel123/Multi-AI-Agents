@@ -165,7 +165,7 @@ type HistoryPayload = {
 
 type ParsedSentence = {
   text: string;
-  confidence?: number;
+  confidence?: number | string;
   type?: string;
 };
 
@@ -175,6 +175,36 @@ type ParsedSynthesis = {
   flags?: string[];
   sources_referenced?: string[];
 };
+
+type AnswerSentenceConfidence = 'verified' | 'supported' | 'uncertain';
+
+type AnswerSentenceView = {
+  text: string;
+  confidence: AnswerSentenceConfidence;
+};
+
+function numericConfidenceToLevel(c: number): AnswerSentenceConfidence {
+  if (c >= 90) return 'verified';
+  if (c >= 70) return 'supported';
+  return 'uncertain';
+}
+
+function sentenceConfidenceLevel(sent: ParsedSentence): AnswerSentenceConfidence {
+  const raw = sent.confidence;
+  if (typeof raw === 'string') {
+    const k = raw.toLowerCase().trim();
+    if (k === 'verified' || k === 'high') return 'verified';
+    if (k === 'supported' || k === 'medium') return 'supported';
+    if (k === 'uncertain' || k === 'low') return 'uncertain';
+    const n = Number.parseFloat(k);
+    if (!Number.isNaN(n)) return numericConfidenceToLevel(n);
+    return 'supported';
+  }
+  if (typeof raw === 'number' && !Number.isNaN(raw)) {
+    return numericConfidenceToLevel(raw);
+  }
+  return 'supported';
+}
 
 const TRACE_STAGE_META: Record<
   StageId,
@@ -424,6 +454,8 @@ export function AgentPage() {
   const menuLayerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [confActive, setConfActive] = useState(false);
+  const [confToggleHovered, setConfToggleHovered] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem('agent_sidebar') !== 'closed');
   const [navToggleHovered, setNavToggleHovered] = useState(false);
@@ -781,6 +813,31 @@ export function AgentPage() {
     [result?.final_answer, parsedAnswer],
   );
 
+  const answerSentences = useMemo((): AnswerSentenceView[] => {
+    if (!parsedAnswer?.sentences?.length) return [];
+    return parsedAnswer.sentences.map((s) => ({
+      text: s.text,
+      confidence: sentenceConfidenceLevel(s),
+    }));
+  }, [parsedAnswer]);
+
+  const confidenceLegendStats = useMemo(() => {
+    const total = answerSentences.length;
+    if (total === 0) return null;
+    const verifiedCount = answerSentences.filter((s) => s.confidence === 'verified').length;
+    const supportedCount = answerSentences.filter((s) => s.confidence === 'supported').length;
+    const uncertainCount = answerSentences.filter((s) => s.confidence === 'uncertain').length;
+    return {
+      total,
+      verifiedCount,
+      supportedCount,
+      uncertainCount,
+      verifiedPct: Math.round((verifiedCount / total) * 100),
+      supportedPct: Math.round((supportedCount / total) * 100),
+      uncertainPct: Math.round((uncertainCount / total) * 100),
+    };
+  }, [answerSentences]);
+
   const intelligenceScore = useMemo(() => {
     const candidate = result?.intelligence_score;
     if (!candidate || Object.keys(candidate).length === 0) return null;
@@ -839,6 +896,10 @@ export function AgentPage() {
     setScoreTooltip(null);
     setScoreCopied(false);
   }, [result?.task_id, result?.refinement_count]);
+
+  useEffect(() => {
+    setConfActive(false);
+  }, [result?.task_id]);
 
   const handleShareScore = useCallback(async () => {
     if (!intelligenceScore) return;
@@ -1259,6 +1320,19 @@ export function AgentPage() {
           height: 8px;
           border-radius: 50%;
           animation: agentChalDotPulse 1.2s ease-in-out infinite;
+        }
+        .answer-text span {
+          color: #2C1810;
+          transition: color 0.45s ease;
+        }
+        .answer-text.conf-active span.verified {
+          color: #2D6A0A;
+        }
+        .answer-text.conf-active span.supported {
+          color: #8B5A00;
+        }
+        .answer-text.conf-active span.uncertain {
+          color: #C0392B;
         }
       `}</style>
       {!isMobile ? (
@@ -1946,88 +2020,269 @@ export function AgentPage() {
                       Agent Response
                     </span>
                   </div>
-                  {parsedAnswer ? (
-                    <div style={{ fontSize: 15, lineHeight: 2.0, color: '#1A1714' }}>
-                      {parsedAnswer.sentences.map((sent, idx) => {
-                        const cRaw = sent.confidence;
-                        const c =
-                          typeof cRaw === 'number' && !Number.isNaN(cRaw)
-                            ? cRaw
-                            : typeof cRaw === 'string'
-                              ? Number.parseFloat(cRaw) || 70
-                              : 70;
-                        const muted = c < 50;
-                        let dot: ReactNode = null;
-                        if (c >= 90) {
-                          dot = null;
-                        } else if (c >= 70) {
-                          dot = (
-                            <span
-                              title={`${c}% confident`}
-                              style={{
-                                display: 'inline-block',
-                                width: 5,
-                                height: 5,
-                                borderRadius: '50%',
-                                marginLeft: 4,
-                                marginBottom: 2,
-                                verticalAlign: 'middle',
-                                background: 'rgba(138,168,153,0.8)',
-                                cursor: 'help',
-                              }}
-                            />
-                          );
-                        } else if (c >= 50) {
-                          dot = (
-                            <span
-                              title={`${c}% confident`}
-                              style={{
-                                display: 'inline-block',
-                                width: 5,
-                                height: 5,
-                                borderRadius: '50%',
-                                marginLeft: 4,
-                                marginBottom: 2,
-                                verticalAlign: 'middle',
-                                background: 'rgba(196,149,106,0.8)',
-                                cursor: 'help',
-                              }}
-                            />
-                          );
-                        } else {
-                          dot = (
-                            <span
-                              title={`${c}% confident — uncertain`}
-                              style={{
-                                display: 'inline-block',
-                                width: 5,
-                                height: 5,
-                                borderRadius: '50%',
-                                marginLeft: 4,
-                                marginBottom: 2,
-                                verticalAlign: 'middle',
-                                background: 'rgba(229,115,115,0.7)',
-                                cursor: 'help',
-                              }}
-                            />
-                          );
-                        }
-                        return (
-                          <span key={`${idx}-${sent.text.slice(0, 24)}`}>
-                            <span style={{ color: muted ? '#6B6460' : '#1A1714' }}>{sent.text}</span>
-                            {dot}
-                            {idx < parsedAnswer.sentences.length - 1 ? ' ' : null}
+                  {answerSentences.length > 0 ? (
+                    <>
+                      <div
+                        className={`answer-text ${confActive ? 'conf-active' : ''}`}
+                        style={{
+                          fontSize: '15px',
+                          lineHeight: '1.8',
+                          color: '#2C1810',
+                          fontFamily: 'Georgia, serif',
+                          fontStyle: 'italic',
+                          marginBottom: '24px',
+                        }}
+                      >
+                        {answerSentences.map((sentence, i) => (
+                          <span
+                            key={`${i}-${sentence.text.slice(0, 32)}`}
+                            className={sentence.confidence}
+                            style={{ transition: 'color 0.45s ease' }}
+                          >
+                            {sentence.text}{' '}
                           </span>
-                        );
-                      })}
-                    </div>
+                        ))}
+                      </div>
+                      {confidenceLegendStats && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 0,
+                            marginBottom: '24px',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setConfActive((v) => !v)}
+                            onMouseEnter={() => setConfToggleHovered(true)}
+                            onMouseLeave={() => setConfToggleHovered(false)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '7px',
+                              padding: '6px 14px',
+                              border: '0.5px solid',
+                              borderColor: confToggleHovered
+                                ? '#C4956A'
+                                : confActive
+                                  ? '#C4956A'
+                                  : '#D4C4B0',
+                              borderRadius: '20px',
+                              background: confActive ? '#FAF3EA' : 'transparent',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              color: confToggleHovered || confActive ? '#C4956A' : '#8C7355',
+                              fontFamily: 'Georgia, serif',
+                              letterSpacing: '0.04em',
+                              transition: 'all 0.2s ease',
+                              alignSelf: 'flex-start',
+                            }}
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              aria-hidden
+                            >
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                            {confActive ? 'Hide confidence' : 'Check confidence'}
+                            <svg
+                              width="10"
+                              height="10"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              style={{
+                                transform: confActive ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.3s ease',
+                              }}
+                              aria-hidden
+                            >
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </button>
+                          <div
+                            style={{
+                              maxHeight: confActive ? 200 : 0,
+                              opacity: confActive ? 1 : 0,
+                              overflow: 'hidden',
+                              transition:
+                                'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease',
+                            }}
+                          >
+                            <div
+                              style={{
+                                background: '#FDFAF6',
+                                border: '0.5px solid #E0D5C5',
+                                borderRadius: 8,
+                                padding: '14px 16px',
+                                marginTop: 8,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: 10,
+                                  letterSpacing: '0.16em',
+                                  textTransform: 'uppercase',
+                                  color: '#C4A882',
+                                  marginBottom: 8,
+                                }}
+                              >
+                                Confidence key
+                              </div>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 10,
+                                  marginBottom: 6,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: '50%',
+                                    background: '#639922',
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <span style={{ fontSize: 12, color: '#4A3728' }}>
+                                  Verified — supported at 90%+
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    color: '#A89070',
+                                    fontFamily: 'ui-monospace, monospace',
+                                    marginLeft: 'auto',
+                                  }}
+                                >
+                                  {confidenceLegendStats.verifiedPct}%
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 10,
+                                  marginBottom: 6,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: '50%',
+                                    background: '#BA7517',
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <span style={{ fontSize: 12, color: '#4A3728' }}>
+                                  Supported — plausible, 70–89%
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    color: '#A89070',
+                                    fontFamily: 'ui-monospace, monospace',
+                                    marginLeft: 'auto',
+                                  }}
+                                >
+                                  {confidenceLegendStats.supportedPct}%
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                                <span
+                                  style={{
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: '50%',
+                                    background: '#D85A30',
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <span style={{ fontSize: 12, color: '#4A3728' }}>
+                                  Uncertain — contested or unverified
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    color: '#A89070',
+                                    fontFamily: 'ui-monospace, monospace',
+                                    marginLeft: 'auto',
+                                  }}
+                                >
+                                  {confidenceLegendStats.uncertainPct}%
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  marginTop: 10,
+                                  height: 4,
+                                  background: '#EDE4D8',
+                                  borderRadius: 2,
+                                  overflow: 'hidden',
+                                  display: 'flex',
+                                }}
+                              >
+                                {confidenceLegendStats.verifiedPct > 0 ? (
+                                  <div style={{ width: `${confidenceLegendStats.verifiedPct}%`, background: '#639922' }} />
+                                ) : null}
+                                {confidenceLegendStats.supportedPct > 0 ? (
+                                  <div style={{ width: `${confidenceLegendStats.supportedPct}%`, background: '#BA7517' }} />
+                                ) : null}
+                                {confidenceLegendStats.uncertainPct > 0 ? (
+                                  <div style={{ width: `${confidenceLegendStats.uncertainPct}%`, background: '#D85A30' }} />
+                                ) : null}
+                              </div>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  marginTop: 5,
+                                }}
+                              >
+                                <span style={{ fontSize: 10, color: '#A89070' }}>
+                                  {confidenceLegendStats.verifiedPct}% verified
+                                </span>
+                                <span style={{ fontSize: 10, color: '#A89070' }}>
+                                  {confidenceLegendStats.supportedPct}% supported
+                                </span>
+                                <span style={{ fontSize: 10, color: '#A89070' }}>
+                                  {confidenceLegendStats.uncertainPct}% uncertain
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   ) : (
-                    <div style={{ fontSize: 15, lineHeight: 1.8, color: '#1A1714', whiteSpace: 'pre-wrap' }}>
-                      {result.final_answer || 'No final answer returned.'}
+                    <div
+                      style={{
+                        fontSize: 15,
+                        lineHeight: 1.8,
+                        color: '#2C1810',
+                        fontFamily: 'Georgia, serif',
+                        fontStyle: 'italic',
+                        whiteSpace: 'pre-wrap',
+                        marginBottom: '24px',
+                      }}
+                    >
+                      {plainAnswerText || result.final_answer || 'No final answer returned.'}
                     </div>
                   )}
                   {intelligenceScore ? (
-                    <div style={{ marginTop: '1.5rem', marginBottom: parsedAnswer ? '1rem' : 0 }}>
+                    <div style={{ marginTop: '1.5rem', marginBottom: answerSentences.length > 0 ? '1rem' : 0 }}>
                       <div
                         style={{
                           display: 'flex',
@@ -2207,59 +2462,6 @@ export function AgentPage() {
                       </div>
                     </div>
                   ) : null}
-                  {parsedAnswer && (
-                    <div style={{ marginTop: '1rem' }}>
-                      <div
-                        style={{
-                          fontSize: 10,
-                          letterSpacing: '0.1em',
-                          textTransform: 'uppercase',
-                          color: '#B0A9A2',
-                          marginBottom: 6,
-                        }}
-                      >
-                        Confidence indicators
-                      </div>
-                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: '#8AA899',
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span style={{ fontSize: 11, color: '#6B6460' }}>Verified (90%+)</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: '#C4956A',
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span style={{ fontSize: 11, color: '#6B6460' }}>Supported (70–89%)</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: '#E57373',
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span style={{ fontSize: 11, color: '#6B6460' }}>Uncertain (&lt;70%)</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   {parsedAnswer?.sources_referenced && parsedAnswer.sources_referenced.length > 0 && (
                     <div style={{ marginTop: '1.25rem' }}>
                       <div
