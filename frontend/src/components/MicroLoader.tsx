@@ -3,7 +3,7 @@ import { getWordPoints } from '../hooks/useCalligraphyCanvas';
 
 type LoaderPhase = 'draw' | 'hold' | 'fade';
 
-const WORDS = ['thinking', 'searching', 'loading', 'working'] as const;
+const WORDS = ['thinking', 'loading', 'working', 'finding'] as const;
 
 export default function MicroLoader() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -30,9 +30,25 @@ export default function MicroLoader() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    loadWord(WORDS[wordIndexRef.current]);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    let wordReady = false;
+
+    const fontTimeout = setTimeout(() => {
+      if (!wordReady) {
+        loadWord(WORDS[wordIndexRef.current]);
+        wordReady = true;
+      }
+    }, 800);
+
+    document.fonts.ready.then(() => {
+      clearTimeout(fontTimeout);
+      if (!wordReady) {
+        loadWord(WORDS[wordIndexRef.current]);
+        wordReady = true;
+      }
+    });
 
     const render = () => {
       frameRef.current += 1;
@@ -92,6 +108,7 @@ export default function MicroLoader() {
     animationFrameRef.current = window.requestAnimationFrame(render);
 
     return () => {
+      clearTimeout(fontTimeout);
       if (animationFrameRef.current != null) {
         window.cancelAnimationFrame(animationFrameRef.current);
       }

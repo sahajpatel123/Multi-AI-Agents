@@ -120,10 +120,27 @@ export function CalligraphyLoader({
     if (!canvas) return;
 
     dotRefs.current = dotRefs.current.slice(0, STAGE_KEYS.length);
-    loadStageWord(getStageKey(stage) || STAGE_KEYS[wordIndexRef.current]);
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    let wordReady = false;
+    const initialStageKey = getStageKey(stage) || STAGE_KEYS[wordIndexRef.current];
+
+    const fontTimeout = setTimeout(() => {
+      if (!wordReady) {
+        loadStageWord(initialStageKey);
+        wordReady = true;
+      }
+    }, 800);
+
+    document.fonts.ready.then(() => {
+      clearTimeout(fontTimeout);
+      if (!wordReady) {
+        loadStageWord(initialStageKey);
+        wordReady = true;
+      }
+    });
 
     const render = () => {
       frameRef.current += 1;
@@ -188,6 +205,7 @@ export function CalligraphyLoader({
     animationFrameRef.current = window.requestAnimationFrame(render);
 
     return () => {
+      clearTimeout(fontTimeout);
       if (animationFrameRef.current != null) {
         window.cancelAnimationFrame(animationFrameRef.current);
       }
