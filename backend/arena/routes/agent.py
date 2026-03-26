@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from arena.core.agent_pipeline import (
@@ -58,6 +58,10 @@ class BridgeRequest(BaseModel):
     original_question: str
     winning_persona: str = ""
     arena_score: int = 0
+
+
+class AgentTaskRenameRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=120)
 
 
 ANALYST_CHALLENGE_PROMPT = """
@@ -568,6 +572,49 @@ async def get_agent_history(
 
     history = get_user_task_history(db=db, user_id=user.id, page=page, per_page=20)
     return JSONResponse(content=history)
+
+
+@router.patch("/tasks/{task_id}/rename")
+async def rename_agent_task(
+    task_id: str,
+    body: AgentTaskRenameRequest,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+    trimmed = body.title.strip()
+    if not trimmed:
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+    row.title = trimmed[:120]
+    db.commit()
+    db.refresh(row)
+    return JSONResponse(content={"success": True, "title": row.title})
+
+
+@router.delete("/tasks/{task_id}")
+async def delete_agent_task(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+    db.delete(row)
+    db.commit()
+    return JSONResponse(content={"success": True})
 
 
 @router.get("/memory/context")

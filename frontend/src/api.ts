@@ -779,6 +779,47 @@ export async function getAgentHistory(page: number = 1): Promise<unknown> {
   return data;
 }
 
+export async function renameAgentTask(
+  taskId: string,
+  title: string,
+): Promise<{ success: boolean; title: string }> {
+  const response = await apiFetch(
+    `${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/rename`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    },
+  );
+  const data = await parseJsonSafely<
+    { success?: boolean; title?: string; detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Rename failed'), response.status, data);
+  }
+  if (!data || data.success !== true || typeof data.title !== 'string') {
+    throw new Error('Invalid rename response');
+  }
+  return { success: true, title: data.title };
+}
+
+export async function deleteAgentTask(taskId: string): Promise<{ success: boolean }> {
+  const response = await apiFetch(
+    `${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}`,
+    { method: 'DELETE' },
+  );
+  const data = await parseJsonSafely<{ success?: boolean; detail?: string | { message?: string } }>(
+    response,
+  );
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Delete failed'), response.status, data);
+  }
+  if (!data || data.success !== true) {
+    throw new Error('Invalid delete response');
+  }
+  return { success: true };
+}
+
 export async function getMemoryContext(task: string = ''): Promise<unknown> {
   const q = encodeURIComponent(task);
   const response = await apiFetch(`${API_BASE}/agent/memory/context?task=${q}`);

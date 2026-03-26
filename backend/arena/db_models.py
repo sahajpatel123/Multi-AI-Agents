@@ -362,6 +362,7 @@ class AgentTask(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     task_id = Column(String(64), unique=True, nullable=False, index=True)
+    title = Column(String(512), nullable=True)
     task_text = Column(Text, nullable=False)
     final_answer = Column(Text, nullable=True)
     final_score = Column(Integer, nullable=True)

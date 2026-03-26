@@ -389,6 +389,7 @@ def get_user_task_history(
         "tasks": [
             {
                 "task_id": t.task_id,
+                "title": t.title,
                 "task_text": t.task_text,
                 "final_score": t.final_score,
                 "final_confidence": t.final_confidence,

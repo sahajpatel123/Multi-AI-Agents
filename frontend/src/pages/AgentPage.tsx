@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Lock, X, Zap } from 'lucide-react';
+import { Ellipsis, Lock, Pencil, Trash2, X, Zap } from 'lucide-react';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
   challengeAgentAnswer,
+  deleteAgentTask,
   getAgentHistory,
   getAgentRebuttal,
   getAgentResult,
@@ -13,6 +14,7 @@ import {
   getMe,
   getMemoryContext,
   refineAgentAnswer,
+  renameAgentTask,
   runAgentTask,
   type AgentChallengeItem,
 } from '../api';
@@ -144,6 +146,7 @@ type MemoryContextPayload = {
 
 type HistoryTask = {
   task_id: string;
+  title?: string | null;
   task_text: string;
   final_score: number | null;
   final_confidence: number | null;
@@ -334,6 +337,52 @@ function AgentProfileSidebarRow({ user }: { user: User | null }) {
   );
 }
 
+type AgentSidebarMenuItemProps = {
+  icon: ReactNode;
+  label: string;
+  color: string;
+  hoverBackground: string;
+  onClick: () => void;
+};
+
+function AgentSidebarMenuItem({
+  icon,
+  label,
+  color,
+  hoverBackground,
+  onClick,
+}: AgentSidebarMenuItemProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="w-full flex items-center gap-2"
+      style={{
+        padding: '8px 12px',
+        fontSize: '13px',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        transition: 'all 150ms ease',
+        color,
+        background: isHovered ? hoverBackground : 'transparent',
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function agentHistoryDisplayTitle(item: HistoryTask): string {
+  const t = item.title?.trim();
+  if (t) return t;
+  const q = item.task_text || '';
+  return q.length > 60 ? `${q.slice(0, 60)}…` : q;
+}
+
 export function AgentPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -368,6 +417,12 @@ export function AgentPage() {
   const [showAllAssumptions, setShowAllAssumptions] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
+  const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
+  const menuLayerRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem('agent_sidebar') !== 'closed');
@@ -450,6 +505,23 @@ export function AgentPage() {
   useEffect(() => {
     void loadTaskHistory();
   }, [loadTaskHistory]);
+
+  useEffect(() => {
+    if (!openMenuTaskId && !confirmDeleteTaskId) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (menuLayerRef.current?.contains(event.target as Node)) return;
+      setOpenMenuTaskId(null);
+      setConfirmDeleteTaskId(null);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [openMenuTaskId, confirmDeleteTaskId]);
+
+  useEffect(() => {
+    if (!editingTaskId) return;
+    editInputRef.current?.focus();
+    editInputRef.current?.select();
+  }, [editingTaskId]);
 
   useEffect(() => {
     if (!canAgent || authLoading) return;
@@ -665,6 +737,10 @@ export function AgentPage() {
   };
 
   const resetRun = () => {
+    setOpenMenuTaskId(null);
+    setConfirmDeleteTaskId(null);
+    setEditingTaskId(null);
+    setEditingValue('');
     setSearchParams({});
     setBridgeMeta(null);
     setResult(null);
@@ -803,6 +879,49 @@ export function AgentPage() {
     [isMobile, setSearchParams],
   );
 
+  const startRenameAgent = (item: HistoryTask) => {
+    const currentLabel = item.title?.trim() || item.task_text;
+    setEditingTaskId(item.task_id);
+    setEditingValue(currentLabel);
+    setOpenMenuTaskId(null);
+    setConfirmDeleteTaskId(null);
+  };
+
+  const cancelRenameAgent = () => {
+    setEditingTaskId(null);
+    setEditingValue('');
+  };
+
+  const saveRenameAgent = (taskId: string) => {
+    const nextValue = editingValue.trim();
+    if (!nextValue) {
+      cancelRenameAgent();
+      return;
+    }
+    setTaskHistory((prev) =>
+      prev.map((t) => (t.task_id === taskId ? { ...t, title: nextValue } : t)),
+    );
+    setEditingTaskId(null);
+    setEditingValue('');
+    void renameAgentTask(taskId, nextValue).catch(() => {
+      setToastMessage('Could not rename task');
+      void loadTaskHistory();
+    });
+  };
+
+  const deleteHistoryItem = (taskId: string) => {
+    if (result?.task_id === taskId) {
+      resetRun();
+    }
+    setOpenMenuTaskId(null);
+    setConfirmDeleteTaskId(null);
+    setTaskHistory((prev) => prev.filter((t) => t.task_id !== taskId));
+    void deleteAgentTask(taskId).catch(() => {
+      setToastMessage('Could not delete task');
+      void loadTaskHistory();
+    });
+  };
+
   const handleChallengeAnswer = useCallback(async () => {
     if (!result) return;
     setChallengesVisible(true);
@@ -870,6 +989,218 @@ export function AgentPage() {
       return next;
     });
   }, []);
+
+  const renderAgentHistoryRow = (item: HistoryTask) => {
+    const score = item.final_score ?? 0;
+    const active = result?.task_id === item.task_id;
+    const isMenuOpen = openMenuTaskId === item.task_id;
+    const isConfirmingDelete = confirmDeleteTaskId === item.task_id;
+    const isEditing = editingTaskId === item.task_id;
+    const displayTitle = agentHistoryDisplayTitle(item);
+    const scoreBg =
+      score >= 80
+        ? 'rgba(138,168,153,0.15)'
+        : score >= 60
+          ? 'rgba(196,149,106,0.12)'
+          : 'rgba(229,115,115,0.1)';
+    const scoreColor = score >= 80 ? '#5A8A5A' : score >= 60 ? '#B07840' : '#D9534F';
+
+    return (
+      <div
+        key={item.task_id}
+        style={{
+          position: 'relative',
+          borderRadius: '10px',
+          padding: '8px 10px',
+          background: active ? '#F0EBE3' : 'transparent',
+          borderLeft: active ? '2px solid #C4956A' : '2px solid transparent',
+          transition: 'all 150ms ease',
+          cursor: isEditing ? 'default' : 'pointer',
+        }}
+        onMouseEnter={(e) => {
+          if (!active && !isEditing) {
+            (e.currentTarget as HTMLDivElement).style.background = '#F0EBE3';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!active && !isEditing) {
+            (e.currentTarget as HTMLDivElement).style.background = 'transparent';
+          }
+        }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {isEditing ? (
+              <input
+                ref={editInputRef}
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveRenameAgent(item.task_id);
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelRenameAgent();
+                  }
+                }}
+                onBlur={() => saveRenameAgent(item.task_id)}
+                className="w-full bg-white border border-border rounded-md px-2 py-1 text-[13px] text-text-primary outline-none"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => void handleHistorySelect(item)}
+                style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                <p
+                  style={{
+                    fontSize: '13px',
+                    color: '#1A1714',
+                    fontWeight: 400,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    lineHeight: '1.35',
+                  }}
+                >
+                  {displayTitle}
+                </p>
+                <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      borderRadius: 999,
+                      padding: '1px 7px',
+                      background: scoreBg,
+                      color: scoreColor,
+                    }}
+                  >
+                    {item.final_score != null ? `${item.final_score}/100` : '—'}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#C4B8AE' }}>{formatShortDate(item.created_at)}</span>
+                </div>
+              </button>
+            )}
+          </div>
+
+          <div
+            className="relative shrink-0"
+            ref={isMenuOpen || isConfirmingDelete ? menuLayerRef : undefined}
+          >
+            {!isEditing && (
+              <button
+                type="button"
+                aria-label="History item actions"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingTaskId(null);
+                  setEditingValue('');
+                  setConfirmDeleteTaskId(null);
+                  setOpenMenuTaskId((prev) => (prev === item.task_id ? null : item.task_id));
+                }}
+                className="flex items-center justify-center"
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '6px',
+                  background: isMenuOpen ? '#F0EBE3' : 'transparent',
+                  color: '#6B6460',
+                  transition: 'all 150ms ease',
+                }}
+              >
+                <Ellipsis className="w-4 h-4" />
+              </button>
+            )}
+
+            {isMenuOpen && (
+              <div
+                className="absolute right-0 mt-2"
+                style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E0D8D0',
+                  borderRadius: '10px',
+                  boxShadow: '0 4px 16px rgba(26,23,20,0.08)',
+                  padding: '4px',
+                  minWidth: '140px',
+                  zIndex: 120,
+                }}
+              >
+                <AgentSidebarMenuItem
+                  icon={<Pencil className="w-[14px] h-[14px]" />}
+                  label="Rename"
+                  color="#1A1714"
+                  hoverBackground="#F0EBE3"
+                  onClick={() => startRenameAgent(item)}
+                />
+                <AgentSidebarMenuItem
+                  icon={<Trash2 className="w-[14px] h-[14px]" />}
+                  label="Delete"
+                  color="#C0392B"
+                  hoverBackground="#FEF2F2"
+                  onClick={() => {
+                    setOpenMenuTaskId(null);
+                    setConfirmDeleteTaskId(item.task_id);
+                  }}
+                />
+              </div>
+            )}
+
+            {isConfirmingDelete && (
+              <div
+                className="absolute right-0 mt-2"
+                style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E0D8D0',
+                  borderRadius: '10px',
+                  boxShadow: '0 4px 16px rgba(26,23,20,0.08)',
+                  padding: '10px',
+                  minWidth: '160px',
+                  zIndex: 120,
+                }}
+              >
+                <p className="text-[13px]" style={{ color: '#1A1714', marginBottom: '10px' }}>
+                  Delete this prompt?
+                </p>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteTaskId(null)}
+                    style={{
+                      padding: '6px 10px',
+                      fontSize: '12px',
+                      borderRadius: '6px',
+                      color: '#6B6460',
+                      background: '#F0EBE3',
+                      transition: 'all 150ms ease',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteHistoryItem(item.task_id)}
+                    style={{
+                      padding: '6px 10px',
+                      fontSize: '12px',
+                      borderRadius: '6px',
+                      color: '#FFFFFF',
+                      background: '#C0392B',
+                      transition: 'all 150ms ease',
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -992,61 +1323,7 @@ export function AgentPage() {
             ) : taskHistory.length === 0 ? (
               <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>No tasks yet</div>
             ) : (
-              taskHistory.map((item) => {
-                const score = item.final_score ?? 0;
-                const active = result?.task_id === item.task_id;
-                const scoreBg =
-                  score >= 80
-                    ? 'rgba(138,168,153,0.15)'
-                    : score >= 60
-                      ? 'rgba(196,149,106,0.12)'
-                      : 'rgba(229,115,115,0.1)';
-                const scoreColor = score >= 80 ? '#5A8A5A' : score >= 60 ? '#B07840' : '#D9534F';
-                return (
-                  <button
-                    key={item.task_id}
-                    type="button"
-                    onClick={() => void handleHistorySelect(item)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '8px 10px',
-                      borderRadius: 10,
-                      cursor: 'pointer',
-                      marginBottom: 4,
-                      transition: 'background 150ms ease',
-                      background: active ? '#EDEAE6' : 'transparent',
-                      border: 'none',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!active) e.currentTarget.style.background = 'rgba(26,23,20,0.05)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!active) e.currentTarget.style.background = 'transparent';
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: '#1A1714',
-                        lineHeight: 1.4,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {item.task_text}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                      <span style={{ fontSize: 10, borderRadius: 999, padding: '1px 7px', background: scoreBg, color: scoreColor }}>
-                        {item.final_score != null ? `${item.final_score}/100` : '—'}
-                      </span>
-                      <span style={{ fontSize: 10, color: '#C4B8AE' }}>{formatShortDate(item.created_at)}</span>
-                    </div>
-                  </button>
-                );
-              })
+              <div className="space-y-1">{taskHistory.map((item) => renderAgentHistoryRow(item))}</div>
             )}
           </div>
           <AgentProfileSidebarRow user={user} />
@@ -1094,16 +1371,16 @@ export function AgentPage() {
               New task
             </button>
             <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 16px' }}>
-              {taskHistory.map((item) => (
-                <button
-                  key={item.task_id}
-                  type="button"
-                  onClick={() => void handleHistorySelect(item)}
-                  style={{ width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 10, border: 'none', background: result?.task_id === item.task_id ? '#EDEAE6' : 'transparent', marginBottom: 4 }}
-                >
-                  <div style={{ fontSize: 12, color: '#1A1714', lineHeight: 1.4 }}>{item.task_text}</div>
-                </button>
-              ))}
+              <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A9A2', padding: '12px 4px 6px', marginBottom: 4 }}>
+                History
+              </div>
+              {historyLoading ? (
+                <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>Loading…</div>
+              ) : taskHistory.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>No tasks yet</div>
+              ) : (
+                <div className="space-y-1">{taskHistory.map((item) => renderAgentHistoryRow(item))}</div>
+              )}
             </div>
             <AgentProfileSidebarRow user={user} />
           </aside>

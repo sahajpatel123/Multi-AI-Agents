@@ -29,6 +29,8 @@ def main():
             "expertise_level VARCHAR DEFAULT 'curious'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
             "expertise_domain VARCHAR DEFAULT ''",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
+            "title VARCHAR",
         ]
 
         with engine.connect() as conn:
