@@ -235,6 +235,7 @@ async def save_task_to_memory(
     stages_run: list[str],
     insight_report: Optional[dict[str, Any]] = None,
     pipeline_contradictions: Optional[list[Any]] = None,
+    intelligence_score: Optional[dict[str, Any]] = None,
 ) -> AgentTask:
     topics, conclusions = await asyncio.gather(
         extract_topics(task_text),
@@ -270,6 +271,7 @@ async def save_task_to_memory(
         stages_run=json.dumps(stages_run),
         insight_report=insight_report,
         contradictions=pipeline_contradictions,
+        intelligence_score=intelligence_score,
     )
     db.add(task_record)
     db.commit()
@@ -406,6 +408,7 @@ def get_user_task_history(
                 "topics": json.loads(t.topics or "[]"),
                 "user_feedback": t.user_feedback,
                 "created_at": t.created_at.isoformat() if t.created_at else "",
+                "is_live": bool(getattr(t, "is_live", False)),
             }
             for t in tasks
         ],

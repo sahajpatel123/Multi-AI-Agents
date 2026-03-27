@@ -1,5 +1,6 @@
 """FastAPI application entry point"""
 
+import asyncio
 import logging
 import traceback
 from fastapi import FastAPI, Depends, Request
@@ -25,6 +26,8 @@ from arena.routes.saved import router as saved_router
 from arena.routes.session import router as session_router
 from arena.routes.payments import router as payments_router
 from arena.routes.agent import router as agent_router
+from arena.routes.calibration import router as calibration_router
+from arena.core.live_scheduler import schedule_live_checks
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +161,7 @@ def create_app() -> FastAPI:
     app.include_router(analytics_router, prefix="/api")
     app.include_router(payments_router, prefix="/api/payments")
     app.include_router(agent_router, prefix="/api/agent")
+    app.include_router(calibration_router, prefix="/api/calibration")
 
     # ── Startup ───────────────────────────────────────────────
     @app.on_event("startup")
@@ -169,6 +173,8 @@ def create_app() -> FastAPI:
             logger.exception("Persona library seed failed: %s", exc)
         finally:
             db.close()
+
+        asyncio.create_task(schedule_live_checks())
 
     # ── Health check ──────────────────────────────────────────
     @app.get("/api/health", tags=["health"])

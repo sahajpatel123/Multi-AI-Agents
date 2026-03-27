@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     Enum,
     Index,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -71,6 +72,11 @@ class User(Base):
     agent_tasks = relationship("AgentTask", back_populates="user", cascade="all, delete-orphan")
     agent_contradictions = relationship(
         "AgentContradiction",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    confidence_ratings = relationship(
+        "ConfidenceRating",
         back_populates="user",
         cascade="all, delete-orphan",
     )
@@ -375,6 +381,11 @@ class AgentTask(Base):
     feedback_note = Column(Text, nullable=True)
     insight_report = Column(JSON, nullable=True)
     contradictions = Column(JSON, nullable=True)
+    intelligence_score = Column(JSON, nullable=True)
+    is_live = Column(Boolean, default=False, nullable=False)
+    live_last_checked = Column(DateTime, nullable=True)
+    live_next_check = Column(DateTime, nullable=True)
+    live_updates = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="agent_tasks")
@@ -391,6 +402,54 @@ class AgentTask(Base):
             "final_answer": fa,
             "created_at": self.created_at.isoformat() if self.created_at else "",
         }
+
+    def to_dict(self) -> dict:
+        """API-oriented snapshot of persisted agent task fields."""
+        return {
+            "task_id": self.task_id,
+            "user_id": self.user_id,
+            "title": self.title,
+            "task_text": self.task_text,
+            "final_answer": self.final_answer,
+            "final_score": self.final_score,
+            "final_confidence": self.final_confidence,
+            "insight_report": self.insight_report,
+            "contradictions": self.contradictions,
+            "intelligence_score": self.intelligence_score,
+            "is_live": bool(self.is_live),
+            "live_last_checked": self.live_last_checked.isoformat()
+            if self.live_last_checked
+            else None,
+            "live_next_check": self.live_next_check.isoformat()
+            if self.live_next_check
+            else None,
+            "live_updates": self.live_updates if isinstance(self.live_updates, list) else [],
+            "created_at": self.created_at.isoformat() if self.created_at else "",
+        }
+
+
+class ConfidenceRating(Base):
+    """User self-rating vs system intelligence score (calibration game)."""
+
+    __tablename__ = "confidence_ratings"
+    __table_args__ = (
+        UniqueConstraint("user_id", "task_id", name="uq_confidence_rating_user_task"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    task_id = Column(
+        String(64),
+        ForeignKey("agent_tasks.task_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_rating = Column(Integer, nullable=False)
+    system_score = Column(Integer, nullable=False)
+    delta = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="confidence_ratings")
 
 
 class AgentContradiction(Base):

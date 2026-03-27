@@ -788,6 +788,85 @@ export async function getAgentHistory(page: number = 1, perPage: number = 200): 
   return data;
 }
 
+export async function postCalibrationRate(
+  taskId: string,
+  rating: number,
+): Promise<unknown> {
+  const response = await apiFetch(`${API_BASE}/calibration/rate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id: taskId, rating }),
+  });
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Calibration rating failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty calibration response');
+  return data;
+}
+
+export async function getCalibrationStats(): Promise<unknown> {
+  const response = await apiFetch(`${API_BASE}/calibration/stats`);
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Calibration stats failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty calibration stats');
+  return data;
+}
+
+export async function getCalibrationRatingForTask(taskId: string): Promise<unknown> {
+  const response = await apiFetch(
+    `${API_BASE}/calibration/rating/${encodeURIComponent(taskId)}`,
+  );
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Calibration lookup failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty calibration lookup');
+  return data;
+}
+
+export async function toggleAgentTaskLive(
+  taskId: string,
+  isLive?: boolean,
+): Promise<unknown> {
+  const response = await apiFetch(
+    `${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/live`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(isLive === undefined ? {} : { is_live: isLive }),
+    },
+  );
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Live toggle failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty live toggle response');
+  return data;
+}
+
+export async function markAgentLiveUpdatesRead(
+  taskId: string,
+  updateId?: string,
+): Promise<unknown> {
+  const response = await apiFetch(
+    `${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/live-updates/mark-read`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updateId ? { update_id: updateId } : {}),
+    },
+  );
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Mark read failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty mark-read response');
+  return data;
+}
+
 export async function renameAgentTask(
   taskId: string,
   title: string,

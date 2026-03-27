@@ -78,6 +78,11 @@ class Blackboard:
     expertise_modifier: str = ""
     steelman: Optional[dict] = None
 
+    is_live: bool = False
+    live_last_checked: Optional[datetime] = None
+    live_next_check: Optional[datetime] = None
+    live_updates: list = field(default_factory=list)
+
     # Collaborative refinement (in-memory; not persisted to agent_tasks rows per turn)
     conversation: list = field(default_factory=list)
     is_refinement: bool = False
@@ -176,6 +181,14 @@ class Blackboard:
             "expertise_modifier": self.expertise_modifier,
             "steelman": self.steelman,
             "insight_report": self.insight_report,
+            "is_live": self.is_live,
+            "live_last_checked": self.live_last_checked.isoformat()
+            if self.live_last_checked
+            else None,
+            "live_next_check": self.live_next_check.isoformat()
+            if self.live_next_check
+            else None,
+            "live_updates": list(self.live_updates or []),
             "conversation": self.conversation,
             "is_refinement": self.is_refinement,
             "parent_task_id": self.parent_task_id,

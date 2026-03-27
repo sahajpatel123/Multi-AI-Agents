@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   cancelSubscription,
+  getCalibrationStats,
   getSubscriptionStatus,
   getUserUsage,
   patchUserProfile,
@@ -198,6 +199,15 @@ export function ProfileModal() {
   const [usage, setUsage] = useState<UserUsageResponse | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageErr, setUsageErr] = useState<string | null>(null);
+  const [calStats, setCalStats] = useState<{
+    total_ratings?: number;
+    avg_delta?: number;
+    trend?: string;
+    calibration_score?: number;
+    recent_ratings?: Array<{ delta?: number; created_at?: string }>;
+  } | null>(null);
+  const [calLoading, setCalLoading] = useState(false);
+  const [calErr, setCalErr] = useState<string | null>(null);
 
   const [sub, setSub] = useState<SubscriptionStatusResponse | null>(null);
   const [subLoading, setSubLoading] = useState(false);
@@ -238,6 +248,29 @@ export function ProfileModal() {
       })
       .finally(() => {
         if (!cancelled) setUsageLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
+    setCalLoading(true);
+    setCalErr(null);
+    void getCalibrationStats()
+      .then((raw) => {
+        if (!cancelled) setCalStats(raw as typeof calStats);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCalErr('Could not load calibration');
+          setCalStats(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCalLoading(false);
       });
     return () => {
       cancelled = true;
@@ -861,6 +894,117 @@ export function ProfileModal() {
                   <span style={{ color: '#C4A882' }}>14 days ago</span>
                   <span style={{ color: '#C4A882' }}>Today</span>
                 </div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    color: '#A89070',
+                    letterSpacing: '0.10em',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  Answer confidence calibration
+                </div>
+                {calLoading ? (
+                  <div style={{ padding: 16, display: 'flex', justifyContent: 'center' }}>
+                    <MicroLoader />
+                  </div>
+                ) : calErr ? (
+                  <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>{calErr}</p>
+                ) : calStats && (calStats.total_ratings ?? 0) > 0 ? (
+                  <div
+                    style={{
+                      background: '#F0E8DC',
+                      borderRadius: 10,
+                      padding: '16px 18px',
+                      border: '0.5px solid #E0D5C5',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: '#A89070', marginBottom: 4 }}>Calibration score</div>
+                        <div style={{ fontSize: 28, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>
+                          {calStats.calibration_score ?? 0}
+                          <span style={{ fontSize: 14, color: '#8C7355' }}>/100</span>
+                        </div>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 120 }}>
+                        <div style={{ fontSize: 10, color: '#A89070', marginBottom: 4 }}>Avg. gap vs system</div>
+                        <div style={{ fontSize: 15, color: '#4A3728', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {(calStats.avg_delta ?? 0) > 0 ? (
+                            <span style={{ color: '#639922' }}>↑</span>
+                          ) : (calStats.avg_delta ?? 0) < 0 ? (
+                            <span style={{ color: '#C0392B' }}>↓</span>
+                          ) : (
+                            <span style={{ color: '#8C7355' }}>→</span>
+                          )}
+                          {(calStats.avg_delta ?? 0).toFixed(1)}
+                        </div>
+                      </div>
+                      <div>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            padding: '4px 10px',
+                            borderRadius: 8,
+                            textTransform: 'capitalize',
+                            background:
+                              calStats.trend === 'improving'
+                                ? '#EAF3DE'
+                                : calStats.trend === 'diverging'
+                                  ? '#FCF0EE'
+                                  : '#FDF6EC',
+                            color:
+                              calStats.trend === 'improving'
+                                ? '#3B6D11'
+                                : calStats.trend === 'diverging'
+                                  ? '#993C1D'
+                                  : '#854F0B',
+                            border: '0.5px solid',
+                            borderColor:
+                              calStats.trend === 'improving'
+                                ? '#97C459'
+                                : calStats.trend === 'diverging'
+                                  ? '#F0997B'
+                                  : '#E8C87A',
+                          }}
+                        >
+                          {calStats.trend === 'improving'
+                            ? 'Improving'
+                            : calStats.trend === 'diverging'
+                              ? 'Diverging'
+                              : 'Stable'}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 10, color: '#A89070', marginRight: 4 }}>Last 5</span>
+                      {(calStats.recent_ratings ?? []).map((r, i) => {
+                        const d = Number(r.delta ?? 0);
+                        const a = Math.abs(d);
+                        const bg = a <= 10 ? '#639922' : a <= 25 ? '#BA7517' : '#C0392B';
+                        return (
+                          <span
+                            key={`${r.created_at ?? i}`}
+                            title={`Δ ${d}`}
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: '50%',
+                              background: bg,
+                              opacity: 0.85,
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>
+                    Rate your confidence on completed Agent answers to build your calibration profile.
+                  </p>
+                )}
               </>
             )}
           </div>

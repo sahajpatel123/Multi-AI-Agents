@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -58,6 +59,35 @@ def _insight_report_from_row(row: AgentTaskRow) -> dict | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def _intelligence_score_from_row(row: AgentTaskRow) -> dict:
+    parsed = _json_column_value(row.intelligence_score)
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _live_updates_from_row(row: AgentTaskRow) -> list:
+    parsed = _json_column_value(row.live_updates)
+    return parsed if isinstance(parsed, list) else []
+
+
+def _utc_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _merge_db_task_into_result_payload(payload: dict, row: AgentTaskRow) -> None:
+    """Overlay persisted columns (live thread, stored intelligence) onto a blackboard dict."""
+    payload["intelligence_score"] = _intelligence_score_from_row(row) or payload.get(
+        "intelligence_score", {}
+    )
+    payload["is_live"] = bool(row.is_live)
+    payload["live_last_checked"] = (
+        row.live_last_checked.isoformat() if row.live_last_checked else None
+    )
+    payload["live_next_check"] = (
+        row.live_next_check.isoformat() if row.live_next_check else None
+    )
+    payload["live_updates"] = _live_updates_from_row(row)
+
+
 def _load_task_contradictions(db: Session, task_id: str, user_id: int) -> list[dict]:
     rows = (
         db.query(AgentContradiction)
@@ -104,6 +134,8 @@ def _persisted_agent_task_result_dict(
     )
     pipe_contra = _pipeline_contradictions_from_row(row)
     insight = _insight_report_from_row(row)
+    intel = _intelligence_score_from_row(row)
+    live_updates = _live_updates_from_row(row)
     return {
         "task_id": row.task_id,
         "user_id": row.user_id,
@@ -123,7 +155,7 @@ def _persisted_agent_task_result_dict(
         "contradictions": pipe_contra,
         "memory_contradictions": memory_contradictions,
         "insight_report": insight,
-        "intelligence_score": {},
+        "intelligence_score": intel,
         "assumptions": {},
         "memory_saved": True,
         "conversation": [],
@@ -138,6 +170,14 @@ def _persisted_agent_task_result_dict(
         "expertise_domain": "",
         "expertise_modifier": "",
         "steelman": None,
+        "is_live": bool(row.is_live),
+        "live_last_checked": row.live_last_checked.isoformat()
+        if row.live_last_checked
+        else None,
+        "live_next_check": row.live_next_check.isoformat()
+        if row.live_next_check
+        else None,
+        "live_updates": live_updates,
     }
 
 
@@ -179,6 +219,14 @@ class BridgeRequest(BaseModel):
 
 class AgentTaskRenameRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=120)
+
+
+class LiveToggleBody(BaseModel):
+    is_live: Optional[bool] = None
+
+
+class MarkLiveReadBody(BaseModel):
+    update_id: Optional[str] = None
 
 
 ANALYST_CHALLENGE_PROMPT = """
@@ -446,6 +494,7 @@ async def _save_completed_task_to_memory(
                 stages_run=stages_run,
                 insight_report=bb.insight_report,
                 pipeline_contradictions=bb.cross_task_contradictions or None,
+                intelligence_score=bb.intelligence_score if bb.intelligence_score else None,
             )
 
             rows = (
@@ -620,7 +669,15 @@ async def get_agent_result(
     bb = get_blackboard(task_id)
     if bb:
         _ensure_task_owner(bb, user)
-        return JSONResponse(content=bb.to_dict())
+        out = bb.to_dict()
+        row = (
+            db.query(AgentTaskRow)
+            .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+            .first()
+        )
+        if row:
+            _merge_db_task_into_result_payload(out, row)
+        return JSONResponse(content=out)
 
     row = (
         db.query(AgentTaskRow)
@@ -796,6 +853,85 @@ async def delete_agent_task(
     return JSONResponse(content={"success": True})
 
 
+@router.post("/tasks/{task_id}/live")
+async def toggle_agent_task_live(
+    task_id: str,
+    body: LiveToggleBody = LiveToggleBody(),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if body.is_live is not None:
+        row.is_live = bool(body.is_live)
+    else:
+        row.is_live = not bool(row.is_live)
+    now = _utc_naive()
+    if row.is_live:
+        row.live_next_check = now + timedelta(hours=24)
+    else:
+        row.live_next_check = None
+    db.commit()
+    db.refresh(row)
+    return JSONResponse(content={"task": row.to_dict()})
+
+
+@router.get("/tasks/{task_id}/updates")
+async def get_agent_task_live_updates(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return JSONResponse(content={"live_updates": _live_updates_from_row(row)})
+
+
+@router.post("/tasks/{task_id}/live-updates/mark-read")
+async def mark_agent_live_updates_read(
+    task_id: str,
+    body: MarkLiveReadBody = MarkLiveReadBody(),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+    updates = list(_live_updates_from_row(row))
+    uid = (body.update_id or "").strip()
+    changed = False
+    for u in updates:
+        if not isinstance(u, dict):
+            continue
+        if not uid or str(u.get("id") or "") == uid:
+            if u.get("status") != "read":
+                u["status"] = "read"
+                changed = True
+            if uid:
+                break
+    if changed:
+        row.live_updates = updates
+        db.commit()
+    return JSONResponse(content={"success": True, "live_updates": updates})
+
+
 @router.get("/memory/context")
 async def get_memory_context(
     task: str = "",
@@ -829,6 +965,8 @@ async def get_saved_agent_task(
     memory_contradictions = _load_task_contradictions(db, task_id, user.id)
     pipe_contra = _pipeline_contradictions_from_row(row)
     insight_saved = _insight_report_from_row(row)
+    intel = _intelligence_score_from_row(row)
+    live_updates = _live_updates_from_row(row)
     return JSONResponse(
         content={
             "task_id": row.task_id,
@@ -843,6 +981,15 @@ async def get_saved_agent_task(
             "contradictions": pipe_contra,
             "memory_contradictions": memory_contradictions,
             "insight_report": insight_saved,
+            "intelligence_score": intel,
+            "is_live": bool(row.is_live),
+            "live_last_checked": row.live_last_checked.isoformat()
+            if row.live_last_checked
+            else None,
+            "live_next_check": row.live_next_check.isoformat()
+            if row.live_next_check
+            else None,
+            "live_updates": live_updates,
             "memory_saved": True,
             "status": "complete",
         }

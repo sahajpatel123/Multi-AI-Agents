@@ -13,10 +13,15 @@ import {
   getAgentResult,
   getAgentSavedTask,
   getAgentStatus,
+  getCalibrationRatingForTask,
+  getCalibrationStats,
   getMe,
+  markAgentLiveUpdatesRead,
+  postCalibrationRate,
   refineAgentAnswer,
   renameAgentTask,
   runAgentTask,
+  toggleAgentTaskLive,
   type AgentChallengeItem,
 } from '../api';
 import { useTier } from '../context/TierContext';
@@ -151,6 +156,10 @@ type AgentResult = {
   dissent_report?: unknown;
   expertise_level?: string;
   expertise_domain?: string;
+  is_live?: boolean;
+  live_last_checked?: string | null;
+  live_next_check?: string | null;
+  live_updates?: any[] | null;
 };
 
 type ContradictionItem = {
@@ -182,6 +191,7 @@ type HistoryTask = {
   topics: string[];
   user_feedback: string | null;
   created_at: string;
+  is_live?: boolean;
 };
 
 type HistoryPayload = {
@@ -248,6 +258,30 @@ function formatShortDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+const CALIBRATION_LEVEL_TITLES: Record<number, string> = {
+  1: 'Uncertain',
+  2: 'Doubtful',
+  3: 'Neutral',
+  4: 'Confident',
+  5: 'Certain',
+};
+
+function formatRelativeShort(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const t = d.getTime();
+  if (Number.isNaN(t)) return '—';
+  let sec = Math.round((Date.now() - t) / 1000);
+  if (sec < 0) sec = 0;
+  if (sec < 60) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 48) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  return `${day}d ago`;
 }
 
 function splitPlainAnswerToSentences(text: string): AnswerSentenceView[] {
@@ -507,6 +541,7 @@ export function AgentPage() {
   const { user, isLoading: authLoading } = useAuth();
   const { canUseFeature, isPro } = useTier();
   const canAgent = canUseFeature('agent_mode');
+  const { openModal, setActiveTab, isOpen: profileModalOpen } = useProfileModal();
 
   const [task, setTask] = useState('');
   const [isRunning, setIsRunning] = useState(false);
@@ -548,6 +583,11 @@ export function AgentPage() {
   const followUpInputRef = useRef<HTMLInputElement | null>(null);
   const idleTaskInputRef = useRef<HTMLInputElement | null>(null);
   const [suggIdx, setSuggIdx] = useState(0);
+  const [userRating, setUserRating] = useState<number | null>(null);
+  const [ratingResult, setRatingResult] = useState<any>(null);
+  const [ratingSubmitBusy, setRatingSubmitBusy] = useState(false);
+  const [liveToggleBusy, setLiveToggleBusy] = useState(false);
+  const [liveUpdatesPanelOpen, setLiveUpdatesPanelOpen] = useState(false);
 
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((current) => !current);
@@ -984,11 +1024,54 @@ export function AgentPage() {
     setSteelmanInnerExpanded(false);
     setShowAllSourcePills(false);
     setFollowUp('');
+    setUserRating(null);
+    setRatingResult(null);
+    setLiveUpdatesPanelOpen(false);
   }, [result?.task_id, result?.refinement_count]);
 
   useEffect(() => {
     setConfActive(false);
   }, [result?.task_id]);
+
+  useEffect(() => {
+    if (!result?.task_id || result.status !== 'complete' || isRunning) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const raw = (await getCalibrationRatingForTask(result.task_id!)) as {
+          rated?: boolean;
+          data?: {
+            user_rating?: number;
+            system_score?: number;
+            delta?: number;
+            verdict?: string;
+            created_at?: string;
+          };
+        };
+        if (cancelled) return;
+        if (raw.rated && raw.data) {
+          setUserRating(raw.data.user_rating ?? null);
+          setRatingResult({ ...raw.data, already_rated: true });
+          void (async () => {
+            try {
+              const st = await getCalibrationStats();
+              if (cancelled) return;
+              setRatingResult((prev: any) =>
+                prev && typeof prev === 'object' ? { ...prev, calibration_stats: st } : prev,
+              );
+            } catch {
+              /* optional */
+            }
+          })();
+        }
+      } catch {
+        /* non-fatal */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [result?.task_id, result?.status, isRunning]);
 
   const handleHistorySelect = useCallback(
     async (item: HistoryTask) => {
@@ -1098,9 +1181,97 @@ export function AgentPage() {
     [result, plainAnswerText, task],
   );
 
+  const handleCalibrationRateClick = useCallback(
+    async (rating: number) => {
+      if (!result?.task_id || ratingSubmitBusy) return;
+      setRatingSubmitBusy(true);
+      try {
+        const raw = await postCalibrationRate(result.task_id, rating);
+        setUserRating(rating);
+        setRatingResult(raw);
+      } catch {
+        setToastMessage('Could not save calibration');
+      } finally {
+        setRatingSubmitBusy(false);
+      }
+    },
+    [result?.task_id, ratingSubmitBusy],
+  );
+
+  const handleToggleLive = useCallback(async () => {
+    if (!result?.task_id || liveToggleBusy) return;
+    setLiveToggleBusy(true);
+    try {
+      const raw = (await toggleAgentTaskLive(result.task_id)) as {
+        task?: {
+          is_live?: boolean;
+          live_last_checked?: string | null;
+          live_next_check?: string | null;
+          live_updates?: any[];
+        };
+      };
+      const t = raw.task;
+      if (t) {
+        const tid = result.task_id;
+        setResult((prev) =>
+          prev
+            ? {
+                ...prev,
+                is_live: !!t.is_live,
+                live_last_checked: t.live_last_checked ?? null,
+                live_next_check: t.live_next_check ?? null,
+                live_updates: Array.isArray(t.live_updates) ? t.live_updates : prev.live_updates,
+              }
+            : prev,
+        );
+        setTaskHistory((prev) =>
+          prev.map((h) => (h.task_id === tid ? { ...h, is_live: !!t.is_live } : h)),
+        );
+      }
+      void loadTaskHistory();
+    } catch {
+      setToastMessage('Could not update live thread');
+    } finally {
+      setLiveToggleBusy(false);
+    }
+  }, [result?.task_id, liveToggleBusy, loadTaskHistory]);
+
+  const markLiveUpdateRead = useCallback(
+    async (updateId?: string) => {
+      if (!result?.task_id) return;
+      try {
+        const raw = (await markAgentLiveUpdatesRead(result.task_id, updateId)) as {
+          live_updates?: any[];
+        };
+        if (raw.live_updates) {
+          setResult((prev) => (prev ? { ...prev, live_updates: raw.live_updates } : prev));
+        }
+      } catch {
+        setToastMessage('Could not mark update read');
+      }
+    },
+    [result?.task_id],
+  );
+
   const sourceIntegrity = result?.source_integrity;
 
   const structuredCaveats = useMemo(() => getStructuredCaveats(result), [result]);
+
+  const liveUpdatesList = useMemo(
+    () => (Array.isArray(result?.live_updates) ? result.live_updates : []),
+    [result?.live_updates],
+  );
+  const unreadLiveCount = useMemo(
+    () => liveUpdatesList.filter((u: any) => u?.status === 'unread').length,
+    [liveUpdatesList],
+  );
+  const intelligenceTotal = useMemo(() => {
+    const t = result?.intelligence_score?.total_score;
+    if (typeof t === 'number' && !Number.isNaN(t)) return Math.round(t);
+    const f = result?.final_score;
+    if (typeof f === 'number' && !Number.isNaN(f)) return Math.round(f);
+    return 0;
+  }, [result?.intelligence_score?.total_score, result?.final_score]);
 
   type SourceCardRow = { title: string; meta: string; category: string };
 
@@ -1204,19 +1375,41 @@ export function AgentPage() {
                 onClick={() => void handleHistorySelect(item)}
                 style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
               >
-                <p
+                <div
                   style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    minWidth: 0,
                     fontSize: '13px',
                     color: '#1A1714',
                     fontWeight: 400,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
                     lineHeight: '1.35',
                   }}
                 >
-                  {displayTitle}
-                </p>
+                  {item.is_live ? (
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 4,
+                        height: 4,
+                        borderRadius: '50%',
+                        background: '#639922',
+                        flexShrink: 0,
+                        animation: 'liveDotBlink 2s ease-in-out infinite',
+                      }}
+                    />
+                  ) : null}
+                  <span
+                    style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {displayTitle}
+                  </span>
+                </div>
                 <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span
                     style={{
@@ -1401,6 +1594,10 @@ export function AgentPage() {
         }
         @keyframes agentSpin {
           to { transform: rotate(360deg); }
+        }
+        @keyframes liveDotBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.35; }
         }
 .agent-chal-dot {
           width: 8px;
@@ -2191,6 +2388,122 @@ export function AgentPage() {
                       rigorous fact-checking of that answer.
                     </div>
                   )}
+                  {unreadLiveCount > 0 && !isRunning ? (
+                    <div
+                      style={{
+                        background: '#EAF3DE',
+                        border: '0.5px solid #97C459',
+                        borderRadius: 8,
+                        padding: '10px 14px',
+                        marginBottom: 16,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <svg
+                        width={18}
+                        height={18}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden
+                      >
+                        <path
+                          d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
+                          stroke="#3B6D11"
+                          strokeWidth={1.8}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <span style={{ fontSize: 13, color: '#2C1810', flex: '1 1 140px' }}>
+                        {unreadLiveCount} new update{unreadLiveCount === 1 ? '' : 's'} found since you ran this
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setLiveUpdatesPanelOpen((o) => !o)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          color: '#3B6D11',
+                          fontWeight: 500,
+                          fontFamily: 'Georgia, serif',
+                          textDecoration: 'underline',
+                        }}
+                      >
+                        {liveUpdatesPanelOpen ? 'Hide updates ↑' : 'See updates →'}
+                      </button>
+                    </div>
+                  ) : null}
+                  {liveUpdatesPanelOpen && liveUpdatesList.length > 0 && !isRunning ? (
+                    <div
+                      style={{
+                        marginBottom: 16,
+                        padding: '12px 14px',
+                        background: AR.SURFACE_ALT,
+                        border: `0.5px solid ${AR.BORDER}`,
+                        borderRadius: 10,
+                      }}
+                    >
+                      {liveUpdatesList.map((u: any, ui: number) => (
+                        <div
+                          key={String(u?.id ?? ui)}
+                          style={{
+                            marginBottom: ui < liveUpdatesList.length - 1 ? 12 : 10,
+                            paddingBottom: ui < liveUpdatesList.length - 1 ? 12 : 0,
+                            borderBottom:
+                              ui < liveUpdatesList.length - 1 ? `0.5px solid ${AR.BORDER_INNER}` : 'none',
+                          }}
+                        >
+                          <div style={{ fontSize: 11, color: '#A89070', marginBottom: 6 }}>
+                            {formatRelativeShort(String(u?.found_at ?? ''))}
+                          </div>
+                          <div style={{ fontSize: 13, color: '#4A3728', lineHeight: 1.5 }}>
+                            {String(u?.summary ?? '')}
+                          </div>
+                          {u?.status === 'unread' ? (
+                            <button
+                              type="button"
+                              onClick={() => void markLiveUpdateRead(String(u.id ?? ''))}
+                              style={{
+                                marginTop: 8,
+                                fontSize: 11,
+                                color: AR.GOLD,
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: 0,
+                                textDecoration: 'underline',
+                                fontFamily: 'Georgia, serif',
+                              }}
+                            >
+                              Mark as read
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => void markLiveUpdateRead()}
+                        style={{
+                          marginTop: 4,
+                          fontSize: 11,
+                          color: '#8C7355',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontFamily: 'Georgia, serif',
+                        }}
+                      >
+                        Mark all read
+                      </button>
+                    </div>
+                  ) : null}
                   {answerSentences.length > 0 ? (
                     <div className={`answer-text ${confActive ? 'conf-active' : ''}`} style={{ marginBottom: 12 }}>
                       {answerSentences.map((sentence, i) => (
@@ -3690,7 +4003,226 @@ export function AgentPage() {
                     >
                       Stress test in Arena →
                     </button>
+                    {result.task_id && result.memory_saved ? (
+                      <button
+                        type="button"
+                        disabled={liveToggleBusy}
+                        onClick={() => void handleToggleLive()}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '9px 14px',
+                          border: result.is_live ? '0.5px solid #5A8C6A' : '0.5px solid #D4C4B0',
+                          borderRadius: 6,
+                          background: result.is_live ? '#EAF3DE' : 'transparent',
+                          color: result.is_live ? '#3B6D11' : '#6B5040',
+                          fontSize: 13,
+                          fontFamily: 'Georgia, serif',
+                          cursor: liveToggleBusy ? 'default' : 'pointer',
+                          opacity: liveToggleBusy ? 0.7 : 1,
+                        }}
+                      >
+                        {result.is_live ? (
+                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
+                            <path
+                              d="M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 006.95 0M12 20h.01"
+                              stroke="currentColor"
+                              strokeWidth={1.8}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        ) : (
+                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
+                            <path
+                              d="M17 21H7a2 2 0 01-2-2v-6a2 2 0 012-2h10a2 2 0 012 2v6a2 2 0 01-2 2zM12 3v4M8.5 7h7"
+                              stroke="currentColor"
+                              strokeWidth={1.8}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <path d="M3 3l18 18" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" />
+                          </svg>
+                        )}
+                        {result.is_live ? 'Live thread' : 'Make it live'}
+                      </button>
+                    ) : null}
                   </div>
+                  {result.is_live && !isRunning ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                        alignItems: 'center',
+                        marginTop: 8,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: '50%',
+                          background: '#639922',
+                          animation: 'liveDotBlink 2s ease-in-out infinite',
+                        }}
+                      />
+                      <span style={{ fontSize: 11, color: '#8C7355' }}>
+                        Checking for updates every 24h
+                      </span>
+                      <span style={{ fontSize: 11, color: '#A89070' }}>
+                        Last checked: {formatRelativeShort(result.live_last_checked)}
+                      </span>
+                    </div>
+                  ) : null}
+                  {result.status === 'complete' &&
+                  !isRunning &&
+                  result.task_id &&
+                  user?.email ? (
+                    <div style={{ marginTop: 16, marginBottom: 8 }}>
+                      {!ratingResult?.verdict && userRating === null ? (
+                        <>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: '#8C7355',
+                              fontStyle: 'italic',
+                              marginBottom: 10,
+                            }}
+                          >
+                            How confident are you in this answer?
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <button
+                                key={n}
+                                type="button"
+                                title={CALIBRATION_LEVEL_TITLES[n]}
+                                disabled={ratingSubmitBusy}
+                                onClick={() => void handleCalibrationRateClick(n)}
+                                style={{
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: '50%',
+                                  border:
+                                    userRating === n
+                                      ? '0.5px solid #C4956A'
+                                      : '0.5px solid #D4C4B0',
+                                  background: userRating === n ? '#C4956A' : 'transparent',
+                                  color: userRating === n ? '#FAF7F2' : '#8C7355',
+                                  fontSize: 12,
+                                  cursor: ratingSubmitBusy ? 'default' : 'pointer',
+                                  fontFamily: 'Georgia, serif',
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (userRating === n || ratingSubmitBusy) return;
+                                  e.currentTarget.style.borderColor = '#C4956A';
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (userRating === n) return;
+                                  e.currentTarget.style.borderColor = '#D4C4B0';
+                                }}
+                              >
+                                {n}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      ) : null}
+                      {ratingResult?.verdict ? (
+                        <div
+                          style={{
+                            background:
+                              Math.abs(Number(ratingResult.delta ?? 0)) <= 10
+                                ? '#EAF3DE'
+                                : Number(ratingResult.delta ?? 0) > 10
+                                  ? '#FDF6EC'
+                                  : '#FCF0EE',
+                            borderRadius: 8,
+                            padding: '12px 16px',
+                          }}
+                        >
+                          <div style={{ fontSize: 13, fontWeight: 500, color: '#2C1810', marginBottom: 8 }}>
+                            {String(ratingResult.verdict)}
+                          </div>
+                          <div style={{ fontSize: 12, color: '#6B5040', marginBottom: 6 }}>
+                            Your rating: {Number(ratingResult.user_rating ?? userRating ?? 0)}/5 · System score:{' '}
+                            {Number(ratingResult.system_score ?? intelligenceTotal)}/100
+                          </div>
+                          {ratingResult.calibration_stats ? (
+                            <div style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic' }}>
+                              Avg. calibration gap:{' '}
+                              {Number(
+                                (ratingResult.calibration_stats as { avg_delta?: number }).avg_delta ?? 0,
+                              ).toFixed(1)}{' '}
+                              (positive = you tend to underestimate)
+                            </div>
+                          ) : null}
+                          {ratingResult.calibration_stats ? (
+                            <>
+                              <div style={{ marginTop: 12, fontSize: 11, color: '#8C7355' }}>
+                                Your calibration score:{' '}
+                                <strong style={{ color: '#2C1810' }}>
+                                  {Number(
+                                    (ratingResult.calibration_stats as { calibration_score?: number })
+                                      ?.calibration_score ?? 0,
+                                  )}
+                                  /100
+                                </strong>
+                              </div>
+                              <div
+                                style={{
+                                  height: 6,
+                                  background: '#EDE4D8',
+                                  borderRadius: 3,
+                                  marginTop: 6,
+                                  maxWidth: 280,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    height: '100%',
+                                    width: `${Math.min(
+                                      100,
+                                      Number(
+                                        (ratingResult.calibration_stats as { calibration_score?: number })
+                                          ?.calibration_score ?? 0,
+                                      ),
+                                    )}%`,
+                                    background: '#C4956A',
+                                    borderRadius: 3,
+                                  }}
+                                />
+                              </div>
+                            </>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (profileModalOpen) setActiveTab('usage');
+                              else openModal('top-right', 'usage');
+                            }}
+                            style={{
+                              marginTop: 10,
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              color: '#C4956A',
+                              fontFamily: 'Georgia, serif',
+                              textDecoration: 'underline',
+                            }}
+                          >
+                            See your calibration history →
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {result.insight_report &&
                     taskHistory.length >= 3 &&
                     (() => {
