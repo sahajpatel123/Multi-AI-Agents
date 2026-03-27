@@ -14,6 +14,7 @@ import { PrivacyPage } from './pages/PrivacyPage'
 import { PersonasPage } from './pages/PersonasPage'
 import { AccountPage } from './pages/AccountPage'
 import { AgentPage } from './pages/AgentPage'
+import { WatchlistPage } from './pages/WatchlistPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './hooks/useAuth'
 import { PanelProvider } from './context/PanelContext'
@@ -102,6 +103,11 @@ if (!rootElement) {
                   <Route path="/agent" element={
                     <ProtectedRoute>
                       <AgentPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/agent/watchlist" element={
+                    <ProtectedRoute>
+                      <WatchlistPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/agent/history" element={

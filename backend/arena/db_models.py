@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from enum import Enum as PyEnum
+from uuid import uuid4
 
 from sqlalchemy import (
     BigInteger,
@@ -87,6 +88,11 @@ class User(Base):
     )
     orchestrations = relationship(
         "Orchestration",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    watchlist_items = relationship(
+        "WatchlistItem",
         back_populates="user",
         cascade="all, delete-orphan",
     )
@@ -378,6 +384,7 @@ class AgentTask(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     orchestration_id = Column(String(36), ForeignKey("orchestrations.id"), nullable=True, index=True)
+    watchlist_item_id = Column(String(36), ForeignKey("watchlist_items.id"), nullable=True, index=True)
     task_id = Column(String(64), unique=True, nullable=False, index=True)
     title = Column(String(512), nullable=True)
     task_text = Column(Text, nullable=False)
@@ -401,6 +408,7 @@ class AgentTask(Base):
 
     user = relationship("User", back_populates="agent_tasks")
     orchestration = relationship("Orchestration", back_populates="child_tasks")
+    watchlist_item = relationship("WatchlistItem", back_populates="spawned_tasks")
     answer_feedbacks = relationship(
         "AnswerFeedback",
         back_populates="agent_task",
@@ -495,6 +503,28 @@ class AnswerFeedback(Base):
         back_populates="answer_feedbacks",
         foreign_keys=[task_id],
     )
+
+
+class WatchlistItem(Base):
+    """Recurring agent research question on a fixed hour interval."""
+
+    __tablename__ = "watchlist_items"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    question = Column(Text, nullable=False)
+    interval_hours = Column(Integer, nullable=False)
+    expertise_level = Column(String(32), default="curious", nullable=False)
+    expertise_domain = Column(String(512), default="", nullable=False)
+    last_run_at = Column(DateTime, nullable=True)
+    next_run_at = Column(DateTime, nullable=False)
+    latest_task_id = Column(String(64), nullable=True)
+    run_count = Column(Integer, default=0, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="watchlist_items")
+    spawned_tasks = relationship("AgentTask", back_populates="watchlist_item")
 
 
 class Orchestration(Base):

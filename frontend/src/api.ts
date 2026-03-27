@@ -914,6 +914,93 @@ export async function getAgentHistory(page: number = 1, perPage: number = 200): 
   return data;
 }
 
+export type AgentWatchlistItem = {
+  id: string;
+  question: string;
+  interval_hours: number;
+  expertise_level: string;
+  expertise_domain: string;
+  last_run_at: string | null;
+  next_run_at: string;
+  latest_task_id: string | null;
+  run_count: number;
+  is_active: boolean;
+  created_at: string;
+  latest_task: {
+    task_id: string;
+    title: string;
+    created_at: string;
+    final_score: number | null;
+  } | null;
+};
+
+export async function getAgentWatchlist(): Promise<{
+  items: AgentWatchlistItem[];
+  active_count: number;
+  active_cap: number;
+}> {
+  const response = await apiFetch(`${API_BASE}/agent/watchlist`);
+  const data = await parseJsonSafely<{
+    items?: AgentWatchlistItem[];
+    active_count?: number;
+    active_cap?: number;
+    detail?: string | { message?: string };
+  }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Watchlist request failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty watchlist response');
+  return {
+    items: data.items || [],
+    active_count: data.active_count ?? 0,
+    active_cap: data.active_cap ?? 10,
+  };
+}
+
+export async function postAgentWatchlist(body: {
+  question: string;
+  interval_hours: number;
+  expertise_level?: string;
+  expertise_domain?: string;
+}): Promise<AgentWatchlistItem> {
+  const response = await apiFetch(`${API_BASE}/agent/watchlist`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await parseJsonSafely<AgentWatchlistItem & { detail?: string | { message?: string } }>(response);
+  if (!data || !response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Could not add to watchlist'), response.status, data);
+  }
+  return data as AgentWatchlistItem;
+}
+
+export async function patchAgentWatchlist(
+  itemId: string,
+  body: { interval_hours?: number; is_active?: boolean },
+): Promise<AgentWatchlistItem> {
+  const response = await apiFetch(`${API_BASE}/agent/watchlist/${encodeURIComponent(itemId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await parseJsonSafely<AgentWatchlistItem & { detail?: string | { message?: string } }>(response);
+  if (!data || !response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Watchlist update failed'), response.status, data);
+  }
+  return data as AgentWatchlistItem;
+}
+
+export async function deleteAgentWatchlist(itemId: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/agent/watchlist/${encodeURIComponent(itemId)}`, {
+    method: 'DELETE',
+  });
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Could not remove watchlist item'), response.status, data);
+  }
+}
+
 export async function postCalibrationRate(
   taskId: string,
   rating: number,

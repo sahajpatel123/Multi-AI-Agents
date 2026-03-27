@@ -34,6 +34,7 @@ from arena.db_models import (
     AgentTask as AgentTaskRow,
     AnswerFeedback,
     Orchestration,
+    WatchlistItem,
 )
 from arena.models.schemas import UserResponse
 
@@ -255,6 +256,18 @@ class OrchestrateRequest(BaseModel):
     expertise_domain: str = ""
 
 
+class WatchlistCreateBody(BaseModel):
+    question: str
+    interval_hours: int
+    expertise_level: str = "curious"
+    expertise_domain: str = ""
+
+
+class WatchlistPatchBody(BaseModel):
+    interval_hours: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
 ANALYST_CHALLENGE_PROMPT = """
 You are The Analyst challenging an AI-generated answer.
 
@@ -409,8 +422,8 @@ def _ensure_agent_access(user: UserResponse) -> None:
             status_code=403,
             detail={
                 "error": "agent_not_available",
-                "message": "Agent Mode requires a Pro subscription.",
-                "upgrade_required": "pro",
+                "message": "Agent Mode requires Arena Plus or Pro.",
+                "upgrade_required": "plus",
             },
         )
 
@@ -426,6 +439,59 @@ def _ensure_agent_orchestrate_access(user: UserResponse) -> None:
                 "upgrade_required": "pro",
             },
         )
+
+
+def _ensure_agent_watchlist_access(user: UserResponse) -> None:
+    tier = normalize_tier(user.tier)
+    if not has_feature(tier, "agent_watchlist"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "watchlist_not_available",
+                "message": "Watchlist is available on Arena Plus and Pro.",
+                "upgrade_required": "plus",
+            },
+        )
+
+
+WATCHLIST_INTERVALS = frozenset({24, 72, 168})
+WATCHLIST_MAX_ACTIVE = 10
+
+
+def _watchlist_latest_summary(db: Session, user_id: int, latest_task_id: Optional[str]) -> Optional[dict]:
+    if not latest_task_id:
+        return None
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == latest_task_id, AgentTaskRow.user_id == user_id)
+        .first()
+    )
+    if not row:
+        return None
+    title = (row.title or "").strip() or (row.task_text or "")[:80]
+    return {
+        "task_id": row.task_id,
+        "title": title,
+        "created_at": row.created_at.isoformat() if row.created_at else "",
+        "final_score": row.final_score,
+    }
+
+
+def _watchlist_item_api_dict(db: Session, item: WatchlistItem) -> dict:
+    return {
+        "id": item.id,
+        "question": item.question,
+        "interval_hours": item.interval_hours,
+        "expertise_level": item.expertise_level or "curious",
+        "expertise_domain": item.expertise_domain or "",
+        "last_run_at": item.last_run_at.isoformat() if item.last_run_at else None,
+        "next_run_at": item.next_run_at.isoformat() if item.next_run_at else "",
+        "latest_task_id": item.latest_task_id,
+        "run_count": int(item.run_count or 0),
+        "is_active": bool(item.is_active),
+        "created_at": item.created_at.isoformat() if item.created_at else "",
+        "latest_task": _watchlist_latest_summary(db, item.user_id, item.latest_task_id),
+    }
 
 
 def _export_overlay_from_bb(bb: Optional[Blackboard]) -> Optional[dict]:
@@ -526,6 +592,7 @@ async def run_agent_pipeline_background(
     expertise_level: str = "curious",
     expertise_domain: str = "",
     orchestration_id: Optional[str] = None,
+    watchlist_item_id: Optional[str] = None,
 ) -> None:
     """Run pipeline for an existing blackboard (same task_id as POST /run)."""
     bb = get_blackboard(task_id)
@@ -568,7 +635,9 @@ async def run_agent_pipeline_background(
     if bb.status != AgentStatus.COMPLETE:
         return
 
-    await _save_completed_task_to_memory(bb, user_id, task, orchestration_id)
+    await _save_completed_task_to_memory(
+        bb, user_id, task, orchestration_id, watchlist_item_id=watchlist_item_id
+    )
 
 
 async def _save_completed_task_to_memory(
@@ -576,6 +645,7 @@ async def _save_completed_task_to_memory(
     user_id: int,
     task_text_for_memory: str,
     orchestration_id: Optional[str] = None,
+    watchlist_item_id: Optional[str] = None,
 ) -> None:
     """Persist completed agent run to research memory (non-fatal on failure)."""
     try:
@@ -623,6 +693,7 @@ async def _save_completed_task_to_memory(
                 pipeline_contradictions=bb.cross_task_contradictions or None,
                 intelligence_score=bb.intelligence_score if bb.intelligence_score else None,
                 orchestration_id=orchestration_id,
+                watchlist_item_id=watchlist_item_id,
             )
 
             rows = (
@@ -1197,6 +1268,130 @@ Respond to this challenge now.
         return JSONResponse(content={"rebuttal": response, "status": "complete"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/watchlist")
+async def create_watchlist_item(
+    body: WatchlistCreateBody,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_watchlist_access(user)
+    q = body.question.strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+    if len(q) > 2000:
+        raise HTTPException(status_code=400, detail="Question too long (max 2000 characters)")
+    if body.interval_hours not in WATCHLIST_INTERVALS:
+        raise HTTPException(status_code=400, detail="interval_hours must be 24, 72, or 168")
+
+    active_n = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
+        .count()
+    )
+    if active_n >= WATCHLIST_MAX_ACTIVE:
+        raise HTTPException(status_code=400, detail="Watchlist limit reached")
+
+    el = (body.expertise_level or "curious").strip().lower() or "curious"
+    ed = (body.expertise_domain or "").strip()[:512]
+    now = _utc_naive()
+    item = WatchlistItem(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        question=q,
+        interval_hours=int(body.interval_hours),
+        expertise_level=el,
+        expertise_domain=ed,
+        next_run_at=now + timedelta(hours=int(body.interval_hours)),
+        run_count=0,
+        is_active=True,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return JSONResponse(content=_watchlist_item_api_dict(db, item))
+
+
+@router.get("/watchlist")
+async def list_watchlist_items(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_watchlist_access(user)
+    items = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id)
+        .order_by(WatchlistItem.next_run_at.asc())
+        .all()
+    )
+    active_n = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
+        .count()
+    )
+    return JSONResponse(
+        content={
+            "items": [_watchlist_item_api_dict(db, i) for i in items],
+            "active_count": active_n,
+            "active_cap": WATCHLIST_MAX_ACTIVE,
+        }
+    )
+
+
+@router.patch("/watchlist/{item_id}")
+async def patch_watchlist_item(
+    item_id: str,
+    body: WatchlistPatchBody,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_watchlist_access(user)
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Watchlist item not found")
+
+    now = _utc_naive()
+    if body.interval_hours is not None:
+        if body.interval_hours not in WATCHLIST_INTERVALS:
+            raise HTTPException(status_code=400, detail="interval_hours must be 24, 72, or 168")
+        item.interval_hours = int(body.interval_hours)
+        if item.is_active:
+            item.next_run_at = now + timedelta(hours=item.interval_hours)
+
+    if body.is_active is not None:
+        if body.is_active:
+            item.is_active = True
+            item.next_run_at = now + timedelta(hours=int(item.interval_hours))
+        else:
+            item.is_active = False
+
+    db.commit()
+    db.refresh(item)
+    return JSONResponse(content=_watchlist_item_api_dict(db, item))
+
+
+@router.delete("/watchlist/{item_id}")
+async def delete_watchlist_item(
+    item_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_watchlist_access(user)
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Watchlist item not found")
+    db.delete(item)
+    db.commit()
+    return JSONResponse(content={"success": True})
 
 
 @router.get("/history")

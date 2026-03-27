@@ -12,6 +12,7 @@ import {
   exportAgentTaskPdf,
   exportOrchestrationPdf,
   getAgentHistory,
+  getAgentWatchlist,
   getAgentOrchestration,
   getAgentRebuttal,
   getAgentResult,
@@ -24,6 +25,7 @@ import {
   getMe,
   markAgentLiveUpdatesRead,
   postAgentOrchestrate,
+  postAgentWatchlist,
   postAgentTaskAnswerFeedback,
   postCalibrationRate,
   refineAgentAnswer,
@@ -203,6 +205,7 @@ type HistoryTask = {
   created_at: string;
   is_live?: boolean;
   orchestration_id?: string | null;
+  watchlist_item_id?: string | null;
 };
 
 type HistoryPayload = {
@@ -612,6 +615,7 @@ export function AgentPage() {
   const { canUseFeature, isPro } = useTier();
   const canAgent = canUseFeature('agent_mode');
   const canOrchestrate = canUseFeature('agent_orchestrate');
+  const canWatchlist = canUseFeature('agent_watchlist');
   const { openModal, setActiveTab, isOpen: profileModalOpen } = useProfileModal();
 
   const [task, setTask] = useState('');
@@ -677,6 +681,11 @@ export function AgentPage() {
   const [orchPoll, setOrchPoll] = useState<any | null>(null);
   const [orchResult, setOrchResult] = useState<any | null>(null);
   const [orchExpandedIdx, setOrchExpandedIdx] = useState<number | null>(null);
+  const [watchlisted, setWatchlisted] = useState(false);
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [watchlistPickHours, setWatchlistPickHours] = useState<24 | 72 | 168>(24);
+  const [watchUnread, setWatchUnread] = useState(false);
+  const [watchlistBusy, setWatchlistBusy] = useState(false);
 
   const closeTemplatesModal = useCallback(() => {
     setTemplatesClosing(true);
@@ -859,6 +868,71 @@ export function AgentPage() {
       cancelled = true;
     };
   }, [urlTaskId, canAgent, authLoading]);
+
+  useEffect(() => {
+    if (!canWatchlist || authLoading || !user?.email) {
+      setWatchlisted(false);
+      return;
+    }
+    const q = (result?.original_task || result?.task || '').trim();
+    if (!q || result?.status !== 'complete') {
+      setWatchlisted(false);
+      return;
+    }
+    let cancelled = false;
+    void getAgentWatchlist()
+      .then((payload) => {
+        if (cancelled) return;
+        const items = payload.items || [];
+        const on = items.some((i) => (i.question || '').trim() === q && i.is_active);
+        setWatchlisted(on);
+      })
+      .catch(() => {
+        if (!cancelled) setWatchlisted(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    result?.original_task,
+    result?.task,
+    result?.status,
+    canWatchlist,
+    authLoading,
+    user?.email,
+  ]);
+
+  useEffect(() => {
+    setShowScheduler(false);
+  }, [result?.task_id]);
+
+  useEffect(() => {
+    if (!canWatchlist || authLoading || !user?.email) {
+      setWatchUnread(false);
+      return;
+    }
+    let cancelled = false;
+    void getAgentWatchlist()
+      .then((payload) => {
+        if (cancelled) return;
+        const lastViewed = Number(localStorage.getItem('watchlist_last_viewed') || 0);
+        let hasNew = false;
+        for (const it of payload.items || []) {
+          const ca = it.latest_task?.created_at;
+          if (ca && new Date(ca).getTime() > lastViewed) {
+            hasNew = true;
+            break;
+          }
+        }
+        setWatchUnread(hasNew);
+      })
+      .catch(() => {
+        if (!cancelled) setWatchUnread(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canWatchlist, authLoading, user?.email, location.pathname, taskHistory.length]);
 
   useEffect(() => {
     const st = location.state as {
@@ -1114,6 +1188,37 @@ export function AgentPage() {
     }
   };
 
+  const handleConfirmWatchlist = async () => {
+    const q = (result?.original_task || result?.task || '').trim();
+    if (!q || !canWatchlist || watchlistBusy) return;
+    setWatchlistBusy(true);
+    setError(null);
+    try {
+      await postAgentWatchlist({
+        question: q,
+        interval_hours: watchlistPickHours,
+        expertise_level: expertiseLevel,
+        expertise_domain: expertiseDomain,
+      });
+      setWatchlisted(true);
+      setShowScheduler(false);
+      setToastMessage('Added to watchlist.');
+      void loadTaskHistory();
+    } catch (e) {
+      const msg =
+        e instanceof ApiError
+          ? typeof e.detail === 'string'
+            ? e.detail
+            : e.message
+          : e instanceof Error
+            ? e.message
+            : 'Could not add to watchlist';
+      setError(msg);
+    } finally {
+      setWatchlistBusy(false);
+    }
+  };
+
   const handleRefine = async () => {
     const msg = followUp.trim();
     if (!msg || !result?.task_id || isRefining || isRunning) return;
@@ -1171,6 +1276,9 @@ export function AgentPage() {
     setOrchResult(null);
     setOrchExpandedIdx(null);
     setMultiMode(false);
+    setWatchlisted(false);
+    setShowScheduler(false);
+    setWatchlistPickHours(24);
     if (isMobile) setSidebarOpen(false);
   };
 
@@ -1676,6 +1784,24 @@ export function AgentPage() {
                     lineHeight: '1.35',
                   }}
                 >
+                  {item.watchlist_item_id ? (
+                    <svg
+                      width={12}
+                      height={12}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden
+                      style={{ flexShrink: 0, color: '#C4956A' }}
+                    >
+                      <path
+                        d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
+                        stroke="currentColor"
+                        strokeWidth={1.8}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  ) : null}
                   {item.is_live ? (
                     <span
                       aria-hidden
@@ -2014,6 +2140,65 @@ export function AgentPage() {
           >
             New task
           </button>
+          {canWatchlist ? (
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  localStorage.setItem('watchlist_last_viewed', String(Date.now()));
+                } catch {
+                  /* ignore */
+                }
+                setWatchUnread(false);
+                navigate('/agent/watchlist');
+                if (isMobile) setSidebarOpen(false);
+              }}
+              style={{
+                margin: '0 16px 10px',
+                width: 'calc(100% - 32px)',
+                padding: '8px 14px',
+                background: 'transparent',
+                color: '#6B5040',
+                borderRadius: 10,
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                border: '0.5px solid #E0D5C5',
+                textAlign: 'left',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontFamily: 'Georgia, serif',
+              }}
+            >
+              <span style={{ position: 'relative', display: 'inline-flex' }}>
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {watchUnread ? (
+                  <span
+                    aria-hidden
+                    style={{
+                      position: 'absolute',
+                      top: -2,
+                      right: -2,
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: '#C4956A',
+                    }}
+                  />
+                ) : null}
+              </span>
+              Watchlist
+            </button>
+          ) : null}
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 16px' }}>
             <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A9A2', padding: '12px 4px 6px', marginBottom: 4 }}>
               History
@@ -5092,6 +5277,62 @@ export function AgentPage() {
                         {exportingPdf ? 'Exporting…' : 'Export PDF'}
                       </button>
                     ) : null}
+                    {result.status === 'complete' && !isRunning && user?.email ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!canWatchlist) {
+                            setToastMessage('Watchlist is available on Arena Plus and Pro.');
+                            return;
+                          }
+                          if (watchlisted) return;
+                          setShowScheduler(true);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '9px 18px',
+                          border: watchlisted ? `0.5px solid ${AR.GOLD}` : '0.5px solid #D4C4B0',
+                          borderRadius: 6,
+                          background: watchlisted ? '#FAF3EA' : 'transparent',
+                          color: watchlisted ? AR.GOLD : '#6B5040',
+                          fontSize: 13,
+                          fontFamily: 'Georgia, serif',
+                          cursor: watchlisted ? 'default' : 'pointer',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (watchlisted) return;
+                          e.currentTarget.style.borderColor = AR.GOLD;
+                          e.currentTarget.style.color = AR.GOLD;
+                        }}
+                        onMouseLeave={(e) => {
+                          if (watchlisted) return;
+                          e.currentTarget.style.borderColor = '#D4C4B0';
+                          e.currentTarget.style.color = '#6B5040';
+                        }}
+                      >
+                        {watchlisted ? (
+                          <svg width={14} height={14} viewBox="0 0 24 24" aria-hidden>
+                            <path
+                              fill={AR.GOLD}
+                              d="M12 22a2.18 2.18 0 002.18-2.18H9.82A2.18 2.18 0 0012 22zm6-5.82V11a6 6 0 10-12 0v5.18L4 19h16l-2-2.82z"
+                            />
+                          </svg>
+                        ) : (
+                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
+                            <path
+                              d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
+                              stroke="currentColor"
+                              strokeWidth={1.5}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                        {watchlisted ? 'Watching' : 'Add to watchlist'}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => {
@@ -5162,6 +5403,82 @@ export function AgentPage() {
                       </button>
                     ) : null}
                   </div>
+                  {showScheduler && result.status === 'complete' && !isRunning && canWatchlist ? (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        background: '#FAF7F2',
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 8,
+                        padding: '12px 16px',
+                      }}
+                    >
+                      <div style={{ fontSize: 12, color: '#8C7355' }}>Auto-run this task every</div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                        {(
+                          [
+                            { h: 24 as const, label: 'Daily' },
+                            { h: 72 as const, label: 'Every 3 days' },
+                            { h: 168 as const, label: 'Weekly' },
+                          ] as const
+                        ).map(({ h, label }) => (
+                          <button
+                            key={h}
+                            type="button"
+                            onClick={() => setWatchlistPickHours(h)}
+                            style={{
+                              padding: '6px 14px',
+                              borderRadius: 999,
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              fontFamily: 'Georgia, serif',
+                              background: watchlistPickHours === h ? '#C4956A' : '#F0E8DC',
+                              color: watchlistPickHours === h ? '#FAF7F2' : '#8C7355',
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowScheduler(false)}
+                          style={{
+                            padding: '7px 14px',
+                            borderRadius: 20,
+                            border: '0.5px solid #D4C4B0',
+                            background: 'transparent',
+                            color: '#8C7355',
+                            fontSize: 12,
+                            fontFamily: 'Georgia, serif',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={watchlistBusy}
+                          onClick={() => void handleConfirmWatchlist()}
+                          style={{
+                            padding: '7px 18px',
+                            borderRadius: 20,
+                            border: 'none',
+                            background: '#2C1810',
+                            color: '#C4956A',
+                            fontSize: 12,
+                            fontFamily: 'Georgia, serif',
+                            cursor: watchlistBusy ? 'default' : 'pointer',
+                            opacity: watchlistBusy ? 0.75 : 1,
+                          }}
+                        >
+                          {watchlistBusy ? 'Saving…' : 'Start watching →'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   {result.is_live && !isRunning ? (
                     <div
                       style={{

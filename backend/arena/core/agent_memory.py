@@ -237,6 +237,7 @@ async def save_task_to_memory(
     pipeline_contradictions: Optional[list[Any]] = None,
     intelligence_score: Optional[dict[str, Any]] = None,
     orchestration_id: Optional[str] = None,
+    watchlist_item_id: Optional[str] = None,
 ) -> AgentTask:
     topics, conclusions = await asyncio.gather(
         extract_topics(task_text),
@@ -262,6 +263,7 @@ async def save_task_to_memory(
     task_record = AgentTask(
         user_id=user_id,
         orchestration_id=orchestration_id,
+        watchlist_item_id=watchlist_item_id,
         task_id=task_id,
         task_text=task_text,
         final_answer=final_answer,
@@ -412,6 +414,7 @@ def get_user_task_history(
                 "created_at": t.created_at.isoformat() if t.created_at else "",
                 "is_live": bool(getattr(t, "is_live", False)),
                 "orchestration_id": getattr(t, "orchestration_id", None),
+                "watchlist_item_id": getattr(t, "watchlist_item_id", None),
             }
             for t in tasks
         ],

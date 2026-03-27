@@ -415,6 +415,8 @@ async def get_user_tier_summary(
             "memory": features["memory"],
             "saved_responses": features["saved_responses"],
             "agent_mode": features["agent_mode"],
+            "agent_orchestrate": features.get("agent_orchestrate", False),
+            "agent_watchlist": features.get("agent_watchlist", False),
             "scoring_audit": features["scoring_audit"],
         },
         "upgrade_to": upgrade_target(normalized_tier),

@@ -195,6 +195,62 @@ def main():
                 except Exception:
                     pass
 
+            pg_watchlist = """
+                CREATE TABLE IF NOT EXISTS watchlist_items (
+                    id VARCHAR(36) PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    question TEXT NOT NULL,
+                    interval_hours INTEGER NOT NULL,
+                    expertise_level VARCHAR DEFAULT 'curious',
+                    expertise_domain VARCHAR DEFAULT '',
+                    last_run_at TIMESTAMP,
+                    next_run_at TIMESTAMP NOT NULL,
+                    latest_task_id VARCHAR,
+                    run_count INTEGER DEFAULT 0,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """
+            sqlite_watchlist = """
+                CREATE TABLE IF NOT EXISTS watchlist_items (
+                    id VARCHAR(36) PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    question TEXT NOT NULL,
+                    interval_hours INTEGER NOT NULL,
+                    expertise_level VARCHAR DEFAULT 'curious',
+                    expertise_domain VARCHAR DEFAULT '',
+                    last_run_at TEXT,
+                    next_run_at TEXT NOT NULL,
+                    latest_task_id VARCHAR,
+                    run_count INTEGER DEFAULT 0,
+                    is_active INTEGER DEFAULT 1,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            wl_sql = sqlite_watchlist if dialect == "sqlite" else pg_watchlist
+            try:
+                conn.execute(text(wl_sql))
+                conn.commit()
+                print("==> Migrated: watchlist_items table", flush=True)
+            except Exception as e:
+                print(f"==> Warning (watchlist_items): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+            wl_alter = "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS watchlist_item_id VARCHAR(36)"
+            try:
+                conn.execute(text(wl_alter))
+                conn.commit()
+                print("==> Migrated: agent_tasks.watchlist_item_id", flush=True)
+            except Exception as e:
+                print(f"==> Warning (agent_tasks.watchlist_item_id): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
         print("==> All migrations complete.", flush=True)
 
     except Exception as e:
