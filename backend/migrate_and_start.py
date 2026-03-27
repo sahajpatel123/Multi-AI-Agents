@@ -145,6 +145,56 @@ def main():
                 except Exception:
                     pass
 
+            pg_orch = """
+                CREATE TABLE IF NOT EXISTS orchestrations (
+                    id VARCHAR(36) PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    task_ids JSONB NOT NULL,
+                    synthesis TEXT,
+                    synthesis_bullets JSONB,
+                    conflicts JSONB,
+                    status VARCHAR DEFAULT 'running',
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """
+            sqlite_orch = """
+                CREATE TABLE IF NOT EXISTS orchestrations (
+                    id VARCHAR(36) PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    task_ids TEXT NOT NULL DEFAULT '[]',
+                    synthesis TEXT,
+                    synthesis_bullets TEXT,
+                    conflicts TEXT,
+                    status VARCHAR DEFAULT 'running',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            orch_sql = sqlite_orch if dialect == "sqlite" else pg_orch
+            try:
+                conn.execute(text(orch_sql))
+                conn.commit()
+                print("==> Migrated: orchestrations table", flush=True)
+            except Exception as e:
+                print(f"==> Warning (orchestrations): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+            orch_alter = (
+                "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS orchestration_id VARCHAR(36)"
+            )
+            try:
+                conn.execute(text(orch_alter))
+                conn.commit()
+                print("==> Migrated: agent_tasks.orchestration_id", flush=True)
+            except Exception as e:
+                print(f"==> Warning (agent_tasks.orchestration_id): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
         print("==> All migrations complete.", flush=True)
 
     except Exception as e:

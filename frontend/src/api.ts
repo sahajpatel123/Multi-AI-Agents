@@ -789,6 +789,57 @@ export async function getAgentResult(taskId: string): Promise<unknown> {
   return data;
 }
 
+export async function exportAgentTaskPdf(taskId: string): Promise<Blob> {
+  const response = await apiFetch(`${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/export/pdf`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Export failed'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function postAgentOrchestrate(body: {
+  questions: string[];
+  expertise_level?: string;
+  expertise_domain?: string;
+}): Promise<{ orchestration_id: string; task_ids: string[] }> {
+  const response = await apiFetch(`${API_BASE}/agent/orchestrate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await parseJsonSafely<{
+    orchestration_id?: string;
+    task_ids?: string[];
+    detail?: string | { message?: string };
+  }>(response);
+  if (!data || !response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Orchestration failed'), response.status, data);
+  }
+  if (!data.orchestration_id || !data.task_ids) throw new Error('Invalid orchestration response');
+  return { orchestration_id: data.orchestration_id, task_ids: data.task_ids };
+}
+
+export async function getAgentOrchestration(orchId: string): Promise<any> {
+  const response = await apiFetch(`${API_BASE}/agent/orchestrate/${encodeURIComponent(orchId)}`);
+  const data = await parseJsonSafely<any>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Failed to load orchestration'), response.status, data);
+  }
+  return data;
+}
+
+export async function exportOrchestrationPdf(orchId: string): Promise<Blob> {
+  const response = await apiFetch(
+    `${API_BASE}/agent/orchestrate/${encodeURIComponent(orchId)}/export/pdf`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Export failed'), response.status, err);
+  }
+  return response.blob();
+}
+
 export type AgentChallengeItem = {
   challenger: string;
   challenge: string;

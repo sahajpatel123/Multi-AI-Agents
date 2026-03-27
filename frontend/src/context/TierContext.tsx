@@ -48,6 +48,7 @@ const guestDefaults: TierStatus = {
     memory: false,
     saved_responses: false,
     agent_mode: false,
+    agent_orchestrate: false,
     scoring_audit: false,
   },
   upgrade_to: 'plus',

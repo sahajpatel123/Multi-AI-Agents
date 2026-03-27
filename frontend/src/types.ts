@@ -148,6 +148,7 @@ export interface TierFeatures {
   memory: boolean;
   saved_responses: boolean;
   agent_mode: boolean;
+  agent_orchestrate: boolean;
   scoring_audit: boolean;
 }
 

@@ -1,11 +1,13 @@
 import asyncio
 import json
 import logging
+import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -18,10 +20,21 @@ from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_b
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 from arena.core.tier_config import UserTier, has_feature, normalize_tier
+from arena.core.agent_orchestration import synthesise_tasks
 from arena.core.feedback_calibrator import get_answer_feedback_distribution
+from arena.core.report_generator import (
+    generate_orchestration_report_html,
+    generate_report_html,
+    write_pdf_or_html,
+)
 from arena.core.templates import get_templates_grouped_by_category
 from arena.database import SessionLocal, get_db
-from arena.db_models import AgentContradiction, AgentTask as AgentTaskRow, AnswerFeedback
+from arena.db_models import (
+    AgentContradiction,
+    AgentTask as AgentTaskRow,
+    AnswerFeedback,
+    Orchestration,
+)
 from arena.models.schemas import UserResponse
 
 logger = logging.getLogger(__name__)
@@ -236,6 +249,12 @@ class MarkLiveReadBody(BaseModel):
     update_id: Optional[str] = None
 
 
+class OrchestrateRequest(BaseModel):
+    questions: list[str]
+    expertise_level: str = "curious"
+    expertise_domain: str = ""
+
+
 ANALYST_CHALLENGE_PROMPT = """
 You are The Analyst challenging an AI-generated answer.
 
@@ -396,6 +415,105 @@ def _ensure_agent_access(user: UserResponse) -> None:
         )
 
 
+def _ensure_agent_orchestrate_access(user: UserResponse) -> None:
+    tier = normalize_tier(user.tier)
+    if not has_feature(tier, "agent_orchestrate"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "orchestrate_not_available",
+                "message": "Multi-task orchestration requires Arena Pro.",
+                "upgrade_required": "pro",
+            },
+        )
+
+
+def _export_overlay_from_bb(bb: Optional[Blackboard]) -> Optional[dict]:
+    if not bb or bb.status != AgentStatus.COMPLETE:
+        return None
+    return {
+        "caveats": list(bb.caveats or []),
+        "steelman": bb.steelman or {},
+        "assumptions": bb.assumptions or {},
+        "sources": list(bb.sources or []),
+        "intelligence_score": bb.intelligence_score or {},
+    }
+
+
+def _orchestration_any_task_failed(task_ids: list[str]) -> bool:
+    for tid in task_ids:
+        bb = get_blackboard(tid)
+        if bb and bb.status == AgentStatus.FAILED:
+            return True
+    return False
+
+
+async def run_orchestration_watcher(orch_id: str, user_id: int, task_ids: list[str]) -> None:
+    deadline = time.monotonic() + 600.0
+    while time.monotonic() < deadline:
+        await asyncio.sleep(5.0)
+
+        if _orchestration_any_task_failed(task_ids):
+            db = SessionLocal()
+            try:
+                orch = db.query(Orchestration).filter(Orchestration.id == orch_id).first()
+                if orch:
+                    orch.status = "failed"
+                    db.commit()
+            finally:
+                db.close()
+            return
+
+        db = SessionLocal()
+        try:
+            all_done = True
+            for tid in task_ids:
+                row = (
+                    db.query(AgentTaskRow)
+                    .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user_id)
+                    .first()
+                )
+                if not row or not (row.final_answer or "").strip():
+                    all_done = False
+                    break
+            if not all_done:
+                continue
+
+            rows = (
+                db.query(AgentTaskRow)
+                .filter(
+                    AgentTaskRow.user_id == user_id,
+                    AgentTaskRow.task_id.in_(task_ids),
+                )
+                .all()
+            )
+            by_id = {r.task_id: r for r in rows}
+            ordered = [by_id[tid] for tid in task_ids if tid in by_id]
+            if len(ordered) != len(task_ids):
+                continue
+
+            out = await synthesise_tasks(ordered)
+            orch = db.query(Orchestration).filter(Orchestration.id == orch_id).first()
+            if orch:
+                orch.synthesis = out.get("synthesis") or ""
+                orch.synthesis_bullets = out.get("bullets") or []
+                orch.conflicts = out.get("conflicts") or []
+                orch.status = "complete"
+                db.commit()
+            return
+        finally:
+            db.close()
+
+    db = SessionLocal()
+    try:
+        orch = db.query(Orchestration).filter(Orchestration.id == orch_id).first()
+        if orch and orch.status == "running":
+            orch.status = "failed"
+            db.commit()
+    finally:
+        db.close()
+
+
 def _ensure_task_owner(bb: Blackboard, user: UserResponse) -> None:
     if bb.user_id != user.id:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -407,6 +525,7 @@ async def run_agent_pipeline_background(
     task: str,
     expertise_level: str = "curious",
     expertise_domain: str = "",
+    orchestration_id: Optional[str] = None,
 ) -> None:
     """Run pipeline for an existing blackboard (same task_id as POST /run)."""
     bb = get_blackboard(task_id)
@@ -449,13 +568,14 @@ async def run_agent_pipeline_background(
     if bb.status != AgentStatus.COMPLETE:
         return
 
-    await _save_completed_task_to_memory(bb, user_id, task)
+    await _save_completed_task_to_memory(bb, user_id, task, orchestration_id)
 
 
 async def _save_completed_task_to_memory(
     bb: Blackboard,
     user_id: int,
     task_text_for_memory: str,
+    orchestration_id: Optional[str] = None,
 ) -> None:
     """Persist completed agent run to research memory (non-fatal on failure)."""
     try:
@@ -502,6 +622,7 @@ async def _save_completed_task_to_memory(
                 insight_report=bb.insight_report,
                 pipeline_contradictions=bb.cross_task_contradictions or None,
                 intelligence_score=bb.intelligence_score if bb.intelligence_score else None,
+                orchestration_id=orchestration_id,
             )
 
             rows = (
@@ -643,6 +764,210 @@ async def post_task_answer_feedback(
     db.commit()
     stats = get_answer_feedback_distribution(user.id, db)
     return {"success": True, "feedback_stats": stats}
+
+
+@router.post("/orchestrate")
+async def start_orchestration(
+    body: OrchestrateRequest,
+    background_tasks: BackgroundTasks,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    _ensure_agent_orchestrate_access(user)
+
+    raw_qs = [str(q).strip() for q in body.questions if str(q).strip()]
+    if not (2 <= len(raw_qs) <= 4):
+        raise HTTPException(
+            status_code=400,
+            detail="Provide between 2 and 4 non-empty questions",
+        )
+    for q in raw_qs:
+        if len(q) > 2000:
+            raise HTTPException(
+                status_code=400,
+                detail="Each question may be at most 2000 characters",
+            )
+
+    el = (body.expertise_level or "curious").strip().lower() or "curious"
+    ed = (body.expertise_domain or "").strip()[:512]
+
+    orch_id = str(uuid.uuid4())
+    task_ids: list[str] = []
+    for q in raw_qs:
+        bb = create_blackboard(user_id=user.id, task=q)
+        bb.status = AgentStatus.RUNNING
+        bb.expertise_level = el
+        bb.expertise_domain = ed
+        task_ids.append(bb.task_id)
+        background_tasks.add_task(
+            run_agent_pipeline_background,
+            bb.task_id,
+            user.id,
+            q,
+            el,
+            ed,
+            orch_id,
+        )
+
+    db.add(
+        Orchestration(
+            id=orch_id,
+            user_id=user.id,
+            task_ids=task_ids,
+            status="running",
+        )
+    )
+    db.commit()
+
+    background_tasks.add_task(run_orchestration_watcher, orch_id, user.id, task_ids)
+
+    return JSONResponse(
+        content={"orchestration_id": orch_id, "task_ids": task_ids},
+    )
+
+
+@router.get("/orchestrate/{orch_id}")
+async def get_orchestration_status(
+    orch_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    _ensure_agent_orchestrate_access(user)
+
+    orch = db.query(Orchestration).filter(Orchestration.id == orch_id.strip()).first()
+    if not orch or orch.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Orchestration not found")
+
+    child_tasks = []
+    for tid in orch.task_ids or []:
+        bb = get_blackboard(tid)
+        row = (
+            db.query(AgentTaskRow)
+            .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+            .first()
+        )
+        text = ""
+        if row and row.task_text:
+            text = row.task_text
+        elif bb and bb.task:
+            text = bb.task
+
+        st = "running"
+        stage = "planner"
+        if bb:
+            stage = bb.current_stage or "planner"
+            if bb.status == AgentStatus.COMPLETE:
+                st = "complete"
+            elif bb.status == AgentStatus.FAILED:
+                st = "failed"
+            else:
+                st = "running"
+        if row and (row.final_answer or "").strip():
+            st = "complete"
+            stage = "done"
+
+        snippet = (text[:50] + "…") if len(text) > 50 else text
+        child_tasks.append(
+            {
+                "task_id": tid,
+                "status": st,
+                "current_stage": stage,
+                "question_snippet": snippet,
+            }
+        )
+
+    return JSONResponse(
+        content={
+            "id": orch.id,
+            "status": orch.status,
+            "task_ids": orch.task_ids,
+            "synthesis": orch.synthesis,
+            "synthesis_bullets": orch.synthesis_bullets or [],
+            "conflicts": orch.conflicts or [],
+            "created_at": orch.created_at.isoformat() if orch.created_at else None,
+            "child_tasks": child_tasks,
+        }
+    )
+
+
+@router.get("/orchestrate/{orch_id}/export/pdf")
+async def export_orchestration_pdf(
+    orch_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    _ensure_agent_orchestrate_access(user)
+
+    oid = orch_id.strip()
+    orch = (
+        db.query(Orchestration)
+        .filter(Orchestration.id == oid, Orchestration.user_id == user.id)
+        .first()
+    )
+    if not orch:
+        raise HTTPException(status_code=404, detail="Orchestration not found")
+    if orch.status != "complete":
+        raise HTTPException(status_code=400, detail="Orchestration is not complete yet")
+
+    tids = list(orch.task_ids or [])
+    rows = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.user_id == user.id, AgentTaskRow.task_id.in_(tids))
+        .all()
+    )
+    by_id = {r.task_id: r for r in rows}
+    ordered = [by_id[i] for i in tids if i in by_id]
+    if len(ordered) != len(tids):
+        raise HTTPException(status_code=400, detail="Missing saved tasks for orchestration")
+
+    overlays = [_export_overlay_from_bb(get_blackboard(tid)) for tid in tids]
+    html_str = generate_orchestration_report_html(
+        orch.synthesis or "",
+        list(orch.synthesis_bullets or []),
+        list(orch.conflicts or []),
+        ordered,
+        overlays,
+    )
+    blob, mime, ext = write_pdf_or_html(html_str, f"arena-orch-{oid[:8]}")
+    filename = f"arena-orchestration-{oid[:8]}.{ext}"
+    return Response(
+        content=blob,
+        media_type=mime,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/tasks/{task_id}/export/pdf")
+async def export_task_pdf(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    tid = task_id.strip()
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if not (row.final_answer or "").strip():
+        raise HTTPException(status_code=400, detail="Nothing to export yet for this task")
+
+    bb = get_blackboard(tid)
+    overlay = _export_overlay_from_bb(bb)
+    html_str = generate_report_html(row, overlay)
+    blob, mime, ext = write_pdf_or_html(html_str, f"arena-report-{tid[:8]}")
+    filename = f"arena-report-{tid[:8]}.{ext}"
+    return Response(
+        content=blob,
+        media_type=mime,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/run")

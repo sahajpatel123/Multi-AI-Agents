@@ -236,6 +236,7 @@ async def save_task_to_memory(
     insight_report: Optional[dict[str, Any]] = None,
     pipeline_contradictions: Optional[list[Any]] = None,
     intelligence_score: Optional[dict[str, Any]] = None,
+    orchestration_id: Optional[str] = None,
 ) -> AgentTask:
     topics, conclusions = await asyncio.gather(
         extract_topics(task_text),
@@ -260,6 +261,7 @@ async def save_task_to_memory(
 
     task_record = AgentTask(
         user_id=user_id,
+        orchestration_id=orchestration_id,
         task_id=task_id,
         task_text=task_text,
         final_answer=final_answer,
@@ -409,6 +411,7 @@ def get_user_task_history(
                 "user_feedback": t.user_feedback,
                 "created_at": t.created_at.isoformat() if t.created_at else "",
                 "is_live": bool(getattr(t, "is_live", False)),
+                "orchestration_id": getattr(t, "orchestration_id", None),
             }
             for t in tasks
         ],

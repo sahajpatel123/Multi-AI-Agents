@@ -9,7 +9,10 @@ import {
   ApiError,
   challengeAgentAnswer,
   deleteAgentTask,
+  exportAgentTaskPdf,
+  exportOrchestrationPdf,
   getAgentHistory,
+  getAgentOrchestration,
   getAgentRebuttal,
   getAgentResult,
   getAgentSavedTask,
@@ -20,6 +23,7 @@ import {
   getCalibrationStats,
   getMe,
   markAgentLiveUpdatesRead,
+  postAgentOrchestrate,
   postAgentTaskAnswerFeedback,
   postCalibrationRate,
   refineAgentAnswer,
@@ -198,6 +202,7 @@ type HistoryTask = {
   user_feedback: string | null;
   created_at: string;
   is_live?: boolean;
+  orchestration_id?: string | null;
 };
 
 type HistoryPayload = {
@@ -257,6 +262,17 @@ function plainTextFromFinalAnswer(finalAnswer: string | undefined, parsed: Parse
     return parsed.sentences.map((s) => s.text).join(' ');
   }
   return finalAnswer;
+}
+
+function parseSynthesisFromFinalAnswer(finalAnswer: string | undefined): ParsedSynthesis | null {
+  if (!finalAnswer) return null;
+  try {
+    const parsed = JSON.parse(finalAnswer) as ParsedSynthesis;
+    if (parsed && Array.isArray(parsed.sentences)) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function formatShortDate(iso: string): string {
@@ -595,6 +611,7 @@ export function AgentPage() {
   const { user, isLoading: authLoading, refreshUser } = useAuth();
   const { canUseFeature, isPro } = useTier();
   const canAgent = canUseFeature('agent_mode');
+  const canOrchestrate = canUseFeature('agent_orchestrate');
   const { openModal, setActiveTab, isOpen: profileModalOpen } = useProfileModal();
 
   const [task, setTask] = useState('');
@@ -652,6 +669,14 @@ export function AgentPage() {
   const [feedbackEditMode, setFeedbackEditMode] = useState(false);
   const [pendingVerdict, setPendingVerdict] = useState<'correct' | 'partial' | 'wrong' | null>(null);
   const [pendingNote, setPendingNote] = useState('');
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [multiMode, setMultiMode] = useState(false);
+  const [multiTasks, setMultiTasks] = useState(['', '', '', '']);
+  const [activeTaskCount, setActiveTaskCount] = useState(2);
+  const [orchActiveId, setOrchActiveId] = useState<string | null>(null);
+  const [orchPoll, setOrchPoll] = useState<any | null>(null);
+  const [orchResult, setOrchResult] = useState<any | null>(null);
+  const [orchExpandedIdx, setOrchExpandedIdx] = useState<number | null>(null);
 
   const closeTemplatesModal = useCallback(() => {
     setTemplatesClosing(true);
@@ -949,6 +974,9 @@ export function AgentPage() {
     setBridgeMeta(null);
     if (isMobile) setSidebarOpen(false);
     setResult(null);
+    setOrchResult(null);
+    setOrchActiveId(null);
+    setOrchPoll(null);
     setCompletedStages([]);
     setCurrentStage('planner');
     setLiveStages({});
@@ -974,6 +1002,115 @@ export function AgentPage() {
       setError(e instanceof Error ? e.message : 'Agent task failed');
       setIsRunning(false);
       setIsRefining(false);
+    }
+  };
+
+  const handleOrchestrateRun = async () => {
+    const qs = multiTasks.slice(0, activeTaskCount).map((t) => t.trim());
+    if (qs.length !== activeTaskCount || qs.some((q) => q.length < 10) || isRunning) return;
+    setError(null);
+    setBridgeMeta(null);
+    setResult(null);
+    setOrchResult(null);
+    setOrchPoll(null);
+    setOrchExpandedIdx(null);
+    if (isMobile) setSidebarOpen(false);
+    setIsRunning(true);
+    setIsRefining(false);
+    try {
+      const { orchestration_id } = await postAgentOrchestrate({
+        questions: qs,
+        expertise_level: expertiseLevel,
+        expertise_domain: expertiseDomain,
+      });
+      setOrchActiveId(orchestration_id);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Orchestration failed');
+      setIsRunning(false);
+      setOrchActiveId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!orchActiveId || !isRunning) return;
+    let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+
+    const tick = async () => {
+      try {
+        const data = await getAgentOrchestration(orchActiveId);
+        if (cancelled) return;
+        setOrchPoll(data);
+        if (data.status === 'complete') {
+          const tids: string[] = data.task_ids || [];
+          const tasks = await Promise.all(tids.map((tid) => getAgentResult(tid)));
+          if (!cancelled) {
+            setOrchResult({ orchestration: data, tasks });
+            setIsRunning(false);
+            setOrchActiveId(null);
+            setOrchPoll(null);
+            void loadTaskHistory();
+          }
+        } else if (data.status === 'failed') {
+          if (!cancelled) {
+            setError('Multi-task run failed or timed out.');
+            setIsRunning(false);
+            setOrchActiveId(null);
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Orchestration poll failed');
+          setIsRunning(false);
+          setOrchActiveId(null);
+        }
+      }
+    };
+
+    void tick();
+    intervalId = setInterval(() => void tick(), 2500);
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [orchActiveId, isRunning, loadTaskHistory]);
+
+  const handleExportTaskPdf = async () => {
+    if (!result?.task_id || exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const blob = await exportAgentTaskPdf(result.task_id);
+      const ext = blob.type.includes('pdf') ? 'pdf' : 'html';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `arena-report-${result.task_id.slice(0, 8)}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const handleExportOrchestrationPdf = async () => {
+    const oid = orchResult?.orchestration?.id as string | undefined;
+    if (!oid || exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const blob = await exportOrchestrationPdf(oid);
+      const ext = blob.type.includes('pdf') ? 'pdf' : 'html';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `arena-orchestration-${oid.slice(0, 8)}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -1029,6 +1166,11 @@ export function AgentPage() {
     setFeedbackEditMode(false);
     setPendingVerdict(null);
     setPendingNote('');
+    setOrchActiveId(null);
+    setOrchPoll(null);
+    setOrchResult(null);
+    setOrchExpandedIdx(null);
+    setMultiMode(false);
     if (isMobile) setSidebarOpen(false);
   };
 
@@ -1038,16 +1180,10 @@ export function AgentPage() {
     if (q) setTask(q);
   };
 
-  const parsedAnswer = useMemo((): ParsedSynthesis | null => {
-    if (!result?.final_answer) return null;
-    try {
-      const parsed = JSON.parse(result.final_answer) as ParsedSynthesis;
-      if (parsed && Array.isArray(parsed.sentences)) return parsed;
-      return null;
-    } catch {
-      return null;
-    }
-  }, [result]);
+  const parsedAnswer = useMemo(
+    () => parseSynthesisFromFinalAnswer(result?.final_answer),
+    [result?.final_answer],
+  );
 
   const plainAnswerText = useMemo(
     () => plainTextFromFinalAnswer(result?.final_answer, parsedAnswer),
@@ -2076,7 +2212,7 @@ export function AgentPage() {
               </div>
             )}
 
-            {!isRunning && !result && (
+            {!isRunning && !result && !orchResult && (
               <>
                 <div
                   style={{
@@ -2284,7 +2420,16 @@ export function AgentPage() {
                         {AGENT_IDLE_SUGGESTIONS[suggIdx]}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: 10,
+                        marginBottom: 10,
+                        flexWrap: 'wrap',
+                      }}
+                    >
                       <button
                         type="button"
                         onClick={() => setTemplatesOpen(true)}
@@ -2319,6 +2464,45 @@ export function AgentPage() {
                           <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth={1.2} />
                         </svg>
                       </button>
+                      {canOrchestrate ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMultiMode((m) => {
+                              const next = !m;
+                              if (next) {
+                                setSelectedTemplate(null);
+                                setTemplateSlots({});
+                              }
+                              return next;
+                            });
+                          }}
+                          style={{
+                            fontSize: 12,
+                            color: multiMode ? '#C4956A' : '#8C7355',
+                            border: multiMode ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                            borderRadius: 20,
+                            padding: '5px 14px',
+                            background: multiMode ? '#FAF3EA' : 'transparent',
+                            cursor: 'pointer',
+                            fontFamily: 'Georgia, serif',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
+                        >
+                          Multi-task
+                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
+                            <path
+                              d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+                              stroke="currentColor"
+                              strokeWidth={1.2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                      ) : null}
                     </div>
                     <TemplatesModal
                       open={templatesOpen}
@@ -2332,6 +2516,7 @@ export function AgentPage() {
                         });
                         setTemplateSlots(next);
                         setSelectedTemplate(t);
+                        setMultiMode(false);
                         setExpertiseLevel((t.default_expertise || 'curious').toLowerCase());
                         localStorage.setItem('arena_expertise_level', (t.default_expertise || 'curious').toLowerCase());
                       }}
@@ -2340,6 +2525,17 @@ export function AgentPage() {
                       className="agent-bottom-input-shell"
                       onSubmit={(e) => {
                         e.preventDefault();
+                        if (multiMode && canOrchestrate) {
+                          const qs = multiTasks.slice(0, activeTaskCount).map((x) => x.trim());
+                          if (
+                            qs.length === activeTaskCount &&
+                            qs.every((q) => q.length >= 10) &&
+                            !isRunning
+                          ) {
+                            void handleOrchestrateRun();
+                          }
+                          return;
+                        }
                         const ready = selectedTemplate
                           ? allTemplateSlotsFilled && assembledTemplatePrompt.trim().length >= 10
                           : task.trim().length >= 10;
@@ -2347,15 +2543,167 @@ export function AgentPage() {
                       }}
                       style={{
                         display: 'flex',
-                        flexDirection: selectedTemplate ? 'column' : 'row',
-                        alignItems: selectedTemplate ? 'stretch' : 'center',
+                        flexDirection: multiMode || selectedTemplate ? 'column' : 'row',
+                        alignItems: multiMode || selectedTemplate ? 'stretch' : 'center',
                         gap: 12,
                         background: '#FDFAF6',
-                        borderRadius: selectedTemplate ? 20 : 32,
+                        borderRadius: multiMode || selectedTemplate ? 20 : 32,
                         padding: '12px 12px 12px 20px',
                       }}
                     >
-                      {selectedTemplate ? (
+                      {multiMode && canOrchestrate ? (
+                        <>
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              flexWrap: 'wrap',
+                              gap: 10,
+                            }}
+                          >
+                            <span style={{ fontSize: 12, color: '#8C7355' }}>
+                              Run {activeTaskCount} tasks in parallel
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <button
+                                type="button"
+                                disabled={activeTaskCount <= 2 || isRunning}
+                                onClick={() => setActiveTaskCount((n) => Math.max(2, n - 1))}
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: '50%',
+                                  border: '0.5px solid #D4C4B0',
+                                  background: '#FAF7F2',
+                                  cursor: activeTaskCount <= 2 ? 'default' : 'pointer',
+                                  fontSize: 16,
+                                  color: '#8C7355',
+                                }}
+                              >
+                                −
+                              </button>
+                              <span style={{ fontSize: 12, color: '#8C7355', minWidth: 16, textAlign: 'center' }}>
+                                {activeTaskCount}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={activeTaskCount >= 4 || isRunning}
+                                onClick={() => setActiveTaskCount((n) => Math.min(4, n + 1))}
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: '50%',
+                                  border: '0.5px solid #D4C4B0',
+                                  background: '#FAF7F2',
+                                  cursor: activeTaskCount >= 4 ? 'default' : 'pointer',
+                                  fontSize: 16,
+                                  color: '#8C7355',
+                                }}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                          {Array.from({ length: activeTaskCount }, (_, i) => {
+                            const placeholders = [
+                              'First research question...',
+                              'Second research question...',
+                              'Third research question...',
+                              'Fourth research question...',
+                            ];
+                            return (
+                              <div
+                                key={i}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'flex-start',
+                                  gap: 10,
+                                  background: '#FDFAF6',
+                                  border: '0.5px solid #E0D5C5',
+                                  borderRadius: 24,
+                                  padding: '8px 12px 8px 10px',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: '50%',
+                                    background: '#F0E8DC',
+                                    color: '#8C7355',
+                                    fontSize: 11,
+                                    fontFamily: 'ui-monospace, monospace',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  {String(i + 1).padStart(2, '0')}
+                                </div>
+                                <textarea
+                                  value={multiTasks[i] ?? ''}
+                                  onChange={(e) =>
+                                    setMultiTasks((prev) => {
+                                      const next = [...prev];
+                                      next[i] = e.target.value;
+                                      return next;
+                                    })
+                                  }
+                                  placeholder={placeholders[i]}
+                                  disabled={isRunning}
+                                  rows={2}
+                                  style={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    border: 'none',
+                                    background: 'transparent',
+                                    resize: 'vertical',
+                                    fontSize: 14,
+                                    fontFamily: 'Georgia, serif',
+                                    color: '#2C1810',
+                                    outline: 'none',
+                                  }}
+                                />
+                              </div>
+                            );
+                          })}
+                          {!multiTasks.slice(0, activeTaskCount).every((t) => t.trim().length >= 10) ? (
+                            <p style={{ fontSize: 11, color: '#A89070', margin: 0 }}>Fill all fields</p>
+                          ) : null}
+                          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                              type="submit"
+                              disabled={
+                                !multiTasks.slice(0, activeTaskCount).every((t) => t.trim().length >= 10) ||
+                                isRunning
+                              }
+                              style={{
+                                padding: '10px 18px',
+                                borderRadius: 20,
+                                border: 'none',
+                                background:
+                                  multiTasks.slice(0, activeTaskCount).every((t) => t.trim().length >= 10) &&
+                                  !isRunning
+                                    ? '#C4956A'
+                                    : '#D4C4B0',
+                                color: '#FDFAF6',
+                                fontSize: 13,
+                                fontFamily: 'Georgia, serif',
+                                cursor:
+                                  multiTasks.slice(0, activeTaskCount).every((t) => t.trim().length >= 10) &&
+                                  !isRunning
+                                    ? 'pointer'
+                                    : 'default',
+                              }}
+                            >
+                              Run {activeTaskCount} tasks →
+                            </button>
+                          </div>
+                        </>
+                      ) : selectedTemplate ? (
                         <>
                           <div
                             style={{
@@ -2618,19 +2966,322 @@ export function AgentPage() {
             )}
 
             {isRunning && (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: '60vh',
-                background: '#F5F0E8',
-              }}>
-                <CalligraphyLoader stage={currentStage} />
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: '60vh',
+                  background: '#F5F0E8',
+                  padding: '24px 16px',
+                }}
+              >
+                {orchActiveId && orchPoll?.child_tasks?.length ? (
+                  <div style={{ width: '100%', maxWidth: 520 }}>
+                    {orchPoll.child_tasks.map((c: any, idx: number) => {
+                      const curRaw = String(c.current_stage || 'planner');
+                      const cur: StageId = STAGE_ORDER.includes(curRaw as StageId)
+                        ? (curRaw as StageId)
+                        : 'planner';
+                      const curIdx = Math.max(0, STAGE_ORDER.indexOf(cur));
+                      return (
+                        <div
+                          key={c.task_id || idx}
+                          style={{
+                            marginBottom: 18,
+                            padding: '12px 14px',
+                            background: '#FDFAF6',
+                            border: '0.5px solid #E0D5C5',
+                            borderRadius: 10,
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: '#4A3728',
+                              marginBottom: 8,
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {(c.question_snippet || '').slice(0, 50)}
+                            {(c.question_snippet || '').length > 50 ? '…' : ''}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#8C7355', marginBottom: 6 }}>
+                            {STAGES.find((s) => s.id === cur)?.label || cur}
+                          </div>
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {STAGE_ORDER.map((sid, i) => (
+                              <span
+                                key={sid}
+                                style={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: '50%',
+                                  background: i <= curIdx && c.status !== 'failed' ? '#C4956A' : '#E0D5C5',
+                                }}
+                              />
+                            ))}
+                          </div>
+                          {c.status === 'failed' ? (
+                            <div style={{ fontSize: 11, color: '#C0392B', marginTop: 6 }}>Failed</div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                    {orchPoll?.child_tasks?.length &&
+                    orchPoll.child_tasks.every((c: any) => c.status === 'complete') &&
+                    orchPoll.status === 'running' ? (
+                      <p style={{ fontSize: 13, color: '#8C7355', fontStyle: 'italic', textAlign: 'center' }}>
+                        Synthesising findings…
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <CalligraphyLoader stage={currentStage} />
+                )}
               </div>
             )}
 
-            {result && (result.final_answer || result.stages) && (!isRunning || isRefining) && (
+            {orchResult && !isRunning && orchResult.orchestration ? (
+              <div style={{ maxWidth: 900, margin: '0 auto', paddingBottom: 48 }}>
+                <div
+                  style={{
+                    background: '#2C1810',
+                    color: '#C4956A',
+                    padding: '14px 18px',
+                    borderRadius: '10px 10px 0 0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 10,
+                  }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 500 }}>Unified synthesis</span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      padding: '2px 10px',
+                      borderRadius: 999,
+                      background: 'rgba(196,149,106,0.25)',
+                    }}
+                  >
+                    {(orchResult.orchestration.task_ids || []).length} tasks combined
+                  </span>
+                </div>
+                <div
+                  style={{
+                    background: '#FAF7F2',
+                    border: '0.5px solid #E0D5C5',
+                    borderTop: 'none',
+                    borderRadius: '0 0 10px 10px',
+                    padding: '20px 18px',
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: 15,
+                      fontFamily: 'Georgia, serif',
+                      lineHeight: 1.8,
+                      color: '#2C1810',
+                      margin: 0,
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {orchResult.orchestration.synthesis || '—'}
+                  </p>
+                  {Array.isArray(orchResult.orchestration.synthesis_bullets) &&
+                  orchResult.orchestration.synthesis_bullets.length > 0 ? (
+                    <ul style={{ margin: '16px 0 0', paddingLeft: 22, fontSize: 13, color: '#4A3728' }}>
+                      {orchResult.orchestration.synthesis_bullets.map((b: string, i: number) => (
+                        <li key={i} style={{ marginBottom: 6 }}>
+                          {b}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {Array.isArray(orchResult.orchestration.conflicts) &&
+                  orchResult.orchestration.conflicts.length > 0 ? (
+                    <div style={{ marginTop: 20 }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          letterSpacing: '0.12em',
+                          textTransform: 'uppercase',
+                          color: '#A89070',
+                          marginBottom: 10,
+                        }}
+                      >
+                        Where tasks disagreed
+                      </div>
+                      {orchResult.orchestration.conflicts.map((c: any, i: number) => (
+                        <div
+                          key={i}
+                          style={{
+                            borderLeft: '3px solid #E8C87A',
+                            padding: '10px 14px',
+                            marginBottom: 8,
+                            background: '#FDF6EC',
+                            fontSize: 13,
+                            color: '#4A3728',
+                          }}
+                        >
+                          <b>
+                            Task {c.task_a} vs Task {c.task_b}
+                          </b>
+                          <div style={{ marginTop: 4 }}>{c.conflict}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 20 }}>
+                    <button
+                      type="button"
+                      disabled={exportingPdf}
+                      onClick={() => void handleExportOrchestrationPdf()}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '9px 18px',
+                        border: '0.5px solid #D4C4B0',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'Georgia, serif',
+                        cursor: exportingPdf ? 'default' : 'pointer',
+                        opacity: exportingPdf ? 0.85 : 1,
+                      }}
+                    >
+                      {exportingPdf ? (
+                        <svg
+                          width={14}
+                          height={14}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden
+                          style={{ animation: 'agentSpin 0.8s linear infinite' }}
+                        >
+                          <circle
+                            cx="12"
+                            cy="12"
+                            r="9"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeDasharray="28 40"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      ) : null}
+                      {exportingPdf ? 'Exporting…' : 'Export all as PDF'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const oid = orchResult.orchestration.id;
+                        const tids = orchResult.orchestration.task_ids || [];
+                        try {
+                          localStorage.setItem(`arena_orch_${oid}`, JSON.stringify({ task_ids: tids, at: Date.now() }));
+                          setToastMessage('Saved this multi-task session in your browser.');
+                        } catch {
+                          setToastMessage('Could not save session.');
+                        }
+                      }}
+                      style={{
+                        padding: '9px 18px',
+                        border: '0.5px solid #D4C4B0',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        color: '#6B5040',
+                        fontSize: 13,
+                        fontFamily: 'Georgia, serif',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Save as session
+                    </button>
+                  </div>
+                </div>
+                <div style={{ marginTop: 24 }}>
+                  {(orchResult.tasks || []).map((tr: AgentResult, ti: number) => {
+                    const q = (tr.original_task || tr.task || '').trim();
+                    const open = orchExpandedIdx === ti;
+                    const trParsed = parseSynthesisFromFinalAnswer(tr.final_answer);
+                    const trSentences: AnswerSentenceView[] = trParsed?.sentences?.length
+                      ? trParsed.sentences.map((s) => ({
+                          text: s.text,
+                          confidence: sentenceConfidenceLevel(s),
+                        }))
+                      : splitPlainAnswerToSentences(
+                          plainTextFromFinalAnswer(tr.final_answer, trParsed),
+                        );
+                    return (
+                      <div
+                        key={tr.task_id || ti}
+                        style={{
+                          marginBottom: 10,
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 8,
+                          overflow: 'hidden',
+                          background: '#FDFAF6',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setOrchExpandedIdx(open ? null : ti)}
+                          style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '12px 14px',
+                            border: 'none',
+                            background: open ? '#F0E8DC' : '#FAF7F2',
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            fontFamily: 'Georgia, serif',
+                            color: '#2C1810',
+                          }}
+                        >
+                          Task {ti + 1} — {q.length > 72 ? `${q.slice(0, 72)}…` : q || 'Untitled'}
+                          <span style={{ float: 'right', color: '#8C7355' }}>{open ? '▾' : '▸'}</span>
+                        </button>
+                        {open ? (
+                          <div style={{ padding: '14px 16px', fontSize: 13, color: '#1A1714', lineHeight: 1.75 }}>
+                            {trSentences.length > 0 ? (
+                              <div className="answer-text conf-active" style={{ marginBottom: 0 }}>
+                                {trSentences.map((sentence, si) => (
+                                  <span key={`${ti}-${si}-${sentence.text.slice(0, 24)}`} className={sentence.confidence}>
+                                    {sentence.text}{' '}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <pre
+                                style={{
+                                  whiteSpace: 'pre-wrap',
+                                  fontFamily: 'Georgia, serif',
+                                  margin: 0,
+                                  fontSize: 14,
+                                }}
+                              >
+                                {plainTextFromFinalAnswer(tr.final_answer, trParsed) ||
+                                  tr.final_answer ||
+                                  'No final answer returned.'}
+                              </pre>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {result &&
+              !orchResult &&
+              (result.final_answer || result.stages) &&
+              (!isRunning || isRefining) && (
               <>
                 {(result.original_task || result.task) && (
                   <div style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>
@@ -4379,6 +5030,68 @@ export function AgentPage() {
                     >
                       Run again
                     </button>
+                    {result.task_id ? (
+                      <button
+                        type="button"
+                        disabled={exportingPdf}
+                        onClick={() => void handleExportTaskPdf()}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '9px 18px',
+                          border: '0.5px solid #D4C4B0',
+                          borderRadius: 6,
+                          background: 'transparent',
+                          color: '#6B5040',
+                          fontSize: 13,
+                          fontFamily: 'Georgia, serif',
+                          cursor: exportingPdf ? 'default' : 'pointer',
+                          opacity: exportingPdf ? 0.85 : 1,
+                        }}
+                        onMouseEnter={(e) => {
+                          if (exportingPdf) return;
+                          e.currentTarget.style.borderColor = AR.GOLD;
+                          e.currentTarget.style.color = AR.GOLD;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = '#D4C4B0';
+                          e.currentTarget.style.color = '#6B5040';
+                        }}
+                      >
+                        {exportingPdf ? (
+                          <svg
+                            width={14}
+                            height={14}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden
+                            style={{ animation: 'agentSpin 0.8s linear infinite' }}
+                          >
+                            <circle
+                              cx="12"
+                              cy="12"
+                              r="9"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                              strokeDasharray="28 40"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                        ) : (
+                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
+                            <path
+                              d="M12 3v12m0 0l4-4m-4 4l-4-4M4 17h16"
+                              stroke="currentColor"
+                              strokeWidth={1.8}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                        {exportingPdf ? 'Exporting…' : 'Export PDF'}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => {

@@ -85,6 +85,11 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    orchestrations = relationship(
+        "Orchestration",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     subscriptions = relationship(
         "Subscription",
         back_populates="user",
@@ -372,6 +377,7 @@ class AgentTask(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    orchestration_id = Column(String(36), ForeignKey("orchestrations.id"), nullable=True, index=True)
     task_id = Column(String(64), unique=True, nullable=False, index=True)
     title = Column(String(512), nullable=True)
     task_text = Column(Text, nullable=False)
@@ -394,6 +400,7 @@ class AgentTask(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="agent_tasks")
+    orchestration = relationship("Orchestration", back_populates="child_tasks")
     answer_feedbacks = relationship(
         "AnswerFeedback",
         back_populates="agent_task",
@@ -488,6 +495,24 @@ class AnswerFeedback(Base):
         back_populates="answer_feedbacks",
         foreign_keys=[task_id],
     )
+
+
+class Orchestration(Base):
+    """Multi-task agent run: parallel pipelines plus cross-task synthesis."""
+
+    __tablename__ = "orchestrations"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    task_ids = Column(JSON, nullable=False)
+    synthesis = Column(Text, nullable=True)
+    synthesis_bullets = Column(JSON, nullable=True)
+    conflicts = Column(JSON, nullable=True)
+    status = Column(String(32), default="running", nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="orchestrations")
+    child_tasks = relationship("AgentTask", back_populates="orchestration")
 
 
 class AgentContradiction(Base):

@@ -34,6 +34,9 @@ razorpay>=1.4.0
 # Tools
 ddgs>=8.0.0
 
+# PDF reports (optional — export falls back to HTML if import fails)
+weasyprint>=62.0
+
 # Dev
 pytest==8.3.3
 pytest-asyncio==0.24.0
