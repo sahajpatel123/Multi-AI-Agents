@@ -331,16 +331,16 @@ const CHALLENGER_CARD_STYLES: Record<string, { accent: string; dot: string }> = 
   'The Philosopher': { accent: '#9B8FAA', dot: '#9B8FAA' },
 };
 
-const EXAMPLES = [
+const AGENT_IDLE_SUGGESTIONS = [
   'Research the top 5 AI startups funded this month',
   'Write a go-to-market strategy for a SaaS product',
-  'Analyse the pros and cons of moving from SQL to NoSQL',
-];
+  'Analyse the pros and cons of SQL vs NoSQL',
+  'What will the AI landscape look like in 2027?',
+  'Break down the business model of Notion',
+  'What are the strongest arguments against remote work?',
+] as const;
 
 const INPUT_STAGE_PILLS = ['Plan', 'Research', 'Solve', 'Critique', 'Verify', 'Synthesise', 'Judge'] as const;
-
-const AGENT_INPUT_PLACEHOLDER =
-  'Ask something that deserves a real answer — complex, contested, or consequential...';
 
 function agentProfileInitials(u: User): string {
   const n = u.name?.trim();
@@ -517,6 +517,8 @@ export function AgentPage() {
   const [navToggleHovered, setNavToggleHovered] = useState(false);
   const answerAnchorRef = useRef<HTMLDivElement>(null);
   const followUpInputRef = useRef<HTMLInputElement | null>(null);
+  const idleTaskInputRef = useRef<HTMLInputElement | null>(null);
+  const [suggIdx, setSuggIdx] = useState(0);
 
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((current) => !current);
@@ -584,6 +586,13 @@ export function AgentPage() {
     const timer = window.setTimeout(() => setToastMessage(null), 3000);
     return () => window.clearTimeout(timer);
   }, [toastMessage]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setSuggIdx((i) => (i + 1) % AGENT_IDLE_SUGGESTIONS.length);
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     void loadTaskHistory();
@@ -1417,11 +1426,18 @@ export function AgentPage() {
         .agent-bottom-input-shell:focus-within {
           border-color: #c4956a;
         }
-        .agent-bottom-input-shell textarea::placeholder {
-          color: #c4a882;
-          font-style: italic;
-          font-family: Georgia, 'Times New Roman', serif;
-          font-size: 14px;
+        @keyframes agentIdleSuggFadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .agent-idle-suggestion-text {
+          animation: agentIdleSuggFadeUp 0.4s ease forwards;
         }
       `}</style>
       <div
@@ -1841,93 +1857,103 @@ export function AgentPage() {
                     pointerEvents: 'none',
                   }}
                 >
-                  <div
-                    className="agent-bottom-input-shell"
-                    style={{
-                      pointerEvents: 'auto',
-                      maxWidth: 640,
-                      margin: '0 auto',
-                      background: '#FDFAF6',
-                      borderRadius: 20,
-                      padding: '16px 14px 12px 20px',
-                    }}
-                  >
-                    <textarea
-                      value={task}
-                      disabled={isRunning}
-                      onChange={(e) => setTask(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          if (task.trim().length >= 10) void handleRunTask();
-                        }
-                      }}
-                      placeholder={AGENT_INPUT_PLACEHOLDER}
-                      rows={1}
-                      style={{
-                        width: '100%',
-                        minHeight: 24,
-                        maxHeight: 120,
-                        border: 'none',
-                        background: 'transparent',
-                        outline: 'none',
-                        resize: 'none',
-                        fontSize: 14,
-                        color: '#2C1810',
-                        fontFamily: 'Georgia, serif',
-                        lineHeight: 1.6,
-                        overflowY: 'auto',
-                        display: 'block',
-                      }}
-                    />
+                  <div style={{ pointerEvents: 'auto', maxWidth: 640, margin: '0 auto' }}>
                     <div
                       style={{
-                        marginTop: 10,
-                        borderTop: '0.5px solid #EDE4D8',
-                        paddingTop: 10,
                         display: 'flex',
-                        justifyContent: 'space-between',
                         alignItems: 'center',
-                        gap: 12,
+                        justifyContent: 'center',
+                        gap: 6,
+                        marginBottom: 10,
                       }}
                     >
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flex: 1, minWidth: 0 }}>
-                        {EXAMPLES.slice(0, 3).map((ex) => (
-                          <button
-                            key={ex}
-                            type="button"
-                            disabled={isRunning}
-                            onClick={() => setTask(ex)}
-                            style={{
-                              fontSize: 11,
-                              color: '#A89070',
-                              padding: '3px 10px',
-                              borderRadius: 12,
-                              border: '0.5px solid #E0D5C5',
-                              cursor: isRunning ? 'default' : 'pointer',
-                              fontFamily: 'Georgia, serif',
-                              background: 'transparent',
-                              textAlign: 'left',
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!isRunning) {
-                                e.currentTarget.style.borderColor = '#C4956A';
-                                e.currentTarget.style.color = '#C4956A';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = '#E0D5C5';
-                              e.currentTarget.style.color = '#A89070';
-                            }}
-                          >
-                            {ex}
-                          </button>
-                        ))}
-                      </div>
+                      <span
+                        style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: '50%',
+                          background: '#C4A882',
+                          flexShrink: 0,
+                        }}
+                        aria-hidden
+                      />
+                      <span
+                        key={suggIdx}
+                        role="button"
+                        tabIndex={0}
+                        className="agent-idle-suggestion-text"
+                        onClick={() => {
+                          setTask(AGENT_IDLE_SUGGESTIONS[suggIdx]);
+                          requestAnimationFrame(() => idleTaskInputRef.current?.focus());
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setTask(AGENT_IDLE_SUGGESTIONS[suggIdx]);
+                            requestAnimationFrame(() => idleTaskInputRef.current?.focus());
+                          }
+                        }}
+                        style={{
+                          fontSize: 13,
+                          color: '#A89070',
+                          fontStyle: 'italic',
+                          fontFamily: 'Georgia, serif',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          maxWidth: 'min(100%, 520px)',
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        {AGENT_IDLE_SUGGESTIONS[suggIdx]}
+                      </span>
+                    </div>
+                    <form
+                      className="agent-bottom-input-shell"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (task.trim().length >= 10 && !isRunning) void handleRunTask();
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        background: '#FDFAF6',
+                        borderRadius: 32,
+                        padding: '12px 12px 12px 20px',
+                      }}
+                    >
+                      <span
+                        className="breathe"
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: '#C4956A',
+                          flexShrink: 0,
+                        }}
+                        aria-hidden
+                      />
+                      <input
+                        ref={idleTaskInputRef}
+                        type="text"
+                        value={task}
+                        disabled={isRunning}
+                        placeholder=""
+                        onChange={(e) => setTask(e.target.value)}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          border: 'none',
+                          background: 'transparent',
+                          outline: 'none',
+                          fontSize: 14,
+                          color: '#2C1810',
+                          fontFamily: 'Georgia, serif',
+                        }}
+                      />
                       <button
-                        type="button"
+                        type="submit"
                         disabled={task.trim().length < 10 || isRunning}
-                        onClick={() => void handleRunTask()}
                         onMouseEnter={(e) => {
                           if (task.trim().length >= 10 && !isRunning) {
                             e.currentTarget.style.background = '#B07850';
@@ -1972,7 +1998,7 @@ export function AgentPage() {
                           />
                         </svg>
                       </button>
-                    </div>
+                    </form>
                   </div>
                 </div>
               </>
