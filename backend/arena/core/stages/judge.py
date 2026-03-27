@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus
+from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 
@@ -167,7 +168,7 @@ Score this answer objectively. Include caveats array as specified.
             client=model["client"],
             provider=provider,
             model_id=model["model_id"],
-            system_prompt=JUDGE_SYSTEM_PROMPT,
+            system_prompt=append_expertise_to_system(JUDGE_SYSTEM_PROMPT, bb.expertise_modifier),
             user_prompt=user_prompt,
             temperature=0.1,
             max_tokens=AGENT_MAX_TOKENS,

@@ -71,6 +71,11 @@ class Blackboard:
     assumptions: dict = field(default_factory=dict)
     memory_saved: bool = False
 
+    expertise_level: str = "curious"
+    expertise_domain: str = ""
+    expertise_modifier: str = ""
+    steelman: Optional[dict] = None
+
     # Collaborative refinement (in-memory; not persisted to agent_tasks rows per turn)
     conversation: list = field(default_factory=list)
     is_refinement: bool = False
@@ -163,6 +168,10 @@ class Blackboard:
             "intelligence_score": self.intelligence_score,
             "assumptions": self.assumptions,
             "memory_saved": self.memory_saved,
+            "expertise_level": self.expertise_level,
+            "expertise_domain": self.expertise_domain,
+            "expertise_modifier": self.expertise_modifier,
+            "steelman": self.steelman,
             "conversation": self.conversation,
             "is_refinement": self.is_refinement,
             "parent_task_id": self.parent_task_id,

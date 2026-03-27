@@ -669,11 +669,18 @@ export type AgentStatusPayload = {
   stages?: Record<string, { status?: string }>;
 };
 
-export async function runAgentTask(task: string): Promise<AgentStartResponse> {
+export async function runAgentTask(
+  task: string,
+  options?: { expertise_level?: string; expertise_domain?: string },
+): Promise<AgentStartResponse> {
   const response = await apiFetch(`${API_BASE}/agent/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ task }),
+    body: JSON.stringify({
+      task,
+      expertise_level: options?.expertise_level ?? 'curious',
+      expertise_domain: options?.expertise_domain ?? '',
+    }),
   });
   const data = await parseJsonSafely<
     AgentStartResponse & { detail?: string | { message?: string; error?: string } }

@@ -104,11 +104,17 @@ def _persisted_agent_task_result_dict(row: AgentTaskRow, contradictions: list[di
         "total_tokens": 0,
         "total_cost_usd": 0.0,
         "error": None,
+        "expertise_level": "curious",
+        "expertise_domain": "",
+        "expertise_modifier": "",
+        "steelman": None,
     }
 
 
 class AgentTaskRequest(BaseModel):
     task: str
+    expertise_level: str = "curious"
+    expertise_domain: str = ""
 
 
 class AgentChallengeRequest(BaseModel):
@@ -310,7 +316,13 @@ def _ensure_task_owner(bb: Blackboard, user: UserResponse) -> None:
         raise HTTPException(status_code=404, detail="Task not found")
 
 
-async def run_agent_pipeline_background(task_id: str, user_id: int, task: str) -> None:
+async def run_agent_pipeline_background(
+    task_id: str,
+    user_id: int,
+    task: str,
+    expertise_level: str = "curious",
+    expertise_domain: str = "",
+) -> None:
     """Run pipeline for an existing blackboard (same task_id as POST /run)."""
     bb = get_blackboard(task_id)
     if not bb:
@@ -335,7 +347,12 @@ async def run_agent_pipeline_background(task_id: str, user_id: int, task: str) -
         logger.warning("[AGENT] Memory context load failed (non-fatal): %s", e)
 
     try:
-        await run_agent_pipeline_on_blackboard(bb, memory_context=memory_context)
+        await run_agent_pipeline_on_blackboard(
+            bb,
+            memory_context=memory_context,
+            expertise_level=expertise_level,
+            expertise_domain=expertise_domain,
+        )
     except Exception as e:
         bb2 = get_blackboard(task_id)
         if bb2:
@@ -480,14 +497,21 @@ async def run_agent_task(
             detail="Task too long. Maximum 2000 characters.",
         )
 
+    expertise_level = (body.expertise_level or "curious").strip().lower() or "curious"
+    expertise_domain = (body.expertise_domain or "").strip()[:512]
+
     bb = create_blackboard(user_id=user.id, task=task)
     bb.status = AgentStatus.RUNNING
+    bb.expertise_level = expertise_level
+    bb.expertise_domain = expertise_domain
 
     background_tasks.add_task(
         run_agent_pipeline_background,
         bb.task_id,
         user.id,
         task,
+        expertise_level,
+        expertise_domain,
     )
 
     return JSONResponse(

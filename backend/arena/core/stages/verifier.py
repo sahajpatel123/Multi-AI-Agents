@@ -2,6 +2,7 @@ import re
 import time
 
 from arena.core.blackboard import Blackboard, StageStatus
+from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 
@@ -82,7 +83,7 @@ Use the source integrity analysis when assigning confidence where relevant.
             client=model["client"],
             provider="claude",
             model_id=model["model_id"],
-            system_prompt=VERIFIER_SYSTEM_PROMPT,
+            system_prompt=append_expertise_to_system(VERIFIER_SYSTEM_PROMPT, bb.expertise_modifier),
             user_prompt=user_prompt,
             temperature=0.2,
             max_tokens=AGENT_MAX_TOKENS,

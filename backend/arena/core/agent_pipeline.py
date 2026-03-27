@@ -31,12 +31,41 @@ def _plain_answer_text(answer: str) -> str:
     return answer
 
 
+async def _run_steelman_step(bb: Blackboard) -> None:
+    from arena.core.steelman_generator import generate_steelman
+
+    try:
+        bb.steelman = await generate_steelman(
+            question=bb.task,
+            research_summary=(bb.research.output or "").strip(),
+            expertise_modifier=bb.expertise_modifier or "",
+        )
+    except Exception as e:
+        logger.warning("[AGENT] Steelman step failed: %s", e)
+        bb.steelman = {
+            "opposing_position": "",
+            "key_arguments": [],
+            "strongest_evidence": "",
+            "concession": "",
+        }
+
+
 async def run_agent_pipeline_on_blackboard(
     bb: Blackboard,
     memory_context: dict | None = None,
+    expertise_level: str | None = None,
+    expertise_domain: str | None = None,
 ) -> Blackboard:
     """Run the full agent pipeline on an existing blackboard (already in active_tasks)."""
+    from arena.core.expertise_calibrator import get_expertise_modifier
+
     bb.status = AgentStatus.RUNNING
+
+    if expertise_level is not None:
+        bb.expertise_level = str(expertise_level).strip().lower() or "curious"
+    if expertise_domain is not None:
+        bb.expertise_domain = str(expertise_domain).strip()
+    bb.expertise_modifier = get_expertise_modifier(bb.expertise_level, bb.expertise_domain)
 
     logger.info(
         "[AGENT] Starting pipeline task_id=%s user_id=%s",
@@ -68,6 +97,8 @@ async def run_agent_pipeline_on_blackboard(
                         )
             except Exception as e:
                 logger.warning("[AGENT] Source integrity skipped: %s", e)
+
+        await _run_steelman_step(bb)
 
         bb = await run_solver(bb)
         bb = await run_critic(bb)
@@ -223,11 +254,17 @@ Do not start from scratch.
 Address specifically: {intent.get("instruction")}
 """
 
+    from arena.core.expertise_calibrator import get_expertise_modifier
+
     existing_bb.is_refinement = True
     existing_bb.refinement_count += 1
     existing_bb.status = AgentStatus.RUNNING
     existing_bb.current_stage = "refining"
     existing_bb.plan.reasoning = refinement_context
+    existing_bb.expertise_modifier = get_expertise_modifier(
+        getattr(existing_bb, "expertise_level", "curious") or "curious",
+        getattr(existing_bb, "expertise_domain", "") or "",
+    )
 
     stages_needed = list(intent.get("stages_needed") or ["solver", "synthesizer"])
     stages_set = set(stages_needed)
@@ -251,6 +288,7 @@ Address specifically: {intent.get("instruction")}
             existing_bb.task = f"{base_task}\n\nFOCUS: {intent.get('focus')}"
             existing_bb = await run_researcher(existing_bb)
             existing_bb.task = saved_task
+            await _run_steelman_step(existing_bb)
 
         if "critic" in stages_set:
             existing_bb.solution.output = current_answer
@@ -297,7 +335,14 @@ async def run_agent_pipeline(
     user_id: int,
     task: str,
     memory_context: dict | None = None,
+    expertise_level: str = "curious",
+    expertise_domain: str = "",
 ) -> Blackboard:
     """Create a new blackboard and run the pipeline (blocking / tests)."""
     bb = create_blackboard(user_id=user_id, task=task)
-    return await run_agent_pipeline_on_blackboard(bb, memory_context=memory_context)
+    return await run_agent_pipeline_on_blackboard(
+        bb,
+        memory_context=memory_context,
+        expertise_level=expertise_level,
+        expertise_domain=expertise_domain,
+    )

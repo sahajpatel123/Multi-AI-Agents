@@ -1,6 +1,7 @@
 import time
 
 from arena.core.blackboard import Blackboard, StageStatus
+from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 
@@ -21,6 +22,23 @@ If something is uncertain, say so.
 
 Output a comprehensive answer that directly addresses the task.
 """
+
+
+def _steelman_prompt_block(bb: Blackboard) -> str:
+    sm = bb.steelman
+    if not sm or not isinstance(sm, dict):
+        return ""
+    opp = str(sm.get("opposing_position") or "").strip()
+    if not opp:
+        return ""
+    ev = str(sm.get("strongest_evidence") or "").strip()
+    con = str(sm.get("concession") or "").strip()
+    return f"""STEELMAN AWARENESS — engage before committing:
+Strongest opposing view: {opp}
+Most compelling evidence: {ev}
+What it gets right (must acknowledge): {con}
+
+Your answer must engage with this. Acknowledge where it is correct. Explain disagreement with evidence where you differ.""".strip()
 
 
 async def run_solver(bb: Blackboard) -> Blackboard:
@@ -50,11 +68,17 @@ Research Findings:
 Provide a comprehensive answer to this task.
 """
 
+        steelman_block = _steelman_prompt_block(bb)
+        solver_core = SOLVER_SYSTEM_PROMPT.rstrip()
+        if steelman_block:
+            solver_core = f"{solver_core}\n\n{steelman_block}"
+        system_prompt = append_expertise_to_system(solver_core, bb.expertise_modifier)
+
         response = await call_llm(
             client=model["client"],
             provider="claude",
             model_id=model["model_id"],
-            system_prompt=SOLVER_SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             user_prompt=user_prompt,
             temperature=0.5,
             max_tokens=AGENT_MAX_TOKENS,

@@ -2,6 +2,7 @@ import json
 import time
 
 from arena.core.blackboard import Blackboard, StageStatus
+from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 
@@ -110,7 +111,7 @@ Please research this task thoroughly and provide all relevant findings.
             client=grok_model["client"],
             provider=provider,
             model_id=grok_model["model_id"],
-            system_prompt=RESEARCHER_SYSTEM_PROMPT,
+            system_prompt=append_expertise_to_system(RESEARCHER_SYSTEM_PROMPT, bb.expertise_modifier),
             user_prompt=user_prompt,
             temperature=0.3,
             max_tokens=AGENT_MAX_TOKENS,

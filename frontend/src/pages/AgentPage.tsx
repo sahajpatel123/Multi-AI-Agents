@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Ellipsis, Lock, Pencil, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
+import { ExpertiseSelector } from '../components/ExpertiseSelector';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
@@ -143,9 +144,11 @@ type AgentResult = {
   intelligence_score?: IntelligenceScorePayload;
   assumptions?: AssumptionsPayload;
   /** Extended blackboard fields (optional until backend persists all) */
-  steelman?: unknown;
+  steelman?: Record<string, unknown> | null;
   temporal_profile?: unknown;
   dissent_report?: unknown;
+  expertise_level?: string;
+  expertise_domain?: string;
 };
 
 type ContradictionItem = {
@@ -521,7 +524,6 @@ export function AgentPage() {
   const [refinementError, setRefinementError] = useState<string | null>(null);
   const [bridgeMeta, setBridgeMeta] = useState<{ taskId: string; originalQuestion: string } | null>(null);
   const [showAllAssumptions, setShowAllAssumptions] = useState(false);
-  const [panelSteelmanOpen, setPanelSteelmanOpen] = useState(false);
   const [panelIntelOpen, setPanelIntelOpen] = useState(false);
   const [panelAssumptionsOpen, setPanelAssumptionsOpen] = useState(false);
   const [panelDissentOpen, setPanelDissentOpen] = useState(false);
@@ -800,7 +802,10 @@ export function AgentPage() {
     setIsRefining(false);
 
     try {
-      const startData = await runAgentTask(t);
+      const startData = await runAgentTask(t, {
+        expertise_level: expertiseLevel,
+        expertise_domain: expertiseDomain,
+      });
       if (!startData.task_id) {
         throw new Error('No task ID received');
       }
@@ -962,9 +967,15 @@ export function AgentPage() {
     return active?.label || 'Running';
   }, [currentStage]);
 
+  const handleExpertiseChange = useCallback((level: string, domain: string) => {
+    setExpertiseLevel(level);
+    setExpertiseDomain(domain);
+    localStorage.setItem('arena_expertise_level', level);
+    localStorage.setItem('arena_expertise_domain', domain);
+  }, []);
+
   useEffect(() => {
     setShowAllAssumptions(false);
-    setPanelSteelmanOpen(false);
     setPanelIntelOpen(false);
     setPanelAssumptionsOpen(false);
     setPanelDissentOpen(false);
@@ -1865,6 +1876,13 @@ export function AgentPage() {
                   }}
                 >
                   <div style={{ pointerEvents: 'auto', maxWidth: 640, margin: '0 auto' }}>
+                    <div style={{ marginBottom: 12 }}>
+                      <ExpertiseSelector
+                        level={expertiseLevel}
+                        domain={expertiseDomain}
+                        onChange={handleExpertiseChange}
+                      />
+                    </div>
                     <div
                       style={{
                         display: 'flex',
@@ -2504,211 +2522,177 @@ export function AgentPage() {
                       </div>
                     </div>
                   )}
-                  {steelmanData?.opposing_position ? (
+                  {steelmanData?.opposing_position &&
+                  String(steelmanData.opposing_position).trim().length > 0 ? (
                     <div
                       style={{
-                        background: AR.SURFACE,
-                        border: `0.5px solid ${AR.BORDER}`,
+                        background: '#FAF7F2',
                         borderRadius: 10,
+                        border: '0.5px solid #E0D5C5',
+                        borderLeft: '3px solid #8C7355',
+                        marginBottom: 20,
+                        padding: '18px 20px',
                         overflow: 'hidden',
-                        marginBottom: 16,
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={() => setPanelSteelmanOpen((o) => !o)}
+                      <div
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'space-between',
-                          width: '100%',
-                          padding: '11px 16px',
-                          cursor: 'pointer',
-                          transition: 'background 0.12s',
-                          background: 'transparent',
-                          border: 'none',
-                          textAlign: 'left',
-                          font: 'inherit',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#F5EFE6';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
+                          gap: 8,
+                          flexWrap: 'wrap',
+                          marginBottom: 12,
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              letterSpacing: '0.16em',
-                              textTransform: 'uppercase',
-                              color: AR.TEXT_MUTED,
-                            }}
-                          >
-                            The steelman
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              padding: '2px 8px',
-                              borderRadius: 8,
-                              border: '0.5px solid #D4C4B0',
-                              color: AR.TEXT_MUTED,
-                              background: '#F0E8DC',
-                            }}
-                          >
-                            strongest opposing view
-                          </span>
-                        </div>
                         <span
                           style={{
-                            fontSize: 11,
-                            color: AR.GOLD_MUTED,
-                            transform: panelSteelmanOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                            transition: 'transform 0.25s',
+                            fontSize: 10,
+                            letterSpacing: '0.16em',
+                            textTransform: 'uppercase',
+                            color: '#8C7355',
                           }}
                         >
-                          ▾
+                          THE STEELMAN
                         </span>
-                      </button>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            background: '#F0E8DC',
+                            color: '#8C7355',
+                            border: '0.5px solid #D4C4B0',
+                            padding: '2px 8px',
+                            borderRadius: 8,
+                          }}
+                        >
+                          strongest opposing view
+                        </span>
+                      </div>
                       <div
                         style={{
-                          maxHeight: panelSteelmanOpen ? 1000 : 0,
-                          overflow: 'hidden',
-                          transition: 'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                          borderTop: panelSteelmanOpen ? `0.5px solid ${AR.BORDER_INNER}` : 'none',
+                          fontSize: 14,
+                          fontStyle: 'italic',
+                          color: '#2C1810',
+                          lineHeight: 1.65,
+                          marginBottom: 12,
+                          paddingLeft: 2,
                         }}
                       >
-                        <div style={{ padding: '14px 16px' }}>
-                          <div
-                            style={{
-                              fontSize: 14,
-                              color: AR.TEXT_PRIMARY,
-                              fontStyle: 'italic',
-                              lineHeight: 1.65,
-                              marginBottom: 12,
-                              paddingLeft: 4,
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: 28,
-                                color: '#D4C4B0',
-                                lineHeight: 0,
-                                verticalAlign: '-10px',
-                                marginRight: 3,
-                              }}
-                              aria-hidden
-                            >
-                              &ldquo;
-                            </span>
-                            {String(steelmanData.opposing_position)}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setSteelmanInnerExpanded((v) => !v)}
-                            style={{
-                              fontSize: 12,
-                              color: AR.TEXT_MUTED,
-                              cursor: 'pointer',
-                              textDecoration: 'underline dotted',
-                              display: 'inline-block',
-                              marginTop: 6,
-                              background: 'none',
-                              border: 'none',
-                              padding: 0,
-                              fontFamily: 'Georgia, serif',
-                            }}
-                          >
-                            {steelmanInnerExpanded ? 'Collapse ↑' : 'See full steelman ↓'}
-                          </button>
-                          {steelmanInnerExpanded ? (
-                            <div style={{ marginTop: 14 }}>
-                              {Array.isArray(steelmanData.key_arguments) &&
-                              steelmanData.key_arguments.length > 0 ? (
-                                <div style={{ marginBottom: 14 }}>
-                                  <div
+                        <span
+                          style={{
+                            fontSize: 32,
+                            color: '#D4C4B0',
+                            lineHeight: 0,
+                            verticalAlign: '-8px',
+                            marginRight: 4,
+                            fontFamily: 'Georgia, serif',
+                          }}
+                          aria-hidden
+                        >
+                          &ldquo;
+                        </span>
+                        {String(steelmanData.opposing_position)}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSteelmanInnerExpanded((v) => !v)}
+                        style={{
+                          fontSize: 12,
+                          color: '#8C7355',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          textDecorationStyle: 'dotted',
+                          display: 'inline-block',
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          fontFamily: 'Georgia, serif',
+                        }}
+                      >
+                        {steelmanInnerExpanded ? 'Collapse ↑' : 'See full steelman ↓'}
+                      </button>
+                      {steelmanInnerExpanded ? (
+                        <div style={{ marginTop: 14 }}>
+                          {Array.isArray(steelmanData.key_arguments) &&
+                          steelmanData.key_arguments.length > 0 ? (
+                            <div style={{ marginBottom: 14 }}>
+                              <div
+                                style={{
+                                  fontSize: 10,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.08em',
+                                  color: '#A89070',
+                                  marginBottom: 8,
+                                }}
+                              >
+                                Core arguments
+                              </div>
+                              {steelmanData.key_arguments.slice(0, 3).map((arg: string, ai: number) => (
+                                <div key={ai} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                                  <span
                                     style={{
-                                      fontSize: 10,
-                                      textTransform: 'uppercase',
-                                      color: AR.TEXT_FAINT,
-                                      marginBottom: 7,
+                                      width: 5,
+                                      height: 5,
+                                      borderRadius: '50%',
+                                      background: '#C4956A',
+                                      flexShrink: 0,
+                                      marginTop: 6,
                                     }}
-                                  >
-                                    Core arguments
-                                  </div>
-                                  {steelmanData.key_arguments.slice(0, 3).map((arg: string, ai: number) => (
-                                    <div
-                                      key={ai}
-                                      style={{ display: 'flex', gap: 8, marginBottom: 8 }}
-                                    >
-                                      <span
-                                        style={{
-                                          width: 5,
-                                          height: 5,
-                                          borderRadius: '50%',
-                                          background: AR.GOLD,
-                                          flexShrink: 0,
-                                          marginTop: 6,
-                                        }}
-                                      />
-                                      <span style={{ fontSize: 13, color: AR.TEXT_MID, lineHeight: 1.55 }}>
-                                        {arg}
-                                      </span>
-                                    </div>
-                                  ))}
+                                  />
+                                  <span style={{ fontSize: 13, color: '#4A3728', lineHeight: 1.55 }}>
+                                    {arg}
+                                  </span>
                                 </div>
-                              ) : null}
-                              {steelmanData.strongest_evidence ? (
-                                <div style={{ marginBottom: 14 }}>
-                                  <div
-                                    style={{
-                                      fontSize: 10,
-                                      textTransform: 'uppercase',
-                                      color: AR.TEXT_FAINT,
-                                      marginBottom: 7,
-                                    }}
-                                  >
-                                    Most compelling evidence
-                                  </div>
-                                  <div
-                                    style={{
-                                      background: '#F5EFE6',
-                                      padding: '8px 12px',
-                                      borderRadius: 4,
-                                      borderLeft: `2px solid ${AR.GOLD}`,
-                                      fontSize: 13,
-                                      color: AR.TEXT_MID,
-                                      lineHeight: 1.55,
-                                    }}
-                                  >
-                                    {String(steelmanData.strongest_evidence)}
-                                  </div>
-                                </div>
-                              ) : null}
-                              {steelmanData.concession ? (
-                                <div>
-                                  <div
-                                    style={{
-                                      fontSize: 10,
-                                      textTransform: 'uppercase',
-                                      color: AR.TEXT_FAINT,
-                                      marginBottom: 7,
-                                    }}
-                                  >
-                                    What it gets right
-                                  </div>
-                                  <div style={{ fontSize: 13, color: '#6B4A2A', lineHeight: 1.55 }}>
-                                    <span style={{ color: AR.TEXT_MUTED }}>✓ </span>
-                                    {String(steelmanData.concession)}
-                                  </div>
-                                </div>
-                              ) : null}
+                              ))}
+                            </div>
+                          ) : null}
+                          {steelmanData.strongest_evidence ? (
+                            <div style={{ marginBottom: 14 }}>
+                              <div
+                                style={{
+                                  fontSize: 10,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.08em',
+                                  color: '#A89070',
+                                  marginBottom: 7,
+                                }}
+                              >
+                                Strongest evidence
+                              </div>
+                              <div
+                                style={{
+                                  background: '#F5EFE6',
+                                  padding: '8px 12px',
+                                  borderLeft: '2px solid #C4956A',
+                                  fontSize: 13,
+                                  color: '#4A3728',
+                                  lineHeight: 1.55,
+                                }}
+                              >
+                                {String(steelmanData.strongest_evidence)}
+                              </div>
+                            </div>
+                          ) : null}
+                          {steelmanData.concession ? (
+                            <div>
+                              <div
+                                style={{
+                                  fontSize: 10,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.08em',
+                                  color: '#A89070',
+                                  marginBottom: 7,
+                                }}
+                              >
+                                What it gets right
+                              </div>
+                              <div style={{ fontSize: 13, color: '#6B4A2A', lineHeight: 1.55 }}>
+                                <span style={{ color: '#8C7355' }}>✓ </span>
+                                {String(steelmanData.concession)}
+                              </div>
                             </div>
                           ) : null}
                         </div>
-                      </div>
+                      ) : null}
                     </div>
                   ) : null}
                   {temporalProfile ? (
