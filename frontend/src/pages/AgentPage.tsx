@@ -12,7 +12,6 @@ import {
   getAgentSavedTask,
   getAgentStatus,
   getMe,
-  getMemoryContext,
   refineAgentAnswer,
   renameAgentTask,
   runAgentTask,
@@ -165,12 +164,6 @@ type SourceIntegrityPayload = {
     position_b?: string;
     severity?: string;
   }>;
-};
-
-type MemoryContextPayload = {
-  task_count?: number;
-  top_topics?: string[];
-  unresolved_contradictions?: Array<{ summary?: string; severity?: string }>;
 };
 
 type HistoryTask = {
@@ -344,6 +337,11 @@ const EXAMPLES = [
   'Analyse the pros and cons of moving from SQL to NoSQL',
 ];
 
+const INPUT_STAGE_PILLS = ['Plan', 'Research', 'Solve', 'Critique', 'Verify', 'Synthesise', 'Judge'] as const;
+
+const AGENT_INPUT_PLACEHOLDER =
+  'Ask something that deserves a real answer — complex, contested, or consequential...';
+
 function agentProfileInitials(u: User): string {
   const n = u.name?.trim();
   if (n) {
@@ -492,7 +490,6 @@ export function AgentPage() {
   const [challengeSectionError, setChallengeSectionError] = useState<string | null>(null);
   const [rebuttals, setRebuttals] = useState<Record<string, string>>({});
   const [rebuttalLoadingFor, setRebuttalLoadingFor] = useState<string | null>(null);
-  const [memoryContext, setMemoryContext] = useState<MemoryContextPayload | null>(null);
   const [followUp, setFollowUp] = useState('');
   const [refinementError, setRefinementError] = useState<string | null>(null);
   const [bridgeMeta, setBridgeMeta] = useState<{ taskId: string; originalQuestion: string } | null>(null);
@@ -608,18 +605,6 @@ export function AgentPage() {
     editInputRef.current?.focus();
     editInputRef.current?.select();
   }, [editingTaskId]);
-
-  useEffect(() => {
-    if (!canAgent || authLoading) return;
-    (async () => {
-      try {
-        const ctx = (await getMemoryContext('')) as MemoryContextPayload;
-        setMemoryContext(ctx);
-      } catch {
-        setMemoryContext(null);
-      }
-    })();
-  }, [canAgent, authLoading]);
 
   useEffect(() => {
     if (!urlTaskId || !canAgent || authLoading) return;
@@ -787,12 +772,6 @@ export function AgentPage() {
       }
       await pollAgentTaskUntilDone(startData.task_id);
       await loadTaskHistory();
-      try {
-        const ctx = (await getMemoryContext('')) as MemoryContextPayload;
-        setMemoryContext(ctx);
-      } catch {
-        /* ignore */
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Agent task failed');
       setIsRunning(false);
@@ -810,12 +789,6 @@ export function AgentPage() {
     try {
       await refineAgentAnswer(result.task_id, msg);
       await pollAgentTaskUntilDone(result.task_id);
-      try {
-        const ctx = (await getMemoryContext('')) as MemoryContextPayload;
-        setMemoryContext(ctx);
-      } catch {
-        /* ignore */
-      }
     } catch (err) {
       setRefinementError(
         err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Refinement failed.',
@@ -1437,6 +1410,19 @@ export function AgentPage() {
         .answer-text.conf-active span.uncertain {
           color: #C0392B;
         }
+        .agent-bottom-input-shell {
+          border: 0.5px solid #d4c4b0;
+          transition: border-color 0.25s ease;
+        }
+        .agent-bottom-input-shell:focus-within {
+          border-color: #c4956a;
+        }
+        .agent-bottom-input-shell textarea::placeholder {
+          color: #c4a882;
+          font-style: italic;
+          font-family: Georgia, 'Times New Roman', serif;
+          font-size: 14px;
+        }
       `}</style>
       <div
         style={{
@@ -1703,178 +1689,293 @@ export function AgentPage() {
               </div>
             )}
 
-            <div style={{ marginBottom: '2rem' }}>
-              <p
-                style={{
-                  fontSize: 10,
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  color: '#B0A9A2',
-                  marginBottom: '0.5rem',
-                }}
-              >
-                MODE
-              </p>
-              <h1
-                style={{
-                  fontSize: 36,
-                  fontWeight: 400,
-                  letterSpacing: '-0.02em',
-                  color: '#1A1714',
-                  marginBottom: '0.5rem',
-                }}
-              >
-                Give it a task.
-              </h1>
-              <p style={{ fontSize: 14, color: '#6B6460', lineHeight: 1.6 }}>
-                Not just an answer. A reasoned, verified, battle-tested response.
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: '2rem' }}>
-              {EXAMPLES.map((ex) => (
-                <button
-                  key={ex}
-                  type="button"
-                  disabled={isRunning}
-                  onClick={() => setTask(ex)}
-                  style={{
-                    background: '#F0EBE3',
-                    border: '0.5px solid #E0D8D0',
-                    borderRadius: 999,
-                    padding: '7px 16px',
-                    fontSize: 12,
-                    color: '#6B6460',
-                    cursor: isRunning ? 'default' : 'pointer',
-                    opacity: isRunning ? 0.5 : 1,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isRunning) e.currentTarget.style.background = '#E0D8D0';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#F0EBE3';
-                  }}
-                >
-                  {ex}
-                </button>
-              ))}
-            </div>
-
-            {canAgent &&
-              !isRunning &&
-              !result &&
-              memoryContext &&
-              (memoryContext.task_count ?? 0) > 0 && (
+            {!isRunning && !result && (
+              <>
                 <div
                   style={{
-                    background: '#F5F2EF',
-                    borderRadius: 12,
-                    padding: '10px 14px',
-                    marginBottom: 12,
-                    fontSize: 12,
-                    color: '#6B6460',
+                    position: 'relative',
+                    width: '100%',
+                    maxWidth: 920,
+                    margin: '0 auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: 'calc(100vh - 52px - 120px)',
+                    paddingBottom: 120,
+                    paddingTop: 24,
+                    paddingLeft: 16,
+                    paddingRight: 16,
+                    boxSizing: 'border-box',
                   }}
                 >
                   <div
+                    aria-hidden
                     style={{
-                      fontSize: 10,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.1em',
-                      color: '#B0A9A2',
-                      marginBottom: 6,
+                      position: 'absolute',
+                      left: '50%',
+                      top: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      fontSize: 180,
+                      fontWeight: 500,
+                      fontStyle: 'italic',
+                      color: 'rgba(196, 149, 106, 0.04)',
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                      zIndex: 0,
+                      whiteSpace: 'nowrap',
+                      fontFamily: 'Georgia, serif',
                     }}
                   >
-                    Based on your research history:
+                    think.
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {(memoryContext.top_topics || []).map((topic) => (
-                      <span
-                        key={topic}
-                        style={{
-                          background: '#F0EBE3',
-                          color: '#6B6460',
-                          borderRadius: 999,
-                          padding: '3px 10px',
-                          fontSize: 11,
-                        }}
-                      >
-                        {topic}
-                      </span>
-                    ))}
-                  </div>
-                  {(memoryContext.unresolved_contradictions?.length ?? 0) > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => navigate('/agent/history')}
+                  <div
+                    style={{
+                      position: 'relative',
+                      zIndex: 1,
+                      width: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div
                       style={{
-                        marginTop: 8,
-                        background: 'none',
-                        border: 'none',
-                        padding: 0,
-                        cursor: 'pointer',
-                        color: '#C4956A',
-                        fontSize: 11,
-                        textAlign: 'left',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        marginBottom: 14,
                       }}
                     >
-                      You have {memoryContext.unresolved_contradictions?.length} unresolved contradiction
-                      {(memoryContext.unresolved_contradictions?.length ?? 0) === 1 ? '' : 's'} in your
-                      history
-                    </button>
-                  )}
+                      <div style={{ width: 32, height: '0.5px', background: '#D4C4B0' }} />
+                      <span
+                        style={{
+                          fontSize: 10,
+                          letterSpacing: '0.22em',
+                          textTransform: 'uppercase',
+                          color: '#C4A882',
+                          textAlign: 'center',
+                        }}
+                      >
+                        Agent Mode
+                      </span>
+                      <div style={{ width: 32, height: '0.5px', background: '#D4C4B0' }} />
+                    </div>
+                    <h1
+                      style={{
+                        fontSize: 42,
+                        fontWeight: 500,
+                        color: '#2C1810',
+                        textAlign: 'center',
+                        lineHeight: 1.1,
+                        margin: '0 0 6px',
+                        maxWidth: 640,
+                      }}
+                    >
+                      What do you need to{' '}
+                      <span style={{ color: '#C4956A', fontStyle: 'italic' }}>truly</span> know?
+                    </h1>
+                    <p
+                      style={{
+                        fontSize: 14,
+                        color: '#A89070',
+                        fontStyle: 'italic',
+                        textAlign: 'center',
+                        margin: '0 0 14px',
+                        maxWidth: 520,
+                      }}
+                    >
+                      Seven stages of reasoning, working for you.
+                    </p>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 6,
+                        justifyContent: 'center',
+                        maxWidth: 640,
+                      }}
+                    >
+                      {INPUT_STAGE_PILLS.map((label) => (
+                        <div
+                          key={label}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontSize: 10,
+                            letterSpacing: '0.08em',
+                            color: '#B8A898',
+                            padding: '3px 10px',
+                            borderRadius: 10,
+                            border: '0.5px solid #E0D5C5',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 5,
+                              height: 5,
+                              borderRadius: '50%',
+                              background: '#D4C4B0',
+                              flexShrink: 0,
+                            }}
+                          />
+                          {label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              )}
 
-            <div
-              style={{
-                background: '#FFFFFF',
-                border: '0.5px solid #E0D8D0',
-                borderRadius: 16,
-                padding: '1rem',
-              }}
-            >
-              <textarea
-                value={task}
-                disabled={isRunning}
-                onChange={(e) => setTask(e.target.value.slice(0, 2000))}
-                placeholder="Describe a complex task, research question, or problem you want solved..."
-                style={{
-                  width: '100%',
-                  minHeight: 120,
-                  border: 'none',
-                  outline: 'none',
-                  resize: 'none',
-                  fontSize: 15,
-                  color: '#1A1714',
-                  background: 'transparent',
-                  lineHeight: 1.7,
-                  fontFamily: 'inherit',
-                }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                <span style={{ fontSize: 11, color: '#C4B8AE' }}>
-                  {task.length}/2000
-                </span>
-                <button
-                  type="button"
-                  disabled={task.trim().length < 10 || isRunning}
-                  onClick={() => void handleRunTask()}
+                <div
                   style={{
-                    background: '#1A1714',
-                    color: '#FAF7F4',
-                    borderRadius: 999,
-                    padding: '9px 24px',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    border: 'none',
-                    cursor: task.trim().length < 10 || isRunning ? 'default' : 'pointer',
-                    opacity: task.trim().length < 10 || isRunning ? 0.4 : 1,
+                    position: 'fixed',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    padding: '16px 24px 24px',
+                    background: 'linear-gradient(to top, rgba(245,240,232,1) 60%, rgba(245,240,232,0) 100%)',
+                    zIndex: 50,
+                    pointerEvents: 'none',
                   }}
                 >
-                  Run
-                </button>
-              </div>
-            </div>
+                  <div
+                    className="agent-bottom-input-shell"
+                    style={{
+                      pointerEvents: 'auto',
+                      maxWidth: 640,
+                      margin: '0 auto',
+                      background: '#FDFAF6',
+                      borderRadius: 20,
+                      padding: '16px 14px 12px 20px',
+                    }}
+                  >
+                    <textarea
+                      value={task}
+                      disabled={isRunning}
+                      onChange={(e) => setTask(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if (task.trim().length >= 10) void handleRunTask();
+                        }
+                      }}
+                      placeholder={AGENT_INPUT_PLACEHOLDER}
+                      rows={1}
+                      style={{
+                        width: '100%',
+                        minHeight: 24,
+                        maxHeight: 120,
+                        border: 'none',
+                        background: 'transparent',
+                        outline: 'none',
+                        resize: 'none',
+                        fontSize: 14,
+                        color: '#2C1810',
+                        fontFamily: 'Georgia, serif',
+                        lineHeight: 1.6,
+                        overflowY: 'auto',
+                        display: 'block',
+                      }}
+                    />
+                    <div
+                      style={{
+                        marginTop: 10,
+                        borderTop: '0.5px solid #EDE4D8',
+                        paddingTop: 10,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flex: 1, minWidth: 0 }}>
+                        {EXAMPLES.slice(0, 3).map((ex) => (
+                          <button
+                            key={ex}
+                            type="button"
+                            disabled={isRunning}
+                            onClick={() => setTask(ex)}
+                            style={{
+                              fontSize: 11,
+                              color: '#A89070',
+                              padding: '3px 10px',
+                              borderRadius: 12,
+                              border: '0.5px solid #E0D5C5',
+                              cursor: isRunning ? 'default' : 'pointer',
+                              fontFamily: 'Georgia, serif',
+                              background: 'transparent',
+                              textAlign: 'left',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isRunning) {
+                                e.currentTarget.style.borderColor = '#C4956A';
+                                e.currentTarget.style.color = '#C4956A';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.borderColor = '#E0D5C5';
+                              e.currentTarget.style.color = '#A89070';
+                            }}
+                          >
+                            {ex}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={task.trim().length < 10 || isRunning}
+                        onClick={() => void handleRunTask()}
+                        onMouseEnter={(e) => {
+                          if (task.trim().length >= 10 && !isRunning) {
+                            e.currentTarget.style.background = '#B07850';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background =
+                            task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0';
+                        }}
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: '50%',
+                          border: 'none',
+                          cursor: task.trim().length >= 10 && !isRunning ? 'pointer' : 'default',
+                          background: task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0',
+                          transition: 'background 0.2s ease',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                        aria-label="Run task"
+                      >
+                        <svg width={15} height={15} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <line
+                            x1="12"
+                            y1="19"
+                            x2="12"
+                            y2="5"
+                            stroke="#FAF7F2"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                          />
+                          <polyline
+                            points="5,12 12,5 19,12"
+                            fill="none"
+                            stroke="#FAF7F2"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             {error && (
               <p style={{ color: '#E57373', fontSize: 13, marginTop: '1rem' }}>{error}</p>
