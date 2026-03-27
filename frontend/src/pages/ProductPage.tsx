@@ -44,12 +44,13 @@ export function ProductPage() {
             onClick={() => navigate('/app')}
             className="product-parchment-card"
             style={{
-              background: '#EDE4D6',
-              border: '1px solid #C4B89A',
+              background: '#FDFAF6',
+              border: '0.5px solid #E0D5C5',
+              borderLeft: '4px solid #C4956A',
               borderRadius: '14px',
-              padding: '32px',
+              padding: '26px',
               cursor: 'pointer',
-              transition: 'border-color 0.2s ease, transform 0.2s ease',
+              transition: 'background 0.2s ease, transform 0.2s ease',
               textAlign: 'left',
               display: 'flex',
               flexDirection: 'column',
@@ -57,18 +58,18 @@ export function ProductPage() {
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.borderColor = '#C4956A';
+              e.currentTarget.style.background = '#FAF7F0';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = '#C4B89A';
+              e.currentTarget.style.background = '#FDFAF6';
             }}
           >
             <div
               style={{
-                background: 'rgba(196, 149, 106, 0.15)',
-                color: '#8C7355',
-                border: '0.5px solid #D4C4B0',
+                background: '#FAF3EA',
+                color: '#C4956A',
+                border: '0.5px solid #E0C8A0',
                 fontSize: '11px',
                 letterSpacing: '0.10em',
                 textTransform: 'uppercase',
@@ -84,11 +85,11 @@ export function ProductPage() {
 
             <div
               style={{
-                color: '#2C1810',
+                color: '#C4956A',
                 fontSize: '52px',
                 fontWeight: 500,
                 fontFamily: 'Georgia, serif',
-                opacity: 0.12,
+                opacity: 0.2,
                 marginBottom: '14px',
                 lineHeight: 1,
               }}
@@ -100,9 +101,8 @@ export function ProductPage() {
               style={{
                 margin: 0,
                 color: '#2C1810',
-                fontSize: '26px',
+                fontSize: '22px',
                 fontWeight: 500,
-                fontFamily: 'Georgia, serif',
                 marginBottom: '6px',
                 lineHeight: 1.2,
               }}
@@ -112,8 +112,7 @@ export function ProductPage() {
             <p
               style={{
                 color: '#8C7355',
-                fontSize: '15px',
-                fontFamily: 'Georgia, serif',
+                fontSize: '13px',
                 fontStyle: 'italic',
                 marginBottom: '20px',
               }}
@@ -129,8 +128,8 @@ export function ProductPage() {
                       width: '18px',
                       height: '18px',
                       borderRadius: '50%',
-                      background: 'rgba(196, 149, 106, 0.15)',
-                      border: '0.5px solid rgba(196, 149, 106, 0.4)',
+                      background: '#FAF3EA',
+                      border: '0.5px solid #C4956A',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -139,14 +138,14 @@ export function ProductPage() {
                   >
                     <span style={{ fontSize: '10px', color: '#C4956A', lineHeight: 1 }}>✓</span>
                   </div>
-                  <span style={{ fontSize: '14px', color: '#4A3728' }}>{feature}</span>
+                  <span style={{ fontSize: '12px', color: '#4A3728' }}>{feature}</span>
                 </div>
               ))}
             </div>
 
             <div
               style={{
-                borderTop: '0.5px solid rgba(212, 196, 176, 0.6)',
+                borderTop: '0.5px solid #E0D5C5',
                 marginTop: '1.5rem',
                 paddingTop: '22px',
               }}
@@ -160,15 +159,6 @@ export function ProductPage() {
                   cursor: 'pointer',
                   textDecoration: 'none',
                   display: 'inline-block',
-                  transition: 'color 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.stopPropagation();
-                  e.currentTarget.style.color = '#8C7355';
-                }}
-                onMouseLeave={(e) => {
-                  e.stopPropagation();
-                  e.currentTarget.style.color = '#C4956A';
                 }}
               >
                 Enter Arena →
@@ -189,12 +179,13 @@ export function ProductPage() {
             }}
             className="product-parchment-card"
             style={{
-              background: '#EDE4D6',
-              border: '1px solid #C4B89A',
+              background: '#FDFAF6',
+              border: '0.5px solid #E0D5C5',
+              borderLeft: '4px solid #5A8C6A',
               borderRadius: '14px',
-              padding: '32px',
+              padding: '26px',
               cursor: 'pointer',
-              transition: 'border-color 0.2s ease, transform 0.2s ease',
+              transition: 'background 0.2s ease, transform 0.2s ease',
               textAlign: 'left',
               display: 'flex',
               flexDirection: 'column',
@@ -202,18 +193,18 @@ export function ProductPage() {
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.borderColor = '#C4956A';
+              e.currentTarget.style.background = '#F5FAF6';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = '#C4B89A';
+              e.currentTarget.style.background = '#FDFAF6';
             }}
           >
             <div
               style={{
-                background: 'rgba(196, 149, 106, 0.15)',
-                color: '#8C7355',
-                border: '0.5px solid #D4C4B0',
+                background: '#EAF3EC',
+                color: '#5A8C6A',
+                border: '0.5px solid #C4D8C8',
                 fontSize: '11px',
                 letterSpacing: '0.10em',
                 textTransform: 'uppercase',
@@ -229,11 +220,11 @@ export function ProductPage() {
 
             <div
               style={{
-                color: '#2C1810',
+                color: '#5A8C6A',
                 fontSize: '52px',
                 fontWeight: 500,
                 fontFamily: 'Georgia, serif',
-                opacity: 0.12,
+                opacity: 0.2,
                 marginBottom: '14px',
                 lineHeight: 1,
               }}
@@ -244,10 +235,9 @@ export function ProductPage() {
             <h2
               style={{
                 margin: 0,
-                color: '#2C1810',
-                fontSize: '26px',
+                color: '#1E2E22',
+                fontSize: '22px',
                 fontWeight: 500,
-                fontFamily: 'Georgia, serif',
                 marginBottom: '6px',
                 lineHeight: 1.2,
               }}
@@ -256,9 +246,8 @@ export function ProductPage() {
             </h2>
             <p
               style={{
-                color: '#8C7355',
-                fontSize: '15px',
-                fontFamily: 'Georgia, serif',
+                color: '#6B8C6B',
+                fontSize: '13px',
                 fontStyle: 'italic',
                 marginBottom: '20px',
               }}
@@ -274,46 +263,37 @@ export function ProductPage() {
                       width: '18px',
                       height: '18px',
                       borderRadius: '50%',
-                      background: 'rgba(196, 149, 106, 0.15)',
-                      border: '0.5px solid rgba(196, 149, 106, 0.4)',
+                      background: '#EAF3EC',
+                      border: '0.5px solid #8CBE9A',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       flexShrink: 0,
                     }}
                   >
-                    <span style={{ fontSize: '10px', color: '#C4956A', lineHeight: 1 }}>✓</span>
+                    <span style={{ fontSize: '10px', color: '#5A8C6A', lineHeight: 1 }}>✓</span>
                   </div>
-                  <span style={{ fontSize: '14px', color: '#4A3728' }}>{feature}</span>
+                  <span style={{ fontSize: '12px', color: '#2E3E30' }}>{feature}</span>
                 </div>
               ))}
             </div>
 
             <div
               style={{
-                borderTop: '0.5px solid rgba(212, 196, 176, 0.6)',
+                borderTop: '0.5px solid #E0D5C5',
                 marginTop: '1.5rem',
                 paddingTop: '22px',
               }}
             >
               <div
                 style={{
-                  color: '#C4956A',
+                  color: '#5A8C6A',
                   fontSize: '14px',
                   fontFamily: 'Georgia, serif',
                   letterSpacing: '0.04em',
                   cursor: 'pointer',
                   textDecoration: 'none',
                   display: 'inline-block',
-                  transition: 'color 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.stopPropagation();
-                  e.currentTarget.style.color = '#8C7355';
-                }}
-                onMouseLeave={(e) => {
-                  e.stopPropagation();
-                  e.currentTarget.style.color = '#C4956A';
                 }}
               >
                 Enter Agent →
