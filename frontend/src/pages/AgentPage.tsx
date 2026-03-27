@@ -2094,28 +2094,25 @@ export function AgentPage() {
             overflow: 'hidden',
           }}
         >
-          <div
-            style={{
-              padding: 16,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: isMobile ? 'space-between' : 'flex-start',
-              gap: 8,
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#6B6460', cursor: 'pointer' }}
+          {isMobile ? (
+            <div
+              style={{
+                padding: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 8,
+              }}
             >
-              ← Home
-            </button>
-            {isMobile ? (
-              <button type="button" onClick={closeSidebar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6460' }}>
+              <button
+                type="button"
+                onClick={closeSidebar}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6460' }}
+              >
                 <X style={{ width: 16, height: 16 }} />
               </button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
           <div style={{ height: '0.5px', background: '#E8E2DA', margin: '0 16px 12px' }} />
           <div style={{ padding: '0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 500, color: '#1A1714' }}>Agent</span>
@@ -2269,9 +2266,31 @@ export function AgentPage() {
                 style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }}
                 className="breathe"
               />
-              <span className="wordmark-text" style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="wordmark-text"
+                style={{
+                  fontSize: '15px',
+                  fontWeight: 500,
+                  color: '#1A1714',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  transition: 'color 0.15s ease',
+                  fontFamily: 'inherit',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = '#C4956A';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = '#1A1714';
+                }}
+              >
                 Agent
-              </span>
+              </button>
             </div>
             {isRunning ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
