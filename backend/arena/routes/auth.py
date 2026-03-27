@@ -25,6 +25,7 @@ from arena.core.auth import (
     get_user_by_id,
     orm_user_to_response,
 )
+from arena.core.feedback_calibrator import get_answer_feedback_distribution
 from arena.core.tier_config import (
     TIER_FEATURES,
     get_credit_budget,
@@ -109,8 +110,8 @@ def _clear_auth_cookies(response: Response) -> None:
     )
 
 
-def _user_to_response(user: User) -> UserResponse:
-    return orm_user_to_response(user)
+def _user_to_response(user: User, db: Session) -> UserResponse:
+    return orm_user_to_response(user, db)
 
 
 def _utc_now_naive() -> datetime:
@@ -167,7 +168,7 @@ async def register(
                 )
 
             user = create_user(db, body.email, body.password)
-            user_response = _user_to_response(user)
+            user_response = _user_to_response(user, db)
             _set_auth_cookies(response, user)
 
             # Registration succeeded — clear attempt record
@@ -206,7 +207,7 @@ async def login(
                     detail="Invalid email or password",
                 )
 
-            user_response = _user_to_response(user)
+            user_response = _user_to_response(user, db)
             _set_auth_cookies(response, user)
 
             # Auth succeeded — clear failed-attempt record
@@ -266,7 +267,7 @@ async def refresh(
                     detail="User not found",
                 )
 
-            user_response = _user_to_response(user)
+            user_response = _user_to_response(user, db)
             _set_auth_cookies(response, user)
             return user_response
 
@@ -286,8 +287,9 @@ async def refresh(
 @router.get("/me", response_model=UserResponse)
 async def me(
     user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
 ) -> UserResponse:
-    return _user_to_response(user)
+    return _user_to_response(user, db)
 
 
 @user_router.patch("/profile", response_model=UserResponse)
@@ -312,7 +314,15 @@ async def patch_user_profile(
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _user_to_response(user)
+    return _user_to_response(user, db)
+
+
+@user_router.get("/answer-feedback-stats")
+async def user_answer_feedback_stats(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+) -> dict:
+    return get_answer_feedback_distribution(user.id, db)
 
 
 @user_router.get("/usage")

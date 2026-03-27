@@ -233,6 +233,15 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=1)
 
 
+class FeedbackCalibrationInfo(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    adjustment: int = 0
+    reliable: bool = False
+    total_feedback: int = 0
+    wrong_rate: int = 0
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, extra="ignore")
 
@@ -244,6 +253,7 @@ class UserResponse(BaseModel):
     name: str = ""
     expertise_level: str = "curious"
     expertise_domain: str = ""
+    feedback_calibration: FeedbackCalibrationInfo = Field(default_factory=FeedbackCalibrationInfo)
 
     @field_validator("name", mode="before")
     @classmethod

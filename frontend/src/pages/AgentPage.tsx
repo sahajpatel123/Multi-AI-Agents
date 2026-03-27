@@ -3,6 +3,7 @@ import { Ellipsis, Lock, Pencil, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
 import { ExpertiseSelector } from '../components/ExpertiseSelector';
+import { TemplatesModal } from '../components/TemplatesModal';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
@@ -13,16 +14,21 @@ import {
   getAgentResult,
   getAgentSavedTask,
   getAgentStatus,
+  getAgentTaskAnswerFeedback,
+  getAgentTemplates,
   getCalibrationRatingForTask,
   getCalibrationStats,
   getMe,
   markAgentLiveUpdatesRead,
+  postAgentTaskAnswerFeedback,
   postCalibrationRate,
   refineAgentAnswer,
   renameAgentTask,
   runAgentTask,
   toggleAgentTaskLive,
   type AgentChallengeItem,
+  type AgentTaskTemplate,
+  type TaskAnswerFeedback,
 } from '../api';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
@@ -406,6 +412,54 @@ const AGENT_IDLE_SUGGESTIONS = [
   'What are the strongest arguments against remote work?',
 ] as const;
 
+function formatTemplateSlotLabel(slotKey: string): string {
+  return slotKey
+    .split('_')
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ''))
+    .join(' ');
+}
+
+function agentTemplatePreviewNodes(tpl: AgentTaskTemplate, slots: Record<string, string>): ReactNode[] {
+  const s = tpl.prompt_template;
+  const nodes: ReactNode[] = [];
+  const re = /\{([^}]+)\}/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  while ((m = re.exec(s)) !== null) {
+    if (m.index > last) {
+      nodes.push(
+        <span key={`tp-${i++}`} style={{ color: '#2C1810' }}>
+          {s.slice(last, m.index)}
+        </span>,
+      );
+    }
+    const name = m[1];
+    const val = (slots[name] ?? '').trim();
+    nodes.push(
+      <span
+        key={`tp-${i++}`}
+        style={{
+          color: val ? '#2C1810' : '#C4956A',
+          fontStyle: val ? 'normal' : 'italic',
+          fontWeight: val ? 500 : 400,
+        }}
+      >
+        {val || `[${name}]`}
+      </span>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) {
+    nodes.push(
+      <span key={`tp-${i++}`} style={{ color: '#2C1810' }}>
+        {s.slice(last)}
+      </span>,
+    );
+  }
+  return nodes;
+}
+
 const INPUT_STAGE_PILLS = ['Plan', 'Research', 'Solve', 'Critique', 'Verify', 'Synthesise', 'Judge'] as const;
 
 function agentProfileInitials(u: User): string {
@@ -538,7 +592,7 @@ export function AgentPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, refreshUser } = useAuth();
   const { canUseFeature, isPro } = useTier();
   const canAgent = canUseFeature('agent_mode');
   const { openModal, setActiveTab, isOpen: profileModalOpen } = useProfileModal();
@@ -588,6 +642,39 @@ export function AgentPage() {
   const [ratingSubmitBusy, setRatingSubmitBusy] = useState(false);
   const [liveToggleBusy, setLiveToggleBusy] = useState(false);
   const [liveUpdatesPanelOpen, setLiveUpdatesPanelOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templatesClosing, setTemplatesClosing] = useState(false);
+  const [templateCategories, setTemplateCategories] = useState<Record<string, AgentTaskTemplate[]>>({});
+  const [selectedTemplate, setSelectedTemplate] = useState<AgentTaskTemplate | null>(null);
+  const [templateSlots, setTemplateSlots] = useState<Record<string, string>>({});
+  const [taskAnswerFeedback, setTaskAnswerFeedback] = useState<TaskAnswerFeedback | null | undefined>(undefined);
+  const [answerFeedbackSubmitBusy, setAnswerFeedbackSubmitBusy] = useState(false);
+  const [feedbackEditMode, setFeedbackEditMode] = useState(false);
+  const [pendingVerdict, setPendingVerdict] = useState<'correct' | 'partial' | 'wrong' | null>(null);
+  const [pendingNote, setPendingNote] = useState('');
+
+  const closeTemplatesModal = useCallback(() => {
+    setTemplatesClosing(true);
+    window.setTimeout(() => {
+      setTemplatesOpen(false);
+      setTemplatesClosing(false);
+    }, 220);
+  }, []);
+
+  const assembledTemplatePrompt = useMemo(() => {
+    if (!selectedTemplate) return '';
+    let s = selectedTemplate.prompt_template;
+    for (const key of selectedTemplate.slots) {
+      const val = (templateSlots[key] ?? '').trim();
+      s = s.split(`{${key}}`).join(val);
+    }
+    return s;
+  }, [selectedTemplate, templateSlots]);
+
+  const allTemplateSlotsFilled = useMemo(() => {
+    if (!selectedTemplate) return false;
+    return selectedTemplate.slots.every((key) => (templateSlots[key] ?? '').trim().length > 0);
+  }, [selectedTemplate, templateSlots]);
 
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((current) => !current);
@@ -662,6 +749,35 @@ export function AgentPage() {
     }, 3000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    void getAgentTemplates()
+      .then((r) => setTemplateCategories(r.categories))
+      .catch(() => setTemplateCategories({}));
+  }, []);
+
+  useEffect(() => {
+    const tid = result?.task_id;
+    if (!tid || !user || isRunning) {
+      setTaskAnswerFeedback(undefined);
+      return;
+    }
+    let cancelled = false;
+    setTaskAnswerFeedback(undefined);
+    setFeedbackEditMode(false);
+    setPendingVerdict(null);
+    setPendingNote('');
+    void getAgentTaskAnswerFeedback(tid)
+      .then((r) => {
+        if (!cancelled) setTaskAnswerFeedback(r);
+      })
+      .catch(() => {
+        if (!cancelled) setTaskAnswerFeedback(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [result?.task_id, user, isRunning]);
 
   useEffect(() => {
     void loadTaskHistory();
@@ -826,8 +942,9 @@ export function AgentPage() {
 
 
   const handleRunTask = async () => {
-    const t = task.trim();
+    const t = selectedTemplate ? assembledTemplatePrompt.trim() : task.trim();
     if (t.length < 10 || isRunning) return;
+    if (selectedTemplate && !allTemplateSlotsFilled) return;
     setError(null);
     setBridgeMeta(null);
     if (isMobile) setSidebarOpen(false);
@@ -904,6 +1021,14 @@ export function AgentPage() {
     setRebuttalLoadingFor(null);
     setIsChallengingAnswer(false);
     setShowAllSourcePills(false);
+    setSelectedTemplate(null);
+    setTemplateSlots({});
+    setTemplatesOpen(false);
+    setTemplatesClosing(false);
+    setTaskAnswerFeedback(undefined);
+    setFeedbackEditMode(false);
+    setPendingVerdict(null);
+    setPendingNote('');
     if (isMobile) setSidebarOpen(false);
   };
 
@@ -957,6 +1082,34 @@ export function AgentPage() {
       uncertainPct: Math.round((uncertainCount / total) * 100),
     };
   }, [answerSentences]);
+
+  const displayConfidenceLegend = useMemo(() => {
+    if (!confidenceLegendStats) return null;
+    const cal = user?.feedback_calibration;
+    if (!cal?.reliable || cal.adjustment === 0) return confidenceLegendStats;
+    const adj = cal.adjustment;
+    let v = confidenceLegendStats.verifiedPct;
+    let s = confidenceLegendStats.supportedPct;
+    let u = confidenceLegendStats.uncertainPct;
+    if (adj < 0) {
+      let take = -adj;
+      const fromV = Math.min(v, take);
+      v -= fromV;
+      u += fromV;
+      take -= fromV;
+      if (take > 0) {
+        const fromS = Math.min(s, take);
+        s -= fromS;
+        u += fromS;
+      }
+    }
+    return {
+      ...confidenceLegendStats,
+      verifiedPct: Math.round(v),
+      supportedPct: Math.round(s),
+      uncertainPct: Math.round(u),
+    };
+  }, [confidenceLegendStats, user?.feedback_calibration]);
 
   const intelligenceScore = useMemo(() => {
     const candidate = result?.intelligence_score;
@@ -2131,97 +2284,329 @@ export function AgentPage() {
                         {AGENT_IDLE_SUGGESTIONS[suggIdx]}
                       </span>
                     </div>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+                      <button
+                        type="button"
+                        onClick={() => setTemplatesOpen(true)}
+                        style={{
+                          fontSize: 12,
+                          color: '#8C7355',
+                          border: '0.5px solid #D4C4B0',
+                          borderRadius: 20,
+                          padding: '5px 14px',
+                          background: 'transparent',
+                          cursor: 'pointer',
+                          fontFamily: 'Georgia, serif',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          transition: 'border-color 0.15s, color 0.15s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = '#C4956A';
+                          e.currentTarget.style.color = '#C4956A';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = '#D4C4B0';
+                          e.currentTarget.style.color = '#8C7355';
+                        }}
+                      >
+                        Browse templates
+                        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
+                          <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth={1.2} />
+                          <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth={1.2} />
+                          <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth={1.2} />
+                          <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth={1.2} />
+                        </svg>
+                      </button>
+                    </div>
+                    <TemplatesModal
+                      open={templatesOpen}
+                      closing={templatesClosing}
+                      categories={templateCategories}
+                      onClose={closeTemplatesModal}
+                      onSelect={(t) => {
+                        const next: Record<string, string> = {};
+                        t.slots.forEach((k) => {
+                          next[k] = '';
+                        });
+                        setTemplateSlots(next);
+                        setSelectedTemplate(t);
+                        setExpertiseLevel((t.default_expertise || 'curious').toLowerCase());
+                        localStorage.setItem('arena_expertise_level', (t.default_expertise || 'curious').toLowerCase());
+                      }}
+                    />
                     <form
                       className="agent-bottom-input-shell"
                       onSubmit={(e) => {
                         e.preventDefault();
-                        if (task.trim().length >= 10 && !isRunning) void handleRunTask();
+                        const ready = selectedTemplate
+                          ? allTemplateSlotsFilled && assembledTemplatePrompt.trim().length >= 10
+                          : task.trim().length >= 10;
+                        if (ready && !isRunning) void handleRunTask();
                       }}
                       style={{
                         display: 'flex',
-                        alignItems: 'center',
+                        flexDirection: selectedTemplate ? 'column' : 'row',
+                        alignItems: selectedTemplate ? 'stretch' : 'center',
                         gap: 12,
                         background: '#FDFAF6',
-                        borderRadius: 32,
+                        borderRadius: selectedTemplate ? 20 : 32,
                         padding: '12px 12px 12px 20px',
                       }}
                     >
-                      <span
-                        className="breathe"
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: '50%',
-                          background: '#C4956A',
-                          flexShrink: 0,
-                        }}
-                        aria-hidden
-                      />
-                      <input
-                        ref={idleTaskInputRef}
-                        type="text"
-                        value={task}
-                        disabled={isRunning}
-                        placeholder=""
-                        onChange={(e) => setTask(e.target.value)}
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          border: 'none',
-                          background: 'transparent',
-                          outline: 'none',
-                          fontSize: 14,
-                          color: '#2C1810',
-                          fontFamily: 'Georgia, serif',
-                        }}
-                      />
-                      <button
-                        type="submit"
-                        disabled={task.trim().length < 10 || isRunning}
-                        onMouseEnter={(e) => {
-                          if (task.trim().length >= 10 && !isRunning) {
-                            e.currentTarget.style.background = '#B07850';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background =
-                            task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0';
-                        }}
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: '50%',
-                          border: 'none',
-                          cursor: task.trim().length >= 10 && !isRunning ? 'pointer' : 'default',
-                          background: task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0',
-                          transition: 'background 0.2s ease',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                        aria-label="Run task"
-                      >
-                        <svg width={15} height={15} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <line
-                            x1="12"
-                            y1="19"
-                            x2="12"
-                            y2="5"
-                            stroke="#FAF7F2"
-                            strokeWidth={2}
-                            strokeLinecap="round"
+                      {selectedTemplate ? (
+                        <>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 10,
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <span
+                              style={{
+                                background: '#2C1810',
+                                color: '#C4956A',
+                                borderRadius: 20,
+                                padding: '4px 12px',
+                                fontSize: 11,
+                                fontFamily: 'Georgia, serif',
+                              }}
+                            >
+                              {selectedTemplate.title}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedTemplate(null);
+                                setTemplateSlots({});
+                              }}
+                              style={{
+                                border: 'none',
+                                background: 'none',
+                                cursor: 'pointer',
+                                fontSize: 12,
+                                color: '#A89070',
+                                fontFamily: 'Georgia, serif',
+                                padding: 0,
+                              }}
+                            >
+                              × Clear template
+                            </button>
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              lineHeight: 1.55,
+                              fontFamily: 'Georgia, serif',
+                              padding: '10px 12px',
+                              background: '#FAF7F2',
+                              border: '0.5px solid #E0D5C5',
+                              borderRadius: 8,
+                              minHeight: 48,
+                            }}
+                          >
+                            {agentTemplatePreviewNodes(selectedTemplate, templateSlots)}
+                          </div>
+                          {selectedTemplate.slots.map((slotKey) => (
+                            <div key={slotKey}>
+                              <label
+                                style={{
+                                  display: 'block',
+                                  fontSize: 10,
+                                  textTransform: 'uppercase',
+                                  color: '#A89070',
+                                  marginBottom: 4,
+                                  letterSpacing: '0.04em',
+                                }}
+                              >
+                                {formatTemplateSlotLabel(slotKey)}
+                              </label>
+                              <input
+                                type="text"
+                                value={templateSlots[slotKey] ?? ''}
+                                disabled={isRunning}
+                                onChange={(e) =>
+                                  setTemplateSlots((prev) => ({ ...prev, [slotKey]: e.target.value }))
+                                }
+                                style={{
+                                  width: '100%',
+                                  boxSizing: 'border-box',
+                                  border: '0.5px solid #D4C4B0',
+                                  borderRadius: 6,
+                                  padding: '7px 12px',
+                                  fontSize: 13,
+                                  fontFamily: 'Georgia, serif',
+                                  outline: 'none',
+                                  background: '#fff',
+                                }}
+                                onFocus={(e) => {
+                                  e.currentTarget.style.borderColor = '#C4956A';
+                                }}
+                                onBlur={(e) => {
+                                  e.currentTarget.style.borderColor = '#D4C4B0';
+                                }}
+                              />
+                            </div>
+                          ))}
+                          {!allTemplateSlotsFilled ? (
+                            <p style={{ fontSize: 11, color: '#A89070', margin: 0 }}>Fill all fields</p>
+                          ) : null}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
+                            <button
+                              type="submit"
+                              disabled={
+                                !allTemplateSlotsFilled ||
+                                assembledTemplatePrompt.trim().length < 10 ||
+                                isRunning
+                              }
+                              onMouseEnter={(e) => {
+                                if (
+                                  allTemplateSlotsFilled &&
+                                  assembledTemplatePrompt.trim().length >= 10 &&
+                                  !isRunning
+                                ) {
+                                  e.currentTarget.style.background = '#B07850';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background =
+                                  allTemplateSlotsFilled &&
+                                  assembledTemplatePrompt.trim().length >= 10 &&
+                                  !isRunning
+                                    ? '#C4956A'
+                                    : '#D4C4B0';
+                              }}
+                              style={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: '50%',
+                                border: 'none',
+                                cursor:
+                                  allTemplateSlotsFilled &&
+                                  assembledTemplatePrompt.trim().length >= 10 &&
+                                  !isRunning
+                                    ? 'pointer'
+                                    : 'default',
+                                background:
+                                  allTemplateSlotsFilled &&
+                                  assembledTemplatePrompt.trim().length >= 10 &&
+                                  !isRunning
+                                    ? '#C4956A'
+                                    : '#D4C4B0',
+                                transition: 'background 0.2s ease',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                              aria-label="Run task"
+                            >
+                              <svg width={15} height={15} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <line
+                                  x1="12"
+                                  y1="19"
+                                  x2="12"
+                                  y2="5"
+                                  stroke="#FAF7F2"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                />
+                                <polyline
+                                  points="5,12 12,5 19,12"
+                                  fill="none"
+                                  stroke="#FAF7F2"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <span
+                            className="breathe"
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              background: '#C4956A',
+                              flexShrink: 0,
+                            }}
+                            aria-hidden
                           />
-                          <polyline
-                            points="5,12 12,5 19,12"
-                            fill="none"
-                            stroke="#FAF7F2"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                          <input
+                            ref={idleTaskInputRef}
+                            type="text"
+                            value={task}
+                            disabled={isRunning}
+                            placeholder=""
+                            onChange={(e) => setTask(e.target.value)}
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              border: 'none',
+                              background: 'transparent',
+                              outline: 'none',
+                              fontSize: 14,
+                              color: '#2C1810',
+                              fontFamily: 'Georgia, serif',
+                            }}
                           />
-                        </svg>
-                      </button>
+                          <button
+                            type="submit"
+                            disabled={task.trim().length < 10 || isRunning}
+                            onMouseEnter={(e) => {
+                              if (task.trim().length >= 10 && !isRunning) {
+                                e.currentTarget.style.background = '#B07850';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background =
+                                task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0';
+                            }}
+                            style={{
+                              width: 34,
+                              height: 34,
+                              borderRadius: '50%',
+                              border: 'none',
+                              cursor: task.trim().length >= 10 && !isRunning ? 'pointer' : 'default',
+                              background: task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0',
+                              transition: 'background 0.2s ease',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                            aria-label="Run task"
+                          >
+                            <svg width={15} height={15} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <line
+                                x1="12"
+                                y1="19"
+                                x2="12"
+                                y2="5"
+                                stroke="#FAF7F2"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                              />
+                              <polyline
+                                points="5,12 12,5 19,12"
+                                fill="none"
+                                stroke="#FAF7F2"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        </>
+                      )}
                     </form>
                   </div>
                 </div>
@@ -2755,7 +3140,7 @@ export function AgentPage() {
                         >
                           Confidence
                         </div>
-                        {confidenceLegendStats ? (
+                        {displayConfidenceLegend ? (
                           <>
                             <div className="agent-confidence-legend-rows">
                               <div
@@ -2784,7 +3169,7 @@ export function AgentPage() {
                                     marginLeft: 'auto',
                                   }}
                                 >
-                                  {confidenceLegendStats.verifiedPct}%
+                                  {displayConfidenceLegend.verifiedPct}%
                                 </span>
                               </div>
                               <div
@@ -2813,7 +3198,7 @@ export function AgentPage() {
                                     marginLeft: 'auto',
                                   }}
                                 >
-                                  {confidenceLegendStats.supportedPct}%
+                                  {displayConfidenceLegend.supportedPct}%
                                 </span>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -2835,7 +3220,7 @@ export function AgentPage() {
                                     marginLeft: 'auto',
                                   }}
                                 >
-                                  {confidenceLegendStats.uncertainPct}%
+                                  {displayConfidenceLegend.uncertainPct}%
                                 </span>
                               </div>
                             </div>
@@ -2849,14 +3234,14 @@ export function AgentPage() {
                                 display: 'flex',
                               }}
                             >
-                              {confidenceLegendStats.verifiedPct > 0 ? (
-                                <div style={{ width: `${confidenceLegendStats.verifiedPct}%`, background: '#639922' }} />
+                              {displayConfidenceLegend.verifiedPct > 0 ? (
+                                <div style={{ width: `${displayConfidenceLegend.verifiedPct}%`, background: '#639922' }} />
                               ) : null}
-                              {confidenceLegendStats.supportedPct > 0 ? (
-                                <div style={{ width: `${confidenceLegendStats.supportedPct}%`, background: '#BA7517' }} />
+                              {displayConfidenceLegend.supportedPct > 0 ? (
+                                <div style={{ width: `${displayConfidenceLegend.supportedPct}%`, background: '#BA7517' }} />
                               ) : null}
-                              {confidenceLegendStats.uncertainPct > 0 ? (
-                                <div style={{ width: `${confidenceLegendStats.uncertainPct}%`, background: '#D85A30' }} />
+                              {displayConfidenceLegend.uncertainPct > 0 ? (
+                                <div style={{ width: `${displayConfidenceLegend.uncertainPct}%`, background: '#D85A30' }} />
                               ) : null}
                             </div>
                             <div
@@ -2870,6 +3255,21 @@ export function AgentPage() {
                               <span style={{ fontSize: 10, color: '#A89070' }}>Supported</span>
                               <span style={{ fontSize: 10, color: '#A89070' }}>Uncertain</span>
                             </div>
+                            {user?.feedback_calibration?.reliable &&
+                            user.feedback_calibration.adjustment !== 0 ? (
+                              <p
+                                style={{
+                                  fontSize: 11,
+                                  fontStyle: 'italic',
+                                  color: '#A89070',
+                                  marginTop: 8,
+                                  marginBottom: 0,
+                                }}
+                              >
+                                Confidence adjusted by {Math.abs(user.feedback_calibration.adjustment)} pts based on
+                                your feedback history
+                              </p>
+                            ) : null}
                             {answerSentences.length > 0 ? (
                               <button
                                 type="button"
@@ -4802,6 +5202,305 @@ export function AgentPage() {
                     </div>
                   ) : null}
                 </div>
+
+                {user &&
+                result?.task_id &&
+                !isRunning &&
+                !!(result?.final_answer || result?.stages) ? (
+                  <div
+                    style={{
+                      marginTop: 28,
+                      paddingTop: 20,
+                      borderTop: '0.5px solid #EDE4D8',
+                    }}
+                  >
+                    {taskAnswerFeedback === undefined ? null : taskAnswerFeedback &&
+                      taskAnswerFeedback.verdict &&
+                      !feedbackEditMode ? (
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '6px 14px',
+                              borderRadius: 8,
+                              fontSize: 12,
+                              fontFamily: 'Georgia, serif',
+                              border: '0.5px solid',
+                              ...(taskAnswerFeedback.verdict === 'correct'
+                                ? {
+                                    background: '#EAF3DE',
+                                    borderColor: '#97C459',
+                                    color: '#3B6D11',
+                                  }
+                                : taskAnswerFeedback.verdict === 'partial'
+                                  ? {
+                                      background: '#FDF6EC',
+                                      borderColor: '#E8C87A',
+                                      color: '#854F0B',
+                                    }
+                                  : {
+                                      background: '#FCF0EE',
+                                      borderColor: '#F0997B',
+                                      color: '#993C1D',
+                                    }),
+                            }}
+                          >
+                            {taskAnswerFeedback.verdict === 'correct'
+                              ? '✓'
+                              : taskAnswerFeedback.verdict === 'partial'
+                                ? '~'
+                                : '✗'}{' '}
+                            You marked this{' '}
+                            {taskAnswerFeedback.verdict === 'partial'
+                              ? 'partially correct'
+                              : taskAnswerFeedback.verdict === 'correct'
+                                ? 'correct'
+                                : 'wrong'}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 11, color: '#A89070', marginTop: 8, marginBottom: 0 }}>
+                          Thanks — this improves future calibration
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFeedbackEditMode(true);
+                            setPendingVerdict(null);
+                            setPendingNote('');
+                          }}
+                          style={{
+                            border: 'none',
+                            background: 'none',
+                            padding: 0,
+                            marginTop: 6,
+                            fontSize: 11,
+                            color: '#C4956A',
+                            cursor: 'pointer',
+                            fontFamily: 'Georgia, serif',
+                            textDecoration: 'underline',
+                          }}
+                        >
+                          Change →
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        {!pendingVerdict ? (
+                          <>
+                            <p
+                              style={{
+                                fontSize: 12,
+                                fontStyle: 'italic',
+                                color: '#8C7355',
+                                marginBottom: 0,
+                              }}
+                            >
+                              Was this answer accurate?
+                            </p>
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 8,
+                                marginTop: 8,
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => setPendingVerdict('correct')}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  borderRadius: 8,
+                                  padding: '7px 16px',
+                                  fontSize: 12,
+                                  fontFamily: 'Georgia, serif',
+                                  border: '0.5px solid #97C459',
+                                  background: '#EAF3DE',
+                                  color: '#3B6D11',
+                                  cursor: 'pointer',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#C0DD97';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = '#EAF3DE';
+                                }}
+                              >
+                                <svg width={12} height={12} viewBox="0 0 24 24" fill="none" aria-hidden>
+                                  <path
+                                    d="M5 12l4 4L19 6"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                                Correct
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPendingVerdict('partial')}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  borderRadius: 8,
+                                  padding: '7px 16px',
+                                  fontSize: 12,
+                                  fontFamily: 'Georgia, serif',
+                                  border: '0.5px solid #E8C87A',
+                                  background: '#FDF6EC',
+                                  color: '#854F0B',
+                                  cursor: 'pointer',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#FAC775';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = '#FDF6EC';
+                                }}
+                              >
+                                <svg width={12} height={12} viewBox="0 0 24 24" fill="none" aria-hidden>
+                                  <path
+                                    d="M4 14c2-4 6-6 10-4s4 6 2 8"
+                                    stroke="currentColor"
+                                    strokeWidth={1.8}
+                                    strokeLinecap="round"
+                                    fill="none"
+                                  />
+                                </svg>
+                                Partially
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPendingVerdict('wrong')}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  borderRadius: 8,
+                                  padding: '7px 16px',
+                                  fontSize: 12,
+                                  fontFamily: 'Georgia, serif',
+                                  border: '0.5px solid #F0997B',
+                                  background: '#FCF0EE',
+                                  color: '#993C1D',
+                                  cursor: 'pointer',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#F5C4B3';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = '#FCF0EE';
+                                }}
+                              >
+                                <svg width={12} height={12} viewBox="0 0 24 24" fill="none" aria-hidden>
+                                  <path
+                                    d="M6 6l12 12M18 6L6 18"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                  />
+                                </svg>
+                                Wrong
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="text"
+                              value={pendingNote}
+                              onChange={(e) => setPendingNote(e.target.value)}
+                              placeholder="What was wrong or missing? (optional)"
+                              style={{
+                                fontSize: 12,
+                                fontFamily: 'Georgia, serif',
+                                border: '0.5px solid #D4C4B0',
+                                borderRadius: 6,
+                                padding: '8px 12px',
+                                width: '100%',
+                                boxSizing: 'border-box',
+                                marginTop: 8,
+                                outline: 'none',
+                                background: '#fff',
+                              }}
+                              onFocus={(e) => {
+                                e.currentTarget.style.borderColor = '#C4956A';
+                              }}
+                              onBlur={(e) => {
+                                e.currentTarget.style.borderColor = '#D4C4B0';
+                              }}
+                            />
+                            <button
+                              type="button"
+                              disabled={answerFeedbackSubmitBusy}
+                              onClick={() => {
+                                if (!result.task_id || !pendingVerdict) return;
+                                setAnswerFeedbackSubmitBusy(true);
+                                void postAgentTaskAnswerFeedback(result.task_id, {
+                                  verdict: pendingVerdict,
+                                  note: pendingNote.trim() || null,
+                                })
+                                  .then(async () => {
+                                    setTaskAnswerFeedback({
+                                      verdict: pendingVerdict,
+                                      note: pendingNote.trim() || null,
+                                      created_at: new Date().toISOString(),
+                                    });
+                                    setPendingVerdict(null);
+                                    setPendingNote('');
+                                    setFeedbackEditMode(false);
+                                    await refreshUser();
+                                  })
+                                  .catch(() => {})
+                                  .finally(() => setAnswerFeedbackSubmitBusy(false));
+                              }}
+                              style={{
+                                marginTop: 10,
+                                padding: '8px 16px',
+                                borderRadius: 8,
+                                border: 'none',
+                                background: '#C4956A',
+                                color: '#FDFAF6',
+                                fontSize: 12,
+                                fontFamily: 'Georgia, serif',
+                                cursor: answerFeedbackSubmitBusy ? 'default' : 'pointer',
+                                opacity: answerFeedbackSubmitBusy ? 0.7 : 1,
+                              }}
+                            >
+                              Submit feedback
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPendingVerdict(null);
+                                setPendingNote('');
+                              }}
+                              style={{
+                                marginLeft: 10,
+                                marginTop: 10,
+                                border: 'none',
+                                background: 'none',
+                                color: '#8C7355',
+                                fontSize: 11,
+                                cursor: 'pointer',
+                                fontFamily: 'Georgia, serif',
+                              }}
+                            >
+                              Back
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
 
                 {(result?.refinement_count ?? 0) >= 10 &&
                   (result?.final_answer || result?.stages) &&

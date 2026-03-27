@@ -123,6 +123,13 @@ export interface SessionData {
 
 export type UserTier = 'GUEST' | 'FREE' | 'PLUS' | 'PRO';
 
+export interface FeedbackCalibration {
+  adjustment: number;
+  reliable: boolean;
+  total_feedback: number;
+  wrong_rate: number;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -132,6 +139,7 @@ export interface User {
   name?: string;
   expertise_level?: string;
   expertise_domain?: string;
+  feedback_calibration?: FeedbackCalibration;
 }
 
 export interface TierFeatures {

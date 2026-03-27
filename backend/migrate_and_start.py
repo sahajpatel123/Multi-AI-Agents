@@ -111,6 +111,40 @@ def main():
                 except Exception:
                     pass
 
+            pg_answer_feedback = """
+                CREATE TABLE IF NOT EXISTS answer_feedback (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    task_id VARCHAR(64) NOT NULL REFERENCES agent_tasks(task_id) ON DELETE CASCADE,
+                    verdict VARCHAR NOT NULL,
+                    note TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    CONSTRAINT uq_answer_feedback_user_task UNIQUE (user_id, task_id)
+                )
+            """
+            sqlite_answer_feedback = """
+                CREATE TABLE IF NOT EXISTS answer_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    task_id VARCHAR(64) NOT NULL REFERENCES agent_tasks(task_id) ON DELETE CASCADE,
+                    verdict VARCHAR NOT NULL,
+                    note TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (user_id, task_id)
+                )
+            """
+            af_sql = sqlite_answer_feedback if dialect == "sqlite" else pg_answer_feedback
+            try:
+                conn.execute(text(af_sql))
+                conn.commit()
+                print("==> Migrated: answer_feedback table", flush=True)
+            except Exception as e:
+                print(f"==> Warning (answer_feedback): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
         print("==> All migrations complete.", flush=True)
 
     except Exception as e:

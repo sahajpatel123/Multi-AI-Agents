@@ -5,8 +5,10 @@ import {
   cancelSubscription,
   getCalibrationStats,
   getSubscriptionStatus,
+  getUserAnswerFeedbackStats,
   getUserUsage,
   patchUserProfile,
+  type AnswerFeedbackStats,
   type SubscriptionStatusResponse,
   type UserUsageResponse,
 } from '../api';
@@ -208,6 +210,9 @@ export function ProfileModal() {
   } | null>(null);
   const [calLoading, setCalLoading] = useState(false);
   const [calErr, setCalErr] = useState<string | null>(null);
+  const [fbAcc, setFbAcc] = useState<AnswerFeedbackStats | null>(null);
+  const [fbAccLoading, setFbAccLoading] = useState(false);
+  const [fbAccErr, setFbAccErr] = useState<string | null>(null);
 
   const [sub, setSub] = useState<SubscriptionStatusResponse | null>(null);
   const [subLoading, setSubLoading] = useState(false);
@@ -271,6 +276,29 @@ export function ProfileModal() {
       })
       .finally(() => {
         if (!cancelled) setCalLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
+    setFbAccLoading(true);
+    setFbAccErr(null);
+    void getUserAnswerFeedbackStats()
+      .then((s) => {
+        if (!cancelled) setFbAcc(s);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFbAccErr('Could not load feedback accuracy');
+          setFbAcc(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setFbAccLoading(false);
       });
     return () => {
       cancelled = true;
@@ -1003,6 +1031,65 @@ export function ProfileModal() {
                 ) : (
                   <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>
                     Rate your confidence on completed Agent answers to build your calibration profile.
+                  </p>
+                )}
+                <div
+                  style={{
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    color: '#A89070',
+                    letterSpacing: '0.10em',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  Feedback accuracy
+                </div>
+                {fbAccLoading ? (
+                  <div style={{ padding: 16, display: 'flex', justifyContent: 'center' }}>
+                    <MicroLoader />
+                  </div>
+                ) : fbAccErr ? (
+                  <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>{fbAccErr}</p>
+                ) : fbAcc && fbAcc.total > 0 ? (
+                  <div
+                    style={{
+                      background: '#F0E8DC',
+                      borderRadius: 10,
+                      padding: '16px 18px',
+                      border: '0.5px solid #E0D5C5',
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: 10,
+                        borderRadius: 5,
+                        overflow: 'hidden',
+                        display: 'flex',
+                        background: '#EDE4D8',
+                      }}
+                    >
+                      {fbAcc.correct_pct > 0 ? (
+                        <div style={{ width: `${fbAcc.correct_pct}%`, background: '#639922' }} />
+                      ) : null}
+                      {fbAcc.partial_pct > 0 ? (
+                        <div style={{ width: `${fbAcc.partial_pct}%`, background: '#BA7517' }} />
+                      ) : null}
+                      {fbAcc.wrong_pct > 0 ? (
+                        <div style={{ width: `${fbAcc.wrong_pct}%`, background: '#C0392B' }} />
+                      ) : null}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 11 }}>
+                      <span style={{ color: '#639922' }}>Correct {fbAcc.correct_pct}%</span>
+                      <span style={{ color: '#BA7517' }}>Partial {fbAcc.partial_pct}%</span>
+                      <span style={{ color: '#C0392B' }}>Wrong {fbAcc.wrong_pct}%</span>
+                    </div>
+                    <p style={{ fontSize: 11, color: '#A89070', marginTop: 10, marginBottom: 0 }}>
+                      Based on {fbAcc.total} rated answer{fbAcc.total === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>
+                    Rate completed Agent answers as correct, partial, or wrong to see your accuracy mix here.
                   </p>
                 )}
               </>

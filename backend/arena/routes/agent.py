@@ -18,8 +18,10 @@ from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_b
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 from arena.core.tier_config import UserTier, has_feature, normalize_tier
+from arena.core.feedback_calibrator import get_answer_feedback_distribution
+from arena.core.templates import get_templates_grouped_by_category
 from arena.database import SessionLocal, get_db
-from arena.db_models import AgentContradiction, AgentTask as AgentTaskRow
+from arena.db_models import AgentContradiction, AgentTask as AgentTaskRow, AnswerFeedback
 from arena.models.schemas import UserResponse
 
 logger = logging.getLogger(__name__)
@@ -202,6 +204,11 @@ class AgentRebuttalRequest(BaseModel):
 class AgentFeedbackRequest(BaseModel):
     task_id: str
     feedback: str
+    note: Optional[str] = None
+
+
+class AnswerAccuracyFeedbackBody(BaseModel):
+    verdict: str
     note: Optional[str] = None
 
 
@@ -559,6 +566,83 @@ async def run_bridge_pipeline_background(task_id: str, user_id: int) -> None:
         return
 
     await _save_completed_task_to_memory(bb, user_id, bb.task)
+
+
+@router.get("/templates")
+async def list_agent_templates() -> dict:
+    """Public list of task prompt templates (grouped by category)."""
+    return get_templates_grouped_by_category()
+
+
+@router.get("/tasks/{task_id}/feedback")
+async def get_task_answer_feedback(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    tid = task_id.strip()
+    owned = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not owned:
+        raise HTTPException(status_code=404, detail="Task not found")
+    fb = (
+        db.query(AnswerFeedback)
+        .filter(AnswerFeedback.user_id == user.id, AnswerFeedback.task_id == tid)
+        .first()
+    )
+    if not fb:
+        return None
+    return {
+        "verdict": fb.verdict,
+        "note": fb.note,
+        "created_at": fb.created_at.isoformat() if fb.created_at else None,
+    }
+
+
+@router.post("/tasks/{task_id}/feedback")
+async def post_task_answer_feedback(
+    task_id: str,
+    body: AnswerAccuracyFeedbackBody,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    _ensure_agent_access(user)
+    tid = task_id.strip()
+    owned = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not owned:
+        raise HTTPException(status_code=404, detail="Task not found")
+    v = body.verdict.strip().lower()
+    if v not in ("correct", "partial", "wrong"):
+        raise HTTPException(status_code=400, detail="Invalid verdict")
+    note_val = (body.note or "").strip() or None
+    existing = (
+        db.query(AnswerFeedback)
+        .filter(AnswerFeedback.user_id == user.id, AnswerFeedback.task_id == tid)
+        .first()
+    )
+    if existing:
+        existing.verdict = v
+        existing.note = note_val
+    else:
+        db.add(
+            AnswerFeedback(
+                user_id=user.id,
+                task_id=tid,
+                verdict=v,
+                note=note_val,
+            )
+        )
+    db.commit()
+    stats = get_answer_feedback_distribution(user.id, db)
+    return {"success": True, "feedback_stats": stats}
 
 
 @router.post("/run")

@@ -656,6 +656,81 @@ export async function healthCheck(): Promise<boolean> {
 // Agent Mode (7-stage pipeline)
 // ──────────────────────────────────────────────────────────────
 
+export type AgentTaskTemplate = {
+  id: string;
+  category: string;
+  title: string;
+  icon: string;
+  description: string;
+  prompt_template: string;
+  slots: string[];
+  default_expertise: string;
+  example: string;
+};
+
+export type AgentTemplatesResponse = {
+  categories: Record<string, AgentTaskTemplate[]>;
+};
+
+export async function getAgentTemplates(): Promise<AgentTemplatesResponse> {
+  const response = await apiFetch(`${API_BASE}/agent/templates`);
+  const data = await parseJsonSafely<AgentTemplatesResponse & { detail?: string }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Failed to load templates'), response.status, data);
+  }
+  if (!data?.categories) throw new Error('Invalid templates response');
+  return data;
+}
+
+export type TaskAnswerFeedback = {
+  verdict: string;
+  note: string | null;
+  created_at?: string | null;
+};
+
+export async function getAgentTaskAnswerFeedback(taskId: string): Promise<TaskAnswerFeedback | null> {
+  const response = await apiFetch(`${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/feedback`);
+  const data = await parseJsonSafely<TaskAnswerFeedback | null | { detail?: string }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data as object, 'Failed to load feedback'), response.status, data);
+  }
+  return (data as TaskAnswerFeedback | null) ?? null;
+}
+
+export type AnswerFeedbackStats = {
+  total: number;
+  correct_pct: number;
+  partial_pct: number;
+  wrong_pct: number;
+};
+
+export async function postAgentTaskAnswerFeedback(
+  taskId: string,
+  body: { verdict: string; note?: string | null },
+): Promise<{ success: boolean; feedback_stats: AnswerFeedbackStats }> {
+  const response = await apiFetch(`${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ verdict: body.verdict, note: body.note ?? null }),
+  });
+  const data = await parseJsonSafely<
+    { success?: boolean; feedback_stats?: AnswerFeedbackStats; detail?: string } | null
+  >(response);
+  if (!data || !response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Failed to submit feedback'), response.status, data);
+  }
+  return { success: !!data.success, feedback_stats: data.feedback_stats! };
+}
+
+export async function getUserAnswerFeedbackStats(): Promise<AnswerFeedbackStats> {
+  const response = await apiFetch(`${API_BASE}/user/answer-feedback-stats`);
+  const data = await parseJsonSafely<AnswerFeedbackStats & { detail?: string }>(response);
+  if (!response.ok || !data) {
+    throw new ApiError(getErrorMessage(data, 'Failed to load feedback stats'), response.status, data);
+  }
+  return data;
+}
+
 export type AgentStartResponse = {
   task_id: string;
   status: string;

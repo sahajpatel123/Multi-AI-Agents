@@ -80,6 +80,11 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    answer_feedbacks = relationship(
+        "AnswerFeedback",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     subscriptions = relationship(
         "Subscription",
         back_populates="user",
@@ -389,6 +394,11 @@ class AgentTask(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="agent_tasks")
+    answer_feedbacks = relationship(
+        "AnswerFeedback",
+        back_populates="agent_task",
+        foreign_keys="AnswerFeedback.task_id",
+    )
 
     def to_dict_summary(self) -> dict:
         """Compact shape for cross-task LLM prompts (pipeline insights / contradictions)."""
@@ -450,6 +460,34 @@ class ConfidenceRating(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="confidence_ratings")
+
+
+class AnswerFeedback(Base):
+    """User verdict on answer accuracy (correct / partial / wrong) per task."""
+
+    __tablename__ = "answer_feedback"
+    __table_args__ = (
+        UniqueConstraint("user_id", "task_id", name="uq_answer_feedback_user_task"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    task_id = Column(
+        String(64),
+        ForeignKey("agent_tasks.task_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    verdict = Column(String(32), nullable=False)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="answer_feedbacks")
+    agent_task = relationship(
+        "AgentTask",
+        back_populates="answer_feedbacks",
+        foreign_keys=[task_id],
+    )
 
 
 class AgentContradiction(Base):

@@ -15,7 +15,8 @@ from arena.config import get_settings
 from arena.core.tier_config import normalize_tier
 from arena.database import get_db
 from arena.db_models import User, UserTier
-from arena.models.schemas import UserResponse
+from arena.core.feedback_calibrator import get_feedback_calibration
+from arena.models.schemas import FeedbackCalibrationInfo, UserResponse
 from arena.core.token_blacklist import token_blacklist
 
 ACCESS_TOKEN_TYPE = "access"
@@ -117,9 +118,14 @@ def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
     return db.query(User).filter(User.id == user_id).first()
 
 
-def orm_user_to_response(user: User) -> UserResponse:
+def orm_user_to_response(user: User, db: Optional[Session] = None) -> UserResponse:
     """Build UserResponse from SQLAlchemy User (avoid model_validate on ORM quirks / NULLs)."""
     tier_raw = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
+    if db is not None:
+        cal_raw = get_feedback_calibration(user.id, db)
+        feedback_calibration = FeedbackCalibrationInfo(**cal_raw)
+    else:
+        feedback_calibration = FeedbackCalibrationInfo()
     return UserResponse(
         id=user.id,
         email=user.email,
@@ -129,6 +135,7 @@ def orm_user_to_response(user: User) -> UserResponse:
         name=getattr(user, "name", None) or "",
         expertise_level=getattr(user, "expertise_level", None) or "curious",
         expertise_domain=getattr(user, "expertise_domain", None) or "",
+        feedback_calibration=feedback_calibration,
     )
 
 
@@ -195,7 +202,7 @@ def get_current_user_optional(
     user = get_user_by_id(db, int(user_id))
     if not user:
         return None
-    return orm_user_to_response(user)
+    return orm_user_to_response(user, db)
 
 
 def get_current_user_required(
