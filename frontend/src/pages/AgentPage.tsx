@@ -1352,11 +1352,10 @@ export function AgentPage() {
   return (
     <div
       style={{
-        height: isMobile ? 'auto' : '100vh',
-        background: '#FAF7F4',
         display: 'flex',
+        height: '100vh',
         overflow: 'hidden',
-        position: 'relative',
+        background: '#FAF7F4',
       }}
       data-expertise-level={expertiseLevel}
       data-expertise-domain={expertiseDomain}
@@ -1439,27 +1438,37 @@ export function AgentPage() {
           color: #C0392B;
         }
       `}</style>
-      {!isMobile ? (
+      <div
+        style={{
+          width: sidebarOpen ? 224 : 0,
+          minWidth: sidebarOpen ? 224 : 0,
+          overflow: 'hidden',
+          transition:
+            'width 0.32s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.32s cubic-bezier(0.16, 1, 0.3, 1)',
+          flexShrink: 0,
+        }}
+      >
         <aside
           style={{
-            position: 'fixed',
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 260,
-            maxWidth: '88vw',
+            width: 224,
+            height: '100%',
+            minHeight: '100%',
             background: '#F5F2EF',
             borderRight: '0.5px solid #E0D8D0',
-            zIndex: 50,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
-            transition: 'transform 500ms cubic-bezier(0.22, 1, 0.36, 1)',
-            pointerEvents: sidebarOpen ? 'auto' : 'none',
           }}
         >
-          <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div
+            style={{
+              padding: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: isMobile ? 'space-between' : 'flex-start',
+              gap: 8,
+            }}
+          >
             <button
               type="button"
               onClick={() => navigate('/')}
@@ -1467,6 +1476,11 @@ export function AgentPage() {
             >
               ← Home
             </button>
+            {isMobile ? (
+              <button type="button" onClick={closeSidebar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6460' }}>
+                <X style={{ width: 16, height: 16 }} />
+              </button>
+            ) : null}
           </div>
           <div style={{ height: '0.5px', background: '#E8E2DA', margin: '0 16px 12px' }} />
           <div style={{ padding: '0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1506,92 +1520,24 @@ export function AgentPage() {
           </div>
           <AgentProfileSidebarRow user={user} />
         </aside>
-      ) : (
-        <>
-          {isMobile && sidebarOpen && (
-            <div
-              onClick={closeSidebar}
-              style={{ position: 'fixed', inset: 0, background: 'rgba(26,23,20,0.28)', zIndex: 65 }}
-            />
-          )}
-          <aside
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              bottom: 0,
-              width: 260,
-              maxWidth: '85vw',
-              background: '#F5F2EF',
-              borderRight: '0.5px solid #E0D8D0',
-              zIndex: 70,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
-              transition: 'transform 500ms cubic-bezier(0.22, 1, 0.36, 1)',
-            }}
-          >
-            <div style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <button type="button" onClick={() => navigate('/')} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#6B6460', cursor: 'pointer' }}>
-                ← Home
-              </button>
-              <button type="button" onClick={closeSidebar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6460' }}>
-                <X style={{ width: 16, height: 16 }} />
-              </button>
-            </div>
-            <div style={{ height: '0.5px', background: '#E8E2DA', margin: '0 16px 12px' }} />
-            <button
-              type="button"
-              onClick={resetRun}
-              style={{ margin: '0 16px 12px', padding: '9px 16px', background: '#1A1714', color: '#FAF7F4', borderRadius: 10, border: 'none' }}
-            >
-              New task
-            </button>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 16px' }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A9A2', padding: '12px 4px 6px', marginBottom: 4 }}>
-                History
-              </div>
-              {historyLoading ? (
-                <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>Loading…</div>
-              ) : taskHistory.length === 0 ? (
-                <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>No tasks yet</div>
-              ) : (
-                <div className="space-y-1">{taskHistory.map((item) => renderAgentHistoryRow(item))}</div>
-              )}
-            </div>
-            <AgentProfileSidebarRow user={user} />
-          </aside>
-        </>
-      )}
+      </div>
 
       <div
         style={{
           flex: 1,
           minWidth: 0,
-          marginLeft: !isMobile ? (sidebarOpen ? 260 : 0) : 0,
-          transition: 'margin-left 500ms cubic-bezier(0.22, 1, 0.36, 1)',
           display: 'flex',
           flexDirection: 'column',
-          height: isMobile ? 'auto' : '100vh',
+          overflow: 'hidden',
+          minHeight: 0,
         }}
       >
-        <div
-          style={{
-            position: 'relative',
-            flex: 1,
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: 0,
-          }}
-        >
           <header
             style={{
               height: '52px',
               position: 'sticky',
               top: 0,
-              zIndex: 5,
+              zIndex: 50,
               backdropFilter: 'blur(12px)',
               background: 'rgba(250,247,244,0.9)',
               borderBottom: '0.5px solid #E0D8D0',
@@ -1649,9 +1595,10 @@ export function AgentPage() {
       <main
         style={{
           flex: 1,
+          minHeight: 0,
           width: '100%',
           boxSizing: 'border-box',
-          overflowY: isMobile ? 'auto' : 'auto',
+          overflowY: 'auto',
           padding: isMobile ? '1rem' : '1.5rem',
         }}
       >
@@ -4156,23 +4103,6 @@ export function AgentPage() {
           </>
         )}
       </main>
-          {sidebarOpen && (
-            <div
-              onClick={() => setSidebarOpen(false)}
-              role="presentation"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background: 'rgba(245, 240, 232, 0.6)',
-                backdropFilter: 'blur(3px)',
-                WebkitBackdropFilter: 'blur(3px)',
-                zIndex: 10,
-                cursor: 'pointer',
-                transition: 'opacity 0.3s ease',
-              }}
-            />
-          )}
-        </div>
       </div>
     </div>
   );
