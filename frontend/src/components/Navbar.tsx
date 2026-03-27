@@ -68,6 +68,34 @@ export function Navbar() {
 
   return (
     <>
+      <style>{`
+        nav.navbar-shell {
+          position: sticky !important;
+          top: 0 !important;
+          z-index: 100 !important;
+          width: 100%;
+          background: rgba(245, 240, 232, 0.72) !important;
+          backdrop-filter: blur(14px) !important;
+          -webkit-backdrop-filter: blur(14px) !important;
+          border-bottom: none !important;
+          box-shadow: none !important;
+          transition: background 200ms ease;
+        }
+        nav.navbar-shell.navbar-shell--scrolled {
+          background: rgba(245, 240, 232, 0.72) !important;
+          box-shadow: none !important;
+          border-bottom: none !important;
+        }
+        @media (max-width: 768px) {
+          nav.navbar-shell {
+            background: rgba(245, 240, 232, 0.72) !important;
+            backdrop-filter: blur(14px) !important;
+            -webkit-backdrop-filter: blur(14px) !important;
+            border-bottom: none !important;
+            box-shadow: none !important;
+          }
+        }
+      `}</style>
       <nav className={shellClass}>
         <div className="navbar-inner-container">
           <div className="navbar-row">
