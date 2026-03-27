@@ -64,6 +64,7 @@ class Blackboard:
     final_score: int = 0
     sources: list = field(default_factory=list)
     flags: list = field(default_factory=list)
+    caveats: list = field(default_factory=list)
     contradictions: list = field(default_factory=list)
     source_integrity: dict = field(default_factory=dict)
     intelligence_score: dict = field(default_factory=dict)
@@ -156,6 +157,7 @@ class Blackboard:
             "final_score": self.final_score,
             "sources": self.sources,
             "flags": self.flags,
+            "caveats": self.caveats,
             "source_integrity": self.source_integrity,
             "contradictions": self.contradictions,
             "intelligence_score": self.intelligence_score,

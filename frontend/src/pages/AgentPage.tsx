@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Ellipsis, Lock, Pencil, Trash2, X } from 'lucide-react';
+import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -129,6 +130,7 @@ type AgentResult = {
   final_confidence?: number;
   final_score?: number;
   flags?: string[];
+  caveats?: StructuredCaveat[];
   error?: string;
   source_integrity?: SourceIntegrityPayload;
   contradictions?: ContradictionItem[];
@@ -253,68 +255,93 @@ function splitPlainAnswerToSentences(text: string): AnswerSentenceView[] {
   });
 }
 
-type JudgeRemarkRow = { category: string; text: string; severity: 'hi' | 'md' | 'lo' };
+const CAVEAT_CATEGORY_KEYS = new Set([
+  'time-sensitive',
+  'methodological',
+  'theory-dependent',
+  'completeness',
+  'precision',
+  'scoring',
+  'aesthetic',
+]);
 
-function remarkSeverityForIndex(i: number, n: number): JudgeRemarkRow['severity'] {
-  if (n <= 1) return 'hi';
-  if (n === 2) return i === 0 ? 'hi' : 'lo';
-  if (i === 0) return 'hi';
-  if (i >= n - 2) return 'lo';
-  return 'md';
+function normalizeStructuredCaveat(raw: Record<string, unknown>): StructuredCaveat | null {
+  const keyword = typeof raw.keyword === 'string' ? raw.keyword.trim() : '';
+  const description = typeof raw.description === 'string' ? raw.description.trim() : '';
+  if (!keyword && !description) return null;
+  let cat = typeof raw.category === 'string' ? raw.category.toLowerCase().trim().replace(/\s+/g, '-') : 'scoring';
+  if (!CAVEAT_CATEGORY_KEYS.has(cat)) cat = 'scoring';
+  const sev = typeof raw.severity === 'string' ? raw.severity.toLowerCase() : 'medium';
+  const exp = raw.expires;
+  const expires =
+    cat === 'time-sensitive' && exp != null && String(exp).trim() !== '' && String(exp).toLowerCase() !== 'null'
+      ? String(exp).trim()
+      : null;
+  return {
+    category: cat,
+    keyword: keyword || description.slice(0, 60),
+    description: description || keyword,
+    severity: sev === 'high' || sev === 'low' || sev === 'medium' ? sev : 'medium',
+    expires,
+  };
 }
 
-function buildJudgeRemarksFromResult(result: AgentResult | null, mergedFlagLines: string[]): JudgeRemarkRow[] {
+function getStructuredCaveats(result: AgentResult | null): StructuredCaveat[] {
   if (!result) return [];
-  const base: Array<{ category: string; text: string; severity?: JudgeRemarkRow['severity'] }> = [];
-  const jOut = result.stages?.judge?.output?.trim() || '';
-  if (jOut) {
-    try {
-      const parsed = JSON.parse(jOut) as unknown;
-      if (Array.isArray(parsed)) {
-        for (const item of parsed) {
-          const rec = item as Record<string, unknown>;
-          const text =
-            typeof rec.remark === 'string'
-              ? rec.remark
-              : typeof rec.text === 'string'
-                ? rec.text
-                : typeof rec.caveat === 'string'
-                  ? rec.caveat
-                  : '';
-          const cat =
-            typeof rec.category === 'string'
-              ? rec.category
-              : typeof rec.title === 'string'
-                ? rec.title
-                : 'Caveat';
-          const sevRaw = typeof rec.severity === 'string' ? rec.severity.toLowerCase() : '';
-          let severity: JudgeRemarkRow['severity'] | undefined;
-          if (sevRaw === 'high' || sevRaw === 'hi') severity = 'hi';
-          else if (sevRaw === 'medium' || sevRaw === 'md') severity = 'md';
-          else if (sevRaw === 'low' || sevRaw === 'lo') severity = 'lo';
-          if (text.trim()) base.push({ category: cat, text: text.trim(), severity });
-        }
+  const direct = result.caveats;
+  if (Array.isArray(direct) && direct.length > 0) {
+    const out: StructuredCaveat[] = [];
+    for (const item of direct) {
+      if (item && typeof item === 'object') {
+        const n = normalizeStructuredCaveat(item as Record<string, unknown>);
+        if (n) out.push(n);
       }
-    } catch {
-      /* fall through */
     }
-    if (base.length === 0) {
-      const lines = jOut
-        .split(/\n+/)
-        .map((l) => l.replace(/^[-*•]\s*/, '').trim())
-        .filter(Boolean);
-      for (const line of lines) base.push({ category: 'Caveat', text: line });
+    if (out.length > 0) return out;
+  }
+  const jOut = result.stages?.judge?.output?.trim() || '';
+  if (!jOut) return [];
+  try {
+    const parsed = JSON.parse(jOut) as { caveats?: unknown };
+    if (!Array.isArray(parsed.caveats)) return [];
+    const out: StructuredCaveat[] = [];
+    for (const item of parsed.caveats) {
+      if (item && typeof item === 'object') {
+        const n = normalizeStructuredCaveat(item as Record<string, unknown>);
+        if (n) out.push(n);
+      }
     }
+    return out;
+  } catch {
+    return [];
   }
-  for (const f of mergedFlagLines) {
-    base.push({ category: 'Note', text: f });
+}
+
+function sourceShortName(title: string): string {
+  const t = title.trim();
+  const dashSplit = t.split(/\s*[—–]\s*/);
+  if (dashSplit.length >= 2) {
+    const left = dashSplit[0].trim();
+    const right = dashSplit[dashSplit.length - 1].trim();
+    const beforeColon = left.split(':')[0].trim();
+    const authorWords = right.split(/\s+/).filter(Boolean);
+    const surname = authorWords.length > 0 ? authorWords[authorWords.length - 1]! : right;
+    if (beforeColon && surname) return `${surname} — ${beforeColon}`;
   }
-  const n = base.length;
-  return base.map((r, i) => ({
-    category: r.category,
-    text: r.text,
-    severity: r.severity ?? remarkSeverityForIndex(i, n),
-  }));
+  const words = t.split(/\s+/).filter((w) => {
+    const core = w.replace(/^[^\w]+|[^\w]+$/g, '');
+    return core.length > 0 && !/^(the|a|an)$/i.test(core);
+  });
+  const short = words.slice(0, 3).join(' ');
+  return short || t.slice(0, 48) || 'Source';
+}
+
+function sourceCategoryTagStyles(category: string): { bg: string; color: string; label: string } {
+  const c = category.toLowerCase();
+  if (c.includes('historical')) return { bg: '#EAF0F7', color: '#185FA5', label: 'Historical' };
+  if (c.includes('philosophy')) return { bg: '#EEEDFE', color: '#534AB7', label: 'Philosophy' };
+  if (c.includes('theory')) return { bg: '#EEEDFE', color: '#534AB7', label: 'Theory' };
+  return { bg: '#F0E8DC', color: '#8C7355', label: 'Primary' };
 }
 
 function intelligenceLabelFromTotal(score: number): string {
@@ -498,10 +525,8 @@ export function AgentPage() {
   const [panelIntelOpen, setPanelIntelOpen] = useState(false);
   const [panelAssumptionsOpen, setPanelAssumptionsOpen] = useState(false);
   const [panelDissentOpen, setPanelDissentOpen] = useState(false);
-  const [panelJudgeOpen, setPanelJudgeOpen] = useState(false);
-  const [panelSourcesOpen, setPanelSourcesOpen] = useState(false);
   const [steelmanInnerExpanded, setSteelmanInnerExpanded] = useState(false);
-  const [sourcesListExpanded, setSourcesListExpanded] = useState(false);
+  const [showAllSourcePills, setShowAllSourcePills] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
@@ -831,6 +856,7 @@ export function AgentPage() {
     setRebuttals({});
     setRebuttalLoadingFor(null);
     setIsChallengingAnswer(false);
+    setShowAllSourcePills(false);
     if (isMobile) setSidebarOpen(false);
   };
 
@@ -942,10 +968,8 @@ export function AgentPage() {
     setPanelIntelOpen(false);
     setPanelAssumptionsOpen(false);
     setPanelDissentOpen(false);
-    setPanelJudgeOpen(false);
-    setPanelSourcesOpen(false);
     setSteelmanInnerExpanded(false);
-    setSourcesListExpanded(false);
+    setShowAllSourcePills(false);
     setFollowUp('');
   }, [result?.task_id, result?.refinement_count]);
 
@@ -1061,26 +1085,9 @@ export function AgentPage() {
     [result, plainAnswerText, task],
   );
 
-  const mergedFlags = useMemo(() => {
-    const fromParsed = parsedAnswer?.flags?.filter((f) => typeof f === 'string' && f.trim()) || [];
-    const fromResult = result?.flags?.filter((f) => typeof f === 'string' && f.trim()) || [];
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const f of [...fromParsed, ...fromResult]) {
-      if (!seen.has(f)) {
-        seen.add(f);
-        out.push(f);
-      }
-    }
-    return out;
-  }, [parsedAnswer, result?.flags]);
-
   const sourceIntegrity = result?.source_integrity;
 
-  const judgeRemarks = useMemo(
-    () => buildJudgeRemarksFromResult(result, mergedFlags),
-    [result, mergedFlags],
-  );
+  const structuredCaveats = useMemo(() => getStructuredCaveats(result), [result]);
 
   type SourceCardRow = { title: string; meta: string; category: string };
 
@@ -2198,221 +2205,13 @@ export function AgentPage() {
                       </div>
                     )}
                   {answerSentences.length > 0 ? (
-                    <>
-                      <div className={`answer-text ${confActive ? 'conf-active' : ''}`}>
-                        {answerSentences.map((sentence, i) => (
-                          <span key={`${i}-${sentence.text.slice(0, 32)}`} className={sentence.confidence}>
-                            {sentence.text}{' '}
-                          </span>
-                        ))}
-                      </div>
-                      {confidenceLegendStats && (
-                        <div style={{ marginBottom: 28 }}>
-                          <button
-                            type="button"
-                            onClick={() => setConfActive((v) => !v)}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 7,
-                              padding: '6px 14px',
-                              border: '0.5px solid',
-                              borderColor: confActive ? AR.GOLD : '#D4C4B0',
-                              borderRadius: 20,
-                              background: confActive ? '#FAF3EA' : 'transparent',
-                              cursor: 'pointer',
-                              fontSize: 12,
-                              color: AR.TEXT_MUTED,
-                              fontFamily: 'Georgia, serif',
-                              letterSpacing: '0.04em',
-                              transition: 'all 0.2s',
-                            }}
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.5"
-                              strokeLinecap="round"
-                              aria-hidden
-                            >
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                              <circle cx="12" cy="12" r="3" />
-                            </svg>
-                            {confActive ? 'Hide confidence' : 'Check confidence'}
-                            <svg
-                              width="10"
-                              height="10"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              style={{
-                                transform: confActive ? 'rotate(180deg)' : 'rotate(0deg)',
-                                transition: 'transform 0.3s ease',
-                              }}
-                              aria-hidden
-                            >
-                              <polyline points="6 9 12 15 18 9" />
-                            </svg>
-                          </button>
-                          <div
-                            style={{
-                              maxHeight: confActive ? 200 : 0,
-                              opacity: confActive ? 1 : 0,
-                              overflow: 'hidden',
-                              transition:
-                                'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease',
-                              marginTop: confActive ? 10 : 0,
-                            }}
-                          >
-                            <div
-                              style={{
-                                background: AR.SURFACE_ALT,
-                                border: `0.5px solid ${AR.BORDER}`,
-                                borderRadius: 8,
-                                padding: '14px 16px',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  fontSize: 10,
-                                  letterSpacing: '0.16em',
-                                  textTransform: 'uppercase',
-                                  color: AR.GOLD_MUTED,
-                                  marginBottom: 10,
-                                }}
-                              >
-                                Confidence key
-                              </div>
-                              <div className="agent-confidence-legend-rows">
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                    marginBottom: 6,
-                                  }}
-                                >
-                                  <span
-                                    style={{
-                                      width: 9,
-                                      height: 9,
-                                      borderRadius: '50%',
-                                      background: '#639922',
-                                      flexShrink: 0,
-                                    }}
-                                  />
-                                  <span style={{ fontSize: 12, color: AR.TEXT_MID }}>Verified — 90%+</span>
-                                  <span
-                                    style={{
-                                      fontSize: 11,
-                                      color: AR.TEXT_FAINT,
-                                      fontFamily: 'ui-monospace, monospace',
-                                      marginLeft: 'auto',
-                                    }}
-                                  >
-                                    {confidenceLegendStats.verifiedPct}%
-                                  </span>
-                                </div>
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                    marginBottom: 6,
-                                  }}
-                                >
-                                  <span
-                                    style={{
-                                      width: 9,
-                                      height: 9,
-                                      borderRadius: '50%',
-                                      background: '#BA7517',
-                                      flexShrink: 0,
-                                    }}
-                                  />
-                                  <span style={{ fontSize: 12, color: AR.TEXT_MID }}>Supported — 70–89%</span>
-                                  <span
-                                    style={{
-                                      fontSize: 11,
-                                      color: AR.TEXT_FAINT,
-                                      fontFamily: 'ui-monospace, monospace',
-                                      marginLeft: 'auto',
-                                    }}
-                                  >
-                                    {confidenceLegendStats.supportedPct}%
-                                  </span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                  <span
-                                    style={{
-                                      width: 9,
-                                      height: 9,
-                                      borderRadius: '50%',
-                                      background: '#D85A30',
-                                      flexShrink: 0,
-                                    }}
-                                  />
-                                  <span style={{ fontSize: 12, color: AR.TEXT_MID }}>
-                                    Uncertain — {'<'}70%
-                                  </span>
-                                  <span
-                                    style={{
-                                      fontSize: 11,
-                                      color: AR.TEXT_FAINT,
-                                      fontFamily: 'ui-monospace, monospace',
-                                      marginLeft: 'auto',
-                                    }}
-                                  >
-                                    {confidenceLegendStats.uncertainPct}%
-                                  </span>
-                                </div>
-                              </div>
-                              <div
-                                style={{
-                                  marginTop: 10,
-                                  height: 4,
-                                  background: '#EDE4D8',
-                                  borderRadius: 2,
-                                  overflow: 'hidden',
-                                  display: 'flex',
-                                }}
-                              >
-                                {confidenceLegendStats.verifiedPct > 0 ? (
-                                  <div style={{ width: `${confidenceLegendStats.verifiedPct}%`, background: '#639922' }} />
-                                ) : null}
-                                {confidenceLegendStats.supportedPct > 0 ? (
-                                  <div style={{ width: `${confidenceLegendStats.supportedPct}%`, background: '#BA7517' }} />
-                                ) : null}
-                                {confidenceLegendStats.uncertainPct > 0 ? (
-                                  <div style={{ width: `${confidenceLegendStats.uncertainPct}%`, background: '#D85A30' }} />
-                                ) : null}
-                              </div>
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  marginTop: 5,
-                                }}
-                              >
-                                <span style={{ fontSize: 10, color: '#A89070' }}>
-                                  {confidenceLegendStats.verifiedPct}% verified
-                                </span>
-                                <span style={{ fontSize: 10, color: '#A89070' }}>
-                                  {confidenceLegendStats.supportedPct}% supported
-                                </span>
-                                <span style={{ fontSize: 10, color: '#A89070' }}>
-                                  {confidenceLegendStats.uncertainPct}% uncertain
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </>
+                    <div className={`answer-text ${confActive ? 'conf-active' : ''}`} style={{ marginBottom: 12 }}>
+                      {answerSentences.map((sentence, i) => (
+                        <span key={`${i}-${sentence.text.slice(0, 32)}`} className={sentence.confidence}>
+                          {sentence.text}{' '}
+                        </span>
+                      ))}
+                    </div>
                   ) : (
                     <div
                       style={{
@@ -2426,6 +2225,283 @@ export function AgentPage() {
                       }}
                     >
                       {plainAnswerText || result.final_answer || 'No final answer returned.'}
+                    </div>
+                  )}
+                  {(confidenceLegendStats || sourcesList.length > 0) && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 14,
+                        marginBottom: 16,
+                        alignItems: 'stretch',
+                      }}
+                    >
+                      <div
+                        style={{
+                          flex: '1 1 0',
+                          minWidth: 260,
+                          background: '#FAF7F2',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 10,
+                          padding: '14px 16px',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 10,
+                            letterSpacing: '0.16em',
+                            textTransform: 'uppercase',
+                            color: '#C4A882',
+                            marginBottom: 10,
+                          }}
+                        >
+                          Confidence
+                        </div>
+                        {confidenceLegendStats ? (
+                          <>
+                            <div className="agent-confidence-legend-rows">
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  marginBottom: 6,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    background: '#639922',
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <span style={{ fontSize: 12, color: AR.TEXT_MID }}>Verified</span>
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    color: AR.TEXT_FAINT,
+                                    fontFamily: 'ui-monospace, monospace',
+                                    marginLeft: 'auto',
+                                  }}
+                                >
+                                  {confidenceLegendStats.verifiedPct}%
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  marginBottom: 6,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    background: '#BA7517',
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <span style={{ fontSize: 12, color: AR.TEXT_MID }}>Supported</span>
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    color: AR.TEXT_FAINT,
+                                    fontFamily: 'ui-monospace, monospace',
+                                    marginLeft: 'auto',
+                                  }}
+                                >
+                                  {confidenceLegendStats.supportedPct}%
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                <span
+                                  style={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    background: '#D85A30',
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <span style={{ fontSize: 12, color: AR.TEXT_MID }}>Uncertain</span>
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    color: AR.TEXT_FAINT,
+                                    fontFamily: 'ui-monospace, monospace',
+                                    marginLeft: 'auto',
+                                  }}
+                                >
+                                  {confidenceLegendStats.uncertainPct}%
+                                </span>
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                marginTop: 8,
+                                height: 4,
+                                background: '#EDE4D8',
+                                borderRadius: 2,
+                                overflow: 'hidden',
+                                display: 'flex',
+                              }}
+                            >
+                              {confidenceLegendStats.verifiedPct > 0 ? (
+                                <div style={{ width: `${confidenceLegendStats.verifiedPct}%`, background: '#639922' }} />
+                              ) : null}
+                              {confidenceLegendStats.supportedPct > 0 ? (
+                                <div style={{ width: `${confidenceLegendStats.supportedPct}%`, background: '#BA7517' }} />
+                              ) : null}
+                              {confidenceLegendStats.uncertainPct > 0 ? (
+                                <div style={{ width: `${confidenceLegendStats.uncertainPct}%`, background: '#D85A30' }} />
+                              ) : null}
+                            </div>
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                marginTop: 5,
+                              }}
+                            >
+                              <span style={{ fontSize: 10, color: '#A89070' }}>Verified</span>
+                              <span style={{ fontSize: 10, color: '#A89070' }}>Supported</span>
+                              <span style={{ fontSize: 10, color: '#A89070' }}>Uncertain</span>
+                            </div>
+                            {answerSentences.length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setConfActive((v) => !v)}
+                                style={{
+                                  marginTop: 12,
+                                  fontSize: 11,
+                                  color: AR.GOLD,
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                  fontFamily: 'Georgia, serif',
+                                  textDecoration: 'underline',
+                                  textDecorationStyle: 'dotted',
+                                }}
+                              >
+                                {confActive ? 'Hide highlights in answer' : 'Highlight in answer'}
+                              </button>
+                            ) : null}
+                          </>
+                        ) : (
+                          <p style={{ fontSize: 12, color: AR.TEXT_MUTED, margin: 0, lineHeight: 1.5 }}>
+                            Per-sentence confidence appears when the answer uses structured sentences.
+                          </p>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          flex: '1 1 0',
+                          minWidth: 260,
+                          background: '#FAF7F2',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 10,
+                          padding: '14px 16px',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 10,
+                            letterSpacing: '0.16em',
+                            textTransform: 'uppercase',
+                            color: '#C4A882',
+                            marginBottom: 10,
+                          }}
+                        >
+                          Sources used · {sourcesList.length}
+                        </div>
+                        {sourcesList.length === 0 ? (
+                          <p style={{ fontSize: 12, color: AR.TEXT_MUTED, margin: 0 }}>No sources listed.</p>
+                        ) : (
+                          <>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              {(showAllSourcePills ? sourcesList : sourcesList.slice(0, 5)).map((src, si) => {
+                                const tag = sourceCategoryTagStyles(src.category);
+                                return (
+                                  <div
+                                    key={`${si}-${src.title.slice(0, 20)}`}
+                                    style={{
+                                      background: '#F0E8DC',
+                                      border: '0.5px solid #D4C4B0',
+                                      borderRadius: 12,
+                                      padding: '4px 10px',
+                                      display: 'flex',
+                                      gap: 5,
+                                      alignItems: 'center',
+                                      transition: 'border-color 0.15s ease',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.borderColor = '#C4956A';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.borderColor = '#D4C4B0';
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        fontSize: 9,
+                                        color: '#A89070',
+                                        fontFamily: 'ui-monospace, monospace',
+                                      }}
+                                    >
+                                      {String(si + 1).padStart(2, '0')}
+                                    </span>
+                                    <span style={{ fontSize: 11, color: '#4A3728' }}>
+                                      {sourceShortName(src.title)}
+                                    </span>
+                                    <span
+                                      style={{
+                                        fontSize: 9,
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.06em',
+                                        padding: '1px 5px',
+                                        borderRadius: 4,
+                                        background: tag.bg,
+                                        color: tag.color,
+                                      }}
+                                    >
+                                      {tag.label}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {sourcesList.length > 5 ? (
+                              <button
+                                type="button"
+                                onClick={() => setShowAllSourcePills((v) => !v)}
+                                style={{
+                                  marginTop: 8,
+                                  fontSize: 11,
+                                  color: '#C4956A',
+                                  cursor: 'pointer',
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  fontFamily: 'Georgia, serif',
+                                }}
+                              >
+                                {showAllSourcePills
+                                  ? 'Show less'
+                                  : `+${sourcesList.length - 5} more →`}
+                              </button>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
                   {steelmanData?.opposing_position ? (
@@ -3380,318 +3456,7 @@ export function AgentPage() {
                       </div>
                     </div>
                   ) : null}
-                  {judgeRemarks.length > 0 ? (
-                    <div
-                      style={{
-                        background: AR.SURFACE,
-                        border: `0.5px solid ${AR.BORDER}`,
-                        borderRadius: 10,
-                        overflow: 'hidden',
-                        marginBottom: 16,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setPanelJudgeOpen((o) => !o)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          width: '100%',
-                          padding: '11px 16px',
-                          cursor: 'pointer',
-                          background: AR.DARK,
-                          border: 'none',
-                          textAlign: 'left',
-                          font: 'inherit',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke={AR.GOLD}
-                            strokeWidth="1.5"
-                            opacity={0.8}
-                            aria-hidden
-                          >
-                            <path d="M12 3v18M3 12h18M5 5l14 14M19 5L5 19" />
-                          </svg>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              letterSpacing: '0.16em',
-                              textTransform: 'uppercase',
-                              color: AR.GOLD,
-                            }}
-                          >
-                            Analytical caveats
-                          </span>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            background: 'rgba(196,149,106,0.2)',
-                            color: AR.GOLD,
-                            padding: '2px 8px',
-                            borderRadius: 8,
-                            border: '0.5px solid rgba(196,149,106,0.3)',
-                          }}
-                        >
-                          {judgeRemarks.length} caveats
-                        </span>
-                      </button>
-                      <div
-                        style={{
-                          maxHeight: panelJudgeOpen ? 1000 : 0,
-                          overflow: 'hidden',
-                          transition: 'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                        }}
-                      >
-                        {judgeRemarks.map((row, ri) => {
-                          const bar =
-                            row.severity === 'hi'
-                              ? '#D85A30'
-                              : row.severity === 'md'
-                                ? '#BA7517'
-                                : AR.TEXT_MUTED;
-                          const catColor = bar;
-                          const isLast = ri === judgeRemarks.length - 1;
-                          return (
-                            <div
-                              key={ri}
-                              style={{
-                                display: 'flex',
-                                borderBottom: isLast ? 'none' : `0.5px solid ${AR.BORDER_INNER}`,
-                              }}
-                            >
-                              <div style={{ width: 3, flexShrink: 0, background: bar }} />
-                              <div style={{ padding: '9px 14px', flex: 1 }}>
-                                <div
-                                  style={{
-                                    fontSize: 9,
-                                    letterSpacing: '0.13em',
-                                    textTransform: 'uppercase',
-                                    marginBottom: 3,
-                                    color: catColor,
-                                  }}
-                                >
-                                  {row.category}
-                                </div>
-                                <div style={{ fontSize: 12, color: AR.TEXT_MID, lineHeight: 1.5 }}>
-                                  {row.text}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
-                  {sourcesList.length > 0 ? (
-                    <div
-                      style={{
-                        background: AR.SURFACE,
-                        border: `0.5px solid ${AR.BORDER}`,
-                        borderRadius: 10,
-                        overflow: 'hidden',
-                        marginBottom: 16,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setPanelSourcesOpen((o) => !o)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          width: '100%',
-                          padding: '11px 16px',
-                          cursor: 'pointer',
-                          transition: 'background 0.12s',
-                          background: 'transparent',
-                          border: 'none',
-                          textAlign: 'left',
-                          font: 'inherit',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#F5EFE6';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              letterSpacing: '0.16em',
-                              textTransform: 'uppercase',
-                              color: AR.TEXT_MUTED,
-                            }}
-                          >
-                            Sources used
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              padding: '2px 8px',
-                              borderRadius: 8,
-                              border: '0.5px solid #D4C4B0',
-                              color: AR.TEXT_MUTED,
-                              background: '#F0E8DC',
-                            }}
-                          >
-                            {sourcesList.length} sources
-                          </span>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: AR.GOLD_MUTED,
-                            transform: panelSourcesOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                            transition: 'transform 0.25s',
-                          }}
-                        >
-                          ▾
-                        </span>
-                      </button>
-                      <div
-                        style={{
-                          maxHeight: panelSourcesOpen ? 1000 : 0,
-                          overflow: 'hidden',
-                          transition: 'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                          borderTop: panelSourcesOpen ? `0.5px solid ${AR.BORDER_INNER}` : 'none',
-                        }}
-                      >
-                        <div style={{ padding: '14px 16px' }}>
-                          {(() => {
-                            const vis = sourcesListExpanded
-                              ? sourcesList
-                              : sourcesList.slice(0, 4);
-                            const tagStyle = (cat: string) => {
-                              const c = cat.toLowerCase();
-                              if (c.includes('historical'))
-                                return { bg: '#EAF0F7', color: '#185FA5' };
-                              if (c.includes('theory') || c.includes('philosophy'))
-                                return { bg: '#EEEDFE', color: '#534AB7' };
-                              return { bg: '#F0E8DC', color: AR.TEXT_MUTED };
-                            };
-                            return (
-                              <>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                                  {vis.map((src, si) => (
-                                    <div
-                                      key={`${si}-${src.title.slice(0, 24)}`}
-                                      style={{
-                                        background: AR.SURFACE_ALT,
-                                        border: `0.5px solid ${AR.BORDER}`,
-                                        borderRadius: 7,
-                                        padding: '10px 13px',
-                                        display: 'flex',
-                                        gap: 11,
-                                        alignItems: 'flex-start',
-                                        transition: 'border-color 0.15s',
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.borderColor = AR.GOLD;
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.borderColor = AR.BORDER;
-                                      }}
-                                    >
-                                      <div
-                                        style={{
-                                          width: 22,
-                                          height: 22,
-                                          borderRadius: '50%',
-                                          background: '#F0E8DC',
-                                          flexShrink: 0,
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          fontSize: 10,
-                                          color: AR.TEXT_MUTED,
-                                          marginTop: 1,
-                                          fontFamily: 'ui-monospace, monospace',
-                                        }}
-                                      >
-                                        {String(si + 1).padStart(2, '0')}
-                                      </div>
-                                      <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div>
-                                          <span
-                                            style={{
-                                              fontSize: 13,
-                                              color: AR.TEXT_PRIMARY,
-                                              verticalAlign: 'middle',
-                                            }}
-                                          >
-                                            {src.title}
-                                          </span>
-                                          <span
-                                            style={{
-                                              fontSize: 9,
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.10em',
-                                              padding: '1px 6px',
-                                              borderRadius: 8,
-                                              marginLeft: 7,
-                                              verticalAlign: 'middle',
-                                              ...tagStyle(src.category),
-                                            }}
-                                          >
-                                            {src.category}
-                                          </span>
-                                        </div>
-                                        {src.meta ? (
-                                          <div
-                                            style={{
-                                              fontSize: 11,
-                                              color: AR.TEXT_FAINT,
-                                              fontStyle: 'italic',
-                                              marginTop: 2,
-                                            }}
-                                          >
-                                            {src.meta}
-                                          </div>
-                                        ) : null}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                                {sourcesList.length > 4 ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setSourcesListExpanded((v) => !v)}
-                                    style={{
-                                      width: '100%',
-                                      fontSize: 11,
-                                      color: AR.GOLD,
-                                      textAlign: 'center',
-                                      padding: 8,
-                                      cursor: 'pointer',
-                                      background: 'none',
-                                      border: 'none',
-                                      borderTop: `0.5px solid ${AR.BORDER_INNER}`,
-                                      marginTop: 4,
-                                      letterSpacing: '0.06em',
-                                    }}
-                                  >
-                                    {sourcesListExpanded
-                                      ? 'Show less ↑'
-                                      : `Show ${sourcesList.length - 4} more sources ↓`}
-                                  </button>
-                                ) : null}
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
+                  <AnalyticalCaveatsSection caveats={structuredCaveats} />
                   <div
                     style={{
                       display: 'flex',

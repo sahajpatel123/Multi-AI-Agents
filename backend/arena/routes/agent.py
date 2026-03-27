@@ -90,6 +90,7 @@ def _persisted_agent_task_result_dict(row: AgentTaskRow, contradictions: list[di
         "final_score": int(row.final_score or 0),
         "sources": sources,
         "flags": [],
+        "caveats": [],
         "source_integrity": {},
         "contradictions": contradictions,
         "intelligence_score": {},
