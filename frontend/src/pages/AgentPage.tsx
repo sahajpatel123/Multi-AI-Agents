@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Ellipsis, Lock, Pencil, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
-import { ExpertiseSelector } from '../components/ExpertiseSelector';
 import { TemplatesModal } from '../components/TemplatesModal';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -22,7 +21,6 @@ import {
   getAgentTemplates,
   getCalibrationRatingForTask,
   getCalibrationStats,
-  getMe,
   markAgentLiveUpdatesRead,
   postAgentOrchestrate,
   postAgentWatchlist,
@@ -722,10 +720,10 @@ export function AgentPage() {
     setSidebarOpen(false);
   }, []);
 
-  const [expertiseLevel, setExpertiseLevel] = useState(() => localStorage.getItem('arena_expertise_level') || 'curious');
-  const [expertiseDomain, setExpertiseDomain] = useState(() => localStorage.getItem('arena_expertise_domain') || '');
-
   const urlTaskId = searchParams.get('task_id');
+
+  const expertiseLevelForRun = (user?.expertise_level || 'curious').toLowerCase();
+  const expertiseDomainForRun = user?.expertise_domain || '';
 
   const loadTaskHistory = useCallback(async () => {
     if (!canAgent || authLoading) return;
@@ -748,28 +746,6 @@ export function AgentPage() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-
-  useEffect(() => {
-    if (!user?.email || authLoading) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const me = await getMe();
-        if (cancelled || !me) return;
-        const lvl = (me.expertise_level || 'curious').toLowerCase();
-        const dom = me.expertise_domain || '';
-        localStorage.setItem('arena_expertise_level', lvl);
-        localStorage.setItem('arena_expertise_domain', dom);
-        setExpertiseLevel(lvl);
-        setExpertiseDomain(dom);
-      } catch {
-        // keep localStorage / initial state
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.email, authLoading]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -1064,8 +1040,8 @@ export function AgentPage() {
 
     try {
       const startData = await runAgentTask(t, {
-        expertise_level: expertiseLevel,
-        expertise_domain: expertiseDomain,
+        expertise_level: expertiseLevelForRun,
+        expertise_domain: expertiseDomainForRun,
       });
       if (!startData.task_id) {
         throw new Error('No task ID received');
@@ -1094,8 +1070,8 @@ export function AgentPage() {
     try {
       const { orchestration_id } = await postAgentOrchestrate({
         questions: qs,
-        expertise_level: expertiseLevel,
-        expertise_domain: expertiseDomain,
+        expertise_level: expertiseLevelForRun,
+        expertise_domain: expertiseDomainForRun,
       });
       setOrchActiveId(orchestration_id);
     } catch (e) {
@@ -1197,8 +1173,8 @@ export function AgentPage() {
       await postAgentWatchlist({
         question: q,
         interval_hours: watchlistPickHours,
-        expertise_level: expertiseLevel,
-        expertise_domain: expertiseDomain,
+        expertise_level: expertiseLevelForRun,
+        expertise_domain: expertiseDomainForRun,
       });
       setWatchlisted(true);
       setShowScheduler(false);
@@ -1405,13 +1381,6 @@ export function AgentPage() {
     const active = STAGES.find((stage) => stage.id === currentStage);
     return active?.label || 'Running';
   }, [currentStage]);
-
-  const handleExpertiseChange = useCallback((level: string, domain: string) => {
-    setExpertiseLevel(level);
-    setExpertiseDomain(domain);
-    localStorage.setItem('arena_expertise_level', level);
-    localStorage.setItem('arena_expertise_domain', domain);
-  }, []);
 
   useEffect(() => {
     setShowAllAssumptions(false);
@@ -1967,8 +1936,8 @@ export function AgentPage() {
         overflow: 'hidden',
         background: '#FAF7F4',
       }}
-      data-expertise-level={expertiseLevel}
-      data-expertise-domain={expertiseDomain}
+      data-expertise-level={expertiseLevelForRun}
+      data-expertise-domain={expertiseDomainForRun}
     >
       <style>{`
         @keyframes breathe {
@@ -2568,13 +2537,6 @@ export function AgentPage() {
                   }}
                 >
                   <div style={{ pointerEvents: 'auto', maxWidth: 640, margin: '0 auto' }}>
-                    <div style={{ marginBottom: 12 }}>
-                      <ExpertiseSelector
-                        level={expertiseLevel}
-                        domain={expertiseDomain}
-                        onChange={handleExpertiseChange}
-                      />
-                    </div>
                     <div
                       style={{
                         display: 'flex',
@@ -2721,8 +2683,6 @@ export function AgentPage() {
                         setTemplateSlots(next);
                         setSelectedTemplate(t);
                         setMultiMode(false);
-                        setExpertiseLevel((t.default_expertise || 'curious').toLowerCase());
-                        localStorage.setItem('arena_expertise_level', (t.default_expertise || 'curious').toLowerCase());
                       }}
                     />
                     <form
