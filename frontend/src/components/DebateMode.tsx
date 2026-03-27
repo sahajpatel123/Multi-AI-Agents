@@ -418,12 +418,13 @@ export function DebateMode({
       <div
         style={{
           height: '52px',
-          background: 'rgba(250,247,244,0.85)',
-          backdropFilter: 'blur(12px)',
-          borderBottom: '0.5px solid #E0D8D0',
+          background: 'rgba(245, 240, 232, 0.72)',
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
+          borderBottom: 'none',
           position: 'sticky',
           top: 0,
-          zIndex: 50,
+          zIndex: 100,
           display: 'grid',
           gridTemplateColumns: '1fr auto 1fr',
           alignItems: 'center',

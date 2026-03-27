@@ -316,17 +316,17 @@ canvas {
 .navbar-shell {
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 100;
   width: 100%;
-  background: rgba(250, 247, 244, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 0.5px solid #e0d8d0;
+  background: rgba(245, 240, 232, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: none;
   transition: background 200ms ease;
 }
 
 .navbar-shell.navbar-shell--scrolled {
-  background: rgba(250, 247, 244, 0.95);
+  background: rgba(245, 240, 232, 0.72);
 }
 
 .navbar-inner-container {
@@ -561,10 +561,11 @@ canvas {
 
   .navbar-shell {
     height: 52px !important;
-    background: rgba(250, 247, 244, 0.95) !important;
-    backdrop-filter: blur(12px) !important;
-    -webkit-backdrop-filter: blur(12px) !important;
-    border-bottom: 0.5px solid #e0d8d0 !important;
+    z-index: 100 !important;
+    background: rgba(245, 240, 232, 0.72) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border-bottom: none !important;
   }
 
   .navbar-inner {

@@ -1003,11 +1003,12 @@ function App() {
             style={{
               position: 'sticky',
               top: 0,
-              zIndex: 80,
+              zIndex: 100,
               height: '52px',
-              borderBottom: '0.5px solid #E0D8D0',
-              background: 'rgba(250,247,244,0.85)',
-              backdropFilter: 'blur(12px)',
+              borderBottom: 'none',
+              background: 'rgba(245, 240, 232, 0.72)',
+              backdropFilter: 'blur(14px)',
+              WebkitBackdropFilter: 'blur(14px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -1460,16 +1461,17 @@ function App() {
         <div style={{ minHeight: '100vh', background: '#FAF7F4' }}>
           <header style={{
             height: '52px',
-            borderBottom: '0.5px solid #E0D8D0',
-            background: 'rgba(250,247,244,0.85)',
-            backdropFilter: 'blur(12px)',
+            borderBottom: 'none',
+            background: 'rgba(245, 240, 232, 0.72)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'flex-end',
             padding: '0 24px',
             position: 'sticky',
             top: 0,
-            zIndex: 80,
+            zIndex: 100,
           }}>
             <UserMenu
               user={user}
