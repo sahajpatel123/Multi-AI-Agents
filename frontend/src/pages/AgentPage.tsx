@@ -2528,8 +2528,9 @@ export function AgentPage() {
                   style={{
                     position: 'fixed',
                     bottom: 0,
-                    left: 0,
+                    left: sidebarOpen ? 224 : 0,
                     right: 0,
+                    transition: 'left 0.32s cubic-bezier(0.16, 1, 0.3, 1)',
                     padding: '16px 24px 24px',
                     background: 'linear-gradient(to top, rgba(245,240,232,1) 60%, rgba(245,240,232,0) 100%)',
                     zIndex: 50,
