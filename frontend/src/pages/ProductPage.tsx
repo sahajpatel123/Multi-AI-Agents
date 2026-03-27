@@ -9,7 +9,7 @@ export function ProductPage() {
   const { isAuthenticated } = useAuth();
 
   return (
-    <div style={{ background: '#FAF7F4', minHeight: '100vh' }}>
+    <div style={{ background: '#F5F0E8', minHeight: '100vh' }}>
       <style>{`
         @keyframes breathe {
           0%, 100% { transform: scale(1); opacity: 1; }
@@ -42,40 +42,135 @@ export function ProductPage() {
           {/* Arena Mode Card */}
           <button
             onClick={() => navigate('/app')}
-            className="product-card"
+            className="product-parchment-card"
             style={{
-              background: '#1A1714',
-              borderRadius: '20px',
-              padding: '2.5rem',
+              background: '#EDE4D6',
+              border: '1px solid #C4B89A',
+              borderRadius: '14px',
+              padding: '32px',
               cursor: 'pointer',
-              transition: 'transform 200ms ease',
-              border: 'none',
+              transition: 'border-color 0.2s ease, transform 0.2s ease',
               textAlign: 'left',
               display: 'flex',
               flexDirection: 'column',
               minHeight: '420px',
             }}
-            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
-            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.borderColor = '#C4956A';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.borderColor = '#C4B89A';
+            }}
           >
-            <div style={{ background: '#C4956A', color: '#FAF7F4', fontSize: '11px', padding: '4px 12px', borderRadius: '999px', display: 'inline-block', alignSelf: 'flex-start', marginBottom: '1.5rem' }}>Active now</div>
+            <div
+              style={{
+                background: 'rgba(196, 149, 106, 0.15)',
+                color: '#8C7355',
+                border: '0.5px solid #D4C4B0',
+                fontSize: '11px',
+                letterSpacing: '0.10em',
+                textTransform: 'uppercase',
+                padding: '4px 12px',
+                borderRadius: '20px',
+                marginBottom: '20px',
+                display: 'inline-block',
+                alignSelf: 'flex-start',
+              }}
+            >
+              Active now
+            </div>
 
-            <div className="product-card-num" style={{ fontSize: '64px', fontWeight: 500, color: 'rgba(250,247,244,0.1)', lineHeight: 1, marginBottom: '.5rem' }}>01</div>
+            <div
+              style={{
+                color: '#2C1810',
+                fontSize: '52px',
+                fontWeight: 500,
+                fontFamily: 'Georgia, serif',
+                opacity: 0.12,
+                marginBottom: '14px',
+                lineHeight: 1,
+              }}
+            >
+              01
+            </div>
 
-            <h2 className="product-card-title" style={{ fontSize: '28px', fontWeight: 500, color: '#FAF7F4', letterSpacing: '-.02em', marginBottom: '.5rem' }}>Arena Mode</h2>
-            <p style={{ fontSize: '14px', color: 'rgba(250,247,244,0.5)', marginBottom: '1.5rem' }}>Four minds. One question.</p>
+            <h2
+              style={{
+                margin: 0,
+                color: '#2C1810',
+                fontSize: '26px',
+                fontWeight: 500,
+                fontFamily: 'Georgia, serif',
+                marginBottom: '6px',
+                lineHeight: 1.2,
+              }}
+            >
+              Arena Mode
+            </h2>
+            <p
+              style={{
+                color: '#8C7355',
+                fontSize: '15px',
+                fontFamily: 'Georgia, serif',
+                fontStyle: 'italic',
+                marginBottom: '20px',
+              }}
+            >
+              Four minds. One question.
+            </p>
 
             <div style={{ marginBottom: 'auto' }}>
               {['Four AI personas compete simultaneously', 'Scored and ranked automatically', 'Challenge, debate, or go 1-on-1', 'Winner surfaces with a reason why'].map((feature, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '.6rem' }}>
-                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#C4956A', color: '#FAF7F4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>✓</div>
-                  <span style={{ fontSize: '13px', color: 'rgba(250,247,244,0.75)' }}>{feature}</span>
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '9px' }}>
+                  <div
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      background: 'rgba(196, 149, 106, 0.15)',
+                      border: '0.5px solid rgba(196, 149, 106, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span style={{ fontSize: '10px', color: '#C4956A', lineHeight: 1 }}>✓</span>
+                  </div>
+                  <span style={{ fontSize: '14px', color: '#4A3728' }}>{feature}</span>
                 </div>
               ))}
             </div>
 
-            <div style={{ borderTop: '0.5px solid rgba(250,247,244,0.1)', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
-              <div style={{ fontSize: '13px', color: '#C4956A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div
+              style={{
+                borderTop: '0.5px solid rgba(212, 196, 176, 0.6)',
+                marginTop: '1.5rem',
+                paddingTop: '22px',
+              }}
+            >
+              <div
+                style={{
+                  color: '#C4956A',
+                  fontSize: '14px',
+                  fontFamily: 'Georgia, serif',
+                  letterSpacing: '0.04em',
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  display: 'inline-block',
+                  transition: 'color 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.stopPropagation();
+                  e.currentTarget.style.color = '#8C7355';
+                }}
+                onMouseLeave={(e) => {
+                  e.stopPropagation();
+                  e.currentTarget.style.color = '#C4956A';
+                }}
+              >
                 Enter Arena →
               </div>
             </div>
@@ -92,44 +187,137 @@ export function ProductPage() {
               }
               navigate('/agent');
             }}
-            className="product-card"
+            className="product-parchment-card"
             style={{
-              background: '#1A1714',
-              borderRadius: '20px',
-              padding: '2.5rem',
+              background: '#EDE4D6',
+              border: '1px solid #C4B89A',
+              borderRadius: '14px',
+              padding: '32px',
               cursor: 'pointer',
-              transition: 'transform 200ms ease',
-              border: 'none',
+              transition: 'border-color 0.2s ease, transform 0.2s ease',
               textAlign: 'left',
               display: 'flex',
               flexDirection: 'column',
               minHeight: '420px',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-4px)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.borderColor = '#C4956A';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.borderColor = '#C4B89A';
             }}
           >
-            <div style={{ background: '#C4956A', color: '#FAF7F4', fontSize: '11px', padding: '4px 12px', borderRadius: '999px', display: 'inline-block', alignSelf: 'flex-start', marginBottom: '1.5rem' }}>Active now</div>
+            <div
+              style={{
+                background: 'rgba(196, 149, 106, 0.15)',
+                color: '#8C7355',
+                border: '0.5px solid #D4C4B0',
+                fontSize: '11px',
+                letterSpacing: '0.10em',
+                textTransform: 'uppercase',
+                padding: '4px 12px',
+                borderRadius: '20px',
+                marginBottom: '20px',
+                display: 'inline-block',
+                alignSelf: 'flex-start',
+              }}
+            >
+              Active now
+            </div>
 
-            <div className="product-card-num" style={{ fontSize: '64px', fontWeight: 500, color: 'rgba(250,247,244,0.1)', lineHeight: 1, marginBottom: '.5rem' }}>02</div>
+            <div
+              style={{
+                color: '#2C1810',
+                fontSize: '52px',
+                fontWeight: 500,
+                fontFamily: 'Georgia, serif',
+                opacity: 0.12,
+                marginBottom: '14px',
+                lineHeight: 1,
+              }}
+            >
+              02
+            </div>
 
-            <h2 className="product-card-title" style={{ fontSize: '28px', fontWeight: 500, color: '#FAF7F4', letterSpacing: '-.02em', marginBottom: '.5rem' }}>Agent Mode</h2>
-            <p style={{ fontSize: '14px', color: 'rgba(250,247,244,0.5)', marginBottom: '1.5rem' }}>Plan. Research. Solve. Verify.</p>
+            <h2
+              style={{
+                margin: 0,
+                color: '#2C1810',
+                fontSize: '26px',
+                fontWeight: 500,
+                fontFamily: 'Georgia, serif',
+                marginBottom: '6px',
+                lineHeight: 1.2,
+              }}
+            >
+              Agent Mode
+            </h2>
+            <p
+              style={{
+                color: '#8C7355',
+                fontSize: '15px',
+                fontFamily: 'Georgia, serif',
+                fontStyle: 'italic',
+                marginBottom: '20px',
+              }}
+            >
+              Plan. Research. Solve. Verify.
+            </p>
 
             <div style={{ marginBottom: 'auto' }}>
               {['7-stage intelligent pipeline', 'Planner → Researcher → Solver → Critic', 'Verifier checks every claim', 'Synthesizer builds the final answer'].map((feature, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '.6rem' }}>
-                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#C4956A', color: '#FAF7F4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>✓</div>
-                  <span style={{ fontSize: '13px', color: 'rgba(250,247,244,0.75)' }}>{feature}</span>
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '9px' }}>
+                  <div
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      background: 'rgba(196, 149, 106, 0.15)',
+                      border: '0.5px solid rgba(196, 149, 106, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span style={{ fontSize: '10px', color: '#C4956A', lineHeight: 1 }}>✓</span>
+                  </div>
+                  <span style={{ fontSize: '14px', color: '#4A3728' }}>{feature}</span>
                 </div>
               ))}
             </div>
 
-            <div style={{ borderTop: '0.5px solid rgba(250,247,244,0.1)', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
-              <div style={{ fontSize: '13px', color: '#C4956A', display: 'flex', alignItems: 'center', gap: '6px' }}>Enter Agent →</div>
+            <div
+              style={{
+                borderTop: '0.5px solid rgba(212, 196, 176, 0.6)',
+                marginTop: '1.5rem',
+                paddingTop: '22px',
+              }}
+            >
+              <div
+                style={{
+                  color: '#C4956A',
+                  fontSize: '14px',
+                  fontFamily: 'Georgia, serif',
+                  letterSpacing: '0.04em',
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  display: 'inline-block',
+                  transition: 'color 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.stopPropagation();
+                  e.currentTarget.style.color = '#8C7355';
+                }}
+                onMouseLeave={(e) => {
+                  e.stopPropagation();
+                  e.currentTarget.style.color = '#C4956A';
+                }}
+              >
+                Enter Agent →
+              </div>
             </div>
           </button>
         </div>
