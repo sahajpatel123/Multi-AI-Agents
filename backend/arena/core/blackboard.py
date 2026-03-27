@@ -66,6 +66,8 @@ class Blackboard:
     flags: list = field(default_factory=list)
     caveats: list = field(default_factory=list)
     contradictions: list = field(default_factory=list)
+    cross_task_contradictions: list = field(default_factory=list)
+    insight_report: Optional[dict] = None
     source_integrity: dict = field(default_factory=dict)
     intelligence_score: dict = field(default_factory=dict)
     assumptions: dict = field(default_factory=dict)
@@ -164,7 +166,8 @@ class Blackboard:
             "flags": self.flags,
             "caveats": self.caveats,
             "source_integrity": self.source_integrity,
-            "contradictions": self.contradictions,
+            "contradictions": self.cross_task_contradictions,
+            "memory_contradictions": self.contradictions,
             "intelligence_score": self.intelligence_score,
             "assumptions": self.assumptions,
             "memory_saved": self.memory_saved,
@@ -172,6 +175,7 @@ class Blackboard:
             "expertise_domain": self.expertise_domain,
             "expertise_modifier": self.expertise_modifier,
             "steelman": self.steelman,
+            "insight_report": self.insight_report,
             "conversation": self.conversation,
             "is_refinement": self.is_refinement,
             "parent_task_id": self.parent_task_id,

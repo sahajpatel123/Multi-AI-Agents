@@ -34,6 +34,30 @@ AGENT_HISTORY_RETENTION_DAYS: dict[UserTier, int] = {
 }
 
 
+def _json_column_value(value) -> list | dict | None:
+    """Normalize JSON columns (PostgreSQL returns objects; SQLite may return str)."""
+    if value is None:
+        return None
+    if isinstance(value, (list, dict)):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return None
+
+
+def _pipeline_contradictions_from_row(row: AgentTaskRow) -> list:
+    parsed = _json_column_value(row.contradictions)
+    return parsed if isinstance(parsed, list) else []
+
+
+def _insight_report_from_row(row: AgentTaskRow) -> dict | None:
+    parsed = _json_column_value(row.insight_report)
+    return parsed if isinstance(parsed, dict) else None
+
+
 def _load_task_contradictions(db: Session, task_id: str, user_id: int) -> list[dict]:
     rows = (
         db.query(AgentContradiction)
@@ -53,7 +77,9 @@ def _load_task_contradictions(db: Session, task_id: str, user_id: int) -> list[d
     ]
 
 
-def _persisted_agent_task_result_dict(row: AgentTaskRow, contradictions: list[dict]) -> dict:
+def _persisted_agent_task_result_dict(
+    row: AgentTaskRow, memory_contradictions: list[dict]
+) -> dict:
     """Shape aligned with Blackboard.to_dict() for clients that call GET /result."""
     sources: list = []
     if row.sources_used:
@@ -76,6 +102,8 @@ def _persisted_agent_task_result_dict(row: AgentTaskRow, contradictions: list[di
         "synthesizer",
         "judge",
     )
+    pipe_contra = _pipeline_contradictions_from_row(row)
+    insight = _insight_report_from_row(row)
     return {
         "task_id": row.task_id,
         "user_id": row.user_id,
@@ -92,7 +120,9 @@ def _persisted_agent_task_result_dict(row: AgentTaskRow, contradictions: list[di
         "flags": [],
         "caveats": [],
         "source_integrity": {},
-        "contradictions": contradictions,
+        "contradictions": pipe_contra,
+        "memory_contradictions": memory_contradictions,
+        "insight_report": insight,
         "intelligence_score": {},
         "assumptions": {},
         "memory_saved": True,
@@ -414,6 +444,8 @@ async def _save_completed_task_to_memory(
                 final_confidence=bb.final_confidence,
                 sources_used=sources,
                 stages_run=stages_run,
+                insight_report=bb.insight_report,
+                pipeline_contradictions=bb.cross_task_contradictions or None,
             )
 
             rows = (
@@ -794,7 +826,9 @@ async def get_saved_agent_task(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Task not found")
-    contradictions = _load_task_contradictions(db, task_id, user.id)
+    memory_contradictions = _load_task_contradictions(db, task_id, user.id)
+    pipe_contra = _pipeline_contradictions_from_row(row)
+    insight_saved = _insight_report_from_row(row)
     return JSONResponse(
         content={
             "task_id": row.task_id,
@@ -806,7 +840,9 @@ async def get_saved_agent_task(
             "user_feedback": row.user_feedback,
             "created_at": row.created_at.isoformat() if row.created_at else "",
             "source_integrity": {},
-            "contradictions": contradictions,
+            "contradictions": pipe_contra,
+            "memory_contradictions": memory_contradictions,
+            "insight_report": insight_saved,
             "memory_saved": True,
             "status": "complete",
         }

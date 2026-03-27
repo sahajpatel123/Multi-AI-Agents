@@ -31,10 +31,23 @@ def main():
             "expertise_domain VARCHAR DEFAULT ''",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
             "title VARCHAR",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
+            "insight_report JSONB",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
+            "contradictions JSONB",
+        ]
+        sqlite_json_fallback = [
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS insight_report TEXT",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS contradictions TEXT",
         ]
 
         with engine.connect() as conn:
-            for sql in migrations:
+            dialect = conn.engine.dialect.name
+            to_run = list(migrations)
+            if dialect == "sqlite":
+                to_run = [m for m in migrations if "JSONB" not in m] + sqlite_json_fallback
+
+            for sql in to_run:
                 try:
                     conn.execute(text(sql))
                     conn.commit()

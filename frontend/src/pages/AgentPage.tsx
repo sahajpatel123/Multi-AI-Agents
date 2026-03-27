@@ -134,7 +134,9 @@ type AgentResult = {
   caveats?: StructuredCaveat[];
   error?: string;
   source_integrity?: SourceIntegrityPayload;
-  contradictions?: ContradictionItem[];
+  contradictions?: any[] | null;
+  memory_contradictions?: any[] | null;
+  insight_report?: Record<string, unknown> | null;
   memory_saved?: boolean;
   conversation?: ConversationEntry[];
   is_refinement?: boolean;
@@ -2189,7 +2191,193 @@ export function AgentPage() {
                       rigorous fact-checking of that answer.
                     </div>
                   )}
-                  {result.contradictions && result.contradictions.length > 0 && (
+                  {answerSentences.length > 0 ? (
+                    <div className={`answer-text ${confActive ? 'conf-active' : ''}`} style={{ marginBottom: 12 }}>
+                      {answerSentences.map((sentence, i) => (
+                        <span key={`${i}-${sentence.text.slice(0, 32)}`} className={sentence.confidence}>
+                          {sentence.text}{' '}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        fontSize: 15,
+                        lineHeight: 1.8,
+                        color: '#2C1810',
+                        fontFamily: 'Georgia, serif',
+                        fontStyle: 'italic',
+                        whiteSpace: 'pre-wrap',
+                        marginBottom: '24px',
+                      }}
+                    >
+                      {plainAnswerText || result.final_answer || 'No final answer returned.'}
+                    </div>
+                  )}
+                  {Array.isArray(result.contradictions) &&
+                    result.contradictions.length > 0 &&
+                    (result.contradictions[0] as { claim_new?: string })?.claim_new && (
+                      <div
+                        style={{
+                          background: '#FDF5F0',
+                          border: '0.5px solid #E8A898',
+                          borderRadius: 10,
+                          padding: '16px 18px',
+                          marginBottom: 16,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <svg
+                            width={14}
+                            height={14}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden
+                          >
+                            <path
+                              d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                              stroke="#D85A30"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              color: '#D85A30',
+                              fontWeight: 500,
+                            }}
+                          >
+                            Contradicts your past research
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              padding: '2px 8px',
+                              borderRadius: 8,
+                              background: '#FCF0EE',
+                              color: '#993C1D',
+                            }}
+                          >
+                            {result.contradictions.length}
+                          </span>
+                        </div>
+                        {result.contradictions.map((raw: any, ci: number) => {
+                          const sev = String(raw?.severity || 'nuanced').toLowerCase();
+                          const borderLeft =
+                            sev === 'direct' ? '#D85A30' : '#BA7517';
+                          const tid = String(raw?.task_id_old || '').trim();
+                          return (
+                            <div
+                              key={`pipe-contra-${ci}`}
+                              style={{
+                                marginTop: 10,
+                                background: '#FDFAF6',
+                                borderRadius: 8,
+                                padding: '12px 14px',
+                                borderLeft: `3px solid ${borderLeft}`,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: 10,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.12em',
+                                  color: '#D85A30',
+                                  marginBottom: 4,
+                                }}
+                              >
+                                This answer says:
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: '#2C1810',
+                                  marginBottom: 10,
+                                  lineHeight: 1.45,
+                                }}
+                              >
+                                {String(raw?.claim_new || '')}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 10,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.12em',
+                                  color: '#8C7355',
+                                  marginBottom: 4,
+                                }}
+                              >
+                                You previously found:
+                              </div>
+                              <div style={{ fontSize: 12, color: '#6B5040', lineHeight: 1.45 }}>
+                                {String(raw?.claim_old || '')}
+                                {tid ? (
+                                  <>
+                                    {' '}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const hit = taskHistory.find((t) => t.task_id === tid);
+                                        if (hit) void handleHistorySelect(hit);
+                                        else
+                                          void (async () => {
+                                            try {
+                                              const data = (await getAgentResult(tid)) as AgentResult;
+                                              setResult({ ...data, task_id: data.task_id || tid });
+                                              setTask(data.task || '');
+                                              setError(null);
+                                              setSearchParams({ task_id: tid });
+                                            } catch {
+                                              setToastMessage('Could not open that task.');
+                                            }
+                                          })();
+                                      }}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        padding: 0,
+                                        cursor: 'pointer',
+                                        color: '#C4956A',
+                                        fontSize: 12,
+                                        textDecoration: 'underline',
+                                        fontFamily: 'Georgia, serif',
+                                      }}
+                                    >
+                                      {String(raw?.task_title || 'Open past task')}
+                                    </button>
+                                  </>
+                                ) : null}
+                              </div>
+                              {raw?.resolution_hint ? (
+                                <div
+                                  style={{
+                                    marginTop: 10,
+                                    fontSize: 12,
+                                    fontStyle: 'italic',
+                                    color: '#A89070',
+                                    lineHeight: 1.45,
+                                  }}
+                                >
+                                  → {String(raw.resolution_hint)}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  {Array.isArray(result.memory_contradictions) &&
+                    result.memory_contradictions.length > 0 && (
                       <div
                         style={{
                           background: 'rgba(196,149,106,0.08)',
@@ -2214,37 +2402,14 @@ export function AgentPage() {
                             This answer may contradict a past conclusion
                           </div>
                           <div style={{ fontSize: 12, color: '#6B6460', marginTop: 2 }}>
-                            {result.contradictions
-                              .map((c) => c.summary)
+                            {result.memory_contradictions
+                              .map((c: ContradictionItem) => c.summary)
                               .filter(Boolean)
                               .join(' · ')}
                           </div>
                         </div>
                       </div>
                     )}
-                  {answerSentences.length > 0 ? (
-                    <div className={`answer-text ${confActive ? 'conf-active' : ''}`} style={{ marginBottom: 12 }}>
-                      {answerSentences.map((sentence, i) => (
-                        <span key={`${i}-${sentence.text.slice(0, 32)}`} className={sentence.confidence}>
-                          {sentence.text}{' '}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        fontSize: 15,
-                        lineHeight: 1.8,
-                        color: '#2C1810',
-                        fontFamily: 'Georgia, serif',
-                        fontStyle: 'italic',
-                        whiteSpace: 'pre-wrap',
-                        marginBottom: '24px',
-                      }}
-                    >
-                      {plainAnswerText || result.final_answer || 'No final answer returned.'}
-                    </div>
-                  )}
                   {(confidenceLegendStats || sourcesList.length > 0) && (
                     <div
                       style={{
@@ -3526,6 +3691,152 @@ export function AgentPage() {
                       Stress test in Arena →
                     </button>
                   </div>
+                  {result.insight_report &&
+                    taskHistory.length >= 3 &&
+                    (() => {
+                      const ir = result.insight_report as Record<string, unknown>;
+                      const patterns = Array.isArray(ir.patterns)
+                        ? (ir.patterns as unknown[]).map((p) => String(p))
+                        : [];
+                      const blind = Array.isArray(ir.blind_spots)
+                        ? (ir.blind_spots as unknown[]).map((b) => String(b))
+                        : [];
+                      const evolution = String(ir.evolution || '');
+                      const synthesis = String(ir.synthesis || '');
+                      return (
+                        <div
+                          style={{
+                            background: '#FAF7F2',
+                            border: '0.5px solid #E0D5C5',
+                            borderRadius: 10,
+                            marginBottom: 20,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <div
+                            style={{
+                              background: '#2C1810',
+                              padding: '13px 20px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 11,
+                                letterSpacing: '0.16em',
+                                textTransform: 'uppercase',
+                                color: '#C4956A',
+                              }}
+                            >
+                              Across your research
+                            </span>
+                          </div>
+                          <div style={{ padding: '16px 18px 18px' }}>
+                            <div
+                              style={{
+                                fontSize: 10,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.12em',
+                                color: '#A89070',
+                                marginBottom: 8,
+                              }}
+                            >
+                              Recurring themes
+                            </div>
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 6,
+                              }}
+                            >
+                              {patterns
+                                .filter((p) => p.trim())
+                                .map((p, pi) => (
+                                  <span
+                                    key={`ip-${pi}-${p.slice(0, 24)}`}
+                                    style={{
+                                      background: '#F0E8DC',
+                                      border: '0.5px solid #D4C4B0',
+                                      borderRadius: 12,
+                                      fontSize: 12,
+                                      color: '#4A3728',
+                                      padding: '4px 12px',
+                                    }}
+                                  >
+                                    {p}
+                                  </span>
+                                ))}
+                            </div>
+                            <div style={{ marginTop: 12 }}>
+                              <div
+                                style={{
+                                  fontSize: 10,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.12em',
+                                  color: '#A89070',
+                                  marginBottom: 6,
+                                }}
+                              >
+                                How your thinking is shifting
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  fontStyle: 'italic',
+                                  color: '#8C7355',
+                                  lineHeight: 1.5,
+                                }}
+                              >
+                                {evolution || '—'}
+                              </div>
+                            </div>
+                            <div style={{ marginTop: 12 }}>
+                              <div
+                                style={{
+                                  fontSize: 10,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.12em',
+                                  color: '#A89070',
+                                  marginBottom: 8,
+                                }}
+                              >
+                                Angles you haven&apos;t explored
+                              </div>
+                              {blind
+                                .filter((b) => b.trim())
+                                .map((b, bi) => (
+                                  <div
+                                    key={`ib-${bi}-${b.slice(0, 24)}`}
+                                    style={{
+                                      fontSize: 12,
+                                      color: '#C0392B',
+                                      marginBottom: 4,
+                                      lineHeight: 1.45,
+                                    }}
+                                  >
+                                    → {b}
+                                  </div>
+                                ))}
+                            </div>
+                            {synthesis ? (
+                              <div
+                                style={{
+                                  marginTop: 12,
+                                  fontSize: 13,
+                                  color: '#4A3728',
+                                  lineHeight: 1.55,
+                                }}
+                              >
+                                {synthesis}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   <div
                     style={{
                       display: 'flex',

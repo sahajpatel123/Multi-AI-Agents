@@ -17,6 +17,72 @@ from arena.core.stages.verifier import run_verifier
 logger = logging.getLogger("arena.agent_pipeline")
 
 
+async def _safe_insight_synthesis(bb: Blackboard) -> dict | None:
+    if not bb.user_id:
+        return None
+    from arena.database import SessionLocal
+    from arena.db_models import AgentTask
+    from arena.core.insight_synthesizer import synthesize_insights
+
+    db = SessionLocal()
+    try:
+        recent = (
+            db.query(AgentTask)
+            .filter(
+                AgentTask.user_id == bb.user_id,
+                AgentTask.task_id != bb.task_id,
+            )
+            .order_by(AgentTask.created_at.desc())
+            .limit(10)
+            .all()
+        )
+        if len(recent) < 3:
+            return None
+        return await synthesize_insights(
+            [t.to_dict_summary() for t in recent],
+            bb.task,
+        )
+    except Exception as e:
+        logger.warning("[PIPELINE] insight synthesis skipped: %s", e)
+        return None
+    finally:
+        db.close()
+
+
+async def _safe_pipeline_contradictions(bb: Blackboard) -> list:
+    if not bb.user_id:
+        return []
+    from arena.database import SessionLocal
+    from arena.db_models import AgentTask
+    from arena.core.pipeline_contradiction_detector import detect_contradictions
+
+    db = SessionLocal()
+    try:
+        past = (
+            db.query(AgentTask)
+            .filter(
+                AgentTask.user_id == bb.user_id,
+                AgentTask.task_id != bb.task_id,
+            )
+            .order_by(AgentTask.created_at.desc())
+            .limit(10)
+            .all()
+        )
+        if not past:
+            return []
+        plain = _plain_answer_text(bb.final_answer or "")
+        return await detect_contradictions(
+            plain,
+            bb.task,
+            [t.to_dict_summary() for t in past],
+        )
+    except Exception as e:
+        logger.warning("[PIPELINE] contradiction detector skipped: %s", e)
+        return []
+    finally:
+        db.close()
+
+
 def _plain_answer_text(answer: str) -> str:
     if not answer:
         return ""
@@ -142,6 +208,16 @@ async def run_agent_pipeline_on_blackboard(
                 logger.warning("Post-processing failed, continuing: %s", e)
                 bb.intelligence_score = {}
                 bb.assumptions = {}
+
+            ins_raw, con_raw = await asyncio.gather(
+                _safe_insight_synthesis(bb),
+                _safe_pipeline_contradictions(bb),
+                return_exceptions=True,
+            )
+            bb.insight_report = None if isinstance(ins_raw, Exception) else ins_raw
+            bb.cross_task_contradictions = (
+                [] if isinstance(con_raw, Exception) else list(con_raw or [])
+            )
 
         if bb.status == AgentStatus.NEEDS_REVISION:
             bb.status = AgentStatus.COMPLETE

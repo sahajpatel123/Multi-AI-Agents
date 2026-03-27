@@ -373,9 +373,24 @@ class AgentTask(Base):
     stages_run = Column(Text, nullable=True)
     user_feedback = Column(String(32), nullable=True)
     feedback_note = Column(Text, nullable=True)
+    insight_report = Column(JSON, nullable=True)
+    contradictions = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="agent_tasks")
+
+    def to_dict_summary(self) -> dict:
+        """Compact shape for cross-task LLM prompts (pipeline insights / contradictions)."""
+        q = (self.task_text or "")[:300]
+        fa = (self.final_answer or "")[:200]
+        title = (self.title or "").strip() or (self.task_text or "")[:80]
+        return {
+            "task_id": self.task_id,
+            "title": title,
+            "question": q,
+            "final_answer": fa,
+            "created_at": self.created_at.isoformat() if self.created_at else "",
+        }
 
 
 class AgentContradiction(Base):

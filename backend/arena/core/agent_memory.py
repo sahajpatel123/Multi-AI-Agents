@@ -233,6 +233,8 @@ async def save_task_to_memory(
     final_confidence: Optional[float],
     sources_used: list[str],
     stages_run: list[str],
+    insight_report: Optional[dict[str, Any]] = None,
+    pipeline_contradictions: Optional[list[Any]] = None,
 ) -> AgentTask:
     topics, conclusions = await asyncio.gather(
         extract_topics(task_text),
@@ -266,6 +268,8 @@ async def save_task_to_memory(
         topics=json.dumps(topics),
         key_conclusions=json.dumps(conclusions),
         stages_run=json.dumps(stages_run),
+        insight_report=insight_report,
+        contradictions=pipeline_contradictions,
     )
     db.add(task_record)
     db.commit()
