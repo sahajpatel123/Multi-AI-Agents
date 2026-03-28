@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Ellipsis, Lock, Pencil, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
+import MicroLoader from '../components/MicroLoader';
 import { RazorpayCheckout } from '../components/RazorpayCheckout';
 import { TemplatesModal } from '../components/TemplatesModal';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -617,7 +618,8 @@ export function AgentPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, isLoading: authLoading, refreshUser } = useAuth();
   const { canUseFeature, isPro, isPlus, refreshTier } = useTier();
-  const canAgent = canUseFeature('agent_mode');
+  const hasAgentAccess =
+    (user?.tier ?? '').toUpperCase() === 'PRO' || user?.agent_addon_active === true;
   const canOrchestrate = canUseFeature('agent_orchestrate');
   const canWatchlist = canUseFeature('agent_watchlist');
   const { openModal, setActiveTab, isOpen: profileModalOpen } = useProfileModal();
@@ -749,7 +751,7 @@ export function AgentPage() {
   const expertiseDomainForRun = user?.expertise_domain || '';
 
   const loadTaskHistory = useCallback(async () => {
-    if (!canAgent || authLoading) return;
+    if (!hasAgentAccess || authLoading) return;
     setHistoryLoading(true);
     try {
       const raw = (await getAgentHistory(1)) as HistoryPayload;
@@ -759,7 +761,7 @@ export function AgentPage() {
     } finally {
       setHistoryLoading(false);
     }
-  }, [authLoading, canAgent]);
+  }, [authLoading, hasAgentAccess]);
 
   useEffect(() => {
     const onResize = () => {
@@ -771,7 +773,7 @@ export function AgentPage() {
   }, []);
 
   useEffect(() => {
-    if (!canAgent || authLoading || !user?.email) return;
+    if (!hasAgentAccess || authLoading || !user?.email) return;
     let cancelled = false;
     void getMcpIntegrations()
       .then((list) => {
@@ -783,7 +785,7 @@ export function AgentPage() {
     return () => {
       cancelled = true;
     };
-  }, [canAgent, authLoading, user?.email]);
+  }, [hasAgentAccess, authLoading, user?.email]);
 
   useEffect(() => {
     if (!attachMenuOpen) return;
@@ -960,7 +962,7 @@ export function AgentPage() {
   }, [editingTaskId]);
 
   useEffect(() => {
-    if (!urlTaskId || !canAgent || authLoading) return;
+    if (!urlTaskId || !hasAgentAccess || authLoading) return;
     let cancelled = false;
     (async () => {
       try {
@@ -992,7 +994,7 @@ export function AgentPage() {
     return () => {
       cancelled = true;
     };
-  }, [urlTaskId, canAgent, authLoading]);
+  }, [urlTaskId, hasAgentAccess, authLoading]);
 
   useEffect(() => {
     if (!canWatchlist || authLoading || !user?.email) {
@@ -1065,14 +1067,14 @@ export function AgentPage() {
       bridgeMode?: boolean;
       originalQuestion?: string;
     } | null;
-    if (st?.bridgeTaskId && st.bridgeMode && canAgent && !authLoading) {
+    if (st?.bridgeTaskId && st.bridgeMode && hasAgentAccess && !authLoading) {
       setBridgeMeta({
         taskId: st.bridgeTaskId,
         originalQuestion: typeof st.originalQuestion === 'string' ? st.originalQuestion : '',
       });
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, location.pathname, navigate, canAgent, authLoading]);
+  }, [location.state, location.pathname, navigate, hasAgentAccess, authLoading]);
 
   const pollAgentTaskUntilDone = useCallback(async (taskId: string) => {
     const maxAttempts = 60;
@@ -1141,7 +1143,7 @@ export function AgentPage() {
   }, []);
 
   useEffect(() => {
-    if (!bridgeMeta?.taskId || !canAgent || authLoading) return;
+    if (!bridgeMeta?.taskId || !hasAgentAccess || authLoading) return;
     let cancelled = false;
     setError(null);
     setIsRunning(true);
@@ -1156,7 +1158,7 @@ export function AgentPage() {
     return () => {
       cancelled = true;
     };
-  }, [bridgeMeta, canAgent, authLoading, pollAgentTaskUntilDone]);
+  }, [bridgeMeta, hasAgentAccess, authLoading, pollAgentTaskUntilDone]);
 
   useEffect(() => {
     if (result?.bridge_from_arena && bridgeMeta) {
@@ -1165,26 +1167,24 @@ export function AgentPage() {
   }, [result?.bridge_from_arena, bridgeMeta]);
 
 
-  const uploadAttachmentFile = useCallback(
-    async (file: File | undefined) => {
-      if (!file || !canAgent) return;
-      setAttachMenuOpen(false);
-      setUploadErr(null);
-      try {
-        const data = await uploadAgentFile(file);
-        setAttachments((prev) => [...prev, data]);
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 413) {
-          setUploadErr('File too large (max 10MB)');
-        } else {
-          setUploadErr(e instanceof Error ? e.message : 'Upload failed');
-        }
+  const uploadAttachmentFile = useCallback(async (file: File | undefined) => {
+    if (!file) return;
+    setAttachMenuOpen(false);
+    setUploadErr(null);
+    try {
+      const data = await uploadAgentFile(file);
+      setAttachments((prev) => [...prev, data]);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 413) {
+        setUploadErr('File too large (max 10MB)');
+      } else {
+        setUploadErr(e instanceof Error ? e.message : 'Upload failed');
       }
-    },
-    [canAgent],
-  );
+    }
+  }, []);
 
   const handleRunTask = async () => {
+    if (!hasAgentAccess) return;
     const t = selectedTemplate ? assembledTemplatePrompt.trim() : task.trim();
     if (t.length < 10 || isRunning) return;
     if (selectedTemplate && !allTemplateSlotsFilled) return;
@@ -1232,6 +1232,7 @@ export function AgentPage() {
   };
 
   const handleOrchestrateRun = async () => {
+    if (!hasAgentAccess) return;
     const qs = multiTasks.slice(0, activeTaskCount).map((t) => t.trim());
     if (qs.length !== activeTaskCount || qs.some((q) => q.length < 10) || isRunning) return;
     try {
@@ -2132,6 +2133,22 @@ export function AgentPage() {
     );
   };
 
+  if (!user) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          background: '#F5F0E8',
+        }}
+      >
+        <MicroLoader />
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -2565,183 +2582,6 @@ export function AgentPage() {
           padding: isMobile ? '1rem' : '1.5rem',
         }}
       >
-        {!canAgent ? (
-          isPlus && user ? (
-            <div style={{ maxWidth: 640, margin: '0 auto', padding: '3rem 1.25rem' }}>
-              <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-                <Lock style={{ width: 32, height: 32, color: '#C4956A' }} />
-              </div>
-              <h1 style={{ fontSize: 28, fontWeight: 400, color: '#1A1714', marginBottom: '0.5rem', textAlign: 'center' }}>
-                Agent
-              </h1>
-              <p style={{ fontSize: 14, color: '#6B6460', lineHeight: 1.7, marginBottom: '1.5rem', textAlign: 'center' }}>
-                A 7-stage AI pipeline that researches, solves, critiques, verifies, and synthesises. Unlock it on your Plus
-                plan or upgrade to Pro.
-              </p>
-              {agentAddonCheckout && user.email ? (
-                <RazorpayCheckout
-                  planKey="agent_addon"
-                  agentAddon
-                  prefillEmail={user.email}
-                  onSuccess={async () => {
-                    setAgentAddonCheckout(false);
-                    await refreshUser();
-                    await refreshTier();
-                  }}
-                  onError={() => setAgentAddonCheckout(false)}
-                  onClose={() => setAgentAddonCheckout(false)}
-                />
-              ) : null}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: 16,
-                  background: '#FAF7F2',
-                  border: '0.5px solid #E0D5C5',
-                  borderRadius: 12,
-                  padding: 24,
-                  alignItems: 'stretch',
-                  maxWidth: 560,
-                  margin: '0 auto',
-                }}
-              >
-                <div style={{ borderRight: '0.5px solid #EDE4D8', paddingRight: 16 }}>
-                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#A89070', marginBottom: 8 }}>
-                    Add to Plus
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 28, color: '#2C1810', fontWeight: 500 }}>₹599</span>
-                    <span style={{ fontSize: 14, color: '#A89070' }}>/month</span>
-                  </div>
-                  <p style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
-                    Agent Mode on your current plan
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#4A3728' }}>
-                    <span>✓ Full 7-stage pipeline</span>
-                    <span>✓ Plus limits apply (100K/day)</span>
-                    <span>✓ Cancel anytime</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAgentAddonCheckout(true)}
-                    style={{
-                      width: '100%',
-                      background: '#2C1810',
-                      color: '#C4956A',
-                      borderRadius: 20,
-                      padding: '9px 18px',
-                      fontSize: 13,
-                      fontFamily: 'Georgia, serif',
-                      border: 'none',
-                      cursor: 'pointer',
-                      marginTop: 12,
-                    }}
-                  >
-                    Add Agent Mode →
-                  </button>
-                </div>
-                <div style={{ paddingLeft: 4 }}>
-                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#A89070', marginBottom: 8 }}>
-                    Upgrade to Pro
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 28, color: '#2C1810', fontWeight: 500 }}>₹2,499</span>
-                    <span style={{ fontSize: 14, color: '#A89070' }}>/month</span>
-                  </div>
-                  <p style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
-                    3× more credits + priority routing
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#4A3728' }}>
-                    <span>✓ 300K credits/day</span>
-                    <span>✓ Priority model routing</span>
-                    <span>✓ Loyalty reward after 10 months</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/pricing')}
-                    style={{
-                      width: '100%',
-                      background: 'transparent',
-                      color: '#C4956A',
-                      borderRadius: 20,
-                      padding: '9px 18px',
-                      fontSize: 13,
-                      fontFamily: 'Georgia, serif',
-                      border: '0.5px solid #C4956A',
-                      cursor: 'pointer',
-                      marginTop: 12,
-                    }}
-                  >
-                    Upgrade to Pro →
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div
-              style={{
-                maxWidth: 480,
-                margin: '0 auto',
-                textAlign: 'center',
-                padding: '3rem 2rem',
-              }}
-            >
-              <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-                <Lock style={{ width: 32, height: 32, color: '#C4956A' }} />
-              </div>
-              <h1 style={{ fontSize: 28, fontWeight: 400, color: '#1A1714', marginBottom: '0.5rem' }}>Agent</h1>
-              <p style={{ fontSize: 14, color: '#6B6460', lineHeight: 1.7, marginBottom: '2rem' }}>
-                A 7-stage AI pipeline that researches, solves, critiques, verifies, and synthesises. Not just an answer — a
-                process.
-              </p>
-              <div
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 8,
-                  justifyContent: 'center',
-                  marginBottom: '2rem',
-                }}
-              >
-                {['7 reasoning stages', 'Confidence scoring', 'Web research', 'Self-correction'].map((label) => (
-                  <span
-                    key={label}
-                    style={{
-                      background: '#F0EBE3',
-                      color: '#6B6460',
-                      borderRadius: 999,
-                      padding: '6px 14px',
-                      fontSize: 12,
-                    }}
-                  >
-                    {label}
-                  </span>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => navigate('/pricing')}
-                style={{
-                  background: '#1A1714',
-                  color: '#FAF7F4',
-                  borderRadius: 999,
-                  padding: '13px 32px',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  width: '100%',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                Upgrade to Pro
-              </button>
-              {!isPro && (
-                <p style={{ fontSize: 12, color: '#B0A9A2', marginTop: '1rem' }}>Pro includes Agent Mode and more.</p>
-              )}
-            </div>
-          )
-        ) : (
           <>
             {bridgeMeta && isRunning && (
               <div
@@ -2800,6 +2640,217 @@ export function AgentPage() {
                     boxSizing: 'border-box',
                   }}
                 >
+                  {!hasAgentAccess ? (
+                    isPlus && user ? (
+                      <div style={{ maxWidth: 640, margin: '0 auto', padding: '3rem 1.25rem', width: '100%' }}>
+                        <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                          <Lock style={{ width: 32, height: 32, color: '#C4956A' }} />
+                        </div>
+                        <h1
+                          style={{
+                            fontSize: 28,
+                            fontWeight: 400,
+                            color: '#1A1714',
+                            marginBottom: '0.5rem',
+                            textAlign: 'center',
+                          }}
+                        >
+                          Agent
+                        </h1>
+                        <p
+                          style={{
+                            fontSize: 14,
+                            color: '#6B6460',
+                            lineHeight: 1.7,
+                            marginBottom: '1.5rem',
+                            textAlign: 'center',
+                          }}
+                        >
+                          A 7-stage AI pipeline that researches, solves, critiques, verifies, and synthesises. Unlock it on
+                          your Plus plan or upgrade to Pro.
+                        </p>
+                        {agentAddonCheckout && user.email ? (
+                          <RazorpayCheckout
+                            planKey="agent_addon"
+                            agentAddon
+                            prefillEmail={user.email}
+                            onSuccess={async () => {
+                              setAgentAddonCheckout(false);
+                              await refreshUser();
+                              await refreshTier();
+                            }}
+                            onError={() => setAgentAddonCheckout(false)}
+                            onClose={() => setAgentAddonCheckout(false)}
+                          />
+                        ) : null}
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 16,
+                            background: '#FAF7F2',
+                            border: '0.5px solid #E0D5C5',
+                            borderRadius: 12,
+                            padding: 24,
+                            alignItems: 'stretch',
+                            maxWidth: 560,
+                            margin: '0 auto',
+                          }}
+                        >
+                          <div style={{ borderRight: '0.5px solid #EDE4D8', paddingRight: 16 }}>
+                            <div
+                              style={{
+                                fontSize: 10,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.08em',
+                                color: '#A89070',
+                                marginBottom: 8,
+                              }}
+                            >
+                              Add to Plus
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 28, color: '#2C1810', fontWeight: 500 }}>₹599</span>
+                              <span style={{ fontSize: 14, color: '#A89070' }}>/month</span>
+                            </div>
+                            <p style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
+                              Agent Mode on your current plan
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#4A3728' }}>
+                              <span>✓ Full 7-stage pipeline</span>
+                              <span>✓ Plus limits apply (100K/day)</span>
+                              <span>✓ Cancel anytime</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setAgentAddonCheckout(true)}
+                              style={{
+                                width: '100%',
+                                background: '#2C1810',
+                                color: '#C4956A',
+                                borderRadius: 20,
+                                padding: '9px 18px',
+                                fontSize: 13,
+                                fontFamily: 'Georgia, serif',
+                                border: 'none',
+                                cursor: 'pointer',
+                                marginTop: 12,
+                              }}
+                            >
+                              Add Agent Mode →
+                            </button>
+                          </div>
+                          <div style={{ paddingLeft: 4 }}>
+                            <div
+                              style={{
+                                fontSize: 10,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.08em',
+                                color: '#A89070',
+                                marginBottom: 8,
+                              }}
+                            >
+                              Upgrade to Pro
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 28, color: '#2C1810', fontWeight: 500 }}>₹2,499</span>
+                              <span style={{ fontSize: 14, color: '#A89070' }}>/month</span>
+                            </div>
+                            <p style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
+                              3× more credits + priority routing
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#4A3728' }}>
+                              <span>✓ 300K credits/day</span>
+                              <span>✓ Priority model routing</span>
+                              <span>✓ Loyalty reward after 10 months</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => navigate('/pricing')}
+                              style={{
+                                width: '100%',
+                                background: 'transparent',
+                                color: '#C4956A',
+                                borderRadius: 20,
+                                padding: '9px 18px',
+                                fontSize: 13,
+                                fontFamily: 'Georgia, serif',
+                                border: '0.5px solid #C4956A',
+                                cursor: 'pointer',
+                                marginTop: 12,
+                              }}
+                            >
+                              Upgrade to Pro →
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          maxWidth: 480,
+                          margin: '0 auto',
+                          textAlign: 'center',
+                          padding: '3rem 2rem',
+                          width: '100%',
+                        }}
+                      >
+                        <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                          <Lock style={{ width: 32, height: 32, color: '#C4956A' }} />
+                        </div>
+                        <h1 style={{ fontSize: 28, fontWeight: 400, color: '#1A1714', marginBottom: '0.5rem' }}>Agent</h1>
+                        <p style={{ fontSize: 14, color: '#6B6460', lineHeight: 1.7, marginBottom: '2rem' }}>
+                          A 7-stage AI pipeline that researches, solves, critiques, verifies, and synthesises. Not just an
+                          answer — a process.
+                        </p>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 8,
+                            justifyContent: 'center',
+                            marginBottom: '2rem',
+                          }}
+                        >
+                          {['7 reasoning stages', 'Confidence scoring', 'Web research', 'Self-correction'].map((label) => (
+                            <span
+                              key={label}
+                              style={{
+                                background: '#F0EBE3',
+                                color: '#6B6460',
+                                borderRadius: 999,
+                                padding: '6px 14px',
+                                fontSize: 12,
+                              }}
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => navigate('/pricing')}
+                          style={{
+                            background: '#1A1714',
+                            color: '#FAF7F4',
+                            borderRadius: 999,
+                            padding: '13px 32px',
+                            fontSize: 14,
+                            fontWeight: 500,
+                            width: '100%',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Upgrade to Pro
+                        </button>
+                        {!isPro && (
+                          <p style={{ fontSize: 12, color: '#B0A9A2', marginTop: '1rem' }}>Pro includes Agent Mode and more.</p>
+                        )}
+                      </div>
+                    )
+                  ) : (
+                    <>
                   <div
                     aria-hidden
                     style={{
@@ -2917,6 +2968,8 @@ export function AgentPage() {
                       ))}
                     </div>
                   </div>
+                    </>
+                  )}
                 </div>
 
                 <div
@@ -3085,6 +3138,7 @@ export function AgentPage() {
                       className="agent-bottom-input-shell"
                       onSubmit={(e) => {
                         e.preventDefault();
+                        if (!hasAgentAccess) return;
                         if (multiMode && canOrchestrate) {
                           const qs = multiTasks.slice(0, activeTaskCount).map((x) => x.trim());
                           if (
@@ -3254,7 +3308,8 @@ export function AgentPage() {
                               type="submit"
                               disabled={
                                 !multiTasks.slice(0, activeTaskCount).every((t) => t.trim().length >= 10) ||
-                                isRunning
+                                isRunning ||
+                                !hasAgentAccess
                               }
                               style={{
                                 padding: '10px 18px',
@@ -3262,7 +3317,8 @@ export function AgentPage() {
                                 border: 'none',
                                 background:
                                   multiTasks.slice(0, activeTaskCount).every((t) => t.trim().length >= 10) &&
-                                  !isRunning
+                                  !isRunning &&
+                                  hasAgentAccess
                                     ? '#C4956A'
                                     : '#D4C4B0',
                                 color: '#FDFAF6',
@@ -3270,7 +3326,8 @@ export function AgentPage() {
                                 fontFamily: 'Georgia, serif',
                                 cursor:
                                   multiTasks.slice(0, activeTaskCount).every((t) => t.trim().length >= 10) &&
-                                  !isRunning
+                                  !isRunning &&
+                                  hasAgentAccess
                                     ? 'pointer'
                                     : 'default',
                               }}
@@ -3385,13 +3442,15 @@ export function AgentPage() {
                               disabled={
                                 !allTemplateSlotsFilled ||
                                 assembledTemplatePrompt.trim().length < 10 ||
-                                isRunning
+                                isRunning ||
+                                !hasAgentAccess
                               }
                               onMouseEnter={(e) => {
                                 if (
                                   allTemplateSlotsFilled &&
                                   assembledTemplatePrompt.trim().length >= 10 &&
-                                  !isRunning
+                                  !isRunning &&
+                                  hasAgentAccess
                                 ) {
                                   e.currentTarget.style.background = '#B07850';
                                 }
@@ -3400,7 +3459,8 @@ export function AgentPage() {
                                 e.currentTarget.style.background =
                                   allTemplateSlotsFilled &&
                                   assembledTemplatePrompt.trim().length >= 10 &&
-                                  !isRunning
+                                  !isRunning &&
+                                  hasAgentAccess
                                     ? '#C4956A'
                                     : '#D4C4B0';
                               }}
@@ -3412,13 +3472,15 @@ export function AgentPage() {
                                 cursor:
                                   allTemplateSlotsFilled &&
                                   assembledTemplatePrompt.trim().length >= 10 &&
-                                  !isRunning
+                                  !isRunning &&
+                                  hasAgentAccess
                                     ? 'pointer'
                                     : 'default',
                                 background:
                                   allTemplateSlotsFilled &&
                                   assembledTemplatePrompt.trim().length >= 10 &&
-                                  !isRunning
+                                  !isRunning &&
+                                  hasAgentAccess
                                     ? '#C4956A'
                                     : '#D4C4B0',
                                 transition: 'background 0.2s ease',
@@ -3677,23 +3739,27 @@ export function AgentPage() {
                               />
                               <button
                                 type="submit"
-                                disabled={task.trim().length < 10 || isRunning}
+                                disabled={task.trim().length < 10 || isRunning || !hasAgentAccess}
                                 onMouseEnter={(e) => {
-                                  if (task.trim().length >= 10 && !isRunning) {
+                                  if (task.trim().length >= 10 && !isRunning && hasAgentAccess) {
                                     e.currentTarget.style.background = '#B07850';
                                   }
                                 }}
                                 onMouseLeave={(e) => {
                                   e.currentTarget.style.background =
-                                    task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0';
+                                    task.trim().length >= 10 && !isRunning && hasAgentAccess
+                                      ? '#C4956A'
+                                      : '#D4C4B0';
                                 }}
                                 style={{
                                   width: 34,
                                   height: 34,
                                   borderRadius: '50%',
                                   border: 'none',
-                                  cursor: task.trim().length >= 10 && !isRunning ? 'pointer' : 'default',
-                                  background: task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0',
+                                  cursor:
+                                    task.trim().length >= 10 && !isRunning && hasAgentAccess ? 'pointer' : 'default',
+                                  background:
+                                    task.trim().length >= 10 && !isRunning && hasAgentAccess ? '#C4956A' : '#D4C4B0',
                                   transition: 'background 0.2s ease',
                                   display: 'flex',
                                   alignItems: 'center',
@@ -7672,7 +7738,6 @@ export function AgentPage() {
               </>
             )}
           </>
-        )}
       </main>
       </div>
     </div>
