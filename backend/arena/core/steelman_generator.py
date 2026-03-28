@@ -6,8 +6,9 @@ import asyncio
 import json
 import logging
 import re
-from typing import List, TypedDict
+from typing import List, Optional, TypedDict
 
+from arena.core.blackboard import Blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 
@@ -50,6 +51,7 @@ async def generate_steelman(
     question: str,
     research_summary: str,
     expertise_modifier: str = "",
+    bb: Optional[Blackboard] = None,
 ) -> SteelmanOutput:
     model = MODEL_REGISTRY["claude_sonnet"]
     expertise_append = ""
@@ -68,7 +70,7 @@ Build the strongest opposing view to the most likely answer this research points
 """
 
     try:
-        response = await asyncio.wait_for(
+        response, inp, out = await asyncio.wait_for(
             call_llm(
                 client=model["client"],
                 provider="claude",
@@ -80,6 +82,9 @@ Build the strongest opposing view to the most likely answer this research points
             ),
             timeout=25.0,
         )
+        if bb is not None:
+            bb.total_input_tokens += inp
+            bb.total_output_tokens += out
     except Exception as e:
         logger.warning("[STEELMAN] generation failed: %s", e)
         return _empty_steelman()

@@ -272,9 +272,9 @@ async def call_persona(
     persona_id: str,
     system_prompt: str,
     user_prompt: str,
-    temperature: float
-) -> str:
-    """Route API call to appropriate model based on persona."""
+    temperature: float,
+) -> tuple[str, int, int]:
+    """Route API call to appropriate model based on persona. Returns (text, input_tokens, output_tokens)."""
     from arena.core.llm_caller import call_llm
 
     route = get_route_for_persona(persona_id)
@@ -327,4 +327,8 @@ async def call_persona(
             )
         except Exception as e2:
             print(f"[ERROR] Fallback also failed: {e2}")
-            return "I was unable to generate a response at this time. Please try again."
+            return (
+                "I was unable to generate a response at this time. Please try again.",
+                0,
+                0,
+            )

@@ -115,7 +115,7 @@ async def synthesise_tasks(tasks: list[AgentTask]) -> dict[str, Any]:
     user_prompt = "\n\n".join(parts)
 
     try:
-        raw = await asyncio.wait_for(
+        raw, _, _ = await asyncio.wait_for(
             call_llm(
                 client=client,
                 provider=provider,

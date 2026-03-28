@@ -79,7 +79,7 @@ Verify the solution and assign confidence scores to all claims.
 Use the source integrity analysis when assigning confidence where relevant.
 """
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider="claude",
             model_id=model["model_id"],
@@ -88,6 +88,8 @@ Use the source integrity analysis when assigning confidence where relevant.
             temperature=0.2,
             max_tokens=AGENT_MAX_TOKENS,
         )
+        bb.total_input_tokens += inp
+        bb.total_output_tokens += out
 
         bb.verification.output = response
         bb.verification.model_used = model["model_id"]

@@ -139,7 +139,7 @@ async def _get_reaction(
     try:
         # Get persona_id and route to appropriate API
         persona_id = get_persona_id_for_agent(agent_id, request.persona_ids)
-        content = await call_persona(
+        content, _, _ = await call_persona(
             persona_id=persona_id,
             system_prompt=system_prompt,
             user_prompt=user_message,
@@ -338,7 +338,7 @@ async def stream_debate_round(
                     
                     if model_type != "claude":
                         # Grok doesn't support streaming - get full response
-                        content = await call_persona(
+                        content, _, _ = await call_persona(
                             persona_id=persona_id,
                             system_prompt=system_prompt,
                             user_prompt=user_message,

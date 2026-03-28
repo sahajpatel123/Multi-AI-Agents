@@ -127,7 +127,7 @@ class Orchestrator:
             persona_id = get_persona_id_for_agent(agent.agent_id, persona_ids)
             
             # Route to appropriate API (Claude or Grok)
-            content = await asyncio.wait_for(
+            content, _, _ = await asyncio.wait_for(
                 call_persona(
                     persona_id=persona_id,
                     system_prompt=system_prompt,

@@ -69,7 +69,7 @@ User research history context:
 """
             user_prompt = f"Task: {bb.task}\n\n{memory_str}"
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider="claude",
             model_id=model["model_id"],
@@ -78,6 +78,8 @@ User research history context:
             temperature=0.3,
             max_tokens=AGENT_MAX_TOKENS,
         )
+        bb.total_input_tokens += inp
+        bb.total_output_tokens += out
 
         json_match = re.search(r"\{.*\}", response, re.DOTALL)
         if json_match:

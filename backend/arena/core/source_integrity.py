@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any
+from typing import Any, Optional
 
+from arena.core.blackboard import Blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 
@@ -71,7 +72,11 @@ def _fallback_result(message: str, integrity_label: str = "uncertain") -> dict[s
     }
 
 
-async def analyze_source_integrity(research_output: str, task: str) -> dict[str, Any]:
+async def analyze_source_integrity(
+    research_output: str,
+    task: str,
+    bb: Optional[Blackboard] = None,
+) -> dict[str, Any]:
     if not research_output or not str(research_output).strip():
         return {
             **_fallback_result("No research data available"),
@@ -91,7 +96,7 @@ Research findings:
 Analyze source integrity.
 """
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider=provider,
             model_id=model["model_id"],
@@ -100,6 +105,9 @@ Analyze source integrity.
             temperature=0.1,
             max_tokens=900,
         )
+        if bb is not None:
+            bb.total_input_tokens += inp
+            bb.total_output_tokens += out
 
         match = re.search(r"\{.*\}", response, re.DOTALL)
         if match:

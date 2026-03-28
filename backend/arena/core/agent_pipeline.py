@@ -42,6 +42,7 @@ async def _safe_insight_synthesis(bb: Blackboard) -> dict | None:
         return await synthesize_insights(
             [t.to_dict_summary() for t in recent],
             bb.task,
+            bb=bb,
         )
     except Exception as e:
         logger.warning("[PIPELINE] insight synthesis skipped: %s", e)
@@ -76,6 +77,7 @@ async def _safe_pipeline_contradictions(bb: Blackboard) -> list:
             plain,
             bb.task,
             [t.to_dict_summary() for t in past],
+            bb=bb,
         )
     except Exception as e:
         logger.warning("[PIPELINE] contradiction detector skipped: %s", e)
@@ -98,6 +100,34 @@ def _plain_answer_text(answer: str) -> str:
     return answer
 
 
+def record_agent_task_usage(bb: Blackboard) -> None:
+    """Persist one UsageRecord for a completed agent run (real token totals on blackboard)."""
+    if not bb.user_id or bb.status != AgentStatus.COMPLETE:
+        return
+    from arena.database import SessionLocal
+    from arena.db_models import UsageRecord
+
+    db = SessionLocal()
+    try:
+        usage = UsageRecord(
+            user_id=bb.user_id,
+            session_id=bb.task_id,
+            request_id=str(uuid4()),
+            input_tokens=bb.total_input_tokens,
+            output_tokens=bb.total_output_tokens,
+            mode="agent",
+            prompt_category="agent_task",
+            timestamp=datetime.utcnow(),
+        )
+        db.add(usage)
+        db.commit()
+    except Exception as e:
+        print(f"Usage tracking failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 async def _run_steelman_step(bb: Blackboard) -> None:
     from arena.core.steelman_generator import generate_steelman
 
@@ -106,6 +136,7 @@ async def _run_steelman_step(bb: Blackboard) -> None:
             question=bb.task,
             research_summary=(bb.research.output or "").strip(),
             expertise_modifier=bb.expertise_modifier or "",
+            bb=bb,
         )
     except Exception as e:
         logger.warning("[AGENT] Steelman step failed: %s", e)
@@ -151,6 +182,7 @@ async def run_agent_pipeline_on_blackboard(
                 integrity_result = await analyze_source_integrity(
                     research_output=bb.research.output,
                     task=bb.task,
+                    bb=bb,
                 )
                 bb.source_integrity = integrity_result
                 bb.research.reasoning = json.dumps(integrity_result)
@@ -186,10 +218,12 @@ async def run_agent_pipeline_on_blackboard(
                         final_answer=bb.final_answer,
                         research_output=bb.research.output or "",
                         judgment_output=bb.judgment.output or "",
+                        bb=bb,
                     ),
                     surface_assumptions(
                         task=bb.task,
                         final_answer=bb.final_answer,
+                        bb=bb,
                     ),
                 )
 
@@ -248,30 +282,6 @@ async def run_agent_pipeline_on_blackboard(
             e,
         )
 
-    if bb.user_id and bb.status == AgentStatus.COMPLETE:
-        from arena.database import SessionLocal
-        from arena.db_models import UsageRecord
-
-        db = SessionLocal()
-        try:
-            usage = UsageRecord(
-                user_id=bb.user_id,
-                session_id=bb.task_id,
-                request_id=str(uuid4()),
-                input_tokens=20000,
-                output_tokens=0,
-                mode="agent",
-                prompt_category="agent_task",
-                timestamp=datetime.utcnow(),
-            )
-            db.add(usage)
-            db.commit()
-        except Exception as e:
-            print(f"Usage tracking failed: {e}")
-            db.rollback()
-        finally:
-            db.close()
-
     return bb
 
 
@@ -323,6 +333,7 @@ async def run_refinement_pipeline(
     intent = await classify_refinement(
         user_message=user_message,
         current_answer=current_answer,
+        bb=existing_bb,
     )
 
     logger.info(

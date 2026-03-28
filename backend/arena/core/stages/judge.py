@@ -164,7 +164,7 @@ Final Answer to Judge:
 Score this answer objectively. Include caveats array as specified.
 """
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider=provider,
             model_id=model["model_id"],
@@ -173,6 +173,8 @@ Score this answer objectively. Include caveats array as specified.
             temperature=0.1,
             max_tokens=AGENT_MAX_TOKENS,
         )
+        bb.total_input_tokens += inp
+        bb.total_output_tokens += out
 
         json_match = re.search(r"\{.*\}", response, re.DOTALL)
         judgment_data: dict = {}

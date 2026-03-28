@@ -8,6 +8,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, TypedDict
 
+from arena.core.blackboard import Blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 
@@ -76,6 +77,7 @@ def _parse_insight_report(raw: str) -> Optional[InsightReport]:
 async def synthesize_insights(
     tasks: List[Dict[str, Any]],
     current_question: str,
+    bb: Optional[Blackboard] = None,
 ) -> Optional[InsightReport]:
     if len(tasks) < 3:
         return None
@@ -97,7 +99,7 @@ async def synthesize_insights(
     )
 
     try:
-        raw = await asyncio.wait_for(
+        raw, inp, out = await asyncio.wait_for(
             call_llm(
                 client=client,
                 provider=provider,
@@ -109,6 +111,9 @@ async def synthesize_insights(
             ),
             timeout=20.0,
         )
+        if bb is not None:
+            bb.total_input_tokens += inp
+            bb.total_output_tokens += out
     except Exception as e:
         logger.warning("[INSIGHT] synthesize_insights failed: %s", e)
         return None

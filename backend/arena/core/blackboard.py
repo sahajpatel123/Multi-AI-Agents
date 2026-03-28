@@ -91,6 +91,8 @@ class Blackboard:
     original_task: str = ""
     bridge_from_arena: bool = False
 
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
     total_tokens: int = 0
     total_cost_usd: float = 0.0
     started_at: Optional[datetime] = None
@@ -195,6 +197,8 @@ class Blackboard:
             "refinement_count": self.refinement_count,
             "original_task": self.original_task or self.task,
             "bridge_from_arena": self.bridge_from_arena,
+            "total_input_tokens": self.total_input_tokens,
+            "total_output_tokens": self.total_output_tokens,
             "total_tokens": self.total_tokens,
             "total_cost_usd": self.total_cost_usd,
             "error": self.error,

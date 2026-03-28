@@ -39,7 +39,7 @@ async def check_if_update_meaningful(
         "Reply with only yes or no."
     )
     try:
-        raw = await asyncio.wait_for(
+        raw, _, _ = await asyncio.wait_for(
             call_llm(
                 client=client,
                 provider=provider,

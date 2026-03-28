@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from arena.core.agent_pipeline import (
+    record_agent_task_usage,
     run_agent_pipeline_on_blackboard,
     run_refinement_pipeline,
 )
@@ -19,7 +20,8 @@ from arena.core.auth import get_current_user_required
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
-from arena.core.tier_config import UserTier, has_feature, normalize_tier
+from arena.core.cost_tracker import get_today_token_usage
+from arena.core.tier_config import UserTier, get_credit_budget, has_feature, normalize_tier
 from arena.core.agent_orchestration import synthesise_tasks
 from arena.core.feedback_calibrator import get_answer_feedback_distribution
 from arena.core.report_generator import (
@@ -387,7 +389,7 @@ Agent's Answer:
 Challenge this answer now.
 """
     try:
-        response = await call_llm(
+        response, _, _ = await call_llm(
             client=model["client"],
             provider=provider,
             model_id=model["model_id"],
@@ -694,6 +696,7 @@ async def _save_completed_task_to_memory(
                 intelligence_score=bb.intelligence_score if bb.intelligence_score else None,
                 orchestration_id=orchestration_id,
                 watchlist_item_id=watchlist_item_id,
+                bb=bb,
             )
 
             rows = (
@@ -714,6 +717,8 @@ async def _save_completed_task_to_memory(
             db.close()
     except Exception as e:
         logger.warning("[AGENT] Memory save failed (non-fatal): %s", e)
+    finally:
+        record_agent_task_usage(bb)
 
 
 async def run_refinement_background(
@@ -1046,8 +1051,24 @@ async def run_agent_task(
     body: AgentTaskRequest,
     background_tasks: BackgroundTasks,
     user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user)
+
+    tier = normalize_tier(user.tier)
+    today_usage = get_today_token_usage(db, user.id)
+    daily_limit = get_credit_budget(tier)
+    if today_usage >= daily_limit:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "daily_limit_reached",
+                "message": "Daily usage limit reached.",
+                "used": today_usage,
+                "limit": daily_limit,
+                "resets_at": "midnight UTC",
+            },
+        )
 
     task = body.task.strip()
     if not task:
@@ -1256,7 +1277,7 @@ Challenge Received:
 Respond to this challenge now.
 """
     try:
-        response = await call_llm(
+        response, _, _ = await call_llm(
             client=model["client"],
             provider="claude",
             model_id=model["model_id"],

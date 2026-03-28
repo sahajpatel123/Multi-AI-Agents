@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
+from arena.core.blackboard import Blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 from arena.db_models import AgentContradiction, AgentTask
@@ -97,11 +98,11 @@ def _json_object_from_response(response: str) -> Optional[dict]:
     return None
 
 
-async def extract_topics(task_text: str) -> list[str]:
+async def extract_topics(task_text: str, bb: Optional[Blackboard] = None) -> list[str]:
     try:
         model = MODEL_REGISTRY.get("gpt_4o_mini", MODEL_REGISTRY["claude_sonnet"])
         provider = str(model.get("provider", "openai"))
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider=provider,
             model_id=model["model_id"],
@@ -110,6 +111,9 @@ async def extract_topics(task_text: str) -> list[str]:
             temperature=0.1,
             max_tokens=150,
         )
+        if bb is not None:
+            bb.total_input_tokens += inp
+            bb.total_output_tokens += out
         raw = _json_array_from_response(response)
         return [str(x).strip() for x in raw if str(x).strip()][:8]
     except Exception as e:
@@ -117,7 +121,7 @@ async def extract_topics(task_text: str) -> list[str]:
         return []
 
 
-async def extract_conclusions(answer_text: str) -> list[str]:
+async def extract_conclusions(answer_text: str, bb: Optional[Blackboard] = None) -> list[str]:
     try:
         plain = answer_text
         try:
@@ -131,7 +135,7 @@ async def extract_conclusions(answer_text: str) -> list[str]:
 
         model = MODEL_REGISTRY.get("gpt_4o_mini", MODEL_REGISTRY["claude_sonnet"])
         provider = str(model.get("provider", "openai"))
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider=provider,
             model_id=model["model_id"],
@@ -140,6 +144,9 @@ async def extract_conclusions(answer_text: str) -> list[str]:
             temperature=0.1,
             max_tokens=250,
         )
+        if bb is not None:
+            bb.total_input_tokens += inp
+            bb.total_output_tokens += out
         raw = _json_array_from_response(response)
         return [str(x).strip() for x in raw if str(x).strip()][:6]
     except Exception as e:
@@ -151,6 +158,7 @@ async def detect_contradictions(
     new_task: str,
     new_conclusions: list[str],
     past_tasks: list[dict[str, Any]],
+    bb: Optional[Blackboard] = None,
 ) -> list[dict[str, Any]]:
     if not past_tasks or not new_conclusions:
         return []
@@ -187,7 +195,7 @@ Past tasks and conclusions:
 Detect any contradictions.
 """
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider="claude",
             model_id=model["model_id"],
@@ -196,6 +204,9 @@ Detect any contradictions.
             temperature=0.1,
             max_tokens=800,
         )
+        if bb is not None:
+            bb.total_input_tokens += inp
+            bb.total_output_tokens += out
 
         result = _json_object_from_response(response)
         if result and result.get("contradictions_found"):
@@ -238,10 +249,11 @@ async def save_task_to_memory(
     intelligence_score: Optional[dict[str, Any]] = None,
     orchestration_id: Optional[str] = None,
     watchlist_item_id: Optional[str] = None,
+    bb: Optional[Blackboard] = None,
 ) -> AgentTask:
     topics, conclusions = await asyncio.gather(
-        extract_topics(task_text),
-        extract_conclusions(final_answer),
+        extract_topics(task_text, bb),
+        extract_conclusions(final_answer, bb),
     )
 
     past_tasks = (
@@ -287,6 +299,7 @@ async def save_task_to_memory(
             new_task=task_text,
             new_conclusions=conclusions,
             past_tasks=past_dicts,
+            bb=bb,
         )
     except Exception as e:
         logger.warning("Contradiction detection after save failed: %s", e)

@@ -1,11 +1,11 @@
 """Auth routes — /api/auth/*"""
 
 import traceback
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
-from sqlalchemy import func
+from sqlalchemy import Date, cast, func
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
@@ -112,14 +112,6 @@ def _clear_auth_cookies(response: Response) -> None:
 
 def _user_to_response(user: User, db: Session) -> UserResponse:
     return orm_user_to_response(user, db)
-
-
-def _utc_now_naive() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-def _day_start_utc(d: datetime) -> datetime:
-    return d.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 _EXPERTISE_LEVELS = {"none", "curious", "practitioner", "expert", "researcher"}
@@ -334,10 +326,11 @@ async def get_user_usage(
     daily_limit = get_credit_budget(normalized)
     weekly_limit = daily_limit * 7
 
-    now = _utc_now_naive()
-    today_start = _day_start_utc(now)
-    week_start = now - timedelta(days=7)
-    month_start = now - timedelta(days=30)
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    week_start = today_start - timedelta(days=7)
+    month_start = today_start - timedelta(days=30)
 
     token_sum = UsageRecord.input_tokens + UsageRecord.output_tokens
 
@@ -365,22 +358,31 @@ async def get_user_usage(
     )
     total_tasks_month = int(total_tasks_month)
 
+    chart_start = today_start - timedelta(days=13)
+    day_col = cast(UsageRecord.timestamp, Date)
+    rows = (
+        db.query(day_col.label("day"), func.coalesce(func.sum(token_sum), 0).label("total"))
+        .filter(UsageRecord.user_id == user.id, UsageRecord.timestamp >= chart_start)
+        .group_by(day_col)
+        .all()
+    )
+    by_day: dict[date, int] = {}
+    for r in rows:
+        d = r.day
+        if isinstance(d, datetime):
+            dk = d.date()
+        elif isinstance(d, date):
+            dk = d
+        elif isinstance(d, str):
+            dk = date.fromisoformat(d[:10])
+        else:
+            dk = d
+        by_day[dk] = int(r.total or 0)
+
     usage_history: list[int] = []
     for i in range(13, -1, -1):
-        day = now - timedelta(days=i)
-        d0 = _day_start_utc(day)
-        d1 = d0 + timedelta(days=1)
-        day_total = int(
-            db.query(func.coalesce(func.sum(token_sum), 0))
-            .filter(
-                UsageRecord.user_id == user.id,
-                UsageRecord.timestamp >= d0,
-                UsageRecord.timestamp < d1,
-            )
-            .scalar()
-            or 0,
-        )
-        usage_history.append(day_total)
+        day = (today_start - timedelta(days=i)).date()
+        usage_history.append(by_day.get(day, 0))
 
     return {
         "credits_used_today": credits_used_today,

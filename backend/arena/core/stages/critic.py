@@ -62,7 +62,7 @@ Critically analyse this solution.
 Find every weakness and gap.
 """
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider=provider,
             model_id=model["model_id"],
@@ -71,6 +71,8 @@ Find every weakness and gap.
             temperature=0.4,
             max_tokens=AGENT_MAX_TOKENS,
         )
+        bb.total_input_tokens += inp
+        bb.total_output_tokens += out
 
         bb.critique.output = response
         bb.critique.model_used = model["model_id"]

@@ -74,7 +74,7 @@ Provide a comprehensive answer to this task.
             solver_core = f"{solver_core}\n\n{steelman_block}"
         system_prompt = append_expertise_to_system(solver_core, bb.expertise_modifier)
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider="claude",
             model_id=model["model_id"],
@@ -83,6 +83,8 @@ Provide a comprehensive answer to this task.
             temperature=0.5,
             max_tokens=AGENT_MAX_TOKENS,
         )
+        bb.total_input_tokens += inp
+        bb.total_output_tokens += out
 
         bb.solution.output = response
         bb.solution.model_used = model["model_id"]

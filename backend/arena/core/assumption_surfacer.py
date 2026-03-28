@@ -1,9 +1,13 @@
 import json
 import logging
 import re
+from typing import TYPE_CHECKING, Optional
 
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
+
+if TYPE_CHECKING:
+    from arena.core.blackboard import Blackboard
 
 logger = logging.getLogger("arena.assumptions")
 
@@ -52,7 +56,11 @@ Be specific not generic.
 """
 
 
-async def surface_assumptions(task: str, final_answer: str) -> dict:
+async def surface_assumptions(
+    task: str,
+    final_answer: str,
+    bb: Optional["Blackboard"] = None,
+) -> dict:
     plain_answer = final_answer
     try:
         parsed = json.loads(final_answer)
@@ -75,7 +83,7 @@ Answer to analyse:
 Surface all hidden assumptions.
 """
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider=model.get("provider", "openai"),
             model_id=model["model_id"],
@@ -84,6 +92,9 @@ Surface all hidden assumptions.
             temperature=0.3,
             max_tokens=700,
         )
+        if bb is not None:
+            bb.total_input_tokens += inp
+            bb.total_output_tokens += out
 
         match = re.search(r"\{.*\}", response, re.DOTALL)
         if match:

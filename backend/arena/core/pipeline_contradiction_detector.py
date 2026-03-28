@@ -6,8 +6,9 @@ import asyncio
 import json
 import logging
 import re
-from typing import Any, Dict, List, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict
 
+from arena.core.blackboard import Blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 
@@ -98,6 +99,7 @@ async def detect_contradictions(
     current_answer: str,
     current_question: str,
     past_tasks: List[Dict[str, Any]],
+    bb: Optional[Blackboard] = None,
 ) -> List[Contradiction]:
     if not past_tasks:
         return []
@@ -123,7 +125,7 @@ async def detect_contradictions(
     )
 
     try:
-        raw = await asyncio.wait_for(
+        raw, inp, out = await asyncio.wait_for(
             call_llm(
                 client=client,
                 provider=provider,
@@ -135,6 +137,9 @@ async def detect_contradictions(
             ),
             timeout=20.0,
         )
+        if bb is not None:
+            bb.total_input_tokens += inp
+            bb.total_output_tokens += out
     except Exception as e:
         logger.warning("[PIPELINE_CONTRA] detect_contradictions failed: %s", e)
         return []

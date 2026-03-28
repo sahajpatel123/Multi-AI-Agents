@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
@@ -17,6 +18,20 @@ logger = logging.getLogger(__name__)
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def get_today_token_usage(db: Session, user_id: int) -> int:
+    """Sum input+output tokens for usage_records since UTC midnight today."""
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    token_sum = UsageRecord.input_tokens + UsageRecord.output_tokens
+    return int(
+        db.query(func.coalesce(func.sum(token_sum), 0))
+        .filter(UsageRecord.user_id == user_id, UsageRecord.timestamp >= today_start)
+        .scalar()
+        or 0
+    )
 
 
 def estimate_cost(input_tokens: int, output_tokens: int, model_key: str = "claude_sonnet") -> float:

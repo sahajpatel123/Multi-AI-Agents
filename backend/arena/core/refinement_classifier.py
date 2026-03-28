@@ -1,7 +1,9 @@
 import json
 import logging
 import re
+from typing import Optional
 
+from arena.core.blackboard import Blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 
@@ -39,11 +41,15 @@ stages_needed should be the minimum stages required to handle this:
 """
 
 
-async def classify_refinement(user_message: str, current_answer: str) -> dict:
+async def classify_refinement(
+    user_message: str,
+    current_answer: str,
+    bb: Optional[Blackboard] = None,
+) -> dict:
     try:
         model = MODEL_REGISTRY.get("gpt_4o_mini", MODEL_REGISTRY["claude_sonnet"])
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider=model.get("provider", "openai"),
             model_id=model["model_id"],
@@ -55,6 +61,9 @@ async def classify_refinement(user_message: str, current_answer: str) -> dict:
             temperature=0.1,
             max_tokens=200,
         )
+        if bb is not None:
+            bb.total_input_tokens += inp
+            bb.total_output_tokens += out
 
         match = re.search(r"\{.*\}", response, re.DOTALL)
         if match:

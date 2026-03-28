@@ -156,7 +156,7 @@ Address all valid criticisms.
 Remove unverifiable claims.
 """
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider="claude",
             model_id=model["model_id"],
@@ -165,6 +165,8 @@ Remove unverifiable claims.
             temperature=0.4,
             max_tokens=AGENT_MAX_TOKENS,
         )
+        bb.total_input_tokens += inp
+        bb.total_output_tokens += out
 
         parsed, json_str = _parse_synthesizer_response(response)
 

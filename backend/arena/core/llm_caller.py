@@ -18,62 +18,65 @@ async def call_llm(
     user_prompt: str,
     temperature: float,
     max_tokens: int = 1000,
-) -> str:
+) -> tuple[str, int, int]:
     """
     Call LLM with provider-specific format.
-    
-    Args:
-        client: Either AsyncAnthropic or AsyncOpenAI client
-        provider: "claude", "grok", "openai", or "deepseek"
-        model_id: Model identifier
-        system_prompt: System prompt text
-        user_prompt: User prompt text
-        temperature: Temperature for generation
-        max_tokens: Max tokens to generate
-    
+
     Returns:
-        Generated text response
+        (generated text, input_tokens, output_tokens). On failure, ("", 0, 0).
     """
-    if provider == "claude":
-        # Anthropic format
-        response = await client.messages.create(
-            model=model_id,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-        return response.content[0].text
-    
-    elif provider in {"grok", "openai", "deepseek"}:
-        if client is None:
-            fallback_client, fallback_model_id = _get_claude_fallback()
-            print(f"[FALLBACK] {provider} client not initialized, using Claude")
-            return await call_llm(
-                client=fallback_client,
-                provider="claude",
-                model_id=fallback_model_id,
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=temperature,
+    try:
+        if provider == "claude":
+            response = await client.messages.create(
+                model=model_id,
                 max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
             )
-        # OpenAI-compatible chat completions format
-        response = await client.chat.completions.create(
-            model=model_id,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        return response.choices[0].message.content
-    
-    else:
+            text = ""
+            if response.content:
+                text = response.content[0].text or ""
+            u = getattr(response, "usage", None)
+            inp = int(getattr(u, "input_tokens", 0) or 0) if u else 0
+            out = int(getattr(u, "output_tokens", 0) or 0) if u else 0
+            return text, inp, out
+
+        if provider in {"grok", "openai", "deepseek"}:
+            if client is None:
+                fallback_client, fallback_model_id = _get_claude_fallback()
+                print(f"[FALLBACK] {provider} client not initialized, using Claude")
+                return await call_llm(
+                    client=fallback_client,
+                    provider="claude",
+                    model_id=fallback_model_id,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            response = await client.chat.completions.create(
+                model=model_id,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+            )
+            choice0 = response.choices[0] if response.choices else None
+            msg = choice0.message if choice0 else None
+            text = (msg.content or "") if msg else ""
+            u = getattr(response, "usage", None)
+            inp = int(getattr(u, "prompt_tokens", 0) or 0) if u else 0
+            out = int(getattr(u, "completion_tokens", 0) or 0) if u else 0
+            return text, inp, out
+
         raise ValueError(
             f"Unknown provider: {provider}. Must be claude, grok, openai, or deepseek."
         )
+    except Exception:
+        return "", 0, 0
 
 
 async def call_llm_streaming(
@@ -87,16 +90,7 @@ async def call_llm_streaming(
 ):
     """
     Call LLM with streaming and provider-specific format.
-    
-    Args:
-        client: Either AsyncAnthropic or AsyncOpenAI client
-        provider: "claude", "grok", "openai", or "deepseek"
-        model_id: Model identifier
-        system_prompt: System prompt text
-        user_prompt: User prompt text
-        temperature: Temperature for generation
-        max_tokens: Max tokens to generate
-    
+
     Yields:
         Text chunks as they arrive
     """
@@ -111,7 +105,7 @@ async def call_llm_streaming(
         ) as stream:
             async for text in stream.text_stream:
                 yield text
-    
+
     elif provider in {"grok", "openai", "deepseek"}:
         if client is None:
             fallback_client, fallback_model_id = _get_claude_fallback()
@@ -141,7 +135,7 @@ async def call_llm_streaming(
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
-    
+
     else:
         raise ValueError(
             f"Unknown provider: {provider}. Must be claude, grok, openai, or deepseek."

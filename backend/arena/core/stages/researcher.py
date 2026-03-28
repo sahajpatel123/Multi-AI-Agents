@@ -107,7 +107,7 @@ Search Results:
 Please research this task thoroughly and provide all relevant findings.
 """
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=grok_model["client"],
             provider=provider,
             model_id=grok_model["model_id"],
@@ -116,6 +116,8 @@ Please research this task thoroughly and provide all relevant findings.
             temperature=0.3,
             max_tokens=AGENT_MAX_TOKENS,
         )
+        bb.total_input_tokens += inp
+        bb.total_output_tokens += out
 
         bb.research.output = response
         bb.research.model_used = grok_model["model_id"]

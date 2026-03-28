@@ -177,7 +177,7 @@ async def discuss_with_agent(
         )
         full_user_message = f"{conversation_text}\n\nUSER: {request.message}" if conversation_text else request.message
         
-        reply_content = await call_persona(
+        reply_content, _, _ = await call_persona(
             persona_id=persona_id,
             system_prompt=system_prompt,
             user_prompt=full_user_message,
@@ -283,7 +283,7 @@ async def stream_discuss(
                 )
                 full_user_message = f"{conversation_text}\n\nUSER: {request.message}" if conversation_text else request.message
                 
-                content = await call_persona(
+                content, _, _ = await call_persona(
                     persona_id=persona_id,
                     system_prompt=system_prompt,
                     user_prompt=full_user_message,

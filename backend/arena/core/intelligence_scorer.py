@@ -1,9 +1,13 @@
 import json
 import logging
 import re
+from typing import TYPE_CHECKING, Optional
 
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
+
+if TYPE_CHECKING:
+    from arena.core.blackboard import Blackboard
 
 logger = logging.getLogger("arena.intelligence_scorer")
 
@@ -89,6 +93,7 @@ async def calculate_intelligence_score(
     final_answer: str,
     research_output: str = "",
     judgment_output: str = "",
+    bb: Optional["Blackboard"] = None,
 ) -> dict:
     plain_answer = final_answer
     try:
@@ -118,7 +123,7 @@ Judge assessment:
 Calculate the Intelligence Score.
 """
 
-        response = await call_llm(
+        response, inp, out = await call_llm(
             client=model["client"],
             provider=model.get("provider", "deepseek"),
             model_id=model["model_id"],
@@ -127,6 +132,9 @@ Calculate the Intelligence Score.
             temperature=0.1,
             max_tokens=600,
         )
+        if bb is not None:
+            bb.total_input_tokens += inp
+            bb.total_output_tokens += out
 
         match = re.search(r"\{.*\}", response, re.DOTALL)
         if match:

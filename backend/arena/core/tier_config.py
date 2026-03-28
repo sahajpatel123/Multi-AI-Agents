@@ -47,20 +47,24 @@ TIER_PERSONAS = {
     UserTier.PRO: ALL_PERSONAS,
 }
 
-TIER_DAILY_LIMITS = {
+# Per-day message caps for Arena chat (not token credits).
+TIER_MESSAGE_LIMITS = {
     UserTier.GUEST: 3,
     UserTier.FREE: 5,
     UserTier.PLUS: 15,
     UserTier.PRO: 35,
 }
 
-# Display / usage budget credits (approximate token budgets per day for UI).
-TIER_CREDIT_BUDGETS = {
+# Daily token/credit budgets (usage panel + Agent enforcement).
+TIER_DAILY_LIMITS = {
     UserTier.GUEST: 25_000,
     UserTier.FREE: 25_000,
     UserTier.PLUS: 100_000,
     UserTier.PRO: 300_000,
 }
+
+# Backward-compatible alias for UI credit budgets.
+TIER_CREDIT_BUDGETS = TIER_DAILY_LIMITS
 
 TIER_FEATURES = {
     UserTier.GUEST: {
@@ -135,11 +139,13 @@ def get_tier_personas(tier: UserTier | str | None) -> set[str]:
 
 
 def get_daily_limit(tier: UserTier | str | None) -> int:
-    return TIER_DAILY_LIMITS.get(normalize_tier(tier), TIER_DAILY_LIMITS[UserTier.FREE])
+    """Daily Arena message limit (not token credits)."""
+    return TIER_MESSAGE_LIMITS.get(normalize_tier(tier), TIER_MESSAGE_LIMITS[UserTier.FREE])
 
 
 def get_credit_budget(tier: UserTier | str | None) -> int:
-    return TIER_CREDIT_BUDGETS.get(normalize_tier(tier), TIER_CREDIT_BUDGETS[UserTier.FREE])
+    """Daily token/credit budget for usage UI and Agent limits."""
+    return TIER_DAILY_LIMITS.get(normalize_tier(tier), TIER_DAILY_LIMITS[UserTier.FREE])
 
 
 def has_feature(tier: UserTier | str | None, feature: str) -> bool:

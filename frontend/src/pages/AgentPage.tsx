@@ -1049,7 +1049,11 @@ export function AgentPage() {
       await pollAgentTaskUntilDone(startData.task_id);
       await loadTaskHistory();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Agent task failed');
+      if (e instanceof ApiError && e.status === 429) {
+        setError('Daily limit reached. Resets at midnight UTC.');
+      } else {
+        setError(e instanceof Error ? e.message : 'Agent task failed');
+      }
       setIsRunning(false);
       setIsRefining(false);
     }
