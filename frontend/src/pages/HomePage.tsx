@@ -1054,13 +1054,6 @@ export function HomePage() {
                   See it in action
                 </button>
               </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', animation: 'fadeUp 500ms ease 350ms backwards' }}>
-                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#EEF0F2', border: '2px solid #FAF7F4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 500, color: '#8C9BAB', marginLeft: 0 }}>S</div>
-                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#F0EDF2', border: '2px solid #FAF7F4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 500, color: '#9B8FAA', marginLeft: '-8px' }}>A</div>
-                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#EDF2EF', border: '2px solid #FAF7F4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 500, color: '#8AA899', marginLeft: '-8px' }}>R</div>
-                <span style={{ fontSize: '13px', color: '#6B6460', marginLeft: '10px' }}>Early users · No credit card needed</span>
-              </div>
             </div>
 
             {/* Right Column - Live Example */}
