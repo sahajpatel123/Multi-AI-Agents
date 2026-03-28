@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from arena.core.assumption_surfacer import surface_assumptions
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard
@@ -246,6 +247,30 @@ async def run_agent_pipeline_on_blackboard(
             bb.task_id,
             e,
         )
+
+    if bb.user_id and bb.status == AgentStatus.COMPLETE:
+        from arena.database import SessionLocal
+        from arena.db_models import UsageRecord
+
+        db = SessionLocal()
+        try:
+            usage = UsageRecord(
+                user_id=bb.user_id,
+                session_id=bb.task_id,
+                request_id=str(uuid4()),
+                input_tokens=20000,
+                output_tokens=0,
+                mode="agent",
+                prompt_category="agent_task",
+                timestamp=datetime.utcnow(),
+            )
+            db.add(usage)
+            db.commit()
+        except Exception as e:
+            print(f"Usage tracking failed: {e}")
+            db.rollback()
+        finally:
+            db.close()
 
     return bb
 
