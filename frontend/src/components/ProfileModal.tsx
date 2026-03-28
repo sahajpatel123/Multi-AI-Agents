@@ -12,9 +12,11 @@ import {
   type SubscriptionStatusResponse,
   type UserUsageResponse,
 } from '../api';
+import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { useAuth } from '../hooks/useAuth';
 import MicroLoader from './MicroLoader';
+import { RazorpayCheckout } from './RazorpayCheckout';
 
 const EXPERTISE_PILLS = [
   { id: 'none', label: 'None' },
@@ -189,6 +191,7 @@ function planFeatures(tier: string): string[] {
 export function ProfileModal() {
   const navigate = useNavigate();
   const { user, logout, refreshUser } = useAuth();
+  const { refreshTier } = useTier();
   const { isOpen, closing, origin, activeTab, setActiveTab, closeModal } = useProfileModal();
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
 
@@ -217,6 +220,7 @@ export function ProfileModal() {
   const [sub, setSub] = useState<SubscriptionStatusResponse | null>(null);
   const [subLoading, setSubLoading] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
+  const [addonCheckout, setAddonCheckout] = useState(false);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768);
@@ -410,6 +414,15 @@ export function ProfileModal() {
     sub?.has_subscription && sub.billing_period
       ? `${sub.billing_period === 'annual' ? 'ANNUAL' : 'MONTHLY'} SUBSCRIPTION · ${(sub.status || 'ACTIVE').toUpperCase()}`
       : 'FREE PLAN · NO BILLING';
+
+  const billingPeriod = (user.subscription_billing_period || sub?.billing_period || '').toLowerCase();
+  const consecutive = user.consecutive_payments ?? 0;
+  const showLoyaltyProgress =
+    tierUpper === 'PRO' &&
+    billingPeriod === 'monthly' &&
+    consecutive > 0 &&
+    !user.loyalty_reward_active;
+  const showLoyaltyActive = user.loyalty_reward_active === true;
 
   const mobile = isMobile;
   const panelAnim = closing
@@ -816,6 +829,71 @@ export function ProfileModal() {
                     </div>
                   ) : null}
                 </div>
+                {showLoyaltyActive ? (
+                  <div
+                    style={{
+                      background: '#EAF3DE',
+                      border: '0.5px solid #97C459',
+                      borderRadius: 8,
+                      padding: '12px 16px',
+                      marginBottom: 12,
+                    }}
+                  >
+                    <div style={{ fontSize: 13, color: '#3B6D11', fontWeight: 500 }}>🎁 Your loyalty reward is active</div>
+                    <div style={{ fontSize: 11, color: '#5A8C6A', marginTop: 6, lineHeight: 1.5 }}>
+                      Months 11 &amp; 12 are free — billing resumes automatically after.
+                      {user.loyalty_resume_at
+                        ? ` (${new Date(user.loyalty_resume_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })})`
+                        : ''}
+                    </div>
+                  </div>
+                ) : showLoyaltyProgress ? (
+                  <div
+                    style={{
+                      background: '#FAF7F2',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 8,
+                      padding: '12px 16px',
+                      marginBottom: 12,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+                      <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#A89070' }}>
+                        Loyalty reward
+                      </span>
+                      <span
+                        style={{
+                          background: '#F0E8DC',
+                          color: '#8C7355',
+                          fontSize: 10,
+                          borderRadius: 8,
+                          padding: '4px 10px',
+                        }}
+                      >
+                        Months 11 &amp; 12 free
+                      </span>
+                    </div>
+                    <div style={{ height: 6, background: '#EDE4D8', borderRadius: 3, overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${Math.min((consecutive / 10) * 100, 100)}%`,
+                          background: '#C4956A',
+                          borderRadius: 3,
+                          transition: 'width 0.4s ease',
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: 11, color: '#A89070', marginTop: 5 }}>
+                      Month {consecutive} of 10 — {Math.max(10 - consecutive, 0)} months to go
+                    </div>
+                    {consecutive >= 8 ? (
+                      <div style={{ fontSize: 11, color: '#C4956A', fontStyle: 'italic', marginTop: 8, lineHeight: 1.45 }}>
+                        Almost there — stay through month 10 and get months 11 &amp; 12 completely free
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleManagePlan}
@@ -853,6 +931,75 @@ export function ProfileModal() {
                   >
                     {cancelBusy ? 'Cancelling…' : 'Cancel subscription'}
                   </button>
+                ) : null}
+                {tierUpper === 'PLUS' ? (
+                  <>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        color: '#A89070',
+                        marginTop: 14,
+                        marginBottom: 10,
+                      }}
+                    >
+                      Expand your plan
+                    </div>
+                    {user.agent_addon_active ? (
+                      <div style={{ fontSize: 12, color: '#3B6D11', textAlign: 'center', padding: '8px 0' }}>✓ Agent Mode active</div>
+                    ) : (
+                      <div
+                        style={{
+                          background: '#FAF7F2',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 8,
+                          padding: '14px 16px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                          <span style={{ fontSize: 14, color: '#2C1810', fontWeight: 500 }}>Agent Mode</span>
+                          <span style={{ fontSize: 14, color: '#C4956A' }}>₹599/month</span>
+                        </div>
+                        <p style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', margin: '0 0 10px', lineHeight: 1.5 }}>
+                          7-stage pipeline · Full research depth · Plus limits apply
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setAddonCheckout(true)}
+                          style={{
+                            width: '100%',
+                            background: '#2C1810',
+                            color: '#C4956A',
+                            borderRadius: 20,
+                            padding: '8px 18px',
+                            fontSize: 12,
+                            fontFamily: 'Georgia, serif',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Add Agent Mode →
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : null}
+                {addonCheckout && user.email ? (
+                  <RazorpayCheckout
+                    planKey="agent_addon"
+                    agentAddon
+                    prefillEmail={user.email}
+                    onSuccess={async () => {
+                      setAddonCheckout(false);
+                      const s = await getSubscriptionStatus();
+                      setSub(s);
+                      await refreshUser();
+                      await refreshTier();
+                    }}
+                    onError={() => setAddonCheckout(false)}
+                    onClose={() => setAddonCheckout(false)}
+                  />
                 ) : null}
               </>
             )}

@@ -25,7 +25,7 @@ export function Footer() {
         .breathe-slow { animation: breathe 3.2s ease-in-out infinite; }
       `}</style>
 
-      <div className="footer-top" style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 1fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
+      <div className="footer-top" style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
         <div>
           <button
             onClick={() => navigate('/')}
@@ -51,12 +51,6 @@ export function Footer() {
           <button onClick={() => navigate('/privacy')} style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>Privacy</button>
         </div>
 
-        <div>
-          <h4 style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714', marginBottom: '.8rem', textTransform: 'uppercase', letterSpacing: '.08em' }}>Connect</h4>
-          <a href="https://x.com/sahajp001" target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', textDecoration: 'none', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>X / Twitter</a>
-          <a href="https://github.com/sahajpatel123" target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', textDecoration: 'none', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>GitHub</a>
-          <a href="https://www.linkedin.com/in/sahajpatel1703/" target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', textDecoration: 'none', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>LinkedIn</a>
-        </div>
       </div>
 
       <div className="footer-bottom" style={{ borderTop: '0.5px solid #E0D8D0', marginTop: '1.5rem', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

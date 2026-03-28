@@ -23,6 +23,12 @@ def main():
         from sqlalchemy import text
 
         migrations = [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS consecutive_payments INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS loyalty_reward_active BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS loyalty_free_months_remaining INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS loyalty_resume_at TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS agent_addon_active BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS agent_addon_subscription_id VARCHAR(64)",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
             "name VARCHAR DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS "

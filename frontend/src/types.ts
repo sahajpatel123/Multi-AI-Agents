@@ -140,6 +140,12 @@ export interface User {
   expertise_level?: string;
   expertise_domain?: string;
   feedback_calibration?: FeedbackCalibration;
+  consecutive_payments?: number;
+  loyalty_reward_active?: boolean;
+  loyalty_free_months_remaining?: number;
+  loyalty_resume_at?: string | null;
+  agent_addon_active?: boolean;
+  subscription_billing_period?: string | null;
 }
 
 export interface TierFeatures {

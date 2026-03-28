@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Ellipsis, Lock, Pencil, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
+import { RazorpayCheckout } from '../components/RazorpayCheckout';
 import { TemplatesModal } from '../components/TemplatesModal';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -610,12 +611,13 @@ export function AgentPage() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, isLoading: authLoading, refreshUser } = useAuth();
-  const { canUseFeature, isPro } = useTier();
+  const { canUseFeature, isPro, isPlus, refreshTier } = useTier();
   const canAgent = canUseFeature('agent_mode');
   const canOrchestrate = canUseFeature('agent_orchestrate');
   const canWatchlist = canUseFeature('agent_watchlist');
   const { openModal, setActiveTab, isOpen: profileModalOpen } = useProfileModal();
 
+  const [agentAddonCheckout, setAgentAddonCheckout] = useState(false);
   const [task, setTask] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
@@ -2289,67 +2291,157 @@ export function AgentPage() {
         }}
       >
         {!canAgent ? (
-          <div
-            style={{
-              maxWidth: 480,
-              margin: '0 auto',
-              textAlign: 'center',
-              padding: '3rem 2rem',
-            }}
-          >
-            <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-              <Lock style={{ width: 32, height: 32, color: '#C4956A' }} />
+          isPlus && user && !user.agent_addon_active ? (
+            <div style={{ maxWidth: 640, margin: '0 auto', padding: '3rem 1.25rem' }}>
+              <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                <Lock style={{ width: 32, height: 32, color: '#C4956A' }} />
+              </div>
+              <h1 style={{ fontSize: 28, fontWeight: 400, color: '#1A1714', marginBottom: '0.5rem', textAlign: 'center' }}>
+                Agent
+              </h1>
+              <p style={{ fontSize: 14, color: '#6B6460', lineHeight: 1.7, marginBottom: '1.5rem', textAlign: 'center' }}>
+                A 7-stage AI pipeline that researches, solves, critiques, verifies, and synthesises. Unlock it on your Plus
+                plan or upgrade to Pro.
+              </p>
+              {agentAddonCheckout && user.email ? (
+                <RazorpayCheckout
+                  planKey="agent_addon"
+                  agentAddon
+                  prefillEmail={user.email}
+                  onSuccess={async () => {
+                    setAgentAddonCheckout(false);
+                    await refreshUser();
+                    await refreshTier();
+                  }}
+                  onError={() => setAgentAddonCheckout(false)}
+                  onClose={() => setAgentAddonCheckout(false)}
+                />
+              ) : null}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 16,
+                  background: '#FAF7F2',
+                  border: '0.5px solid #E0D5C5',
+                  borderRadius: 12,
+                  padding: 20,
+                  alignItems: 'stretch',
+                }}
+              >
+                <div style={{ borderRight: '0.5px solid #E0D5C5', paddingRight: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginBottom: 8 }}>Add Agent to your Plus plan</div>
+                  <div style={{ fontSize: 14, color: '#C4956A', marginBottom: 6 }}>₹599/month</div>
+                  <p style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', margin: '0 0 14px', lineHeight: 1.5 }}>
+                    Keep your Plus plan, unlock Agent Mode
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setAgentAddonCheckout(true)}
+                    style={{
+                      width: '100%',
+                      background: '#2C1810',
+                      color: '#C4956A',
+                      borderRadius: 20,
+                      padding: '10px 18px',
+                      fontSize: 12,
+                      fontFamily: 'Georgia, serif',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Add for ₹599/month →
+                  </button>
+                </div>
+                <div style={{ paddingLeft: 4 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginBottom: 8 }}>Upgrade to Pro</div>
+                  <div style={{ fontSize: 14, color: '#C4956A', marginBottom: 6 }}>₹2,499/month</div>
+                  <p style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', margin: '0 0 14px', lineHeight: 1.5 }}>
+                    3× more credits + priority routing
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/pricing')}
+                    style={{
+                      width: '100%',
+                      background: 'transparent',
+                      color: '#C4956A',
+                      borderRadius: 20,
+                      padding: '10px 18px',
+                      fontSize: 12,
+                      fontFamily: 'Georgia, serif',
+                      border: '0.5px solid #C4956A',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Upgrade to Pro →
+                  </button>
+                </div>
+              </div>
             </div>
-            <h1 style={{ fontSize: 28, fontWeight: 400, color: '#1A1714', marginBottom: '0.5rem' }}>Agent</h1>
-            <p style={{ fontSize: 14, color: '#6B6460', lineHeight: 1.7, marginBottom: '2rem' }}>
-              A 7-stage AI pipeline that researches, solves, critiques, verifies, and synthesises. Not just an answer — a
-              process.
-            </p>
+          ) : (
             <div
               style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 8,
-                justifyContent: 'center',
-                marginBottom: '2rem',
+                maxWidth: 480,
+                margin: '0 auto',
+                textAlign: 'center',
+                padding: '3rem 2rem',
               }}
             >
-              {['7 reasoning stages', 'Confidence scoring', 'Web research', 'Self-correction'].map((label) => (
-                <span
-                  key={label}
-                  style={{
-                    background: '#F0EBE3',
-                    color: '#6B6460',
-                    borderRadius: 999,
-                    padding: '6px 14px',
-                    fontSize: 12,
-                  }}
-                >
-                  {label}
-                </span>
-              ))}
+              <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                <Lock style={{ width: 32, height: 32, color: '#C4956A' }} />
+              </div>
+              <h1 style={{ fontSize: 28, fontWeight: 400, color: '#1A1714', marginBottom: '0.5rem' }}>Agent</h1>
+              <p style={{ fontSize: 14, color: '#6B6460', lineHeight: 1.7, marginBottom: '2rem' }}>
+                A 7-stage AI pipeline that researches, solves, critiques, verifies, and synthesises. Not just an answer — a
+                process.
+              </p>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  justifyContent: 'center',
+                  marginBottom: '2rem',
+                }}
+              >
+                {['7 reasoning stages', 'Confidence scoring', 'Web research', 'Self-correction'].map((label) => (
+                  <span
+                    key={label}
+                    style={{
+                      background: '#F0EBE3',
+                      color: '#6B6460',
+                      borderRadius: 999,
+                      padding: '6px 14px',
+                      fontSize: 12,
+                    }}
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/pricing')}
+                style={{
+                  background: '#1A1714',
+                  color: '#FAF7F4',
+                  borderRadius: 999,
+                  padding: '13px 32px',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  width: '100%',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Upgrade to Pro
+              </button>
+              {!isPro && (
+                <p style={{ fontSize: 12, color: '#B0A9A2', marginTop: '1rem' }}>Pro includes Agent Mode and more.</p>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => navigate('/pricing')}
-              style={{
-                background: '#1A1714',
-                color: '#FAF7F4',
-                borderRadius: 999,
-                padding: '13px 32px',
-                fontSize: 14,
-                fontWeight: 500,
-                width: '100%',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              Upgrade to Pro
-            </button>
-            {!isPro && (
-              <p style={{ fontSize: 12, color: '#B0A9A2', marginTop: '1rem' }}>Pro includes Agent Mode and more.</p>
-            )}
-          </div>
+          )
         ) : (
           <>
             {bridgeMeta && isRunning && (

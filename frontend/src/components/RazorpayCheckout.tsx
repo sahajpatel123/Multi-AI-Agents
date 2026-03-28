@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { createSubscription, verifyPayment } from '../api';
+import { createAgentAddonSubscription, createSubscription, verifyPayment } from '../api';
 
 interface Props {
   planKey: string;
+  /** When set, calls `/payments/addon/agent` instead of `/payments/subscribe`. */
+  agentAddon?: boolean;
   prefillEmail?: string;
   onSuccess: () => void;
   onError: (error: string) => void;
@@ -28,7 +30,7 @@ const loadRazorpayScript = (): Promise<boolean> =>
     document.body.appendChild(script);
   });
 
-export function RazorpayCheckout({ planKey, prefillEmail, onSuccess, onError, onClose }: Props) {
+export function RazorpayCheckout({ planKey, agentAddon, prefillEmail, onSuccess, onError, onClose }: Props) {
   const effectGeneration = useRef(0);
 
   useEffect(() => {
@@ -43,7 +45,9 @@ export function RazorpayCheckout({ planKey, prefillEmail, onSuccess, onError, on
       }
 
       try {
-        const subscriptionData = await createSubscription(planKey);
+        const subscriptionData = agentAddon
+          ? await createAgentAddonSubscription()
+          : await createSubscription(planKey);
 
         if (gen !== effectGeneration.current) return;
         if (!window.Razorpay) {
@@ -98,7 +102,7 @@ export function RazorpayCheckout({ planKey, prefillEmail, onSuccess, onError, on
     };
 
     void run();
-  }, [planKey, prefillEmail, onSuccess, onError, onClose]);
+  }, [planKey, agentAddon, prefillEmail, onSuccess, onError, onClose]);
 
   return null;
 }

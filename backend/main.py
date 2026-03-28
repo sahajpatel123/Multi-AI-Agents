@@ -28,6 +28,7 @@ from arena.routes.payments import router as payments_router
 from arena.routes.agent import router as agent_router
 from arena.routes.calibration import router as calibration_router
 from arena.core.live_scheduler import schedule_live_checks
+from arena.core.loyalty_scheduler import schedule_loyalty_checks
 from arena.core.watchlist_runner import schedule_watchlist_checks
 
 logger = logging.getLogger(__name__)
@@ -177,6 +178,7 @@ def create_app() -> FastAPI:
 
         asyncio.create_task(schedule_live_checks())
         asyncio.create_task(schedule_watchlist_checks())
+        asyncio.create_task(schedule_loyalty_checks())
 
     # ── Health check ──────────────────────────────────────────
     @app.get("/api/health", tags=["health"])

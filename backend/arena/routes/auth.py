@@ -28,6 +28,7 @@ from arena.core.auth import (
 from arena.core.feedback_calibrator import get_answer_feedback_distribution
 from arena.core.tier_config import (
     TIER_FEATURES,
+    UserTier,
     get_credit_budget,
     get_daily_limit,
     get_tier_personas,
@@ -398,12 +399,17 @@ async def get_user_usage(
 
 @user_router.get("/tier")
 async def get_user_tier_summary(
-    user: UserResponse = Depends(get_current_user_required),
+    user: User = Depends(get_current_user_required_orm),
 ) -> dict:
     normalized_tier = normalize_tier(user.tier.value if hasattr(user.tier, "value") else str(user.tier))
     daily_limit = get_daily_limit(normalized_tier)
     messages_used_today = min(int(user.prompt_count_today or 0), daily_limit)
-    features = TIER_FEATURES[normalized_tier]
+    base = TIER_FEATURES[normalized_tier]
+    agent_mode = bool(base.get("agent_mode", False))
+    if normalized_tier == UserTier.PRO:
+        agent_mode = True
+    elif normalized_tier == UserTier.PLUS and getattr(user, "agent_addon_active", False):
+        agent_mode = True
 
     return {
         "tier": normalized_tier.value,
@@ -412,14 +418,14 @@ async def get_user_tier_summary(
         "messages_remaining": max(daily_limit - messages_used_today, 0),
         "allowed_personas": sorted(get_tier_personas(normalized_tier)),
         "features": {
-            "debate": features["debate"],
-            "discuss": features["discuss"],
-            "memory": features["memory"],
-            "saved_responses": features["saved_responses"],
-            "agent_mode": features["agent_mode"],
-            "agent_orchestrate": features.get("agent_orchestrate", False),
-            "agent_watchlist": features.get("agent_watchlist", False),
-            "scoring_audit": features["scoring_audit"],
+            "debate": base["debate"],
+            "discuss": base["discuss"],
+            "memory": base["memory"],
+            "saved_responses": base["saved_responses"],
+            "agent_mode": agent_mode,
+            "agent_orchestrate": base.get("agent_orchestrate", False),
+            "agent_watchlist": base.get("agent_watchlist", False),
+            "scoring_audit": base["scoring_audit"],
         },
         "upgrade_to": upgrade_target(normalized_tier),
     }

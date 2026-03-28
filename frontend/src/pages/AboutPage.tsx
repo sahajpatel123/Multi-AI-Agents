@@ -31,8 +31,8 @@ export function AboutPage() {
             {/* Left Column */}
             <div>
               <h1 style={{ fontSize: '52px', fontWeight: 500, letterSpacing: '-.03em', lineHeight: 1.1, marginBottom: '1.5rem' }}>
-                <span style={{ display: 'block', color: '#1A1714' }}>Built by one</span>
-                <span style={{ display: 'block', color: '#C4956A', fontStyle: 'italic' }}>person.</span>
+                <span style={{ display: 'block', color: '#1A1714' }}>Reasoning,</span>
+                <span style={{ display: 'block', color: '#C4956A', fontStyle: 'italic' }}>made visible.</span>
               </h1>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '460px' }}>
@@ -40,10 +40,10 @@ export function AboutPage() {
                   Arena started as a simple question: why do we accept a single AI's answer when we know every perspective is shaped by assumptions? Most AI tools are optimized to agree with you. Arena is built to challenge you.
                 </p>
                 <p style={{ fontSize: '14px', color: '#6B6460', lineHeight: 1.8 }}>
-                  I'm Sahaj Patel — an 18-year-old pursuing BCA in AI & ML, building Arena as a real product while studying. The goal was always bigger than a class project: a platform that makes AI reasoning transparent, competitive, and genuinely useful.
+                  The goal is a platform that makes AI reasoning transparent, competitive, and genuinely useful — where multiple agents do not just answer questions, but debate, verify, and challenge each other to surface stronger conclusions.
                 </p>
                 <p style={{ fontSize: '14px', color: '#6B6460', lineHeight: 1.8 }}>
-                  Arena is the first product in a larger vision — a platform where multiple AI agents don't just answer questions, but debate, verify, and challenge each other to surface the truth. The persona library, Agent mode, and the full dual-mode architecture are all in active development.
+                  The persona library, Agent mode, and the full dual-mode architecture are in active development.
                 </p>
               </div>
             </div>

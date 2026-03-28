@@ -36,6 +36,7 @@ from arena.db_models import (
     AgentTask as AgentTaskRow,
     AnswerFeedback,
     Orchestration,
+    User,
     WatchlistItem,
 )
 from arena.models.schemas import UserResponse
@@ -417,17 +418,23 @@ def _stage_status_value(status) -> str:
     return status.value if hasattr(status, "value") else str(status)
 
 
-def _ensure_agent_access(user: UserResponse) -> None:
-    tier = normalize_tier(user.tier)
-    if not has_feature(tier, "agent_mode"):
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "error": "agent_not_available",
-                "message": "Agent Mode requires Arena Plus or Pro.",
-                "upgrade_required": "plus",
-            },
-        )
+def _ensure_agent_access(user: UserResponse, db: Session) -> None:
+    u = db.query(User).filter(User.id == user.id).first()
+    if not u:
+        raise HTTPException(status_code=401, detail="User not found")
+    tier = normalize_tier(u.tier)
+    if tier == UserTier.PRO:
+        return
+    if tier == UserTier.PLUS and getattr(u, "agent_addon_active", False):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "error": "agent_not_available",
+            "message": "Agent Mode requires Pro, or Plus with the Agent add-on.",
+            "upgrade_required": "plus",
+        },
+    )
 
 
 def _ensure_agent_orchestrate_access(user: UserResponse) -> None:
@@ -777,7 +784,7 @@ async def get_task_answer_feedback(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     tid = task_id.strip()
     owned = (
         db.query(AgentTaskRow)
@@ -807,7 +814,7 @@ async def post_task_answer_feedback(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     tid = task_id.strip()
     owned = (
         db.query(AgentTaskRow)
@@ -849,7 +856,7 @@ async def start_orchestration(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     _ensure_agent_orchestrate_access(user)
 
     raw_qs = [str(q).strip() for q in body.questions if str(q).strip()]
@@ -909,7 +916,7 @@ async def get_orchestration_status(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     _ensure_agent_orchestrate_access(user)
 
     orch = db.query(Orchestration).filter(Orchestration.id == orch_id.strip()).first()
@@ -974,7 +981,7 @@ async def export_orchestration_pdf(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     _ensure_agent_orchestrate_access(user)
 
     oid = orch_id.strip()
@@ -1022,7 +1029,7 @@ async def export_task_pdf(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     tid = task_id.strip()
     row = (
         db.query(AgentTaskRow)
@@ -1053,7 +1060,7 @@ async def run_agent_task(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
 
     tier = normalize_tier(user.tier)
     today_usage = get_today_token_usage(db, user.id)
@@ -1111,7 +1118,7 @@ async def get_agent_status(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     bb = get_blackboard(task_id)
     if bb:
         _ensure_task_owner(bb, user)
@@ -1166,7 +1173,7 @@ async def get_agent_result(
     db: Session = Depends(get_db),
 ):
     """Returns full blackboard including per-stage output, model, and duration_ms for revision trace."""
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     bb = get_blackboard(task_id)
     if bb:
         _ensure_task_owner(bb, user)
@@ -1196,8 +1203,9 @@ async def get_agent_result(
 async def challenge_agent_answer(
     body: AgentChallengeRequest,
     user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     answer = body.answer.strip()
     if not answer:
         raise HTTPException(status_code=400, detail="Answer required")
@@ -1256,8 +1264,9 @@ async def challenge_agent_answer(
 async def agent_rebuttal(
     body: AgentRebuttalRequest,
     user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     task = body.task.strip() or "(context not provided)"
     answer = body.answer.strip()
     challenge = body.challenge.strip()
@@ -1422,7 +1431,7 @@ async def get_agent_history(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     from arena.core.agent_memory import get_user_task_history
 
     tier = normalize_tier(user.tier)
@@ -1485,7 +1494,7 @@ async def toggle_agent_task_live(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
@@ -1513,7 +1522,7 @@ async def get_agent_task_live_updates(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
@@ -1531,7 +1540,7 @@ async def mark_agent_live_updates_read(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
@@ -1563,7 +1572,7 @@ async def get_memory_context(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     from arena.core.agent_memory import get_user_memory_context
 
     context = get_user_memory_context(
@@ -1579,7 +1588,7 @@ async def get_saved_agent_task(
     db: Session = Depends(get_db),
 ):
     """Load a persisted Agent task from DB when no in-memory blackboard exists."""
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
@@ -1627,7 +1636,7 @@ async def submit_task_feedback(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
     task_record = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == body.task_id, AgentTaskRow.user_id == user.id)
@@ -1659,7 +1668,7 @@ async def refine_agent_answer(
     background_tasks: BackgroundTasks,
     user: UserResponse = Depends(get_current_user_required),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
 
     message = body.message.strip()
     if not message:
@@ -1718,7 +1727,7 @@ async def verify_arena_answer(
     background_tasks: BackgroundTasks,
     user: UserResponse = Depends(get_current_user_required),
 ):
-    _ensure_agent_access(user)
+    _ensure_agent_access(user, db)
 
     arena_answer = body.arena_answer.strip()
     original_question = body.original_question.strip()

@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     razorpay_plus_annual_plan_id: str = ""
     razorpay_pro_monthly_plan_id: str = ""
     razorpay_pro_annual_plan_id: str = ""
+    razorpay_agent_addon_plan_id: str = ""
 
     @field_validator("debug", mode="before")
     @classmethod

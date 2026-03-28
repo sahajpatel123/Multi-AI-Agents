@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from arena.config import get_settings
 from arena.core.tier_config import normalize_tier
 from arena.database import get_db
-from arena.db_models import User, UserTier
+from arena.db_models import Subscription, User, UserTier
 from arena.core.feedback_calibrator import get_feedback_calibration
 from arena.models.schemas import FeedbackCalibrationInfo, UserResponse
 from arena.core.token_blacklist import token_blacklist
@@ -118,6 +118,25 @@ def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
     return db.query(User).filter(User.id == user_id).first()
 
 
+def _main_subscription_billing_period(db: Session, user: User) -> Optional[str]:
+    """Billing period of the user's primary Plus/Pro subscription (excludes Agent add-on)."""
+    uid = getattr(user, "subscription_id", None)
+    if uid:
+        row = db.query(Subscription).filter(Subscription.id == uid).first()
+        if row and row.tier != "AGENT_ADDON":
+            return row.billing_period
+    row = (
+        db.query(Subscription)
+        .filter(
+            Subscription.user_id == user.id,
+            Subscription.tier.in_(("PLUS", "PRO")),
+        )
+        .order_by(Subscription.id.desc())
+        .first()
+    )
+    return row.billing_period if row else None
+
+
 def orm_user_to_response(user: User, db: Optional[Session] = None) -> UserResponse:
     """Build UserResponse from SQLAlchemy User (avoid model_validate on ORM quirks / NULLs)."""
     tier_raw = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
@@ -126,6 +145,7 @@ def orm_user_to_response(user: User, db: Optional[Session] = None) -> UserRespon
         feedback_calibration = FeedbackCalibrationInfo(**cal_raw)
     else:
         feedback_calibration = FeedbackCalibrationInfo()
+    sub_period = _main_subscription_billing_period(db, user) if db is not None else None
     return UserResponse(
         id=user.id,
         email=user.email,
@@ -136,6 +156,12 @@ def orm_user_to_response(user: User, db: Optional[Session] = None) -> UserRespon
         expertise_level=getattr(user, "expertise_level", None) or "curious",
         expertise_domain=getattr(user, "expertise_domain", None) or "",
         feedback_calibration=feedback_calibration,
+        consecutive_payments=int(getattr(user, "consecutive_payments", 0) or 0),
+        loyalty_reward_active=bool(getattr(user, "loyalty_reward_active", False)),
+        loyalty_free_months_remaining=int(getattr(user, "loyalty_free_months_remaining", 0) or 0),
+        loyalty_resume_at=getattr(user, "loyalty_resume_at", None),
+        agent_addon_active=bool(getattr(user, "agent_addon_active", False)),
+        subscription_billing_period=sub_period,
     )
 
 

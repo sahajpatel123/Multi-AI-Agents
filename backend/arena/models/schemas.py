@@ -254,6 +254,12 @@ class UserResponse(BaseModel):
     expertise_level: str = "curious"
     expertise_domain: str = ""
     feedback_calibration: FeedbackCalibrationInfo = Field(default_factory=FeedbackCalibrationInfo)
+    consecutive_payments: int = 0
+    loyalty_reward_active: bool = False
+    loyalty_free_months_remaining: int = 0
+    loyalty_resume_at: Optional[datetime] = None
+    agent_addon_active: bool = False
+    subscription_billing_period: Optional[str] = None
 
     @field_validator("name", mode="before")
     @classmethod

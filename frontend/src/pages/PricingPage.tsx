@@ -11,13 +11,14 @@ import { useProfileModal } from '../context/ProfileModalContext';
 import { setRedirectIntent } from '../utils/redirectIntent';
 
 const comparisonRows = [
+  ['Credits per day', '25K', '100K', '300K'],
   ['Questions per day', '5', '15', '35'],
   ['Personas available', '6', '16', '16'],
   ['Debate mode', '✕', '✓', '✓'],
   ['Memory', '✕', '✓', '✓'],
   ['Focused chat', '✕', '✓', '✓'],
   ['Saved responses', '✕', '✓', '✓'],
-  ['Agent mode', '✕', '✕', '✓ Soon'],
+  ['Agent mode', '✕', '✕', '✓'],
   ['Scoring audit', '✕', '✕', '✓'],
   ['Priority speed', '✕', '✕', '✓'],
 ];
@@ -29,7 +30,8 @@ const faqs = [
   },
   {
     question: 'What is the difference between Plus and Pro?',
-    answer: 'Plus gives you everything Arena currently offers — all 16 minds, debate mode, memory, and focused chat. Pro adds Agent mode (coming soon), unlimited debates, scoring audit visibility, and priority response speed. If you are unsure, start with Plus.',
+    answer:
+      'Plus unlocks all 16 minds, debate mode, memory, and focused chat. Pro adds full Agent Mode (7-stage pipeline), unlimited debates, scoring audit visibility, and priority response speed. Plus users can add Agent Mode as an optional in-app add-on.',
   },
   {
     question: 'Can I change plans anytime?',
@@ -38,6 +40,8 @@ const faqs = [
 ];
 
 const explorerFeatures = [
+  '25,000 credits per day',
+  'Arena mode',
   '5 questions per day',
   '6 minds to explore:',
   '· The Analyst',
@@ -127,13 +131,11 @@ function FeatureList({
   dotColor,
   textColor,
   subColor,
-  badgeDark = false,
 }: {
   items: string[];
   dotColor: string;
   textColor: string;
   subColor: string;
-  badgeDark?: boolean;
 }) {
   return (
     <div style={{ flex: 1 }}>
@@ -173,24 +175,7 @@ function FeatureList({
                 fontWeight: 400,
               }}
             >
-              {item === 'Agent mode access' ? (
-                <>
-                  Agent mode access{' '}
-                  <span
-                    style={{
-                      background: badgeDark ? 'rgba(250,247,244,0.1)' : '#F0EBE3',
-                      color: badgeDark ? 'rgba(250,247,244,0.4)' : '#6B6460',
-                      fontSize: '10px',
-                      padding: '2px 7px',
-                      borderRadius: '999px',
-                    }}
-                  >
-                    Coming soon
-                  </span>
-                </>
-              ) : (
-                item
-              )}
+              {item}
             </span>
           </div>
         );
@@ -473,7 +458,7 @@ export function PricingPage() {
               >
                 <span>Annual</span>
                 <span style={{ color: '#C4B8AE', margin: '0 4px', fontSize: '11px' }}>·</span>
-                <span style={{ fontSize: '11px', color: '#8AA899', fontWeight: 400 }}>Save 31%</span>
+                <span style={{ fontSize: '11px', color: '#8AA899', fontWeight: 400 }}>lower monthly rate</span>
               </button>
             </div>
           </div>
@@ -505,7 +490,7 @@ export function PricingPage() {
             <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: '#6B6460', letterSpacing: '.08em', marginBottom: '.8rem' }}>
               Explorer
             </p>
-            <div style={{ fontSize: '48px', fontWeight: 500, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>$0</div>
+            <div style={{ fontSize: '48px', fontWeight: 500, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹0</div>
             <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>forever</p>
             <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', margin: '0.75rem 0' }} />
             <FeatureList items={explorerFeatures} dotColor="#D4CCC4" textColor="#1A1714" subColor="#8B8480" />
@@ -574,7 +559,7 @@ export function PricingPage() {
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '.35rem' }}>
-                  <span style={{ fontSize: '40px', fontWeight: 400, letterSpacing: '-.02em', color: '#1A1714', lineHeight: 1 }}>₹693/mo</span>
+                  <span style={{ fontSize: '40px', fontWeight: 400, letterSpacing: '-.02em', color: '#1A1714', lineHeight: 1 }}>₹742/mo</span>
                   <span
                     style={{
                       background: '#EFF4EF',
@@ -586,11 +571,11 @@ export function PricingPage() {
                       verticalAlign: 'middle',
                     }}
                   >
-                    -31%
+                    Save 26%
                   </span>
                 </div>
-                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '4px' }}>₹8,299 billed annually</p>
-                <p style={{ fontSize: '12px', color: '#C4B8AE', textDecoration: 'line-through', marginBottom: '1rem' }}>vs ₹11,988 monthly</p>
+                <p style={{ fontSize: '12px', color: '#8B8480', marginBottom: '4px' }}>billed ₹8,904/year</p>
+                <p style={{ fontSize: '12px', color: '#C4B8AE', textDecoration: 'line-through', marginBottom: '1rem' }}>vs ₹11,988 if paid monthly</p>
               </>
             )}
 
@@ -686,13 +671,13 @@ export function PricingPage() {
 
             {billing === 'monthly' ? (
               <>
-                <div style={{ fontSize: '40px', fontWeight: 400, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹1,999/mo</div>
+                <div style={{ fontSize: '40px', fontWeight: 400, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹2,499/mo</div>
                 <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>per month, billed monthly</p>
               </>
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '.35rem' }}>
-                  <span style={{ fontSize: '40px', fontWeight: 400, color: '#1A1714', lineHeight: 1 }}>₹1,383/mo</span>
+                  <span style={{ fontSize: '40px', fontWeight: 400, color: '#1A1714', lineHeight: 1 }}>₹1,650/mo</span>
                   <span
                     style={{
                       background: '#EFF4EF',
@@ -703,10 +688,10 @@ export function PricingPage() {
                       borderRadius: '999px',
                     }}
                   >
-                    -31%
+                    Save 34%
                   </span>
                 </div>
-                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '4px' }}>₹16,599 billed annually</p>
+                <p style={{ fontSize: '12px', color: '#8B8480', marginBottom: '4px' }}>billed ₹19,800/year</p>
                 <p
                   style={{
                     fontSize: '12px',
@@ -715,18 +700,13 @@ export function PricingPage() {
                     marginBottom: '1rem',
                   }}
                 >
-                  vs ₹23,988 monthly
+                  vs ₹29,988 if paid monthly
                 </p>
               </>
             )}
 
             <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', margin: '0.75rem 0' }} />
-            <FeatureList
-              items={architectFeatures}
-              dotColor="rgba(196,149,106,0.5)"
-              textColor="#1A1714"
-              subColor="#6B6460"
-            />
+            <FeatureList items={architectFeatures} dotColor="rgba(196,149,106,0.5)" textColor="#1A1714" subColor="#6B6460" />
             {isCurrentPlan('pro') ? (
               <div
                 style={{
@@ -772,6 +752,18 @@ export function PricingPage() {
                 Upgrade to Pro
               </button>
             )}
+            <p
+              style={{
+                fontSize: '11px',
+                color: '#A89070',
+                fontStyle: 'italic',
+                textAlign: 'center',
+                marginTop: '8px',
+                marginBottom: 0,
+              }}
+            >
+              Stay 10 months, get months 11 &amp; 12 free
+            </p>
           </div>
         </section>
 

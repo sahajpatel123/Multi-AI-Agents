@@ -97,7 +97,7 @@ TIER_FEATURES = {
         "memory": True,
         "saved_responses": True,
         "full_history": True,
-        "agent_mode": True,
+        "agent_mode": False,
         "agent_orchestrate": False,
         "agent_watchlist": True,
         "scoring_audit": False,

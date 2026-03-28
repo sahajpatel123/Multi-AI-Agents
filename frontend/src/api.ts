@@ -1249,6 +1249,17 @@ export async function createSubscription(planKey: string): Promise<CreateSubscri
   return data as CreateSubscriptionResponse;
 }
 
+/** Plus-only Agent Mode add-on (₹599/mo). Same checkout shape as `createSubscription`. */
+export async function createAgentAddonSubscription(): Promise<CreateSubscriptionResponse> {
+  const response = await apiFetch(`${API_BASE}/payments/addon/agent`, { method: 'POST' });
+  const data = await parseJsonSafely<{ detail?: string | { message?: string } } & CreateSubscriptionResponse>(response);
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Add-on checkout failed'), response.status, data);
+  }
+  return data as CreateSubscriptionResponse;
+}
+
 export async function verifyPayment(
   paymentId: string,
   subscriptionId: string,
