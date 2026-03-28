@@ -2,6 +2,7 @@ import json
 import re
 import time
 
+from arena.core.attachment_prompts import build_attachment_text_block, claude_image_content_blocks
 from arena.core.blackboard import Blackboard, StageStatus
 from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
@@ -69,6 +70,16 @@ User research history context:
 """
             user_prompt = f"Task: {bb.task}\n\n{memory_str}"
 
+        att_block = build_attachment_text_block(bb)
+        if att_block:
+            user_prompt = f"{user_prompt}\n\n{att_block}"
+
+        img_blocks = claude_image_content_blocks(bb)
+        claude_content = None
+        if img_blocks:
+            claude_content = [{"type": "text", "text": user_prompt}]
+            claude_content.extend(img_blocks)
+
         response, inp, out = await call_llm(
             client=model["client"],
             provider="claude",
@@ -77,6 +88,7 @@ User research history context:
             user_prompt=user_prompt,
             temperature=0.3,
             max_tokens=AGENT_MAX_TOKENS,
+            claude_user_content=claude_content,
         )
         bb.total_input_tokens += inp
         bb.total_output_tokens += out

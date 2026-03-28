@@ -1,12 +1,13 @@
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -16,6 +17,8 @@ from arena.core.agent_pipeline import (
     run_agent_pipeline_on_blackboard,
     run_refinement_pipeline,
 )
+from arena.core.file_ingest import process_upload
+from arena.core.upload_store import UPLOAD_DIR, ensure_upload_dir, register_upload, resolve_attachments
 from arena.core.auth import get_current_user_required
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard
 from arena.core.llm_caller import call_llm
@@ -204,6 +207,8 @@ class AgentTaskRequest(BaseModel):
     task: str
     expertise_level: str = "curious"
     expertise_domain: str = ""
+    attachment_ids: list[str] = Field(default_factory=list)
+    mcp_integration_ids: list[int] = Field(default_factory=list)
 
 
 class AgentChallengeRequest(BaseModel):
@@ -774,6 +779,48 @@ async def run_bridge_pipeline_background(task_id: str, user_id: int) -> None:
     await _save_completed_task_to_memory(bb, user_id, bb.task)
 
 
+@router.post("/upload")
+async def upload_agent_attachment(
+    file: UploadFile = File(...),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Multipart upload: PDF, images, Word docs — ephemeral /tmp + in-memory registry."""
+    _ensure_agent_access(user, db)
+    ensure_upload_dir()
+    data = await file.read()
+    max_bytes = 10 * 1024 * 1024
+    if len(data) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large (max 10MB)",
+        )
+    orig = (file.filename or "upload").strip() or "upload"
+    file_id = str(uuid.uuid4())
+    safe_name = "".join(c for c in orig if c.isalnum() or c in "._- ")[:180] or "file"
+    stored_name = f"{uuid.uuid4().hex[:8]}_{safe_name}"
+    dest_path = os.path.join(UPLOAD_DIR, stored_name)
+    ct = file.content_type or "application/octet-stream"
+    try:
+        record = process_upload(filename=orig, content_type=ct, data=data, dest_path=dest_path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    record["file_id"] = file_id
+    register_upload(file_id, record)
+    rtype = record.get("type") or "doc"
+    if rtype == "image":
+        content_preview = "[Image]"
+    else:
+        content_preview = ((record.get("content") or "")[:100]) or ""
+    return {
+        "file_id": file_id,
+        "filename": orig,
+        "type": rtype,
+        "content_preview": content_preview,
+        "size_kb": max(1, len(data) // 1024),
+    }
+
+
 @router.get("/templates")
 async def list_agent_templates() -> dict:
     """Public list of task prompt templates (grouped by category)."""
@@ -1095,6 +1142,8 @@ async def run_agent_task(
     bb.status = AgentStatus.RUNNING
     bb.expertise_level = expertise_level
     bb.expertise_domain = expertise_domain
+    bb.attachments = resolve_attachments(list(body.attachment_ids or [])[:32])
+    bb.mcp_integration_ids = list(body.mcp_integration_ids or [])[:20]
 
     background_tasks.add_task(
         run_agent_pipeline_background,
@@ -1669,6 +1718,7 @@ async def refine_agent_answer(
     body: RefinementRequest,
     background_tasks: BackgroundTasks,
     user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
 
@@ -1728,6 +1778,7 @@ async def verify_arena_answer(
     body: BridgeRequest,
     background_tasks: BackgroundTasks,
     user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
 

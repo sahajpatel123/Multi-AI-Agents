@@ -111,6 +111,11 @@ class User(Base):
         back_populates="creator",
         foreign_keys="Room.creator_id",
     )
+    mcp_integrations = relationship(
+        "MCPIntegration",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     consecutive_payments = Column(Integer, default=0, nullable=False)
     loyalty_reward_active = Column(Boolean, default=False, nullable=False)
@@ -616,6 +621,26 @@ class RoomMember(Base):
 
     room = relationship("Room", back_populates="members")
     user = relationship("User", back_populates="room_memberships")
+
+
+class MCPIntegration(Base):
+    """User-connected external tools (Notion, Drive, GitHub) for Agent MCP context."""
+
+    __tablename__ = "mcp_integrations"
+    __table_args__ = (UniqueConstraint("user_id", "service", name="uq_mcp_user_service"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    service = Column(String(64), nullable=False)
+    display_name = Column(String(128), nullable=False)
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text, nullable=True)
+    token_expires_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    connected_at = Column(DateTime, default=_now, nullable=False)
+    integration_metadata = Column("metadata", JSON, nullable=True)
+
+    user = relationship("User", back_populates="mcp_integrations")
 
 
 class RoomTask(Base):

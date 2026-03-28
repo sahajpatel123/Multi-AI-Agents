@@ -23,6 +23,7 @@ import {
   getAgentStatus,
   getAgentTaskAnswerFeedback,
   getAgentTemplates,
+  getMcpIntegrations,
   getCalibrationRatingForTask,
   getCalibrationStats,
   markAgentLiveUpdatesRead,
@@ -33,6 +34,7 @@ import {
   refineAgentAnswer,
   renameAgentTask,
   runAgentTask,
+  uploadAgentFile,
   toggleAgentTaskLive,
   type AgentChallengeItem,
   type AgentTaskTemplate,
@@ -684,6 +686,15 @@ export function AgentPage() {
   const [orchPoll, setOrchPoll] = useState<any | null>(null);
   const [orchResult, setOrchResult] = useState<any | null>(null);
   const [orchExpandedIdx, setOrchExpandedIdx] = useState<number | null>(null);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [mcpSubHovered, setMcpSubHovered] = useState(false);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [integrations, setIntegrations] = useState<any[]>([]);
+  const [activeMcpSources, setActiveMcpSources] = useState<number[]>([]);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
+  const attachZoneRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [watchlisted, setWatchlisted] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
   const [watchlistPickHours, setWatchlistPickHours] = useState<24 | 72 | 168>(24);
@@ -758,6 +769,41 @@ export function AgentPage() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  useEffect(() => {
+    if (!canAgent || authLoading || !user?.email) return;
+    let cancelled = false;
+    void getMcpIntegrations()
+      .then((list) => {
+        if (!cancelled) setIntegrations(list);
+      })
+      .catch(() => {
+        if (!cancelled) setIntegrations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canAgent, authLoading, user?.email]);
+
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAttachMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [attachMenuOpen]);
+
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (attachZoneRef.current && !attachZoneRef.current.contains(e.target as Node)) {
+        setAttachMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [attachMenuOpen]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -1119,6 +1165,25 @@ export function AgentPage() {
   }, [result?.bridge_from_arena, bridgeMeta]);
 
 
+  const uploadAttachmentFile = useCallback(
+    async (file: File | undefined) => {
+      if (!file || !canAgent) return;
+      setAttachMenuOpen(false);
+      setUploadErr(null);
+      try {
+        const data = await uploadAgentFile(file);
+        setAttachments((prev) => [...prev, data]);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 413) {
+          setUploadErr('File too large (max 10MB)');
+        } else {
+          setUploadErr(e instanceof Error ? e.message : 'Upload failed');
+        }
+      }
+    },
+    [canAgent],
+  );
+
   const handleRunTask = async () => {
     const t = selectedTemplate ? assembledTemplatePrompt.trim() : task.trim();
     if (t.length < 10 || isRunning) return;
@@ -1145,12 +1210,16 @@ export function AgentPage() {
       const startData = await runAgentTask(t, {
         expertise_level: expertiseLevelForRun,
         expertise_domain: expertiseDomainForRun,
+        attachment_ids: attachments.map((a) => a.file_id),
+        mcp_integration_ids: activeMcpSources,
       });
       if (!startData.task_id) {
         throw new Error('No task ID received');
       }
       await pollAgentTaskUntilDone(startData.task_id);
       await loadTaskHistory();
+      setAttachments([]);
+      setActiveMcpSources([]);
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {
         setError('Daily limit reached. Resets at midnight UTC.');
@@ -2176,6 +2245,16 @@ export function AgentPage() {
             transform: translateY(0);
           }
         }
+        @keyframes attachMenuFade {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
         .agent-idle-suggestion-text {
           animation: agentIdleSuggFadeUp 0.4s ease forwards;
         }
@@ -3023,12 +3102,28 @@ export function AgentPage() {
                         if (ready && !isRunning) void handleRunTask();
                       }}
                       style={{
+                        position: 'relative',
                         display: 'flex',
-                        flexDirection: multiMode || selectedTemplate ? 'column' : 'row',
-                        alignItems: multiMode || selectedTemplate ? 'stretch' : 'center',
+                        flexDirection:
+                          multiMode ||
+                          selectedTemplate ||
+                          (!multiMode && !selectedTemplate && (attachments.length > 0 || activeMcpSources.length > 0))
+                            ? 'column'
+                            : 'row',
+                        alignItems:
+                          multiMode ||
+                          selectedTemplate ||
+                          (!multiMode && !selectedTemplate && (attachments.length > 0 || activeMcpSources.length > 0))
+                            ? 'stretch'
+                            : 'center',
                         gap: 12,
                         background: '#FDFAF6',
-                        borderRadius: multiMode || selectedTemplate ? 20 : 32,
+                        borderRadius:
+                          multiMode ||
+                          selectedTemplate ||
+                          (!multiMode && !selectedTemplate && (attachments.length > 0 || activeMcpSources.length > 0))
+                            ? 20
+                            : 32,
                         padding: '12px 12px 12px 20px',
                       }}
                     >
@@ -3358,82 +3453,646 @@ export function AgentPage() {
                         </>
                       ) : (
                         <>
-                          <span
-                            className="breathe"
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: '#C4956A',
-                              flexShrink: 0,
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".pdf,.doc,.docx"
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              void uploadAttachmentFile(e.target.files?.[0]);
+                              e.target.value = '';
                             }}
-                            aria-hidden
                           />
                           <input
-                            ref={idleTaskInputRef}
-                            type="text"
-                            value={task}
-                            disabled={isRunning}
-                            placeholder=""
-                            onChange={(e) => setTask(e.target.value)}
-                            style={{
-                              flex: 1,
-                              minWidth: 0,
-                              border: 'none',
-                              background: 'transparent',
-                              outline: 'none',
-                              fontSize: 14,
-                              color: '#2C1810',
-                              fontFamily: 'Georgia, serif',
+                            ref={imageInputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              void uploadAttachmentFile(e.target.files?.[0]);
+                              e.target.value = '';
                             }}
                           />
-                          <button
-                            type="submit"
-                            disabled={task.trim().length < 10 || isRunning}
-                            onMouseEnter={(e) => {
-                              if (task.trim().length >= 10 && !isRunning) {
-                                e.currentTarget.style.background = '#B07850';
+                          <div
+                            ref={attachZoneRef}
+                            tabIndex={-1}
+                            style={{
+                              position: 'relative',
+                              flex: 1,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 8,
+                              minWidth: 0,
+                            }}
+                            onBlur={(e) => {
+                              if (!attachZoneRef.current?.contains(e.relatedTarget as Node)) {
+                                setAttachMenuOpen(false);
                               }
                             }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background =
-                                task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0';
-                            }}
-                            style={{
-                              width: 34,
-                              height: 34,
-                              borderRadius: '50%',
-                              border: 'none',
-                              cursor: task.trim().length >= 10 && !isRunning ? 'pointer' : 'default',
-                              background: task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0',
-                              transition: 'background 0.2s ease',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
-                            }}
-                            aria-label="Run task"
                           >
-                            <svg width={15} height={15} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                              <line
-                                x1="12"
-                                y1="19"
-                                x2="12"
-                                y2="5"
-                                stroke="#FAF7F2"
-                                strokeWidth={2}
-                                strokeLinecap="round"
+                            {uploadErr ? (
+                              <p style={{ fontSize: 11, color: '#C0392B', margin: 0 }}>{uploadErr}</p>
+                            ) : null}
+                            {attachments.length > 0 || activeMcpSources.length > 0 ? (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexWrap: 'wrap',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                }}
+                              >
+                                {attachments.map((a: any) => (
+                                  <span
+                                    key={a.file_id}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 6,
+                                      borderRadius: 8,
+                                      padding: '4px 10px',
+                                      marginRight: 4,
+                                      background: '#F0E8DC',
+                                      border: '0.5px solid #D4C4B0',
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        width: 18,
+                                        height: 18,
+                                        borderRadius: 4,
+                                        background: '#FAF7F2',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                      }}
+                                    >
+                                      <svg width={11} height={11} viewBox="0 0 24 24" fill="none" aria-hidden>
+                                        <path
+                                          d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"
+                                          stroke="#C4956A"
+                                          strokeWidth={1.2}
+                                        />
+                                        <path d="M14 2v6h6" stroke="#C4956A" strokeWidth={1.2} />
+                                      </svg>
+                                    </span>
+                                    <span style={{ fontSize: 12, color: '#4A3728', maxWidth: 120 }} title={a.filename}>
+                                      {(a.filename || 'file').length > 20
+                                        ? `${(a.filename || 'file').slice(0, 20)}…`
+                                        : a.filename || 'file'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      aria-label="Remove attachment"
+                                      onClick={() =>
+                                        setAttachments((prev) => prev.filter((x) => x.file_id !== a.file_id))
+                                      }
+                                      style={{
+                                        border: 'none',
+                                        background: 'none',
+                                        cursor: 'pointer',
+                                        fontSize: 12,
+                                        color: '#A89070',
+                                        padding: 0,
+                                        lineHeight: 1,
+                                      }}
+                                    >
+                                      ×
+                                    </button>
+                                  </span>
+                                ))}
+                                {activeMcpSources.map((iid) => {
+                                  const integ = integrations.find((x: any) => x.id === iid);
+                                  const label = integ?.display_name || integ?.service || 'MCP';
+                                  const svc = String(integ?.service || '');
+                                  const bg =
+                                    svc === 'github' ? '#2C1810' : svc === 'google_drive' ? '#185FA5' : '#2C1810';
+                                  const fg = svc === 'github' ? '#FAF7F2' : '#FAF7F2';
+                                  return (
+                                    <span
+                                      key={`mcp-${iid}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        borderRadius: 8,
+                                        padding: '4px 10px',
+                                        marginRight: 4,
+                                        background: '#EEEDFE',
+                                        border: '0.5px solid #AFA9EC',
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          width: 18,
+                                          height: 18,
+                                          borderRadius: 4,
+                                          background: bg,
+                                          color: fg,
+                                          fontSize: 9,
+                                          fontWeight: 600,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                        }}
+                                      >
+                                        {svc === 'google_drive' ? 'G' : svc === 'github' ? 'gh' : 'N'}
+                                      </span>
+                                      <span style={{ fontSize: 12, color: '#26215C', maxWidth: 120 }}>{label}</span>
+                                      <button
+                                        type="button"
+                                        aria-label="Remove MCP source"
+                                        onClick={() =>
+                                          setActiveMcpSources((prev) => prev.filter((x) => x !== iid))
+                                        }
+                                        style={{
+                                          border: 'none',
+                                          background: 'none',
+                                          cursor: 'pointer',
+                                          fontSize: 12,
+                                          color: '#A89070',
+                                          padding: 0,
+                                        }}
+                                      >
+                                        ×
+                                      </button>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                width: '100%',
+                              }}
+                            >
+                              <button
+                                type="button"
+                                aria-expanded={attachMenuOpen}
+                                aria-haspopup="menu"
+                                onClick={() => setAttachMenuOpen((o) => !o)}
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: '50%',
+                                  background: attachMenuOpen ? '#E8DDD0' : '#F0E8DC',
+                                  border: attachMenuOpen ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                  flexShrink: 0,
+                                  transition: 'all 0.15s',
+                                }}
+                              >
+                                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
+                                  <path
+                                    d="M12 5v14M5 12h14"
+                                    stroke={attachMenuOpen ? '#C4956A' : '#8C7355'}
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                  />
+                                </svg>
+                              </button>
+                              <input
+                                ref={idleTaskInputRef}
+                                type="text"
+                                value={task}
+                                disabled={isRunning}
+                                placeholder=""
+                                onChange={(e) => setTask(e.target.value)}
+                                style={{
+                                  flex: 1,
+                                  minWidth: 0,
+                                  border: 'none',
+                                  background: 'transparent',
+                                  outline: 'none',
+                                  fontSize: 14,
+                                  color: '#2C1810',
+                                  fontFamily: 'Georgia, serif',
+                                }}
                               />
-                              <polyline
-                                points="5,12 12,5 19,12"
-                                fill="none"
-                                stroke="#FAF7F2"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          </button>
+                              <button
+                                type="submit"
+                                disabled={task.trim().length < 10 || isRunning}
+                                onMouseEnter={(e) => {
+                                  if (task.trim().length >= 10 && !isRunning) {
+                                    e.currentTarget.style.background = '#B07850';
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background =
+                                    task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0';
+                                }}
+                                style={{
+                                  width: 34,
+                                  height: 34,
+                                  borderRadius: '50%',
+                                  border: 'none',
+                                  cursor: task.trim().length >= 10 && !isRunning ? 'pointer' : 'default',
+                                  background: task.trim().length >= 10 && !isRunning ? '#C4956A' : '#D4C4B0',
+                                  transition: 'background 0.2s ease',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                                aria-label="Run task"
+                              >
+                                <svg width={15} height={15} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                  <line
+                                    x1="12"
+                                    y1="19"
+                                    x2="12"
+                                    y2="5"
+                                    stroke="#FAF7F2"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                  />
+                                  <polyline
+                                    points="5,12 12,5 19,12"
+                                    fill="none"
+                                    stroke="#FAF7F2"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                            {attachMenuOpen && !isMobile ? (
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  bottom: 'calc(100% + 8px)',
+                                  left: 0,
+                                  background: '#FDFAF6',
+                                  border: '0.5px solid #DDD0BC',
+                                  borderRadius: 12,
+                                  width: 220,
+                                  boxShadow: '0 4px 16px rgba(44,24,16,0.08)',
+                                  zIndex: 100,
+                                  animation: 'attachMenuFade 0.2s ease',
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => fileInputRef.current?.click()}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    padding: '10px 14px',
+                                    cursor: 'pointer',
+                                    borderRadius: '12px 12px 0 0',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    font: 'inherit',
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      width: 28,
+                                      height: 28,
+                                      borderRadius: 7,
+                                      background: '#EAF0F7',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                    }}
+                                  >
+                                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
+                                      <path
+                                        d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
+                                        stroke="#185FA5"
+                                        strokeWidth={1.5}
+                                        strokeLinecap="round"
+                                      />
+                                    </svg>
+                                  </span>
+                                  <span>
+                                    <span style={{ display: 'block', fontSize: 13, color: '#2C1810' }}>
+                                      Attach file
+                                    </span>
+                                    <span style={{ fontSize: 10, color: '#A89070' }}>PDF, doc, image…</span>
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => imageInputRef.current?.click()}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    padding: '10px 14px',
+                                    cursor: 'pointer',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    font: 'inherit',
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      width: 28,
+                                      height: 28,
+                                      borderRadius: 7,
+                                      background: '#F0E8DC',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                    }}
+                                  >
+                                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
+                                      <rect
+                                        x="3"
+                                        y="5"
+                                        width="18"
+                                        height="14"
+                                        rx="2"
+                                        stroke="#C4956A"
+                                        strokeWidth={1.3}
+                                      />
+                                      <circle cx="8.5" cy="10" r="1.5" fill="#C4956A" />
+                                    </svg>
+                                  </span>
+                                  <span>
+                                    <span style={{ display: 'block', fontSize: 13, color: '#2C1810' }}>
+                                      Attach image
+                                    </span>
+                                    <span style={{ fontSize: 10, color: '#A89070' }}>PNG, JPG, WEBP…</span>
+                                  </span>
+                                </button>
+                                <div style={{ height: 0.5, background: '#EDE4D8', margin: '0 8px' }} />
+                                <div
+                                  style={{ position: 'relative' }}
+                                  onMouseEnter={() => setMcpSubHovered(true)}
+                                  onMouseLeave={() => setMcpSubHovered(false)}
+                                >
+                                  <button
+                                    type="button"
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      padding: '10px 14px',
+                                      cursor: 'pointer',
+                                      borderRadius: '0 0 12px 12px',
+                                      border: 'none',
+                                      background: mcpSubHovered ? '#F0EBF8' : 'transparent',
+                                      width: '100%',
+                                      textAlign: 'left',
+                                      font: 'inherit',
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        width: 28,
+                                        height: 28,
+                                        borderRadius: 7,
+                                        background: '#EEEDFE',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                      }}
+                                    >
+                                      <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
+                                        <path
+                                          d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+                                          stroke="#534AB7"
+                                          strokeWidth={1.2}
+                                        />
+                                      </svg>
+                                    </span>
+                                    <span style={{ flex: 1 }}>
+                                      <span style={{ display: 'block', fontSize: 13, color: '#2C1810' }}>MCP</span>
+                                      <span style={{ fontSize: 10, color: '#A89070' }}>
+                                        {integrations.length > 0
+                                          ? `${integrations.length} connected`
+                                          : 'Connect tools'}
+                                      </span>
+                                    </span>
+                                    <span style={{ fontSize: 11, color: '#C4A882' }}>›</span>
+                                  </button>
+                                  {mcpSubHovered ? (
+                                    <div
+                                      style={{
+                                        position: 'absolute',
+                                        left: 224,
+                                        bottom: 0,
+                                        background: '#FDFAF6',
+                                        border: '0.5px solid #DDD0BC',
+                                        borderRadius: 12,
+                                        width: 200,
+                                        boxShadow: '0 4px 16px rgba(44,24,16,0.08)',
+                                        zIndex: 101,
+                                      }}
+                                    >
+                                      {integrations.map((integ: any) => {
+                                        const sel = activeMcpSources.includes(integ.id);
+                                        return (
+                                          <button
+                                            key={integ.id}
+                                            type="button"
+                                            onClick={() => {
+                                              setActiveMcpSources((prev) =>
+                                                prev.includes(integ.id)
+                                                  ? prev.filter((x) => x !== integ.id)
+                                                  : [...prev, integ.id],
+                                              );
+                                            }}
+                                            style={{
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: 8,
+                                              padding: '9px 13px',
+                                              cursor: 'pointer',
+                                              border: 'none',
+                                              background: 'transparent',
+                                              width: '100%',
+                                              textAlign: 'left',
+                                              font: 'inherit',
+                                            }}
+                                          >
+                                            <span
+                                              style={{
+                                                width: 22,
+                                                height: 22,
+                                                borderRadius: 5,
+                                                background:
+                                                  integ.service === 'github'
+                                                    ? '#2C1810'
+                                                    : integ.service === 'google_drive'
+                                                      ? '#EAF0F7'
+                                                      : '#F0E8DC',
+                                                color:
+                                                  integ.service === 'google_drive' ? '#185FA5' : '#FAF7F2',
+                                                fontSize: 10,
+                                                fontWeight: 600,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                              }}
+                                            >
+                                              {integ.service === 'google_drive'
+                                                ? 'G'
+                                                : integ.service === 'github'
+                                                  ? 'gh'
+                                                  : 'N'}
+                                            </span>
+                                            <span style={{ fontSize: 12, color: '#2C1810', flex: 1 }}>
+                                              {integ.display_name || integ.service}
+                                            </span>
+                                            {sel ? (
+                                              <span style={{ fontSize: 12, color: '#534AB7' }}>✓</span>
+                                            ) : (
+                                              <span
+                                                style={{
+                                                  width: 6,
+                                                  height: 6,
+                                                  borderRadius: '50%',
+                                                  background: '#639922',
+                                                  marginLeft: 'auto',
+                                                }}
+                                              />
+                                            )}
+                                          </button>
+                                        );
+                                      })}
+                                      {integrations.length > 0 ? (
+                                        <div style={{ height: 0.5, background: '#EDE4D8' }} />
+                                      ) : null}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setAttachMenuOpen(false);
+                                          setActiveTab('integrations');
+                                          openModal('bottom-left', 'integrations');
+                                        }}
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: 8,
+                                          padding: '9px 13px',
+                                          cursor: 'pointer',
+                                          border: 'none',
+                                          background: 'transparent',
+                                          width: '100%',
+                                          fontSize: 12,
+                                          color: '#C4956A',
+                                          fontFamily: 'Georgia, serif',
+                                        }}
+                                      >
+                                        Manage MCP →
+                                      </button>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ) : null}
+                            {attachMenuOpen && isMobile ? (
+                              <div
+                                style={{
+                                  position: 'fixed',
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  zIndex: 200,
+                                  background: '#FDFAF6',
+                                  borderRadius: '16px 16px 0 0',
+                                  border: '0.5px solid #DDD0BC',
+                                  boxShadow: '0 -4px 24px rgba(44,24,16,0.12)',
+                                  padding: '12px 0 calc(12px + env(safe-area-inset-bottom))',
+                                  animation: 'attachMenuFade 0.2s ease',
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => fileInputRef.current?.click()}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    padding: '12px 16px',
+                                    width: '100%',
+                                    border: 'none',
+                                    background: 'none',
+                                    font: 'inherit',
+                                    textAlign: 'left',
+                                  }}
+                                >
+                                  <span style={{ fontSize: 13, color: '#2C1810' }}>Attach file</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => imageInputRef.current?.click()}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    padding: '12px 16px',
+                                    width: '100%',
+                                    border: 'none',
+                                    background: 'none',
+                                    font: 'inherit',
+                                    textAlign: 'left',
+                                  }}
+                                >
+                                  <span style={{ fontSize: 13, color: '#2C1810' }}>Attach image</span>
+                                </button>
+                                <div style={{ height: 0.5, background: '#EDE4D8', margin: '4px 0' }} />
+                                {integrations.map((integ: any) => (
+                                  <button
+                                    key={integ.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveMcpSources((prev) =>
+                                        prev.includes(integ.id)
+                                          ? prev.filter((x) => x !== integ.id)
+                                          : [...prev, integ.id],
+                                      );
+                                    }}
+                                    style={{
+                                      padding: '12px 16px',
+                                      width: '100%',
+                                      border: 'none',
+                                      background: 'none',
+                                      fontSize: 13,
+                                      textAlign: 'left',
+                                    }}
+                                  >
+                                    {integ.display_name || integ.service}{' '}
+                                    {activeMcpSources.includes(integ.id) ? '✓' : ''}
+                                  </button>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAttachMenuOpen(false);
+                                    setActiveTab('integrations');
+                                    openModal('bottom-left', 'integrations');
+                                  }}
+                                  style={{
+                                    padding: '12px 16px',
+                                    width: '100%',
+                                    border: 'none',
+                                    background: 'none',
+                                    fontSize: 12,
+                                    color: '#C4956A',
+                                    fontFamily: 'Georgia, serif',
+                                  }}
+                                >
+                                  Manage MCP →
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
                         </>
                       )}
                     </form>

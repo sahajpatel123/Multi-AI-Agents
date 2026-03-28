@@ -1,6 +1,6 @@
 """Provider-aware LLM caller for Claude and OpenAI-compatible APIs."""
 
-from typing import Any
+from typing import Any, List, Optional, Union
 
 
 def _get_claude_fallback() -> tuple[Any, str]:
@@ -18,21 +18,28 @@ async def call_llm(
     user_prompt: str,
     temperature: float,
     max_tokens: int = 1000,
+    claude_user_content: Optional[List[dict]] = None,
 ) -> tuple[str, int, int]:
     """
     Call LLM with provider-specific format.
+
+    If ``claude_user_content`` is set (Claude only), it replaces the string user
+    message with a list of content blocks (text + images).
 
     Returns:
         (generated text, input_tokens, output_tokens). On failure, ("", 0, 0).
     """
     try:
         if provider == "claude":
+            user_content: Union[str, List[dict]] = (
+                claude_user_content if claude_user_content is not None else user_prompt
+            )
             response = await client.messages.create(
                 model=model_id,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
+                messages=[{"role": "user", "content": user_content}],
             )
             text = ""
             if response.content:

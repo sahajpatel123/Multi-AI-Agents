@@ -372,6 +372,47 @@ def main():
                 except Exception:
                     pass
 
+            pg_mcp = """
+                CREATE TABLE IF NOT EXISTS mcp_integrations (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    service VARCHAR NOT NULL,
+                    display_name VARCHAR NOT NULL,
+                    access_token TEXT NOT NULL,
+                    refresh_token TEXT,
+                    token_expires_at TIMESTAMP,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    connected_at TIMESTAMP DEFAULT NOW(),
+                    metadata JSONB,
+                    CONSTRAINT uq_mcp_user_service UNIQUE (user_id, service)
+                )
+            """
+            sqlite_mcp = """
+                CREATE TABLE IF NOT EXISTS mcp_integrations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    service VARCHAR NOT NULL,
+                    display_name VARCHAR NOT NULL,
+                    access_token TEXT NOT NULL,
+                    refresh_token TEXT,
+                    token_expires_at TIMESTAMP,
+                    is_active INTEGER DEFAULT 1,
+                    connected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    metadata TEXT,
+                    UNIQUE (user_id, service)
+                )
+            """
+            try:
+                conn.execute(text(sqlite_mcp if dialect == "sqlite" else pg_mcp))
+                conn.commit()
+                print("==> Migrated: mcp_integrations table", flush=True)
+            except Exception as e:
+                print(f"==> Warning (mcp_integrations): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
         print("==> All migrations complete.", flush=True)
 
     except Exception as e:

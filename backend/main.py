@@ -28,6 +28,7 @@ from arena.routes.payments import router as payments_router
 from arena.routes.agent import router as agent_router
 from arena.routes.calibration import router as calibration_router
 from arena.routes.rooms import router as rooms_router
+from arena.routes.mcp import router as mcp_router
 from arena.core.live_scheduler import schedule_live_checks
 from arena.core.loyalty_scheduler import schedule_loyalty_checks
 from arena.core.watchlist_runner import schedule_watchlist_checks
@@ -47,19 +48,28 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         self.max_size = max_size
 
     async def dispatch(self, request: Request, call_next):
+        path = request.url.path.rstrip("/")
         # Razorpay webhooks can exceed the default API body limit
-        if request.url.path.rstrip("/").endswith("/api/payments/webhook"):
+        if path.endswith("/api/payments/webhook"):
             return await call_next(request)
         # Skip size check for OPTIONS preflight requests
         if request.method == "OPTIONS":
             return await call_next(request)
+        max_allowed = self.max_size
+        if path.endswith("/api/agent/upload"):
+            max_allowed = 11 * 1024 * 1024  # 10MB file + multipart overhead
         content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > self.max_size:
+        if content_length and int(content_length) > max_allowed:
+            msg = (
+                "File too large (max 10MB)"
+                if path.endswith("/api/agent/upload")
+                else "Request too large. Maximum 10KB allowed."
+            )
             return JSONResponse(
                 status_code=413,
                 content={
                     "error": "payload_too_large",
-                    "message": "Request too large. Maximum 10KB allowed.",
+                    "message": msg,
                 },
             )
         return await call_next(request)
@@ -166,10 +176,18 @@ def create_app() -> FastAPI:
     app.include_router(agent_router, prefix="/api/agent")
     app.include_router(calibration_router, prefix="/api/calibration")
     app.include_router(rooms_router, prefix="/api/rooms")
+    app.include_router(mcp_router, prefix="/api/mcp")
 
     # ── Startup ───────────────────────────────────────────────
     @app.on_event("startup")
     async def run_startup_tasks() -> None:
+        import os
+
+        if not (os.environ.get("ENCRYPTION_KEY") or "").strip():
+            logger.warning(
+                "ENCRYPTION_KEY is not set — MCP manual token storage will return 503 until configured."
+            )
+
         db = SessionLocal()
         try:
             await seed_persona_library(db)

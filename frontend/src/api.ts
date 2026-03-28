@@ -746,7 +746,12 @@ export type AgentStatusPayload = {
 
 export async function runAgentTask(
   task: string,
-  options?: { expertise_level?: string; expertise_domain?: string },
+  options?: {
+    expertise_level?: string;
+    expertise_domain?: string;
+    attachment_ids?: string[];
+    mcp_integration_ids?: number[];
+  },
 ): Promise<AgentStartResponse> {
   const response = await apiFetch(`${API_BASE}/agent/run`, {
     method: 'POST',
@@ -755,6 +760,8 @@ export async function runAgentTask(
       task,
       expertise_level: options?.expertise_level ?? 'curious',
       expertise_domain: options?.expertise_domain ?? '',
+      attachment_ids: options?.attachment_ids ?? [],
+      mcp_integration_ids: options?.mcp_integration_ids ?? [],
     }),
   });
   const data = await parseJsonSafely<
@@ -765,6 +772,76 @@ export async function runAgentTask(
     throw new ApiError(getErrorMessage(data, 'Agent task failed'), response.status, data);
   }
   return data;
+}
+
+export async function uploadAgentFile(file: File): Promise<{
+  file_id: string;
+  filename: string;
+  type: string;
+  content_preview: string;
+  size_kb: number;
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await apiFetch(`${API_BASE}/agent/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await parseJsonSafely<{
+    file_id: string;
+    filename: string;
+    type: string;
+    content_preview: string;
+    size_kb: number;
+    detail?: string;
+  }>(response);
+  if (!response.ok || !data?.file_id) {
+    throw new ApiError(
+      getErrorMessage(
+        data as { detail?: string | { message?: string } },
+        response.status === 413 ? 'File too large (max 10MB)' : 'Upload failed',
+      ),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
+
+export async function getMcpIntegrations(): Promise<any[]> {
+  const response = await apiFetch(`${API_BASE}/mcp/integrations`);
+  const data = await parseJsonSafely<{ integrations?: any[]; detail?: string }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Failed to load integrations'), response.status, data);
+  }
+  return data?.integrations ?? [];
+}
+
+export async function postMcpManualConnect(body: {
+  service: string;
+  access_token: string;
+  display_name: string;
+}): Promise<any> {
+  const response = await apiFetch(`${API_BASE}/mcp/connect/manual`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await parseJsonSafely<any>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Connect failed'), response.status, data);
+  }
+  return data;
+}
+
+export async function deleteMcpIntegration(integrationId: number): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/mcp/integrations/${integrationId}`, {
+    method: 'DELETE',
+  });
+  const data = await parseJsonSafely<{ detail?: string }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Disconnect failed'), response.status, data);
+  }
 }
 
 export async function getAgentStatus(taskId: string): Promise<AgentStatusPayload> {

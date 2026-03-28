@@ -1,9 +1,15 @@
 import json
+import logging
 import time
 
+from arena.core.attachment_prompts import build_attachment_text_block
 from arena.core.blackboard import Blackboard, StageStatus
 from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
+from arena.core.mcp_runtime import fetch_mcp_context_for_task
+from arena.database import SessionLocal
+
+logger = logging.getLogger(__name__)
 from arena.core.model_router import MODEL_REGISTRY
 
 AGENT_MAX_TOKENS = 4096
@@ -96,6 +102,29 @@ async def run_researcher(bb: Blackboard) -> Blackboard:
         grok_model = MODEL_REGISTRY.get("grok_3", MODEL_REGISTRY["claude_sonnet"])
         provider = str(grok_model.get("provider", "grok"))
 
+        bb.mcp_context = ""
+        if bb.mcp_integration_ids and bb.user_id:
+            db_mcp = SessionLocal()
+            try:
+                bb.mcp_context = await fetch_mcp_context_for_task(
+                    db_mcp,
+                    bb.user_id,
+                    list(bb.mcp_integration_ids),
+                    bb.task,
+                )
+            except Exception as mcp_err:
+                bb.mcp_context = ""
+                logger.warning("[MCP] context fetch failed: %s", mcp_err)
+            finally:
+                db_mcp.close()
+
+        att_block = build_attachment_text_block(bb)
+        extra_ctx = ""
+        if att_block:
+            extra_ctx += f"\n{att_block}\n"
+        if bb.mcp_context:
+            extra_ctx += f"\n{bb.mcp_context}\n"
+
         user_prompt = f"""
 Task: {bb.task}
 
@@ -103,7 +132,7 @@ Execution Plan: {bb.plan.reasoning}
 
 Search Results:
 {search_context}
-
+{extra_ctx}
 Please research this task thoroughly and provide all relevant findings.
 """
 

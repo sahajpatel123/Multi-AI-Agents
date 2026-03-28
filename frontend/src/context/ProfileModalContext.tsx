@@ -11,7 +11,7 @@ import {
 
 export type ProfileModalOrigin = 'top-right' | 'bottom-left';
 
-export type ProfileModalTab = 'account' | 'plan' | 'usage' | 'help';
+export type ProfileModalTab = 'account' | 'plan' | 'usage' | 'integrations' | 'help';
 
 export interface ProfileModalContextType {
   isOpen: boolean;

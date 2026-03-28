@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 from dataclasses import dataclass, field
 
@@ -91,6 +91,11 @@ class Blackboard:
     original_task: str = ""
     bridge_from_arena: bool = False
 
+    # Uploads + MCP (in-memory for current run)
+    attachments: List[Dict[str, Any]] = field(default_factory=list)
+    mcp_integration_ids: List[int] = field(default_factory=list)
+    mcp_context: str = ""
+
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     total_tokens: int = 0
@@ -98,6 +103,21 @@ class Blackboard:
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error: Optional[str] = None
+
+    def _attachments_public_view(self) -> list:
+        """Strip heavy/binary fields from API responses."""
+        out: list = []
+        for att in self.attachments or []:
+            if not isinstance(att, dict):
+                continue
+            out.append(
+                {
+                    "file_id": att.get("file_id"),
+                    "filename": att.get("filename"),
+                    "type": att.get("type"),
+                }
+            )
+        return out
 
     def add_message(
         self,
@@ -197,6 +217,8 @@ class Blackboard:
             "refinement_count": self.refinement_count,
             "original_task": self.original_task or self.task,
             "bridge_from_arena": self.bridge_from_arena,
+            "attachments": self._attachments_public_view(),
+            "mcp_integration_ids": list(self.mcp_integration_ids or []),
             "total_input_tokens": self.total_input_tokens,
             "total_output_tokens": self.total_output_tokens,
             "total_tokens": self.total_tokens,

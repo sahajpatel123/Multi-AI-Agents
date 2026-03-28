@@ -4,11 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import {
   cancelAgentAddon,
   cancelSubscription,
+  deleteMcpIntegration,
   getCalibrationStats,
+  getMcpIntegrations,
   getSubscriptionStatus,
   getUserAnswerFeedbackStats,
   getUserUsage,
   patchUserProfile,
+  postMcpManualConnect,
   reactivateAgentAddon,
   type AnswerFeedbackStats,
   type SubscriptionStatusResponse,
@@ -82,6 +85,28 @@ function TabIconUsage({ active }: { active: boolean }) {
     <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M4 16l4-4 4 4 8-8M4 20h16"
+        stroke={c}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function TabIconIntegrations({ active }: { active: boolean }) {
+  const c = active ? '#C4956A' : 'currentColor';
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 22v-5M9 8a3 3 0 116 0c0 2-3 3-3 3M12 17h.01"
+        stroke={c}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 12H5a2 2 0 01-2-2V5a2 2 0 012-2h3m8 9h3a2 2 0 002-2V5a2 2 0 00-2-2h-3"
         stroke={c}
         strokeWidth={1.5}
         strokeLinecap="round"
@@ -226,6 +251,16 @@ export function ProfileModal() {
   const [addonCancelConfirm, setAddonCancelConfirm] = useState(false);
   const [addonBusy, setAddonBusy] = useState(false);
 
+  const [mcpList, setMcpList] = useState<any[]>([]);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [mcpErr, setMcpErr] = useState<string | null>(null);
+  const [mcpTokens, setMcpTokens] = useState<Record<string, string>>({
+    notion: '',
+    google_drive: '',
+    github: '',
+  });
+  const [mcpConnectBusy, setMcpConnectBusy] = useState<string | null>(null);
+
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', onResize);
@@ -312,6 +347,25 @@ export function ProfileModal() {
       cancelled = true;
     };
   }, [isOpen, activeTab]);
+
+  const refreshMcp = useCallback(async () => {
+    setMcpLoading(true);
+    setMcpErr(null);
+    try {
+      const rows = await getMcpIntegrations();
+      setMcpList(rows);
+    } catch {
+      setMcpErr('Could not load integrations');
+      setMcpList([]);
+    } finally {
+      setMcpLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'integrations') return;
+    void refreshMcp();
+  }, [isOpen, activeTab, refreshMcp]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -446,6 +500,7 @@ export function ProfileModal() {
           { id: 'account' as const, label: 'Account', Icon: TabIconAccount },
           { id: 'plan' as const, label: 'Plan', Icon: TabIconPlan },
           { id: 'usage' as const, label: 'Usage', Icon: TabIconUsage },
+          { id: 'integrations' as const, label: 'Integrations', Icon: TabIconIntegrations },
           { id: 'help' as const, label: 'Get help', Icon: TabIconHelp },
         ] as const
       ).map(({ id, label, Icon }) => (
@@ -1411,6 +1466,219 @@ export function ProfileModal() {
                     Rate completed Agent answers as correct, partial, or wrong to see your accuracy mix here.
                   </p>
                 )}
+              </>
+            )}
+          </div>
+
+          <div style={{ display: activeTab === 'integrations' ? 'block' : 'none' }}>
+            <h2 style={{ fontSize: 18, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>Integrations</h2>
+            <p style={{ fontSize: 12, color: '#A89070', marginBottom: 16 }}>
+              Connect your tools to include personal context in Agent research.
+            </p>
+            {mcpLoading ? (
+              <div style={{ padding: 32, display: 'flex', justifyContent: 'center' }}>
+                <MicroLoader />
+              </div>
+            ) : mcpErr ? (
+              <p style={{ fontSize: 13, color: '#8C7355' }}>{mcpErr}</p>
+            ) : (
+              <>
+                {!mcpList.length ? (
+                  <div style={{ textAlign: 'center', padding: '20px 8px 24px' }}>
+                    <svg width={48} height={48} viewBox="0 0 24 24" fill="none" aria-hidden style={{ opacity: 0.55 }}>
+                      <path
+                        d="M12 22v-5M9 8a3 3 0 116 0c0 2-3 3-3 3M12 17h.01"
+                        stroke="#D4C4B0"
+                        strokeWidth={1.2}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <p style={{ fontSize: 14, color: '#A89070', fontStyle: 'italic', margin: '12px 0 6px' }}>
+                      No tools connected yet
+                    </p>
+                    <p style={{ fontSize: 12, color: '#C4A882', margin: 0 }}>
+                      Connect a service to include your documents in Agent research
+                    </p>
+                  </div>
+                ) : null}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: mobile ? '1fr' : '1fr 1fr',
+                    gap: 12,
+                  }}
+                >
+                  {(
+                    [
+                      {
+                        sid: 'notion',
+                        label: 'Notion',
+                        desc: 'Internal docs and databases.',
+                        steps:
+                          'Go to notion.so/my-integrations → Create integration → Copy the internal integration token.',
+                      },
+                      {
+                        sid: 'google_drive',
+                        label: 'Google Drive',
+                        desc: 'Files and Google Docs.',
+                        steps:
+                          'Use Google Cloud Console → APIs & Services → OAuth 2.0 → create credentials and copy an access token with Drive scope.',
+                      },
+                      {
+                        sid: 'github',
+                        label: 'GitHub',
+                        desc: 'Repositories and code search.',
+                        steps:
+                          'Go to github.com/settings/tokens → Generate new token (classic) → enable repo read scope.',
+                      },
+                    ] as const
+                  ).map((svc) => {
+                    const row = mcpList.find((r: any) => r.service === svc.sid && r.is_active);
+                    return (
+                      <div
+                        key={svc.sid}
+                        style={{
+                          background: '#FAF7F2',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 10,
+                          padding: 16,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 8,
+                                background: svc.sid === 'github' ? '#2C1810' : svc.sid === 'google_drive' ? '#EAF0F7' : '#F0E8DC',
+                                color: svc.sid === 'github' ? '#FAF7F2' : svc.sid === 'google_drive' ? '#185FA5' : '#2C1810',
+                                fontSize: 13,
+                                fontWeight: 600,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {svc.sid === 'github' ? 'gh' : svc.sid === 'google_drive' ? 'G' : 'N'}
+                            </div>
+                            <div style={{ fontSize: 14, color: '#2C1810', fontWeight: 500 }}>{svc.label}</div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 600,
+                              padding: '3px 8px',
+                              borderRadius: 8,
+                              background: row ? '#EAF3DE' : '#F0E8DC',
+                              color: row ? '#3B6D11' : '#8C7355',
+                            }}
+                          >
+                            {row ? 'Connected' : 'Not connected'}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 12, color: '#A89070', fontStyle: 'italic', margin: '8px 0' }}>{svc.desc}</p>
+                        {row ? (
+                          <>
+                            <p style={{ fontSize: 12, color: '#8C7355', margin: '4px 0' }}>
+                              {(row.metadata?.workspace_name as string) ||
+                                (row.metadata?.username as string) ||
+                                row.display_name}
+                            </p>
+                            <p style={{ fontSize: 11, color: '#A89070', margin: '4px 0 8px' }}>
+                              Connected {row.connected_at ? new Date(row.connected_at).toLocaleDateString() : ''}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await deleteMcpIntegration(row.id);
+                                  await refreshMcp();
+                                } catch {
+                                  /* ignore */
+                                }
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                cursor: 'pointer',
+                                fontSize: 12,
+                                color: '#C0392B',
+                                textDecoration: 'underline dotted',
+                              }}
+                            >
+                              Disconnect
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A89070', marginBottom: 4 }}>
+                              How to connect
+                            </div>
+                            <p style={{ fontSize: 11, color: '#6B5040', lineHeight: 1.6, margin: '0 0 10px' }}>{svc.steps}</p>
+                            <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A89070', marginBottom: 4 }}>
+                              Paste your API token
+                            </div>
+                            <input
+                              type="password"
+                              value={mcpTokens[svc.sid] ?? ''}
+                              onChange={(e) =>
+                                setMcpTokens((prev) => ({ ...prev, [svc.sid]: e.target.value }))
+                              }
+                              placeholder="paste token here..."
+                              style={{
+                                width: '100%',
+                                boxSizing: 'border-box',
+                                border: '0.5px solid #D4C4B0',
+                                borderRadius: 6,
+                                padding: '8px 12px',
+                                fontSize: 13,
+                              }}
+                            />
+                            <button
+                              type="button"
+                              disabled={mcpConnectBusy === svc.sid}
+                              onClick={async () => {
+                                const tok = (mcpTokens[svc.sid] || '').trim();
+                                if (tok.length < 8) return;
+                                setMcpConnectBusy(svc.sid);
+                                try {
+                                  await postMcpManualConnect({
+                                    service: svc.sid,
+                                    access_token: tok,
+                                    display_name: svc.label,
+                                  });
+                                  setMcpTokens((prev) => ({ ...prev, [svc.sid]: '' }));
+                                  await refreshMcp();
+                                } catch {
+                                  /* silent */
+                                } finally {
+                                  setMcpConnectBusy(null);
+                                }
+                              }}
+                              style={{
+                                marginTop: 8,
+                                width: '100%',
+                                background: '#2C1810',
+                                color: '#C4956A',
+                                border: 'none',
+                                borderRadius: 20,
+                                padding: '8px 18px',
+                                fontSize: 12,
+                                fontFamily: 'Georgia, serif',
+                                cursor: mcpConnectBusy === svc.sid ? 'default' : 'pointer',
+                                opacity: mcpConnectBusy === svc.sid ? 0.7 : 1,
+                              }}
+                            >
+                              Connect {svc.label}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </>
             )}
           </div>

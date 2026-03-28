@@ -1,5 +1,6 @@
 import time
 
+from arena.core.attachment_prompts import build_attachment_text_block, claude_image_content_blocks
 from arena.core.blackboard import Blackboard, StageStatus
 from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
@@ -68,6 +69,16 @@ Research Findings:
 Provide a comprehensive answer to this task.
 """
 
+        att_block = build_attachment_text_block(bb)
+        if att_block:
+            user_prompt = f"{user_prompt}\n\n{att_block}"
+
+        img_blocks = claude_image_content_blocks(bb)
+        claude_content = None
+        if img_blocks:
+            claude_content = [{"type": "text", "text": user_prompt}]
+            claude_content.extend(img_blocks)
+
         steelman_block = _steelman_prompt_block(bb)
         solver_core = SOLVER_SYSTEM_PROMPT.rstrip()
         if steelman_block:
@@ -82,6 +93,7 @@ Provide a comprehensive answer to this task.
             user_prompt=user_prompt,
             temperature=0.5,
             max_tokens=AGENT_MAX_TOKENS,
+            claude_user_content=claude_content,
         )
         bb.total_input_tokens += inp
         bb.total_output_tokens += out
