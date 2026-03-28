@@ -101,6 +101,16 @@ class User(Base):
         back_populates="user",
         foreign_keys="Subscription.user_id",
     )
+    room_memberships = relationship(
+        "RoomMember",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    created_rooms = relationship(
+        "Room",
+        back_populates="creator",
+        foreign_keys="Room.creator_id",
+    )
 
     consecutive_payments = Column(Integer, default=0, nullable=False)
     loyalty_reward_active = Column(Boolean, default=False, nullable=False)
@@ -417,6 +427,11 @@ class AgentTask(Base):
     user = relationship("User", back_populates="agent_tasks")
     orchestration = relationship("Orchestration", back_populates="child_tasks")
     watchlist_item = relationship("WatchlistItem", back_populates="spawned_tasks")
+    room_task_links = relationship(
+        "RoomTask",
+        back_populates="agent_task",
+        foreign_keys="RoomTask.task_id",
+    )
     answer_feedbacks = relationship(
         "AnswerFeedback",
         back_populates="agent_task",
@@ -568,3 +583,56 @@ class AgentContradiction(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="agent_contradictions")
+
+
+class Room(Base):
+    """Shared research room: cross-member synthesis over Agent tasks."""
+
+    __tablename__ = "rooms"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    name = Column(String(255), nullable=False)
+    slug = Column(String(128), unique=True, nullable=False, index=True)
+    creator_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    synthesis = Column(JSON, nullable=True)
+    synthesis_updated_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    creator = relationship("User", back_populates="created_rooms", foreign_keys=[creator_id])
+    members = relationship("RoomMember", back_populates="room", cascade="all, delete-orphan")
+    room_tasks = relationship("RoomTask", back_populates="room", cascade="all, delete-orphan")
+
+
+class RoomMember(Base):
+    __tablename__ = "room_members"
+    __table_args__ = (UniqueConstraint("room_id", "user_id", name="uq_room_member_room_user"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    room_id = Column(String(36), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    joined_at = Column(DateTime, default=_now, nullable=False)
+    last_seen_at = Column(DateTime, default=_now, nullable=False)
+
+    room = relationship("Room", back_populates="members")
+    user = relationship("User", back_populates="room_memberships")
+
+
+class RoomTask(Base):
+    __tablename__ = "room_tasks"
+    __table_args__ = (UniqueConstraint("room_id", "task_id", name="uq_room_task_room_task"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    room_id = Column(String(36), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False, index=True)
+    task_id = Column(String(64), ForeignKey("agent_tasks.task_id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    added_at = Column(DateTime, default=_now, nullable=False)
+
+    room = relationship("Room", back_populates="room_tasks")
+    agent_task = relationship(
+        "AgentTask",
+        back_populates="room_task_links",
+        foreign_keys=[task_id],
+        primaryjoin="RoomTask.task_id==AgentTask.task_id",
+    )
+    user = relationship("User")

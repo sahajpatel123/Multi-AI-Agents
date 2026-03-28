@@ -14,6 +14,7 @@ import { PrivacyPage } from './pages/PrivacyPage'
 import { PersonasPage } from './pages/PersonasPage'
 import { AccountPage } from './pages/AccountPage'
 import { AgentPage } from './pages/AgentPage'
+import { RoomPage } from './pages/RoomPage'
 import { WatchlistPage } from './pages/WatchlistPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './hooks/useAuth'
@@ -115,6 +116,7 @@ if (!rootElement) {
                       <Navigate to="/agent" replace />
                     </ProtectedRoute>
                   } />
+                  <Route path="/room/:slug" element={<RoomPage />} />
                 </Routes>
                 </Suspense>
                 </ProfileModalProvider>

@@ -233,6 +233,25 @@ def get_current_user_optional(
     return orm_user_to_response(user, db)
 
 
+def get_current_user_optional_orm(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    """Cookie JWT auth; returns SQLAlchemy User or None."""
+    token = request.cookies.get(ACCESS_COOKIE)
+    if not token:
+        return None
+    if token_blacklist.is_blacklisted(token):
+        return None
+    payload = decode_token(token)
+    if not payload or payload.get("type") != ACCESS_TOKEN_TYPE:
+        return None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    return get_user_by_id(db, int(user_id))
+
+
 def get_current_user_required(
     user: Optional[UserResponse] = Depends(get_current_user_optional),
 ) -> UserResponse:

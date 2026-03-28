@@ -1341,3 +1341,101 @@ export async function cancelSubscription(): Promise<{
   }
   return data as { status: string; message: string; access_until: string };
 }
+
+// ──────────────────────────────────────────────────────────────
+// Shared research rooms
+// ──────────────────────────────────────────────────────────────
+
+export async function createRoom(body: { name: string; task_id?: string }): Promise<any> {
+  const response = await apiFetch(`${API_BASE}/rooms/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await parseJsonSafely<{ detail?: string } & Record<string, unknown>>(response);
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Could not create room'), response.status, data);
+  }
+  return data;
+}
+
+export async function getRoom(slug: string): Promise<any> {
+  const response = await apiFetch(`${API_BASE}/rooms/${encodeURIComponent(slug)}`);
+  const data = await parseJsonSafely<{ detail?: string } & Record<string, unknown>>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data || {}, 'Room not found'), response.status, data);
+  }
+  return data;
+}
+
+export async function joinRoom(slug: string): Promise<any> {
+  const response = await apiFetch(`${API_BASE}/rooms/${encodeURIComponent(slug)}/join`, {
+    method: 'POST',
+  });
+  const data = await parseJsonSafely<{ detail?: string } & Record<string, unknown>>(response);
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Could not join room'), response.status, data);
+  }
+  return data;
+}
+
+export async function addRoomTask(slug: string, taskId: string): Promise<any> {
+  const response = await apiFetch(`${API_BASE}/rooms/${encodeURIComponent(slug)}/add-task`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id: taskId }),
+  });
+  const data = await parseJsonSafely<{ detail?: string } & Record<string, unknown>>(response);
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Could not add task'), response.status, data);
+  }
+  return data;
+}
+
+export async function removeRoomTask(slug: string, taskId: string): Promise<any> {
+  const response = await apiFetch(
+    `${API_BASE}/rooms/${encodeURIComponent(slug)}/remove-task/${encodeURIComponent(taskId)}`,
+    { method: 'POST' },
+  );
+  const data = await parseJsonSafely<{ detail?: string } & Record<string, unknown>>(response);
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Could not remove task'), response.status, data);
+  }
+  return data;
+}
+
+export async function getRoomSynthesis(slug: string): Promise<{
+  synthesis: any;
+  synthesis_updated_at: string | null;
+}> {
+  const response = await apiFetch(`${API_BASE}/rooms/${encodeURIComponent(slug)}/synthesis`);
+  const data = await parseJsonSafely<{ synthesis?: any; synthesis_updated_at?: string | null }>(response);
+  if (!response.ok) {
+    throw new ApiError('Could not load synthesis', response.status, data);
+  }
+  return {
+    synthesis: data?.synthesis ?? null,
+    synthesis_updated_at: data?.synthesis_updated_at ?? null,
+  };
+}
+
+export async function getMyRooms(): Promise<{ rooms: any[] }> {
+  const response = await apiFetch(`${API_BASE}/rooms/my-rooms`);
+  const data = await parseJsonSafely<{ rooms?: any[] }>(response);
+  if (!response.ok) {
+    return { rooms: [] };
+  }
+  return { rooms: data?.rooms ?? [] };
+}
+
+export async function deleteRoom(slug: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/rooms/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+  if (!response.ok) {
+    const data = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(data || {}, 'Could not delete room'), response.status, data);
+  }
+}

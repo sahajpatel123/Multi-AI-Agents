@@ -27,6 +27,7 @@ from arena.routes.session import router as session_router
 from arena.routes.payments import router as payments_router
 from arena.routes.agent import router as agent_router
 from arena.routes.calibration import router as calibration_router
+from arena.routes.rooms import router as rooms_router
 from arena.core.live_scheduler import schedule_live_checks
 from arena.core.loyalty_scheduler import schedule_loyalty_checks
 from arena.core.watchlist_runner import schedule_watchlist_checks
@@ -164,6 +165,7 @@ def create_app() -> FastAPI:
     app.include_router(payments_router, prefix="/api/payments")
     app.include_router(agent_router, prefix="/api/agent")
     app.include_router(calibration_router, prefix="/api/calibration")
+    app.include_router(rooms_router, prefix="/api/rooms")
 
     # ── Startup ───────────────────────────────────────────────
     @app.on_event("startup")

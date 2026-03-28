@@ -7,11 +7,14 @@ import { TemplatesModal } from '../components/TemplatesModal';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
+  addRoomTask,
   challengeAgentAnswer,
+  createRoom,
   deleteAgentTask,
   exportAgentTaskPdf,
   exportOrchestrationPdf,
   getAgentHistory,
+  getMyRooms,
   getAgentWatchlist,
   getAgentOrchestration,
   getAgentRebuttal,
@@ -686,6 +689,13 @@ export function AgentPage() {
   const [watchlistPickHours, setWatchlistPickHours] = useState<24 | 72 | 168>(24);
   const [watchUnread, setWatchUnread] = useState(false);
   const [watchlistBusy, setWatchlistBusy] = useState(false);
+  const [showRoomCreate, setShowRoomCreate] = useState(false);
+  const [roomName, setRoomName] = useState('');
+  const [createdRoom, setCreatedRoom] = useState<any>(null);
+  const [myRooms, setMyRooms] = useState<any[]>([]);
+  const [myRoomsLoading, setMyRoomsLoading] = useState(false);
+  const [copyRoomLinkFeedback, setCopyRoomLinkFeedback] = useState(false);
+  const pendingRoomHandledRef = useRef<string | null>(null);
 
   const closeTemplatesModal = useCallback(() => {
     setTemplatesClosing(true);
@@ -794,6 +804,97 @@ export function AgentPage() {
   useEffect(() => {
     void loadTaskHistory();
   }, [loadTaskHistory]);
+
+  useEffect(() => {
+    if (!user) {
+      setMyRooms([]);
+      return;
+    }
+    let cancelled = false;
+    setMyRoomsLoading(true);
+    void getMyRooms()
+      .then((r) => {
+        if (!cancelled) setMyRooms(r.rooms || []);
+      })
+      .catch(() => {
+        if (!cancelled) setMyRooms([]);
+      })
+      .finally(() => {
+        if (!cancelled) setMyRoomsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (searchParams.get('createRoom') === '1') {
+      setShowRoomCreate(true);
+      setCreatedRoom(null);
+      setRoomName('');
+      setSearchParams(
+        (prev) => {
+          const n = new URLSearchParams(prev);
+          n.delete('createRoom');
+          return n;
+        },
+        { replace: true },
+      );
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (!q?.trim()) return;
+    try {
+      setTask(decodeURIComponent(q));
+    } catch {
+      setTask(q);
+    }
+    setSearchParams(
+      (prev) => {
+        const n = new URLSearchParams(prev);
+        n.delete('q');
+        return n;
+      },
+      { replace: true },
+    );
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (result?.status !== 'complete' || !result.task_id || !user) return;
+    let slug: string | null = null;
+    let rname: string | null = null;
+    try {
+      slug = sessionStorage.getItem('pending_room_slug');
+      rname = sessionStorage.getItem('pending_room_name');
+    } catch {
+      return;
+    }
+    if (!slug) return;
+    const key = `${slug}:${result.task_id}`;
+    if (pendingRoomHandledRef.current === key) return;
+    pendingRoomHandledRef.current = key;
+    void addRoomTask(slug, result.task_id)
+      .then(() => {
+        try {
+          sessionStorage.removeItem('pending_room_slug');
+          sessionStorage.removeItem('pending_room_name');
+        } catch {
+          /* ignore */
+        }
+        setToastMessage(rname ? `Task added to ${rname}` : 'Task added to room');
+        void getMyRooms().then((r) => setMyRooms(r.rooms || []));
+      })
+      .catch(() => {
+        try {
+          sessionStorage.removeItem('pending_room_slug');
+          sessionStorage.removeItem('pending_room_name');
+        } catch {
+          /* ignore */
+        }
+      });
+  }, [result?.status, result?.task_id, user]);
 
   useEffect(() => {
     if (!openMenuTaskId && !confirmDeleteTaskId) return;
@@ -1064,6 +1165,12 @@ export function AgentPage() {
   const handleOrchestrateRun = async () => {
     const qs = multiTasks.slice(0, activeTaskCount).map((t) => t.trim());
     if (qs.length !== activeTaskCount || qs.some((q) => q.length < 10) || isRunning) return;
+    try {
+      sessionStorage.removeItem('pending_room_slug');
+      sessionStorage.removeItem('pending_room_name');
+    } catch {
+      /* ignore */
+    }
     setError(null);
     setBridgeMeta(null);
     setResult(null);
@@ -1222,6 +1329,13 @@ export function AgentPage() {
   };
 
   const resetRun = () => {
+    try {
+      sessionStorage.removeItem('pending_room_slug');
+      sessionStorage.removeItem('pending_room_name');
+    } catch {
+      /* ignore */
+    }
+    pendingRoomHandledRef.current = null;
     setOpenMenuTaskId(null);
     setConfirmDeleteTaskId(null);
     setEditingTaskId(null);
@@ -1268,6 +1382,21 @@ export function AgentPage() {
     const q = (result?.original_task || result?.task || '').trim();
     resetRun();
     if (q) setTask(q);
+  };
+
+  const handleCreateResearchRoom = async () => {
+    const n = roomName.trim();
+    if (n.length < 2 || !user) return;
+    try {
+      const tid = result?.task_id;
+      const payload: { name: string; task_id?: string } = { name: n };
+      if (tid) payload.task_id = tid;
+      const data = await createRoom(payload);
+      setCreatedRoom(data);
+      void getMyRooms().then((r) => setMyRooms(r.rooms || []));
+    } catch (e) {
+      setToastMessage(e instanceof ApiError ? e.message : 'Could not create room');
+    }
   };
 
   const parsedAnswer = useMemo(
@@ -1950,6 +2079,10 @@ export function AgentPage() {
           0%, 100% { transform: scale(1); opacity: 1; }
           50% { transform: scale(1.5); opacity: 0.6; }
         }
+        @keyframes roomPanelFadeUp {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         @keyframes breatheDot {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.15); }
@@ -2170,6 +2303,69 @@ export function AgentPage() {
               </span>
               Watchlist
             </button>
+          ) : null}
+          {user ? (
+            <div style={{ padding: '0 16px 12px', borderBottom: '0.5px solid #E8E2DA' }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A9A2', padding: '8px 4px 6px', marginBottom: 4 }}>
+                Rooms
+              </div>
+              {myRoomsLoading ? (
+                <div style={{ fontSize: 11, color: '#C4B8AE', padding: '4px 0' }}>Loading…</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {myRooms.map((r: any) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => {
+                        navigate(`/room/${encodeURIComponent(r.slug)}`);
+                        if (isMobile) setSidebarOpen(false);
+                      }}
+                      style={{
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        color: '#4A3728',
+                        padding: '6px 4px',
+                        borderRadius: 6,
+                        fontFamily: 'Georgia, serif',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#EDE4D8';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      {(r.name || 'Room').slice(0, 28)}
+                      {(r.name || '').length > 28 ? '…' : ''}
+                      <span style={{ color: '#A89070', marginLeft: 6 }}>({r.member_count ?? 0})</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRoomCreate(true);
+                  if (isMobile) setSidebarOpen(false);
+                }}
+                style={{
+                  marginTop: 8,
+                  background: 'none',
+                  border: 'none',
+                  padding: '4px 4px 0',
+                  fontSize: 11,
+                  color: '#C4956A',
+                  cursor: 'pointer',
+                  fontFamily: 'Georgia, serif',
+                }}
+              >
+                New room →
+              </button>
+            </div>
           ) : null}
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 16px' }}>
             <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A9A2', padding: '12px 4px 6px', marginBottom: 4 }}>
@@ -5502,7 +5698,174 @@ export function AgentPage() {
                         {result.is_live ? 'Live thread' : 'Make it live'}
                       </button>
                     ) : null}
+                    {result.status === 'complete' && !isRunning && user ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCreatedRoom(null);
+                          setRoomName('');
+                          setShowRoomCreate(true);
+                        }}
+                        style={{
+                          padding: '9px 18px',
+                          border: '0.5px solid #D4C4B0',
+                          borderRadius: 6,
+                          background: 'transparent',
+                          color: '#6B5040',
+                          fontSize: 13,
+                          fontFamily: 'Georgia, serif',
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = AR.GOLD;
+                          e.currentTarget.style.color = AR.GOLD;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = '#D4C4B0';
+                          e.currentTarget.style.color = '#6B5040';
+                        }}
+                      >
+                        + Create research room
+                      </button>
+                    ) : null}
                   </div>
+                  {showRoomCreate && result?.status === 'complete' && !isRunning && user ? (
+                    <div
+                      style={{
+                        marginTop: 10,
+                        animation: 'roomPanelFadeUp 0.25s ease',
+                        background: '#FAF7F2',
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 10,
+                        padding: '16px 18px',
+                      }}
+                    >
+                      <div style={{ fontSize: 14, color: '#2C1810', fontWeight: 500, marginBottom: 6 }}>Create a research room</div>
+                      <p style={{ fontSize: 12, color: '#A89070', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
+                        Collaborate on this topic. Each member runs their own tasks — the room synthesises everyone&apos;s findings
+                        automatically.
+                      </p>
+                      {!createdRoom ? (
+                        <>
+                          <input
+                            type="text"
+                            value={roomName}
+                            onChange={(e) => setRoomName(e.target.value)}
+                            placeholder="Room name e.g. AI Startup Funding"
+                            style={{
+                              width: '100%',
+                              boxSizing: 'border-box',
+                              border: '0.5px solid #D4C4B0',
+                              borderRadius: 6,
+                              padding: '8px 12px',
+                              fontSize: 13,
+                              color: '#2C1810',
+                              fontFamily: 'Georgia, serif',
+                              background: '#FDFAF6',
+                              outline: 'none',
+                              marginBottom: 10,
+                            }}
+                          />
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => void handleCreateResearchRoom()}
+                              style={{
+                                background: '#2C1810',
+                                color: '#C4956A',
+                                borderRadius: 20,
+                                padding: '8px 20px',
+                                fontSize: 13,
+                                fontFamily: 'Georgia, serif',
+                                border: 'none',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Create room →
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowRoomCreate(false);
+                                setCreatedRoom(null);
+                                setRoomName('');
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: '0.5px solid #D4C4B0',
+                                color: '#8C7355',
+                                borderRadius: 20,
+                                padding: '8px 20px',
+                                fontSize: 13,
+                                fontFamily: 'Georgia, serif',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div
+                            style={{
+                              background: '#F0E8DC',
+                              border: '0.5px solid #D4C4B0',
+                              borderRadius: 6,
+                              padding: '8px 12px',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              gap: 8,
+                              fontSize: 12,
+                              color: '#8C7355',
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <span style={{ wordBreak: 'break-all' }}>
+                              {(createdRoom.share_url || '').replace(/^https?:\/\//, '')}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const url = createdRoom.share_url || `${window.location.origin}/room/${createdRoom.slug}`;
+                                void navigator.clipboard.writeText(url).then(() => {
+                                  setCopyRoomLinkFeedback(true);
+                                  window.setTimeout(() => setCopyRoomLinkFeedback(false), 1500);
+                                });
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#C4956A',
+                                cursor: 'pointer',
+                                fontSize: 12,
+                                fontFamily: 'Georgia, serif',
+                              }}
+                            >
+                              {copyRoomLinkFeedback ? 'Copied!' : 'Copy link'}
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/room/${encodeURIComponent(createdRoom.slug)}`)}
+                            style={{
+                              marginTop: 8,
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              fontSize: 13,
+                              color: '#C4956A',
+                              cursor: 'pointer',
+                              fontFamily: 'Georgia, serif',
+                            }}
+                          >
+                            Open room →
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ) : null}
                   {showScheduler && result.status === 'complete' && !isRunning && canWatchlist ? (
                     <div
                       style={{

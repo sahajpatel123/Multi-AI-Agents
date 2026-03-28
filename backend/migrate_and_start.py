@@ -277,6 +277,101 @@ def main():
                 except Exception:
                     pass
 
+            pg_rooms = """
+                CREATE TABLE IF NOT EXISTS rooms (
+                    id VARCHAR(36) PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    slug VARCHAR(128) UNIQUE NOT NULL,
+                    creator_id INTEGER NOT NULL REFERENCES users(id),
+                    synthesis JSONB,
+                    synthesis_updated_at TIMESTAMP,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """
+            sqlite_rooms = """
+                CREATE TABLE IF NOT EXISTS rooms (
+                    id VARCHAR(36) PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    slug VARCHAR(128) UNIQUE NOT NULL,
+                    creator_id INTEGER NOT NULL REFERENCES users(id),
+                    synthesis TEXT,
+                    synthesis_updated_at TIMESTAMP,
+                    is_active INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            pg_rm = """
+                CREATE TABLE IF NOT EXISTS room_members (
+                    id SERIAL PRIMARY KEY,
+                    room_id VARCHAR(36) NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    joined_at TIMESTAMP DEFAULT NOW(),
+                    last_seen_at TIMESTAMP DEFAULT NOW(),
+                    CONSTRAINT uq_room_member_room_user UNIQUE (room_id, user_id)
+                )
+            """
+            sqlite_rm = """
+                CREATE TABLE IF NOT EXISTS room_members (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    room_id VARCHAR(36) NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (room_id, user_id)
+                )
+            """
+            pg_rt = """
+                CREATE TABLE IF NOT EXISTS room_tasks (
+                    id SERIAL PRIMARY KEY,
+                    room_id VARCHAR(36) NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+                    task_id VARCHAR(64) NOT NULL REFERENCES agent_tasks(task_id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    added_at TIMESTAMP DEFAULT NOW(),
+                    CONSTRAINT uq_room_task_room_task UNIQUE (room_id, task_id)
+                )
+            """
+            sqlite_rt = """
+                CREATE TABLE IF NOT EXISTS room_tasks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    room_id VARCHAR(36) NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+                    task_id VARCHAR(64) NOT NULL REFERENCES agent_tasks(task_id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (room_id, task_id)
+                )
+            """
+            try:
+                conn.execute(text(sqlite_rooms if dialect == "sqlite" else pg_rooms))
+                conn.commit()
+                print("==> Migrated: rooms table", flush=True)
+            except Exception as e:
+                print(f"==> Warning (rooms): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+            try:
+                conn.execute(text(sqlite_rm if dialect == "sqlite" else pg_rm))
+                conn.commit()
+                print("==> Migrated: room_members table", flush=True)
+            except Exception as e:
+                print(f"==> Warning (room_members): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+            try:
+                conn.execute(text(sqlite_rt if dialect == "sqlite" else pg_rt))
+                conn.commit()
+                print("==> Migrated: room_tasks table", flush=True)
+            except Exception as e:
+                print(f"==> Warning (room_tasks): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
         print("==> All migrations complete.", flush=True)
 
     except Exception as e:

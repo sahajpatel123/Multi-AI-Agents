@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     # CORS
     allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # Public frontend URL (shared links, room invites)
+    frontend_public_url: str = "http://localhost:5173"
+
     # Rate limits
     guest_daily_limit: int = 5
     registered_daily_limit: int = 7
