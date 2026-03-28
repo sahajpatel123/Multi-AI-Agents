@@ -574,7 +574,7 @@ export function PricingPage() {
                     Save 26%
                   </span>
                 </div>
-                <p style={{ fontSize: '12px', color: '#8B8480', marginBottom: '4px' }}>billed ₹8,904/year</p>
+                <p style={{ fontSize: '12px', color: '#8B8480', marginBottom: '4px' }}>Billed as ₹8,899/year</p>
                 <p style={{ fontSize: '12px', color: '#C4B8AE', textDecoration: 'line-through', marginBottom: '1rem' }}>vs ₹11,988 if paid monthly</p>
               </>
             )}

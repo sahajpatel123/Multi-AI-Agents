@@ -2291,7 +2291,7 @@ export function AgentPage() {
         }}
       >
         {!canAgent ? (
-          isPlus && user && !user.agent_addon_active ? (
+          isPlus && user ? (
             <div style={{ maxWidth: 640, margin: '0 auto', padding: '3rem 1.25rem' }}>
               <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
                 <Lock style={{ width: 32, height: 32, color: '#C4956A' }} />
@@ -2325,16 +2325,28 @@ export function AgentPage() {
                   background: '#FAF7F2',
                   border: '0.5px solid #E0D5C5',
                   borderRadius: 12,
-                  padding: 20,
+                  padding: 24,
                   alignItems: 'stretch',
+                  maxWidth: 560,
+                  margin: '0 auto',
                 }}
               >
-                <div style={{ borderRight: '0.5px solid #E0D5C5', paddingRight: 16 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginBottom: 8 }}>Add Agent to your Plus plan</div>
-                  <div style={{ fontSize: 14, color: '#C4956A', marginBottom: 6 }}>₹599/month</div>
-                  <p style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', margin: '0 0 14px', lineHeight: 1.5 }}>
-                    Keep your Plus plan, unlock Agent Mode
+                <div style={{ borderRight: '0.5px solid #EDE4D8', paddingRight: 16 }}>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#A89070', marginBottom: 8 }}>
+                    Add to Plus
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 28, color: '#2C1810', fontWeight: 500 }}>₹599</span>
+                    <span style={{ fontSize: 14, color: '#A89070' }}>/month</span>
+                  </div>
+                  <p style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
+                    Agent Mode on your current plan
                   </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#4A3728' }}>
+                    <span>✓ Full 7-stage pipeline</span>
+                    <span>✓ Plus limits apply (100K/day)</span>
+                    <span>✓ Cancel anytime</span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setAgentAddonCheckout(true)}
@@ -2343,22 +2355,33 @@ export function AgentPage() {
                       background: '#2C1810',
                       color: '#C4956A',
                       borderRadius: 20,
-                      padding: '10px 18px',
-                      fontSize: 12,
+                      padding: '9px 18px',
+                      fontSize: 13,
                       fontFamily: 'Georgia, serif',
                       border: 'none',
                       cursor: 'pointer',
+                      marginTop: 12,
                     }}
                   >
-                    Add for ₹599/month →
+                    Add Agent Mode →
                   </button>
                 </div>
                 <div style={{ paddingLeft: 4 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginBottom: 8 }}>Upgrade to Pro</div>
-                  <div style={{ fontSize: 14, color: '#C4956A', marginBottom: 6 }}>₹2,499/month</div>
-                  <p style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', margin: '0 0 14px', lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#A89070', marginBottom: 8 }}>
+                    Upgrade to Pro
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 28, color: '#2C1810', fontWeight: 500 }}>₹2,499</span>
+                    <span style={{ fontSize: 14, color: '#A89070' }}>/month</span>
+                  </div>
+                  <p style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
                     3× more credits + priority routing
                   </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#4A3728' }}>
+                    <span>✓ 300K credits/day</span>
+                    <span>✓ Priority model routing</span>
+                    <span>✓ Loyalty reward after 10 months</span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => navigate('/pricing')}
@@ -2367,11 +2390,12 @@ export function AgentPage() {
                       background: 'transparent',
                       color: '#C4956A',
                       borderRadius: 20,
-                      padding: '10px 18px',
-                      fontSize: 12,
+                      padding: '9px 18px',
+                      fontSize: 13,
                       fontFamily: 'Georgia, serif',
                       border: '0.5px solid #C4956A',
                       cursor: 'pointer',
+                      marginTop: 12,
                     }}
                   >
                     Upgrade to Pro →

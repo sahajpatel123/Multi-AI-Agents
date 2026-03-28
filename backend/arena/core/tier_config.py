@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any, Optional
 
 
 class UserTier(str, Enum):
@@ -148,8 +149,24 @@ def get_credit_budget(tier: UserTier | str | None) -> int:
     return TIER_DAILY_LIMITS.get(normalize_tier(tier), TIER_DAILY_LIMITS[UserTier.FREE])
 
 
-def has_feature(tier: UserTier | str | None, feature: str) -> bool:
-    features = TIER_FEATURES.get(normalize_tier(tier), TIER_FEATURES[UserTier.FREE])
+def has_feature(
+    tier: UserTier | str | None,
+    feature: str,
+    *,
+    user: Optional[Any] = None,
+) -> bool:
+    """When `user` is provided and feature is `agent_mode`, Plus users get access if the Agent add-on is active or still in a paid period after scheduling cancel."""
+    nt = normalize_tier(tier)
+    if feature == "agent_mode":
+        if nt == UserTier.PRO:
+            return True
+        if user is not None and nt == UserTier.PLUS:
+            return bool(
+                getattr(user, "agent_addon_active", False)
+                or getattr(user, "agent_addon_cancelling", False)
+            )
+        return False
+    features = TIER_FEATURES.get(nt, TIER_FEATURES[UserTier.FREE])
     return features.get(feature, False)
 
 

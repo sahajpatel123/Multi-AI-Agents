@@ -3,7 +3,7 @@ import { createAgentAddonSubscription, createSubscription, verifyPayment } from 
 
 interface Props {
   planKey: string;
-  /** When set, calls `/payments/addon/agent` instead of `/payments/subscribe`. */
+  /** When set, calls `/payments/addon/agent/subscribe` instead of `/payments/subscribe`. */
   agentAddon?: boolean;
   prefillEmail?: string;
   onSuccess: () => void;
@@ -55,8 +55,14 @@ export function RazorpayCheckout({ planKey, agentAddon, prefillEmail, onSuccess,
           return;
         }
 
+        const keyId =
+          'key_id' in subscriptionData && subscriptionData.key_id
+            ? String(subscriptionData.key_id)
+            : 'razorpay_key' in subscriptionData && subscriptionData.razorpay_key
+              ? String(subscriptionData.razorpay_key)
+              : '';
         const options: Record<string, unknown> = {
-          key: subscriptionData.key_id,
+          key: keyId,
           subscription_id: subscriptionData.subscription_id,
           name: 'Arena',
           description: subscriptionData.plan_name,

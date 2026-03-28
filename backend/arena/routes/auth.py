@@ -408,7 +408,10 @@ async def get_user_tier_summary(
     agent_mode = bool(base.get("agent_mode", False))
     if normalized_tier == UserTier.PRO:
         agent_mode = True
-    elif normalized_tier == UserTier.PLUS and getattr(user, "agent_addon_active", False):
+    elif normalized_tier == UserTier.PLUS and (
+        getattr(user, "agent_addon_active", False)
+        or getattr(user, "agent_addon_cancelling", False)
+    ):
         agent_mode = True
 
     return {

@@ -145,6 +145,8 @@ export interface User {
   loyalty_free_months_remaining?: number;
   loyalty_resume_at?: string | null;
   agent_addon_active?: boolean;
+  agent_addon_cancelling?: boolean;
+  addon_subscription_id?: string | null;
   subscription_billing_period?: string | null;
 }
 

@@ -107,7 +107,8 @@ class User(Base):
     loyalty_free_months_remaining = Column(Integer, default=0, nullable=False)
     loyalty_resume_at = Column(DateTime, nullable=True)
     agent_addon_active = Column(Boolean, default=False, nullable=False)
-    agent_addon_subscription_id = Column(String(64), nullable=True)
+    agent_addon_cancelling = Column(Boolean, default=False, nullable=False)
+    addon_subscription_id = Column(String(64), nullable=True)
 
 
 class Subscription(Base):

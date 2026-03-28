@@ -259,6 +259,8 @@ class UserResponse(BaseModel):
     loyalty_free_months_remaining: int = 0
     loyalty_resume_at: Optional[datetime] = None
     agent_addon_active: bool = False
+    agent_addon_cancelling: bool = False
+    addon_subscription_id: Optional[str] = None
     subscription_billing_period: Optional[str] = None
 
     @field_validator("name", mode="before")

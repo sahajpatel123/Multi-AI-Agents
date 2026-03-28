@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
+  cancelAgentAddon,
   cancelSubscription,
   getCalibrationStats,
   getSubscriptionStatus,
   getUserAnswerFeedbackStats,
   getUserUsage,
   patchUserProfile,
+  reactivateAgentAddon,
   type AnswerFeedbackStats,
   type SubscriptionStatusResponse,
   type UserUsageResponse,
@@ -221,6 +223,8 @@ export function ProfileModal() {
   const [subLoading, setSubLoading] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [addonCheckout, setAddonCheckout] = useState(false);
+  const [addonCancelConfirm, setAddonCancelConfirm] = useState(false);
+  const [addonBusy, setAddonBusy] = useState(false);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768);
@@ -940,15 +944,13 @@ export function ProfileModal() {
                         letterSpacing: '0.1em',
                         textTransform: 'uppercase',
                         color: '#A89070',
-                        marginTop: 14,
+                        marginTop: 16,
                         marginBottom: 10,
                       }}
                     >
-                      Expand your plan
+                      Agent Mode add-on
                     </div>
-                    {user.agent_addon_active ? (
-                      <div style={{ fontSize: 12, color: '#3B6D11', textAlign: 'center', padding: '8px 0' }}>✓ Agent Mode active</div>
-                    ) : (
+                    {!user.agent_addon_active && !user.agent_addon_cancelling ? (
                       <div
                         style={{
                           background: '#FAF7F2',
@@ -961,9 +963,14 @@ export function ProfileModal() {
                           <span style={{ fontSize: 14, color: '#2C1810', fontWeight: 500 }}>Agent Mode</span>
                           <span style={{ fontSize: 14, color: '#C4956A' }}>₹599/month</span>
                         </div>
-                        <p style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', margin: '0 0 10px', lineHeight: 1.5 }}>
-                          7-stage pipeline · Full research depth · Plus limits apply
+                        <p style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
+                          7-stage research pipeline · Full Agent access · Plus limits apply
                         </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, color: '#4A3728', marginBottom: 0 }}>
+                          <span>✓ Planner → Researcher → Solver pipeline</span>
+                          <span>✓ Confidence calibration + source integrity</span>
+                          <span>✓ Cancel anytime from your profile</span>
+                        </div>
                         <button
                           type="button"
                           onClick={() => setAddonCheckout(true)}
@@ -972,17 +979,182 @@ export function ProfileModal() {
                             background: '#2C1810',
                             color: '#C4956A',
                             borderRadius: 20,
-                            padding: '8px 18px',
-                            fontSize: 12,
+                            padding: '9px 18px',
+                            fontSize: 13,
                             fontFamily: 'Georgia, serif',
                             border: 'none',
                             cursor: 'pointer',
+                            marginTop: 12,
                           }}
                         >
-                          Add Agent Mode →
+                          Add Agent Mode — ₹599/month →
                         </button>
                       </div>
-                    )}
+                    ) : user.agent_addon_active && !user.agent_addon_cancelling ? (
+                      <div
+                        style={{
+                          background: '#EAF3DE',
+                          border: '0.5px solid #97C459',
+                          borderRadius: 8,
+                          padding: '14px 16px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
+                          <span style={{ fontSize: 14, color: '#2C1810', fontWeight: 500 }}>Agent Mode</span>
+                          <span
+                            style={{
+                              background: '#639922',
+                              color: '#FAF7F2',
+                              fontSize: 10,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.06em',
+                              padding: '2px 8px',
+                              borderRadius: 8,
+                            }}
+                          >
+                            Active
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 11, color: '#5A8C6A', margin: 0, lineHeight: 1.5 }}>₹599/month · Renews automatically</p>
+                        {!addonCancelConfirm ? (
+                          <button
+                            type="button"
+                            onClick={() => setAddonCancelConfirm(true)}
+                            style={{
+                              marginTop: 10,
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              fontSize: 12,
+                              color: '#A89070',
+                              textDecoration: 'underline dotted',
+                              cursor: 'pointer',
+                              fontFamily: 'Georgia, serif',
+                            }}
+                          >
+                            Cancel add-on →
+                          </button>
+                        ) : (
+                          <div
+                            style={{
+                              marginTop: 10,
+                              background: '#FAF7F2',
+                              border: '0.5px solid #E0D5C5',
+                              borderRadius: 8,
+                              padding: '12px 14px',
+                            }}
+                          >
+                            <div style={{ fontSize: 12, color: '#2C1810', marginBottom: 8 }}>Cancel Agent add-on?</div>
+                            <div style={{ fontSize: 11, color: '#A89070', marginBottom: 10, lineHeight: 1.45 }}>
+                              You keep access until end of current billing period.
+                            </div>
+                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                disabled={addonBusy}
+                                onClick={() => setAddonCancelConfirm(false)}
+                                style={{
+                                  border: '0.5px solid #D4C4B0',
+                                  color: '#8C7355',
+                                  borderRadius: 20,
+                                  padding: '6px 14px',
+                                  fontSize: 12,
+                                  background: 'transparent',
+                                  cursor: addonBusy ? 'default' : 'pointer',
+                                  fontFamily: 'Georgia, serif',
+                                }}
+                              >
+                                Keep add-on
+                              </button>
+                              <button
+                                type="button"
+                                disabled={addonBusy}
+                                onClick={async () => {
+                                  setAddonBusy(true);
+                                  try {
+                                    await cancelAgentAddon();
+                                    setAddonCancelConfirm(false);
+                                    await refreshUser();
+                                    await refreshTier();
+                                  } catch {
+                                    // ignore; could surface toast
+                                  } finally {
+                                    setAddonBusy(false);
+                                  }
+                                }}
+                                style={{
+                                  border: '0.5px solid #F0997B',
+                                  color: '#993C1D',
+                                  borderRadius: 20,
+                                  padding: '6px 14px',
+                                  fontSize: 12,
+                                  background: 'transparent',
+                                  cursor: addonBusy ? 'default' : 'pointer',
+                                  fontFamily: 'Georgia, serif',
+                                }}
+                              >
+                                {addonBusy ? '…' : 'Yes, cancel'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : user.agent_addon_cancelling ? (
+                      <div
+                        style={{
+                          background: '#FDF6EC',
+                          border: '0.5px solid #E8C87A',
+                          borderRadius: 8,
+                          padding: '14px 16px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
+                          <span style={{ fontSize: 14, color: '#2C1810', fontWeight: 500 }}>Agent Mode</span>
+                          <span
+                            style={{
+                              background: '#BA7517',
+                              color: '#FAF7F2',
+                              fontSize: 10,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.06em',
+                              padding: '2px 8px',
+                              borderRadius: 8,
+                            }}
+                          >
+                            Cancelling
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 11, color: '#854F0B', margin: '0 0 10px', lineHeight: 1.5 }}>Access continues until billing period ends</p>
+                        <button
+                          type="button"
+                          disabled={addonBusy}
+                          onClick={async () => {
+                            setAddonBusy(true);
+                            try {
+                              await reactivateAgentAddon();
+                              await refreshUser();
+                              await refreshTier();
+                            } catch {
+                              // ignore
+                            } finally {
+                              setAddonBusy(false);
+                            }
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            fontSize: 12,
+                            color: '#C4956A',
+                            textDecoration: 'underline dotted',
+                            cursor: addonBusy ? 'default' : 'pointer',
+                            fontFamily: 'Georgia, serif',
+                          }}
+                        >
+                          Changed your mind? Reactivate →
+                        </button>
+                      </div>
+                    ) : null}
                   </>
                 ) : null}
                 {addonCheckout && user.email ? (

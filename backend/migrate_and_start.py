@@ -29,6 +29,8 @@ def main():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS loyalty_resume_at TIMESTAMP",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS agent_addon_active BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS agent_addon_subscription_id VARCHAR(64)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS agent_addon_cancelling BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS addon_subscription_id VARCHAR(64)",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
             "name VARCHAR DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
@@ -104,6 +106,24 @@ def main():
                         conn.rollback()
                     except Exception:
                         pass
+
+            try:
+                conn.execute(
+                    text(
+                        "UPDATE users SET addon_subscription_id = agent_addon_subscription_id "
+                        "WHERE (addon_subscription_id IS NULL OR addon_subscription_id = '') "
+                        "AND agent_addon_subscription_id IS NOT NULL "
+                        "AND agent_addon_subscription_id != ''"
+                    )
+                )
+                conn.commit()
+                print("==> Migrated: addon_subscription_id backfill from agent_addon_subscription_id", flush=True)
+            except Exception as e:
+                print(f"==> Warning (addon_subscription_id backfill): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
 
             ct_sql = sqlite_confidence_table if dialect == "sqlite" else pg_confidence_table
             try:

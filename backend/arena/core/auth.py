@@ -161,6 +161,8 @@ def orm_user_to_response(user: User, db: Optional[Session] = None) -> UserRespon
         loyalty_free_months_remaining=int(getattr(user, "loyalty_free_months_remaining", 0) or 0),
         loyalty_resume_at=getattr(user, "loyalty_resume_at", None),
         agent_addon_active=bool(getattr(user, "agent_addon_active", False)),
+        agent_addon_cancelling=bool(getattr(user, "agent_addon_cancelling", False)),
+        addon_subscription_id=getattr(user, "addon_subscription_id", None),
         subscription_billing_period=sub_period,
     )
 

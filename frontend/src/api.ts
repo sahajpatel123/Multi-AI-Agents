@@ -1250,14 +1250,36 @@ export async function createSubscription(planKey: string): Promise<CreateSubscri
 }
 
 /** Plus-only Agent Mode add-on (₹599/mo). Same checkout shape as `createSubscription`. */
-export async function createAgentAddonSubscription(): Promise<CreateSubscriptionResponse> {
-  const response = await apiFetch(`${API_BASE}/payments/addon/agent`, { method: 'POST' });
-  const data = await parseJsonSafely<{ detail?: string | { message?: string } } & CreateSubscriptionResponse>(response);
+export async function createAgentAddonSubscription(): Promise<CreateSubscriptionResponse & { razorpay_key?: string }> {
+  const response = await apiFetch(`${API_BASE}/payments/addon/agent/subscribe`, { method: 'POST' });
+  const data = await parseJsonSafely<
+    { detail?: string | { message?: string } } & CreateSubscriptionResponse & { razorpay_key?: string }
+  >(response);
   if (!data) throw new Error('Empty response');
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data, 'Add-on checkout failed'), response.status, data);
   }
-  return data as CreateSubscriptionResponse;
+  return data as CreateSubscriptionResponse & { razorpay_key?: string };
+}
+
+export async function cancelAgentAddon(): Promise<{ success: boolean; message: string }> {
+  const response = await apiFetch(`${API_BASE}/payments/addon/agent/cancel`, { method: 'POST' });
+  const data = await parseJsonSafely<{ detail?: string; success?: boolean; message?: string }>(response);
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Could not cancel add-on'), response.status, data);
+  }
+  return { success: !!data.success, message: data.message || '' };
+}
+
+export async function reactivateAgentAddon(): Promise<{ success: boolean; message: string }> {
+  const response = await apiFetch(`${API_BASE}/payments/addon/agent/reactivate`, { method: 'POST' });
+  const data = await parseJsonSafely<{ detail?: string; success?: boolean; message?: string }>(response);
+  if (!data) throw new Error('Empty response');
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Could not reactivate add-on'), response.status, data);
+  }
+  return { success: !!data.success, message: data.message || '' };
 }
 
 export async function verifyPayment(

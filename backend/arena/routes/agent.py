@@ -425,7 +425,9 @@ def _ensure_agent_access(user: UserResponse, db: Session) -> None:
     tier = normalize_tier(u.tier)
     if tier == UserTier.PRO:
         return
-    if tier == UserTier.PLUS and getattr(u, "agent_addon_active", False):
+    if tier == UserTier.PLUS and (
+        getattr(u, "agent_addon_active", False) or getattr(u, "agent_addon_cancelling", False)
+    ):
         return
     raise HTTPException(
         status_code=403,
