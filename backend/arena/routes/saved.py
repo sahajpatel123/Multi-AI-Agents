@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
-from arena.core.tier_config import has_feature, normalize_tier
+from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
 from arena.db_models import SavedResponse
 from arena.models.schemas import UserResponse
@@ -31,7 +31,7 @@ async def get_saved(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> list[dict]:
-    if not has_feature(normalize_tier(user.tier), "saved_responses"):
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         return []
 
     rows = (
@@ -65,7 +65,7 @@ async def save_response(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> dict:
-    if not has_feature(normalize_tier(user.tier), "saved_responses"):
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
             detail={
@@ -112,7 +112,7 @@ async def delete_saved(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> dict:
-    if not has_feature(normalize_tier(user.tier), "saved_responses"):
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
             detail={

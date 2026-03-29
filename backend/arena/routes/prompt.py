@@ -32,7 +32,14 @@ from arena.core.orchestrator import Orchestrator
 from arena.core.persona_integrity import check_integrity
 from arena.core.response_shaper import assemble_payload
 from arena.core.scorer import Scorer
-from arena.core.tier_config import UserTier, get_tier_personas, has_feature, normalize_tier, validate_persona_access
+from arena.core.tier_config import (
+    UserTier,
+    get_tier_personas,
+    get_tier_str,
+    has_feature,
+    normalize_tier,
+    validate_persona_access,
+)
 from arena.database import get_db
 from arena.models.schemas import (
     ContradictionFlag,
@@ -76,7 +83,7 @@ def _check_rate_limit(
 
 
 def _get_request_tier(user: UserResponse) -> UserTier:
-    return normalize_tier(user.tier)
+    return normalize_tier(get_tier_str(user))
 
 
 def _enforce_persona_access(user_tier: UserTier, persona_ids: list[str] | None) -> None:

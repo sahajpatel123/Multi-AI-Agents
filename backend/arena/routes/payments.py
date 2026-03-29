@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.rate_limits import enforce_user_rate_limit
-from arena.core.tier_config import normalize_tier
+from arena.core.tier_config import get_tier_str
 from arena.core.dependencies import get_current_user_required_orm
 from arena.database import get_db
 from arena.db_models import Subscription, User, UserTier
@@ -237,7 +237,7 @@ def _apply_agent_addon_subscription_event(
 
 
 def _loyalty_on_pro_monthly_charged(db: Session, row: Subscription, settings: Any) -> None:
-    if row.tier != "PRO" or row.billing_period != "monthly":
+    if get_tier_str(row) != "pro" or row.billing_period != "monthly":
         return
     expected = (settings.razorpay_pro_monthly_plan_id or "").strip()
     if expected and row.plan_id != expected:
@@ -355,16 +355,7 @@ async def create_subscription(
 
 
 def _user_is_plus_tier(user: User) -> bool:
-    """Accept enum, raw DB string, or any casing (e.g. 'plus', 'PLUS')."""
-    t = user.tier
-    if isinstance(t, UserTier):
-        return t == UserTier.PLUS
-    raw = str(t or "").strip()
-    if not raw:
-        return False
-    if raw.lower() == "plus":
-        return True
-    return normalize_tier(t) == UserTier.PLUS
+    return get_tier_str(user) == "plus"
 
 
 @router.post("/addon/agent/subscribe")
@@ -404,6 +395,7 @@ async def subscribe_agent_addon(
     plans = _plan_map(settings)
     plan = plans["agent_addon_monthly"]
     addon_plan_id = (plan.get("plan_id") or "").strip()
+    print(f"Addon plan ID from env: '{addon_plan_id}'")
     if not addon_plan_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -588,7 +580,7 @@ async def verify_payment(
         )
 
     row.status = "authenticated"
-    if row.tier == "AGENT_ADDON":
+    if get_tier_str(row) == "agent_addon":
         user.agent_addon_active = True
         user.agent_addon_cancelling = False
         user.addon_subscription_id = row.razorpay_subscription_id
@@ -656,7 +648,7 @@ def _apply_subscription_event(
         logger.warning("%s: no subscription found for %s", trigger, sub_id)
         return
 
-    if row.tier == "AGENT_ADDON":
+    if get_tier_str(row) == "agent_addon":
         exp = (get_settings().razorpay_agent_addon_plan_id or "").strip()
         ent_plan = (entity.get("plan_id") or "").strip()
         if exp and ent_plan and ent_plan != exp:
@@ -682,13 +674,13 @@ def _apply_subscription_event(
         trigger=trigger,
         status_value="active",
     )
-    if user and row.tier == "PRO":
+    if user and get_tier_str(row) == "pro":
         try:
             _cancel_agent_addon_if_active(db, user, _get_razorpay_client())
         except HTTPException:
             pass
 
-    if trigger == "subscription.charged" and row.tier == "PRO":
+    if trigger == "subscription.charged" and get_tier_str(row) == "pro":
         _loyalty_on_pro_monthly_charged(db, row, get_settings())
 
 
@@ -771,7 +763,7 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                     row.status = "cancelled" if event == "subscription.cancelled" else "completed"
                     db.add(row)
                     u = db.query(User).filter(User.id == row.user_id).first()
-                    if u and row.tier == "AGENT_ADDON":
+                    if u and get_tier_str(row) == "agent_addon":
                         plan_id_ent = (ent.get("plan_id") or "").strip()
                         expected_addon = (get_settings().razorpay_agent_addon_plan_id or "").strip()
                         if expected_addon and plan_id_ent and plan_id_ent != expected_addon:
@@ -832,7 +824,7 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                     if subscription_id:
                         row = _find_subscription_by_rzp_id(db, subscription_id)
                         if row:
-                            if row.tier == "AGENT_ADDON":
+                            if get_tier_str(row) == "agent_addon":
                                 _apply_agent_addon_subscription_event(
                                     db,
                                     row,
@@ -846,7 +838,7 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                                     trigger="payment.captured",
                                     status_value="active",
                                 )
-                                if user and row.tier == "PRO":
+                                if user and get_tier_str(row) == "pro":
                                     try:
                                         _cancel_agent_addon_if_active(
                                             db, user, _get_razorpay_client()

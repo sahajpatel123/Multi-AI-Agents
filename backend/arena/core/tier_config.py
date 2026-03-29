@@ -135,6 +135,16 @@ def normalize_tier(value: str | UserTier | None) -> UserTier:
     return legacy_map.get(normalized, UserTier.FREE)
 
 
+def get_tier_str(user: Any) -> str:
+    """Lowercase tier string whether ``user.tier`` is an enum or a plain string."""
+    tier = getattr(user, "tier", None)
+    if tier is None:
+        return ""
+    if hasattr(tier, "value"):
+        return str(tier.value).lower()
+    return str(tier).lower()
+
+
 def get_tier_personas(tier: UserTier | str | None) -> set[str]:
     return TIER_PERSONAS.get(normalize_tier(tier), TIER_PERSONAS[UserTier.FREE])
 

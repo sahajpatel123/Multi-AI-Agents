@@ -15,7 +15,7 @@ from arena.core.cost_tracker import (
     RateLimitExceeded,
     check_and_increment_user,
 )
-from arena.core.tier_config import has_feature, normalize_tier
+from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
 from arena.models.schemas import (
     DiscussRequest,
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api", tags=["discuss"])
 
 
 def _enforce_discuss_access(user: UserResponse) -> str:
-    user_tier = normalize_tier(user.tier)
+    user_tier = normalize_tier(get_tier_str(user))
     if not has_feature(user_tier, "discuss"):
         raise HTTPException(
             status_code=403,

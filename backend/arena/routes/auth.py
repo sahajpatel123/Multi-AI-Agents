@@ -30,6 +30,7 @@ from arena.core.tier_config import (
     get_credit_budget,
     get_daily_limit,
     get_tier_personas,
+    get_tier_str,
     normalize_tier,
     upgrade_target,
 )
@@ -294,7 +295,7 @@ async def get_user_usage(
     user: User = Depends(get_current_user_required_orm),
     db: Session = Depends(get_db),
 ) -> dict:
-    normalized = normalize_tier(user.tier.value if hasattr(user.tier, "value") else str(user.tier))
+    normalized = normalize_tier(get_tier_str(user))
     daily_limit = get_credit_budget(normalized)
     weekly_limit = daily_limit * 7
 
@@ -372,7 +373,7 @@ async def get_user_usage(
 async def get_user_tier_summary(
     user: User = Depends(get_current_user_required_orm),
 ) -> dict:
-    normalized_tier = normalize_tier(user.tier.value if hasattr(user.tier, "value") else str(user.tier))
+    normalized_tier = normalize_tier(get_tier_str(user))
     daily_limit = get_daily_limit(normalized_tier)
     messages_used_today = min(int(user.prompt_count_today or 0), daily_limit)
     base = TIER_FEATURES[normalized_tier]

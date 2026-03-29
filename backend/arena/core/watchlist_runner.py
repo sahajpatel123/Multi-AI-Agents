@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from arena.core.blackboard import AgentStatus, create_blackboard
-from arena.core.tier_config import has_feature, normalize_tier
+from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import SessionLocal
 from arena.db_models import User, WatchlistItem
 
@@ -35,7 +35,7 @@ async def run_due_watchlist() -> None:
                 user = db.query(User).filter(User.id == item.user_id).first()
                 if not user:
                     continue
-                tier = normalize_tier(user.tier.value if hasattr(user.tier, "value") else str(user.tier))
+                tier = normalize_tier(get_tier_str(user))
                 if not has_feature(tier, "agent_watchlist"):
                     continue
 

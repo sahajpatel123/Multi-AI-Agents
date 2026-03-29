@@ -31,7 +31,7 @@ from arena.core.input_validation import (
     sanitize_text,
 )
 from arena.core.rate_limits import enforce_user_rate_limit
-from arena.core.tier_config import UserTier, get_credit_budget, has_feature, normalize_tier
+from arena.core.tier_config import UserTier, get_credit_budget, get_tier_str, has_feature, normalize_tier
 from arena.core.agent_orchestration import synthesise_tasks
 from arena.core.feedback_calibrator import get_answer_feedback_distribution
 from arena.core.report_generator import (
@@ -510,7 +510,7 @@ def _ensure_agent_access(user: UserResponse, db: Session) -> None:
     u = db.query(User).filter(User.id == user.id).first()
     if not u:
         raise HTTPException(status_code=401, detail="User not found")
-    tier = normalize_tier(u.tier)
+    tier = normalize_tier(get_tier_str(u))
     if tier == UserTier.PRO:
         return
     if tier == UserTier.PLUS and (
@@ -528,7 +528,7 @@ def _ensure_agent_access(user: UserResponse, db: Session) -> None:
 
 
 def _ensure_agent_orchestrate_access(user: UserResponse) -> None:
-    tier = normalize_tier(user.tier)
+    tier = normalize_tier(get_tier_str(user))
     if not has_feature(tier, "agent_orchestrate"):
         raise HTTPException(
             status_code=403,
@@ -541,7 +541,7 @@ def _ensure_agent_orchestrate_access(user: UserResponse) -> None:
 
 
 def _ensure_agent_watchlist_access(user: UserResponse) -> None:
-    tier = normalize_tier(user.tier)
+    tier = normalize_tier(get_tier_str(user))
     if not has_feature(tier, "agent_watchlist"):
         raise HTTPException(
             status_code=403,
@@ -1201,7 +1201,7 @@ async def run_agent_task(
         message="Too many agent runs. Limit is 10 per minute.",
     )
 
-    tier = normalize_tier(user.tier)
+    tier = normalize_tier(get_tier_str(user))
     today_usage = get_today_token_usage(db, user.id)
     daily_limit = get_credit_budget(tier)
     if today_usage >= daily_limit:
@@ -1568,7 +1568,7 @@ async def get_agent_history(
     _ensure_agent_access(user, db)
     from arena.core.agent_memory import get_user_task_history
 
-    tier = normalize_tier(user.tier)
+    tier = normalize_tier(get_tier_str(user))
     retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
     history = get_user_task_history(
         db=db,

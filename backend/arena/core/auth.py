@@ -11,6 +11,7 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from arena.core.feedback_calibrator import get_feedback_calibration
+from arena.core.tier_config import get_tier_str
 from arena.db_models import Subscription, User, UserTier
 from arena.models.schemas import FeedbackCalibrationInfo, UserResponse
 
@@ -88,7 +89,7 @@ def _main_subscription_billing_period(db: Session, user: User) -> Optional[str]:
     uid = getattr(user, "subscription_id", None)
     if uid:
         row = db.query(Subscription).filter(Subscription.id == uid).first()
-        if row and row.tier != "AGENT_ADDON":
+        if row and get_tier_str(row) != "agent_addon":
             return row.billing_period
     row = (
         db.query(Subscription)

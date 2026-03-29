@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.model_router import estimate_call_cost
-from arena.core.tier_config import get_daily_limit, normalize_tier, upgrade_target
+from arena.core.tier_config import get_daily_limit, get_tier_str, normalize_tier, upgrade_target
 from arena.db_models import GuestRateLimit, User, UsageRecord
 
 logger = logging.getLogger(__name__)
@@ -150,7 +150,8 @@ def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
     if not user:
         return
 
-    normalized_tier = normalize_tier(user_tier or (user.tier.value if hasattr(user.tier, "value") else str(user.tier)))
+    _ = user_tier  # tier is always taken from the fresh DB user row
+    normalized_tier = normalize_tier(get_tier_str(user))
     limit = get_daily_limit(normalized_tier)
     now = _now_utc()
 
@@ -225,7 +226,7 @@ def record_usage(
 
 def get_user_usage_summary(db: Session, user: User) -> dict:
     """Return today's usage summary for display in the UI."""
-    normalized_tier = normalize_tier(user.tier.value if hasattr(user.tier, "value") else str(user.tier))
+    normalized_tier = normalize_tier(get_tier_str(user))
     limit = get_daily_limit(normalized_tier)
 
     # Reset if stale
