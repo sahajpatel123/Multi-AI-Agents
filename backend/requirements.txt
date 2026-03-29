@@ -41,7 +41,7 @@ python-magic==0.4.27
 razorpay==1.4.2
 
 # Tools
-ddgs==8.0.0
+ddgs==9.0.0
 
 # PDF reports (optional — export falls back to HTML if import fails)
 weasyprint==62.3
