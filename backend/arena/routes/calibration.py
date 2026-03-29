@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from arena.core.auth import get_current_user_required
+from arena.core.dependencies import get_current_user_required
 from arena.database import get_db
 from arena.db_models import AgentTask, ConfidenceRating
 from arena.models.schemas import UserResponse

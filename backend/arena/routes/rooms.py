@@ -15,7 +15,7 @@ from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
-from arena.core.auth import get_current_user_optional_orm, get_current_user_required_orm
+from arena.core.dependencies import get_current_user_optional_orm, get_current_user_required_orm
 from arena.core.input_validation import sanitize_html, sanitize_model_html, sanitize_model_text
 from arena.core.room_synthesiser import synthesise_room
 from arena.database import SessionLocal, get_db

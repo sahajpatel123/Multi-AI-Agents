@@ -177,7 +177,7 @@ def create_app() -> FastAPI:
         )
 
     # ── Middleware (order matters — outermost runs first) ─────
-    # Explicit origins only — required when allow_credentials=True (no "*")
+    # Explicit origins (Bearer tokens in headers; credentials flag off)
     allowed_origins = [
         "https://multi-ai-agents-chi.vercel.app",
         "http://localhost:5173",
@@ -190,10 +190,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["set-cookie"],
         max_age=3600,
     )
     app.add_middleware(GlobalRateLimitMiddleware)

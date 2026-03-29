@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
-from arena.core.auth import get_current_user_required
+from arena.core.dependencies import get_current_user_required
 from arena.core.input_validation import sanitize_model_html, sanitize_model_text
 from arena.core.mcp_runtime import search_integration_api
 from arena.core.token_crypto import encrypt_token, get_fernet

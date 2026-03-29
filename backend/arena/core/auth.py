@@ -1,40 +1,26 @@
-"""Auth core — JWT creation/verification, password hashing, user helpers, FastAPI dependencies."""
+"""Auth core — JWT, password hashing, user helpers (no cookies)."""
 
 import base64
 import hashlib
-import hmac
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt as _bcrypt
-from fastapi import Depends, HTTPException, Request, status
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
-from starlette.responses import Response
 
 from arena.core.feedback_calibrator import get_feedback_calibration
-from arena.database import get_db
 from arena.db_models import Subscription, User, UserTier
 from arena.models.schemas import FeedbackCalibrationInfo, UserResponse
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_TYPE = "access"
-REFRESH_TOKEN_TYPE = "refresh"
-ACCESS_TOKEN_MAX_AGE_SECONDS = 900       # 15 min
-REFRESH_TOKEN_MAX_AGE_SECONDS = 604800   # 7 days
+ACCESS_TOKEN_MAX_AGE_SECONDS = 86400  # 24h
+REFRESH_TOKEN_MAX_AGE_SECONDS = 2592000  # 30 days
 
-ACCESS_COOKIE = "access_token"
-REFRESH_COOKIE = "refresh_token"
-
-
-# ─────────────────────────────────────────────────
-# Password helpers
-# ─────────────────────────────────────────────────
 
 def _prehash(plain: str) -> bytes:
-    """SHA-256 → base64 bytes, permanently within bcrypt's 72-byte input limit."""
     digest = hashlib.sha256(plain.encode("utf-8")).digest()
     return base64.b64encode(digest)
 
@@ -59,38 +45,28 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-# ─────────────────────────────────────────────────
-# JWT helpers
-# ─────────────────────────────────────────────────
-
-def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def create_access_token(data: dict) -> str:
-    payload = data.copy()
-    expire = _now_utc() + timedelta(seconds=ACCESS_TOKEN_MAX_AGE_SECONDS)
-    payload.update({"exp": expire, "type": ACCESS_TOKEN_TYPE})
+def create_access_token(user_id: int, email: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(seconds=ACCESS_TOKEN_MAX_AGE_SECONDS)
+    payload = {
+        "sub": str(user_id),
+        "user_id": user_id,
+        "email": email,
+        "exp": expire,
+        "type": "access",
+    }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_refresh_token(data: dict) -> str:
-    payload = data.copy()
-    expire = _now_utc() + timedelta(seconds=REFRESH_TOKEN_MAX_AGE_SECONDS)
-    payload.update({"exp": expire, "type": REFRESH_TOKEN_TYPE})
+def create_refresh_token(user_id: int, email: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(seconds=REFRESH_TOKEN_MAX_AGE_SECONDS)
+    payload = {
+        "sub": str(user_id),
+        "user_id": user_id,
+        "email": email,
+        "exp": expire,
+        "type": "refresh",
+    }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
-def verify_token_hash(token: str, stored_hash: str) -> bool:
-    return hmac.compare_digest(hash_token(token), stored_hash)
-
-
-def hash_refresh_token(token: str) -> str:
-    return hash_token(token)
 
 
 def decode_token(token: str) -> Optional[dict]:
@@ -99,14 +75,6 @@ def decode_token(token: str) -> Optional[dict]:
     except JWTError:
         return None
 
-
-def is_token_valid(token: str) -> bool:
-    return decode_token(token) is not None
-
-
-# ─────────────────────────────────────────────────
-# User DB helpers
-# ─────────────────────────────────────────────────
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
     return db.query(User).filter(User.email == email.lower().strip()).first()
@@ -183,128 +151,3 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     if not verify_password(password, user.password_hash):
         return None
     return user
-
-
-# ─────────────────────────────────────────────────
-# Cookie helpers
-# ─────────────────────────────────────────────────
-
-def auth_cookie_samesite_and_secure() -> tuple[str, bool]:
-    is_prod = os.environ.get("ENVIRONMENT") == "production"
-    return ("none", True) if is_prod else ("lax", False)
-
-
-def persist_refresh_token(user: User, refresh_token: str) -> None:
-    user.refresh_token_hash = hash_token(refresh_token)
-    user.refresh_token_expires_at = (
-        _now_utc() + timedelta(seconds=REFRESH_TOKEN_MAX_AGE_SECONDS)
-    ).replace(tzinfo=None)
-
-
-def clear_refresh_token(user: User) -> None:
-    user.refresh_token_hash = None
-    user.refresh_token_expires_at = None
-
-
-def issue_auth_cookies(response: Response, user: User) -> tuple[str, str]:
-    payload = {"sub": str(user.id), "user_id": user.id, "email": user.email}
-    access_token = create_access_token(payload)
-    refresh_token = create_refresh_token(payload)
-    samesite, secure = auth_cookie_samesite_and_secure()
-
-    response.set_cookie(
-        key=ACCESS_COOKIE,
-        value=access_token,
-        max_age=ACCESS_TOKEN_MAX_AGE_SECONDS,
-        httponly=True,
-        secure=secure,
-        samesite=samesite,
-        path="/",
-    )
-    response.set_cookie(
-        key=REFRESH_COOKIE,
-        value=refresh_token,
-        max_age=REFRESH_TOKEN_MAX_AGE_SECONDS,
-        httponly=True,
-        secure=secure,
-        samesite=samesite,
-        path="/",
-    )
-    return access_token, refresh_token
-
-
-def set_auth_cookies_on_response(response: Response, user: User, db: Session) -> None:
-    _access_token, refresh_token = issue_auth_cookies(response, user)
-    persist_refresh_token(user, refresh_token)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-
-# ─────────────────────────────────────────────────
-# FastAPI dependencies
-# ─────────────────────────────────────────────────
-
-async def get_current_user(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> User:
-    token = request.cookies.get(ACCESS_COOKIE)
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    payload = decode_token(token)
-    if not payload or payload.get("type") != ACCESS_TOKEN_TYPE:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired")
-
-    user_id = payload.get("sub") or payload.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
-    user = get_user_by_id(db, int(user_id))
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-
-    return user
-
-
-async def get_optional_user(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> Optional[User]:
-    try:
-        return await get_current_user(request, db)
-    except HTTPException:
-        return None
-
-
-async def get_current_user_optional(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> Optional[UserResponse]:
-    user = await get_optional_user(request, db)
-    if not user:
-        return None
-    return orm_user_to_response(user, db)
-
-
-async def get_current_user_optional_orm(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> Optional[User]:
-    return await get_optional_user(request, db)
-
-
-async def get_current_user_required_orm(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> User:
-    return await get_current_user(request, db)
-
-
-async def get_current_user_required(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> UserResponse:
-    user = await get_current_user(request, db)
-    return orm_user_to_response(user, db)

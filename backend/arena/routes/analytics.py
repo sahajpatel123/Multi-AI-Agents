@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
-from arena.core.auth import get_current_user_optional, get_current_user_required
+from arena.core.dependencies import get_current_user_optional, get_current_user_required
 from arena.core.input_validation import sanitize_model_optional_text, sanitize_model_text
 from arena.core.model_router import get_all_routes_summary
 from arena.core.observability import log_ux_event

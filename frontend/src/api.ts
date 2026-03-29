@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+import { apiFetch as bearerApiFetch, type ApiFetchOptions } from './lib/apiFetch';
+import { clearTokens, getRefreshToken, setTokens } from './lib/tokenStorage';
 import {
   PromptResponse,
   DebateRoundResponse,
@@ -12,26 +14,16 @@ import {
   TierStatus,
 } from './types';
 
-export const API_BASE =
-  `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api`;
+export const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(
+  /\/$/,
+  '',
+);
+export const API_BASE = `${API_ORIGIN}/api`;
 
-export const AUTH_LOGOUT_EVENT = 'auth:logout';
-type AuthLogoutDetail = { redirect: boolean };
-type AuthResponse = {
-  success: boolean;
-  user: User;
-};
-type ApiFetchOptions = RequestInit & {
-  retryOn401?: boolean;
-  redirectOnAuthFail?: boolean;
-};
-const NO_INTERCEPT = [
-  '/api/auth/login',
-  '/api/auth/register',
-  '/api/auth/me',
-  '/api/auth/refresh',
-  '/api/auth/logout',
-] as const;
+/** Re-export for modules that imported apiFetch from here. */
+export async function apiFetch(path: string, options: ApiFetchOptions = {}): Promise<Response> {
+  return bearerApiFetch(path, options);
+}
 
 export class ApiError extends Error {
   status: number;
@@ -43,27 +35,6 @@ export class ApiError extends Error {
     this.status = status;
     this.detail = detail;
   }
-}
-
-let isRefreshing = false;
-let refreshPromise: Promise<User | null> | null = null;
-
-function dispatchAuthLogout(redirect: boolean): void {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent<AuthLogoutDetail>(AUTH_LOGOUT_EVENT, {
-    detail: { redirect },
-  }));
-}
-
-async function fetchWithCredentials(url: string, options: RequestInit = {}): Promise<Response> {
-  return fetch(url, {
-    ...options,
-    credentials: 'include',
-  });
-}
-
-function shouldIntercept401(url: string): boolean {
-  return !NO_INTERCEPT.some((path) => url.includes(path));
 }
 
 async function parseJsonSafely<T>(response: Response): Promise<T | null> {
@@ -91,65 +62,19 @@ function getErrorMessage(
   return fallback;
 }
 
-export async function attemptTokenRefresh(): Promise<User | null> {
-  if (isRefreshing && refreshPromise) {
-    return refreshPromise;
-  }
-
-  isRefreshing = true;
-  refreshPromise = fetchWithCredentials(`${API_BASE}/auth/refresh`, {
-    method: 'POST',
-  })
-    .then(async (response) => {
-      if (!response.ok) {
-        return null;
-      }
-      const data = await parseJsonSafely<AuthResponse>(response);
-      return data?.user || null;
-    })
-    .catch(() => null)
-    .finally(() => {
-      isRefreshing = false;
-      refreshPromise = null;
-    });
-
-  return refreshPromise;
-}
-
-export async function refreshSession(): Promise<User | null> {
-  return attemptTokenRefresh();
-}
-
-export async function apiFetch(
-  url: string,
-  options: ApiFetchOptions = {},
-): Promise<Response> {
-  const {
-    retryOn401 = true,
-    redirectOnAuthFail = true,
-    ...requestOptions
-  } = options;
-  const response = await fetchWithCredentials(url, requestOptions);
-
-  if (response.status === 401 && retryOn401 && shouldIntercept401(url)) {
-    const refreshed = await attemptTokenRefresh();
-
-    if (refreshed) {
-      return fetchWithCredentials(url, requestOptions);
-    }
-
-    dispatchAuthLogout(redirectOnAuthFail);
-  }
-
-  return response;
-}
-
 // ──────────────────────────────────────────────────────────────
 // Auth
 // ──────────────────────────────────────────────────────────────
 
+type TokenAuthResponse = {
+  success: boolean;
+  access_token: string;
+  refresh_token: string;
+  user: User;
+};
+
 export async function register(name: string, email: string, password: string): Promise<User> {
-  const res = await fetchWithCredentials(`${API_BASE}/auth/register`, {
+  const res = await fetch(`${API_ORIGIN}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password }),
@@ -158,13 +83,14 @@ export async function register(name: string, email: string, password: string): P
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
     throw new ApiError(getErrorMessage(err, 'Registration failed'), res.status, err);
   }
-  const data = await parseJsonSafely<AuthResponse>(res);
-  if (!data?.user) throw new Error('Empty response');
+  const data = await parseJsonSafely<TokenAuthResponse>(res);
+  if (!data?.user || !data.access_token || !data.refresh_token) throw new Error('Empty response');
+  setTokens(data.access_token, data.refresh_token);
   return data.user;
 }
 
 export async function login(email: string, password: string): Promise<User> {
-  const res = await fetchWithCredentials(`${API_BASE}/auth/login`, {
+  const res = await fetch(`${API_ORIGIN}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -173,24 +99,22 @@ export async function login(email: string, password: string): Promise<User> {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
     throw new ApiError(getErrorMessage(err, 'Login failed'), res.status, err);
   }
-  const data = await parseJsonSafely<AuthResponse>(res);
-  if (!data?.user) throw new Error('Empty response');
+  const data = await parseJsonSafely<TokenAuthResponse>(res);
+  if (!data?.user || !data.access_token || !data.refresh_token) throw new Error('Empty response');
+  setTokens(data.access_token, data.refresh_token);
   return data.user;
 }
 
 export async function logout(): Promise<void> {
-  await apiFetch(`${API_BASE}/auth/logout`, {
+  await bearerApiFetch('/api/auth/logout', {
     method: 'POST',
-    retryOn401: false,
-    redirectOnAuthFail: false,
-  });
+    skipAuthRefresh: true,
+  }).catch(() => {});
+  clearTokens();
 }
 
 export async function getMe(): Promise<User | null> {
-  const res = await apiFetch(`${API_BASE}/auth/me`, {
-    retryOn401: false,
-    redirectOnAuthFail: false,
-  });
+  const res = await bearerApiFetch('/api/auth/me', { skipAuthRefresh: true });
   if (res.status === 401) return null;
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
@@ -211,7 +135,7 @@ export type UserUsageResponse = {
 };
 
 export async function getUserUsage(): Promise<UserUsageResponse> {
-  const res = await apiFetch(`${API_BASE}/user/usage`);
+  const res = await apiFetch(`/api/user/usage`);
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
     throw new ApiError(err?.detail || 'Failed to load usage', res.status, err);
@@ -226,7 +150,7 @@ export async function patchUserProfile(body: {
   expertise_level?: string;
   expertise_domain?: string;
 }): Promise<User> {
-  const res = await apiFetch(`${API_BASE}/user/profile`, {
+  const res = await apiFetch(`/api/user/profile`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -241,7 +165,7 @@ export async function patchUserProfile(body: {
 }
 
 export async function getUserTier(): Promise<TierStatus | null> {
-  const res = await apiFetch(`${API_BASE}/user/tier`);
+  const res = await apiFetch(`/api/user/tier`);
   if (res.status === 401) return null;
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
@@ -251,11 +175,22 @@ export async function getUserTier(): Promise<TierStatus | null> {
 }
 
 export async function refreshToken(): Promise<User | null> {
-  return refreshSession();
+  const refresh = getRefreshToken();
+  if (!refresh) return null;
+  const res = await fetch(`${API_ORIGIN}/api/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refresh }),
+  });
+  if (!res.ok) return null;
+  const data = await parseJsonSafely<TokenAuthResponse>(res);
+  if (!data?.access_token || !data.refresh_token) return null;
+  setTokens(data.access_token, data.refresh_token);
+  return data.user ?? null;
 }
 
 export async function saveMemory(sessionId: string, trigger: 'session_end' | 'new_chat' | 'manual'): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/memory/save`, {
+  const res = await apiFetch(`/api/memory/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -290,7 +225,7 @@ export interface SavedPanel {
 }
 
 export async function getPersonas(): Promise<ApiPersona[]> {
-  const res = await apiFetch(`${API_BASE}/personas`);
+  const res = await apiFetch(`/api/personas`);
   if (!res.ok) {
     throw new Error('Failed to load personas');
   }
@@ -298,7 +233,7 @@ export async function getPersonas(): Promise<ApiPersona[]> {
 }
 
 export async function getPanel(): Promise<SavedPanel> {
-  const res = await apiFetch(`${API_BASE}/panel`);
+  const res = await apiFetch(`/api/panel`);
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
     throw new Error(getErrorMessage(err, 'Failed to load panel'));
@@ -307,7 +242,7 @@ export async function getPanel(): Promise<SavedPanel> {
 }
 
 export async function savePanel(panel: SavedPanel): Promise<SavedPanel> {
-  const res = await apiFetch(`${API_BASE}/panel/save`, {
+  const res = await apiFetch(`/api/panel/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(panel),
@@ -321,7 +256,7 @@ export async function savePanel(panel: SavedPanel): Promise<SavedPanel> {
 }
 
 export async function getSavedResponses(): Promise<SavedResponseItem[]> {
-  const res = await apiFetch(`${API_BASE}/saved`);
+  const res = await apiFetch(`/api/saved`);
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
     throw new Error(getErrorMessage(err, 'Failed to load saved responses'));
@@ -356,7 +291,7 @@ export async function saveResponse(payload: {
   score?: number;
   confidence?: number;
 }): Promise<number> {
-  const res = await apiFetch(`${API_BASE}/saved`, {
+  const res = await apiFetch(`/api/saved`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -370,7 +305,7 @@ export async function saveResponse(payload: {
 }
 
 export async function deleteSavedResponse(id: number): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/saved/${id}`, {
+  const res = await apiFetch(`/api/saved/${id}`, {
     method: 'DELETE',
   });
   if (!res.ok) {
@@ -384,7 +319,7 @@ export async function submitPrompt(
   sessionId?: string,
   personaIds?: string[],
 ): Promise<PromptResponse> {
-  const response = await apiFetch(`${API_BASE}/prompt`, {
+  const response = await apiFetch(`/api/prompt`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -443,7 +378,7 @@ export async function streamPrompt(
   sessionId?: string,
   personaIds?: string[],
 ): Promise<void> {
-  const response = await apiFetch(`${API_BASE}/prompt/stream`, {
+  const response = await apiFetch(`/api/prompt/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt, session_id: sessionId, persona_ids: personaIds }),
@@ -530,7 +465,7 @@ export async function streamDebateRound(
   },
   callbacks: DebateStreamCallbacks,
 ): Promise<void> {
-  const response = await apiFetch(`${API_BASE}/debate/stream`, {
+  const response = await apiFetch(`/api/debate/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
@@ -607,7 +542,7 @@ export async function streamDiscuss(
   },
   callbacks: DiscussStreamCallbacks,
 ): Promise<void> {
-  const response = await apiFetch(`${API_BASE}/discuss/stream`, {
+  const response = await apiFetch(`/api/discuss/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
@@ -665,7 +600,7 @@ export async function streamDiscuss(
 
 export async function getSession(sessionId: string): Promise<SessionData | null> {
   try {
-    const response = await apiFetch(`${API_BASE}/session/${sessionId}`);
+    const response = await apiFetch(`/api/session/${sessionId}`);
     if (!response.ok) {
       return null;
     }
@@ -677,7 +612,7 @@ export async function getSession(sessionId: string): Promise<SessionData | null>
 
 export async function healthCheck(): Promise<boolean> {
   try {
-    const response = await apiFetch(`${API_BASE}/health`);
+    const response = await apiFetch(`/api/health`);
     return response.ok;
   } catch {
     return false;
@@ -705,7 +640,7 @@ export type AgentTemplatesResponse = {
 };
 
 export async function getAgentTemplates(): Promise<AgentTemplatesResponse> {
-  const response = await apiFetch(`${API_BASE}/agent/templates`);
+  const response = await apiFetch(`/api/agent/templates`);
   const data = await parseJsonSafely<AgentTemplatesResponse & { detail?: string }>(response);
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data, 'Failed to load templates'), response.status, data);
@@ -721,7 +656,7 @@ export type TaskAnswerFeedback = {
 };
 
 export async function getAgentTaskAnswerFeedback(taskId: string): Promise<TaskAnswerFeedback | null> {
-  const response = await apiFetch(`${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/feedback`);
+  const response = await apiFetch(`/api/agent/tasks/${encodeURIComponent(taskId)}/feedback`);
   const data = await parseJsonSafely<TaskAnswerFeedback | null | { detail?: string }>(response);
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data as object, 'Failed to load feedback'), response.status, data);
@@ -740,7 +675,7 @@ export async function postAgentTaskAnswerFeedback(
   taskId: string,
   body: { verdict: string; note?: string | null },
 ): Promise<{ success: boolean; feedback_stats: AnswerFeedbackStats }> {
-  const response = await apiFetch(`${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/feedback`, {
+  const response = await apiFetch(`/api/agent/tasks/${encodeURIComponent(taskId)}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ verdict: body.verdict, note: body.note ?? null }),
@@ -755,7 +690,7 @@ export async function postAgentTaskAnswerFeedback(
 }
 
 export async function getUserAnswerFeedbackStats(): Promise<AnswerFeedbackStats> {
-  const response = await apiFetch(`${API_BASE}/user/answer-feedback-stats`);
+  const response = await apiFetch(`/api/user/answer-feedback-stats`);
   const data = await parseJsonSafely<AnswerFeedbackStats & { detail?: string }>(response);
   if (!response.ok || !data) {
     throw new ApiError(getErrorMessage(data, 'Failed to load feedback stats'), response.status, data);
@@ -785,7 +720,7 @@ export async function runAgentTask(
     mcp_integration_ids?: number[];
   },
 ): Promise<AgentStartResponse> {
-  const response = await apiFetch(`${API_BASE}/agent/run`, {
+  const response = await apiFetch(`/api/agent/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -815,7 +750,7 @@ export async function uploadAgentFile(file: File): Promise<{
 }> {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await apiFetch(`${API_BASE}/agent/upload`, {
+  const response = await apiFetch(`/api/agent/upload`, {
     method: 'POST',
     body: formData,
   });
@@ -841,7 +776,7 @@ export async function uploadAgentFile(file: File): Promise<{
 }
 
 export async function getMcpIntegrations(): Promise<any[]> {
-  const response = await apiFetch(`${API_BASE}/mcp/integrations`);
+  const response = await apiFetch(`/api/mcp/integrations`);
   const data = await parseJsonSafely<{ integrations?: any[]; detail?: string }>(response);
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data, 'Failed to load integrations'), response.status, data);
@@ -854,7 +789,7 @@ export async function postMcpManualConnect(body: {
   access_token: string;
   display_name: string;
 }): Promise<any> {
-  const response = await apiFetch(`${API_BASE}/mcp/connect/manual`, {
+  const response = await apiFetch(`/api/mcp/connect/manual`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -867,7 +802,7 @@ export async function postMcpManualConnect(body: {
 }
 
 export async function deleteMcpIntegration(integrationId: number): Promise<void> {
-  const response = await apiFetch(`${API_BASE}/mcp/integrations/${integrationId}`, {
+  const response = await apiFetch(`/api/mcp/integrations/${integrationId}`, {
     method: 'DELETE',
   });
   const data = await parseJsonSafely<{ detail?: string }>(response);
@@ -877,7 +812,7 @@ export async function deleteMcpIntegration(integrationId: number): Promise<void>
 }
 
 export async function getAgentStatus(taskId: string): Promise<AgentStatusPayload> {
-  const response = await apiFetch(`${API_BASE}/agent/status/${taskId}`);
+  const response = await apiFetch(`/api/agent/status/${taskId}`);
   const data = await parseJsonSafely<AgentStatusPayload & { detail?: string | { message?: string } }>(
     response,
   );
@@ -889,7 +824,7 @@ export async function getAgentStatus(taskId: string): Promise<AgentStatusPayload
 }
 
 export async function getAgentResult(taskId: string): Promise<unknown> {
-  const response = await apiFetch(`${API_BASE}/agent/result/${taskId}`);
+  const response = await apiFetch(`/api/agent/result/${taskId}`);
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data, 'Result request failed'), response.status, data);
@@ -899,7 +834,7 @@ export async function getAgentResult(taskId: string): Promise<unknown> {
 }
 
 export async function exportAgentTaskPdf(taskId: string): Promise<Blob> {
-  const response = await apiFetch(`${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/export/pdf`);
+  const response = await apiFetch(`/api/agent/tasks/${encodeURIComponent(taskId)}/export/pdf`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
     throw new ApiError(getErrorMessage(err, 'Export failed'), response.status, err);
@@ -912,7 +847,7 @@ export async function postAgentOrchestrate(body: {
   expertise_level?: string;
   expertise_domain?: string;
 }): Promise<{ orchestration_id: string; task_ids: string[] }> {
-  const response = await apiFetch(`${API_BASE}/agent/orchestrate`, {
+  const response = await apiFetch(`/api/agent/orchestrate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -930,7 +865,7 @@ export async function postAgentOrchestrate(body: {
 }
 
 export async function getAgentOrchestration(orchId: string): Promise<any> {
-  const response = await apiFetch(`${API_BASE}/agent/orchestrate/${encodeURIComponent(orchId)}`);
+  const response = await apiFetch(`/api/agent/orchestrate/${encodeURIComponent(orchId)}`);
   const data = await parseJsonSafely<any>(response);
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data, 'Failed to load orchestration'), response.status, data);
@@ -940,7 +875,7 @@ export async function getAgentOrchestration(orchId: string): Promise<any> {
 
 export async function exportOrchestrationPdf(orchId: string): Promise<Blob> {
   const response = await apiFetch(
-    `${API_BASE}/agent/orchestrate/${encodeURIComponent(orchId)}/export/pdf`,
+    `/api/agent/orchestrate/${encodeURIComponent(orchId)}/export/pdf`,
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
@@ -967,7 +902,7 @@ export async function challengeAgentAnswer(
   answer: string,
   taskContext: string,
 ): Promise<AgentChallengeResponse> {
-  const response = await apiFetch(`${API_BASE}/agent/challenge`, {
+  const response = await apiFetch(`/api/agent/challenge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -996,7 +931,7 @@ export async function getAgentRebuttal(
   answer: string,
   challenge: string,
 ): Promise<AgentRebuttalResponse> {
-  const response = await apiFetch(`${API_BASE}/agent/rebuttal`, {
+  const response = await apiFetch(`/api/agent/rebuttal`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task, answer, challenge }),
@@ -1013,7 +948,7 @@ export async function getAgentRebuttal(
 
 export async function getAgentHistory(page: number = 1, perPage: number = 200): Promise<unknown> {
   const response = await apiFetch(
-    `${API_BASE}/agent/history?page=${page}&per_page=${perPage}`,
+    `/api/agent/history?page=${page}&per_page=${perPage}`,
   );
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
@@ -1048,7 +983,7 @@ export async function getAgentWatchlist(): Promise<{
   active_count: number;
   active_cap: number;
 }> {
-  const response = await apiFetch(`${API_BASE}/agent/watchlist`);
+  const response = await apiFetch(`/api/agent/watchlist`);
   const data = await parseJsonSafely<{
     items?: AgentWatchlistItem[];
     active_count?: number;
@@ -1072,7 +1007,7 @@ export async function postAgentWatchlist(body: {
   expertise_level?: string;
   expertise_domain?: string;
 }): Promise<AgentWatchlistItem> {
-  const response = await apiFetch(`${API_BASE}/agent/watchlist`, {
+  const response = await apiFetch(`/api/agent/watchlist`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1088,7 +1023,7 @@ export async function patchAgentWatchlist(
   itemId: string,
   body: { interval_hours?: number; is_active?: boolean },
 ): Promise<AgentWatchlistItem> {
-  const response = await apiFetch(`${API_BASE}/agent/watchlist/${encodeURIComponent(itemId)}`, {
+  const response = await apiFetch(`/api/agent/watchlist/${encodeURIComponent(itemId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1101,7 +1036,7 @@ export async function patchAgentWatchlist(
 }
 
 export async function deleteAgentWatchlist(itemId: string): Promise<void> {
-  const response = await apiFetch(`${API_BASE}/agent/watchlist/${encodeURIComponent(itemId)}`, {
+  const response = await apiFetch(`/api/agent/watchlist/${encodeURIComponent(itemId)}`, {
     method: 'DELETE',
   });
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
@@ -1114,7 +1049,7 @@ export async function postCalibrationRate(
   taskId: string,
   rating: number,
 ): Promise<unknown> {
-  const response = await apiFetch(`${API_BASE}/calibration/rate`, {
+  const response = await apiFetch(`/api/calibration/rate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task_id: taskId, rating }),
@@ -1128,7 +1063,7 @@ export async function postCalibrationRate(
 }
 
 export async function getCalibrationStats(): Promise<unknown> {
-  const response = await apiFetch(`${API_BASE}/calibration/stats`);
+  const response = await apiFetch(`/api/calibration/stats`);
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data, 'Calibration stats failed'), response.status, data);
@@ -1139,7 +1074,7 @@ export async function getCalibrationStats(): Promise<unknown> {
 
 export async function getCalibrationRatingForTask(taskId: string): Promise<unknown> {
   const response = await apiFetch(
-    `${API_BASE}/calibration/rating/${encodeURIComponent(taskId)}`,
+    `/api/calibration/rating/${encodeURIComponent(taskId)}`,
   );
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
@@ -1154,7 +1089,7 @@ export async function toggleAgentTaskLive(
   isLive?: boolean,
 ): Promise<unknown> {
   const response = await apiFetch(
-    `${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/live`,
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/live`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1174,7 +1109,7 @@ export async function markAgentLiveUpdatesRead(
   updateId?: string,
 ): Promise<unknown> {
   const response = await apiFetch(
-    `${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/live-updates/mark-read`,
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/live-updates/mark-read`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1194,7 +1129,7 @@ export async function renameAgentTask(
   title: string,
 ): Promise<{ success: boolean; title: string }> {
   const response = await apiFetch(
-    `${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}/rename`,
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/rename`,
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -1215,7 +1150,7 @@ export async function renameAgentTask(
 
 export async function deleteAgentTask(taskId: string): Promise<{ success: boolean }> {
   const response = await apiFetch(
-    `${API_BASE}/agent/tasks/${encodeURIComponent(taskId)}`,
+    `/api/agent/tasks/${encodeURIComponent(taskId)}`,
     { method: 'DELETE' },
   );
   const data = await parseJsonSafely<{ success?: boolean; detail?: string | { message?: string } }>(
@@ -1232,7 +1167,7 @@ export async function deleteAgentTask(taskId: string): Promise<{ success: boolea
 
 export async function getMemoryContext(task: string = ''): Promise<unknown> {
   const q = encodeURIComponent(task);
-  const response = await apiFetch(`${API_BASE}/agent/memory/context?task=${q}`);
+  const response = await apiFetch(`/api/agent/memory/context?task=${q}`);
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data, 'Memory context failed'), response.status, data);
@@ -1246,7 +1181,7 @@ export async function submitTaskFeedback(
   feedback: string,
   note?: string,
 ): Promise<unknown> {
-  const response = await apiFetch(`${API_BASE}/agent/feedback`, {
+  const response = await apiFetch(`/api/agent/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task_id: taskId, feedback, note }),
@@ -1261,7 +1196,7 @@ export async function submitTaskFeedback(
 
 export async function getAgentSavedTask(taskId: string): Promise<unknown> {
   const response = await apiFetch(
-    `${API_BASE}/agent/saved/${encodeURIComponent(taskId)}`,
+    `/api/agent/saved/${encodeURIComponent(taskId)}`,
   );
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
@@ -1289,7 +1224,7 @@ export type RefineAgentResponse = {
 };
 
 export async function refineAgentAnswer(taskId: string, message: string): Promise<RefineAgentResponse> {
-  const response = await apiFetch(`${API_BASE}/agent/refine`, {
+  const response = await apiFetch(`/api/agent/refine`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task_id: taskId, message }),
@@ -1314,7 +1249,7 @@ export async function verifyArenaAnswerInAgent(
   winningPersona: string = '',
   arenaScore: number = 0,
 ): Promise<BridgeAgentResponse> {
-  const response = await apiFetch(`${API_BASE}/agent/verify-from-arena`, {
+  const response = await apiFetch(`/api/agent/verify-from-arena`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -1345,7 +1280,7 @@ export type CreateSubscriptionResponse = {
 };
 
 export async function createSubscription(planKey: string): Promise<CreateSubscriptionResponse> {
-  const response = await apiFetch(`${API_BASE}/payments/subscribe`, {
+  const response = await apiFetch(`/api/payments/subscribe`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ plan_key: planKey }),
@@ -1360,7 +1295,7 @@ export async function createSubscription(planKey: string): Promise<CreateSubscri
 
 /** Plus-only Agent Mode add-on (₹599/mo). Same checkout shape as `createSubscription`. */
 export async function createAgentAddonSubscription(): Promise<CreateSubscriptionResponse & { razorpay_key?: string }> {
-  const response = await apiFetch(`${API_BASE}/payments/addon/agent/subscribe`, { method: 'POST' });
+  const response = await apiFetch(`/api/payments/addon/agent/subscribe`, { method: 'POST' });
   const data = await parseJsonSafely<
     { detail?: string | { message?: string } } & CreateSubscriptionResponse & { razorpay_key?: string }
   >(response);
@@ -1372,7 +1307,7 @@ export async function createAgentAddonSubscription(): Promise<CreateSubscription
 }
 
 export async function cancelAgentAddon(): Promise<{ success: boolean; message: string }> {
-  const response = await apiFetch(`${API_BASE}/payments/addon/agent/cancel`, { method: 'POST' });
+  const response = await apiFetch(`/api/payments/addon/agent/cancel`, { method: 'POST' });
   const data = await parseJsonSafely<{ detail?: string; success?: boolean; message?: string }>(response);
   if (!data) throw new Error('Empty response');
   if (!response.ok) {
@@ -1382,7 +1317,7 @@ export async function cancelAgentAddon(): Promise<{ success: boolean; message: s
 }
 
 export async function reactivateAgentAddon(): Promise<{ success: boolean; message: string }> {
-  const response = await apiFetch(`${API_BASE}/payments/addon/agent/reactivate`, { method: 'POST' });
+  const response = await apiFetch(`/api/payments/addon/agent/reactivate`, { method: 'POST' });
   const data = await parseJsonSafely<{ detail?: string; success?: boolean; message?: string }>(response);
   if (!data) throw new Error('Empty response');
   if (!response.ok) {
@@ -1396,7 +1331,7 @@ export async function verifyPayment(
   subscriptionId: string,
   signature: string,
 ): Promise<{ status: string; tier: string; message?: string }> {
-  const response = await apiFetch(`${API_BASE}/payments/verify`, {
+  const response = await apiFetch(`/api/payments/verify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -1427,7 +1362,7 @@ export type SubscriptionStatusResponse = {
 };
 
 export async function getSubscriptionStatus(): Promise<SubscriptionStatusResponse> {
-  const response = await apiFetch(`${API_BASE}/payments/subscription`);
+  const response = await apiFetch(`/api/payments/subscription`);
   const data = await parseJsonSafely<SubscriptionStatusResponse>(response);
   if (!data) {
     return { has_subscription: false, tier: 'FREE' };
@@ -1440,7 +1375,7 @@ export async function cancelSubscription(): Promise<{
   message: string;
   access_until: string;
 }> {
-  const response = await apiFetch(`${API_BASE}/payments/cancel`, { method: 'POST' });
+  const response = await apiFetch(`/api/payments/cancel`, { method: 'POST' });
   const data = await parseJsonSafely<{ detail?: string; status?: string; message?: string; access_until?: string }>(
     response,
   );
@@ -1456,7 +1391,7 @@ export async function cancelSubscription(): Promise<{
 // ──────────────────────────────────────────────────────────────
 
 export async function createRoom(body: { name: string; task_id?: string }): Promise<any> {
-  const response = await apiFetch(`${API_BASE}/rooms/create`, {
+  const response = await apiFetch(`/api/rooms/create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1470,7 +1405,7 @@ export async function createRoom(body: { name: string; task_id?: string }): Prom
 }
 
 export async function getRoom(slug: string): Promise<any> {
-  const response = await apiFetch(`${API_BASE}/rooms/${encodeURIComponent(slug)}`);
+  const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}`);
   const data = await parseJsonSafely<{ detail?: string } & Record<string, unknown>>(response);
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data || {}, 'Room not found'), response.status, data);
@@ -1479,7 +1414,7 @@ export async function getRoom(slug: string): Promise<any> {
 }
 
 export async function joinRoom(slug: string): Promise<any> {
-  const response = await apiFetch(`${API_BASE}/rooms/${encodeURIComponent(slug)}/join`, {
+  const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}/join`, {
     method: 'POST',
   });
   const data = await parseJsonSafely<{ detail?: string } & Record<string, unknown>>(response);
@@ -1491,7 +1426,7 @@ export async function joinRoom(slug: string): Promise<any> {
 }
 
 export async function addRoomTask(slug: string, taskId: string): Promise<any> {
-  const response = await apiFetch(`${API_BASE}/rooms/${encodeURIComponent(slug)}/add-task`, {
+  const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}/add-task`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task_id: taskId }),
@@ -1506,7 +1441,7 @@ export async function addRoomTask(slug: string, taskId: string): Promise<any> {
 
 export async function removeRoomTask(slug: string, taskId: string): Promise<any> {
   const response = await apiFetch(
-    `${API_BASE}/rooms/${encodeURIComponent(slug)}/remove-task/${encodeURIComponent(taskId)}`,
+    `/api/rooms/${encodeURIComponent(slug)}/remove-task/${encodeURIComponent(taskId)}`,
     { method: 'POST' },
   );
   const data = await parseJsonSafely<{ detail?: string } & Record<string, unknown>>(response);
@@ -1521,7 +1456,7 @@ export async function getRoomSynthesis(slug: string): Promise<{
   synthesis: any;
   synthesis_updated_at: string | null;
 }> {
-  const response = await apiFetch(`${API_BASE}/rooms/${encodeURIComponent(slug)}/synthesis`);
+  const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}/synthesis`);
   const data = await parseJsonSafely<{ synthesis?: any; synthesis_updated_at?: string | null }>(response);
   if (!response.ok) {
     throw new ApiError('Could not load synthesis', response.status, data);
@@ -1533,7 +1468,7 @@ export async function getRoomSynthesis(slug: string): Promise<{
 }
 
 export async function getMyRooms(): Promise<{ rooms: any[] }> {
-  const response = await apiFetch(`${API_BASE}/rooms/my-rooms`);
+  const response = await apiFetch(`/api/rooms/my-rooms`);
   const data = await parseJsonSafely<{ rooms?: any[] }>(response);
   if (!response.ok) {
     return { rooms: [] };
@@ -1542,7 +1477,7 @@ export async function getMyRooms(): Promise<{ rooms: any[] }> {
 }
 
 export async function deleteRoom(slug: string): Promise<void> {
-  const response = await apiFetch(`${API_BASE}/rooms/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+  const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}`, { method: 'DELETE' });
   if (!response.ok) {
     const data = await parseJsonSafely<{ detail?: string }>(response);
     throw new ApiError(getErrorMessage(data || {}, 'Could not delete room'), response.status, data);

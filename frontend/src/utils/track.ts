@@ -14,7 +14,6 @@ const track = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      credentials: 'include',
       body: JSON.stringify({
         session_id: getCurrentSessionId(),
         event_type: eventType,

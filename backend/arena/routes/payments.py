@@ -10,17 +10,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import razorpay
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.tier_config import normalize_tier
-from arena.core.auth import (
-    get_current_user_required_orm,
-    set_auth_cookies_on_response,
-)
+from arena.core.dependencies import get_current_user_required_orm
 from arena.database import get_db
 from arena.db_models import Subscription, User, UserTier
 from arena.models.schemas import SubscribePlanRequest, VerifyPaymentRequest
@@ -530,7 +527,6 @@ async def reactivate_agent_addon(
 @router.post("/verify")
 async def verify_payment(
     body: VerifyPaymentRequest,
-    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
@@ -575,7 +571,6 @@ async def verify_payment(
         db.add(user)
         db.commit()
         db.refresh(user)
-        set_auth_cookies_on_response(response, user, db)
         return {
             "status": "success",
             "tier": _tier_label(user.tier),
@@ -599,7 +594,6 @@ async def verify_payment(
         trigger="verify_endpoint",
         subscription_id=row.razorpay_subscription_id,
     )
-    set_auth_cookies_on_response(response, user, db)
 
     return {
         "status": "success",

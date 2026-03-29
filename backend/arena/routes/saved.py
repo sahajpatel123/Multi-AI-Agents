@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from arena.core.auth import get_current_user_required
+from arena.core.dependencies import get_current_user_required
 from arena.core.tier_config import has_feature, normalize_tier
 from arena.database import get_db
 from arena.db_models import SavedResponse

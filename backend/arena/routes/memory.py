@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from arena.core.auth import get_current_user_required
+from arena.core.dependencies import get_current_user_required
 from arena.core.memory import get_memory_manager
 from arena.core.preferences import infer_preferences_from_session
 from arena.core.stance_archive import save_agent_stance

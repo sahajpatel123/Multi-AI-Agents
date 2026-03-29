@@ -1,11 +1,10 @@
-"""Auth routes — /api/auth/*"""
+"""Auth routes — /api/auth/* (Bearer tokens in JSON body, no cookies)."""
 
 import logging
-import os
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Any
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -13,24 +12,18 @@ from sqlalchemy import Date, cast, func
 from sqlalchemy.orm import Session
 
 from arena.core.auth import (
-    ACCESS_COOKIE,
-    REFRESH_COOKIE,
-    ACCESS_TOKEN_MAX_AGE_SECONDS,
-    REFRESH_TOKEN_MAX_AGE_SECONDS,
     authenticate_user,
     create_access_token,
     create_refresh_token,
     create_user,
     decode_token,
-    clear_refresh_token,
-    get_current_user_required_orm,
     get_user_by_email,
-    get_user_by_id,
-    hash_token,
     orm_user_to_response,
-    verify_token_hash,
 )
+from arena.core.dependencies import get_current_user_required_orm
 from arena.core.feedback_calibrator import get_answer_feedback_distribution
+from arena.core.input_validation import sanitize_html
+from arena.core.login_limiter import login_limiter, registration_limiter
 from arena.core.tier_config import (
     TIER_FEATURES,
     UserTier,
@@ -40,17 +33,9 @@ from arena.core.tier_config import (
     normalize_tier,
     upgrade_target,
 )
-from arena.core.login_limiter import login_limiter, registration_limiter
-from arena.core.input_validation import sanitize_html, sanitize_optional_text
 from arena.database import get_db
 from arena.db_models import UsageRecord, User
-from arena.models.schemas import (
-    AuthResponse,
-    LoginRequest,
-    RegisterRequest,
-    UserProfilePatch,
-    UserResponse,
-)
+from arena.models.schemas import LoginRequest, RegisterRequest, UserProfilePatch, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 user_router = APIRouter(prefix="/api/user", tags=["auth"])
@@ -58,76 +43,23 @@ logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
 
 _COMMON_PASSWORDS = {
-    "password", "12345678", "password1",
-    "qwerty123", "letmein1", "welcome1",
+    "password",
+    "12345678",
+    "password1",
+    "qwerty123",
+    "letmein1",
+    "welcome1",
 }
-
-
-# ─────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────
-
-def _tier_value(user: User) -> str:
-    raw = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
-    return normalize_tier(raw).value
-
-
-def _token_payload(user: User) -> dict[str, object]:
-    return {"sub": str(user.id), "user_id": user.id, "email": user.email}
-
-
-def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
-    is_prod = os.environ.get("ENVIRONMENT", "") == "production"
-    samesite = "none" if is_prod else "lax"
-    secure = is_prod
-    response.set_cookie(
-        key=ACCESS_COOKIE,
-        value=access_token,
-        max_age=ACCESS_TOKEN_MAX_AGE_SECONDS,
-        httponly=True,
-        secure=secure,
-        samesite=samesite,
-        path="/",
-    )
-    response.set_cookie(
-        key=REFRESH_COOKIE,
-        value=refresh_token,
-        max_age=REFRESH_TOKEN_MAX_AGE_SECONDS,
-        httponly=True,
-        secure=secure,
-        samesite=samesite,
-        path="/",
-    )
-
-
-def _clear_auth_cookies(response: Response) -> None:
-    is_prod = os.environ.get("ENVIRONMENT", "") == "production"
-    samesite = "none" if is_prod else "lax"
-    response.delete_cookie(
-        ACCESS_COOKIE,
-        path="/",
-        secure=is_prod,
-        httponly=True,
-        samesite=samesite,
-    )
-    response.delete_cookie(
-        REFRESH_COOKIE,
-        path="/",
-        secure=is_prod,
-        httponly=True,
-        samesite=samesite,
-    )
-
-
-def _user_to_response(user: User, db: Session) -> UserResponse:
-    return orm_user_to_response(user, db)
-
 
 _EXPERTISE_LEVELS = {"none", "curious", "practitioner", "expert", "researcher"}
 
 
+def user_payload(user: User, db: Session) -> dict[str, Any]:
+    """Full user shape for API clients; name is always a string."""
+    return orm_user_to_response(user, db).model_dump(mode="json")
+
+
 def _validate_password_strength(password: str) -> tuple[bool, str]:
-    """Return (is_valid, error_message)."""
     if len(password) < 8:
         return False, "Password must be at least 8 characters"
     if not any(c.isupper() for c in password):
@@ -139,19 +71,13 @@ def _validate_password_strength(password: str) -> tuple[bool, str]:
     return True, ""
 
 
-# ─────────────────────────────────────────────────
-# Routes
-# ─────────────────────────────────────────────────
-
-@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(
     body: RegisterRequest,
     request: Request,
-    response: Response,
     db: Session = Depends(get_db),
-) -> AuthResponse:
+) -> JSONResponse:
     try:
-        # Rate-limit registrations per IP (3/hour, 24h lockout)
         registration_limiter.check_and_record(request, success=False)
 
         try:
@@ -169,21 +95,18 @@ async def register(
                 )
 
             user = create_user(db, body.email, body.password, body.name)
-            access_token = create_access_token(_token_payload(user))
-            refresh_token = create_refresh_token(_token_payload(user))
-            user.refresh_token_hash = hash_token(refresh_token)
-            user.refresh_token_expires_at = (
-                datetime.now(timezone.utc) + timedelta(seconds=REFRESH_TOKEN_MAX_AGE_SECONDS)
-            ).replace(tzinfo=None)
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-            _set_auth_cookies(response, access_token, refresh_token)
-            user_response = _user_to_response(user, db)
-
-            # Registration succeeded — clear attempt record
+            access = create_access_token(user.id, user.email)
+            refresh = create_refresh_token(user.id, user.email)
             registration_limiter.check_and_record(request, success=True)
-            return AuthResponse(success=True, user=user_response)
+            return JSONResponse(
+                status_code=status.HTTP_201_CREATED,
+                content={
+                    "success": True,
+                    "access_token": access,
+                    "refresh_token": refresh,
+                    "user": user_payload(user, db),
+                },
+            )
 
         except HTTPException:
             raise
@@ -192,20 +115,18 @@ async def register(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Registration failed",
             )
-    except Exception as e:
-        logger.exception("Registration failed: %s", type(e).__name__)
+    except Exception:
+        logger.exception("Registration failed")
         raise
 
 
-@router.post("/login", response_model=AuthResponse)
+@router.post("/login")
 async def login(
     body: LoginRequest,
     request: Request,
-    response: Response,
     db: Session = Depends(get_db),
-) -> AuthResponse:
+) -> JSONResponse:
     try:
-        # Rate-limit login attempts per IP (5/hour, 1h lockout)
         login_limiter.check_and_record(request, success=False)
 
         try:
@@ -216,21 +137,17 @@ async def login(
                     detail="Invalid email or password",
                 )
 
-            access_token = create_access_token(_token_payload(user))
-            refresh_token = create_refresh_token(_token_payload(user))
-            user.refresh_token_hash = hash_token(refresh_token)
-            user.refresh_token_expires_at = (
-                datetime.now(timezone.utc) + timedelta(seconds=REFRESH_TOKEN_MAX_AGE_SECONDS)
-            ).replace(tzinfo=None)
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-            _set_auth_cookies(response, access_token, refresh_token)
-            user_response = _user_to_response(user, db)
-
-            # Auth succeeded — clear failed-attempt record
+            access = create_access_token(user.id, user.email)
+            refresh = create_refresh_token(user.id, user.email)
             login_limiter.check_and_record(request, success=True)
-            return AuthResponse(success=True, user=user_response)
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "access_token": access,
+                    "refresh_token": refresh,
+                    "user": user_payload(user, db),
+                },
+            )
 
         except HTTPException:
             raise
@@ -239,111 +156,92 @@ async def login(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Login failed",
             )
-    except Exception as e:
-        logger.exception("Login failed: %s", type(e).__name__)
+    except Exception:
+        logger.exception("Login failed")
         raise
 
 
 @router.post("/logout")
-async def logout(
-    request: Request,
-    db: Session = Depends(get_db),
-    _arena_refresh: Optional[str] = Cookie(default=None, alias=REFRESH_COOKIE),
-) -> JSONResponse:
-    token = request.cookies.get(ACCESS_COOKIE) or request.cookies.get(REFRESH_COOKIE)
-    if token:
-        payload = decode_token(token)
-        if payload:
-            user_id = payload.get("sub") or payload.get("user_id")
-            if user_id:
-                user = db.query(User).filter(User.id == int(user_id)).first()
-                if user:
-                    clear_refresh_token(user)
-                    db.add(user)
-                    db.commit()
-
-    response = JSONResponse({"success": True})
-    _clear_auth_cookies(response)
-    return response
+async def logout() -> JSONResponse:
+    return JSONResponse({"success": True})
 
 
-@router.post("/refresh", response_model=AuthResponse)
+@router.post("/refresh")
 @limiter.limit("20/hour")
-async def refresh(
-    request: Request,
-    db: Session = Depends(get_db),
-    _arena_refresh: Optional[str] = Cookie(default=None, alias=REFRESH_COOKIE),
-) -> JSONResponse:
+async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONResponse:
+    refresh_token = ""
     try:
-        refresh_token = request.cookies.get(REFRESH_COOKIE)
-        if not refresh_token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="No session found. Please sign in.",
-            )
+        body = await request.json()
+        if isinstance(body, dict):
+            refresh_token = (body.get("refresh_token") or "").strip()
+    except Exception:
+        pass
 
-        payload = decode_token(refresh_token)
-        if not payload or payload.get("type") != "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Session expired. Please sign in.",
-            )
+    if not refresh_token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            refresh_token = auth_header[7:].strip()
 
-        user_id = payload.get("sub") or payload.get("user_id")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid session. Please sign in.",
-            )
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
 
-        user = db.query(User).filter(User.id == int(user_id)).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Account not found. Please sign in.",
-            )
+    payload = decode_token(refresh_token)
+    if not payload or payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
 
-        if user.refresh_token_hash and not verify_token_hash(refresh_token, user.refresh_token_hash):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Session invalidated. Please sign in again.",
-            )
+    user_id = payload.get("sub") or str(payload.get("user_id", ""))
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
 
-        new_access = create_access_token(_token_payload(user))
-        new_refresh = create_refresh_token(_token_payload(user))
-        user.refresh_token_hash = hash_token(new_refresh)
-        user.refresh_token_expires_at = (
-            datetime.now(timezone.utc) + timedelta(seconds=REFRESH_TOKEN_MAX_AGE_SECONDS)
-        ).replace(tzinfo=None)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
 
-        auth_response = AuthResponse(success=True, user=_user_to_response(user, db))
-        response = JSONResponse(content=auth_response.model_dump(mode="json"))
-        _set_auth_cookies(response, new_access, new_refresh)
-        return response
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Refresh failed: %s", type(e).__name__)
-        raise
+    new_access = create_access_token(user.id, user.email)
+    new_refresh = create_refresh_token(user.id, user.email)
+
+    return JSONResponse(
+        content={
+            "success": True,
+            "access_token": new_access,
+            "refresh_token": new_refresh,
+            "user": user_payload(user, db),
+        },
+    )
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> UserResponse:
-    access_token = request.cookies.get(ACCESS_COOKIE)
-    if not access_token:
+async def me(request: Request, db: Session = Depends(get_db)) -> UserResponse:
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    payload = decode_token(access_token)
-    if not payload or payload.get("type") != "access":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired")
+    token = auth_header[7:]
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+    if payload.get("type") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
 
-    user_id = payload.get("sub") or payload.get("user_id")
+    user_id = payload.get("sub") or str(payload.get("user_id", ""))
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
@@ -351,7 +249,7 @@ async def me(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    return _user_to_response(user, db)
+    return orm_user_to_response(user, db)
 
 
 @user_router.patch("/profile", response_model=UserResponse)
@@ -380,7 +278,7 @@ async def patch_user_profile(
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _user_to_response(user, db)
+    return orm_user_to_response(user, db)
 
 
 @user_router.get("/answer-feedback-stats")

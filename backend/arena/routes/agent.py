@@ -19,7 +19,7 @@ from arena.core.agent_pipeline import (
 )
 from arena.core.file_ingest import process_upload
 from arena.core.upload_store import UPLOAD_DIR, ensure_upload_dir, register_upload, resolve_attachments
-from arena.core.auth import get_current_user_required
+from arena.core.dependencies import get_current_user_required
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
