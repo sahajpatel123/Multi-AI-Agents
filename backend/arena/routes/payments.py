@@ -354,35 +354,60 @@ async def create_subscription(
     }
 
 
+def _user_is_plus_tier(user: User) -> bool:
+    """Accept enum, raw DB string, or any casing (e.g. 'plus', 'PLUS')."""
+    t = user.tier
+    if isinstance(t, UserTier):
+        return t == UserTier.PLUS
+    raw = str(t or "").strip()
+    if not raw:
+        return False
+    if raw.lower() == "plus":
+        return True
+    return normalize_tier(t) == UserTier.PLUS
+
+
 @router.post("/addon/agent/subscribe")
 async def subscribe_agent_addon(
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
-    """Plus-only Agent Mode add-on (₹599/mo). Does not replace the main Plus subscription row on the user."""
+    """Plus-only Agent Mode add-on. Persists Subscription row for verify/webhook flow."""
     _enforce_payment_rate_limit(user.id)
-    if normalize_tier(user.tier) != UserTier.PLUS:
+    _ = request  # reserved for future client-IP / audit logging
+    # Temporary debug — remove after confirming tier/plan issues in production logs
+    logger.info(
+        "Addon subscribe: user %s tier=%r raw_type=%s",
+        user.id,
+        user.tier,
+        type(user.tier).__name__,
+    )
+
+    if not _user_is_plus_tier(user):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Agent add-on is only for Plus users",
+            detail="Agent add-on is only available for Plus plan users",
         )
     if getattr(user, "agent_addon_active", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Add-on already active",
+            detail="Agent add-on is already active on your account",
         )
     if getattr(user, "agent_addon_cancelling", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Add-on is scheduled to cancel; use reactivate or wait until it ends.",
         )
+
     settings = get_settings()
     plans = _plan_map(settings)
     plan = plans["agent_addon_monthly"]
-    if not plan["plan_id"]:
+    addon_plan_id = (plan.get("plan_id") or "").strip()
+    if not addon_plan_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Agent add-on plan not configured",
+            detail="Agent add-on plan not configured. Contact support.",
         )
 
     client = _get_razorpay_client()
@@ -392,7 +417,7 @@ async def subscribe_agent_addon(
     try:
         rzp_sub = client.subscription.create(
             {
-                "plan_id": plan["plan_id"],
+                "plan_id": addon_plan_id,
                 "customer_id": customer_id,
                 "customer_notify": 1,
                 "quantity": 1,
@@ -401,14 +426,15 @@ async def subscribe_agent_addon(
                     "user_id": str(user.id),
                     "email": user.email,
                     "plan_key": "agent_addon_monthly",
+                    "type": "agent_addon",
                 },
             }
         )
     except Exception as exc:
-        logger.exception("Razorpay agent add-on subscription create failed: %s", exc)
+        logger.exception("Addon subscribe error: %s", exc)
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not create add-on subscription. Please try again.",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create subscription: {exc!s}",
         ) from exc
 
     sub_id = rzp_sub.get("id")
@@ -426,7 +452,7 @@ async def subscribe_agent_addon(
         user_id=user.id,
         razorpay_subscription_id=sub_id,
         razorpay_customer_id=customer_id,
-        plan_id=plan["plan_id"],
+        plan_id=addon_plan_id,
         plan_name=plan["name"],
         tier=plan["tier"],
         billing_period=plan["billing_period"],

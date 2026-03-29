@@ -189,6 +189,12 @@ export function PricingPage() {
   const { openModal } = useProfileModal();
   const { isAuthenticated, refreshUser, user } = useAuth();
   const { tier, isPlus, isPro, refreshTier } = useTier();
+  const userTierLc = (user?.tier ?? '').toString().toLowerCase();
+  const isPlusUser = isAuthenticated && (userTierLc === 'plus' || isPlus);
+  const hasAgentAddon = user?.agent_addon_active === true;
+  const addonCancelling = user?.agent_addon_cancelling === true;
+  const showAddonUpsell = isPlusUser && !hasAgentAddon && !addonCancelling;
+  const showAddonActiveBanner = isPlusUser && hasAgentAddon;
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -328,7 +334,9 @@ export function PricingPage() {
               marginBottom: '1.5rem',
             }}
           >
-            🎉 Welcome to {upgradeSuccessLabel}! Your account has been upgraded.
+            {upgradeSuccessLabel === 'Agent Mode'
+              ? '🎉 Agent Mode add-on activated. Your Plus plan now includes the 7-stage pipeline.'
+              : `🎉 Welcome to ${upgradeSuccessLabel}! Your account has been upgraded.`}
           </div>
         )}
 
@@ -370,10 +378,20 @@ export function PricingPage() {
         {checkoutPlan && (
           <RazorpayCheckout
             key={checkoutPlan}
-            planKey={checkoutPlan}
+            planKey={checkoutPlan === 'agent_addon' ? 'agent_addon' : checkoutPlan}
+            agentAddon={checkoutPlan === 'agent_addon'}
             prefillEmail={user?.email}
             onSuccess={() => {
-              void handleCheckoutSuccess(checkoutPlan);
+              if (checkoutPlan === 'agent_addon') {
+                setCheckoutPlan(null);
+                void refreshTier();
+                void refreshUser();
+                setUpgradeSuccessLabel('Agent Mode');
+                setUpgradeSuccess(true);
+                window.setTimeout(() => setUpgradeSuccess(false), 2500);
+              } else {
+                void handleCheckoutSuccess(checkoutPlan);
+              }
             }}
             onError={onCheckoutError}
             onClose={onCheckoutClose}
@@ -482,8 +500,28 @@ export function PricingPage() {
               padding: '1.5rem',
               display: 'flex',
               flexDirection: 'column',
+              position: 'relative',
             }}
           >
+            {isAuthenticated && isCurrentPlan('free') ? (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 14,
+                  right: 14,
+                  background: '#2C1810',
+                  color: '#C4956A',
+                  fontSize: 10,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  padding: '2px 10px',
+                  borderRadius: 8,
+                  zIndex: 2,
+                }}
+              >
+                Your plan
+              </span>
+            ) : null}
             <div style={{ display: 'inline-flex', background: '#F0EBE3', color: '#6B6460', borderRadius: '999px', padding: '4px 10px', fontSize: '11px', marginBottom: '1rem' }}>
               Free forever
             </div>
@@ -547,6 +585,25 @@ export function PricingPage() {
             >
               Most popular
             </div>
+            {isAuthenticated && isCurrentPlan('plus') ? (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 14,
+                  right: 14,
+                  background: '#2C1810',
+                  color: '#C4956A',
+                  fontSize: 10,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  padding: '2px 10px',
+                  borderRadius: 8,
+                  zIndex: 2,
+                }}
+              >
+                Your plan
+              </span>
+            ) : null}
             <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: '#6B6460', letterSpacing: '.08em', marginBottom: '.8rem' }}>
               Plus
             </p>
@@ -653,6 +710,61 @@ export function PricingPage() {
                 Start with Plus
               </button>
             )}
+            {showAddonUpsell ? (
+              <div
+                style={{
+                  background: '#FAF3EA',
+                  border: '0.5px solid #C4956A',
+                  borderRadius: 10,
+                  padding: '14px 16px',
+                  marginTop: 10,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#2C1810' }}>⚡ Add Agent Mode</span>
+                  <span style={{ fontSize: 13, color: '#C4956A', marginLeft: 'auto' }}>₹599/month</span>
+                </div>
+                <p style={{ fontSize: 11, color: '#8C7355', fontStyle: 'italic', margin: '6px 0 10px' }}>
+                  Unlock the 7-stage research pipeline on your Plus plan. Plus limits apply.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCheckoutError(null);
+                    setCheckoutPlan('agent_addon');
+                  }}
+                  style={{
+                    width: '100%',
+                    background: '#2C1810',
+                    color: '#C4956A',
+                    borderRadius: 20,
+                    padding: '8px 18px',
+                    fontSize: 12,
+                    fontFamily: 'Georgia, serif',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Add Agent Mode →
+                </button>
+              </div>
+            ) : null}
+            {showAddonActiveBanner ? (
+              <div
+                style={{
+                  background: '#EAF3DE',
+                  border: '0.5px solid #97C459',
+                  borderRadius: 10,
+                  padding: '10px 14px',
+                  marginTop: 10,
+                  fontSize: 12,
+                  color: '#3B6D11',
+                  textAlign: 'center',
+                }}
+              >
+                ✓ Agent Mode active on your plan
+              </div>
+            ) : null}
           </div>
 
           <div
@@ -663,8 +775,28 @@ export function PricingPage() {
               padding: '1.5rem',
               display: 'flex',
               flexDirection: 'column',
+              position: 'relative',
             }}
           >
+            {isAuthenticated && isCurrentPlan('pro') ? (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 14,
+                  right: 14,
+                  background: '#2C1810',
+                  color: '#C4956A',
+                  fontSize: 10,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  padding: '2px 10px',
+                  borderRadius: 8,
+                  zIndex: 2,
+                }}
+              >
+                Your plan
+              </span>
+            ) : null}
             <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: '#6B6460', letterSpacing: '.08em', marginBottom: '.8rem' }}>
               Pro
             </p>
@@ -707,6 +839,9 @@ export function PricingPage() {
 
             <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', margin: '0.75rem 0' }} />
             <FeatureList items={architectFeatures} dotColor="rgba(196,149,106,0.5)" textColor="#1A1714" subColor="#6B6460" />
+            {isAuthenticated && isCurrentPlan('pro') ? (
+              <p style={{ fontSize: 11, color: '#5A8C6A', fontStyle: 'italic', margin: '0 0 10px' }}>Agent Mode included</p>
+            ) : null}
             {isCurrentPlan('pro') ? (
               <div
                 style={{
