@@ -19,6 +19,7 @@ import {
   refreshSession,
 } from '../api';
 import { User } from '../types';
+import { setRedirectIntent } from '../utils/redirectIntent';
 
 export interface AuthState {
   user: User | null;
@@ -48,27 +49,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  const redirectToSignIn = useCallback(() => {
+    if (typeof window === 'undefined' || window.location.pathname === '/signin') return;
+    setRedirectIntent(`${window.location.pathname}${window.location.search}`);
+    window.location.assign('/signin');
+  }, []);
+
   const refreshUser = useCallback(async () => {
     setIsLoading(true);
 
     try {
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Auth refresh timed out')), 5000)
-      );
-
-      const user = await Promise.race([
-        getMe(),
-        timeoutPromise
-      ]);
-
-      if (user) {
-        setUser(user);
+      const currentUser = await getMe();
+      if (currentUser) {
+        setUser(currentUser);
         setIsAuthenticated(true);
-      } else {
-        clearAuthState();
+        return;
       }
+
+      const refreshed = await refreshSession();
+      if (!refreshed) {
+        clearAuthState();
+        return;
+      }
+
+      const refreshedUser = await getMe();
+      if (refreshedUser) {
+        setUser(refreshedUser);
+        setIsAuthenticated(true);
+        return;
+      }
+
+      clearAuthState();
     } catch (error) {
-      console.log('[AUTH] User refresh failed, clearing session state', error);
+      console.log('[AUTH] Auth bootstrap failed, clearing session state', error);
       clearAuthState();
     } finally {
       setIsLoading(false);
@@ -94,38 +107,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await apiLogout();
+    try {
+      await apiLogout();
+    } catch {
+      // Best effort only; backend handles cookie clearing when reachable.
+    }
     clearAuthState();
-  }, [clearAuthState]);
+    redirectToSignIn();
+  }, [clearAuthState, redirectToSignIn]);
 
   useEffect(() => {
-    const handleLogout = () => {
+    const handleLogout = (event: Event) => {
       clearAuthState();
+      const detail = (event as CustomEvent<{ redirect?: boolean }>).detail;
+      if (detail?.redirect) {
+        redirectToSignIn();
+      }
     };
 
     window.addEventListener(AUTH_LOGOUT_EVENT, handleLogout);
     return () => window.removeEventListener(AUTH_LOGOUT_EVENT, handleLogout);
-  }, [clearAuthState]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return undefined;
-
-    const refreshInterval = setInterval(async () => {
-      const result = await refreshSession();
-
-      if (result === 'unauthorized') {
-        console.log('[AUTH] Refresh failed, clearing session state');
-        clearAuthState();
-        return;
-      }
-
-      if (result === 'network_error') {
-        console.log('[AUTH] Refresh network error, keeping session');
-      }
-    }, 45 * 60 * 1000);
-
-    return () => clearInterval(refreshInterval);
-  }, [clearAuthState, isAuthenticated]);
+  }, [clearAuthState, redirectToSignIn]);
 
   const value = useMemo<UseAuth>(
     () => ({

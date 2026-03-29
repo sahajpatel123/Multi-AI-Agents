@@ -16,8 +16,11 @@ export const API_BASE =
   `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api`;
 
 export const AUTH_LOGOUT_EVENT = 'auth:logout';
-
-type RefreshResult = 'success' | 'unauthorized' | 'network_error' | 'failed';
+type AuthLogoutDetail = { redirect: boolean };
+type ApiFetchOptions = RequestInit & {
+  retryOn401?: boolean;
+  redirectOnAuthFail?: boolean;
+};
 
 export class ApiError extends Error {
   status: number;
@@ -32,11 +35,20 @@ export class ApiError extends Error {
 }
 
 let isRefreshing = false;
-let refreshPromise: Promise<RefreshResult> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
-function dispatchAuthLogout(): void {
+function dispatchAuthLogout(redirect: boolean): void {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_EVENT));
+  window.dispatchEvent(new CustomEvent<AuthLogoutDetail>(AUTH_LOGOUT_EVENT, {
+    detail: { redirect },
+  }));
+}
+
+async function fetchWithCredentials(url: string, options: RequestInit = {}): Promise<Response> {
+  return fetch(url, {
+    ...options,
+    credentials: 'include',
+  });
 }
 
 async function parseJsonSafely<T>(response: Response): Promise<T | null> {
@@ -64,62 +76,50 @@ function getErrorMessage(
   return fallback;
 }
 
-export async function attemptTokenRefresh(): Promise<RefreshResult> {
+export async function attemptTokenRefresh(): Promise<boolean> {
   if (isRefreshing && refreshPromise) {
     return refreshPromise;
   }
 
   isRefreshing = true;
-  refreshPromise = fetch(`${API_BASE}/auth/refresh`, {
+  refreshPromise = fetchWithCredentials(`${API_BASE}/auth/refresh`, {
     method: 'POST',
-    credentials: 'include',
   })
     .then((response) => {
-      isRefreshing = false;
-      refreshPromise = null;
-
-      if (response.ok) return 'success';
-      if (response.status === 401) {
-        dispatchAuthLogout();
-        return 'unauthorized';
-      }
-      return 'failed';
+      return response.ok;
     })
-    .catch(() => {
+    .catch(() => false)
+    .finally(() => {
       isRefreshing = false;
       refreshPromise = null;
-      return 'network_error';
     });
 
   return refreshPromise;
 }
 
-export async function refreshSession(): Promise<RefreshResult> {
+export async function refreshSession(): Promise<boolean> {
   return attemptTokenRefresh();
 }
 
 export async function apiFetch(
   url: string,
-  options: RequestInit = {},
+  options: ApiFetchOptions = {},
 ): Promise<Response> {
-  // Cross-origin session cookies (e.g. Vercel → Render): always send credentials;
-  // spread options first so `credentials` cannot be overridden to 'omit'.
-  const response = await fetch(url, {
-    ...options,
-    credentials: 'include',
-  });
+  const {
+    retryOn401 = true,
+    redirectOnAuthFail = true,
+    ...requestOptions
+  } = options;
+  const response = await fetchWithCredentials(url, requestOptions);
 
-  if (response.status === 401) {
+  if (response.status === 401 && retryOn401) {
     const refreshed = await attemptTokenRefresh();
 
-    if (refreshed === 'success') {
-      return fetch(url, {
-        ...options,
-        credentials: 'include',
-      });
+    if (refreshed) {
+      return fetchWithCredentials(url, requestOptions);
     }
 
-    dispatchAuthLogout();
+    dispatchAuthLogout(redirectOnAuthFail);
   }
 
   return response;
@@ -132,6 +132,8 @@ export async function apiFetch(
 export async function register(email: string, password: string): Promise<User> {
   const res = await apiFetch(`${API_BASE}/auth/register`, {
     method: 'POST',
+    retryOn401: false,
+    redirectOnAuthFail: false,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
@@ -147,6 +149,8 @@ export async function register(email: string, password: string): Promise<User> {
 export async function login(email: string, password: string): Promise<User> {
   const res = await apiFetch(`${API_BASE}/auth/login`, {
     method: 'POST',
+    retryOn401: false,
+    redirectOnAuthFail: false,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
@@ -162,11 +166,16 @@ export async function login(email: string, password: string): Promise<User> {
 export async function logout(): Promise<void> {
   await apiFetch(`${API_BASE}/auth/logout`, {
     method: 'POST',
+    retryOn401: false,
+    redirectOnAuthFail: false,
   });
 }
 
 export async function getMe(): Promise<User | null> {
-  const res = await apiFetch(`${API_BASE}/auth/me`);
+  const res = await apiFetch(`${API_BASE}/auth/me`, {
+    retryOn401: false,
+    redirectOnAuthFail: false,
+  });
   if (res.status === 401) return null;
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
@@ -228,7 +237,7 @@ export async function getUserTier(): Promise<TierStatus | null> {
 
 export async function refreshToken(): Promise<User | null> {
   const refreshResult = await refreshSession();
-  if (refreshResult !== 'success') {
+  if (!refreshResult) {
     return null;
   }
   return getMe();
