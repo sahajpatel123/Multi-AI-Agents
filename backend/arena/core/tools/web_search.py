@@ -1,9 +1,12 @@
 """Web search tool using DuckDuckGo"""
 
+import logging
 import re
 from typing import List, Dict, Any
 
 from arena.core.tools.base import Tool, ToolResult
+
+logger = logging.getLogger(__name__)
 
 
 class WebSearchToolResult(ToolResult):
@@ -86,7 +89,7 @@ class WebSearchTool(Tool):
             # Enhance query for better results
             query = self._enhance_query(query, prompt)
             
-            print(f"[WEB_SEARCH] Searching for: {query}")
+            logger.debug("[WEB_SEARCH] Searching query length=%s", len(query))
             
             # Perform search
             with DDGS() as ddgs:
@@ -110,7 +113,7 @@ class WebSearchTool(Tool):
                     "url": result.get("href", "")
                 })
             
-            print(f"[WEB_SEARCH] Found {len(formatted_results)} results for query: {query}")
+            logger.debug("[WEB_SEARCH] Found %s results", len(formatted_results))
             
             return WebSearchToolResult(
                 tool_name=self.name,
@@ -130,7 +133,7 @@ class WebSearchTool(Tool):
                 error="duckduckgo-search library not installed"
             )
         except Exception as e:
-            print(f"[WEB_SEARCH] Error: {str(e)}")
+            logger.warning("[WEB_SEARCH] Error: %s", type(e).__name__)
             return WebSearchToolResult(
                 tool_name=self.name,
                 success=False,

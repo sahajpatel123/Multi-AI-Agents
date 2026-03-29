@@ -10,12 +10,13 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.auth import get_current_user_optional_orm, get_current_user_required_orm
+from arena.core.input_validation import sanitize_html, sanitize_model_html, sanitize_model_text
 from arena.core.room_synthesiser import synthesise_room
 from arena.database import SessionLocal, get_db
 from arena.db_models import AgentTask, Room, RoomMember, RoomTask, User
@@ -130,6 +131,11 @@ class CreateRoomBody(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     task_id: Optional[str] = None
 
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return sanitize_model_html(v, max_length=100, field_name="name")
+
 
 class AddTaskBody(BaseModel):
     task_id: str = Field(..., min_length=1)
@@ -163,7 +169,7 @@ async def create_room(
 
     room = Room(
         id=rid,
-        name=body.name.strip()[:255],
+        name=sanitize_html(body.name, max_length=100, field_name="room name"),
         slug=slug,
         creator_id=user.id,
         is_active=True,
@@ -398,7 +404,7 @@ async def add_task_to_room(
         .first()
     )
     if not is_member:
-        raise HTTPException(status_code=403, detail="Not a room member")
+        raise HTTPException(status_code=404, detail="Room not found")
 
     at = (
         db.query(AgentTask)
@@ -406,7 +412,7 @@ async def add_task_to_room(
         .first()
     )
     if not at:
-        raise HTTPException(status_code=400, detail="Task not found or not owned by you")
+        raise HTTPException(status_code=404, detail="Task not found")
 
     dup = (
         db.query(RoomTask)
@@ -453,7 +459,7 @@ async def remove_task_from_room(
         raise HTTPException(status_code=404, detail="Task not in room")
 
     if rt.user_id != user.id and room.creator_id != user.id:
-        raise HTTPException(status_code=403, detail="Not allowed to remove this task")
+        raise HTTPException(status_code=404, detail="Task not in room")
 
     db.delete(rt)
     db.commit()
@@ -474,7 +480,7 @@ async def delete_room(
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     if room.creator_id != user.id:
-        raise HTTPException(status_code=403, detail="Only the creator can delete this room")
+        raise HTTPException(status_code=404, detail="Room not found")
 
     room.is_active = False
     db.add(room)

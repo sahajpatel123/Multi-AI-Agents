@@ -36,8 +36,10 @@ class Orchestrator:
             return system_prompt
         
         injected = f"{system_prompt}\n\n{tool_context}"
-        print(f"[ORCHESTRATOR] Injecting tool context ({len(tool_context)} chars) into system prompt")
-        print(f"[ORCHESTRATOR] Tool context preview: {tool_context[:200]}...")
+        logger.debug(
+            "[ORCHESTRATOR] Injecting tool context chars=%s",
+            len(tool_context),
+        )
         return injected
 
     async def _build_memory_contexts(

@@ -5,6 +5,13 @@ from datetime import datetime
 from enum import Enum
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from arena.core.input_validation import (
+    sanitize_model_html,
+    sanitize_model_optional_html,
+    sanitize_model_optional_text,
+    sanitize_model_text,
+)
+
 
 class PromptCategory(str, Enum):
     """Categories a prompt can be classified as"""
@@ -75,6 +82,11 @@ class PromptRequest(BaseModel):
     session_id: str | None = Field(None, description="Optional session ID for continuity")
     persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
 
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, v: str) -> str:
+        return sanitize_model_text(v, max_length=2000, field_name="prompt")
+
 
 class IntegrityReport(BaseModel):
     """Persona integrity report for a set of agent responses"""
@@ -133,6 +145,16 @@ class DebateRequest(BaseModel):
     session_id: str | None = Field(None, description="Session ID for continuity")
     persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
 
+    @field_validator("original_prompt", "challenged_verdict")
+    @classmethod
+    def validate_debate_text(cls, v: str, info) -> str:
+        return sanitize_model_text(v, max_length=2000, field_name=info.field_name)
+
+    @field_validator("user_interjection")
+    @classmethod
+    def validate_user_interjection(cls, v: str | None) -> str | None:
+        return sanitize_model_optional_text(v, max_length=2000, field_name="user_interjection")
+
 
 class DebateReaction(BaseModel):
     """A single agent's reaction in a debate round"""
@@ -168,6 +190,11 @@ class DiscussRequest(BaseModel):
     original_prompt: str = Field(..., description="The original arena prompt for context")
     session_id: str | None = Field(None, description="Session ID for continuity")
     persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
+
+    @field_validator("message", "original_verdict", "original_prompt")
+    @classmethod
+    def validate_discuss_text(cls, v: str, info) -> str:
+        return sanitize_model_text(v, max_length=2000, field_name=info.field_name)
 
 
 class DiscussResponse(BaseModel):
@@ -282,9 +309,19 @@ class UserResponse(BaseModel):
 
 
 class UserProfilePatch(BaseModel):
-    name: str | None = Field(None, max_length=255)
+    name: str | None = Field(None, max_length=100)
     expertise_level: str | None = Field(None, max_length=32)
-    expertise_domain: str | None = Field(None, max_length=512)
+    expertise_domain: str | None = Field(None, max_length=100)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str | None) -> str | None:
+        return sanitize_model_optional_html(v, max_length=100, field_name="name")
+
+    @field_validator("expertise_domain")
+    @classmethod
+    def validate_expertise_domain(cls, v: str | None) -> str | None:
+        return sanitize_model_optional_html(v, max_length=100, field_name="expertise_domain")
 
 
 class TokenResponse(BaseModel):

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from arena.config import get_settings
 from arena.core.model_router import GROK_PERSONAS, get_fallback_model, get_route_for_persona
 from arena.models.schemas import AgentConfig
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 RESPONSE_FORMAT_SUFFIX = """
@@ -284,9 +286,10 @@ async def call_persona(
     model_id = route["model_id"]
 
     if client is None:
-        print(
-            f"[FALLBACK] {provider} client not initialized for {persona_id}, "
-            "falling back to Claude"
+        logger.warning(
+            "[FALLBACK] %s client not initialized for %s; using Claude fallback",
+            provider,
+            persona_id,
         )
         fallback = get_fallback_model()
         return await call_llm(
@@ -310,9 +313,10 @@ async def call_persona(
             max_tokens=route["max_tokens"],
         )
     except Exception as e:
-        print(
-            f"[FALLBACK] {provider} failed for {persona_id}: {e}. "
-            "Falling back to Claude."
+        logger.warning(
+            "[FALLBACK] %s failed for %s; using Claude fallback",
+            provider,
+            persona_id,
         )
         fallback = get_fallback_model()
         try:
@@ -326,7 +330,7 @@ async def call_persona(
                 max_tokens=fallback["max_tokens"],
             )
         except Exception as e2:
-            print(f"[ERROR] Fallback also failed: {e2}")
+            logger.error("[ERROR] Fallback also failed: %s", type(e2).__name__)
             return (
                 "I was unable to generate a response at this time. Please try again.",
                 0,

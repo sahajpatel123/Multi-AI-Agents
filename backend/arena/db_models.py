@@ -45,6 +45,8 @@ class User(Base):
     expertise_level = Column(String, default="curious", nullable=False)
     expertise_domain = Column(String, default="", nullable=False)
     password_hash = Column(String(255), nullable=False)
+    refresh_token_hash = Column(String(255), nullable=True)
+    refresh_token_expires_at = Column(DateTime, nullable=True)
     tier = Column(Enum(UserTier), default=UserTier.FREE, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
     last_active = Column(DateTime, default=_now, onupdate=_now, nullable=False)

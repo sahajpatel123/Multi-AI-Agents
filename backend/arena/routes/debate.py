@@ -205,7 +205,7 @@ async def run_debate_round(
     try:
         active_agents = get_all_agents(request.persona_ids)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail="Invalid agent configuration") from e
 
     active_agent_map = {agent.agent_id: agent for agent in active_agents}
 
@@ -257,8 +257,8 @@ async def run_debate_round(
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Debate request failed")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -302,7 +302,7 @@ async def stream_debate_round(
     try:
         active_agents = get_all_agents(request.persona_ids)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail="Invalid agent configuration") from e
 
     active_agent_map = {agent.agent_id: agent for agent in active_agents}
 
@@ -458,7 +458,7 @@ async def stream_debate_round(
             yield _sse_event("result", final.model_dump(mode="json"))
 
         except Exception as e:
-            yield _sse_event("error", {"detail": str(e)})
+            yield _sse_event("error", {"detail": "Debate request failed"})
 
     return StreamingResponse(
         event_generator(),

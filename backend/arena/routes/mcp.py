@@ -6,10 +6,11 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from arena.core.auth import get_current_user_required
+from arena.core.input_validation import sanitize_model_html, sanitize_model_text
 from arena.core.mcp_runtime import search_integration_api
 from arena.core.token_crypto import encrypt_token, get_fernet
 from arena.database import get_db
@@ -55,9 +56,19 @@ class ManualConnectBody(BaseModel):
     access_token: str = Field(..., min_length=8)
     display_name: str = Field(..., min_length=1, max_length=128)
 
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, v: str) -> str:
+        return sanitize_model_html(v, max_length=100, field_name="display_name")
+
 
 class SearchBody(BaseModel):
     query: str = Field(..., min_length=1, max_length=500)
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, v: str) -> str:
+        return sanitize_model_text(v, max_length=500, field_name="query")
 
 
 @router.get("/integrations")

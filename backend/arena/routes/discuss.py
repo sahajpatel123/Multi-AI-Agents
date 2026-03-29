@@ -139,7 +139,7 @@ async def discuss_with_agent(
     try:
         agent = get_agent_config(request.agent_id, request.persona_ids)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail="Invalid agent configuration") from e
     if not agent:
         raise HTTPException(status_code=400, detail="Invalid agent ID")
 
@@ -197,8 +197,8 @@ async def discuss_with_agent(
             session_id=session_id,
         )
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Discuss request failed")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -240,7 +240,7 @@ async def stream_discuss(
     try:
         agent = get_agent_config(request.agent_id, request.persona_ids)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail="Invalid agent configuration") from e
     if not agent:
         raise HTTPException(status_code=400, detail="Invalid agent ID")
 
@@ -327,7 +327,7 @@ async def stream_discuss(
             yield _sse_event("result", final.model_dump(mode="json"))
 
         except Exception as e:
-            yield _sse_event("error", {"detail": str(e)})
+            yield _sse_event("error", {"detail": "Discuss request failed"})
 
     return StreamingResponse(
         event_generator(),

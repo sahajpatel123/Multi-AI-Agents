@@ -3,11 +3,13 @@
 from collections import Counter, defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from arena.config import get_settings
 from arena.core.auth import get_current_user_optional, get_current_user_required
+from arena.core.input_validation import sanitize_model_optional_text, sanitize_model_text
 from arena.core.model_router import get_all_routes_summary
 from arena.core.observability import log_ux_event
 from arena.database import get_db
@@ -41,6 +43,16 @@ class UXEventRequest(BaseModel):
     agent_id: str | None = None
     metadata: dict | None = None
 
+    @field_validator("session_id", "event_type")
+    @classmethod
+    def validate_required_text(cls, v: str, info) -> str:
+        return sanitize_model_text(v, max_length=100, field_name=info.field_name)
+
+    @field_validator("persona_id", "agent_id")
+    @classmethod
+    def validate_optional_text(cls, v: str | None, info) -> str | None:
+        return sanitize_model_optional_text(v, max_length=100, field_name=info.field_name)
+
 
 @router.post("/analytics/event")
 async def track_event(
@@ -70,6 +82,7 @@ async def analytics_summary(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> dict:
+    user_id = user.id
     preference = db.query(UserPreference).filter(UserPreference.user_id == user.id).first()
     scoring_rows = db.query(ScoringAudit).filter(ScoringAudit.user_id == user.id).all()
     event_rows = db.query(UXEvent).filter(UXEvent.user_id == user.id).all()
@@ -147,4 +160,7 @@ async def analytics_summary(
 async def admin_routes_summary(
     user: UserResponse = Depends(get_current_user_required),
 ) -> dict:
+    admin_email = get_settings().admin_email
+    if str(user.email).lower() != str(admin_email).strip().lower():
+        raise HTTPException(status_code=404, detail="Not found")
     return get_all_routes_summary()

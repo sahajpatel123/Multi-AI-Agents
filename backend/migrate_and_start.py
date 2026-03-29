@@ -37,6 +37,8 @@ def main():
             "expertise_level VARCHAR DEFAULT 'curious'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
             "expertise_domain VARCHAR DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token_hash VARCHAR",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token_expires_at TIMESTAMP",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
             "title VARCHAR",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "

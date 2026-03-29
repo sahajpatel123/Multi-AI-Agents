@@ -133,7 +133,7 @@ async def submit_prompt(
         try:
             active_agents = get_all_agents(body.persona_ids)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+            raise HTTPException(status_code=400, detail="Invalid persona selection") from e
 
         pipeline_result = await run_input_pipeline(body.prompt)
         tracker.mark("input_pipeline_done")
@@ -274,7 +274,7 @@ async def submit_prompt(
         raise
     except Exception as e:
         log_unhandled_exception(request_id, user_label, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Prompt request failed")
 
 
 @router.post("/prompt/stream")
@@ -306,7 +306,7 @@ async def stream_prompt(
             try:
                 active_agents = get_all_agents(body.persona_ids)
             except ValueError as e:
-                yield _sse_event("error", {"detail": str(e)})
+                yield _sse_event("error", {"detail": "Prompt request failed"})
                 return
 
             pipeline_result = await run_input_pipeline(body.prompt)
@@ -453,7 +453,7 @@ async def stream_prompt(
 
         except Exception as e:
             log_unhandled_exception(request_id, user_label, e)
-            yield _sse_event("error", {"detail": str(e)})
+            yield _sse_event("error", {"detail": "Prompt request failed"})
 
     return StreamingResponse(
         event_generator(),

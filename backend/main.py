@@ -9,10 +9,14 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from arena.config import get_settings
 from arena.core.seed_personas import seed_persona_library
 from arena.core.observability import get_health_data, setup_logging
+from arena.core.rate_limits import client_ip, rate_limiter
 from arena.database import SessionLocal, get_db, init_db
 from arena.routes.auth import router as auth_router, user_router
 from arena.routes.analytics import router as analytics_router
@@ -88,12 +92,31 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         if self.is_production:
             response.headers["Strict-Transport-Security"] = (
                 "max-age=31536000; includeSubDomains"
             )
+        # Remove server fingerprinting headers
+        response.headers.pop("server", None)
+        response.headers.pop("x-powered-by", None)
         return response
+
+
+class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
+    """Apply a global 100 requests/minute/IP cap, excluding payment webhooks."""
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path.rstrip("/")
+        if path.endswith("/api/payments/webhook"):
+            return await call_next(request)
+        rate_limiter.hit(
+            f"global:{client_ip(request)}",
+            limit=100,
+            window_seconds=60,
+            message="Too many requests from this IP. Please slow down.",
+        )
+        return await call_next(request)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -105,6 +128,7 @@ def create_app() -> FastAPI:
 
     # Validate secrets/API keys before starting
     settings.validate_secrets()
+    settings.validate_api_keys()
 
     setup_logging()
     init_db()
@@ -115,6 +139,11 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         debug=settings.debug,
     )
+
+    # ── Rate limiting ─────────────────────────────────────────
+    limiter = Limiter(key_func=get_remote_address)
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     # ── Global exception handler ──────────────────────────────
     @app.exception_handler(Exception)
@@ -148,6 +177,10 @@ def create_app() -> FastAPI:
     # ── Middleware (order matters — outermost runs first) ─────
     # Explicit origins only — required when allow_credentials=True (no "*")
     _cors_origins = settings.allowed_origins_list
+    if settings.is_production and "*" in _cors_origins:
+        logger.error("[SECURITY ERROR] CORS wildcard (*) is not allowed in production")
+        raise ValueError("CORS wildcard not allowed in production")
+    
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors_origins,
@@ -157,6 +190,7 @@ def create_app() -> FastAPI:
         expose_headers=["Set-Cookie", "X-Request-ID"],
         max_age=3600,
     )
+    app.add_middleware(GlobalRateLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
     app.add_middleware(RequestSizeLimitMiddleware, max_size=10 * 1024)
 
@@ -181,13 +215,6 @@ def create_app() -> FastAPI:
     # ── Startup ───────────────────────────────────────────────
     @app.on_event("startup")
     async def run_startup_tasks() -> None:
-        import os
-
-        if not (os.environ.get("ENCRYPTION_KEY") or "").strip():
-            logger.warning(
-                "ENCRYPTION_KEY is not set — MCP manual token storage will return 503 until configured."
-            )
-
         db = SessionLocal()
         try:
             await seed_persona_library(db)

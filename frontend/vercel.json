@@ -1,4 +1,23 @@
 {
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' checkout.razorpay.com; connect-src 'self' multiagents-blx0.onrender.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-src checkout.razorpay.com"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

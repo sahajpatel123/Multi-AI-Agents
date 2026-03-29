@@ -1,12 +1,15 @@
 """Tool router - determines which tools to run and executes them"""
 
 import asyncio
+import logging
 from typing import List, Dict, Any
 
 from arena.core.tools.base import Tool, ToolResult
 from arena.core.tools.calculator import CalculatorTool
 from arena.core.tools.web_search import WebSearchTool
 from arena.core.tools.datetime_tool import DateTimeTool
+
+logger = logging.getLogger(__name__)
 
 
 class ToolRouter:
@@ -25,18 +28,18 @@ class ToolRouter:
         Returns dict of tool_name -> ToolResult.
         Never raises - tools that fail return ToolResult with success=False.
         """
-        print(f"[TOOL_ROUTER] Checking tools for prompt: {prompt[:100]}...")
+        logger.debug("[TOOL_ROUTER] Checking tools for prompt length=%s", len(prompt))
         
         # Determine which tools should trigger
         tools_to_run = []
         for tool in self.tools:
             should_trigger = tool.should_trigger(prompt, **kwargs)
-            print(f"[TOOL_ROUTER] {tool.name}: should_trigger={should_trigger}")
+            logger.debug("[TOOL_ROUTER] %s should_trigger=%s", tool.name, should_trigger)
             if should_trigger:
                 tools_to_run.append(tool)
         
         if not tools_to_run:
-            print("[TOOL_ROUTER] No tools triggered")
+            logger.debug("[TOOL_ROUTER] No tools triggered")
             return {}
         
         # Execute all triggered tools in parallel

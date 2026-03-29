@@ -9,9 +9,20 @@ import re
 from io import BytesIO
 from typing import Any, Tuple
 
+import magic
+
 logger = logging.getLogger(__name__)
 
 MAX_TEXT = 3000
+DISALLOWED_EXTENSIONS = {".exe", ".sh", ".py", ".js"}
+ALLOWED_MIME_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "text/plain",
+}
 
 
 def _truncate(s: str, n: int = MAX_TEXT) -> str:
@@ -80,14 +91,22 @@ def process_upload(
     dest_path: str,
 ) -> dict[str, Any]:
     """Return registry record: file_id, filename, type, content, b64?, mime_type?, path."""
+    ext = os.path.splitext((filename or "").lower())[1]
+    if ext in DISALLOWED_EXTENSIONS:
+        raise ValueError("Executable and script uploads are not allowed.")
+
+    detected_mime = magic.from_buffer(data, mime=True)
+    if detected_mime not in ALLOWED_MIME_TYPES:
+        raise ValueError("Unsupported file type.")
+
     os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
     with open(dest_path, "wb") as f:
         f.write(data)
 
-    ct = (content_type or "").split(";")[0].strip().lower()
+    ct = detected_mime
     name_lower = (filename or "").lower()
 
-    if ct == "application/pdf" or name_lower.endswith(".pdf"):
+    if ct == "application/pdf":
         text = extract_pdf_text(dest_path)
         return {
             "filename": filename,
@@ -97,9 +116,7 @@ def process_upload(
             "path": dest_path,
         }
 
-    if ct in ("image/png", "image/jpeg", "image/webp") or re.search(
-        r"\.(png|jpe?g|webp)$", name_lower
-    ):
+    if ct in ("image/png", "image/jpeg", "image/webp"):
         b64, mime = image_b64_and_mime(data, ct or "image/jpeg")
         return {
             "filename": filename,
@@ -110,9 +127,7 @@ def process_upload(
             "path": dest_path,
         }
 
-    if ct in (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ) or name_lower.endswith(".docx"):
+    if ct == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         text = extract_docx_bytes(data)
         return {
             "filename": filename,

@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from arena.core.agent_pipeline import (
@@ -24,6 +24,13 @@ from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_b
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 from arena.core.cost_tracker import get_today_token_usage
+from arena.core.input_validation import (
+    sanitize_html,
+    sanitize_model_optional_text,
+    sanitize_model_text,
+    sanitize_text,
+)
+from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.tier_config import UserTier, get_credit_budget, has_feature, normalize_tier
 from arena.core.agent_orchestration import synthesise_tasks
 from arena.core.feedback_calibrator import get_answer_feedback_distribution
@@ -210,11 +217,28 @@ class AgentTaskRequest(BaseModel):
     attachment_ids: list[str] = Field(default_factory=list)
     mcp_integration_ids: list[int] = Field(default_factory=list)
 
+    @field_validator("task")
+    @classmethod
+    def validate_task(cls, v: str) -> str:
+        return sanitize_model_text(v, max_length=2000, field_name="task")
+
+    @field_validator("expertise_domain")
+    @classmethod
+    def validate_expertise_domain(cls, v: str) -> str:
+        return sanitize_model_optional_text(v, max_length=100, field_name="expertise_domain") or ""
+
 
 class AgentChallengeRequest(BaseModel):
     task_id: str = ""
     answer: str = ""
     task: str = ""
+
+    @field_validator("answer", "task")
+    @classmethod
+    def validate_optional_content(cls, v: str, info) -> str:
+        if not v:
+            return ""
+        return sanitize_model_text(v, max_length=2000, field_name=info.field_name)
 
 
 class AgentRebuttalRequest(BaseModel):
@@ -222,21 +246,43 @@ class AgentRebuttalRequest(BaseModel):
     answer: str = ""
     challenge: str = ""
 
+    @field_validator("task", "answer", "challenge")
+    @classmethod
+    def validate_rebuttal_text(cls, v: str, info) -> str:
+        if info.field_name == "task" and not v:
+            return ""
+        return sanitize_model_text(v, max_length=2000, field_name=info.field_name)
+
 
 class AgentFeedbackRequest(BaseModel):
     task_id: str
     feedback: str
     note: Optional[str] = None
 
+    @field_validator("note")
+    @classmethod
+    def validate_feedback_note(cls, v: Optional[str]) -> Optional[str]:
+        return sanitize_model_optional_text(v, max_length=1000, field_name="note")
+
 
 class AnswerAccuracyFeedbackBody(BaseModel):
     verdict: str
     note: Optional[str] = None
 
+    @field_validator("note")
+    @classmethod
+    def validate_answer_feedback_note(cls, v: Optional[str]) -> Optional[str]:
+        return sanitize_model_optional_text(v, max_length=1000, field_name="note")
+
 
 class RefinementRequest(BaseModel):
     task_id: str
     message: str
+
+    @field_validator("message")
+    @classmethod
+    def validate_refinement_message(cls, v: str) -> str:
+        return sanitize_model_text(v, max_length=1000, field_name="message")
 
 
 class BridgeRequest(BaseModel):
@@ -245,9 +291,26 @@ class BridgeRequest(BaseModel):
     winning_persona: str = ""
     arena_score: int = 0
 
+    @field_validator("arena_answer", "original_question")
+    @classmethod
+    def validate_bridge_text(cls, v: str, info) -> str:
+        return sanitize_model_text(v, max_length=2000, field_name=info.field_name)
+
+    @field_validator("winning_persona")
+    @classmethod
+    def validate_persona(cls, v: str) -> str:
+        if not v:
+            return ""
+        return sanitize_model_text(v, max_length=100, field_name="winning_persona")
+
 
 class AgentTaskRenameRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=120)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v: str) -> str:
+        return sanitize_model_text(v, max_length=100, field_name="title")
 
 
 class LiveToggleBody(BaseModel):
@@ -263,12 +326,32 @@ class OrchestrateRequest(BaseModel):
     expertise_level: str = "curious"
     expertise_domain: str = ""
 
+    @field_validator("questions")
+    @classmethod
+    def validate_questions(cls, values: list[str]) -> list[str]:
+        return [sanitize_model_text(v, max_length=2000, field_name="question") for v in values]
+
+    @field_validator("expertise_domain")
+    @classmethod
+    def validate_orchestration_domain(cls, v: str) -> str:
+        return sanitize_model_optional_text(v, max_length=100, field_name="expertise_domain") or ""
+
 
 class WatchlistCreateBody(BaseModel):
     question: str
     interval_hours: int
     expertise_level: str = "curious"
     expertise_domain: str = ""
+
+    @field_validator("question")
+    @classmethod
+    def validate_question(cls, v: str) -> str:
+        return sanitize_model_text(v, max_length=2000, field_name="question")
+
+    @field_validator("expertise_domain")
+    @classmethod
+    def validate_watchlist_domain(cls, v: str) -> str:
+        return sanitize_model_optional_text(v, max_length=100, field_name="expertise_domain") or ""
 
 
 class WatchlistPatchBody(BaseModel):
@@ -875,7 +958,7 @@ async def post_task_answer_feedback(
     v = body.verdict.strip().lower()
     if v not in ("correct", "partial", "wrong"):
         raise HTTPException(status_code=400, detail="Invalid verdict")
-    note_val = (body.note or "").strip() or None
+    note_val = sanitize_model_optional_text(body.note, max_length=1000, field_name="note")
     existing = (
         db.query(AnswerFeedback)
         .filter(AnswerFeedback.user_id == user.id, AnswerFeedback.task_id == tid)
@@ -922,7 +1005,7 @@ async def start_orchestration(
             )
 
     el = (body.expertise_level or "curious").strip().lower() or "curious"
-    ed = (body.expertise_domain or "").strip()[:512]
+    ed = (body.expertise_domain or "").strip()[:100]
 
     orch_id = str(uuid.uuid4())
     task_ids: list[str] = []
@@ -1110,6 +1193,13 @@ async def run_agent_task(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_run",
+        limit=10,
+        window_seconds=60,
+        message="Too many agent runs. Limit is 10 per minute.",
+    )
 
     tier = normalize_tier(user.tier)
     today_usage = get_today_token_usage(db, user.id)
@@ -1126,17 +1216,10 @@ async def run_agent_task(
             },
         )
 
-    task = body.task.strip()
-    if not task:
-        raise HTTPException(status_code=400, detail="Task cannot be empty")
-    if len(task) > 2000:
-        raise HTTPException(
-            status_code=400,
-            detail="Task too long. Maximum 2000 characters.",
-        )
+    task = sanitize_text(body.task, max_length=2000, field_name="task")
 
     expertise_level = (body.expertise_level or "curious").strip().lower() or "curious"
-    expertise_domain = (body.expertise_domain or "").strip()[:512]
+    expertise_domain = (body.expertise_domain or "").strip()[:100]
 
     bb = create_blackboard(user_id=user.id, task=task)
     bb.status = AgentStatus.RUNNING
@@ -1257,18 +1340,24 @@ async def challenge_agent_answer(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
-    answer = body.answer.strip()
-    if not answer:
-        raise HTTPException(status_code=400, detail="Answer required")
+    answer = sanitize_text(body.answer, max_length=2000, field_name="answer")
 
-    task_text = body.task.strip()
+    task_text = (body.task or "").strip()
     tid = body.task_id.strip()
     if tid:
         bb = get_blackboard(tid)
-        if not bb:
-            raise HTTPException(status_code=404, detail="Task not found")
-        _ensure_task_owner(bb, user)
-        task_text = bb.task
+        if bb:
+            _ensure_task_owner(bb, user)
+            task_text = bb.task
+        else:
+            row = (
+                db.query(AgentTaskRow)
+                .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+                .first()
+            )
+            if not row:
+                raise HTTPException(status_code=404, detail="Task not found")
+            task_text = row.task_text
     if not task_text:
         raise HTTPException(
             status_code=400,
@@ -1319,10 +1408,8 @@ async def agent_rebuttal(
 ):
     _ensure_agent_access(user, db)
     task = body.task.strip() or "(context not provided)"
-    answer = body.answer.strip()
-    challenge = body.challenge.strip()
-    if not answer or not challenge:
-        raise HTTPException(status_code=400, detail="Answer and challenge required")
+    answer = sanitize_text(body.answer, max_length=2000, field_name="answer")
+    challenge = sanitize_text(body.challenge, max_length=2000, field_name="challenge")
 
     model = MODEL_REGISTRY["claude_sonnet"]
     user_prompt = f"""
@@ -1347,8 +1434,8 @@ Respond to this challenge now.
             max_tokens=600,
         )
         return JSONResponse(content={"rebuttal": response, "status": "complete"})
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception:
+        raise HTTPException(status_code=500, detail="Rebuttal generation failed")
 
 
 @router.post("/watchlist")
@@ -1358,11 +1445,7 @@ async def create_watchlist_item(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_watchlist_access(user)
-    q = body.question.strip()
-    if not q:
-        raise HTTPException(status_code=400, detail="Question cannot be empty")
-    if len(q) > 2000:
-        raise HTTPException(status_code=400, detail="Question too long (max 2000 characters)")
+    q = sanitize_text(body.question, max_length=2000, field_name="question")
     if body.interval_hours not in WATCHLIST_INTERVALS:
         raise HTTPException(status_code=400, detail="interval_hours must be 24, 72, or 168")
 
@@ -1375,7 +1458,7 @@ async def create_watchlist_item(
         raise HTTPException(status_code=400, detail="Watchlist limit reached")
 
     el = (body.expertise_level or "curious").strip().lower() or "curious"
-    ed = (body.expertise_domain or "").strip()[:512]
+    ed = (body.expertise_domain or "").strip()[:100]
     now = _utc_naive()
     item = WatchlistItem(
         id=str(uuid.uuid4()),
@@ -1504,17 +1587,15 @@ async def rename_agent_task(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    _ensure_agent_access(user, db)
     row = (
         db.query(AgentTaskRow)
-        .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+        .filter(AgentTaskRow.task_id == task_id.strip(), AgentTaskRow.user_id == user.id)
         .first()
     )
     if not row:
         raise HTTPException(status_code=404, detail="Task not found")
-    trimmed = body.title.strip()
-    if not trimmed:
-        raise HTTPException(status_code=400, detail="Title cannot be empty")
-    row.title = trimmed[:120]
+    row.title = sanitize_html(body.title, max_length=100, field_name="title")
     db.commit()
     db.refresh(row)
     return JSONResponse(content={"success": True, "title": row.title})
@@ -1526,9 +1607,10 @@ async def delete_agent_task(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    _ensure_agent_access(user, db)
     row = (
         db.query(AgentTaskRow)
-        .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+        .filter(AgentTaskRow.task_id == task_id.strip(), AgentTaskRow.user_id == user.id)
         .first()
     )
     if not row:
@@ -1690,7 +1772,7 @@ async def submit_task_feedback(
     _ensure_agent_access(user, db)
     task_record = (
         db.query(AgentTaskRow)
-        .filter(AgentTaskRow.task_id == body.task_id, AgentTaskRow.user_id == user.id)
+        .filter(AgentTaskRow.task_id == body.task_id.strip(), AgentTaskRow.user_id == user.id)
         .first()
     )
     if not task_record:
@@ -1701,13 +1783,17 @@ async def submit_task_feedback(
         raise HTTPException(status_code=400, detail="Invalid feedback value")
 
     task_record.user_feedback = body.feedback
-    task_record.feedback_note = body.note
+    task_record.feedback_note = sanitize_model_optional_text(
+        body.note,
+        max_length=1000,
+        field_name="note",
+    )
     db.commit()
 
     return JSONResponse(
         content={
             "status": "saved",
-            "task_id": body.task_id,
+            "task_id": body.task_id.strip(),
             "feedback": body.feedback,
         }
     )
@@ -1722,14 +1808,7 @@ async def refine_agent_answer(
 ):
     _ensure_agent_access(user, db)
 
-    message = body.message.strip()
-    if not message:
-        raise HTTPException(status_code=400, detail="Message cannot be empty")
-    if len(message) > 1000:
-        raise HTTPException(
-            status_code=400,
-            detail="Message too long. Max 1000 characters.",
-        )
+    message = sanitize_text(body.message, max_length=1000, field_name="message")
 
     bb = get_blackboard(body.task_id.strip())
     if not bb:
@@ -1742,7 +1821,7 @@ async def refine_agent_answer(
         )
 
     if bb.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=404, detail="Task not found")
 
     if bb.refinement_count >= 10:
         raise HTTPException(

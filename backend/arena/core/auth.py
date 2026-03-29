@@ -21,6 +21,8 @@ from arena.core.token_blacklist import token_blacklist
 
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
+ACCESS_TOKEN_MAX_AGE_SECONDS = 900      # 15 minutes
+REFRESH_TOKEN_MAX_AGE_SECONDS = 604800  # 7 days
 
 
 # ─────────────────────────────────────────────────
@@ -35,8 +37,8 @@ def _prehash(plain: str) -> bytes:
 
 
 def hash_password(plain: str) -> str:
-    """Hash a password with SHA-256 prehash + bcrypt."""
-    return _bcrypt.hashpw(_prehash(plain), _bcrypt.gensalt()).decode("utf-8")
+    """Hash a password with SHA-256 prehash + bcrypt (cost factor 12)."""
+    return _bcrypt.hashpw(_prehash(plain), _bcrypt.gensalt(rounds=12)).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -73,7 +75,7 @@ def _now_utc() -> datetime:
 
 def create_access_token(user_id: int, tier: str) -> str:
     settings = get_settings()
-    expire = _now_utc() + timedelta(minutes=settings.access_token_expire_minutes)
+    expire = _now_utc() + timedelta(minutes=15)
     payload = {
         "sub": str(user_id),
         "tier": normalize_tier(tier).value,
@@ -86,7 +88,7 @@ def create_access_token(user_id: int, tier: str) -> str:
 
 def create_refresh_token(user_id: int) -> str:
     settings = get_settings()
-    expire = _now_utc() + timedelta(days=settings.refresh_token_expire_days)
+    expire = _now_utc() + timedelta(days=7)
     payload = {
         "sub": str(user_id),
         "type": REFRESH_TOKEN_TYPE,
@@ -104,6 +106,10 @@ def decode_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 # ─────────────────────────────────────────────────
@@ -264,15 +270,24 @@ def get_current_user_required(
     return user
 
 
-def set_auth_cookies_on_response(response: Response, user: User) -> None:
-    """Re-issue access + refresh cookies (e.g. after tier changes from payment verify)."""
+def persist_refresh_token(user: User, refresh_token: str) -> None:
+    user.refresh_token_hash = hash_refresh_token(refresh_token)
+    user.refresh_token_expires_at = (
+        _now_utc() + timedelta(seconds=REFRESH_TOKEN_MAX_AGE_SECONDS)
+    ).replace(tzinfo=None)
+
+
+def clear_refresh_token(user: User) -> None:
+    user.refresh_token_hash = None
+    user.refresh_token_expires_at = None
+
+
+def issue_auth_cookies(response: Response, user: User) -> tuple[str, str]:
     tier_raw = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
     tier_val = normalize_tier(tier_raw).value
     access_token = create_access_token(user.id, tier_val)
     refresh_token = create_refresh_token(user.id)
     samesite, secure = auth_cookie_samesite_and_secure()
-    settings = get_settings()
-    access_max_age = 60 * int(settings.access_token_expire_minutes)
 
     response.set_cookie(
         key=ACCESS_COOKIE,
@@ -280,7 +295,7 @@ def set_auth_cookies_on_response(response: Response, user: User) -> None:
         httponly=True,
         secure=secure,
         samesite=samesite,
-        max_age=access_max_age,
+        max_age=ACCESS_TOKEN_MAX_AGE_SECONDS,
         path="/",
     )
     response.set_cookie(
@@ -289,9 +304,19 @@ def set_auth_cookies_on_response(response: Response, user: User) -> None:
         httponly=True,
         secure=secure,
         samesite=samesite,
-        max_age=60 * 60 * 24 * int(settings.refresh_token_expire_days),
+        max_age=REFRESH_TOKEN_MAX_AGE_SECONDS,
         path="/api/auth/refresh",
     )
+    return access_token, refresh_token
+
+
+def set_auth_cookies_on_response(response: Response, user: User, db: Session) -> None:
+    """Re-issue access + refresh cookies and persist the rotated refresh token."""
+    _access_token, refresh_token = issue_auth_cookies(response, user)
+    persist_refresh_token(user, refresh_token)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
 
 def get_current_user_required_orm(
