@@ -59,10 +59,10 @@ if (!rootElement) {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
       <ErrorBoundary>
-        <AuthProvider>
-          <TierProvider>
-            <PanelProvider>
-              <BrowserRouter>
+        <BrowserRouter>
+          <AuthProvider>
+            <TierProvider>
+              <PanelProvider>
                 <ProfileModalProvider>
                 <ProfileModal />
                 <Suspense fallback={
@@ -120,10 +120,10 @@ if (!rootElement) {
                 </Routes>
                 </Suspense>
                 </ProfileModalProvider>
-              </BrowserRouter>
-            </PanelProvider>
-          </TierProvider>
-        </AuthProvider>
+              </PanelProvider>
+            </TierProvider>
+          </AuthProvider>
+        </BrowserRouter>
       </ErrorBoundary>
     </React.StrictMode>,
   );

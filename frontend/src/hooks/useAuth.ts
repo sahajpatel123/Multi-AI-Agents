@@ -10,6 +10,7 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   AUTH_LOGOUT_EVENT,
   login as apiLogin,
@@ -19,7 +20,7 @@ import {
   refreshSession,
 } from '../api';
 import { User } from '../types';
-import { setRedirectIntent } from '../utils/redirectIntent';
+import { clearRedirectIntent, getRedirectIntent, setRedirectIntent } from '../utils/redirectIntent';
 
 export interface AuthState {
   user: User | null;
@@ -39,6 +40,7 @@ export interface UseAuth extends AuthState {
 const AuthContext = createContext<UseAuth | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,8 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const redirectToSignIn = useCallback(() => {
     if (typeof window === 'undefined' || window.location.pathname === '/signin') return;
     setRedirectIntent(`${window.location.pathname}${window.location.search}`);
-    window.location.assign('/signin');
-  }, []);
+    navigate('/signin', { replace: true });
+  }, [navigate]);
 
   const refreshUser = useCallback(async () => {
     setIsLoading(true);
@@ -93,18 +95,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const nextUser = await apiLogin(email, password);
-    setUser(nextUser);
-    setIsAuthenticated(true);
-    setIsLoading(false);
-  }, []);
+    setIsLoading(true);
+    try {
+      const nextUser = await apiLogin(email, password);
+      setUser(nextUser);
+      setIsAuthenticated(true);
+      const intent = getRedirectIntent();
+      clearRedirectIntent();
+      navigate(intent || '/agent', { replace: true });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [navigate]);
 
   const register = useCallback(async (email: string, password: string) => {
-    const nextUser = await apiRegister(email, password);
-    setUser(nextUser);
-    setIsAuthenticated(true);
-    setIsLoading(false);
-  }, []);
+    setIsLoading(true);
+    try {
+      const nextUser = await apiRegister(email, password);
+      setUser(nextUser);
+      setIsAuthenticated(true);
+      navigate('/agent', { replace: true });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [navigate]);
 
   const logout = useCallback(async () => {
     try {
@@ -120,14 +134,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleLogout = (event: Event) => {
       clearAuthState();
       const detail = (event as CustomEvent<{ redirect?: boolean }>).detail;
-      if (detail?.redirect) {
-        redirectToSignIn();
-      }
+      if (detail?.redirect === false) return;
+      navigate('/signin', { replace: true });
     };
 
     window.addEventListener(AUTH_LOGOUT_EVENT, handleLogout);
     return () => window.removeEventListener(AUTH_LOGOUT_EVENT, handleLogout);
-  }, [clearAuthState, redirectToSignIn]);
+  }, [clearAuthState, navigate]);
 
   const value = useMemo<UseAuth>(
     () => ({

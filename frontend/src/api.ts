@@ -21,6 +21,13 @@ type ApiFetchOptions = RequestInit & {
   retryOn401?: boolean;
   redirectOnAuthFail?: boolean;
 };
+const NO_INTERCEPT = [
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/me',
+  '/api/auth/refresh',
+  '/api/auth/logout',
+] as const;
 
 export class ApiError extends Error {
   status: number;
@@ -49,6 +56,10 @@ async function fetchWithCredentials(url: string, options: RequestInit = {}): Pro
     ...options,
     credentials: 'include',
   });
+}
+
+function shouldIntercept401(url: string): boolean {
+  return !NO_INTERCEPT.some((path) => url.includes(path));
 }
 
 async function parseJsonSafely<T>(response: Response): Promise<T | null> {
@@ -112,7 +123,7 @@ export async function apiFetch(
   } = options;
   const response = await fetchWithCredentials(url, requestOptions);
 
-  if (response.status === 401 && retryOn401) {
+  if (response.status === 401 && retryOn401 && shouldIntercept401(url)) {
     const refreshed = await attemptTokenRefresh();
 
     if (refreshed) {
@@ -130,37 +141,41 @@ export async function apiFetch(
 // ──────────────────────────────────────────────────────────────
 
 export async function register(email: string, password: string): Promise<User> {
-  const res = await apiFetch(`${API_BASE}/auth/register`, {
+  const res = await fetchWithCredentials(`${API_BASE}/auth/register`, {
     method: 'POST',
-    retryOn401: false,
-    redirectOnAuthFail: false,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
-    const err = await parseJsonSafely<{ detail?: string }>(res);
-    throw new ApiError(err?.detail || 'Registration failed', res.status, err);
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
+    throw new ApiError(getErrorMessage(err, 'Registration failed'), res.status, err);
   }
-  const data = await parseJsonSafely<User>(res);
-  if (!data) throw new Error('Empty response');
-  return data;
+  const meRes = await fetchWithCredentials(`${API_BASE}/auth/me`);
+  if (!meRes.ok) {
+    throw new ApiError('Failed to load user', meRes.status);
+  }
+  const user = await parseJsonSafely<User>(meRes);
+  if (!user) throw new Error('Empty response');
+  return user;
 }
 
 export async function login(email: string, password: string): Promise<User> {
-  const res = await apiFetch(`${API_BASE}/auth/login`, {
+  const res = await fetchWithCredentials(`${API_BASE}/auth/login`, {
     method: 'POST',
-    retryOn401: false,
-    redirectOnAuthFail: false,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
-    const err = await parseJsonSafely<{ detail?: string }>(res);
-    throw new ApiError(err?.detail || 'Login failed', res.status, err);
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
+    throw new ApiError(getErrorMessage(err, 'Login failed'), res.status, err);
   }
-  const data = await parseJsonSafely<User>(res);
-  if (!data) throw new Error('Empty response');
-  return data;
+  const meRes = await fetchWithCredentials(`${API_BASE}/auth/me`);
+  if (!meRes.ok) {
+    throw new ApiError('Failed to load user', meRes.status);
+  }
+  const user = await parseJsonSafely<User>(meRes);
+  if (!user) throw new Error('Empty response');
+  return user;
 }
 
 export async function logout(): Promise<void> {

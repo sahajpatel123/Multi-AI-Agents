@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
-import { login, register } from '../api';
 import { useAuth } from '../hooks/useAuth';
 import { getRedirectIntent, clearRedirectIntent } from '../utils/redirectIntent';
 
@@ -10,7 +9,8 @@ type PasswordStrength = 'weak' | 'fair' | 'good' | 'strong' | null;
 
 export function SignInPage() {
   const navigate = useNavigate();
-  const { user, setUser, setIsAuthenticated } = useAuth();
+  const { user, login, register, isLoading: authLoading } = useAuth();
+  const handledInitialUser = useRef(false);
   const [activeTab, setActiveTab] = useState<Tab>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,10 +31,12 @@ export function SignInPage() {
   const passwordStrength = activeTab === 'signup' ? getPasswordStrength(password) : null;
 
   useEffect(() => {
+    if (handledInitialUser.current) return;
+    handledInitialUser.current = true;
     if (!user) return;
     const destination = getRedirectIntent();
     clearRedirectIntent();
-    navigate(destination, { replace: true });
+    navigate(destination || '/agent', { replace: true });
   }, [user, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -43,15 +45,8 @@ export function SignInPage() {
     setIsLoading(true);
 
     try {
-      const signedInUser = await login(email, password);
-      console.log('SignInPage received user:', JSON.stringify(signedInUser));
-      console.log('User has id?', signedInUser?.id);
-      console.log('User has email?', signedInUser?.email);
-      setUser(signedInUser);
-      setIsAuthenticated(true);
+      await login(email, password);
     } catch (err) {
-      console.log('SignInPage caught error:', err);
-      console.log('Error message:', err instanceof Error ? err.message : 'Sign in failed');
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {
       setIsLoading(false);
@@ -75,9 +70,7 @@ export function SignInPage() {
     setIsLoading(true);
 
     try {
-      const registeredUser = await register(email, password);
-      setUser(registeredUser);
-      setIsAuthenticated(true);
+      await register(email, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Account creation failed');
     } finally {
@@ -295,9 +288,9 @@ export function SignInPage() {
               )}
 
               <button
-                className={`signin-submit${isLoading ? ' pulse' : ''}`}
+                className={`signin-submit${isLoading || authLoading ? ' pulse' : ''}`}
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || authLoading}
                 style={{
                   width: '100%',
                   padding: '12px',
@@ -307,15 +300,15 @@ export function SignInPage() {
                   fontSize: '14px',
                   fontWeight: 500,
                   border: 'none',
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  cursor: isLoading || authLoading ? 'not-allowed' : 'pointer',
                   transition: 'opacity 150ms ease',
                   marginBottom: '1.5rem',
-                  opacity: isLoading ? 0.7 : 1,
+                  opacity: isLoading || authLoading ? 0.7 : 1,
                 }}
-                onMouseEnter={(e) => !isLoading && (e.currentTarget.style.opacity = '0.85')}
-                onMouseLeave={(e) => !isLoading && (e.currentTarget.style.opacity = '1')}
+                onMouseEnter={(e) => !(isLoading || authLoading) && (e.currentTarget.style.opacity = '0.85')}
+                onMouseLeave={(e) => !(isLoading || authLoading) && (e.currentTarget.style.opacity = '1')}
               >
-                {isLoading ? 'Signing in...' : 'Sign in'}
+                {isLoading || authLoading ? 'Signing in...' : 'Sign in'}
               </button>
 
               <p style={{ fontSize: '12px', color: '#6B6460', textAlign: 'center', marginTop: '1.5rem' }}>
@@ -527,9 +520,9 @@ export function SignInPage() {
               )}
 
               <button
-                className={`signin-submit${isLoading ? ' pulse' : ''}`}
+                className={`signin-submit${isLoading || authLoading ? ' pulse' : ''}`}
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || authLoading}
                 style={{
                   width: '100%',
                   padding: '12px',
@@ -539,15 +532,15 @@ export function SignInPage() {
                   fontSize: '14px',
                   fontWeight: 500,
                   border: 'none',
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  cursor: isLoading || authLoading ? 'not-allowed' : 'pointer',
                   transition: 'opacity 150ms ease',
                   marginBottom: '1.5rem',
-                  opacity: isLoading ? 0.7 : 1,
+                  opacity: isLoading || authLoading ? 0.7 : 1,
                 }}
-                onMouseEnter={(e) => !isLoading && (e.currentTarget.style.opacity = '0.85')}
-                onMouseLeave={(e) => !isLoading && (e.currentTarget.style.opacity = '1')}
+                onMouseEnter={(e) => !(isLoading || authLoading) && (e.currentTarget.style.opacity = '0.85')}
+                onMouseLeave={(e) => !(isLoading || authLoading) && (e.currentTarget.style.opacity = '1')}
               >
-                {isLoading ? 'Creating account...' : 'Create account'}
+                {isLoading || authLoading ? 'Creating account...' : 'Create account'}
               </button>
 
               <p style={{ fontSize: '12px', color: '#6B6460', textAlign: 'center', marginTop: '1.5rem' }}>
