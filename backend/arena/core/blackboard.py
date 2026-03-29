@@ -71,6 +71,8 @@ class Blackboard:
     source_integrity: dict = field(default_factory=dict)
     intelligence_score: dict = field(default_factory=dict)
     assumptions: dict = field(default_factory=dict)
+    dissent_report: Optional[Dict] = None
+    temporal_profile: Optional[Dict] = None
     memory_saved: bool = False
 
     expertise_level: str = "curious"
@@ -193,10 +195,11 @@ class Blackboard:
             "flags": self.flags,
             "caveats": self.caveats,
             "source_integrity": self.source_integrity,
-            "contradictions": self.cross_task_contradictions,
-            "memory_contradictions": self.contradictions,
+            "contradictions": self.contradictions,
             "intelligence_score": self.intelligence_score,
             "assumptions": self.assumptions,
+            "dissent_report": self.dissent_report,
+            "temporal_profile": self.temporal_profile,
             "memory_saved": self.memory_saved,
             "expertise_level": self.expertise_level,
             "expertise_domain": self.expertise_domain,
@@ -219,10 +222,13 @@ class Blackboard:
             "bridge_from_arena": self.bridge_from_arena,
             "attachments": self._attachments_public_view(),
             "mcp_integration_ids": list(self.mcp_integration_ids or []),
+            "mcp_context": self.mcp_context,
             "total_input_tokens": self.total_input_tokens,
             "total_output_tokens": self.total_output_tokens,
             "total_tokens": self.total_tokens,
             "total_cost_usd": self.total_cost_usd,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "error": self.error,
         }
 

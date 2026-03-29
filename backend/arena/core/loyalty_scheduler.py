@@ -68,5 +68,7 @@ async def schedule_loyalty_checks() -> None:
         db = SessionLocal()
         try:
             await check_loyalty_resumes(db)
+        except Exception as e:
+            print(f"Loyalty scheduler error: {e}")
         finally:
             db.close()

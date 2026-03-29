@@ -6,7 +6,9 @@ from uuid import uuid4
 
 from arena.core.assumption_surfacer import surface_assumptions
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard
+from arena.core.dissent_engine import generate_dissent_report
 from arena.core.intelligence_scorer import calculate_intelligence_score
+from arena.core.temporal_classifier import classify_temporal
 from arena.core.stages.critic import run_critic
 from arena.core.stages.judge import run_judge
 from arena.core.stages.planner import run_planner
@@ -211,38 +213,78 @@ async def run_agent_pipeline_on_blackboard(
             bb = await run_judge(bb)
 
         if bb.status != AgentStatus.FAILED and bb.final_answer:
-            try:
-                intelligence_score, assumptions_result = await asyncio.gather(
-                    calculate_intelligence_score(
+            async def safe_score(bb):
+                try:
+                    return await calculate_intelligence_score(
                         task=bb.task,
                         final_answer=bb.final_answer,
                         research_output=bb.research.output or "",
                         judgment_output=bb.judgment.output or "",
                         bb=bb,
-                    ),
-                    surface_assumptions(
+                    )
+                except Exception:
+                    return {}
+
+            async def safe_assume(bb):
+                try:
+                    return await surface_assumptions(
                         task=bb.task,
                         final_answer=bb.final_answer,
                         bb=bb,
-                    ),
+                    )
+                except Exception:
+                    return {}
+
+            async def safe_dissent(bb):
+                try:
+                    return await wait_for(
+                        generate_dissent_report(
+                            question=bb.task,
+                            final_answer=bb.final_answer,
+                            critique_output=getattr(bb.critique, 'output', '') or ''
+                        ), timeout=25)
+                except Exception:
+                    return {"positions": [], "minority_view_summary": ""}
+
+            async def safe_temporal(bb):
+                try:
+                    return await wait_for(
+                        classify_temporal(
+                            question=bb.task,
+                            final_answer=bb.final_answer
+                        ), timeout=25)
+                except Exception:
+                    return {"decay_class": "durable", "half_life": "2–5 years", "recheck_by": None, "decay_reason": "", "time_sensitive_claims": []}
+
+            try:
+                results = await asyncio.gather(
+                    safe_score(bb),
+                    safe_assume(bb),
+                    safe_dissent(bb),
+                    safe_temporal(bb),
+                    return_exceptions=True
                 )
 
-                bb.intelligence_score = intelligence_score
-                bb.assumptions = assumptions_result
+                bb.intelligence_score = results[0] if not isinstance(results[0], Exception) else {}
+                bb.assumptions = results[1] if not isinstance(results[1], Exception) else {}
+                bb.dissent_report = results[2] if not isinstance(results[2], Exception) else None
+                bb.temporal_profile = results[3] if not isinstance(results[3], Exception) else None
 
-                for assumption in assumptions_result.get("assumptions", []):
+                for assumption in bb.assumptions.get("assumptions", []):
                     if assumption.get("criticality") == "high" and assumption.get("flag"):
                         bb.flags.append(f"Assumption: {assumption['assumption']}")
 
                 logger.info(
                     "[PIPELINE] Intelligence=%s/100 Assumptions=%s",
-                    intelligence_score.get("total_score"),
-                    assumptions_result.get("assumption_count", 0),
+                    bb.intelligence_score.get("total_score"),
+                    bb.assumptions.get("assumption_count", 0),
                 )
             except Exception as e:
                 logger.warning("Post-processing failed, continuing: %s", e)
                 bb.intelligence_score = {}
                 bb.assumptions = {}
+                bb.dissent_report = None
+                bb.temporal_profile = None
 
             ins_raw, con_raw = await asyncio.gather(
                 _safe_insight_synthesis(bb),

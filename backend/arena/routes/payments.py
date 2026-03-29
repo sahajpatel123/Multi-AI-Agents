@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
+from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.tier_config import normalize_tier
 from arena.core.auth import (
     get_current_user_required_orm,
@@ -27,6 +28,16 @@ from arena.models.schemas import SubscribePlanRequest, VerifyPaymentRequest
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["payments"])
+
+
+def _enforce_payment_rate_limit(user_id: int) -> None:
+    enforce_user_rate_limit(
+        user_id,
+        scope="payments",
+        limit=5,
+        window_seconds=60,
+        message="Too many payment requests. Limit is 5 per minute.",
+    )
 
 
 def _razorpay_ts_to_naive_utc(ts: Any) -> Optional[datetime]:
@@ -258,6 +269,7 @@ async def create_subscription(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
+    _enforce_payment_rate_limit(user.id)
     settings = get_settings()
     plans = _plan_map(settings)
     plan_key = body.plan_key.strip()
@@ -351,6 +363,7 @@ async def subscribe_agent_addon(
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
     """Plus-only Agent Mode add-on (₹599/mo). Does not replace the main Plus subscription row on the user."""
+    _enforce_payment_rate_limit(user.id)
     if normalize_tier(user.tier) != UserTier.PLUS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -446,6 +459,7 @@ async def cancel_agent_addon(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
+    _enforce_payment_rate_limit(user.id)
     if not getattr(user, "agent_addon_active", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -483,6 +497,7 @@ async def reactivate_agent_addon(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
+    _enforce_payment_rate_limit(user.id)
     if not getattr(user, "agent_addon_cancelling", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -519,6 +534,7 @@ async def verify_payment(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
+    _enforce_payment_rate_limit(user.id)
     settings = get_settings()
     if not settings.razorpay_key_secret:
         raise HTTPException(
@@ -559,7 +575,7 @@ async def verify_payment(
         db.add(user)
         db.commit()
         db.refresh(user)
-        set_auth_cookies_on_response(response, user)
+        set_auth_cookies_on_response(response, user, db)
         return {
             "status": "success",
             "tier": _tier_label(user.tier),
@@ -583,7 +599,7 @@ async def verify_payment(
         trigger="verify_endpoint",
         subscription_id=row.razorpay_subscription_id,
     )
-    set_auth_cookies_on_response(response, user)
+    set_auth_cookies_on_response(response, user, db)
 
     return {
         "status": "success",
@@ -671,7 +687,7 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
         expected_signature = hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected_signature, sig_header):
             logger.warning("Invalid Razorpay webhook signature")
-            return JSONResponse(status_code=200, content={"status": "ok"})
+            raise HTTPException(status_code=400, detail="Invalid signature")
 
         payload = json.loads(raw_body.decode("utf-8"))
         event = payload.get("event")
@@ -831,7 +847,21 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                     ent.get("id"),
                     ent.get("subscription_id"),
                 )
+                subscription_id = ent.get("subscription_id")
+                if subscription_id:
+                    user = db.query(User).filter(
+                        User.subscription_id == subscription_id
+                    ).first()
+                    if user:
+                        user.subscription_status = "failed"
+                        db.commit()
+                        logger.info(
+                            "Payment failed for user %s, status updated",
+                            user.id
+                        )
 
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Webhook handler error")
 
@@ -843,6 +873,7 @@ async def get_subscription_status(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
+    _enforce_payment_rate_limit(user.id)
     tier_val = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
 
     row: Optional[Subscription] = None
@@ -894,6 +925,7 @@ async def cancel_subscription(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
+    _enforce_payment_rate_limit(user.id)
     row: Optional[Subscription] = None
     if user.subscription_id:
         row = db.query(Subscription).filter(Subscription.id == user.subscription_id).first()
