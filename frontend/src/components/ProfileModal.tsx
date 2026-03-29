@@ -20,6 +20,8 @@ import {
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { useAuth } from '../hooks/useAuth';
+import { getBrandIcon, PlugIcon } from './BrandIcons';
+import { SERVICES } from './integrationServices';
 import MicroLoader from './MicroLoader';
 import { RazorpayCheckout } from './RazorpayCheckout';
 
@@ -47,6 +49,21 @@ function profileInitials(name: string | undefined, email: string): string {
 function formatInrPaise(paise: number): string {
   const rupees = paise / 100;
   return `₹${rupees.toLocaleString('en-IN')}`;
+}
+
+function formatRelativeConnected(iso: string | null): string {
+  if (!iso) return 'recently';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return 'recently';
+  const sec = Math.floor((Date.now() - then) / 1000);
+  if (sec < 60) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 48) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 14) return `${day}d ago`;
+  return new Date(iso).toLocaleDateString();
 }
 
 function TabIconAccount({ active }: { active: boolean }) {
@@ -254,12 +271,14 @@ export function ProfileModal() {
   const [mcpList, setMcpList] = useState<any[]>([]);
   const [mcpLoading, setMcpLoading] = useState(false);
   const [mcpErr, setMcpErr] = useState<string | null>(null);
-  const [mcpTokens, setMcpTokens] = useState<Record<string, string>>({
-    notion: '',
-    google_drive: '',
-    github: '',
-  });
+  const [mcpExpandedId, setMcpExpandedId] = useState<string | null>(null);
+  const [mcpTokenInputs, setMcpTokenInputs] = useState<Record<string, string>>({});
   const [mcpConnectBusy, setMcpConnectBusy] = useState<string | null>(null);
+  const [mcpToast, setMcpToast] = useState<string | null>(null);
+  const [mcpDisconnectTarget, setMcpDisconnectTarget] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768);
@@ -366,6 +385,12 @@ export function ProfileModal() {
     if (!isOpen || activeTab !== 'integrations') return;
     void refreshMcp();
   }, [isOpen, activeTab, refreshMcp]);
+
+  useEffect(() => {
+    if (!mcpToast) return;
+    const t = window.setTimeout(() => setMcpToast(null), 2000);
+    return () => clearTimeout(t);
+  }, [mcpToast]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -1470,7 +1495,7 @@ export function ProfileModal() {
             )}
           </div>
 
-          <div style={{ display: activeTab === 'integrations' ? 'block' : 'none' }}>
+          <div style={{ display: activeTab === 'integrations' ? 'block' : 'none', maxHeight: mobile ? undefined : 'min(72vh, 640px)' }}>
             <h2 style={{ fontSize: 18, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>Integrations</h2>
             <p style={{ fontSize: 12, color: '#A89070', marginBottom: 16 }}>
               Connect your tools to include personal context in Agent research.
@@ -1483,196 +1508,386 @@ export function ProfileModal() {
               <p style={{ fontSize: 13, color: '#8C7355' }}>{mcpErr}</p>
             ) : (
               <>
+                {mcpToast ? (
+                  <div
+                    role="status"
+                    style={{
+                      marginBottom: 12,
+                      padding: '10px 14px',
+                      borderRadius: 8,
+                      background: '#EAF3DE',
+                      border: '0.5px solid #97C459',
+                      fontSize: 13,
+                      color: '#3B6D11',
+                    }}
+                  >
+                    {mcpToast}
+                  </div>
+                ) : null}
                 {!mcpList.length ? (
-                  <div style={{ textAlign: 'center', padding: '20px 8px 24px' }}>
-                    <svg width={48} height={48} viewBox="0 0 24 24" fill="none" aria-hidden style={{ opacity: 0.55 }}>
-                      <path
-                        d="M12 22v-5M9 8a3 3 0 116 0c0 2-3 3-3 3M12 17h.01"
-                        stroke="#D4C4B0"
-                        strokeWidth={1.2}
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <p style={{ fontSize: 14, color: '#A89070', fontStyle: 'italic', margin: '12px 0 6px' }}>
+                  <div
+                    style={{
+                      background: '#FAF7F2',
+                      borderRadius: 10,
+                      padding: 20,
+                      textAlign: 'center',
+                      marginBottom: 16,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                      <PlugIcon size={20} color="#D4C4B0" />
+                    </div>
+                    <p style={{ fontSize: 14, color: '#A89070', fontStyle: 'italic', margin: 0 }}>
                       No tools connected yet
                     </p>
-                    <p style={{ fontSize: 12, color: '#C4A882', margin: 0 }}>
-                      Connect a service to include your documents in Agent research
+                    <p style={{ fontSize: 12, color: '#C4A882', marginTop: 4, marginBottom: 0 }}>
+                      Connect a service below to include your documents in Agent research
                     </p>
                   </div>
                 ) : null}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: mobile ? '1fr' : '1fr 1fr',
-                    gap: 12,
-                  }}
-                >
-                  {(
-                    [
-                      {
-                        sid: 'notion',
-                        label: 'Notion',
-                        desc: 'Internal docs and databases.',
-                        steps:
-                          'Go to notion.so/my-integrations → Create integration → Copy the internal integration token.',
-                      },
-                      {
-                        sid: 'google_drive',
-                        label: 'Google Drive',
-                        desc: 'Files and Google Docs.',
-                        steps:
-                          'Use Google Cloud Console → APIs & Services → OAuth 2.0 → create credentials and copy an access token with Drive scope.',
-                      },
-                      {
-                        sid: 'github',
-                        label: 'GitHub',
-                        desc: 'Repositories and code search.',
-                        steps:
-                          'Go to github.com/settings/tokens → Generate new token (classic) → enable repo read scope.',
-                      },
-                    ] as const
-                  ).map((svc) => {
-                    const row = mcpList.find((r: any) => r.service === svc.sid && r.is_active);
-                    return (
-                      <div
-                        key={svc.sid}
-                        style={{
-                          background: '#FAF7F2',
-                          border: '0.5px solid #E0D5C5',
-                          borderRadius: 10,
-                          padding: 16,
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {mcpList.length > 0 ? (
+                  <>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        color: '#A89070',
+                        marginBottom: 8,
+                      }}
+                    >
+                      Connected
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                      {mcpList
+                        .filter((r: any) => r.is_active)
+                        .map((row: any) => {
+                          const meta = SERVICES.find((s) => s.id === row.service);
+                          const label = meta?.name || row.display_name || row.service;
+                          return (
                             <div
+                              key={row.id}
                               style={{
-                                width: 32,
-                                height: 32,
-                                borderRadius: 8,
-                                background: svc.sid === 'github' ? '#2C1810' : svc.sid === 'google_drive' ? '#EAF0F7' : '#F0E8DC',
-                                color: svc.sid === 'github' ? '#FAF7F2' : svc.sid === 'google_drive' ? '#185FA5' : '#2C1810',
-                                fontSize: 13,
-                                fontWeight: 600,
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
+                                gap: 8,
+                                background: '#EAF3DE',
+                                border: '0.5px solid #97C459',
+                                borderRadius: 20,
+                                padding: '5px 12px 5px 8px',
                               }}
                             >
-                              {svc.sid === 'github' ? 'gh' : svc.sid === 'google_drive' ? 'G' : 'N'}
+                              <span style={{ display: 'flex', flexShrink: 0 }}>{getBrandIcon(row.service, 16)}</span>
+                              <span style={{ fontSize: 12, color: '#2C1810' }}>{label}</span>
+                              <button
+                                type="button"
+                                aria-label={`Remove ${label}`}
+                                onClick={() => {
+                                  if (
+                                    typeof window !== 'undefined' &&
+                                    window.confirm(`Remove ${label} from connected tools?`)
+                                  ) {
+                                    void (async () => {
+                                      try {
+                                        await deleteMcpIntegration(row.id);
+                                        await refreshMcp();
+                                        setMcpDisconnectTarget(null);
+                                      } catch {
+                                        /* ignore */
+                                      }
+                                    })();
+                                  }
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: '0 0 0 4px',
+                                  cursor: 'pointer',
+                                  fontSize: 12,
+                                  color: '#A89070',
+                                  lineHeight: 1,
+                                }}
+                              >
+                                ×
+                              </button>
                             </div>
-                            <div style={{ fontSize: 14, color: '#2C1810', fontWeight: 500 }}>{svc.label}</div>
+                          );
+                        })}
+                    </div>
+                    <div
+                      style={{
+                        height: 0,
+                        borderTop: '0.5px solid #E0D5C5',
+                        marginBottom: 16,
+                      }}
+                    />
+                  </>
+                ) : null}
+                <div
+                  className="profile-modal-integrations-grid"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: mobile ? '1fr' : 'repeat(2, 1fr)',
+                    gap: 10,
+                    maxHeight: 420,
+                    overflowY: 'auto',
+                    paddingRight: 4,
+                  }}
+                >
+                  {SERVICES.map((service) => {
+                    const row = mcpList.find((r: any) => r.service === service.id && r.is_active);
+                    const connected = Boolean(row);
+                    const expanded = mcpExpandedId === service.id && !connected;
+                    const tokenVal = mcpTokenInputs[service.id] ?? '';
+                    const showDisconnectConfirm = connected && mcpDisconnectTarget?.id === row.id;
+
+                    return (
+                      <div
+                        key={service.id}
+                        style={{
+                          background: connected ? '#F0F7ED' : '#FAF7F2',
+                          border: connected ? '0.5px solid #97C459' : '0.5px solid #E0D5C5',
+                          borderRadius: 10,
+                          padding: 14,
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 8,
+                              background: service.bg_color,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {getBrandIcon(service.id, 20)}
                           </div>
+                          <div style={{ fontSize: 14, color: '#2C1810', fontWeight: 500, flex: 1 }}>{service.name}</div>
                           <span
                             style={{
                               fontSize: 10,
-                              fontWeight: 600,
-                              padding: '3px 8px',
+                              textTransform: connected ? 'uppercase' : 'none',
+                              fontWeight: connected ? 600 : 400,
+                              padding: '2px 8px',
                               borderRadius: 8,
-                              background: row ? '#EAF3DE' : '#F0E8DC',
-                              color: row ? '#3B6D11' : '#8C7355',
+                              background: connected ? '#EAF3DE' : '#F0E8DC',
+                              color: connected ? '#3B6D11' : '#8C7355',
+                              border: connected ? '0.5px solid #97C459' : 'none',
+                              whiteSpace: 'nowrap',
                             }}
                           >
-                            {row ? 'Connected' : 'Not connected'}
+                            {connected ? '✓ Connected' : 'Not connected'}
                           </span>
                         </div>
-                        <p style={{ fontSize: 12, color: '#A89070', fontStyle: 'italic', margin: '8px 0' }}>{svc.desc}</p>
-                        {row ? (
+                        <p style={{ fontSize: 12, color: '#A89070', fontStyle: 'italic', margin: '0 0 10px' }}>
+                          {service.description}
+                        </p>
+                        {!connected ? (
                           <>
-                            <p style={{ fontSize: 12, color: '#8C7355', margin: '4px 0' }}>
-                              {(row.metadata?.workspace_name as string) ||
-                                (row.metadata?.username as string) ||
-                                row.display_name}
-                            </p>
-                            <p style={{ fontSize: 11, color: '#A89070', margin: '4px 0 8px' }}>
-                              Connected {row.connected_at ? new Date(row.connected_at).toLocaleDateString() : ''}
-                            </p>
                             <button
                               type="button"
-                              onClick={async () => {
-                                try {
-                                  await deleteMcpIntegration(row.id);
-                                  await refreshMcp();
-                                } catch {
-                                  /* ignore */
-                                }
-                              }}
+                              onClick={() =>
+                                setMcpExpandedId((prev) => (prev === service.id ? null : service.id))
+                              }
                               style={{
                                 background: 'none',
                                 border: 'none',
                                 padding: 0,
                                 cursor: 'pointer',
-                                fontSize: 12,
-                                color: '#C0392B',
-                                textDecoration: 'underline dotted',
+                                fontSize: 11,
+                                color: '#C4956A',
+                                marginBottom: expanded ? 10 : 0,
                               }}
                             >
-                              Disconnect
+                              How to connect ›
                             </button>
+                            {expanded ? (
+                              <>
+                                <div
+                                  style={{
+                                    fontSize: 10,
+                                    textTransform: 'uppercase',
+                                    color: '#A89070',
+                                    marginBottom: 4,
+                                  }}
+                                >
+                                  How to connect
+                                </div>
+                                <p style={{ fontSize: 11, color: '#6B5040', lineHeight: 1.6, margin: '0 0 10px' }}>
+                                  {service.how_to}
+                                </p>
+                                <div
+                                  style={{
+                                    fontSize: 10,
+                                    textTransform: 'uppercase',
+                                    color: '#A89070',
+                                    marginBottom: 4,
+                                  }}
+                                >
+                                  Paste your API token
+                                </div>
+                                <input
+                                  type="password"
+                                  value={tokenVal}
+                                  onChange={(e) =>
+                                    setMcpTokenInputs((prev) => ({ ...prev, [service.id]: e.target.value }))
+                                  }
+                                  placeholder={service.placeholder}
+                                  autoComplete="off"
+                                  style={{
+                                    width: '100%',
+                                    boxSizing: 'border-box',
+                                    border: '0.5px solid #D4C4B0',
+                                    borderRadius: 6,
+                                    padding: '8px 10px',
+                                    fontSize: 12,
+                                    fontFamily: 'Georgia, serif',
+                                    background: '#FDFAF6',
+                                    outline: 'none',
+                                  }}
+                                  onFocus={(e) => {
+                                    e.target.style.borderColor = '#C4956A';
+                                  }}
+                                  onBlur={(e) => {
+                                    e.target.style.borderColor = '#D4C4B0';
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  disabled={!tokenVal.trim() || mcpConnectBusy === service.id}
+                                  onClick={async () => {
+                                    const tok = tokenVal.trim();
+                                    if (tok.length < 8) return;
+                                    setMcpConnectBusy(service.id);
+                                    try {
+                                      await postMcpManualConnect({
+                                        service: service.id,
+                                        access_token: tok,
+                                        display_name: service.name,
+                                      });
+                                      setMcpTokenInputs((prev) => ({ ...prev, [service.id]: '' }));
+                                      setMcpExpandedId(null);
+                                      await refreshMcp();
+                                      setMcpToast(`${service.name} connected`);
+                                    } catch {
+                                      /* silent */
+                                    } finally {
+                                      setMcpConnectBusy(null);
+                                    }
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    marginTop: 8,
+                                    background: '#2C1810',
+                                    color: '#C4956A',
+                                    borderRadius: 20,
+                                    padding: '8px 14px',
+                                    fontSize: 12,
+                                    fontFamily: 'Georgia, serif',
+                                    border: 'none',
+                                    cursor: tokenVal.trim() ? 'pointer' : 'not-allowed',
+                                    opacity: tokenVal.trim() ? 1 : 0.5,
+                                  }}
+                                >
+                                  Connect {service.name}
+                                </button>
+                              </>
+                            ) : null}
                           </>
                         ) : (
                           <>
-                            <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A89070', marginBottom: 4 }}>
-                              How to connect
-                            </div>
-                            <p style={{ fontSize: 11, color: '#6B5040', lineHeight: 1.6, margin: '0 0 10px' }}>{svc.steps}</p>
-                            <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A89070', marginBottom: 4 }}>
-                              Paste your API token
-                            </div>
-                            <input
-                              type="password"
-                              value={mcpTokens[svc.sid] ?? ''}
-                              onChange={(e) =>
-                                setMcpTokens((prev) => ({ ...prev, [svc.sid]: e.target.value }))
-                              }
-                              placeholder="paste token here..."
-                              style={{
-                                width: '100%',
-                                boxSizing: 'border-box',
-                                border: '0.5px solid #D4C4B0',
-                                borderRadius: 6,
-                                padding: '8px 12px',
-                                fontSize: 13,
-                              }}
-                            />
-                            <button
-                              type="button"
-                              disabled={mcpConnectBusy === svc.sid}
-                              onClick={async () => {
-                                const tok = (mcpTokens[svc.sid] || '').trim();
-                                if (tok.length < 8) return;
-                                setMcpConnectBusy(svc.sid);
-                                try {
-                                  await postMcpManualConnect({
-                                    service: svc.sid,
-                                    access_token: tok,
-                                    display_name: svc.label,
-                                  });
-                                  setMcpTokens((prev) => ({ ...prev, [svc.sid]: '' }));
-                                  await refreshMcp();
-                                } catch {
-                                  /* silent */
-                                } finally {
-                                  setMcpConnectBusy(null);
+                            <p style={{ fontSize: 11, color: '#5A8C6A', margin: '0 0 8px' }}>
+                              Connected · {formatRelativeConnected(row.connected_at)}
+                            </p>
+                            {showDisconnectConfirm ? (
+                              <div
+                                style={{
+                                  background: '#FDFAF6',
+                                  border: '0.5px solid #E0D5C5',
+                                  borderRadius: 8,
+                                  padding: 10,
+                                  marginBottom: 8,
+                                }}
+                              >
+                                <p style={{ fontSize: 11, color: '#6B5040', lineHeight: 1.5, margin: '0 0 10px' }}>
+                                  Remove {service.name}? Your tasks using this source will still work until you re-run
+                                  them.
+                                </p>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setMcpDisconnectTarget(null)}
+                                    style={{
+                                      flex: 1,
+                                      padding: '6px 10px',
+                                      borderRadius: 8,
+                                      border: '0.5px solid #D4C4B0',
+                                      background: '#FAF7F2',
+                                      fontSize: 12,
+                                      cursor: 'pointer',
+                                      color: '#2C1810',
+                                    }}
+                                  >
+                                    Keep
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        await deleteMcpIntegration(row.id);
+                                        await refreshMcp();
+                                      } catch {
+                                        /* ignore */
+                                      } finally {
+                                        setMcpDisconnectTarget(null);
+                                      }
+                                    }}
+                                    style={{
+                                      flex: 1,
+                                      padding: '6px 10px',
+                                      borderRadius: 8,
+                                      border: 'none',
+                                      background: '#C0392B',
+                                      fontSize: 12,
+                                      cursor: 'pointer',
+                                      color: '#fff',
+                                    }}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setMcpDisconnectTarget({ id: row.id, name: service.name })
                                 }
-                              }}
-                              style={{
-                                marginTop: 8,
-                                width: '100%',
-                                background: '#2C1810',
-                                color: '#C4956A',
-                                border: 'none',
-                                borderRadius: 20,
-                                padding: '8px 18px',
-                                fontSize: 12,
-                                fontFamily: 'Georgia, serif',
-                                cursor: mcpConnectBusy === svc.sid ? 'default' : 'pointer',
-                                opacity: mcpConnectBusy === svc.sid ? 0.7 : 1,
-                              }}
-                            >
-                              Connect {svc.label}
-                            </button>
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  cursor: 'pointer',
+                                  fontSize: 12,
+                                  color: '#C0392B',
+                                  textDecoration: 'underline dotted',
+                                }}
+                              >
+                                Disconnect →
+                              </button>
+                            )}
                           </>
                         )}
                       </div>

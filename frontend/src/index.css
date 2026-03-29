@@ -1389,3 +1389,22 @@ canvas {
     width: auto;
   }
 }
+
+/* Profile modal — Integrations service grid (narrow scrollbar) */
+.profile-modal-integrations-grid {
+  scrollbar-width: thin;
+  scrollbar-color: #e0d5c5 transparent;
+}
+
+.profile-modal-integrations-grid::-webkit-scrollbar {
+  width: 4px;
+}
+
+.profile-modal-integrations-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.profile-modal-integrations-grid::-webkit-scrollbar-thumb {
+  background: #e0d5c5;
+  border-radius: 2px;
+}

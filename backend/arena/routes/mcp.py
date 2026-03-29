@@ -21,7 +21,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-ALLOWED_SERVICES = frozenset({"notion", "google_drive", "github"})
+VALID_SERVICES = frozenset(
+    {
+        "notion",
+        "google_drive",
+        "gmail",
+        "google_calendar",
+        "github",
+        "linear",
+        "slack",
+        "airtable",
+        "dropbox",
+        "jira",
+        "confluence",
+        "hubspot",
+    }
+)
 
 
 def _ensure_encryption() -> None:
@@ -93,8 +108,8 @@ async def connect_manual(
 ):
     _ensure_encryption()
     svc = body.service.strip().lower()
-    if svc not in ALLOWED_SERVICES:
-        raise HTTPException(status_code=400, detail="Invalid service")
+    if svc not in VALID_SERVICES:
+        raise HTTPException(status_code=400, detail=f"Unsupported service: {svc}")
 
     enc = encrypt_token(body.access_token.strip())
 
