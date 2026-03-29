@@ -67,12 +67,22 @@ export function CollapsiblePrompt({ text }: CollapsiblePromptProps) {
     >
       <div
         style={{
-          maxHeight: expanded ? '1000px' : '3.6em',
+          maxHeight: expanded ? '500px' : '1.6em',
           overflow: 'hidden',
+          whiteSpace: expanded ? 'normal' : 'nowrap',
+          textOverflow: expanded ? 'clip' : 'ellipsis',
           transition: 'max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
-        <p style={TEXT_STYLE}>{text}</p>
+        <p
+          style={{
+            ...TEXT_STYLE,
+            whiteSpace: expanded ? 'normal' : 'nowrap',
+            textOverflow: expanded ? 'clip' : 'ellipsis',
+          }}
+        >
+          {text}
+        </p>
       </div>
       <span style={HINT_STYLE}>{expanded ? 'Collapse ↑' : 'Read full prompt ↓'}</span>
     </div>

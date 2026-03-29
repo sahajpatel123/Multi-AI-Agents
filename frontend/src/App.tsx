@@ -15,7 +15,6 @@ import {
   streamPrompt,
   streamDiscuss,
   getSession,
-  parseStreamedAgentPreview,
   saveMemory,
   getSavedResponses,
   saveResponse,
@@ -131,7 +130,6 @@ function App() {
   const [pendingScrollTarget, setPendingScrollTarget] = useState<ScrollTarget | null>(null);
 
   // Per-agent streaming state
-  const [streamingTexts, setStreamingTexts] = useState<Record<string, string>>({});
   const [doneAgents, setDoneAgents] = useState<Set<string>>(new Set());
 
   const panelByAgentId = useMemo(
@@ -274,21 +272,6 @@ function App() {
       setIsSidebarOpen(false);
     }
   };
-
-  const flushTokens = useCallback(() => {
-    setStreamingTexts((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      for (const [id, rawText] of Object.entries(tokenBuffers.current)) {
-        const previewText = parseStreamedAgentPreview(rawText) || '';
-        if (next[id] !== previewText) {
-          next[id] = previewText;
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, []);
 
   const handleCopyResponse = useCallback(async (scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
@@ -482,7 +465,6 @@ function App() {
     setHasSubmittedPrompt(false);
     setPresetPrompt('');
     setPresetPromptNonce((prev) => prev + 1);
-    setStreamingTexts({});
     setDoneAgents(new Set());
     setViewMode('arena');
     setChallengedAgent(null);
@@ -514,7 +496,6 @@ function App() {
     setAnimateCurrentResponseBars(false);
     setExpandedAgent(null);
     setCurrentPrompt(prompt);
-    setStreamingTexts({});
     setDoneAgents(new Set());
     setViewMode('arena');
     setChallengedAgent(null);
@@ -528,9 +509,6 @@ function App() {
     setHighlightedAgentId(null);
     setPendingScrollTarget(null);
     tokenBuffers.current = {};
-
-    // Flush streaming text to state at 60fps-ish
-    flushTimer.current = setInterval(flushTokens, 50);
 
     // Pass existing session_id if available
     const existingSessionId = sessionData?.session_id || localStorage.getItem('arena_session_id') || undefined;
@@ -566,8 +544,6 @@ function App() {
           setDoneAgents((prev) => new Set(prev).add(data.agent_id));
         },
         onResult: (data) => {
-          // Final flush
-          flushTokens();
           if (flushTimer.current) clearInterval(flushTimer.current);
 
           setResponse(data);
@@ -1154,8 +1130,7 @@ function App() {
                   displayPersonaId={getPersonaForAgentId(id)?.id}
                   isExpanded={false}
                   onToggle={(cardRect) => openFocusedAgent(id, cardRect)}
-                  streamingText={streamingTexts[id] || ''}
-                  isStreaming={!doneAgents.has(id)}
+                  isLoadingState={true}
                 />
               ))}
 
