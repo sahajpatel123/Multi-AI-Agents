@@ -244,8 +244,14 @@ class ErrorResponse(BaseModel):
 # ─────────────────────────────────────────────────
 
 class RegisterRequest(BaseModel):
+    name: str = Field("", max_length=100)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return sanitize_model_text(v or "", max_length=100, field_name="name")
 
     @field_validator("password")
     @classmethod
@@ -327,6 +333,11 @@ class UserProfilePatch(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class AuthResponse(BaseModel):
+    success: bool = True
+    user: UserResponse
 
 
 # ─────────────────────────────────────────────────

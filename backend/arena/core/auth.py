@@ -163,10 +163,11 @@ def orm_user_to_response(user: User, db: Optional[Session] = None) -> UserRespon
     )
 
 
-def create_user(db: Session, email: str, password: str) -> User:
+def create_user(db: Session, email: str, password: str, name: str = "") -> User:
     user = User(
         email=email.lower().strip(),
         password_hash=hash_password(password),
+        name=name.strip(),
         tier=UserTier.FREE,
     )
     db.add(user)

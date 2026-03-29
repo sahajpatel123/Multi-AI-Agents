@@ -17,6 +17,10 @@ export const API_BASE =
 
 export const AUTH_LOGOUT_EVENT = 'auth:logout';
 type AuthLogoutDetail = { redirect: boolean };
+type AuthResponse = {
+  success: boolean;
+  user: User;
+};
 type ApiFetchOptions = RequestInit & {
   retryOn401?: boolean;
   redirectOnAuthFail?: boolean;
@@ -42,7 +46,7 @@ export class ApiError extends Error {
 }
 
 let isRefreshing = false;
-let refreshPromise: Promise<boolean> | null = null;
+let refreshPromise: Promise<User | null> | null = null;
 
 function dispatchAuthLogout(redirect: boolean): void {
   if (typeof window === 'undefined') return;
@@ -87,7 +91,7 @@ function getErrorMessage(
   return fallback;
 }
 
-export async function attemptTokenRefresh(): Promise<boolean> {
+export async function attemptTokenRefresh(): Promise<User | null> {
   if (isRefreshing && refreshPromise) {
     return refreshPromise;
   }
@@ -96,10 +100,14 @@ export async function attemptTokenRefresh(): Promise<boolean> {
   refreshPromise = fetchWithCredentials(`${API_BASE}/auth/refresh`, {
     method: 'POST',
   })
-    .then((response) => {
-      return response.ok;
+    .then(async (response) => {
+      if (!response.ok) {
+        return null;
+      }
+      const data = await parseJsonSafely<AuthResponse>(response);
+      return data?.user || null;
     })
-    .catch(() => false)
+    .catch(() => null)
     .finally(() => {
       isRefreshing = false;
       refreshPromise = null;
@@ -108,7 +116,7 @@ export async function attemptTokenRefresh(): Promise<boolean> {
   return refreshPromise;
 }
 
-export async function refreshSession(): Promise<boolean> {
+export async function refreshSession(): Promise<User | null> {
   return attemptTokenRefresh();
 }
 
@@ -140,23 +148,19 @@ export async function apiFetch(
 // Auth
 // ──────────────────────────────────────────────────────────────
 
-export async function register(email: string, password: string): Promise<User> {
+export async function register(name: string, email: string, password: string): Promise<User> {
   const res = await fetchWithCredentials(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ name, email, password }),
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
     throw new ApiError(getErrorMessage(err, 'Registration failed'), res.status, err);
   }
-  const meRes = await fetchWithCredentials(`${API_BASE}/auth/me`);
-  if (!meRes.ok) {
-    throw new ApiError('Failed to load user', meRes.status);
-  }
-  const user = await parseJsonSafely<User>(meRes);
-  if (!user) throw new Error('Empty response');
-  return user;
+  const data = await parseJsonSafely<AuthResponse>(res);
+  if (!data?.user) throw new Error('Empty response');
+  return data.user;
 }
 
 export async function login(email: string, password: string): Promise<User> {
@@ -169,13 +173,9 @@ export async function login(email: string, password: string): Promise<User> {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
     throw new ApiError(getErrorMessage(err, 'Login failed'), res.status, err);
   }
-  const meRes = await fetchWithCredentials(`${API_BASE}/auth/me`);
-  if (!meRes.ok) {
-    throw new ApiError('Failed to load user', meRes.status);
-  }
-  const user = await parseJsonSafely<User>(meRes);
-  if (!user) throw new Error('Empty response');
-  return user;
+  const data = await parseJsonSafely<AuthResponse>(res);
+  if (!data?.user) throw new Error('Empty response');
+  return data.user;
 }
 
 export async function logout(): Promise<void> {
@@ -251,11 +251,7 @@ export async function getUserTier(): Promise<TierStatus | null> {
 }
 
 export async function refreshToken(): Promise<User | null> {
-  const refreshResult = await refreshSession();
-  if (!refreshResult) {
-    return null;
-  }
-  return getMe();
+  return refreshSession();
 }
 
 export async function saveMemory(sessionId: string, trigger: 'session_end' | 'new_chat' | 'manual'): Promise<void> {

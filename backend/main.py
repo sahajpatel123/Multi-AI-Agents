@@ -178,18 +178,22 @@ def create_app() -> FastAPI:
 
     # ── Middleware (order matters — outermost runs first) ─────
     # Explicit origins only — required when allow_credentials=True (no "*")
-    _cors_origins = settings.allowed_origins_list
-    if settings.is_production and "*" in _cors_origins:
+    allowed_origins = [
+        "https://multi-ai-agents-chi.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ]
+    if settings.is_production and "*" in allowed_origins:
         logger.error("[SECURITY ERROR] CORS wildcard (*) is not allowed in production")
         raise ValueError("CORS wildcard not allowed in production")
-    
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=_cors_origins,
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["Set-Cookie", "X-Request-ID"],
+        expose_headers=["set-cookie"],
         max_age=3600,
     )
     app.add_middleware(GlobalRateLimitMiddleware)

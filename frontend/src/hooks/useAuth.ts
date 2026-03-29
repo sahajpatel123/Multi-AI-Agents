@@ -32,7 +32,7 @@ export interface UseAuth extends AuthState {
   setUser: Dispatch<SetStateAction<User | null>>;
   setIsAuthenticated: Dispatch<SetStateAction<boolean>>;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -68,20 +68,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const refreshed = await refreshSession();
-      if (!refreshed) {
+      const refreshedUser = await refreshSession();
+      if (!refreshedUser) {
         clearAuthState();
         return;
       }
 
-      const refreshedUser = await getMe();
-      if (refreshedUser) {
-        setUser(refreshedUser);
-        setIsAuthenticated(true);
-        return;
-      }
-
-      clearAuthState();
+      setUser(refreshedUser);
+      setIsAuthenticated(true);
     } catch (error) {
       console.log('[AUTH] Auth bootstrap failed, clearing session state', error);
       clearAuthState();
@@ -108,10 +102,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [navigate]);
 
-  const register = useCallback(async (email: string, password: string) => {
+  const register = useCallback(async (name: string, email: string, password: string) => {
     setIsLoading(true);
     try {
-      const nextUser = await apiRegister(email, password);
+      const nextUser = await apiRegister(name, email, password);
       setUser(nextUser);
       setIsAuthenticated(true);
       navigate('/agent', { replace: true });

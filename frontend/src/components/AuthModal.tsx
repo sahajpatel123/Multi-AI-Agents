@@ -6,7 +6,7 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLogin: (email: string, password: string) => Promise<void>;
-  onRegister: (email: string, password: string) => Promise<void>;
+  onRegister: (name: string, email: string, password: string) => Promise<void>;
   defaultTab?: 'login' | 'signup';
 }
 
@@ -20,6 +20,7 @@ export function AuthModal({
   defaultTab = 'login',
 }: AuthModalProps) {
   const [tab, setTab] = useState<Tab>(defaultTab);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +30,7 @@ export function AuthModal({
   // Reset form when modal opens or tab changes
   useEffect(() => {
     if (isOpen) {
+      setName('');
       setEmail('');
       setPassword('');
       setError(null);
@@ -58,7 +60,7 @@ export function AuthModal({
       if (tab === 'login') {
         await onLogin(email, password);
       } else {
-        await onRegister(email, password);
+        await onRegister(name.trim(), email, password);
       }
       clearRedirectIntent();
       onClose();
@@ -156,6 +158,41 @@ export function AuthModal({
 
           {/* Form */}
           <form onSubmit={handleSubmit} style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {tab === 'signup' && (
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: '#6B6460', marginBottom: '6px' }}>
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  autoComplete="name"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    background: '#FAF7F4',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: '10px',
+                    color: '#1A1714',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'all 150ms ease',
+                  }}
+                  placeholder="Your name"
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = '#C4956A';
+                    e.currentTarget.style.background = '#FFFFFF';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#E0D8D0';
+                    e.currentTarget.style.background = '#FAF7F4';
+                  }}
+                />
+              </div>
+            )}
+
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: '#6B6460', marginBottom: '6px' }}>
                 Email

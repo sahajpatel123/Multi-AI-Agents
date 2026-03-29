@@ -45,9 +45,9 @@ from arena.core.input_validation import sanitize_html, sanitize_optional_text
 from arena.database import get_db
 from arena.db_models import UsageRecord, User
 from arena.models.schemas import (
+    AuthResponse,
     LoginRequest,
     RegisterRequest,
-    TokenResponse,
     UserProfilePatch,
     UserResponse,
 )
@@ -77,14 +77,15 @@ def _token_payload(user: User) -> dict[str, object]:
 
 
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
-    is_prod = os.environ.get("ENVIRONMENT") == "production"
+    is_prod = os.environ.get("ENVIRONMENT", "") == "production"
     samesite = "none" if is_prod else "lax"
+    secure = is_prod
     response.set_cookie(
         key=ACCESS_COOKIE,
         value=access_token,
         max_age=ACCESS_TOKEN_MAX_AGE_SECONDS,
         httponly=True,
-        secure=is_prod,
+        secure=secure,
         samesite=samesite,
         path="/",
     )
@@ -93,14 +94,14 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str)
         value=refresh_token,
         max_age=REFRESH_TOKEN_MAX_AGE_SECONDS,
         httponly=True,
-        secure=is_prod,
+        secure=secure,
         samesite=samesite,
         path="/",
     )
 
 
 def _clear_auth_cookies(response: Response) -> None:
-    is_prod = os.environ.get("ENVIRONMENT") == "production"
+    is_prod = os.environ.get("ENVIRONMENT", "") == "production"
     samesite = "none" if is_prod else "lax"
     response.delete_cookie(
         ACCESS_COOKIE,
@@ -142,13 +143,13 @@ def _validate_password_strength(password: str) -> tuple[bool, str]:
 # Routes
 # ─────────────────────────────────────────────────
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     body: RegisterRequest,
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
-) -> UserResponse:
+) -> AuthResponse:
     try:
         # Rate-limit registrations per IP (3/hour, 24h lockout)
         registration_limiter.check_and_record(request, success=False)
@@ -167,7 +168,7 @@ async def register(
                     detail="An account with that email already exists",
                 )
 
-            user = create_user(db, body.email, body.password)
+            user = create_user(db, body.email, body.password, body.name)
             access_token = create_access_token(_token_payload(user))
             refresh_token = create_refresh_token(_token_payload(user))
             user.refresh_token_hash = hash_token(refresh_token)
@@ -182,7 +183,7 @@ async def register(
 
             # Registration succeeded — clear attempt record
             registration_limiter.check_and_record(request, success=True)
-            return user_response
+            return AuthResponse(success=True, user=user_response)
 
         except HTTPException:
             raise
@@ -196,13 +197,13 @@ async def register(
         raise
 
 
-@router.post("/login", response_model=UserResponse)
+@router.post("/login", response_model=AuthResponse)
 async def login(
     body: LoginRequest,
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
-) -> UserResponse:
+) -> AuthResponse:
     try:
         # Rate-limit login attempts per IP (5/hour, 1h lockout)
         login_limiter.check_and_record(request, success=False)
@@ -229,7 +230,7 @@ async def login(
 
             # Auth succeeded — clear failed-attempt record
             login_limiter.check_and_record(request, success=True)
-            return user_response
+            return AuthResponse(success=True, user=user_response)
 
         except HTTPException:
             raise
@@ -266,7 +267,7 @@ async def logout(
     return response
 
 
-@router.post("/refresh")
+@router.post("/refresh", response_model=AuthResponse)
 @limiter.limit("20/hour")
 async def refresh(
     request: Request,
@@ -316,8 +317,10 @@ async def refresh(
         ).replace(tzinfo=None)
         db.add(user)
         db.commit()
+        db.refresh(user)
 
-        response = JSONResponse({"success": True})
+        auth_response = AuthResponse(success=True, user=_user_to_response(user, db))
+        response = JSONResponse(content=auth_response.model_dump(mode="json"))
         _set_auth_cookies(response, new_access, new_refresh)
         return response
     except HTTPException:

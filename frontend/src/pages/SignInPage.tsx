@@ -12,6 +12,7 @@ export function SignInPage() {
   const { user, login, register, isLoading: authLoading } = useAuth();
   const handledInitialUser = useRef(false);
   const [activeTab, setActiveTab] = useState<Tab>('signin');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -62,6 +63,11 @@ export function SignInPage() {
       return;
     }
 
+    if (!name.trim()) {
+      setError('Name is required');
+      return;
+    }
+
     if (password.length < 8) {
       setError('Password must be at least 8 characters');
       return;
@@ -70,7 +76,7 @@ export function SignInPage() {
     setIsLoading(true);
 
     try {
-      await register(email, password);
+      await register(name.trim(), email, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Account creation failed');
     } finally {
@@ -176,6 +182,7 @@ export function SignInPage() {
               onClick={() => {
                 setActiveTab('signup');
                 setError('');
+                setName('');
                 setPassword('');
                 setConfirmPassword('');
               }}
@@ -318,6 +325,7 @@ export function SignInPage() {
                   onClick={() => {
                     setActiveTab('signup');
                     setError('');
+                    setName('');
                     setPassword('');
                     setConfirmPassword('');
                   }}
@@ -341,6 +349,34 @@ export function SignInPage() {
           {activeTab === 'signup' && (
             <form onSubmit={handleSignUp}>
               <h2 style={{ fontSize: '22px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', marginBottom: '.4rem' }}>Create your account</h2>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#6B6460', marginBottom: '.4rem' }}>Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: '10px',
+                    border: '0.5px solid #E0D8D0',
+                    background: '#FFFFFF',
+                    fontSize: '14px',
+                    color: '#1A1714',
+                    outline: 'none',
+                    transition: 'all 150ms ease',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = '#C4956A';
+                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(196,149,106,0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#E0D8D0';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                />
+              </div>
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '12px', color: '#6B6460', marginBottom: '.4rem' }}>Email</label>
                 <input
@@ -550,6 +586,7 @@ export function SignInPage() {
                   onClick={() => {
                     setActiveTab('signin');
                     setError('');
+                    setName('');
                     setPassword('');
                     setConfirmPassword('');
                   }}
