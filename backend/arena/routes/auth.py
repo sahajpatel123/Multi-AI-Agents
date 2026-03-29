@@ -1,10 +1,12 @@
 """Auth routes — /api/auth/*"""
 
-import traceback
+import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import Date, cast, func
 from sqlalchemy.orm import Session
 
@@ -13,17 +15,22 @@ from arena.core.auth import (
     ACCESS_COOKIE,
     REFRESH_COOKIE,
     REFRESH_TOKEN_TYPE,
+    ACCESS_TOKEN_MAX_AGE_SECONDS,
+    REFRESH_TOKEN_MAX_AGE_SECONDS,
     auth_cookie_samesite_and_secure,
     authenticate_user,
     create_access_token,
-    create_refresh_token,
     create_user,
     decode_token,
+    clear_refresh_token,
     get_current_user_required,
     get_current_user_required_orm,
     get_user_by_email,
     get_user_by_id,
+    hash_refresh_token,
+    issue_auth_cookies,
     orm_user_to_response,
+    persist_refresh_token,
 )
 from arena.core.feedback_calibrator import get_answer_feedback_distribution
 from arena.core.tier_config import (
@@ -36,6 +43,7 @@ from arena.core.tier_config import (
     upgrade_target,
 )
 from arena.core.login_limiter import login_limiter, registration_limiter
+from arena.core.input_validation import sanitize_html, sanitize_optional_text
 from arena.core.token_blacklist import token_blacklist
 from arena.database import get_db
 from arena.db_models import UsageRecord, User
@@ -49,6 +57,9 @@ from arena.models.schemas import (
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 user_router = APIRouter(prefix="/api/user", tags=["auth"])
+logger = logging.getLogger(__name__)
+limiter = Limiter(key_func=get_remote_address)
+SESSION_EXPIRED_DETAIL = "Session expired. Please log in again."
 
 _COMMON_PASSWORDS = {
     "password", "12345678", "password1",
@@ -66,30 +77,7 @@ def _tier_value(user: User) -> str:
 
 
 def _set_auth_cookies(response: Response, user: User) -> None:
-    access_token = create_access_token(user.id, _tier_value(user))
-    refresh_token = create_refresh_token(user.id)
-    samesite, secure = auth_cookie_samesite_and_secure()
-    settings = get_settings()
-    access_max_age = 60 * int(settings.access_token_expire_minutes)
-
-    response.set_cookie(
-        key=ACCESS_COOKIE,
-        value=access_token,
-        httponly=True,
-        secure=secure,
-        samesite=samesite,
-        max_age=access_max_age,
-        path="/",
-    )
-    response.set_cookie(
-        key=REFRESH_COOKIE,
-        value=refresh_token,
-        httponly=True,
-        secure=secure,
-        samesite=samesite,
-        max_age=60 * 60 * 24 * int(settings.refresh_token_expire_days),
-        path="/api/auth/refresh",
-    )
+    issue_auth_cookies(response, user)
 
 
 def _clear_auth_cookies(response: Response) -> None:
@@ -161,8 +149,12 @@ async def register(
                 )
 
             user = create_user(db, body.email, body.password)
+            _access_token, refresh_token = issue_auth_cookies(response, user)
+            persist_refresh_token(user, refresh_token)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
             user_response = _user_to_response(user, db)
-            _set_auth_cookies(response, user)
 
             # Registration succeeded — clear attempt record
             registration_limiter.check_and_record(request, success=True)
@@ -176,8 +168,7 @@ async def register(
                 detail="Registration failed",
             )
     except Exception as e:
-        traceback.print_exc()
-        print(f"REGISTER ERROR: {type(e).__name__}: {e}", flush=True)
+        logger.exception("Registration failed: %s", type(e).__name__)
         raise
 
 
@@ -200,8 +191,12 @@ async def login(
                     detail="Invalid email or password",
                 )
 
+            _access_token, refresh_token = issue_auth_cookies(response, user)
+            persist_refresh_token(user, refresh_token)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
             user_response = _user_to_response(user, db)
-            _set_auth_cookies(response, user)
 
             # Auth succeeded — clear failed-attempt record
             login_limiter.check_and_record(request, success=True)
@@ -215,8 +210,7 @@ async def login(
                 detail="Login failed",
             )
     except Exception as e:
-        traceback.print_exc()
-        print(f"LOGIN ERROR: {type(e).__name__}: {e}", flush=True)
+        logger.exception("Login failed: %s", type(e).__name__)
         raise
 
 
@@ -224,44 +218,69 @@ async def login(
 async def logout(
     request: Request,
     response: Response,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_required_orm),
 ) -> dict:
     # Blacklist the current access token so it can't be reused
     access_token = request.cookies.get(ACCESS_COOKIE)
     if access_token:
         token_blacklist.add(access_token)
 
+    clear_refresh_token(user)
+    db.add(user)
+    db.commit()
     _clear_auth_cookies(response)
     return {"message": "Logged out"}
 
 
 @router.post("/refresh", response_model=UserResponse)
+@limiter.limit("20/hour")
 async def refresh(
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
     arena_refresh: Optional[str] = Cookie(default=None),
 ) -> UserResponse:
     try:
         try:
-            if not arena_refresh:
+            def reject_session() -> None:
+                _clear_auth_cookies(response)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="No refresh token",
-                )
-            payload = decode_token(arena_refresh)
-            if not payload or payload.get("type") != REFRESH_TOKEN_TYPE:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid or expired refresh token",
-                )
-            user = get_user_by_id(db, int(payload["sub"]))
-            if not user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="User not found",
+                    detail=SESSION_EXPIRED_DETAIL,
                 )
 
+            if not arena_refresh:
+                reject_session()
+            payload = decode_token(arena_refresh)
+            if not payload or payload.get("type") != REFRESH_TOKEN_TYPE:
+                reject_session()
+            user = get_user_by_id(db, int(payload["sub"]))
+            if not user:
+                reject_session()
+
+            if not user.refresh_token_hash or not user.refresh_token_expires_at:
+                clear_refresh_token(user)
+                db.add(user)
+                db.commit()
+                reject_session()
+            if user.refresh_token_expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
+                clear_refresh_token(user)
+                db.add(user)
+                db.commit()
+                reject_session()
+            if hash_refresh_token(arena_refresh) != user.refresh_token_hash:
+                clear_refresh_token(user)
+                db.add(user)
+                db.commit()
+                reject_session()
+
+            _access_token, new_refresh_token = issue_auth_cookies(response, user)
+            persist_refresh_token(user, new_refresh_token)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
             user_response = _user_to_response(user, db)
-            _set_auth_cookies(response, user)
             return user_response
 
         except HTTPException:
@@ -272,8 +291,7 @@ async def refresh(
                 detail="Token refresh failed",
             )
     except Exception as e:
-        traceback.print_exc()
-        print(f"REFRESH ERROR: {type(e).__name__}: {e}", flush=True)
+        logger.exception("Refresh failed: %s", type(e).__name__)
         raise
 
 
@@ -292,7 +310,7 @@ async def patch_user_profile(
     db: Session = Depends(get_db),
 ) -> UserResponse:
     if body.name is not None:
-        user.name = body.name.strip()[:255]
+        user.name = sanitize_html(body.name, max_length=100, field_name="name")
     if body.expertise_level is not None:
         level = body.expertise_level.strip().lower()
         if level not in _EXPERTISE_LEVELS:
@@ -302,7 +320,11 @@ async def patch_user_profile(
             )
         user.expertise_level = level
     if body.expertise_domain is not None:
-        user.expertise_domain = body.expertise_domain.strip()[:512]
+        user.expertise_domain = sanitize_html(
+            body.expertise_domain,
+            max_length=100,
+            field_name="expertise domain",
+        )
 
     db.add(user)
     db.commit()

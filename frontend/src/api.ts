@@ -15,6 +15,8 @@ import {
 export const API_BASE =
   `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api`;
 
+export const AUTH_LOGOUT_EVENT = 'auth:logout';
+
 type RefreshResult = 'success' | 'unauthorized' | 'network_error' | 'failed';
 
 export class ApiError extends Error {
@@ -31,6 +33,11 @@ export class ApiError extends Error {
 
 let isRefreshing = false;
 let refreshPromise: Promise<RefreshResult> | null = null;
+
+function dispatchAuthLogout(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_EVENT));
+}
 
 async function parseJsonSafely<T>(response: Response): Promise<T | null> {
   const text = await response.text();
@@ -72,7 +79,10 @@ export async function attemptTokenRefresh(): Promise<RefreshResult> {
       refreshPromise = null;
 
       if (response.ok) return 'success';
-      if (response.status === 401) return 'unauthorized';
+      if (response.status === 401) {
+        dispatchAuthLogout();
+        return 'unauthorized';
+      }
       return 'failed';
     })
     .catch(() => {
@@ -108,6 +118,8 @@ export async function apiFetch(
         credentials: 'include',
       });
     }
+
+    dispatchAuthLogout();
   }
 
   return response;

@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react';
 import {
+  AUTH_LOGOUT_EVENT,
   login as apiLogin,
   logout as apiLogout,
   register as apiRegister,
@@ -41,6 +42,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const clearAuthState = useCallback(() => {
+    setUser(null);
+    setIsAuthenticated(false);
+    setIsLoading(false);
+  }, []);
+
   const refreshUser = useCallback(async () => {
     setIsLoading(true);
 
@@ -58,17 +65,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(user);
         setIsAuthenticated(true);
       } else {
-        setUser(null);
-        setIsAuthenticated(false);
+        clearAuthState();
       }
     } catch (error) {
       console.log('[AUTH] User refresh failed, clearing session state', error);
-      setUser(null);
-      setIsAuthenticated(false);
+      clearAuthState();
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [clearAuthState]);
 
   useEffect(() => {
     void refreshUser();
@@ -90,10 +95,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await apiLogout();
-    setUser(null);
-    setIsAuthenticated(false);
-    setIsLoading(false);
-  }, []);
+    clearAuthState();
+  }, [clearAuthState]);
+
+  useEffect(() => {
+    const handleLogout = () => {
+      clearAuthState();
+    };
+
+    window.addEventListener(AUTH_LOGOUT_EVENT, handleLogout);
+    return () => window.removeEventListener(AUTH_LOGOUT_EVENT, handleLogout);
+  }, [clearAuthState]);
 
   useEffect(() => {
     if (!isAuthenticated) return undefined;
@@ -102,8 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await refreshSession();
 
       if (result === 'unauthorized') {
-        console.log('[AUTH] Refresh failed, logging out');
-        await logout();
+        console.log('[AUTH] Refresh failed, clearing session state');
+        clearAuthState();
         return;
       }
 
@@ -113,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 45 * 60 * 1000);
 
     return () => clearInterval(refreshInterval);
-  }, [isAuthenticated, logout]);
+  }, [clearAuthState, isAuthenticated]);
 
   const value = useMemo<UseAuth>(
     () => ({
