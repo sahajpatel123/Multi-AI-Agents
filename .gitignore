@@ -18,7 +18,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Repo-root only (do not ignore frontend/src/lib)
+/lib/
 lib64/
 parts/
 sdist/
