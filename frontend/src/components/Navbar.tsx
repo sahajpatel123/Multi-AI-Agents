@@ -105,114 +105,93 @@ export function Navbar() {
               </button>
             </div>
 
-            <div className="navbar-nav-links" aria-label="Primary navigation">
-              <button
-                type="button"
-                className={`navbar-nav-link${isActive('/product') ? ' navbar-nav-link--active' : ''}`}
-                onClick={() => navigate('/product')}
-              >
-                Product
-              </button>
-              <button
-                type="button"
-                className={`navbar-nav-link${isActive('/pricing') ? ' navbar-nav-link--active' : ''}`}
-                onClick={() => navigate('/pricing')}
-              >
-                Pricing
-              </button>
-              <button
-                type="button"
-                className={`navbar-nav-link${isActive('/about') ? ' navbar-nav-link--active' : ''}`}
-                onClick={() => navigate('/about')}
-              >
-                About
-              </button>
-            </div>
-
-            {!isAuthenticated ? (
-              <div className="navbar-auth">
+            <div className="navbar-right-cluster">
+              <div className="navbar-nav-links" aria-label="Primary navigation">
                 <button
                   type="button"
-                  className="navbar-hamburger"
-                  onClick={() => setMenuOpen(true)}
-                  aria-label="Open navigation menu"
+                  className={`navbar-nav-link${isActive('/product') ? ' navbar-nav-link--active' : ''}`}
+                  onClick={() => navigate('/product')}
                 >
-                  <HamburgerIcon />
+                  Product
                 </button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="navbar-signin-link"
-                  onClick={() => {
-                    setRedirectIntent('/');
-                    navigate('/signin');
-                  }}
-                >
-                  Sign in
-                </Button>
                 <button
                   type="button"
-                  className="navbar-cta-pill"
-                  onClick={() => {
-                    if (isAuthenticated) {
-                      navigate('/app');
-                      return;
-                    }
-                    setRedirectIntent('/arena');
-                    navigate('/signin');
-                  }}
+                  className={`navbar-nav-link${isActive('/pricing') ? ' navbar-nav-link--active' : ''}`}
+                  onClick={() => navigate('/pricing')}
                 >
-                  Try Arena →
+                  Pricing
+                </button>
+                <button
+                  type="button"
+                  className={`navbar-nav-link${isActive('/about') ? ' navbar-nav-link--active' : ''}`}
+                  onClick={() => navigate('/about')}
+                >
+                  About
                 </button>
               </div>
-            ) : (
-              <div ref={menuRef} className="navbar-auth" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button
-                  type="button"
-                  className="mobile-only navbar-mobile-profile-avatar"
-                  onClick={() => {
-                    openModal('top-right');
-                  }}
-                  aria-label="Profile and settings"
-                >
-                  {profileInitials}
-                </button>
-                {!isChatPage && (
+
+              {!isAuthenticated ? (
+                <div className="navbar-auth">
                   <button
                     type="button"
-                    className="desktop-only"
-                    onClick={() => openModal('top-right')}
+                    className="navbar-hamburger"
+                    onClick={() => setMenuOpen(true)}
+                    aria-label="Open navigation menu"
+                  >
+                    <HamburgerIcon />
+                  </button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="navbar-signin-link"
+                    onClick={() => {
+                      setRedirectIntent('/');
+                      navigate('/signin');
+                    }}
+                  >
+                    Sign in
+                  </Button>
+                  <button
+                    type="button"
+                    className="navbar-cta-pill"
+                    onClick={() => {
+                      if (isAuthenticated) {
+                        navigate('/app');
+                        return;
+                      }
+                      setRedirectIntent('/arena');
+                      navigate('/signin');
+                    }}
+                  >
+                    Try Arena →
+                  </button>
+                </div>
+              ) : (
+                <div ref={menuRef} className="navbar-auth navbar-auth--session">
+                  <button
+                    type="button"
+                    className="mobile-only navbar-mobile-profile-avatar"
+                    onClick={() => {
+                      openModal('top-right');
+                    }}
                     aria-label="Profile and settings"
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      background: '#C4956A',
-                      color: '#FAF7F2',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      border: '1.5px solid transparent',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'border-color 0.15s, background 0.15s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#C4956A';
-                      e.currentTarget.style.background = '#B8845A';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = 'transparent';
-                      e.currentTarget.style.background = '#C4956A';
-                    }}
                   >
                     {profileInitials}
                   </button>
-                )}
-              </div>
-            )}
+                  {!isChatPage && (
+                    <button
+                      type="button"
+                      className="desktop-only navbar-desktop-avatar"
+                      onClick={() => openModal('top-right')}
+                      aria-label="Profile and settings"
+                    >
+                      {profileInitials}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <div className="navbar-divider-line" aria-hidden />
