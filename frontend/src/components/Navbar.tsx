@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useProfileModal } from '../context/ProfileModalContext';
+import { Button } from './Button';
 import { setRedirectIntent } from '../utils/redirectIntent';
 
 function HamburgerIcon() {
@@ -138,8 +139,10 @@ export function Navbar() {
                 >
                   <HamburgerIcon />
                 </button>
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   className="navbar-signin-link"
                   onClick={() => {
                     setRedirectIntent('/');
@@ -147,7 +150,7 @@ export function Navbar() {
                   }}
                 >
                   Sign in
-                </button>
+                </Button>
                 <button
                   type="button"
                   className="navbar-cta-pill"

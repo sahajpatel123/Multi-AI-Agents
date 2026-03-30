@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Ellipsis, Lock, Pencil, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
+import { Button } from '../components/Button';
+import { Icons } from '../components/Icons';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
 import MicroLoader from '../components/MicroLoader';
 import { RazorpayCheckout } from '../components/RazorpayCheckout';
@@ -1994,7 +1996,7 @@ export function AgentPage() {
                 <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span
                     style={{
-                      fontSize: 10,
+                      fontSize: 11,
                       borderRadius: 999,
                       padding: '1px 7px',
                       background: scoreBg,
@@ -2003,7 +2005,7 @@ export function AgentPage() {
                   >
                     {item.final_score != null ? `${item.final_score}/100` : '—'}
                   </span>
-                  <span style={{ fontSize: 10, color: '#C4B8AE' }}>{formatShortDate(item.created_at)}</span>
+                  <span style={{ fontSize: 11, color: '#A89070' }}>{formatShortDate(item.created_at)}</span>
                 </div>
               </button>
             )}
@@ -2974,8 +2976,8 @@ export function AgentPage() {
                     </h1>
                     <p
                       style={{
-                        fontSize: isMobile ? 13 : 14,
-                        color: '#A89070',
+                        fontSize: 17,
+                        color: '#8C7355',
                         fontStyle: 'italic',
                         textAlign: 'center',
                         margin: '0 0 14px',
@@ -3003,10 +3005,10 @@ export function AgentPage() {
                             display: 'flex',
                             alignItems: 'center',
                             gap: 6,
-                            fontSize: 10,
-                            letterSpacing: '0.08em',
+                            fontSize: 13,
+                            letterSpacing: '0.04em',
                             color: '#B8A898',
-                            padding: '3px 10px',
+                            padding: '5px 14px',
                             borderRadius: 10,
                             border: '0.5px solid #E0D5C5',
                           }}
@@ -3105,43 +3107,21 @@ export function AgentPage() {
                         flexWrap: 'wrap',
                       }}
                     >
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={Icons.grid(14)}
                         onClick={() => setTemplatesOpen(true)}
-                        style={{
-                          fontSize: 12,
-                          color: '#8C7355',
-                          border: '0.5px solid #D4C4B0',
-                          borderRadius: 20,
-                          padding: '5px 14px',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          fontFamily: 'Georgia, serif',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          transition: 'border-color 0.15s, color 0.15s',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = '#C4956A';
-                          e.currentTarget.style.color = '#C4956A';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = '#D4C4B0';
-                          e.currentTarget.style.color = '#8C7355';
-                        }}
                       >
-                        Browse templates
-                        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
-                          <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth={1.2} />
-                          <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth={1.2} />
-                          <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth={1.2} />
-                          <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth={1.2} />
-                        </svg>
-                      </button>
+                        Templates
+                      </Button>
                       {canOrchestrate ? (
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="sm"
+                          icon={Icons.layers(14)}
                           onClick={() => {
                             setMultiMode((m) => {
                               const next = !m;
@@ -3152,31 +3132,18 @@ export function AgentPage() {
                               return next;
                             });
                           }}
-                          style={{
-                            fontSize: 12,
-                            color: multiMode ? '#C4956A' : '#8C7355',
-                            border: multiMode ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
-                            borderRadius: 20,
-                            padding: '5px 14px',
-                            background: multiMode ? '#FAF3EA' : 'transparent',
-                            cursor: 'pointer',
-                            fontFamily: 'Georgia, serif',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                          }}
+                          style={
+                            multiMode
+                              ? {
+                                  borderColor: '#C4956A',
+                                  color: '#C4956A',
+                                  background: '#FAF3EA',
+                                }
+                              : undefined
+                          }
                         >
                           Multi-task
-                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
-                            <path
-                              d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                              stroke="currentColor"
-                              strokeWidth={1.2}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        </button>
+                        </Button>
                       ) : null}
                     </div>
                     <TemplatesModal
@@ -6184,121 +6151,40 @@ export function AgentPage() {
                       borderTop: `0.5px solid ${AR.BORDER_INNER}`,
                     }}
                   >
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
+                      icon={Icons.copy(14)}
                       onClick={() => {
                         void navigator.clipboard.writeText(plainAnswerText);
                       }}
-                      style={{
-                        padding: '9px 18px',
-                        border: '0.5px solid #D4C4B0',
-                        borderRadius: 6,
-                        background: 'transparent',
-                        color: '#6B5040',
-                        fontSize: 13,
-                        fontFamily: 'Georgia, serif',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = AR.GOLD;
-                        e.currentTarget.style.color = AR.GOLD;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = '#D4C4B0';
-                        e.currentTarget.style.color = '#6B5040';
-                      }}
                     >
-                      Copy answer
-                    </button>
-                    <button
-                      type="button"
-                      onClick={runAgainWithSameQuestion}
-                      style={{
-                        padding: '9px 18px',
-                        border: '0.5px solid #D4C4B0',
-                        borderRadius: 6,
-                        background: 'transparent',
-                        color: '#6B5040',
-                        fontSize: 13,
-                        fontFamily: 'Georgia, serif',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = AR.GOLD;
-                        e.currentTarget.style.color = AR.GOLD;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = '#D4C4B0';
-                        e.currentTarget.style.color = '#6B5040';
-                      }}
-                    >
+                      Copy
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" icon={Icons.refresh(14)} onClick={runAgainWithSameQuestion}>
                       Run again
-                    </button>
+                    </Button>
                     {result.task_id ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={exportingPdf ? undefined : Icons.download(14)}
+                        loading={exportingPdf}
                         disabled={exportingPdf}
                         onClick={() => void handleExportTaskPdf()}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          padding: '9px 18px',
-                          border: '0.5px solid #D4C4B0',
-                          borderRadius: 6,
-                          background: 'transparent',
-                          color: '#6B5040',
-                          fontSize: 13,
-                          fontFamily: 'Georgia, serif',
-                          cursor: exportingPdf ? 'default' : 'pointer',
-                          opacity: exportingPdf ? 0.85 : 1,
-                        }}
-                        onMouseEnter={(e) => {
-                          if (exportingPdf) return;
-                          e.currentTarget.style.borderColor = AR.GOLD;
-                          e.currentTarget.style.color = AR.GOLD;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = '#D4C4B0';
-                          e.currentTarget.style.color = '#6B5040';
-                        }}
                       >
-                        {exportingPdf ? (
-                          <svg
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            aria-hidden
-                            style={{ animation: 'agentSpin 0.8s linear infinite' }}
-                          >
-                            <circle
-                              cx="12"
-                              cy="12"
-                              r="9"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                              strokeDasharray="28 40"
-                              strokeLinecap="round"
-                            />
-                          </svg>
-                        ) : (
-                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
-                            <path
-                              d="M12 3v12m0 0l4-4m-4 4l-4-4M4 17h16"
-                              stroke="currentColor"
-                              strokeWidth={1.8}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        )}
                         {exportingPdf ? 'Exporting…' : 'Export PDF'}
-                      </button>
+                      </Button>
                     ) : null}
                     {result.status === 'complete' && !isRunning && user?.email ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={Icons.bell(14, watchlisted)}
+                        disabled={watchlisted}
                         onClick={() => {
                           if (!canWatchlist) {
                             setToastMessage('Watchlist is available on Arena Plus and Pro.');
@@ -6307,53 +6193,24 @@ export function AgentPage() {
                           if (watchlisted) return;
                           setShowScheduler(true);
                         }}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          padding: '9px 18px',
-                          border: watchlisted ? `0.5px solid ${AR.GOLD}` : '0.5px solid #D4C4B0',
-                          borderRadius: 6,
-                          background: watchlisted ? '#FAF3EA' : 'transparent',
-                          color: watchlisted ? AR.GOLD : '#6B5040',
-                          fontSize: 13,
-                          fontFamily: 'Georgia, serif',
-                          cursor: watchlisted ? 'default' : 'pointer',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (watchlisted) return;
-                          e.currentTarget.style.borderColor = AR.GOLD;
-                          e.currentTarget.style.color = AR.GOLD;
-                        }}
-                        onMouseLeave={(e) => {
-                          if (watchlisted) return;
-                          e.currentTarget.style.borderColor = '#D4C4B0';
-                          e.currentTarget.style.color = '#6B5040';
-                        }}
+                        style={
+                          watchlisted
+                            ? {
+                                borderColor: AR.GOLD,
+                                color: AR.GOLD,
+                                background: '#FAF3EA',
+                              }
+                            : undefined
+                        }
                       >
-                        {watchlisted ? (
-                          <svg width={14} height={14} viewBox="0 0 24 24" aria-hidden>
-                            <path
-                              fill={AR.GOLD}
-                              d="M12 22a2.18 2.18 0 002.18-2.18H9.82A2.18 2.18 0 0012 22zm6-5.82V11a6 6 0 10-12 0v5.18L4 19h16l-2-2.82z"
-                            />
-                          </svg>
-                        ) : (
-                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
-                            <path
-                              d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
-                              stroke="currentColor"
-                              strokeWidth={1.5}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        )}
-                        {watchlisted ? 'Watching' : 'Add to watchlist'}
-                      </button>
+                        {watchlisted ? 'Watching' : 'Watch this'}
+                      </Button>
                     ) : null}
-                    <button
+                    <Button
                       type="button"
+                      variant="secondary"
+                      size="sm"
+                      icon={Icons.flame(14)}
                       onClick={() => {
                         setRedirectIntent('/arena');
                         navigate('/app', {
@@ -6363,19 +6220,9 @@ export function AgentPage() {
                           },
                         });
                       }}
-                      style={{
-                        padding: '9px 18px',
-                        border: `0.5px solid ${AR.GOLD}`,
-                        borderRadius: 6,
-                        background: '#FAF3EA',
-                        color: AR.GOLD,
-                        fontSize: 13,
-                        fontFamily: 'Georgia, serif',
-                        cursor: 'pointer',
-                      }}
                     >
-                      Stress test in Arena →
-                    </button>
+                      Test in Arena
+                    </Button>
                     {result.task_id && result.memory_saved ? (
                       <button
                         type="button"
@@ -6422,34 +6269,19 @@ export function AgentPage() {
                       </button>
                     ) : null}
                     {result.status === 'complete' && !isRunning && user ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
+                        icon={Icons.users(14)}
                         onClick={() => {
                           setCreatedRoom(null);
                           setRoomName('');
                           setShowRoomCreate(true);
                         }}
-                        style={{
-                          padding: '9px 18px',
-                          border: '0.5px solid #D4C4B0',
-                          borderRadius: 6,
-                          background: 'transparent',
-                          color: '#6B5040',
-                          fontSize: 13,
-                          fontFamily: 'Georgia, serif',
-                          cursor: 'pointer',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = AR.GOLD;
-                          e.currentTarget.style.color = AR.GOLD;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = '#D4C4B0';
-                          e.currentTarget.style.color = '#6B5040';
-                        }}
                       >
-                        + Create research room
-                      </button>
+                        Create room
+                      </Button>
                     ) : null}
                   </div>
                   {showRoomCreate && result?.status === 'complete' && !isRunning && user ? (
@@ -6644,24 +6476,17 @@ export function AgentPage() {
                         >
                           Cancel
                         </button>
-                        <button
+                        <Button
                           type="button"
+                          variant="primary"
+                          size="sm"
+                          icon={watchlistBusy ? undefined : Icons.bell(14)}
+                          loading={watchlistBusy}
                           disabled={watchlistBusy}
                           onClick={() => void handleConfirmWatchlist()}
-                          style={{
-                            padding: '7px 18px',
-                            borderRadius: 20,
-                            border: 'none',
-                            background: '#2C1810',
-                            color: '#C4956A',
-                            fontSize: 12,
-                            fontFamily: 'Georgia, serif',
-                            cursor: watchlistBusy ? 'default' : 'pointer',
-                            opacity: watchlistBusy ? 0.75 : 1,
-                          }}
                         >
-                          {watchlistBusy ? 'Saving…' : 'Start watching →'}
-                        </button>
+                          {watchlistBusy ? 'Saving…' : 'Start watching'}
+                        </Button>
                       </div>
                     </div>
                   ) : null}

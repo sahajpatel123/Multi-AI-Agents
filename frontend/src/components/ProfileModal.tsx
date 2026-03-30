@@ -20,7 +20,9 @@ import {
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { useAuth } from '../hooks/useAuth';
+import { Button } from './Button';
 import { getBrandIcon, PlugIcon } from './BrandIcons';
+import { Icons } from './Icons';
 import { SERVICES } from './integrationServices';
 import MicroLoader from './MicroLoader';
 import { RazorpayCheckout } from './RazorpayCheckout';
@@ -140,20 +142,6 @@ function TabIconHelp({ active }: { active: boolean }) {
       <path
         d="M12 18h.01M12 14a4 4 0 10-4-4 2 2 0 014 2c0 2-4 2-4 4"
         stroke={c}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function IconSignOut() {
-  return (
-    <svg width={13} height={13} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"
-        stroke="currentColor"
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -702,27 +690,9 @@ export function ProfileModal() {
             {tabs}
           </nav>
           <div style={{ marginTop: 'auto', padding: '14px 16px', borderTop: '0.5px solid #E0D5C5' }}>
-            <button
-              type="button"
-              onClick={() => void handleSignOut()}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 7,
-                fontSize: 12,
-                color: '#8C7355',
-                cursor: 'pointer',
-                fontFamily: 'Georgia, serif',
-                background: 'none',
-                border: 'none',
-                padding: 0,
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#C4956A')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#8C7355')}
-            >
-              <IconSignOut />
+            <Button type="button" variant="ghost" size="sm" icon={Icons.logout(14)} onClick={() => void handleSignOut()}>
               Sign out
-            </button>
+            </Button>
           </div>
         </aside>
 
@@ -731,7 +701,7 @@ export function ProfileModal() {
             <h2 id="profile-modal-title" style={{ fontSize: 18, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>
               Account
             </h2>
-            <p style={{ fontSize: 12, color: '#A89070', marginBottom: 24 }}>Manage your profile and expertise calibration</p>
+            <p style={{ fontSize: 14, color: '#A89070', marginBottom: 24 }}>Manage your profile and expertise calibration</p>
 
             <div style={{ marginBottom: 18 }}>
               <div style={{ fontSize: 10, letterSpacing: '0.13em', textTransform: 'uppercase', color: '#A89070', marginBottom: 6 }}>Full name</div>
@@ -886,7 +856,7 @@ export function ProfileModal() {
 
           <div style={{ display: activeTab === 'plan' ? 'block' : 'none' }}>
             <h2 style={{ fontSize: 18, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>Your plan</h2>
-            <p style={{ fontSize: 12, color: '#A89070', marginBottom: 16 }}>Current subscription and billing details</p>
+            <p style={{ fontSize: 14, color: '#A89070', marginBottom: 16 }}>Current subscription and billing details</p>
             {subLoading ? (
               <div style={{ padding: 24, display: 'flex', justifyContent: 'center' }}>
                 <MicroLoader />
@@ -901,7 +871,7 @@ export function ProfileModal() {
                     marginBottom: 16,
                   }}
                 >
-                  <div style={{ fontSize: 24, color: '#C4956A', fontWeight: 600, letterSpacing: '0.03em', fontFamily: 'Georgia, serif' }}>{planLabel}</div>
+                  <div style={{ fontSize: 18, color: '#C4956A', fontWeight: 500, letterSpacing: '0.02em', fontFamily: 'Georgia, serif' }}>{planLabel}</div>
                   <div style={{ fontSize: 11, color: '#6B5040', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 3 }}>{billingLine}</div>
                   <div style={{ borderTop: '0.5px solid #3D2820', margin: '14px 0' }} />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
@@ -923,7 +893,7 @@ export function ProfileModal() {
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: 11, color: '#6B5040' }}>Per month</div>
-                        <div style={{ fontSize: 13, color: '#C4956A', fontWeight: 500 }}>
+                        <div style={{ fontSize: 28, color: '#C4956A', fontWeight: 500, fontFamily: 'Georgia, serif' }}>
                           {sub.amount != null && sub.billing_period === 'annual'
                             ? formatInrPaise(Math.round(sub.amount / 12))
                             : sub.amount != null
@@ -999,24 +969,11 @@ export function ProfileModal() {
                     ) : null}
                   </div>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={handleManagePlan}
-                  style={{
-                    width: '100%',
-                    padding: 9,
-                    border: '0.5px solid #C4956A',
-                    borderRadius: 6,
-                    background: 'transparent',
-                    color: '#C4956A',
-                    fontSize: 12,
-                    fontFamily: 'Georgia, serif',
-                    cursor: 'pointer',
-                    marginBottom: 8,
-                  }}
-                >
-                  {tierUpper === 'FREE' || tierUpper === 'GUEST' ? 'Upgrade plan' : 'Manage subscription'}
-                </button>
+                <div style={{ marginBottom: 8 }}>
+                  <Button type="button" variant="secondary" size="sm" fullWidth onClick={handleManagePlan}>
+                    {tierUpper === 'FREE' || tierUpper === 'GUEST' ? 'Upgrade plan' : 'Manage plan'}
+                  </Button>
+                </div>
                 {sub?.has_subscription && sub.razorpay_subscription_id && ['created', 'authenticated', 'active', 'halted'].includes(sub.status || '') ? (
                   <button
                     type="button"
@@ -1072,24 +1029,11 @@ export function ProfileModal() {
                           <span>✓ Confidence calibration + source integrity</span>
                           <span>✓ Cancel anytime from your profile</span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setAddonCheckout(true)}
-                          style={{
-                            width: '100%',
-                            background: '#2C1810',
-                            color: '#C4956A',
-                            borderRadius: 20,
-                            padding: '9px 18px',
-                            fontSize: 13,
-                            fontFamily: 'Georgia, serif',
-                            border: 'none',
-                            cursor: 'pointer',
-                            marginTop: 12,
-                          }}
-                        >
-                          Add Agent Mode — ₹599/month →
-                        </button>
+                        <div style={{ marginTop: 12 }}>
+                          <Button type="button" variant="primary" size="md" fullWidth onClick={() => setAddonCheckout(true)}>
+                            Add Agent Mode — ₹599/mo
+                          </Button>
+                        </div>
                       </div>
                     ) : user.agent_addon_active && !user.agent_addon_cancelling ? (
                       <div
@@ -1785,45 +1729,39 @@ export function ProfileModal() {
                                     e.target.style.borderColor = '#D4C4B0';
                                   }}
                                 />
-                                <button
-                                  type="button"
-                                  disabled={!tokenVal.trim() || mcpConnectBusy === service.id}
-                                  onClick={async () => {
-                                    const tok = tokenVal.trim();
-                                    if (tok.length < 8) return;
-                                    setMcpConnectBusy(service.id);
-                                    try {
-                                      await postMcpManualConnect({
-                                        service: service.id,
-                                        access_token: tok,
-                                        display_name: service.name,
-                                      });
-                                      setMcpTokenInputs((prev) => ({ ...prev, [service.id]: '' }));
-                                      setMcpExpandedId(null);
-                                      await refreshMcp();
-                                      setMcpToast(`${service.name} connected`);
-                                    } catch {
-                                      /* silent */
-                                    } finally {
-                                      setMcpConnectBusy(null);
-                                    }
-                                  }}
-                                  style={{
-                                    width: '100%',
-                                    marginTop: 8,
-                                    background: '#2C1810',
-                                    color: '#C4956A',
-                                    borderRadius: 20,
-                                    padding: '8px 14px',
-                                    fontSize: 12,
-                                    fontFamily: 'Georgia, serif',
-                                    border: 'none',
-                                    cursor: tokenVal.trim() ? 'pointer' : 'not-allowed',
-                                    opacity: tokenVal.trim() ? 1 : 0.5,
-                                  }}
-                                >
-                                  Connect {service.name}
-                                </button>
+                                <div style={{ marginTop: 8 }}>
+                                  <Button
+                                    type="button"
+                                    variant="primary"
+                                    size="sm"
+                                    fullWidth
+                                    icon={Icons.plug(14)}
+                                    disabled={!tokenVal.trim() || mcpConnectBusy === service.id}
+                                    loading={mcpConnectBusy === service.id}
+                                    onClick={async () => {
+                                      const tok = tokenVal.trim();
+                                      if (tok.length < 8) return;
+                                      setMcpConnectBusy(service.id);
+                                      try {
+                                        await postMcpManualConnect({
+                                          service: service.id,
+                                          access_token: tok,
+                                          display_name: service.name,
+                                        });
+                                        setMcpTokenInputs((prev) => ({ ...prev, [service.id]: '' }));
+                                        setMcpExpandedId(null);
+                                        await refreshMcp();
+                                        setMcpToast(`${service.name} connected`);
+                                      } catch {
+                                        /* silent */
+                                      } finally {
+                                        setMcpConnectBusy(null);
+                                      }
+                                    }}
+                                  >
+                                    {`Connect ${service.name}`}
+                                  </Button>
+                                </div>
                               </>
                             ) : null}
                           </>
@@ -1891,23 +1829,14 @@ export function ProfileModal() {
                                 </div>
                               </div>
                             ) : (
-                              <button
+                              <Button
                                 type="button"
-                                onClick={() =>
-                                  setMcpDisconnectTarget({ id: row.id, name: service.name })
-                                }
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  padding: 0,
-                                  cursor: 'pointer',
-                                  fontSize: 12,
-                                  color: '#C0392B',
-                                  textDecoration: 'underline dotted',
-                                }}
+                                variant="danger"
+                                size="sm"
+                                onClick={() => setMcpDisconnectTarget({ id: row.id, name: service.name })}
                               >
-                                Disconnect →
-                              </button>
+                                Disconnect
+                              </Button>
                             )}
                           </>
                         )}

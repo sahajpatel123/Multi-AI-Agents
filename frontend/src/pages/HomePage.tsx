@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Button } from '../components/Button';
+import { Icons } from '../components/Icons';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { setRedirectIntent } from '../utils/redirectIntent';
@@ -561,7 +563,6 @@ export function HomePage() {
   const { isAuthenticated } = useAuth();
   const { tier } = useTier();
   const [quickOpen, setQuickOpen] = useState(false);
-  const [quickPillHover, setQuickPillHover] = useState(false);
   const [activePromptIndex, setActivePromptIndex] = useState(0);
   const [, setPromptPhase] = useState<'visible' | 'exiting' | 'entering'>('visible');
   const [isPromptHovered] = useState(false);
@@ -1008,51 +1009,20 @@ export function HomePage() {
                 </span>
               </h1>
 
-              <p className="home-hero-sub" style={{ fontSize: '14px', color: '#6B6460', lineHeight: 1.75, maxWidth: '320px', marginBottom: '1.5rem', animation: 'heroSubtext 500ms ease 400ms backwards' }}>
+              <p
+                className="home-hero-sub"
+                style={{ marginBottom: '1.5rem', animation: 'heroSubtext 500ms ease 400ms backwards' }}
+              >
                 Four AI personalities with opposing worldviews compete to answer your question. Scored on logic, directness, and originality. The best answer wins — automatically.
               </p>
 
-              <div className="hero-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '2rem', animation: 'heroSubtext 500ms ease 400ms backwards' }}>
-                <button
-                  onClick={() => navigate('/app')}
-                  style={{
-                    padding: '11px 24px',
-                    borderRadius: '999px',
-                    background: '#1A1714',
-                    color: '#FAF7F4',
-                    fontSize: '13px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'opacity 150ms',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'}
-                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-                >
-                  Ask your first question
-                </button>
-                <button
-                  onClick={scrollToHowItWorks}
-                  style={{
-                    padding: '11px 24px',
-                    borderRadius: '999px',
-                    border: '0.5px solid #1A1714',
-                    color: '#1A1714',
-                    background: 'transparent',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    transition: 'all 150ms',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#1A1714';
-                    e.currentTarget.style.color = '#FAF7F4';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = '#1A1714';
-                  }}
-                >
-                  See it in action
-                </button>
+              <div className="hero-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '2rem', animation: 'heroSubtext 500ms ease 400ms backwards', flexWrap: 'wrap' }}>
+                <Button variant="primary" size="lg" icon={Icons.arrowRight(18)} onClick={() => navigate('/app')}>
+                  Begin thinking →
+                </Button>
+                <Button variant="secondary" size="lg" onClick={scrollToHowItWorks}>
+                  Watch it work
+                </Button>
               </div>
             </div>
 
@@ -1670,61 +1640,23 @@ export function HomePage() {
       `}</style>
 
       {!quickOpen ? (
-        <div
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setQuickOpen(true);
-            }
-          }}
+        <Button
+          type="button"
           className="quick-access-floating"
+          variant="primary"
+          size="md"
+          icon={Icons.sparkle(16)}
           onClick={() => setQuickOpen(true)}
-          onMouseEnter={() => {
-            setQuickPillHover(true);
-          }}
-          onMouseLeave={() => {
-            setQuickPillHover(false);
-          }}
           style={{
             position: 'fixed',
             bottom: 32,
             right: 32,
             zIndex: 999,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            background: quickPillHover ? '#3D2418' : '#2C1810',
-            borderRadius: 40,
-            padding: '10px 18px 10px 14px',
-            cursor: 'pointer',
-            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            boxShadow: '0 4px 20px rgba(44, 24, 16, 0.12)',
           }}
         >
-          <div
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: '#C4956A',
-              flexShrink: 0,
-              animation: 'quickPulse 2s ease-in-out infinite',
-            }}
-          />
-          <span
-            style={{
-              fontSize: 13,
-              color: '#E8D5BE',
-              fontFamily: 'Georgia, serif',
-              letterSpacing: '0.04em',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Open Arena or Agent
-          </span>
-          <span style={{ fontSize: 11, color: '#C4956A' }}>↑</span>
-        </div>
+          Open Arena
+        </Button>
       ) : (
         <div
           id="quick-access-widget"

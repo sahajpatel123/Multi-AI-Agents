@@ -2,7 +2,9 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Check, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getSubscriptionStatus } from '../api';
+import { Button } from '../components/Button';
 import { Footer } from '../components/Footer';
+import { Icons } from '../components/Icons';
 import { Navbar } from '../components/Navbar';
 import { RazorpayCheckout } from '../components/RazorpayCheckout';
 import { useAuth } from '../hooks/useAuth';
@@ -169,7 +171,7 @@ function FeatureList({
             )}
             <span
               style={{
-                fontSize: sub ? '11px' : '13px',
+                fontSize: sub ? '11px' : '15px',
                 color: sub ? subColor : textColor,
                 lineHeight: 1.5,
                 fontWeight: 400,
@@ -200,7 +202,6 @@ export function PricingPage() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
   const [upgradeSuccessLabel, setUpgradeSuccessLabel] = useState('');
-  const [freeCtaHover, setFreeCtaHover] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
   const [sectionHovered, setSectionHovered] = useState(false);
   const [hoveredMind, setHoveredMind] = useState<number | null>(null);
@@ -529,34 +530,37 @@ export function PricingPage() {
             <div style={{ display: 'inline-flex', background: '#F0EBE3', color: '#6B6460', borderRadius: '999px', padding: '4px 10px', fontSize: '11px', marginBottom: '1rem' }}>
               Free forever
             </div>
-            <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: '#6B6460', letterSpacing: '.08em', marginBottom: '.8rem' }}>
+            <p style={{ fontSize: '24px', fontWeight: 500, color: '#1A1714', letterSpacing: '-0.02em', marginBottom: '.8rem' }}>
               Explorer
             </p>
-            <div style={{ fontSize: '48px', fontWeight: 500, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹0</div>
+            <div style={{ fontSize: '36px', fontWeight: 500, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹0</div>
             <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>forever</p>
             <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', margin: '0.75rem 0' }} />
             <FeatureList items={explorerFeatures} dotColor="#D4CCC4" textColor="#1A1714" subColor="#8B8480" />
-            <button
-              type="button"
-              onClick={isCurrentPlan('free') ? undefined : () => navigate('/app')}
-              onMouseEnter={isCurrentPlan('free') ? undefined : () => setFreeCtaHover(true)}
-              onMouseLeave={isCurrentPlan('free') ? undefined : () => setFreeCtaHover(false)}
-              style={{
-                width: '100%',
-                padding: '11px',
-                borderRadius: '999px',
-                border: isCurrentPlan('free') ? '0.5px solid #E0D8D0' : '0.5px solid #DDD7D0',
-                background: isCurrentPlan('free') ? '#F0EBE3' : freeCtaHover ? '#F5F2EF' : 'transparent',
-                color: '#6B6460',
-                fontSize: '14px',
-                cursor: isCurrentPlan('free') ? 'default' : 'pointer',
-                marginTop: 'auto',
-                transition: 'background 150ms ease',
-                textAlign: 'center',
-              }}
-            >
-              {isCurrentPlan('free') ? 'Current plan' : 'Start exploring'}
-            </button>
+            {isCurrentPlan('free') ? (
+              <div
+                style={{
+                  width: '100%',
+                  padding: '11px',
+                  borderRadius: '999px',
+                  border: '0.5px solid #E0D8D0',
+                  background: '#F0EBE3',
+                  color: '#6B6460',
+                  fontSize: '14px',
+                  cursor: 'default',
+                  marginTop: 'auto',
+                  textAlign: 'center',
+                }}
+              >
+                Current plan
+              </div>
+            ) : (
+              <div style={{ marginTop: 'auto', width: '100%' }}>
+                <Button variant="secondary" size="lg" fullWidth onClick={() => navigate('/app')}>
+                  Start for free
+                </Button>
+              </div>
+            )}
           </div>
 
           <div
@@ -608,19 +612,19 @@ export function PricingPage() {
                 Your plan
               </span>
             ) : null}
-            <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: '#6B6460', letterSpacing: '.08em', marginBottom: '.8rem' }}>
+            <p style={{ fontSize: '24px', fontWeight: 500, color: '#1A1714', letterSpacing: '-0.02em', marginBottom: '.8rem' }}>
               Plus
             </p>
 
             {billing === 'monthly' ? (
               <>
-                <div style={{ fontSize: '40px', fontWeight: 400, letterSpacing: '-.02em', color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹999/mo</div>
+                <div style={{ fontSize: '36px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹999/mo</div>
                 <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>per month, billed monthly</p>
               </>
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '.35rem' }}>
-                  <span style={{ fontSize: '40px', fontWeight: 400, letterSpacing: '-.02em', color: '#1A1714', lineHeight: 1 }}>₹742/mo</span>
+                  <span style={{ fontSize: '36px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', lineHeight: 1 }}>₹742/mo</span>
                   <span
                     style={{
                       background: '#EFF4EF',
@@ -635,7 +639,7 @@ export function PricingPage() {
                     Save 26%
                   </span>
                 </div>
-                <p style={{ fontSize: '12px', color: '#8B8480', marginBottom: '4px' }}>Billed as ₹8,899/year</p>
+                <p style={{ fontSize: '16px', color: '#8C7355', marginBottom: '4px' }}>Billed as ₹8,899/year</p>
                 <p style={{ fontSize: '12px', color: '#C4B8AE', textDecoration: 'line-through', marginBottom: '1rem' }}>vs ₹11,988 if paid monthly</p>
               </>
             )}
@@ -688,31 +692,18 @@ export function PricingPage() {
                 Included in your plan
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => handleUpgrade(billing === 'monthly' ? 'plus_monthly' : 'plus_annual')}
-                style={{
-                  width: '100%',
-                  background: '#1A1714',
-                  color: '#FAF7F4',
-                  borderRadius: '999px',
-                  padding: '11px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  border: 'none',
-                  cursor: 'pointer',
-                  marginTop: 'auto',
-                  transition: 'opacity 150ms ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.opacity = '0.88';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.opacity = '1';
-                }}
-              >
-                Start with Plus
-              </button>
+              <div style={{ marginTop: 'auto', width: '100%' }}>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  icon={Icons.lightning(18)}
+                  onClick={() => handleUpgrade(billing === 'monthly' ? 'plus_monthly' : 'plus_annual')}
+                >
+                  Get Plus
+                </Button>
+              </div>
             )}
             {showAddonUpsell ? (
               <div
@@ -731,26 +722,18 @@ export function PricingPage() {
                 <p style={{ fontSize: 11, color: '#8C7355', fontStyle: 'italic', margin: '6px 0 10px' }}>
                   Unlock the 7-stage research pipeline on your Plus plan. Plus limits apply.
                 </p>
-                <button
+                <Button
                   type="button"
+                  variant="primary"
+                  size="md"
+                  fullWidth
                   onClick={() => {
                     setCheckoutError(null);
                     setCheckoutPlan('agent_addon');
                   }}
-                  style={{
-                    width: '100%',
-                    background: '#2C1810',
-                    color: '#C4956A',
-                    borderRadius: 20,
-                    padding: '8px 18px',
-                    fontSize: 12,
-                    fontFamily: 'Georgia, serif',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
                 >
-                  Add Agent Mode →
-                </button>
+                  Add Agent Mode — ₹599/mo
+                </Button>
               </div>
             ) : null}
             {showAddonActiveBanner ? (
@@ -801,19 +784,19 @@ export function PricingPage() {
                 Your plan
               </span>
             ) : null}
-            <p style={{ fontSize: '13px', fontWeight: 500, textTransform: 'uppercase', color: '#6B6460', letterSpacing: '.08em', marginBottom: '.8rem' }}>
+            <p style={{ fontSize: '24px', fontWeight: 500, color: '#1A1714', letterSpacing: '-0.02em', marginBottom: '.8rem' }}>
               Pro
             </p>
 
             {billing === 'monthly' ? (
               <>
-                <div style={{ fontSize: '40px', fontWeight: 400, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹2,499/mo</div>
+                <div style={{ fontSize: '36px', fontWeight: 500, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹2,499/mo</div>
                 <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>per month, billed monthly</p>
               </>
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '.35rem' }}>
-                  <span style={{ fontSize: '40px', fontWeight: 400, color: '#1A1714', lineHeight: 1 }}>₹1,650/mo</span>
+                  <span style={{ fontSize: '36px', fontWeight: 500, color: '#1A1714', lineHeight: 1 }}>₹1,650/mo</span>
                   <span
                     style={{
                       background: '#EFF4EF',
@@ -827,7 +810,7 @@ export function PricingPage() {
                     Save 34%
                   </span>
                 </div>
-                <p style={{ fontSize: '12px', color: '#8B8480', marginBottom: '4px' }}>billed ₹19,800/year</p>
+                <p style={{ fontSize: '16px', color: '#8C7355', marginBottom: '4px' }}>billed ₹19,800/year</p>
                 <p
                   style={{
                     fontSize: '12px',
@@ -865,31 +848,18 @@ export function PricingPage() {
                 ✓ Current plan
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => handleUpgrade(billing === 'monthly' ? 'pro_monthly' : 'pro_annual')}
-                style={{
-                  width: '100%',
-                  background: '#C4956A',
-                  color: '#FAF7F4',
-                  borderRadius: '999px',
-                  padding: '11px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  border: 'none',
-                  cursor: 'pointer',
-                  marginTop: 'auto',
-                  transition: 'opacity 150ms ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.opacity = '0.88';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.opacity = '1';
-                }}
-              >
-                Upgrade to Pro
-              </button>
+              <div style={{ marginTop: 'auto', width: '100%' }}>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  icon={Icons.star(18)}
+                  onClick={() => handleUpgrade(billing === 'monthly' ? 'pro_monthly' : 'pro_annual')}
+                >
+                  Get Pro
+                </Button>
+              </div>
             )}
             <p
               style={{

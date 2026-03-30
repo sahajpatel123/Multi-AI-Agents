@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import { Button } from '../components/Button';
 import { useAuth } from '../hooks/useAuth';
 import { getRedirectIntent, clearRedirectIntent } from '../utils/redirectIntent';
 
@@ -210,7 +211,7 @@ export function SignInPage() {
               <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '2rem' }}>Sign in to your Arena account</p>
 
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6B6460', marginBottom: '.4rem' }}>Email</label>
+                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Email</label>
                 <input
                   type="email"
                   value={email}
@@ -222,7 +223,7 @@ export function SignInPage() {
                     borderRadius: '10px',
                     border: '0.5px solid #E0D8D0',
                     background: '#FFFFFF',
-                    fontSize: '14px',
+                    fontSize: '16px',
                     color: '#1A1714',
                     outline: 'none',
                     transition: 'all 150ms ease',
@@ -239,7 +240,7 @@ export function SignInPage() {
               </div>
 
               <div style={{ marginBottom: '1.5rem', position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6B6460', marginBottom: '.4rem' }}>Password</label>
+                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Password</label>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
@@ -252,7 +253,7 @@ export function SignInPage() {
                     borderRadius: '10px',
                     border: '0.5px solid #E0D8D0',
                     background: '#FFFFFF',
-                    fontSize: '14px',
+                    fontSize: '16px',
                     color: '#1A1714',
                     outline: 'none',
                     transition: 'all 150ms ease',
@@ -291,32 +292,22 @@ export function SignInPage() {
               </div>
 
               {error && (
-                <p style={{ fontSize: '12px', color: '#E57373', marginBottom: '1rem' }}>{error}</p>
+                <p style={{ fontSize: '13px', color: '#993C1D', marginBottom: '1rem' }}>{error}</p>
               )}
 
-              <button
-                className={`signin-submit${isLoading || authLoading ? ' pulse' : ''}`}
-                type="submit"
-                disabled={isLoading || authLoading}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  borderRadius: '999px',
-                  background: '#1A1714',
-                  color: '#FAF7F4',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  border: 'none',
-                  cursor: isLoading || authLoading ? 'not-allowed' : 'pointer',
-                  transition: 'opacity 150ms ease',
-                  marginBottom: '1.5rem',
-                  opacity: isLoading || authLoading ? 0.7 : 1,
-                }}
-                onMouseEnter={(e) => !(isLoading || authLoading) && (e.currentTarget.style.opacity = '0.85')}
-                onMouseLeave={(e) => !(isLoading || authLoading) && (e.currentTarget.style.opacity = '1')}
-              >
-                {isLoading || authLoading ? 'Signing in...' : 'Sign in'}
-              </button>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  loading={isLoading || authLoading}
+                  disabled={isLoading || authLoading}
+                  className="signin-submit"
+                >
+                  Sign in to Arena
+                </Button>
+              </div>
 
               <p style={{ fontSize: '12px', color: '#6B6460', textAlign: 'center', marginTop: '1.5rem' }}>
                 Don't have an account?{' '}
@@ -350,7 +341,7 @@ export function SignInPage() {
             <form onSubmit={handleSignUp}>
               <h2 style={{ fontSize: '22px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', marginBottom: '.4rem' }}>Create your account</h2>
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6B6460', marginBottom: '.4rem' }}>Name</label>
+                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Name</label>
                 <input
                   type="text"
                   value={name}
@@ -362,7 +353,7 @@ export function SignInPage() {
                     borderRadius: '10px',
                     border: '0.5px solid #E0D8D0',
                     background: '#FFFFFF',
-                    fontSize: '14px',
+                    fontSize: '16px',
                     color: '#1A1714',
                     outline: 'none',
                     transition: 'all 150ms ease',
@@ -378,7 +369,7 @@ export function SignInPage() {
                 />
               </div>
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6B6460', marginBottom: '.4rem' }}>Email</label>
+                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Email</label>
                 <input
                   type="email"
                   value={email}
@@ -390,7 +381,7 @@ export function SignInPage() {
                     borderRadius: '10px',
                     border: '0.5px solid #E0D8D0',
                     background: '#FFFFFF',
-                    fontSize: '14px',
+                    fontSize: '16px',
                     color: '#1A1714',
                     outline: 'none',
                     transition: 'all 150ms ease',
@@ -407,7 +398,7 @@ export function SignInPage() {
               </div>
 
               <div style={{ marginBottom: '.6rem', position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6B6460', marginBottom: '.4rem' }}>Password</label>
+                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Password</label>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
@@ -420,7 +411,7 @@ export function SignInPage() {
                     borderRadius: '10px',
                     border: '0.5px solid #E0D8D0',
                     background: '#FFFFFF',
-                    fontSize: '14px',
+                    fontSize: '16px',
                     color: '#1A1714',
                     outline: 'none',
                     transition: 'all 150ms ease',
@@ -496,7 +487,7 @@ export function SignInPage() {
               )}
 
               <div style={{ marginBottom: '1.5rem', position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6B6460', marginBottom: '.4rem' }}>Confirm password</label>
+                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Confirm password</label>
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
@@ -509,7 +500,7 @@ export function SignInPage() {
                     borderRadius: '10px',
                     border: '0.5px solid #E0D8D0',
                     background: '#FFFFFF',
-                    fontSize: '14px',
+                    fontSize: '16px',
                     color: '#1A1714',
                     outline: 'none',
                     transition: 'all 150ms ease',
@@ -552,32 +543,22 @@ export function SignInPage() {
               </p>
 
               {error && (
-                <p style={{ fontSize: '12px', color: '#E57373', marginBottom: '1rem' }}>{error}</p>
+                <p style={{ fontSize: '13px', color: '#993C1D', marginBottom: '1rem' }}>{error}</p>
               )}
 
-              <button
-                className={`signin-submit${isLoading || authLoading ? ' pulse' : ''}`}
-                type="submit"
-                disabled={isLoading || authLoading}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  borderRadius: '999px',
-                  background: '#1A1714',
-                  color: '#FAF7F4',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  border: 'none',
-                  cursor: isLoading || authLoading ? 'not-allowed' : 'pointer',
-                  transition: 'opacity 150ms ease',
-                  marginBottom: '1.5rem',
-                  opacity: isLoading || authLoading ? 0.7 : 1,
-                }}
-                onMouseEnter={(e) => !(isLoading || authLoading) && (e.currentTarget.style.opacity = '0.85')}
-                onMouseLeave={(e) => !(isLoading || authLoading) && (e.currentTarget.style.opacity = '1')}
-              >
-                {isLoading || authLoading ? 'Creating account...' : 'Create account'}
-              </button>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  loading={isLoading || authLoading}
+                  disabled={isLoading || authLoading}
+                  className="signin-submit"
+                >
+                  Create your account
+                </Button>
+              </div>
 
               <p style={{ fontSize: '12px', color: '#6B6460', textAlign: 'center', marginTop: '1.5rem' }}>
                 Already have an account?{' '}

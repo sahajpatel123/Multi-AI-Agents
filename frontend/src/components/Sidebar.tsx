@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Button } from './Button';
+import { Icons } from './Icons';
 import {
-  Plus,
   Ellipsis,
   Trophy,
   Sparkles,
@@ -172,7 +173,9 @@ export function Sidebar({
       >
         <div className="flex flex-col h-full px-4 py-6">
           <div className="mb-2">
-            <MenuAction icon={<Plus style={{ width: '14px', height: '14px' }} />} label="New chat" isPrimary onClick={handleNewChatClick} />
+            <Button type="button" variant="primary" size="sm" fullWidth icon={Icons.plus(14)} onClick={handleNewChatClick}>
+              New task
+            </Button>
           </div>
           <div className="mb-5">
             <MenuAction

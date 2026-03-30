@@ -271,7 +271,7 @@ export function WatchlistPage() {
                     >
                       {item.question}
                     </div>
-                    <div style={{ fontSize: 11, color: '#A89070', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 12, color: '#8C7355', lineHeight: 1.5 }}>
                       Run {item.run_count} times · Last ran {formatRelativePast(item.last_run_at)} · Next:{' '}
                       {item.is_active ? formatRelativeFuture(item.next_run_at) : 'paused'}
                     </div>

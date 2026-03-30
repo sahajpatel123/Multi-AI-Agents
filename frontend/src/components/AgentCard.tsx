@@ -341,7 +341,7 @@ export function AgentCard({
             </div>
           ) : isStreaming ? (
             <div>
-              <p className="agent-response-text" style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
+              <p className="agent-response-text" style={{ whiteSpace: 'pre-wrap' }}>
                 {displayText}
                 <span style={{ display: 'inline-block', width: '2px', height: '16px', marginLeft: '2px', background: 'rgba(107,100,96,0.5)', animation: 'breathe 1.2s ease-in-out infinite', verticalAlign: 'text-bottom' }} />
               </p>
@@ -431,7 +431,7 @@ export function AgentCard({
                 </div>
               )}
               
-              <p className="agent-response-text" style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7' }}>
+              <p className="agent-response-text">
                 {response.one_liner}
               </p>
             </div>
