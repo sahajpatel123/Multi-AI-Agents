@@ -537,14 +537,19 @@ export function ProfileModal() {
             display: 'flex',
             alignItems: 'center',
             gap: 9,
-            padding: '10px 16px',
-            fontSize: 13,
+            padding: mobile ? '8px 12px' : '10px 16px',
+            fontSize: mobile ? 12 : 13,
             color: activeTab === id ? '#2C1810' : '#6B5040',
             fontFamily: 'Georgia, serif',
             cursor: 'pointer',
             transition: 'background 0.12s, color 0.12s',
             border: 'none',
-            borderRight: activeTab === id ? '2px solid #C4956A' : '2px solid transparent',
+            borderRight: mobile ? 'none' : activeTab === id ? '2px solid #C4956A' : '2px solid transparent',
+            borderBottom: mobile
+              ? activeTab === id
+                ? '2px solid #C4956A'
+                : '2px solid transparent'
+              : 'none',
             background: activeTab === id ? '#E8DDD0' : 'transparent',
             fontWeight: activeTab === id ? 500 : 400,
             textAlign: 'left',
@@ -578,7 +583,7 @@ export function ProfileModal() {
         zIndex: 9999,
         background: 'rgba(30, 18, 10, 0.55)',
         display: 'flex',
-        alignItems: 'center',
+        alignItems: mobile ? 'flex-end' : 'center',
         justifyContent: 'center',
         animation: overlayAnim,
       }}
@@ -609,13 +614,13 @@ export function ProfileModal() {
         aria-labelledby="profile-modal-title"
         onMouseDown={(e) => e.stopPropagation()}
         style={{
-          width: mobile ? '100vw' : 680,
+          width: mobile ? '100%' : 680,
           maxWidth: mobile ? 'none' : 'calc(100vw - 32px)',
-          height: mobile ? '100vh' : 540,
-          maxHeight: mobile ? 'none' : 'calc(100vh - 48px)',
+          height: mobile ? '90vh' : 540,
+          maxHeight: mobile ? '90vh' : 'calc(100vh - 48px)',
           background: '#FDFAF6',
           border: mobile ? 'none' : '0.5px solid #DDD0BC',
-          borderRadius: mobile ? 0 : 14,
+          borderRadius: mobile ? '20px 20px 0 0' : 14,
           display: 'flex',
           flexDirection: mobile ? 'column' : 'row',
           overflow: 'hidden',
@@ -623,6 +628,19 @@ export function ProfileModal() {
           animation: panelAnim,
         }}
       >
+        {mobile ? (
+          <div
+            style={{
+              width: 36,
+              height: 4,
+              background: '#D4C4B0',
+              borderRadius: 2,
+              margin: '12px auto 0',
+              flexShrink: 0,
+            }}
+            aria-hidden
+          />
+        ) : null}
         <aside
           style={{
             width: mobile ? '100%' : 180,
@@ -636,7 +654,7 @@ export function ProfileModal() {
             maxHeight: mobile ? 'auto' : undefined,
           }}
         >
-          <div style={{ padding: '18px 16px 16px', borderBottom: '0.5px solid #E0D5C5' }}>
+          <div style={{ padding: '18px 16px 16px', borderBottom: mobile ? 'none' : '0.5px solid #E0D5C5' }}>
             <div
               style={{
                 width: 40,
@@ -670,12 +688,15 @@ export function ProfileModal() {
             </div>
           </div>
           <nav
+            className="horizontal-scroll"
             style={{
               display: 'flex',
               flexDirection: mobile ? 'row' : 'column',
               marginTop: mobile ? 0 : 4,
               overflowX: mobile ? 'auto' : 'visible',
               flex: mobile ? undefined : 1,
+              paddingBottom: mobile ? 4 : 0,
+              borderBottom: mobile ? '0.5px solid #E0D5C5' : 'none',
             }}
           >
             {tabs}
@@ -705,7 +726,7 @@ export function ProfileModal() {
           </div>
         </aside>
 
-        <div style={{ flex: 1, padding: mobile ? '20px 18px' : '28px 30px', overflowY: 'auto' }}>
+        <div style={{ flex: 1, padding: mobile ? '16px' : '28px 30px', overflowY: 'auto' }}>
           <div style={{ display: activeTab === 'account' ? 'block' : 'none' }}>
             <h2 id="profile-modal-title" style={{ fontSize: 18, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>
               Account

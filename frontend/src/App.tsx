@@ -1341,7 +1341,7 @@ function App() {
           )}
 
           <div
-            className="prompt-container"
+            className="prompt-container fixed-input-bar"
             style={{
               display: 'flex',
               flexDirection: 'column',

@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 const TEXT_STYLE: CSSProperties = {
   fontFamily: 'Georgia, serif',
@@ -31,6 +32,7 @@ type CollapsiblePromptProps = {
 
 export function CollapsiblePrompt({ text }: CollapsiblePromptProps) {
   const [expanded, setExpanded] = useState(false);
+  const isMobile = useIsMobile();
   const isLong = text.length > 120;
 
   useEffect(() => {
@@ -40,13 +42,19 @@ export function CollapsiblePrompt({ text }: CollapsiblePromptProps) {
   const outer: CSSProperties = {
     maxWidth: 680,
     margin: '0 auto 32px auto',
+    padding: isMobile ? '10px 16px' : undefined,
     ...(isLong ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
+  };
+
+  const textStyle: CSSProperties = {
+    ...TEXT_STYLE,
+    fontSize: isMobile ? 13 : 15,
   };
 
   if (!isLong) {
     return (
       <div style={outer}>
-        <p style={TEXT_STYLE}>{text}</p>
+        <p style={textStyle}>{text}</p>
       </div>
     );
   }
@@ -76,7 +84,7 @@ export function CollapsiblePrompt({ text }: CollapsiblePromptProps) {
       >
         <p
           style={{
-            ...TEXT_STYLE,
+            ...textStyle,
             whiteSpace: expanded ? 'normal' : 'nowrap',
             textOverflow: expanded ? 'clip' : 'ellipsis',
           }}

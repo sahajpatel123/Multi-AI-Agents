@@ -4,6 +4,22 @@ import { useAuth } from '../hooks/useAuth';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { setRedirectIntent } from '../utils/redirectIntent';
 
+function HamburgerIcon() {
+  return (
+    <svg
+      className="navbar-hamburger-icon"
+      width={24}
+      height={24}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path d="M4 7h16M4 12h16M4 17h16" stroke="#2C1810" strokeWidth={1.5} strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -71,10 +87,22 @@ export function Navbar() {
       <nav className={shellClass}>
         <div className="navbar-inner-container">
           <div className="navbar-row">
-            <button type="button" className="navbar-brand" onClick={() => navigate('/')}>
-              <span className="navbar-brand-dot" aria-hidden />
-              <span className="navbar-brand-text">Arena</span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+              {isAuthenticated ? (
+                <button
+                  type="button"
+                  className="mobile-only navbar-hamburger navbar-hamburger--leading"
+                  onClick={() => setMenuOpen(true)}
+                  aria-label="Open navigation menu"
+                >
+                  <HamburgerIcon />
+                </button>
+              ) : null}
+              <button type="button" className="navbar-brand" onClick={() => navigate('/')}>
+                <span className="navbar-brand-dot" aria-hidden />
+                <span className="navbar-brand-text">Arena</span>
+              </button>
+            </div>
 
             <div className="navbar-nav-links" aria-label="Primary navigation">
               <button
@@ -108,22 +136,30 @@ export function Navbar() {
                   onClick={() => setMenuOpen(true)}
                   aria-label="Open navigation menu"
                 >
-                  <span style={{ fontSize: '20px', lineHeight: 1, color: '#1A1714' }}>☰</span>
+                  <HamburgerIcon />
                 </button>
-                <button type="button" className="navbar-signin-link" onClick={() => {
-                  setRedirectIntent('/');
-                  navigate('/signin');
-                }}>
+                <button
+                  type="button"
+                  className="navbar-signin-link"
+                  onClick={() => {
+                    setRedirectIntent('/');
+                    navigate('/signin');
+                  }}
+                >
                   Sign in
                 </button>
-                <button type="button" className="navbar-cta-pill" onClick={() => {
-                  if (isAuthenticated) {
-                    navigate('/app');
-                    return;
-                  }
-                  setRedirectIntent('/arena');
-                  navigate('/signin');
-                }}>
+                <button
+                  type="button"
+                  className="navbar-cta-pill"
+                  onClick={() => {
+                    if (isAuthenticated) {
+                      navigate('/app');
+                      return;
+                    }
+                    setRedirectIntent('/arena');
+                    navigate('/signin');
+                  }}
+                >
                   Try Arena →
                 </button>
               </div>
@@ -131,11 +167,13 @@ export function Navbar() {
               <div ref={menuRef} className="navbar-auth" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
                   type="button"
-                  className="navbar-hamburger"
-                  onClick={() => setMenuOpen(true)}
-                  aria-label="Open navigation menu"
+                  className="mobile-only navbar-mobile-profile-avatar"
+                  onClick={() => {
+                    openModal('top-right');
+                  }}
+                  aria-label="Profile and settings"
                 >
-                  <span style={{ fontSize: '20px', lineHeight: 1, color: '#1A1714' }}>☰</span>
+                  {profileInitials}
                 </button>
                 {!isChatPage && (
                   <button
@@ -177,13 +215,15 @@ export function Navbar() {
         <div className="navbar-divider-line" aria-hidden />
       </nav>
 
-      {menuOpen && <div className="mobile-only navbar-mobile-overlay" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+      {menuOpen && (
+        <div className="mobile-only navbar-mobile-overlay" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+      )}
       <div
         ref={mobilePanelRef}
         className={`mobile-only navbar-mobile-panel${menuOpen ? ' open' : ''}`}
         aria-hidden={!menuOpen}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
           <button
             type="button"
             onClick={() => navigate('/')}
@@ -211,17 +251,18 @@ export function Navbar() {
               height: '44px',
               borderRadius: '999px',
               border: 'none',
-              background: '#F0EBE3',
-              color: '#1A1714',
-              fontSize: '20px',
+              background: '#EDE4D8',
+              color: '#2C1810',
+              fontSize: '22px',
               cursor: 'pointer',
+              lineHeight: 1,
             }}
           >
             ×
           </button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {[
             { label: 'Product', path: '/product' },
             { label: 'Pricing', path: '/pricing' },
@@ -239,8 +280,40 @@ export function Navbar() {
               {item.label}
             </button>
           ))}
-          {isAuthenticated && (
+          {!isAuthenticated ? (
+            <button
+              type="button"
+              className="navbar-mobile-link"
+              onClick={() => {
+                setMenuOpen(false);
+                setRedirectIntent('/');
+                navigate('/signin');
+              }}
+            >
+              Sign in
+            </button>
+          ) : (
             <>
+              <button
+                type="button"
+                className="navbar-mobile-link"
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate('/app');
+                }}
+              >
+                Arena
+              </button>
+              <button
+                type="button"
+                className="navbar-mobile-link"
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate('/agent');
+                }}
+              >
+                Agent
+              </button>
               <button
                 type="button"
                 className="navbar-mobile-link"

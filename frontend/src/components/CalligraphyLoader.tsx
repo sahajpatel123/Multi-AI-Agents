@@ -46,13 +46,34 @@ function getStageKey(stage?: string): StageKey | null {
 
 export function CalligraphyLoader({
   stage,
-  width = 320,
-  height = 200,
+  width: widthProp,
+  height: heightProp,
 }: {
   stage?: string;
   width?: number;
   height?: number;
 }) {
+  const [dims, setDims] = useState(() => {
+    if (typeof window === 'undefined') return { w: 320, h: 200 };
+    const w = Math.min(600, Math.max(260, window.innerWidth - 40));
+    const h = Math.round((200 / 320) * w);
+    return { w, h };
+  });
+
+  useEffect(() => {
+    const ro = () => {
+      const w = Math.min(600, Math.max(260, window.innerWidth - 40));
+      const h = Math.round((200 / 320) * w);
+      setDims({ w, h });
+    };
+    ro();
+    window.addEventListener('resize', ro);
+    return () => window.removeEventListener('resize', ro);
+  }, []);
+
+  const width = widthProp ?? dims.w;
+  const height = heightProp ?? dims.h;
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const dotRefs = useRef<Array<HTMLSpanElement | null>>([]);

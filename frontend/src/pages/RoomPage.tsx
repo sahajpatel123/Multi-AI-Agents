@@ -616,31 +616,6 @@ export function RoomPage() {
         </button>
       </header>
 
-      {isMobile ? (
-        <div style={{ display: 'flex', borderBottom: '0.5px solid #EDE4D8', background: '#FDFAF6' }}>
-          {(['members', 'synthesis', 'tasks'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setMobileTab(tab)}
-              style={{
-                flex: 1,
-                padding: '10px 8px',
-                fontSize: 11,
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                border: 'none',
-                background: mobileTab === tab ? '#EDE4D8' : 'transparent',
-                color: mobileTab === tab ? '#2C1810' : '#A89070',
-                cursor: 'pointer',
-              }}
-            >
-              {tab === 'members' ? 'Members' : tab === 'synthesis' ? 'Synthesis' : 'Tasks'}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
       <div style={{ flex: 1, display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: 0, overflow: 'hidden' }}>
         {!isMobile ? (
           <aside
@@ -656,7 +631,18 @@ export function RoomPage() {
           </aside>
         ) : null}
 
-        <main style={{ flex: 1, padding: 20, overflowY: 'auto', maxWidth: 900, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+        <main
+          style={{
+            flex: 1,
+            padding: 20,
+            paddingBottom: isMobile ? 72 : 20,
+            overflowY: 'auto',
+            maxWidth: 900,
+            margin: '0 auto',
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
           {isMobile && mobileTab === 'members' ? <div style={{ marginBottom: 16 }}>{sidebarInner}</div> : null}
           {isMobile && mobileTab === 'synthesis' ? synthesisInner : null}
           {!isMobile ? synthesisInner : null}
@@ -789,6 +775,59 @@ export function RoomPage() {
             document.body,
           )
         : null}
+
+      {isMobile ? (
+        <nav
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 60,
+            display: 'flex',
+            borderTop: '0.5px solid #EDE4D8',
+            background: '#FDFAF6',
+            paddingBottom: 'max(0px, env(safe-area-inset-bottom, 0px))',
+            boxShadow: '0 -2px 12px rgba(44,24,16,0.06)',
+          }}
+          aria-label="Room sections"
+        >
+          {(['members', 'synthesis', 'tasks'] as const).map((tab) => {
+            const active = mobileTab === tab;
+            const label = tab === 'members' ? 'Members' : tab === 'synthesis' ? 'Synthesis' : 'Tasks';
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setMobileTab(tab)}
+                style={{
+                  flex: 1,
+                  minHeight: 52,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4,
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  border: 'none',
+                  borderTop: active ? '3px solid #C4956A' : '3px solid transparent',
+                  background: 'transparent',
+                  color: active ? '#2C1810' : '#A89070',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                }}
+              >
+                <span style={{ fontSize: 14, lineHeight: 1 }} aria-hidden>
+                  {tab === 'members' ? '◎' : tab === 'synthesis' ? '◇' : '▢'}
+                </span>
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      ) : null}
     </div>
   );
 }

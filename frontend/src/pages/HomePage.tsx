@@ -984,8 +984,8 @@ export function HomePage() {
       <Navbar />
 
       {/* Hero Section */}
-      <section style={{ position: 'relative', padding: '64px 0 48px' }}>
-        <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '0 24px' }}>
+      <section className="home-hero-section" style={{ position: 'relative', padding: '64px 0 48px' }}>
+        <div className="home-hero-inner" style={{ maxWidth: '1080px', margin: '0 auto', padding: '0 24px' }}>
           <div className="hero-giant-num" ref={giant4Ref} style={{ position: 'absolute', top: '-20px', right: '15%', fontSize: '280px', fontWeight: 500, color: '#F0EBE3', pointerEvents: 'none', zIndex: 0, userSelect: 'none', letterSpacing: '-0.06em', animation: 'slowRotate 40s linear infinite', willChange: 'transform' }}>4</div>
 
           <div className="hero-content" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '64px', alignItems: 'start', position: 'relative', zIndex: 1 }}>
@@ -1008,7 +1008,7 @@ export function HomePage() {
                 </span>
               </h1>
 
-              <p style={{ fontSize: '14px', color: '#6B6460', lineHeight: 1.75, maxWidth: '320px', marginBottom: '1.5rem', animation: 'heroSubtext 500ms ease 400ms backwards' }}>
+              <p className="home-hero-sub" style={{ fontSize: '14px', color: '#6B6460', lineHeight: 1.75, maxWidth: '320px', marginBottom: '1.5rem', animation: 'heroSubtext 500ms ease 400ms backwards' }}>
                 Four AI personalities with opposing worldviews compete to answer your question. Scored on logic, directness, and originality. The best answer wins — automatically.
               </p>
 

@@ -449,8 +449,9 @@ export function PricingPage() {
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+        <div className="pricing-billing-wrap" style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem', width: '100%' }}>
           <div
+            className="billing-toggle"
             style={{
               background: '#EFEFED',
               borderRadius: '999px',
@@ -459,6 +460,9 @@ export function PricingPage() {
               gap: '4px',
               alignItems: 'center',
               flexWrap: 'wrap',
+              width: '100%',
+              maxWidth: 420,
+              justifyContent: 'center',
             }}
           >
             <button

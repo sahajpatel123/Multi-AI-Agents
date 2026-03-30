@@ -244,8 +244,8 @@ export function WatchlistPage() {
                 >
                   <div
                     style={{
-                      width: 52,
-                      height: 52,
+                      width: 50,
+                      height: 50,
                       borderRadius: 10,
                       background: '#F0E8DC',
                       border: '0.5px solid #D4C4B0',

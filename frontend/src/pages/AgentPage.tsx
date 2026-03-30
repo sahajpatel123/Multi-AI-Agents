@@ -660,6 +660,10 @@ export function AgentPage() {
   const [confActive, setConfActive] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (isMobile) setSteelmanInnerExpanded(false);
+  }, [isMobile]);
   const [navToggleHovered, setNavToggleHovered] = useState(false);
   const answerAnchorRef = useRef<HTMLDivElement>(null);
   const followUpInputRef = useRef<HTMLInputElement | null>(null);
@@ -2152,7 +2156,8 @@ export function AgentPage() {
     <div
       style={{
         display: 'flex',
-        height: '100vh',
+        height: '100dvh',
+        minHeight: '100dvh',
         overflow: 'hidden',
         background: '#FAF7F4',
       }}
@@ -2275,11 +2280,24 @@ export function AgentPage() {
           animation: agentIdleSuggFadeUp 0.4s ease forwards;
         }
       `}</style>
+      {isMobile && sidebarOpen ? (
+        <div
+          role="presentation"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            zIndex: 590,
+          }}
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden
+        />
+      ) : null}
       <div
         style={{
-          width: sidebarOpen ? 224 : 0,
-          minWidth: sidebarOpen ? 224 : 0,
-          overflow: 'hidden',
+          width: isMobile ? 0 : sidebarOpen ? 224 : 0,
+          minWidth: isMobile ? 0 : sidebarOpen ? 224 : 0,
+          overflow: 'visible',
           transition:
             'width 0.32s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.32s cubic-bezier(0.16, 1, 0.3, 1)',
           flexShrink: 0,
@@ -2287,14 +2305,24 @@ export function AgentPage() {
       >
         <aside
           style={{
-            width: 224,
+            position: isMobile ? 'fixed' : 'relative',
+            top: 0,
+            left: 0,
+            width: isMobile ? 'min(85vw, 300px)' : 224,
             height: '100%',
-            minHeight: '100%',
-            background: '#F5F2EF',
+            minHeight: '100vh',
+            background: '#F5F0E8',
             borderRight: '0.5px solid #E0D8D0',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            zIndex: isMobile ? 600 : undefined,
+            paddingTop: isMobile ? 52 : 0,
+            transform: isMobile ? (sidebarOpen ? 'translateX(0)' : 'translateX(-100%)') : undefined,
+            transition: isMobile
+              ? 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+              : undefined,
+            boxSizing: 'border-box',
           }}
         >
           {isMobile ? (
@@ -2527,7 +2555,16 @@ export function AgentPage() {
                 <path d="M3 13H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flex: 1,
+                minWidth: 0,
+                justifyContent: isMobile ? 'center' : 'flex-start',
+              }}
+            >
               <div
                 style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }}
                 className="breathe"
@@ -2558,6 +2595,30 @@ export function AgentPage() {
                 Agent
               </button>
             </div>
+            {isMobile && user ? (
+              <button
+                type="button"
+                onClick={() => openModal('bottom-left')}
+                aria-label="Profile and settings"
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  background: '#C4956A',
+                  color: '#FAF7F2',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  border: '1.5px solid #E0D8D0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                {agentProfileInitials(user)}
+              </button>
+            ) : null}
             {isRunning ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, color: '#C4956A' }}>{currentStageLabel}</span>
@@ -2578,7 +2639,7 @@ export function AgentPage() {
           width: '100%',
           boxSizing: 'border-box',
           overflowY: 'auto',
-          padding: isMobile ? '1rem' : '1.5rem',
+          padding: isMobile ? '14px 16px' : '1.5rem',
         }}
       >
           <>
@@ -2905,7 +2966,7 @@ export function AgentPage() {
                     </div>
                     <h1
                       style={{
-                        fontSize: 42,
+                        fontSize: isMobile ? 28 : 42,
                         fontWeight: 500,
                         color: '#2C1810',
                         textAlign: 'center',
@@ -2919,7 +2980,7 @@ export function AgentPage() {
                     </h1>
                     <p
                       style={{
-                        fontSize: 14,
+                        fontSize: isMobile ? 13 : 14,
                         color: '#A89070',
                         fontStyle: 'italic',
                         textAlign: 'center',
@@ -2930,12 +2991,15 @@ export function AgentPage() {
                       Seven stages of reasoning, working for you.
                     </p>
                     <div
+                      className="horizontal-scroll"
                       style={{
                         display: 'flex',
-                        flexWrap: 'wrap',
+                        flexWrap: 'nowrap',
                         gap: 6,
-                        justifyContent: 'center',
+                        justifyContent: isMobile ? 'flex-start' : 'center',
                         maxWidth: 640,
+                        width: '100%',
+                        padding: isMobile ? '0 4px' : undefined,
                       }}
                     >
                       {INPUT_STAGE_PILLS.map((label) => (
@@ -2972,13 +3036,16 @@ export function AgentPage() {
                 </div>
 
                 <div
+                  className="fixed-input-bar"
                   style={{
                     position: 'fixed',
                     bottom: 0,
-                    left: sidebarOpen ? 224 : 0,
+                    left: isMobile ? 0 : sidebarOpen ? 224 : 0,
                     right: 0,
                     transition: 'left 0.32s cubic-bezier(0.16, 1, 0.3, 1)',
-                    padding: '16px 24px 24px',
+                    padding: isMobile
+                      ? '12px 16px max(20px, env(safe-area-inset-bottom, 20px))'
+                      : '16px 24px 24px',
                     background: 'linear-gradient(to top, rgba(245,240,232,1) 60%, rgba(245,240,232,0) 100%)',
                     zIndex: 50,
                     pointerEvents: 'none',
@@ -3688,8 +3755,8 @@ export function AgentPage() {
                                 aria-haspopup="menu"
                                 onClick={() => setAttachMenuOpen((o) => !o)}
                                 style={{
-                                  width: 28,
-                                  height: 28,
+                                  width: isMobile ? 32 : 28,
+                                  height: isMobile ? 32 : 28,
                                   borderRadius: '50%',
                                   background: attachMenuOpen ? '#E8DDD0' : '#F0E8DC',
                                   border: attachMenuOpen ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
@@ -3723,7 +3790,7 @@ export function AgentPage() {
                                   border: 'none',
                                   background: 'transparent',
                                   outline: 'none',
-                                  fontSize: 14,
+                                  fontSize: isMobile ? 16 : 14,
                                   color: '#2C1810',
                                   fontFamily: 'Georgia, serif',
                                 }}
@@ -3743,8 +3810,8 @@ export function AgentPage() {
                                       : '#D4C4B0';
                                 }}
                                 style={{
-                                  width: 34,
-                                  height: 34,
+                                  width: isMobile ? 32 : 34,
+                                  height: isMobile ? 32 : 34,
                                   borderRadius: '50%',
                                   border: 'none',
                                   cursor:
@@ -4914,6 +4981,7 @@ export function AgentPage() {
                     <div
                       style={{
                         display: 'flex',
+                        flexDirection: isMobile ? 'column' : 'row',
                         flexWrap: 'wrap',
                         gap: 14,
                         marginBottom: 16,
@@ -4923,7 +4991,7 @@ export function AgentPage() {
                       <div
                         style={{
                           flex: '1 1 0',
-                          minWidth: 260,
+                          minWidth: isMobile ? '100%' : 260,
                           background: '#FAF7F2',
                           border: '0.5px solid #E0D5C5',
                           borderRadius: 10,
@@ -5102,7 +5170,7 @@ export function AgentPage() {
                       <div
                         style={{
                           flex: '1 1 0',
-                          minWidth: 260,
+                          minWidth: isMobile ? '100%' : 260,
                           background: '#FAF7F2',
                           border: '0.5px solid #E0D5C5',
                           borderRadius: 10,
@@ -5654,7 +5722,7 @@ export function AgentPage() {
                                     style={{
                                       gridRow: '1 / 3',
                                       gridColumn: 1,
-                                      fontSize: 42,
+                                      fontSize: isMobile ? 48 : 42,
                                       color: AR.TEXT_PRIMARY,
                                       fontWeight: 500,
                                       lineHeight: 1,
