@@ -7,6 +7,8 @@ import json
 import logging
 from typing import Any, Optional
 
+import markdown as markdown_lib
+
 from arena.db_models import AgentTask
 
 logger = logging.getLogger(__name__)
@@ -130,6 +132,17 @@ def build_report_context_from_row(
     }
 
 
+def _markdown_answer_html(plain: str) -> str:
+    raw = (plain or "").strip()
+    if not raw:
+        return ""
+    try:
+        body = markdown_lib.markdown(raw, extensions=["tables", "fenced_code"])
+    except Exception:
+        return f"<p>{html.escape(raw)}</p>"
+    return f'<div class="answer-md">{body}</div>'
+
+
 def _answer_html(ctx: dict[str, Any]) -> str:
     sentences = ctx.get("sentences") or []
     if sentences:
@@ -144,7 +157,7 @@ def _answer_html(ctx: dict[str, Any]) -> str:
                 color = "#C0392B"
             parts.append(f'<span style="color:{color}">{html.escape(str(s.get("text", "")))}</span>')
         return " ".join(parts)
-    return html.escape(str(ctx.get("final_answer_plain") or ""))
+    return _markdown_answer_html(str(ctx.get("final_answer_plain") or ""))
 
 
 def _task_body_inner(ctx: dict[str, Any]) -> str:
@@ -273,6 +286,19 @@ def _document_shell(inner_body: str) -> str:
   .synthesis-block{{font-size:15px;line-height:1.8;margin-bottom:20px;}}
   .conflict-box{{border-left:3px solid #E8C87A;padding:10px 14px;margin-bottom:10px;
     background:#FDF6EC;font-size:13px;color:#4A3728;}}
+  .answer-md h1{{font-size:22px;font-weight:500;margin:18px 0 10px;color:#2C1810;}}
+  .answer-md h2{{font-size:17px;font-weight:500;margin:16px 0 8px;padding-bottom:6px;
+    border-bottom:0.5px solid #E0D5C5;color:#2C1810;}}
+  .answer-md h3{{font-size:15px;font-weight:500;margin:14px 0 6px;color:#4A3728;}}
+  .answer-md p{{margin:0 0 12px;line-height:1.82;}}
+  .answer-md ul,.answer-md ol{{margin:0 0 12px;padding-left:22px;}}
+  .answer-md blockquote{{border-left:3px solid #C4956A;padding-left:14px;margin:12px 0;
+    color:#6B5040;font-style:italic;}}
+  .answer-md pre{{background:#F5EFE6;border:0.5px solid #E0D5C5;border-radius:8px;
+    padding:12px 14px;overflow-x:auto;font-size:13px;}}
+  .answer-md table{{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;}}
+  .answer-md th,.answer-md td{{border:0.5px solid #E0D5C5;padding:6px 10px;text-align:left;}}
+  .answer-md th{{background:#F0E8DC;}}
 </style></head><body>
 {inner_body}
 </body></html>"""

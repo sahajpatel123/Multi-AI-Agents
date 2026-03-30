@@ -43,6 +43,17 @@ Output valid JSON only. No preamble.
     "source or context used"
   ]
 }
+
+FORMATTING RULES — always follow (structure the answer via sentence order and markdown inside each "text" field):
+- Use ## at the start of a sentence's "text" for main section headings and ### for sub-sections when you need explicit headings.
+- Use bullet points (lines starting with - or * in the sentence text, or multiple sentences with leading "• ") for lists of 3+ items.
+- Use **bold** for key terms and conclusions within sentence text.
+- Use > at the start of a sentence's "text" for blockquote-style direct evidence or important caveats.
+- Use markdown tables in a single sentence's "text" when comparing options (GitHub-flavored table syntax).
+- Break long explanations across multiple sentences; avoid one sentence that is an entire wall of text.
+- Start with a 2-3 sentence executive summary (first sentences) before deeper sections.
+- End with a ## Conclusion or ## Bottom Line section (as dedicated sentence texts) that summarises the key takeaway in 2-3 sentences.
+- Do not repeat the user's task question as an # title; the UI already shows the question.
 """
 
 

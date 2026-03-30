@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Ellipsis, Lock, Pencil, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
+import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
 import MicroLoader from '../components/MicroLoader';
 import { RazorpayCheckout } from '../components/RazorpayCheckout';
@@ -312,16 +313,6 @@ function formatRelativeShort(iso: string | null | undefined): string {
   if (hr < 48) return `${hr}h ago`;
   const day = Math.floor(hr / 24);
   return `${day}d ago`;
-}
-
-function splitPlainAnswerToSentences(text: string): AnswerSentenceView[] {
-  const t = text.trim();
-  if (!t) return [];
-  const parts = t.split(/\.\s+/).filter((p) => p.trim().length > 0);
-  return parts.map((p, i) => {
-    const withDot = i < parts.length - 1 || t.endsWith('.') ? (p.endsWith('.') ? p : `${p}.`) : p;
-    return { text: withDot.trim(), confidence: 'supported' as const };
-  });
 }
 
 const CAVEAT_CATEGORY_KEYS = new Set([
@@ -1489,10 +1480,8 @@ export function AgentPage() {
         confidence: sentenceConfidenceLevel(s),
       }));
     }
-    const raw = plainTextFromFinalAnswer(result?.final_answer, parsedAnswer);
-    if (raw.trim()) return splitPlainAnswerToSentences(raw);
     return [];
-  }, [parsedAnswer, result?.final_answer]);
+  }, [parsedAnswer]);
 
   const confidenceLegendStats = useMemo(() => {
     const total = answerSentences.length;
@@ -2248,6 +2237,11 @@ export function AgentPage() {
         }
         .answer-text.conf-active span.uncertain {
           color: #C0392B;
+        }
+        .agent-answer-main {
+          max-width: 100%;
+          overflow-x: hidden;
+          padding: 0;
         }
         .agent-bottom-input-shell {
           border: 0.5px solid #d4c4b0;
@@ -4431,9 +4425,7 @@ export function AgentPage() {
                           text: s.text,
                           confidence: sentenceConfidenceLevel(s),
                         }))
-                      : splitPlainAnswerToSentences(
-                          plainTextFromFinalAnswer(tr.final_answer, trParsed),
-                        );
+                      : [];
                     return (
                       <div
                         key={tr.task_id || ti}
@@ -4474,18 +4466,17 @@ export function AgentPage() {
                                 ))}
                               </div>
                             ) : (
-                              <pre
-                                style={{
-                                  whiteSpace: 'pre-wrap',
-                                  fontFamily: 'Georgia, serif',
-                                  margin: 0,
-                                  fontSize: 14,
-                                }}
-                              >
-                                {plainTextFromFinalAnswer(tr.final_answer, trParsed) ||
-                                  tr.final_answer ||
-                                  'No final answer returned.'}
-                              </pre>
+                              <div className="agent-answer-main answer-body">
+                                <AgentAnswerMarkdown
+                                  markdown={
+                                    plainTextFromFinalAnswer(tr.final_answer, trParsed) ||
+                                    tr.final_answer ||
+                                    ''
+                                  }
+                                  question={q}
+                                  emptyMessage="No final answer returned."
+                                />
+                              </div>
                             )}
                           </div>
                         ) : null}
@@ -4767,18 +4758,12 @@ export function AgentPage() {
                       ))}
                     </div>
                   ) : (
-                    <div
-                      style={{
-                        fontSize: 15,
-                        lineHeight: 1.8,
-                        color: '#2C1810',
-                        fontFamily: 'Georgia, serif',
-                        fontStyle: 'italic',
-                        whiteSpace: 'pre-wrap',
-                        marginBottom: '24px',
-                      }}
-                    >
-                      {plainAnswerText || result.final_answer || 'No final answer returned.'}
+                    <div className="agent-answer-main answer-body" style={{ marginBottom: '24px' }}>
+                      <AgentAnswerMarkdown
+                        markdown={plainAnswerText || result.final_answer || ''}
+                        question={(result.original_task || result.task || '').trim()}
+                        emptyMessage="No final answer returned."
+                      />
                     </div>
                   )}
                   {Array.isArray(result.contradictions) &&

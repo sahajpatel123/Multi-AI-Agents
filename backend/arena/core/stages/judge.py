@@ -78,6 +78,8 @@ Output JSON only. No preamble.
 }
 
 Pass threshold: 70+
+
+FORMATTING NOTE — the synthesised answer may be JSON with per-sentence "text" fields or plain markdown. When scoring Clarity and Usefulness, reward structured markdown (##/### headings, bullets, **bold**, blockquotes, tables) and penalise unstructured walls of text. Prefer answers that follow markdown-style structure when present: ## for main sections, ### for sub-sections, bullets for 3+ items, **bold** for key terms, > for caveats, tables for comparisons, short paragraphs, an executive summary up front, and a ## Conclusion or ## Bottom Line at the end. Do not penalise the answer for omitting a duplicate of the task question as a heading.
 """
 
 

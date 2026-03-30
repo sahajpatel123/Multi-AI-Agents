@@ -30,6 +30,7 @@ slowapi==0.1.9
 
 # Utils
 python-dotenv==1.0.1
+markdown==3.7
 python-dateutil>=2.8.0
 pdfplumber==0.11.4
 Pillow==10.4.0
