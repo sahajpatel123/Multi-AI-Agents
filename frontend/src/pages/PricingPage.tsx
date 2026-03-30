@@ -118,6 +118,16 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function PriceDisplay({ amount, period = '/mo' }: { amount: string; period?: string }) {
+  return (
+    <div className="price-display">
+      <span className="currency">₹</span>
+      <span className="amount">{amount}</span>
+      {period ? <span className="period">{period}</span> : null}
+    </div>
+  );
+}
+
 function isSubFeature(item: string) {
   return (
     item.startsWith('· ') ||
@@ -287,30 +297,6 @@ export function PricingPage() {
     setCheckoutPlan(null);
   }, []);
 
-  const toggleBtnActive = {
-    background: '#FFFFFF',
-    borderRadius: '999px',
-    padding: '8px 24px',
-    fontSize: '13px',
-    fontWeight: 500,
-    color: '#1A1714',
-    boxShadow: '0 1px 3px rgba(26,23,20,0.06)',
-    transition: 'all 150ms ease',
-    border: 'none',
-    cursor: 'pointer',
-  } as const;
-
-  const toggleBtnInactive = {
-    background: 'transparent',
-    borderRadius: '999px',
-    padding: '8px 24px',
-    fontSize: '13px',
-    color: '#6B6460',
-    cursor: 'pointer',
-    border: 'none',
-    transition: 'all 150ms ease',
-  } as const;
-
   return (
     <div
       style={{
@@ -450,40 +436,23 @@ export function PricingPage() {
           </div>
         )}
 
-        <div className="pricing-billing-wrap" style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem', width: '100%' }}>
-          <div
-            className="billing-toggle"
-            style={{
-              background: '#EFEFED',
-              borderRadius: '999px',
-              padding: '4px',
-              display: 'inline-flex',
-              gap: '4px',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              width: '100%',
-              maxWidth: 420,
-              justifyContent: 'center',
-            }}
-          >
+        <div className="pricing-billing-wrap">
+          <div className="billing-toggle-v2" role="group" aria-label="Billing period">
             <button
               type="button"
+              className={`billing-toggle-option${billing === 'monthly' ? ' billing-toggle-option--active' : ''}`}
               onClick={() => setBilling('monthly')}
-              style={billing === 'monthly' ? toggleBtnActive : toggleBtnInactive}
             >
               Monthly
             </button>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
-              <button
-                type="button"
-                onClick={() => setBilling('annual')}
-                style={billing === 'annual' ? toggleBtnActive : toggleBtnInactive}
-              >
-                <span>Annual</span>
-                <span style={{ color: '#C4B8AE', margin: '0 4px', fontSize: '11px' }}>·</span>
-                <span style={{ fontSize: '11px', color: '#8AA899', fontWeight: 400 }}>lower monthly rate</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              className={`billing-toggle-option${billing === 'annual' ? ' billing-toggle-option--active' : ''}`}
+              onClick={() => setBilling('annual')}
+            >
+              Annual
+              {billing === 'monthly' ? <span className="billing-toggle-save-badge">· save 26%</span> : null}
+            </button>
           </div>
         </div>
 
@@ -533,8 +502,10 @@ export function PricingPage() {
             <p style={{ fontSize: '24px', fontWeight: 500, color: '#1A1714', letterSpacing: '-0.02em', marginBottom: '.8rem' }}>
               Explorer
             </p>
-            <div style={{ fontSize: '36px', fontWeight: 500, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹0</div>
-            <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>forever</p>
+            <PriceDisplay amount="0" period="" />
+            <p className="pricing-price-sub" style={{ marginBottom: '1rem' }}>
+              forever
+            </p>
             <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', margin: '0.75rem 0' }} />
             <FeatureList items={explorerFeatures} dotColor="#D4CCC4" textColor="#1A1714" subColor="#8B8480" />
             {isCurrentPlan('free') ? (
@@ -618,13 +589,15 @@ export function PricingPage() {
 
             {billing === 'monthly' ? (
               <>
-                <div style={{ fontSize: '36px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹999/mo</div>
-                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>per month, billed monthly</p>
+                <PriceDisplay amount="999" />
+                <p className="pricing-price-sub" style={{ marginBottom: '1rem' }}>
+                  per month, billed monthly
+                </p>
               </>
             ) : (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '.35rem' }}>
-                  <span style={{ fontSize: '36px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', lineHeight: 1 }}>₹742/mo</span>
+                <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '8px', marginBottom: 0 }}>
+                  <PriceDisplay amount="742" />
                   <span
                     style={{
                       background: '#EFF4EF',
@@ -639,6 +612,9 @@ export function PricingPage() {
                     Save 26%
                   </span>
                 </div>
+                <p className="pricing-price-sub" style={{ marginBottom: '4px' }}>
+                  per month, billed annually
+                </p>
                 <p style={{ fontSize: '16px', color: '#8C7355', marginBottom: '4px' }}>Billed as ₹8,899/year</p>
                 <p style={{ fontSize: '12px', color: '#C4B8AE', textDecoration: 'line-through', marginBottom: '1rem' }}>vs ₹11,988 if paid monthly</p>
               </>
@@ -717,7 +693,11 @@ export function PricingPage() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 13, fontWeight: 500, color: '#2C1810' }}>⚡ Add Agent Mode</span>
-                  <span style={{ fontSize: 13, color: '#C4956A', marginLeft: 'auto' }}>₹599/month</span>
+                  <div className="price-display price-display--compact" style={{ marginLeft: 'auto' }}>
+                    <span className="currency">₹</span>
+                    <span className="amount">599</span>
+                    <span className="period">/month</span>
+                  </div>
                 </div>
                 <p style={{ fontSize: 11, color: '#8C7355', fontStyle: 'italic', margin: '6px 0 10px' }}>
                   Unlock the 7-stage research pipeline on your Plus plan. Plus limits apply.
@@ -732,7 +712,14 @@ export function PricingPage() {
                     setCheckoutPlan('agent_addon');
                   }}
                 >
-                  Add Agent Mode — ₹599/mo
+                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+                    Add Agent Mode —
+                    <span className="price-display price-display--compact">
+                      <span className="currency">₹</span>
+                      <span className="amount">599</span>
+                      <span className="period">/mo</span>
+                    </span>
+                  </span>
                 </Button>
               </div>
             ) : null}
@@ -790,13 +777,15 @@ export function PricingPage() {
 
             {billing === 'monthly' ? (
               <>
-                <div style={{ fontSize: '36px', fontWeight: 500, color: '#1A1714', lineHeight: 1, marginBottom: '0.25rem' }}>₹2,499/mo</div>
-                <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>per month, billed monthly</p>
+                <PriceDisplay amount="2,499" />
+                <p className="pricing-price-sub" style={{ marginBottom: '1rem' }}>
+                  per month, billed monthly
+                </p>
               </>
             ) : (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '.35rem' }}>
-                  <span style={{ fontSize: '36px', fontWeight: 500, color: '#1A1714', lineHeight: 1 }}>₹1,650/mo</span>
+                <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '8px', marginBottom: 0 }}>
+                  <PriceDisplay amount="1,650" />
                   <span
                     style={{
                       background: '#EFF4EF',
@@ -810,6 +799,9 @@ export function PricingPage() {
                     Save 34%
                   </span>
                 </div>
+                <p className="pricing-price-sub" style={{ marginBottom: '4px' }}>
+                  per month, billed annually
+                </p>
                 <p style={{ fontSize: '16px', color: '#8C7355', marginBottom: '4px' }}>billed ₹19,800/year</p>
                 <p
                   style={{

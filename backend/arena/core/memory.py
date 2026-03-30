@@ -529,6 +529,7 @@ class MemoryManager:
 _memory_manager: MemoryManager | None = None
 
 
+
 def get_memory_manager() -> MemoryManager:
     global _memory_manager
     if _memory_manager is None:

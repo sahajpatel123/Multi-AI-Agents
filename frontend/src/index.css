@@ -76,6 +76,116 @@ p {
   margin-bottom: 1em;
 }
 
+/* Pricing page — unified ₹ display */
+.price-display {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.price-display .currency {
+  font-size: 28px;
+  font-family: Georgia, serif;
+  font-weight: 400;
+  color: #2c1810;
+  line-height: 1;
+}
+
+.price-display .amount {
+  font-size: 48px;
+  font-family: Georgia, serif;
+  font-weight: 500;
+  color: #2c1810;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.price-display .period {
+  font-size: 16px;
+  color: #8c7355;
+  font-weight: 400;
+  margin-left: 2px;
+}
+
+.pricing-price-sub {
+  font-size: 13px;
+  color: #a89070;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.price-display--compact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.price-display--compact .currency,
+.price-display--compact .amount,
+.price-display--compact .period {
+  font-size: 13px;
+  font-family: Georgia, serif;
+  font-weight: 400;
+  color: #2c1810;
+  line-height: 1;
+  letter-spacing: normal;
+  margin-left: 0;
+}
+
+.price-display--compact .amount {
+  font-weight: 500;
+}
+
+.price-display--compact .period {
+  color: #8c7355;
+  margin-left: 2px;
+}
+
+.pricing-billing-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.billing-toggle-v2 {
+  display: inline-flex;
+  background: #ede4d8;
+  border-radius: 32px;
+  padding: 4px;
+  gap: 0;
+  margin: 0 auto 40px;
+  width: fit-content;
+}
+
+.billing-toggle-option {
+  padding: 9px 24px;
+  border-radius: 28px;
+  font-size: 15px;
+  font-family: Georgia, serif;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+  border: none;
+  background: transparent;
+  color: #8c7355;
+  font-weight: 400;
+}
+
+.billing-toggle-option--active {
+  background: #fdfaf6;
+  color: #2c1810;
+  font-weight: 500;
+  box-shadow: 0 1px 4px rgba(44, 24, 16, 0.1);
+}
+
+.billing-toggle-save-badge {
+  font-size: 11px;
+  color: #c4956a;
+  font-weight: 400;
+  font-style: italic;
+  margin-left: 6px;
+}
+
 .label-xs {
   font-size: var(--text-xs);
   letter-spacing: 0.14em;
@@ -911,7 +1021,7 @@ canvas {
     padding-right: 16px !important;
   }
 
-  .billing-toggle button {
+  .billing-toggle-v2 .billing-toggle-option {
     min-height: 44px !important;
     flex: 1 !important;
   }
@@ -1102,7 +1212,7 @@ canvas {
     padding: 1rem 0 !important;
   }
 
-  .billing-toggle {
+  .billing-toggle-v2 {
     width: 100% !important;
     justify-content: center !important;
   }
