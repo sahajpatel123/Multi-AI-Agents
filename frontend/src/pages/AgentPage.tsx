@@ -696,7 +696,6 @@ export function AgentPage() {
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const attachZoneRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [watchlisted, setWatchlisted] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
   const [watchlistPickHours, setWatchlistPickHours] = useState<24 | 72 | 168>(24);
@@ -3518,20 +3517,12 @@ export function AgentPage() {
                           <input
                             ref={fileInputRef}
                             type="file"
-                            accept=".pdf,.doc,.docx"
+                            accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.doc,.docx,.txt"
+                            multiple
                             style={{ display: 'none' }}
                             onChange={(e) => {
-                              void uploadAttachmentFile(e.target.files?.[0]);
-                              e.target.value = '';
-                            }}
-                          />
-                          <input
-                            ref={imageInputRef}
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp"
-                            style={{ display: 'none' }}
-                            onChange={(e) => {
-                              void uploadAttachmentFile(e.target.files?.[0]);
+                              const files = Array.from(e.target.files || []);
+                              files.forEach(file => void uploadAttachmentFile(file));
                               e.target.value = '';
                             }}
                           />
@@ -3806,7 +3797,7 @@ export function AgentPage() {
                               >
                                 <button
                                   type="button"
-                                  onClick={() => fileInputRef.current?.click()}
+                                  onClick={() => { setAttachMenuOpen(false); fileInputRef.current?.click(); }}
                                   style={{
                                     display: 'flex',
                                     alignItems: 'center',
@@ -3820,6 +3811,8 @@ export function AgentPage() {
                                     textAlign: 'left',
                                     font: 'inherit',
                                   }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = '#F5EFE6')}
+                                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                                 >
                                   <span
                                     style={{
@@ -3830,69 +3823,18 @@ export function AgentPage() {
                                       display: 'flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
+                                      flexShrink: 0,
                                     }}
                                   >
-                                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
-                                      <path
-                                        d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
-                                        stroke="#185FA5"
-                                        strokeWidth={1.5}
-                                        strokeLinecap="round"
-                                      />
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#185FA5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                                     </svg>
                                   </span>
                                   <span>
                                     <span style={{ display: 'block', fontSize: 13, color: '#2C1810' }}>
-                                      Attach file
+                                      Add files or photos
                                     </span>
-                                    <span style={{ fontSize: 10, color: '#A89070' }}>PDF, doc, image…</span>
-                                  </span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => imageInputRef.current?.click()}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 10,
-                                    padding: '10px 14px',
-                                    cursor: 'pointer',
-                                    border: 'none',
-                                    background: 'transparent',
-                                    width: '100%',
-                                    textAlign: 'left',
-                                    font: 'inherit',
-                                  }}
-                                >
-                                  <span
-                                    style={{
-                                      width: 28,
-                                      height: 28,
-                                      borderRadius: 7,
-                                      background: '#F0E8DC',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                    }}
-                                  >
-                                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
-                                      <rect
-                                        x="3"
-                                        y="5"
-                                        width="18"
-                                        height="14"
-                                        rx="2"
-                                        stroke="#C4956A"
-                                        strokeWidth={1.3}
-                                      />
-                                      <circle cx="8.5" cy="10" r="1.5" fill="#C4956A" />
-                                    </svg>
-                                  </span>
-                                  <span>
-                                    <span style={{ display: 'block', fontSize: 13, color: '#2C1810' }}>
-                                      Attach image
-                                    </span>
-                                    <span style={{ fontSize: 10, color: '#A89070' }}>PNG, JPG, WEBP…</span>
+                                    <span style={{ fontSize: 10, color: '#A89070' }}>Images, PDFs, docs…</span>
                                   </span>
                                 </button>
                                 <div style={{ height: 0.5, background: '#EDE4D8', margin: '0 8px' }} />
@@ -4080,7 +4022,7 @@ export function AgentPage() {
                               >
                                 <button
                                   type="button"
-                                  onClick={() => fileInputRef.current?.click()}
+                                  onClick={() => { setAttachMenuOpen(false); fileInputRef.current?.click(); }}
                                   style={{
                                     display: 'flex',
                                     alignItems: 'center',
@@ -4091,26 +4033,29 @@ export function AgentPage() {
                                     background: 'none',
                                     font: 'inherit',
                                     textAlign: 'left',
+                                    cursor: 'pointer',
                                   }}
                                 >
-                                  <span style={{ fontSize: 13, color: '#2C1810' }}>Attach file</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => imageInputRef.current?.click()}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 10,
-                                    padding: '12px 16px',
-                                    width: '100%',
-                                    border: 'none',
-                                    background: 'none',
-                                    font: 'inherit',
-                                    textAlign: 'left',
-                                  }}
-                                >
-                                  <span style={{ fontSize: 13, color: '#2C1810' }}>Attach image</span>
+                                  <span
+                                    style={{
+                                      width: 28,
+                                      height: 28,
+                                      borderRadius: 7,
+                                      background: '#EAF0F7',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#185FA5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                                    </svg>
+                                  </span>
+                                  <span>
+                                    <span style={{ display: 'block', fontSize: 13, color: '#2C1810' }}>Add files or photos</span>
+                                    <span style={{ fontSize: 10, color: '#A89070' }}>Images, PDFs, docs…</span>
+                                  </span>
                                 </button>
                                 <div style={{ height: 0.5, background: '#EDE4D8', margin: '4px 0' }} />
                                 {integrations.map((integ: any) => (
