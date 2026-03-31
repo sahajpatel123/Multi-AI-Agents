@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { addRoomTask, getAgentHistory, getRoom, joinRoom, removeRoomTask } from '../api';
+import { addRoomTask, getAgentHistory, getRoom, getRoomSynthesis, joinRoom, removeRoomTask } from '../api';
 import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getUserColor, getUserInitials } from '../utils/roomUtils';
@@ -18,6 +18,40 @@ function LayersIcon() {
       />
     </svg>
   );
+}
+
+function getExcerpt(task: any): string {
+  const answer = task.final_answer || '';
+  if (!answer) return '';
+
+  if (answer.trim().startsWith('{') || answer.trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(answer);
+      if (parsed.sentences && Array.isArray(parsed.sentences)) {
+        return parsed.sentences.map((s: any) => s.text || '').join(' ').slice(0, 140) + '...';
+      }
+      if (parsed.text) {
+        return parsed.text.slice(0, 140) + '...';
+      }
+      if (parsed.final_answer) {
+        return parsed.final_answer.slice(0, 140) + '...';
+      }
+    } catch {
+      // Not JSON — fall through
+    }
+  }
+
+  return answer
+    .replace(/#{1,3}\s/g, '')
+    .replace(/\*\*/g, '')
+    .replace(/\*/g, '')
+    .replace(/\n+/g, ' ')
+    .trim()
+    .slice(0, 140) + '...';
+}
+
+function getTaskTitle(task: any): string {
+  return task.title || task.question || task.task_text || 'Untitled task';
 }
 
 function onlineActive(iso: string | null | undefined): boolean {
@@ -42,6 +76,7 @@ export function RoomPage() {
   const [newTaskText, setNewTaskText] = useState('');
   const [inviteToast, setInviteToast] = useState(false);
   const [hoverTask, setHoverTask] = useState<string | null>(null);
+  const [synthesisRefreshing, setSynthesisRefreshing] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!slug) return;
@@ -158,6 +193,27 @@ export function RoomPage() {
     }
   };
 
+  const handleRefreshSynthesis = async () => {
+    if (!slug || synthesisRefreshing) return;
+    setSynthesisRefreshing(true);
+    try {
+      const s = await getRoomSynthesis(slug, true);
+      setRoom((prev: any) => prev ? { ...prev, synthesis: s.synthesis, synthesis_updated_at: s.synthesis_updated_at } : prev);
+    } catch {
+      /* ignore */
+    } finally {
+      setSynthesisRefreshing(false);
+    }
+  };
+
+  const handleResolveContradiction = (claimA: string, claimB: string) => {
+    const question = `Compare and resolve: ${claimA} vs ${claimB} — which is more accurate and why?`;
+    try {
+      sessionStorage.setItem('arena_prefill_question', question);
+    } catch { /* ignore */ }
+    navigate('/agent');
+  };
+
   const sidebarInner = (
     <>
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#C4A882', marginBottom: 10 }}>
@@ -252,24 +308,58 @@ export function RoomPage() {
           <LayersIcon />
           <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Group synthesis</span>
         </div>
-        {contradictions.length > 0 ? (
-          <span
-            style={{
-              fontSize: 10,
-              background: '#FCF0EE',
-              color: '#993C1D',
-              border: '0.5px solid #F0997B',
-              borderRadius: 8,
-              padding: '4px 10px',
-            }}
-          >
-            {contradictions.length} contradictions
-          </span>
-        ) : null}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {contradictions.length > 0 ? (
+            <span
+              style={{
+                fontSize: 10,
+                background: '#FCF0EE',
+                color: '#993C1D',
+                border: '0.5px solid #F0997B',
+                borderRadius: 8,
+                padding: '4px 10px',
+              }}
+            >
+              {contradictions.length} contradictions
+            </span>
+          ) : null}
+          {synthesis && tasks.length >= 2 ? (
+            <button
+              type="button"
+              title="Refresh synthesis"
+              onClick={() => void handleRefreshSynthesis()}
+              disabled={synthesisRefreshing}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: synthesisRefreshing ? 'default' : 'pointer',
+                color: '#C4956A',
+                padding: 4,
+                opacity: synthesisRefreshing ? 0.5 : 1,
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden style={synthesisRefreshing ? { animation: 'spin 1s linear infinite' } : undefined}>
+                <path d="M21 2v6h-6M3 22v-6h6" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M3 12a9 9 0 0115.36-6.36L21 8M21 12a9 9 0 01-15.36 6.36L3 16" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
       </div>
       {!synthesis || tasks.length < 2 ? (
-        <div style={{ padding: 24, textAlign: 'center', fontSize: 12, color: '#A89070', fontStyle: 'italic' }}>
-          Add at least 2 tasks to generate group synthesis
+        <div style={{ padding: 32, textAlign: 'center' }}>
+          <svg width={32} height={32} viewBox="0 0 32 32" fill="none" aria-hidden style={{ margin: '0 auto 12px', display: 'block', color: '#D4C4B0' }}>
+            <circle cx="12" cy="16" r="9" stroke="currentColor" strokeWidth={1.5} fill="none" />
+            <circle cx="20" cy="16" r="9" stroke="currentColor" strokeWidth={1.5} fill="none" />
+          </svg>
+          <div style={{ fontSize: 14, color: '#A89070', fontStyle: 'italic' }}>
+            Add 2 or more tasks to see group synthesis
+          </div>
+          <div style={{ fontSize: 12, color: '#C4A882', marginTop: 4 }}>
+            Arena will automatically compare findings across all members
+          </div>
         </div>
       ) : (
         <div>
@@ -293,6 +383,23 @@ export function RoomPage() {
               {c.resolution_hint ? (
                 <div style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', marginTop: 5 }}>{c.resolution_hint}</div>
               ) : null}
+              <button
+                type="button"
+                onClick={() => handleResolveContradiction(c.claim_a || '', c.claim_b || '')}
+                style={{
+                  marginTop: 8,
+                  background: 'none',
+                  border: '0.5px solid #D4C4B0',
+                  borderRadius: 6,
+                  padding: '5px 12px',
+                  fontSize: 11,
+                  color: '#C4956A',
+                  cursor: 'pointer',
+                  fontFamily: 'Georgia, serif',
+                }}
+              >
+                Resolve this →
+              </button>
             </div>
           ))}
           {patterns.length > 0 ? (
@@ -350,7 +457,7 @@ export function RoomPage() {
       {tasks.map((t: any) => {
         const mem = members.find((m: any) => m.user_id === t.user_id);
         const name = mem?.name || 'Member';
-        const excerpt = (t.final_answer || '').slice(0, 120);
+        const excerpt = getExcerpt(t);
         const canRemove = user && (t.user_id === user.id || room?.creator_id === user.id);
         return (
           <div
@@ -366,11 +473,12 @@ export function RoomPage() {
             style={{
               position: 'relative',
               background: '#FAF7F2',
-              border: '0.5px solid #E0D5C5',
+              border: hoverTask === t.task_id ? '0.5px solid #C4956A' : '0.5px solid #E0D5C5',
               borderRadius: 10,
               padding: 14,
               cursor: 'pointer',
-              transition: 'border-color 0.15s',
+              transition: 'border-color 0.15s, box-shadow 0.15s',
+              boxShadow: hoverTask === t.task_id ? '0 2px 8px rgba(196,149,106,0.12)' : 'none',
             }}
           >
             {canRemove && hoverTask === t.task_id ? (
@@ -428,7 +536,7 @@ export function RoomPage() {
                 overflow: 'hidden',
               }}
             >
-              {t.question}
+              {getTaskTitle(t)}
             </div>
             <div
               style={{
@@ -443,7 +551,6 @@ export function RoomPage() {
               }}
             >
               {excerpt}
-              {(t.final_answer || '').length > 120 ? '…' : ''}
             </div>
           </div>
         );
@@ -497,6 +604,11 @@ export function RoomPage() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#F5F0E8' }}>
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       {!user ? (
         <div
           style={{
@@ -555,9 +667,14 @@ export function RoomPage() {
           >
             ← Arena
           </button>
-          <span style={{ fontSize: 16, fontFamily: 'Georgia, serif', fontWeight: 500, color: '#2C1810', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {room.name}
-          </span>
+          <div style={{ minWidth: 0 }}>
+            <span style={{ fontSize: 16, fontFamily: 'Georgia, serif', fontWeight: 500, color: '#2C1810', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+              {room.name}
+            </span>
+            <span style={{ fontSize: 11, color: '#A89070' }}>
+              {members.length} researcher{members.length !== 1 ? 's' : ''} · {tasks.length} task{tasks.length !== 1 ? 's' : ''}{contradictions.length > 0 ? ` · ${contradictions.length} contradiction${contradictions.length !== 1 ? 's' : ''} found` : ''}
+            </span>
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
           {members.slice(0, 8).map((m: any, idx: number) => (
@@ -612,7 +729,7 @@ export function RoomPage() {
             flexShrink: 0,
           }}
         >
-          Invite
+          {inviteToast ? '✓ Link copied!' : 'Copy invite link'}
         </button>
       </header>
 

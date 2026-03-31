@@ -182,6 +182,17 @@ export function WatchlistPage() {
       </header>
 
       <main style={{ flex: 1, padding: '24px 16px 48px', overflowY: 'auto' }}>
+        <p style={{
+          fontSize: '14px',
+          color: '#8C7355',
+          fontStyle: 'italic',
+          marginBottom: '24px',
+          lineHeight: '1.6',
+          maxWidth: 680,
+          margin: '0 auto 24px',
+        }}>
+          Watched tasks re-run automatically on your chosen schedule. Arena compares new findings to the original answer and notifies you when something meaningful changes.
+        </p>
         {error ? (
           <p style={{ color: '#D85A30', fontSize: 13, textAlign: 'center', marginBottom: 16 }}>{error}</p>
         ) : null}

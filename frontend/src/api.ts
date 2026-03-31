@@ -1452,11 +1452,12 @@ export async function removeRoomTask(slug: string, taskId: string): Promise<any>
   return data;
 }
 
-export async function getRoomSynthesis(slug: string): Promise<{
+export async function getRoomSynthesis(slug: string, force?: boolean): Promise<{
   synthesis: any;
   synthesis_updated_at: string | null;
 }> {
-  const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}/synthesis`);
+  const qs = force ? '?force=true' : '';
+  const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}/synthesis${qs}`);
   const data = await parseJsonSafely<{ synthesis?: any; synthesis_updated_at?: string | null }>(response);
   if (!response.ok) {
     throw new ApiError('Could not load synthesis', response.status, data);

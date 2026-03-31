@@ -225,19 +225,33 @@ async def my_rooms(
         .limit(5)
     )
     rooms = q.all()
+    result = []
+    for r in rooms:
+        d = _room_to_dict(r, db)
+        rm = (
+            db.query(RoomMember)
+            .filter(RoomMember.room_id == r.id, RoomMember.user_id == user.id)
+            .first()
+        )
+        d["last_seen_at"] = rm.last_seen_at.isoformat() if rm and rm.last_seen_at else None
+        result.append(d)
     return {
-        "rooms": [_room_to_dict(r, db) for r in rooms],
+        "rooms": result,
     }
 
 
 @router.get("/{slug}/synthesis")
 async def get_synthesis(
     slug: str,
+    force: bool = False,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     room = db.query(Room).filter(Room.slug == slug).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
+    if force:
+        _schedule_synthesis(background_tasks, slug)
     return {
         "synthesis": room.synthesis,
         "synthesis_updated_at": room.synthesis_updated_at.isoformat()

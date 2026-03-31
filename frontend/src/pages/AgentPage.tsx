@@ -941,6 +941,16 @@ export function AgentPage() {
   }, [result?.status, result?.task_id, user]);
 
   useEffect(() => {
+    try {
+      const prefill = sessionStorage.getItem('arena_prefill_question');
+      if (prefill) {
+        setTask(prefill);
+        sessionStorage.removeItem('arena_prefill_question');
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
     if (!openMenuTaskId && !confirmDeleteTaskId) return;
     const handleOutsideClick = (event: MouseEvent) => {
       if (menuLayerRef.current?.contains(event.target as Node)) return;
@@ -1973,9 +1983,10 @@ export function AgentPage() {
                   {item.is_live ? (
                     <span
                       aria-hidden
+                      title="Updates weekly"
                       style={{
-                        width: 4,
-                        height: 4,
+                        width: 5,
+                        height: 5,
                         borderRadius: '50%',
                         background: '#639922',
                         flexShrink: 0,
@@ -2200,8 +2211,8 @@ export function AgentPage() {
           to { transform: rotate(360deg); }
         }
         @keyframes liveDotBlink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.35; }
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.85); }
         }
 .agent-chal-dot {
           width: 8px;
@@ -2432,58 +2443,83 @@ export function AgentPage() {
                 <div style={{ fontSize: 11, color: '#C4B8AE', padding: '4px 0' }}>Loading…</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {myRooms.map((r: any) => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => {
-                        navigate(`/room/${encodeURIComponent(r.slug)}`);
-                        if (isMobile) setSidebarOpen(false);
-                      }}
-                      style={{
-                        textAlign: 'left',
-                        background: 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: 12,
-                        color: '#4A3728',
-                        padding: '6px 4px',
-                        borderRadius: 6,
-                        fontFamily: 'Georgia, serif',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#EDE4D8';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent';
-                      }}
-                    >
-                      {(r.name || 'Room').slice(0, 28)}
-                      {(r.name || '').length > 28 ? '…' : ''}
-                      <span style={{ color: '#A89070', marginLeft: 6 }}>({r.member_count ?? 0})</span>
-                    </button>
-                  ))}
+                  {myRooms.map((r: any) => {
+                    const rName = (r.name || 'Room');
+                    const truncated = rName.length > 22 ? rName.slice(0, 22) + '…' : rName;
+                    const hasUnread = r.synthesis_updated_at && r.last_seen_at && new Date(r.synthesis_updated_at) > new Date(r.last_seen_at);
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => {
+                          navigate(`/room/${encodeURIComponent(r.slug)}`);
+                          if (isMobile) setSidebarOpen(false);
+                        }}
+                        style={{
+                          textAlign: 'left',
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '6px 8px',
+                          borderRadius: 6,
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'space-between',
+                          gap: 6,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#F5EFE6';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, color: '#2C1810', fontWeight: 400, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {truncated}
+                          </div>
+                          <div style={{ fontSize: 10, color: '#A89070', marginTop: 1 }}>
+                            {r.member_count ?? 0} members · {r.task_count ?? 0} tasks
+                          </div>
+                        </div>
+                        {hasUnread ? (
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C4956A', flexShrink: 0, marginTop: 5 }} />
+                        ) : null}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
-              <button
-                type="button"
+              <div
                 onClick={() => {
                   setShowRoomCreate(true);
                   if (isMobile) setSidebarOpen(false);
                 }}
                 style={{
-                  marginTop: 8,
-                  background: 'none',
-                  border: 'none',
-                  padding: '4px 4px 0',
-                  fontSize: 11,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '12px',
                   color: '#C4956A',
                   cursor: 'pointer',
-                  fontFamily: 'Georgia, serif',
+                  padding: '5px 8px',
+                  borderRadius: '6px',
+                  transition: 'background 0.15s',
+                  marginTop: '4px',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#F5EFE6';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
                 }}
               >
-                New room →
-              </button>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                New room
+              </div>
             </div>
           ) : null}
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 16px' }}>
@@ -4629,9 +4665,16 @@ export function AgentPage() {
                           strokeLinejoin="round"
                         />
                       </svg>
-                      <span style={{ fontSize: 13, color: '#2C1810', flex: '1 1 140px' }}>
-                        {unreadLiveCount} new update{unreadLiveCount === 1 ? '' : 's'} found since you ran this
-                      </span>
+                      <div style={{ flex: '1 1 140px' }}>
+                        <span style={{ fontSize: 13, color: '#2C1810', display: 'block' }}>
+                          Arena found new information on this topic since your last run
+                        </span>
+                        {liveUpdatesList.length > 0 && liveUpdatesList[0]?.found_at ? (
+                          <span style={{ fontSize: 11, color: '#5A8C3A', marginTop: 2, display: 'block' }}>
+                            Found {formatRelativeShort(String(liveUpdatesList[0].found_at))}
+                          </span>
+                        ) : null}
+                      </div>
                       <button
                         type="button"
                         onClick={() => setLiveUpdatesPanelOpen((o) => !o)}
@@ -4647,7 +4690,7 @@ export function AgentPage() {
                           textDecoration: 'underline',
                         }}
                       >
-                        {liveUpdatesPanelOpen ? 'Hide updates ↑' : 'See updates →'}
+                        {liveUpdatesPanelOpen ? 'Hide updates ↑' : 'See what changed →'}
                       </button>
                     </div>
                   ) : null}
@@ -6228,6 +6271,7 @@ export function AgentPage() {
                         type="button"
                         disabled={liveToggleBusy}
                         onClick={() => void handleToggleLive()}
+                        title={result.is_live ? 'This task re-runs weekly. Click to stop.' : 'Arena will re-research this topic weekly and notify you of new findings'}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -6265,7 +6309,7 @@ export function AgentPage() {
                             <path d="M3 3l18 18" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" />
                           </svg>
                         )}
-                        {result.is_live ? 'Live thread' : 'Make it live'}
+                        {result.is_live ? (<>Updating weekly <span aria-hidden style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#639922', marginLeft: 2, animation: 'liveDotBlink 2s ease-in-out infinite' }} /></>) : 'Auto-update weekly'}
                       </button>
                     ) : null}
                     {result.status === 'complete' && !isRunning && user ? (
