@@ -105,31 +105,31 @@ export function Navbar() {
               </button>
             </div>
 
-            <div className="navbar-right-cluster">
-              <div className="navbar-nav-links" aria-label="Primary navigation">
-                <button
-                  type="button"
-                  className={`navbar-nav-link${isActive('/product') ? ' navbar-nav-link--active' : ''}`}
-                  onClick={() => navigate('/product')}
-                >
-                  Product
-                </button>
-                <button
-                  type="button"
-                  className={`navbar-nav-link${isActive('/pricing') ? ' navbar-nav-link--active' : ''}`}
-                  onClick={() => navigate('/pricing')}
-                >
-                  Pricing
-                </button>
-                <button
-                  type="button"
-                  className={`navbar-nav-link${isActive('/about') ? ' navbar-nav-link--active' : ''}`}
-                  onClick={() => navigate('/about')}
-                >
-                  About
-                </button>
-              </div>
+            <div className="navbar-nav-links" aria-label="Primary navigation">
+              <button
+                type="button"
+                className={`navbar-nav-link${isActive('/product') ? ' navbar-nav-link--active' : ''}`}
+                onClick={() => navigate('/product')}
+              >
+                Product
+              </button>
+              <button
+                type="button"
+                className={`navbar-nav-link${isActive('/pricing') ? ' navbar-nav-link--active' : ''}`}
+                onClick={() => navigate('/pricing')}
+              >
+                Pricing
+              </button>
+              <button
+                type="button"
+                className={`navbar-nav-link${isActive('/about') ? ' navbar-nav-link--active' : ''}`}
+                onClick={() => navigate('/about')}
+              >
+                About
+              </button>
+            </div>
 
+            <div className="navbar-right-cluster">
               {!isAuthenticated ? (
                 <div className="navbar-auth">
                   <button

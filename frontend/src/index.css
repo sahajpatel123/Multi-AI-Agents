@@ -566,19 +566,19 @@ canvas {
 }
 
 .navbar-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   width: 100%;
   height: 56px;
 }
 
-/* Nav links + auth / avatar: single row, spaced from About to avatar */
+/* Auth / avatar: end-aligned in third grid column */
 .navbar-right-cluster {
   display: flex;
   align-items: center;
-  gap: 28px;
-  flex-shrink: 0;
+  gap: 12px;
+  justify-self: end;
 }
 
 .navbar-brand {
@@ -611,8 +611,8 @@ canvas {
 .navbar-nav-links {
   display: flex;
   align-items: center;
-  gap: 28px;
-  flex-shrink: 0;
+  gap: 36px;
+  justify-self: center;
 }
 
 .navbar-nav-link {
