@@ -258,6 +258,15 @@ input[type='button'] {
   touch-action: manipulation;
 }
 
+button:focus {
+  outline: none;
+}
+
+button:focus-visible {
+  outline: 1.5px solid #C4956A;
+  outline-offset: 2px;
+}
+
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;

@@ -652,7 +652,9 @@ export function AgentPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [confActive, setConfActive] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    !isMobile && localStorage.getItem('agent_sidebar_open') !== 'false'
+  );
 
   useEffect(() => {
     if (isMobile) setSteelmanInnerExpanded(false);
@@ -730,7 +732,11 @@ export function AgentPage() {
   }, [selectedTemplate, templateSlots]);
 
   const toggleSidebar = useCallback(() => {
-    setSidebarOpen((current) => !current);
+    setSidebarOpen((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('agent_sidebar_open', String(next)); } catch { /* ignore */ }
+      return next;
+    });
   }, []);
 
   const openSidebar = useCallback(() => {
@@ -2574,18 +2580,30 @@ export function AgentPage() {
                 background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
-                padding: 8,
+                padding: 6,
+                borderRadius: 6,
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                color: navToggleHovered ? '#2C1810' : '#8C7355',
+                transition: 'background 0.15s',
+                outline: 'none',
               }}
+              onFocus={(e) => { e.currentTarget.style.outline = 'none'; }}
               aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
             >
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                <path d="M3 5H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M3 9H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M3 13H15" stroke={navToggleHovered ? '#2C1810' : '#8C7355'} strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+              {sidebarOpen && !isMobile ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              )}
             </button>
             <div
               style={{
