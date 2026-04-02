@@ -652,9 +652,10 @@ export function AgentPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [confActive, setConfActive] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-  const [sidebarOpen, setSidebarOpen] = useState(() =>
-    !isMobile && localStorage.getItem('agent_sidebar_open') !== 'false'
-  );
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return false;
+    return localStorage.getItem('arena_sidebar') !== 'closed';
+  });
 
   useEffect(() => {
     if (isMobile) setSteelmanInnerExpanded(false);
@@ -734,7 +735,7 @@ export function AgentPage() {
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((prev) => {
       const next = !prev;
-      try { localStorage.setItem('agent_sidebar_open', String(next)); } catch { /* ignore */ }
+      try { localStorage.setItem('arena_sidebar', next ? 'open' : 'closed'); } catch { /* ignore */ }
       return next;
     });
   }, []);
@@ -2308,12 +2309,14 @@ export function AgentPage() {
       ) : null}
       <div
         style={{
-          width: isMobile ? 0 : sidebarOpen ? 224 : 0,
-          minWidth: isMobile ? 0 : sidebarOpen ? 224 : 0,
-          overflow: 'visible',
-          transition:
-            'width 0.32s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.32s cubic-bezier(0.16, 1, 0.3, 1)',
+          width: isMobile ? 0 : sidebarOpen ? 200 : 0,
+          minWidth: isMobile ? 0 : sidebarOpen ? 200 : 0,
+          maxWidth: isMobile ? 0 : sidebarOpen ? 200 : 0,
+          overflow: 'hidden',
           flexShrink: 0,
+          transition: 'width 0.28s cubic-bezier(0.16,1,0.3,1), min-width 0.28s cubic-bezier(0.16,1,0.3,1)',
+          height: '100vh',
+          position: 'relative',
         }}
       >
         <aside
@@ -2321,21 +2324,20 @@ export function AgentPage() {
             position: isMobile ? 'fixed' : 'relative',
             top: 0,
             left: 0,
-            width: isMobile ? 'min(85vw, 300px)' : 224,
+            width: isMobile ? 'min(85vw, 300px)' : 200,
+            minWidth: isMobile ? undefined : 200,
             height: '100%',
             minHeight: '100vh',
             background: '#F5F0E8',
-            borderRight: '0.5px solid #E0D8D0',
+            borderRight: sidebarOpen ? '0.5px solid #EDE4D8' : 'none',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            boxSizing: 'border-box',
             zIndex: isMobile ? 600 : undefined,
             paddingTop: isMobile ? 52 : 0,
             transform: isMobile ? (sidebarOpen ? 'translateX(0)' : 'translateX(-100%)') : undefined,
-            transition: isMobile
-              ? 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-              : undefined,
-            boxSizing: 'border-box',
+            transition: isMobile ? 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)' : undefined,
           }}
         >
           {isMobile ? (
