@@ -896,12 +896,12 @@ function App() {
   return (
     <div
       style={{
-        minHeight: '100vh',
+        minHeight: '100dvh',
         background: '#FAF7F4',
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
-        overflow: 'hidden',
+        overflowX: 'hidden',
       }}
     >
       <style>{`
@@ -1048,7 +1048,9 @@ function App() {
               flex: 1,
               display: 'flex',
               flexDirection: 'column',
-              padding: isMobile ? '16px 0 138px' : '24px 32px 138px 32px',
+              padding: isMobile
+                ? '16px 0 calc(138px + env(safe-area-inset-bottom, 0px))'
+                : '24px 32px 138px 32px',
               background: '#FAF7F4',
               minHeight: 0,
               position: 'relative',

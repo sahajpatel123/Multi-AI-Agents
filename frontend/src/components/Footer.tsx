@@ -15,7 +15,16 @@ export function Footer() {
   };
 
   return (
-    <footer style={{ maxWidth: '1080px', margin: '5rem auto 0', padding: '0 24px', borderTop: '0.5px solid #E0D8D0', paddingTop: '2.5rem', paddingBottom: '2rem' }}>
+    <footer
+      style={{
+        maxWidth: '1080px',
+        margin: '5rem auto 0',
+        padding: '0 24px',
+        borderTop: '0.5px solid #E0D8D0',
+        paddingTop: '2.5rem',
+        paddingBottom: 'max(2rem, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
+      }}
+    >
       <style>{`
         @keyframes breathe {
           0%, 100% { transform: scale(1); opacity: 1; }

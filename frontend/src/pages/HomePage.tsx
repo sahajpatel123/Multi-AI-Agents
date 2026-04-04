@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useReducer } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Icons } from '../components/Icons';
@@ -640,6 +641,8 @@ export function HomePage() {
 
   useEffect(() => {
     if (!quickOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     const handler = (e: MouseEvent) => {
       const el = document.getElementById('quick-access-widget');
       if (el && !el.contains(e.target as Node)) {
@@ -647,7 +650,10 @@ export function HomePage() {
       }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener('mousedown', handler);
+    };
   }, [quickOpen]);
 
   useEffect(() => {
@@ -885,7 +891,7 @@ export function HomePage() {
   };
 
   return (
-    <div style={{ background: '#FAF7F4', minHeight: '100vh', overflow: 'hidden', position: 'relative' }}>
+    <div className="home-page-root" style={{ background: '#FAF7F4', minHeight: '100dvh', position: 'relative' }}>
       <div className="noise-overlay" />
       <style>{`
         @keyframes ticker {
@@ -1628,10 +1634,6 @@ export function HomePage() {
           }
         }
         @media (max-width: 768px) {
-          .quick-access-floating {
-            bottom: 20px !important;
-            right: 20px !important;
-          }
           .quick-access-card-inner {
             width: calc(100vw - 40px) !important;
             max-width: 260px !important;
@@ -1639,35 +1641,36 @@ export function HomePage() {
         }
       `}</style>
 
-      {!quickOpen ? (
-        <Button
-          type="button"
-          className="quick-access-floating"
-          variant="primary"
-          size="md"
-          icon={Icons.sparkle(16)}
-          onClick={() => setQuickOpen(true)}
-          style={{
-            position: 'fixed',
-            bottom: 32,
-            right: 32,
-            zIndex: 999,
-            boxShadow: '0 4px 20px rgba(44, 24, 16, 0.12)',
-          }}
-        >
-          Open Arena
-        </Button>
-      ) : (
-        <div
-          id="quick-access-widget"
-          className="quick-access-floating"
-          style={{
-            position: 'fixed',
-            bottom: 32,
-            right: 32,
-            zIndex: 1000,
-          }}
-        >
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <>
+              {!quickOpen ? (
+                <Button
+                  type="button"
+                  className="quick-access-floating quick-access-floating--corner"
+                  variant="primary"
+                  size="md"
+                  icon={Icons.sparkle(16)}
+                  onClick={() => setQuickOpen(true)}
+                  style={{
+                    boxShadow: '0 4px 20px rgba(44, 24, 16, 0.12)',
+                  }}
+                >
+                  Open Arena
+                </Button>
+              ) : (
+                <>
+                  <div
+                    className="quick-access-backdrop"
+                    role="presentation"
+                    aria-hidden
+                    onClick={() => setQuickOpen(false)}
+                  />
+                  <div
+                    id="quick-access-widget"
+                    className="quick-access-floating quick-access-floating--corner"
+                    style={{ position: 'relative' }}
+                  >
           <button
             type="button"
             aria-label="Close quick access"
@@ -1871,7 +1874,12 @@ export function HomePage() {
             </div>
           </div>
         </div>
-      )}
+                </>
+              )}
+            </>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

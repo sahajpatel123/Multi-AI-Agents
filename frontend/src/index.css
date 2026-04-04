@@ -186,6 +186,31 @@ p {
   margin-left: 6px;
 }
 
+/* Quick access (HomePage) — portal backdrop; must live outside overflow:hidden ancestors */
+.quick-access-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(26, 23, 20, 0.45);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+@media (min-width: 769px) {
+  .quick-access-floating.quick-access-floating--corner {
+    position: fixed !important;
+    left: auto !important;
+    right: 32px !important;
+    width: auto !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    bottom: 32px !important;
+    top: auto !important;
+    z-index: 10001 !important;
+  }
+}
+
 .label-xs {
   font-size: var(--text-xs);
   letter-spacing: 0.14em;
@@ -221,6 +246,11 @@ select {
 #root {
   min-height: 100vh;
   min-height: 100dvh;
+}
+
+.home-page-root {
+  min-height: 100dvh;
+  overflow-x: hidden;
 }
 
 .horizontal-scroll {
@@ -900,7 +930,9 @@ canvas {
     position: fixed;
     inset: 0;
     z-index: 998;
-    background: rgba(26, 23, 20, 0.16);
+    background: rgba(26, 23, 20, 0.42);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
   }
 
   .navbar-mobile-panel {
@@ -910,8 +942,11 @@ canvas {
     width: 100%;
     height: calc(100vh - 56px);
     height: calc(100dvh - 56px);
+    max-height: calc(100dvh - 56px);
     z-index: 999;
     background: #f5f0e8;
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
     padding: 24px 20px;
     display: flex;
     flex-direction: column;
@@ -998,11 +1033,19 @@ canvas {
 
   .home-floating-cta,
   .quick-access-floating {
+    position: fixed !important;
     left: 16px !important;
     right: 16px !important;
     width: calc(100% - 32px) !important;
-    margin: 0 0 16px !important;
+    max-width: 420px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    bottom: max(16px, calc(12px + env(safe-area-inset-bottom, 0px))) !important;
+    top: auto !important;
     font-size: 14px !important;
+    z-index: 10001 !important;
   }
 
   .product-section-heading {
@@ -1291,7 +1334,7 @@ canvas {
     grid-template-rows: none !important;
     gap: 12px !important;
     padding: 12px !important;
-    padding-bottom: 160px !important;
+    padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   .agent-card {
