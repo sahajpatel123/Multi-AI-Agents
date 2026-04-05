@@ -141,6 +141,12 @@ p {
   margin-left: 2px;
 }
 
+/* Primary buttons use a dark fill; pricing tokens default to dark ink and would vanish. */
+.arena-btn--primary .price-display--compact .currency,
+.arena-btn--primary .price-display--compact .amount {
+  color: #c4956a;
+}
+
 .pricing-billing-wrap {
   display: flex;
   justify-content: center;
