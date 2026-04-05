@@ -1024,7 +1024,7 @@ export function HomePage() {
 
               <div className="hero-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '2rem', animation: 'heroSubtext 500ms ease 400ms backwards', flexWrap: 'wrap' }}>
                 <Button variant="primary" size="lg" icon={Icons.arrowRight(18)} onClick={() => navigate('/app')}>
-                  Begin thinking →
+                  Begin thinking
                 </Button>
                 <Button variant="secondary" size="lg" onClick={scrollToHowItWorks}>
                   Watch it work
