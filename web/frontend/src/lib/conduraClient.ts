@@ -114,11 +114,17 @@ export function openHandoffEventStream(
         buffer = chunks.pop() || '';
         for (const chunk of chunks) {
           let eventId: string | null = null;
-          let dataLine = '';
+          const dataLines: string[] = [];
           for (const line of chunk.split('\n')) {
             if (line.startsWith('id:')) eventId = line.slice(3).trim();
-            if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+            if (line.startsWith('data:')) {
+              // SSE spec: strip one optional leading space after 'data:'
+              const val = line.slice(5);
+              dataLines.push(val.startsWith(' ') ? val.slice(1) : val);
+            }
           }
+          // SSE spec: multiple data: lines joined with U+000A (LF)
+          const dataLine = dataLines.join('\n');
           if (eventId) lastEventId = eventId;
           if (dataLine) {
             try {

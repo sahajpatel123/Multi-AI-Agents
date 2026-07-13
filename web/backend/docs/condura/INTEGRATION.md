@@ -226,5 +226,11 @@ Arena server never connects to Condura.
 ## 8. Privacy
 
 - Handoff carries user intent and args. Condura stores them per its privacy policy.
-- Arena's `user_id_hmac` is not reversible without Arena's secret.
+- Arena's `user_id_hmac` is a client-side pseudonymous hash (SHA-256 of
+  `arena:<user_id>:<session_id>`). The spec's long-term goal is a server-side
+  HMAC keyed with an Arena instance secret, but the current v1 implementation
+  uses a client-side hash because the browser doesn't have the server secret.
+  Future versions may add a server endpoint that mints the HMAC so Condura can
+  verify provenance. Until then, Condura should treat `user_id_hmac` as a
+  best-effort pseudonymous identifier, not a cryptographic attestation.
 - Arena's `HandoffRecord` is a UX mirror only; Condura's audit log is authoritative.

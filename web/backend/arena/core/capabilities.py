@@ -275,11 +275,20 @@ def execution_for_request(
     """Resolve execution environment for an Agent request.
 
     Prefer explicit capability_id; fall back to task text heuristics.
+    When the explicit capability resolves to WEB, ALSO run the text heuristic
+    as a safety net — a user can type a local-intent prompt ("open Linear")
+    into a web-capability route (/run). If the heuristic detects local intent,
+    the heuristic result takes precedence so the honest rejection gate fires.
     """
     if capability_id:
         try:
             cap = resolve(capability_id)
-            return cap.execution, cap
+            env = cap.execution
+            if env == ExecutionEnvironment.WEB:
+                text_env = classify_task_text(task_text or "")
+                if requires_local_rejection(text_env):
+                    return text_env, None
+            return env, cap
         except KeyError:
             pass
     env = classify_task_text(task_text or "")

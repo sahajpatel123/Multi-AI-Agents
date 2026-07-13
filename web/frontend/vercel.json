@@ -5,7 +5,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' checkout.razorpay.com; connect-src 'self' multiagents-blx0.onrender.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-src checkout.razorpay.com"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' checkout.razorpay.com; connect-src 'self' multiagents-blx0.onrender.com http://127.0.0.1:18600 http://localhost:18600; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-src checkout.razorpay.com"
         },
         {
           "key": "X-Frame-Options",

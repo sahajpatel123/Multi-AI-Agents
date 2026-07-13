@@ -83,3 +83,37 @@ def test_templates_include_condura_demos():
     assert "long_research_delegate" in ids
     long_t = next(t for t in TEMPLATES if t["id"] == "long_research_delegate")
     assert long_t.get("disabled") is True
+
+
+def test_execution_for_request_web_capability_with_local_text_returns_condura():
+    """CRITICAL regression: /run passes capability_id='agent.research' (WEB)
+    but the user might type 'open Linear'. The heuristic safety net MUST
+    override WEB and return CONDURA so the 409 gate fires.
+
+    Without this test, the gate on /run is a silent no-op.
+    """
+    from arena.core.capabilities import ExecutionEnvironment, execution_for_request
+
+    # Explicit WEB capability + generic text → stays WEB
+    env, _ = execution_for_request(
+        capability_id="agent.research",
+        task_text="Analyse the B2B SaaS market",
+    )
+    assert env == ExecutionEnvironment.WEB
+
+    # Explicit WEB capability + local-intent text → overrides to CONDURA
+    env, _ = execution_for_request(
+        capability_id="agent.research",
+        task_text="Open Linear and create a ticket from this research",
+    )
+    assert env == ExecutionEnvironment.CONDURA, (
+        f"expected CONDURA for local-intent text, got {env} — "
+        f"the /run honest-rejection gate is a no-op without this safety net"
+    )
+
+    # Explicit WEB capability + delegate-intent text → overrides to HYBRID_DELEGATE
+    env, _ = execution_for_request(
+        capability_id="agent.research",
+        task_text="Watch AI regulation every 4 hours on my machine",
+    )
+    assert env == ExecutionEnvironment.HYBRID_DELEGATE
