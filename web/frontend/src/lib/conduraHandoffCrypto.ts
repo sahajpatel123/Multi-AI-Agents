@@ -30,7 +30,9 @@ export async function getOrCreateSigningKey(): Promise<{
         true,
         ['sign'],
       );
-      const { d: _d, ...publicJwk } = jwk;
+      // Strip the private exponent to produce the public JWK.
+      const publicJwk: JsonWebKey = { ...jwk };
+      delete publicJwk.d;
       return { publicKeyJwk: publicJwk, privateKey };
     } catch {
       sessionStorage.removeItem(KEY_STORAGE);

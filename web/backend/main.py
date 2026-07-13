@@ -38,6 +38,7 @@ from arena.routes.condura import router as condura_router
 from arena.core.live_scheduler import schedule_live_checks
 from arena.core.loyalty_scheduler import schedule_loyalty_checks
 from arena.core.watchlist_runner import schedule_watchlist_checks
+from arena.core.condura_scheduler import schedule_condura_reconciler
 
 logger = logging.getLogger(__name__)
 
@@ -295,6 +296,7 @@ def create_app() -> FastAPI:
         asyncio.create_task(schedule_live_checks())
         asyncio.create_task(schedule_watchlist_checks())
         asyncio.create_task(schedule_loyalty_checks())
+        asyncio.create_task(schedule_condura_reconciler())
 
     # ── Health check ──────────────────────────────────────────
     @app.get("/api/health", tags=["health"])

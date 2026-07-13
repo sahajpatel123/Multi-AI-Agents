@@ -13,6 +13,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
+from arena.core.handoff_status import (
+    ALL_KNOWN_STATUSES,
+    ALLOWED_EVENT_KINDS,
+    DISPATCHED,
+    RUNNING_EVENT_KINDS,
+    STREAMING,
+)
 from arena.core.migration import list_open_flags_for_user, resolve_flag
 from arena.core.telemetry import record_handoff_dispatched, record_probe_state
 from arena.database import get_db
@@ -34,7 +41,7 @@ class HandoffDispatchBody(BaseModel):
     condura_run_id: Optional[str] = None
     summary: Optional[str] = Field(None, max_length=512)
     retention_class: str = "standard"
-    status: str = "dispatched"
+    status: str = DISPATCHED
 
 
 class HandoffEventBody(BaseModel):
@@ -98,18 +105,29 @@ async def append_handoff_event(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Handoff not found")
+    kind = body.event_kind.lower().strip()
+    # Defense-in-depth: validate kind against the known set before persisting
+    # it as a status value. Browser-mediated, but we don't trust arbitrary
+    # clients to write any string into HandoffRecord.status.
+    if kind not in ALLOWED_EVENT_KINDS:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_event_kind",
+                "message": f"event_kind must be one of {sorted(ALLOWED_EVENT_KINDS)}",
+            },
+        )
     ev = HandoffEvent(
         handoff_id=row.id,
         event_id=body.event_id,
-        event_kind=body.event_kind[:32],
+        event_kind=kind[:32],
         payload=body.payload,
     )
     db.add(ev)
-    kind = body.event_kind.lower()
-    if kind in {"complete", "failed", "cancelled", "streaming", "stream_lost", "reconcile_needed"}:
-        row.status = kind[:32]
-    elif kind in {"started", "progress", "result"}:
-        row.status = "streaming"
+    if kind in ALL_KNOWN_STATUSES:
+        row.status = kind
+    elif kind in RUNNING_EVENT_KINDS:
+        row.status = STREAMING
     row.updated_at = _utc_naive()
     db.commit()
     return {"ok": True, "status": row.status}

@@ -313,20 +313,6 @@ def local_execution_error_body(
     }
 
 
-def tier_supports_env(tier: Any, env: ExecutionEnvironment) -> bool:
-    """Condura/hybrid_delegate are never tier-gated (runtime requirements).
-
-    Web and hybrid_prep still require agent_mode (or related) features —
-    callers enforce those separately via has_feature.
-    """
-    if env in {
-        ExecutionEnvironment.CONDURA,
-        ExecutionEnvironment.HYBRID_DELEGATE,
-    }:
-        return True
-    return True
-
-
 def list_capabilities() -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for cap in REGISTRY.values():

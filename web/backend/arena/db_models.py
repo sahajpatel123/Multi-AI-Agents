@@ -696,6 +696,8 @@ class HandoffRecord(Base):
     capability = Column(String(64), nullable=False)
     execution_env = Column(String(32), nullable=False)
     condura_run_id = Column(String(64), nullable=True, index=True)
+    # Status literals live in arena.core.handoff_status — use those constants
+    # when writing. Default is handoff_status.DISPATCH_PENDING.
     status = Column(String(32), default="dispatch_pending", nullable=False)
     retention_class = Column(String(16), default="standard", nullable=False)
     summary = Column(String(512), nullable=True)
