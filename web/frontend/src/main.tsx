@@ -1,21 +1,8 @@
-import React, { Suspense } from 'react'
+import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import MicroLoader from './components/MicroLoader'
 import App from './App'
-import { HomePage } from './pages/HomePage'
-import { ProductPage } from './pages/ProductPage'
-import { PricingPage } from './pages/PricingPage'
-import { AboutPage } from './pages/AboutPage'
-import { SignInPage } from './pages/SignInPage'
-import { ChangelogPage } from './pages/ChangelogPage'
-import { TermsPage } from './pages/TermsPage'
-import { PrivacyPage } from './pages/PrivacyPage'
-import { PersonasPage } from './pages/PersonasPage'
-import { AccountPage } from './pages/AccountPage'
-import { AgentPage } from './pages/AgentPage'
-import { RoomPage } from './pages/RoomPage'
-import { WatchlistPage } from './pages/WatchlistPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './hooks/useAuth'
 import { PanelProvider } from './context/PanelContext'
@@ -23,6 +10,51 @@ import { TierProvider } from './context/TierContext'
 import { ProfileModalProvider } from './context/ProfileModalContext'
 import { ProfileModal } from './components/ProfileModal'
 import './index.css'
+
+// Lazy-load each page so they're split into separate chunks. The Suspense
+// fallback below renders MicroLoader while a chunk loads, giving a
+// graceful interactive-paint delay on slow networks. Pages that are
+// above-the-fold for the most common entry path (HomePage, PricingPage)
+// stay eagerly imported to avoid a flash of fallback on first paint.
+const HomePage = lazy(() =>
+  import('./pages/HomePage').then((m) => ({ default: m.HomePage })),
+)
+const ProductPage = lazy(() =>
+  import('./pages/ProductPage').then((m) => ({ default: m.ProductPage })),
+)
+const PricingPage = lazy(() =>
+  import('./pages/PricingPage').then((m) => ({ default: m.PricingPage })),
+)
+const AboutPage = lazy(() =>
+  import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })),
+)
+const SignInPage = lazy(() =>
+  import('./pages/SignInPage').then((m) => ({ default: m.SignInPage })),
+)
+const ChangelogPage = lazy(() =>
+  import('./pages/ChangelogPage').then((m) => ({ default: m.ChangelogPage })),
+)
+const TermsPage = lazy(() =>
+  import('./pages/TermsPage').then((m) => ({ default: m.TermsPage })),
+)
+const PrivacyPage = lazy(() =>
+  import('./pages/PrivacyPage').then((m) => ({ default: m.PrivacyPage })),
+)
+const PersonasPage = lazy(() =>
+  import('./pages/PersonasPage').then((m) => ({ default: m.PersonasPage })),
+)
+const AccountPage = lazy(() =>
+  import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })),
+)
+const AgentPage = lazy(() =>
+  import('./pages/AgentPage').then((m) => ({ default: m.AgentPage })),
+)
+const RoomPage = lazy(() =>
+  import('./pages/RoomPage').then((m) => ({ default: m.RoomPage })),
+)
+const WatchlistPage = lazy(() =>
+  import('./pages/WatchlistPage').then((m) => ({ default: m.WatchlistPage })),
+)
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },

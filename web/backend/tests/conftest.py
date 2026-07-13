@@ -95,25 +95,14 @@ def db_session(isolated_db) -> Iterator:
 class StubAnthropicClient:
     """Minimal async stand-in for anthropic.AsyncAnthropic.messages.create.
 
-    Returns a fixed JSON body so callers that parse it can proceed.
+    Mirrors the real client's shape: client.messages is an attribute returning
+    a Messages resource, and the resource exposes .create(...).
     """
 
     def __init__(self, response_text: str = '{"verdict": "ok", "one_liner": "ok", "confidence": 50, "key_assumption": "test"}'):
         self.response_text = response_text
         self.calls: list[dict] = []
-
-    async def messages(self, **kwargs):
-        return self
-
-    async def create(self, **kwargs):
-        self.calls.append(kwargs)
-
-        class _Resp:
-            def __init__(self, text):
-                self.content = [type("Block", (), {"text": text})()]
-                self.usage = type("Usage", (), {"input_tokens": 10, "output_tokens": 10})()
-
-        return _Resp(self.response_text)
+        self.messages = _StubMessagesResource(self)
 
 
 class StubOpenAIClient:
@@ -141,16 +130,43 @@ class StubOpenAIClient:
 @pytest.fixture
 def stub_anthropic(monkeypatch):
     client = StubAnthropicClient()
-    monkeypatch.setattr("arena.core.model_router.claude_client", client, raising=False)
+    from arena.core import model_router
+    # MODEL_REGISTRY was built at import time with the real client reference;
+    # patch the dict entries directly so route lookups see the stub.
+    for key in ("claude_haiku", "claude_sonnet", "claude_opus"):
+        if key in model_router.MODEL_REGISTRY:
+            monkeypatch.setitem(model_router.MODEL_REGISTRY[key], "client", client)
     yield client
+
+
+class _StubMessagesResource:
+    """Mimics anthropic's `client.messages` resource object."""
+
+    def __init__(self, parent: "StubAnthropicClient"):
+        self._parent = parent
+
+    async def create(self, **kwargs):
+        self._parent.calls.append(kwargs)
+
+        class _Resp:
+            def __init__(self, text):
+                self.content = [type("Block", (), {"text": text})()]
+                self.usage = type("Usage", (), {"input_tokens": 10, "output_tokens": 10})()
+
+        return _Resp(self._parent.response_text)
 
 
 @pytest.fixture
 def stub_openai(monkeypatch):
     client = StubOpenAIClient()
+    from arena.core import model_router
     monkeypatch.setattr("arena.core.model_router.openai_client", client, raising=False)
     monkeypatch.setattr("arena.core.model_router.grok_client", client, raising=False)
     monkeypatch.setattr("arena.core.model_router.deepseek_client", client, raising=False)
+    # Patch OpenAI/Grok/DeepSeek model registry entries too
+    for key in ("gpt_4o", "gpt_4o_mini", "grok_3", "grok_3_mini", "grok", "deepseek_v3"):
+        if key in model_router.MODEL_REGISTRY:
+            monkeypatch.setitem(model_router.MODEL_REGISTRY[key], "client", client)
     yield client
 
 
@@ -217,7 +233,8 @@ async def app_client(isolated_db, monkeypatch):
     """httpx.AsyncClient wired to the FastAPI app with DB overridden."""
     import httpx
     from arena.database import get_db
-    from arena.main import create_app
+    # main.py lives at web/backend/main.py, not inside the arena package.
+    from main import create_app
 
     SessionLocal = isolated_db
 
@@ -231,8 +248,6 @@ async def app_client(isolated_db, monkeypatch):
     app = create_app()
     app.dependency_overrides[get_db] = _override_get_db
 
-    # Replace lifespan-dependent tasks that would otherwise try to hit external
-    # services (Razorpay, etc.).
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",

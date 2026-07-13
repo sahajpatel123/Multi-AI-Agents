@@ -65,13 +65,13 @@ class TestScorerGetWinner:
         loser_resp = _make_response("agent_2")
         from arena.models.schemas import ScoredAgent
 
-        scored = [
-            ScoredAgent(response=winner_resp, score=95, is_winner=True),
-            ScoredAgent(response=loser_resp, score=70, is_winner=False),
-        ]
+        winner_scored = ScoredAgent(response=winner_resp, score=95, is_winner=True)
+        loser_scored = ScoredAgent(response=loser_resp, score=70, is_winner=False)
+        scored = [winner_scored, loser_scored]
         s = Scorer()
         winner = s.get_winner(scored)
-        assert winner is winner_resp
+        # get_winner returns the ScoredAgent wrapper, not the inner response.
+        assert winner is winner_scored
 
     def test_falls_back_to_highest_score(self):
         from arena.models.schemas import ScoredAgent
@@ -95,9 +95,6 @@ class TestScorerScoringHappyPath:
             "winner": "agent_1",
             "reasoning": "best",
         })
-        # Swap in the stub client used by scorer
-        from arena.core import model_router
-        model_router.claude_client = stub_anthropic
 
         scorer = Scorer()
         responses = [_make_response(f"agent_{i}") for i in range(1, 5)]
@@ -113,19 +110,16 @@ class TestScorerScoringHappyPath:
             + json.dumps({"scores": {"agent_1": 80}, "winner": "agent_1"})
             + "\n```"
         )
-        from arena.core import model_router
-        model_router.claude_client = stub_anthropic
 
         scorer = Scorer()
         responses = [_make_response("agent_1")]
         scored = await scorer.score_responses("p", responses)
+        assert stub_anthropic.calls, "stub was not invoked"
         assert scored[0].score == 80
 
     @pytest.mark.asyncio
     async def test_fallback_on_parse_error(self, stub_anthropic):
         stub_anthropic.response_text = "not json at all"
-        from arena.core import model_router
-        model_router.claude_client = stub_anthropic
 
         scorer = Scorer()
         responses = [_make_response("agent_1")]

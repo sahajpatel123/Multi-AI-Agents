@@ -93,6 +93,28 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        # Content Security Policy. Strict default-src of 'self', then
+        # open up exactly the hosts the app uses: API same-origin, Vercel
+        # frontend, Razorpay (payments), Google Fonts, Anthropic stream
+        # endpoints for any direct browser calls, and data/blob for
+        # in-browser image handling. 'unsafe-inline' on style-src keeps
+        # Tailwind's runtime-injected styles working without a nonce
+        # pipeline; revisit if/when migrating to a nonce-based CSP.
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com data:; "
+            "img-src 'self' data: blob: https:; "
+            "connect-src 'self' https://api.anthropic.com https://api.x.ai "
+            "https://api.openai.com https://api.deepseek.com "
+            "https://*.razorpay.com https://checkout.razorpay.com "
+            "wss: ws:; "
+            "frame-src https://*.razorpay.com https://checkout.razorpay.com https://api.razorpay.com; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'"
+        )
         if self.is_production:
             response.headers["Strict-Transport-Security"] = (
                 "max-age=31536000; includeSubDomains"

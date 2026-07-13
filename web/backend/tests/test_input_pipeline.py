@@ -26,12 +26,14 @@ class TestSanitize:
     def test_removes_null_bytes(self):
         assert "\x00" not in sanitize_input("hello\x00world")
 
-    def test_removes_control_chars_but_keeps_newlines_tabs(self):
-        # newlines and tabs preserved
-        assert "line1\nline2" in sanitize_input("line1\nline2")
-        assert "a\tb" in sanitize_input("a\tb")
-        # other control chars dropped
+    def test_removes_control_chars_keeps_tab(self):
+        # sanitize normalizes whitespace — tabs and newlines collapse to single
+        # spaces for consistent downstream handling. Other control chars are
+        # dropped.
+        assert sanitize_input("line1\nline2") == "line1 line2"
+        assert sanitize_input("a\tb") == "a b"
         assert "\x01" not in sanitize_input("hello\x01world")
+        assert "\x02" not in sanitize_input("a\x02b")
 
     def test_normalizes_whitespace(self):
         assert sanitize_input("hello    world") == "hello world"

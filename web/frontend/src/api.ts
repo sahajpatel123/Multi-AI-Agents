@@ -377,11 +377,13 @@ export async function streamPrompt(
   callbacks: StreamCallbacks,
   sessionId?: string,
   personaIds?: string[],
+  signal?: AbortSignal,
 ): Promise<void> {
   const response = await apiFetch(`/api/prompt/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt, session_id: sessionId, persona_ids: personaIds }),
+    signal,
   });
 
   if (!response.ok) {
@@ -389,56 +391,30 @@ export async function streamPrompt(
     throw new Error(getErrorMessage(error, 'Failed to start stream'));
   }
 
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No response body');
+  if (!response.body) throw new Error('No response body');
 
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-
-    // Parse SSE events from buffer
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    let currentEvent = '';
-    for (const line of lines) {
-      if (line.startsWith('event: ')) {
-        currentEvent = line.slice(7).trim();
-      } else if (line.startsWith('data: ') && currentEvent) {
-        try {
-          const data = JSON.parse(line.slice(6));
-          switch (currentEvent) {
-            case 'pipeline':
-              callbacks.onPipeline?.(data);
-              break;
-            case 'token':
-              callbacks.onToken?.(data);
-              break;
-            case 'agent_done':
-              callbacks.onAgentDone?.(data);
-              break;
-            case 'agent_error':
-              callbacks.onAgentError?.(data);
-              break;
-            case 'result':
-              callbacks.onResult?.(data);
-              break;
-            case 'error':
-              callbacks.onError?.(data);
-              break;
-          }
-        } catch {
-          // Skip malformed JSON
-        }
-        currentEvent = '';
-      }
+  await consumeSseStream(response.body, signal, (event, data) => {
+    switch (event) {
+      case 'pipeline':
+        callbacks.onPipeline?.(data);
+        break;
+      case 'token':
+        callbacks.onToken?.(data);
+        break;
+      case 'agent_done':
+        callbacks.onAgentDone?.(data);
+        break;
+      case 'agent_error':
+        callbacks.onAgentError?.(data);
+        break;
+      case 'result':
+        callbacks.onResult?.(data);
+        break;
+      case 'error':
+        callbacks.onError?.(data);
+        break;
     }
-  }
+  });
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -464,11 +440,13 @@ export async function streamDebateRound(
     persona_ids?: string[];
   },
   callbacks: DebateStreamCallbacks,
+  signal?: AbortSignal,
 ): Promise<void> {
   const response = await apiFetch(`/api/debate/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
+    signal,
   });
 
   if (!response.ok) {
@@ -476,48 +454,24 @@ export async function streamDebateRound(
     throw new Error(getErrorMessage(error, 'Failed to start debate stream'));
   }
 
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No response body');
+  if (!response.body) throw new Error('No response body');
 
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    let currentEvent = '';
-    for (const line of lines) {
-      if (line.startsWith('event: ')) {
-        currentEvent = line.slice(7).trim();
-      } else if (line.startsWith('data: ') && currentEvent) {
-        try {
-          const data = JSON.parse(line.slice(6));
-          switch (currentEvent) {
-            case 'reaction_token':
-              callbacks.onReactionToken?.(data);
-              break;
-            case 'reaction_done':
-              callbacks.onReactionDone?.(data);
-              break;
-            case 'result':
-              callbacks.onResult?.(data);
-              break;
-            case 'error':
-              callbacks.onError?.(data);
-              break;
-          }
-        } catch {
-          // Skip malformed JSON
-        }
-        currentEvent = '';
-      }
+  await consumeSseStream(response.body, signal, (event, data) => {
+    switch (event) {
+      case 'reaction_token':
+        callbacks.onReactionToken?.(data);
+        break;
+      case 'reaction_done':
+        callbacks.onReactionDone?.(data);
+        break;
+      case 'result':
+        callbacks.onResult?.(data);
+        break;
+      case 'error':
+        callbacks.onError?.(data);
+        break;
     }
-  }
+  });
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -541,11 +495,13 @@ export async function streamDiscuss(
     persona_ids?: string[];
   },
   callbacks: DiscussStreamCallbacks,
+  signal?: AbortSignal,
 ): Promise<void> {
   const response = await apiFetch(`/api/discuss/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
+    signal,
   });
 
   if (!response.ok) {
@@ -553,45 +509,81 @@ export async function streamDiscuss(
     throw new Error(getErrorMessage(error, 'Failed to start discuss stream'));
   }
 
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No response body');
+  if (!response.body) throw new Error('No response body');
 
+  await consumeSseStream(response.body, signal, (event, data) => {
+    switch (event) {
+      case 'token':
+        callbacks.onToken?.(data);
+        break;
+      case 'result':
+        callbacks.onResult?.(data);
+        break;
+      case 'error':
+        callbacks.onError?.(data);
+        break;
+    }
+  });
+}
+
+// Shared SSE consumer — handles AbortSignal-driven cancellation so
+// navigating away mid-stream cleans up the open connection instead
+// of leaving it hanging until the server closes.
+async function consumeSseStream(
+  body: ReadableStream<Uint8Array>,
+  signal: AbortSignal | undefined,
+  dispatch: (event: string, data: any) => void,
+): Promise<void> {
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  // Bridge AbortSignal → reader.cancel(). If the caller cancels
+  // (route change, retry, unmount), we both stop reading and tear
+  // down the underlying stream — otherwise the body sits open until
+  // the server-side generator finishes.
+  const onAbort = () => {
+    void reader.cancel().catch(() => {});
+  };
+  if (signal) {
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    let currentEvent = '';
-    for (const line of lines) {
-      if (line.startsWith('event: ')) {
-        currentEvent = line.slice(7).trim();
-      } else if (line.startsWith('data: ') && currentEvent) {
-        try {
-          const data = JSON.parse(line.slice(6));
-          switch (currentEvent) {
-            case 'token':
-              callbacks.onToken?.(data);
-              break;
-            case 'result':
-              callbacks.onResult?.(data);
-              break;
-            case 'error':
-              callbacks.onError?.(data);
-              break;
-          }
-        } catch {
-          // Skip malformed JSON
-        }
-        currentEvent = '';
+      buffer += decoder.decode(value, { stream: true });
+      buffer = parseSseBuffer(buffer, dispatch);
+    }
+  } finally {
+    if (signal) signal.removeEventListener('abort', onAbort);
+  }
+}
+
+function parseSseBuffer(buffer: string, dispatch: (event: string, data: any) => void): string {
+  const lines = buffer.split('\n');
+  const remainder = lines.pop() || '';
+  let currentEvent = '';
+  for (const line of lines) {
+    if (line.startsWith('event: ')) {
+      currentEvent = line.slice(7).trim();
+    } else if (line.startsWith('data: ') && currentEvent) {
+      try {
+        dispatch(currentEvent, JSON.parse(line.slice(6)));
+      } catch {
+        // Skip malformed JSON — server may have flushed a partial
+        // event during shutdown; next event will be a fresh frame.
       }
+      currentEvent = '';
     }
   }
+  return remainder;
 }
 
 // ──────────────────────────────────────────────────────────────

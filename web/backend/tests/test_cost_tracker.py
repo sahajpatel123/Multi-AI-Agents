@@ -102,14 +102,15 @@ class TestUserRateLimit:
 
     def test_user_under_limit_increments(self, make_user):
         from arena.database import SessionLocal
-        from arena.db_models import UserTier
+        from arena.db_models import User, UserTier
 
         user = make_user(tier=UserTier.FREE, prompt_count_today=0)
         db = SessionLocal()
         try:
             check_and_increment_user(db, user.id, "free")
-            db.refresh(user)
-            assert user.prompt_count_today == 1
+            db.commit()
+            refreshed = db.query(User).filter(User.id == user.id).first()
+            assert refreshed.prompt_count_today == 1
         finally:
             db.close()
 

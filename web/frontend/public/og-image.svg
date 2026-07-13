@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Arena Open Graph share card (1200x630).
+  Static SVG so it ships with no build step and renders identically in
+  every platform that accepts SVG OG images (GitHub, Slack, Discord,
+  LinkedIn, most others). For platforms that require raster OG images
+  (notably Twitter) regenerate via:
+      cd web/backend && python tools/generate_og_image.py
+  That writes the same composition to og-image.png.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <!-- Brand palette mirrors web/frontend/tailwind.config.js -->
+  <rect width="1200" height="630" fill="#FAF7F4"/>
+  <rect width="1200" height="8" fill="#C4956A"/>
+  <rect x="24" y="24" width="1152" height="582" fill="none" stroke="#E0D8D0" stroke-width="1"/>
+
+  <!-- Wordmark -->
+  <text x="80" y="180" font-family="Georgia, 'Times New Roman', serif" font-size="96" font-weight="500" fill="#1A1714">Arena</text>
+  <text x="80" y="240" font-family="Georgia, 'Times New Roman', serif" font-size="32" fill="#6B6460">Multi-AI Agent Chatroom</text>
+
+  <!-- Headline -->
+  <text x="80" y="380" font-family="Georgia, 'Times New Roman', serif" font-size="68" fill="#1A1714">Four minds. One question.</text>
+  <text x="80" y="450" font-family="Georgia, 'Times New Roman', serif" font-size="68" fill="#1A1714">The best answer wins.</text>
+
+  <!-- 4-agent panel chips -->
+  <g>
+    <circle cx="116" cy="540" r="36" fill="#8C9BAB"/>
+    <text x="116" y="552" font-family="Georgia, serif" font-size="36" fill="#FAF7F4" text-anchor="middle">1</text>
+    <circle cx="226" cy="540" r="36" fill="#9B8FAA"/>
+    <text x="226" y="552" font-family="Georgia, serif" font-size="36" fill="#FAF7F4" text-anchor="middle">2</text>
+    <circle cx="336" cy="540" r="36" fill="#8AA899"/>
+    <text x="336" y="552" font-family="Georgia, serif" font-size="36" fill="#FAF7F4" text-anchor="middle">3</text>
+    <circle cx="446" cy="540" r="36" fill="#B0977E"/>
+    <text x="446" y="552" font-family="Georgia, serif" font-size="36" fill="#FAF7F4" text-anchor="middle">4</text>
+  </g>
+
+  <!-- Domain -->
+  <text x="80" y="595" font-family="Georgia, 'Times New Roman', serif" font-size="28" fill="#6B6460">arena.ai</text>
+</svg>
