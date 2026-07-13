@@ -118,6 +118,57 @@ TEMPLATES: list[dict[str, Any]] = [
         "default_expertise": "expert",
         "example": "Case against remote work",
     },
+    # ── Condura demonstrative templates (capability-gated) ──
+    {
+        "id": "open_in_linear",
+        "category": "On device",
+        "title": "Open in Linear",
+        "icon": "target",
+        "description": "Create a Linear ticket from research (needs Condura)",
+        "prompt_template": (
+            "Create a ticket in Linear from this research: {summary}. "
+            "Open Linear on my computer and file it under {project}."
+        ),
+        "slots": ["summary", "project"],
+        "default_expertise": "practitioner",
+        "example": "Ticket for API rate-limit findings",
+        "capability_id": "app.open_in_linear",
+        "execution": "condura",
+    },
+    {
+        "id": "save_report_local",
+        "category": "On device",
+        "title": "Save report locally",
+        "icon": "chart",
+        "description": "Write a report then save it on your machine (Condura)",
+        "prompt_template": (
+            "Write a concise research report on {topic}, then save it to "
+            "~/Documents/{filename}."
+        ),
+        "slots": ["topic", "filename"],
+        "default_expertise": "practitioner",
+        "example": "Save market brief to Documents",
+        "capability_id": "report.save_to_local",
+        "execution": "hybrid_prep",
+    },
+    {
+        "id": "long_research_delegate",
+        "category": "On device",
+        "title": "Watch topic (on device)",
+        "icon": "trending",
+        "description": "Long-running on-device research loop (Condura)",
+        "prompt_template": (
+            "Watch {topic} for material changes every 4 hours on my machine "
+            "and keep running until I cancel."
+        ),
+        "slots": ["topic"],
+        "default_expertise": "researcher",
+        "example": "Watch AI regulation every 4h",
+        "capability_id": "agent.long_research",
+        "execution": "hybrid_delegate",
+        "disabled": True,
+        "disabled_reason": "Available after Condura long-running delegate ships",
+    },
 ]
 
 

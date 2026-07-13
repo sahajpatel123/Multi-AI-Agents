@@ -11,6 +11,7 @@ import { TemplatesModal } from '../components/TemplatesModal';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
+  LocalExecutionRequiredError,
   addRoomTask,
   challengeAgentAnswer,
   createRoom,
@@ -38,12 +39,19 @@ import {
   refineAgentAnswer,
   renameAgentTask,
   runAgentTask,
+  recordConduraHandoff,
+  saveConduraHandoffDraft,
   uploadAgentFile,
   toggleAgentTaskLive,
   type AgentChallengeItem,
   type AgentTaskTemplate,
   type TaskAnswerFeedback,
 } from '../api';
+import { ConduraInstallCTA } from '../components/ConduraInstallCTA';
+import { buildHandoffPayload } from '../lib/conduraHandoff';
+import { dispatchHandoff, pairDevice, ConduraClientError } from '../lib/conduraClient';
+import { getOrCreateSigningKey, rotateSigningKey } from '../lib/conduraHandoffCrypto';
+import type { HandoffPayload } from '../types/condura';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { useAuth } from '../hooks/useAuth';
@@ -622,6 +630,13 @@ export function AgentPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conduraCtaOpen, setConduraCtaOpen] = useState(false);
+  const [conduraCtaMessage, setConduraCtaMessage] = useState(
+    'Powered by Condura — free, local-first agent for on-device actions.',
+  );
+  const [conduraCtaTitle, setConduraCtaTitle] = useState('This needs your machine');
+  const [conduraInstallUrl, setConduraInstallUrl] = useState('https://condura.app');
+  const [pendingHandoff, setPendingHandoff] = useState<HandoffPayload | null>(null);
   const [result, setResult] = useState<AgentResult | null>(null);
   const [_completedStages, setCompletedStages] = useState<string[]>([]);
   const [currentStage, setCurrentStage] = useState<string>('planner');
@@ -1220,6 +1235,27 @@ export function AgentPage() {
     setIsRefining(false);
 
     try {
+      if (selectedTemplate?.execution && selectedTemplate.execution !== 'web') {
+        const capability = selectedTemplate.capability_id || 'app.open_in_linear';
+        const payload = await buildHandoffPayload({
+          capability,
+          summary: t.slice(0, 200),
+          args: { task: t, source_prompt: t },
+          sessionId: `agent-${Date.now()}`,
+          userId: user?.id ?? 'guest',
+        });
+        setPendingHandoff(payload);
+        setConduraCtaTitle('This needs your machine');
+        setConduraCtaMessage(
+          selectedTemplate.execution === 'hybrid_prep'
+            ? 'Arena can plan on the web; saving or opening apps on your machine is Powered by Condura.'
+            : 'Powered by Condura — free, local-first agent for on-device actions.',
+        );
+        setConduraInstallUrl('https://condura.app');
+        setConduraCtaOpen(true);
+        setIsRunning(false);
+        return;
+      }
       const startData = await runAgentTask(t, {
         expertise_level: expertiseLevelForRun,
         expertise_domain: expertiseDomainForRun,
@@ -1234,6 +1270,27 @@ export function AgentPage() {
       setAttachments([]);
       setActiveMcpSources([]);
     } catch (e) {
+      if (e instanceof LocalExecutionRequiredError) {
+        setConduraCtaTitle(e.detail.title || 'This needs your machine');
+        setConduraCtaMessage(e.detail.message);
+        setConduraInstallUrl(e.detail.install_url || 'https://condura.app');
+        try {
+          const payload = await buildHandoffPayload({
+            capability: e.detail.execution_environment || 'app.open_in_linear',
+            summary: t.slice(0, 200),
+            args: { task: t },
+            sessionId: `agent-${Date.now()}`,
+            userId: user?.id ?? 'guest',
+          });
+          setPendingHandoff(payload);
+        } catch {
+          setPendingHandoff(null);
+        }
+        setConduraCtaOpen(true);
+        setIsRunning(false);
+        setIsRefining(false);
+        return;
+      }
       if (e instanceof ApiError && e.status === 429) {
         setError('Daily limit reached. Resets at midnight UTC.');
       } else {
@@ -7626,6 +7683,61 @@ export function AgentPage() {
           </>
       </main>
       </div>
+      <ConduraInstallCTA
+        open={conduraCtaOpen}
+        onClose={() => {
+          setConduraCtaOpen(false);
+          setPendingHandoff(null);
+        }}
+        title={conduraCtaTitle}
+        message={conduraCtaMessage}
+        installUrl={conduraInstallUrl}
+        handoffPayload={pendingHandoff}
+        onSaveDraft={async () => {
+          if (!pendingHandoff) return;
+          await saveConduraHandoffDraft({
+            capability: pendingHandoff.intent.capability,
+            payload: pendingHandoff as unknown as Record<string, unknown>,
+          });
+        }}
+        onSendToCondura={async () => {
+          if (!pendingHandoff) return;
+          try {
+            const { run_id } = await dispatchHandoff(pendingHandoff);
+            await recordConduraHandoff({
+              capability: pendingHandoff.intent.capability,
+              execution_env: 'condura',
+              condura_run_id: run_id,
+              summary: pendingHandoff.intent.summary,
+              status: 'dispatched',
+            });
+            setConduraCtaOpen(false);
+            setPendingHandoff(null);
+            setError(null);
+          } catch (err) {
+            if (err instanceof ConduraClientError) {
+              if (err.kind === 'unknown_device' || err.kind === 'key_mismatch') {
+                if (err.kind === 'key_mismatch') await rotateSigningKey();
+                const { publicKeyJwk } = await getOrCreateSigningKey();
+                await pairDevice(publicKeyJwk);
+                const { run_id } = await dispatchHandoff(pendingHandoff);
+                await recordConduraHandoff({
+                  capability: pendingHandoff.intent.capability,
+                  execution_env: 'condura',
+                  condura_run_id: run_id,
+                  summary: pendingHandoff.intent.summary,
+                  status: 'dispatched',
+                });
+                setConduraCtaOpen(false);
+                setPendingHandoff(null);
+                return;
+              }
+              throw new Error(err.message);
+            }
+            throw err;
+          }
+        }}
+      />
     </div>
   );
 }

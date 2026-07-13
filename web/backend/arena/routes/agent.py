@@ -40,6 +40,14 @@ from arena.core.report_generator import (
     write_pdf_or_html,
 )
 from arena.core.templates import get_templates_grouped_by_category
+from arena.core.capabilities import (
+    execution_for_request,
+    honest_rejection_enabled,
+    local_execution_error_body,
+    requires_local_rejection,
+    list_capabilities,
+)
+from arena.core.telemetry import record_guard_decision
 from arena.database import SessionLocal, get_db
 from arena.db_models import (
     AgentContradiction,
@@ -54,6 +62,32 @@ from arena.models.schemas import UserResponse
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _enforce_capability_gate(
+    *,
+    capability_id: str | None = None,
+    task_text: str | None = None,
+) -> None:
+    """Reject condura / hybrid_delegate work on web when feature flag is on."""
+    env, cap = execution_for_request(capability_id=capability_id, task_text=task_text)
+    cid = capability_id or (cap.id if cap else "inferred")
+    if not requires_local_rejection(env):
+        record_guard_decision(cid, "allow")
+        return
+    if not honest_rejection_enabled():
+        record_guard_decision(cid, "fallback")
+        logger.info(
+            "Condura gate: would reject capability=%s env=%s (flag off)",
+            cid,
+            env.value,
+        )
+        return
+    record_guard_decision(cid, "reject")
+    raise HTTPException(
+        status_code=409,
+        detail=local_execution_error_body(env, cap),
+    )
 
 # Sidebar history window by subscription tier (not related to temporal_profile / recheck_by).
 AGENT_HISTORY_RETENTION_DAYS: dict[UserTier, int] = {
@@ -910,6 +944,12 @@ async def list_agent_templates() -> dict:
     return get_templates_grouped_by_category()
 
 
+@router.get("/capabilities")
+async def list_agent_capabilities() -> dict:
+    """Capability taxonomy for UI badges and Condura handoff."""
+    return {"capabilities": list_capabilities()}
+
+
 @router.get("/tasks/{task_id}/feedback")
 async def get_task_answer_feedback(
     task_id: str,
@@ -992,6 +1032,10 @@ async def start_orchestration(
     _ensure_agent_orchestrate_access(user)
 
     raw_qs = [str(q).strip() for q in body.questions if str(q).strip()]
+    _enforce_capability_gate(
+        capability_id="agent.orchestrate",
+        task_text=" ".join(raw_qs),
+    )
     if not (2 <= len(raw_qs) <= 4):
         raise HTTPException(
             status_code=400,
@@ -1217,6 +1261,7 @@ async def run_agent_task(
         )
 
     task = sanitize_text(body.task, max_length=2000, field_name="task")
+    _enforce_capability_gate(capability_id="agent.research", task_text=task)
 
     expertise_level = (body.expertise_level or "curious").strip().lower() or "curious"
     expertise_domain = (body.expertise_domain or "").strip()[:100]
@@ -1341,6 +1386,7 @@ async def challenge_agent_answer(
 ):
     _ensure_agent_access(user, db)
     answer = sanitize_text(body.answer, max_length=2000, field_name="answer")
+    _enforce_capability_gate(capability_id="agent.challenge", task_text=answer)
 
     task_text = (body.task or "").strip()
     tid = body.task_id.strip()
@@ -1410,6 +1456,7 @@ async def agent_rebuttal(
     task = body.task.strip() or "(context not provided)"
     answer = sanitize_text(body.answer, max_length=2000, field_name="answer")
     challenge = sanitize_text(body.challenge, max_length=2000, field_name="challenge")
+    _enforce_capability_gate(capability_id="agent.rebuttal", task_text=f"{task} {answer}")
 
     model = MODEL_REGISTRY["claude_sonnet"]
     user_prompt = f"""
@@ -1446,6 +1493,7 @@ async def create_watchlist_item(
 ):
     _ensure_agent_watchlist_access(user)
     q = sanitize_text(body.question, max_length=2000, field_name="question")
+    _enforce_capability_gate(capability_id="watchlist.create", task_text=q)
     if body.interval_hours not in WATCHLIST_INTERVALS:
         raise HTTPException(status_code=400, detail="interval_hours must be 24, 72, or 168")
 
@@ -1635,6 +1683,10 @@ async def toggle_agent_task_live(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Task not found")
+    _enforce_capability_gate(
+        capability_id="watchlist.toggle",
+        task_text=row.task_text or "",
+    )
     if body.is_live is not None:
         row.is_live = bool(body.is_live)
     else:
@@ -1770,6 +1822,7 @@ async def submit_task_feedback(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    _enforce_capability_gate(capability_id="agent.feedback", task_text=body.feedback or "")
     task_record = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == body.task_id.strip(), AgentTaskRow.user_id == user.id)
@@ -1809,6 +1862,7 @@ async def refine_agent_answer(
     _ensure_agent_access(user, db)
 
     message = sanitize_text(body.message, max_length=1000, field_name="message")
+    _enforce_capability_gate(capability_id="agent.refine", task_text=message)
 
     bb = get_blackboard(body.task_id.strip())
     if not bb:
@@ -1877,6 +1931,10 @@ async def verify_arena_answer(
         f"{arena_answer}\n\n"
         f"Your job: rigorously verify this answer. Find supporting evidence. "
         f"Attack assumptions. Score every claim. Produce a verified, refined version."
+    )
+    _enforce_capability_gate(
+        capability_id="agent.verify_arena_answer",
+        task_text=verification_task,
     )
 
     bb = create_blackboard(user_id=user.id, task=verification_task)

@@ -37,6 +37,39 @@ export class ApiError extends Error {
   }
 }
 
+export class LocalExecutionRequiredError extends Error {
+  status = 409;
+  detail: {
+    error: string;
+    execution_environment: string;
+    message: string;
+    title?: string;
+    install_url: string;
+    handoff_spec: string;
+  };
+
+  constructor(detail: LocalExecutionRequiredError['detail']) {
+    super(detail.message || 'This task needs your machine. Powered by Condura.');
+    this.name = 'LocalExecutionRequiredError';
+    this.detail = detail;
+  }
+}
+
+function asLocalExecutionDetail(data: unknown): LocalExecutionRequiredError['detail'] | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as { detail?: unknown; error?: string };
+  const detail = (d.detail && typeof d.detail === 'object' ? d.detail : d) as Record<string, unknown>;
+  if (detail.error !== 'requires_local_execution') return null;
+  return {
+    error: 'requires_local_execution',
+    execution_environment: String(detail.execution_environment || 'condura'),
+    message: String(detail.message || 'This task needs your machine. Powered by Condura.'),
+    title: detail.title ? String(detail.title) : undefined,
+    install_url: String(detail.install_url || 'https://condura.app'),
+    handoff_spec: String(detail.handoff_spec || 'arena.handoff.v1'),
+  };
+}
+
 async function parseJsonSafely<T>(response: Response): Promise<T | null> {
   const text = await response.text();
   if (!text) return null;
@@ -625,6 +658,10 @@ export type AgentTaskTemplate = {
   slots: string[];
   default_expertise: string;
   example: string;
+  capability_id?: string;
+  execution?: string;
+  disabled?: boolean;
+  disabled_reason?: string;
 };
 
 export type AgentTemplatesResponse = {
@@ -728,9 +765,87 @@ export async function runAgentTask(
   >(response);
   if (!data) throw new Error('Empty response');
   if (!response.ok) {
+    if (response.status === 409) {
+      const local = asLocalExecutionDetail(data);
+      if (local) throw new LocalExecutionRequiredError(local);
+    }
     throw new ApiError(getErrorMessage(data, 'Agent task failed'), response.status, data);
   }
   return data;
+}
+
+export async function recordConduraHandoff(body: {
+  capability: string;
+  execution_env: string;
+  session_id?: string;
+  condura_run_id?: string;
+  summary?: string;
+  retention_class?: string;
+  status?: string;
+}): Promise<{ id: number; status: string; condura_run_id?: string | null }> {
+  const response = await apiFetch(`/api/condura/handoff`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await parseJsonSafely<{ id?: number; status?: string; condura_run_id?: string }>(response);
+  if (!response.ok || !data?.id) {
+    throw new ApiError('Failed to record handoff', response.status, data);
+  }
+  return { id: data.id, status: data.status || 'dispatched', condura_run_id: data.condura_run_id };
+}
+
+export async function postConduraHandoffEvent(
+  handoffId: number,
+  body: { event_id?: string; event_kind: string; payload?: Record<string, unknown> },
+): Promise<void> {
+  const response = await apiFetch(`/api/condura/handoff/${handoffId}/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new ApiError('Failed to record handoff event', response.status);
+  }
+}
+
+export async function saveConduraHandoffDraft(body: {
+  capability: string;
+  payload: Record<string, unknown>;
+}): Promise<{ id: number }> {
+  const response = await apiFetch(`/api/condura/handoff-drafts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await parseJsonSafely<{ id?: number }>(response);
+  if (!response.ok || !data?.id) {
+    throw new ApiError('Failed to save handoff draft', response.status, data);
+  }
+  return { id: data.id };
+}
+
+export async function getConduraMigrationFlags(): Promise<{
+  flags: Array<{
+    id: number;
+    kind: string;
+    ref_id: string;
+    affected_capability: string;
+    surfaced_at?: string | null;
+  }>;
+}> {
+  const response = await apiFetch(`/api/condura/migration-flags`);
+  const data = await parseJsonSafely<{ flags?: Array<Record<string, unknown>> }>(response);
+  if (!response.ok) return { flags: [] };
+  return {
+    flags: (data?.flags || []).map((f) => ({
+      id: Number(f.id),
+      kind: String(f.kind || ''),
+      ref_id: String(f.ref_id || ''),
+      affected_capability: String(f.affected_capability || ''),
+      surfaced_at: f.surfaced_at ? String(f.surfaced_at) : null,
+    })),
+  };
 }
 
 export async function uploadAgentFile(file: File): Promise<{

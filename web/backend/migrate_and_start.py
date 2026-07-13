@@ -415,6 +415,116 @@ def main():
                 except Exception:
                     pass
 
+            # Condura integration tables (handoff mirror + migration flags)
+            pg_migration_flags = """
+                CREATE TABLE IF NOT EXISTS migration_flags (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    kind VARCHAR(32) NOT NULL,
+                    ref_id VARCHAR(64) NOT NULL,
+                    affected_capability VARCHAR(64) NOT NULL,
+                    surfaced_at TIMESTAMP DEFAULT NOW(),
+                    resolved_at TIMESTAMP,
+                    user_decision VARCHAR(64)
+                )
+            """
+            sqlite_migration_flags = """
+                CREATE TABLE IF NOT EXISTS migration_flags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    kind VARCHAR(32) NOT NULL,
+                    ref_id VARCHAR(64) NOT NULL,
+                    affected_capability VARCHAR(64) NOT NULL,
+                    surfaced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    resolved_at TIMESTAMP,
+                    user_decision VARCHAR(64)
+                )
+            """
+            pg_handoff = """
+                CREATE TABLE IF NOT EXISTS handoff_records (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    session_id VARCHAR(36),
+                    capability VARCHAR(64) NOT NULL,
+                    execution_env VARCHAR(32) NOT NULL,
+                    condura_run_id VARCHAR(64),
+                    status VARCHAR(32) DEFAULT 'dispatch_pending',
+                    retention_class VARCHAR(16) DEFAULT 'standard',
+                    summary VARCHAR(512),
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """
+            sqlite_handoff = """
+                CREATE TABLE IF NOT EXISTS handoff_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    session_id VARCHAR(36),
+                    capability VARCHAR(64) NOT NULL,
+                    execution_env VARCHAR(32) NOT NULL,
+                    condura_run_id VARCHAR(64),
+                    status VARCHAR(32) DEFAULT 'dispatch_pending',
+                    retention_class VARCHAR(16) DEFAULT 'standard',
+                    summary VARCHAR(512),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            pg_handoff_events = """
+                CREATE TABLE IF NOT EXISTS handoff_events (
+                    id SERIAL PRIMARY KEY,
+                    handoff_id INTEGER NOT NULL REFERENCES handoff_records(id) ON DELETE CASCADE,
+                    event_id VARCHAR(64),
+                    event_kind VARCHAR(32) NOT NULL,
+                    payload JSONB,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """
+            sqlite_handoff_events = """
+                CREATE TABLE IF NOT EXISTS handoff_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    handoff_id INTEGER NOT NULL REFERENCES handoff_records(id) ON DELETE CASCADE,
+                    event_id VARCHAR(64),
+                    event_kind VARCHAR(32) NOT NULL,
+                    payload TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            pg_handoff_drafts = """
+                CREATE TABLE IF NOT EXISTS handoff_drafts (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    capability VARCHAR(64) NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """
+            sqlite_handoff_drafts = """
+                CREATE TABLE IF NOT EXISTS handoff_drafts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    capability VARCHAR(64) NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            for label, pg_sql, sq_sql in (
+                ("migration_flags", pg_migration_flags, sqlite_migration_flags),
+                ("handoff_records", pg_handoff, sqlite_handoff),
+                ("handoff_events", pg_handoff_events, sqlite_handoff_events),
+                ("handoff_drafts", pg_handoff_drafts, sqlite_handoff_drafts),
+            ):
+                try:
+                    conn.execute(text(sq_sql if dialect == "sqlite" else pg_sql))
+                    conn.commit()
+                    print(f"==> Migrated: {label} table", flush=True)
+                except Exception as e:
+                    print(f"==> Warning ({label}): {e}", flush=True)
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+
         print("==> All migrations complete.", flush=True)
 
     except Exception as e:

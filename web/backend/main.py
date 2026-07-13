@@ -34,6 +34,7 @@ from arena.routes.calibration import router as calibration_router
 from arena.routes.rooms import router as rooms_router
 from arena.routes.mcp import router as mcp_router
 from arena.routes.metrics import router as metrics_router
+from arena.routes.condura import router as condura_router
 from arena.core.live_scheduler import schedule_live_checks
 from arena.core.loyalty_scheduler import schedule_loyalty_checks
 from arena.core.watchlist_runner import schedule_watchlist_checks
@@ -240,6 +241,7 @@ def create_app() -> FastAPI:
     app.include_router(calibration_router, prefix="/api/calibration")
     app.include_router(rooms_router, prefix="/api/rooms")
     app.include_router(mcp_router, prefix="/api/mcp")
+    app.include_router(condura_router, prefix="/api/condura")
     app.include_router(metrics_router)
 
     # ── Startup ───────────────────────────────────────────────

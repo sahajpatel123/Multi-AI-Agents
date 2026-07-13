@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentTaskTemplate } from '../api';
+import { ConduraBadge } from './ConduraBadge';
 
 const TAB_ORDER = [
   'All',
@@ -11,6 +12,7 @@ const TAB_ORDER = [
   'Policy',
   'Personal',
   'Analysis',
+  'On device',
 ] as const;
 
 type TabId = (typeof TAB_ORDER)[number];
@@ -197,50 +199,61 @@ export function TemplatesModal({ open, closing, categories, onClose, onSelect }:
               <button
                 key={t.id}
                 type="button"
+                disabled={!!t.disabled}
                 onClick={() => {
+                  if (t.disabled) return;
                   onSelect(t);
                   onClose();
                 }}
                 style={{
                   textAlign: 'left',
-                  background: '#FAF7F2',
+                  background: t.disabled ? '#F5F0E8' : '#FAF7F2',
                   border: '0.5px solid #E0D5C5',
                   borderRadius: 8,
                   padding: 14,
-                  cursor: 'pointer',
+                  cursor: t.disabled ? 'not-allowed' : 'pointer',
+                  opacity: t.disabled ? 0.65 : 1,
                   transition: 'all 0.15s',
                   fontFamily: 'Georgia, serif',
                 }}
                 onMouseEnter={(e) => {
+                  if (t.disabled) return;
                   e.currentTarget.style.borderColor = '#C4956A';
                   e.currentTarget.style.background = '#FAF3EA';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = '#E0D5C5';
-                  e.currentTarget.style.background = '#FAF7F2';
+                  e.currentTarget.style.background = t.disabled ? '#F5F0E8' : '#FAF7F2';
                 }}
               >
-                <span
-                  style={{
-                    fontSize: 9,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    background: '#F0E8DC',
-                    color: '#8C7355',
-                    borderRadius: 6,
-                    padding: '2px 8px',
-                    display: 'inline-block',
-                  }}
-                >
-                  {t.category}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      background: '#F0E8DC',
+                      color: '#8C7355',
+                      borderRadius: 6,
+                      padding: '2px 8px',
+                      display: 'inline-block',
+                    }}
+                  >
+                    {t.category}
+                  </span>
+                  <ConduraBadge execution={t.execution} compact />
+                </div>
                 <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginTop: 6 }}>{t.title}</div>
                 <div style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', marginTop: 3, lineHeight: 1.4 }}>
                   {t.description}
                 </div>
-                <div style={{ fontSize: 11, color: '#C4A882', marginTop: 6 }}>
-                  e.g. {t.example}
-                </div>
+                {t.disabled && t.disabled_reason ? (
+                  <div style={{ fontSize: 11, color: '#a89070', marginTop: 6 }}>{t.disabled_reason}</div>
+                ) : (
+                  <div style={{ fontSize: 11, color: '#C4A882', marginTop: 6 }}>
+                    e.g. {t.example}
+                  </div>
+                )}
               </button>
             ))}
           </div>

@@ -1,4 +1,9 @@
-"""Extract text / image payloads from uploaded bytes for Agent pipeline."""
+"""Extract text / image payloads from uploaded bytes for Agent pipeline.
+
+Extract text from bytes the user uploaded. This is not a local file system.
+We never read the user's disk. Hybrid Condura capabilities must not carry
+file attachments — re-attach in Condura if on-device file access is needed.
+"""
 
 from __future__ import annotations
 

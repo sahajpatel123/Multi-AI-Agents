@@ -663,3 +663,67 @@ class RoomTask(Base):
         primaryjoin="RoomTask.task_id==AgentTask.task_id",
     )
     user = relationship("User")
+
+
+class MigrationKind(str, PyEnum):
+    WATCHLIST_ITEM = "watchlist_item"
+    LIVE_AGENT_TASK = "live_agent_task"
+
+
+class MigrationFlag(Base):
+    """User-facing flags for Condura honest-rejection migration review."""
+
+    __tablename__ = "migration_flags"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    kind = Column(Enum(MigrationKind), nullable=False)
+    ref_id = Column(String(64), nullable=False)
+    affected_capability = Column(String(64), nullable=False)
+    surfaced_at = Column(DateTime, default=_now, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+    user_decision = Column(String(64), nullable=True)
+
+
+class HandoffRecord(Base):
+    """UX mirror of Condura handoffs. Condura audit log is system of record."""
+
+    __tablename__ = "handoff_records"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    session_id = Column(String(36), nullable=True)
+    capability = Column(String(64), nullable=False)
+    execution_env = Column(String(32), nullable=False)
+    condura_run_id = Column(String(64), nullable=True, index=True)
+    status = Column(String(32), default="dispatch_pending", nullable=False)
+    retention_class = Column(String(16), default="standard", nullable=False)
+    summary = Column(String(512), nullable=True)
+    created_at = Column(DateTime, default=_now, nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
+
+
+class HandoffEvent(Base):
+    """Browser-forwarded stream events for a handoff run."""
+
+    __tablename__ = "handoff_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    handoff_id = Column(Integer, ForeignKey("handoff_records.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_id = Column(String(64), nullable=True)
+    event_kind = Column(String(32), nullable=False)
+    payload = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+
+class HandoffDraft(Base):
+    """Saved handoff payloads for Path B (Condura not ready / mobile)."""
+
+    __tablename__ = "handoff_drafts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    capability = Column(String(64), nullable=False)
+    payload_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
