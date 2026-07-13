@@ -66,6 +66,20 @@ function mergeHeaders(
   return headers;
 }
 
+/**
+ * Auth endpoints where attempting a token refresh on 401 would cause an
+ * infinite loop or is semantically meaningless (login, register, the
+ * refresh itself, logout). Other /api/auth/* paths like /api/auth/me
+ * and /api/auth/user/usage ARE protected endpoints that should trigger
+ * refresh when the access token expires.
+ */
+const AUTH_PATHS_NO_REFRESH = [
+  '/api/auth/refresh',
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/logout',
+];
+
 export async function apiFetch(path: string, options: ApiFetchOptions = {}): Promise<Response> {
   const { skipAuthRefresh, ...fetchOpts } = options;
   const token = getAccessToken();
@@ -79,7 +93,7 @@ export async function apiFetch(path: string, options: ApiFetchOptions = {}): Pro
   if (
     res.status === 401 &&
     !skipAuthRefresh &&
-    !path.includes('/api/auth/')
+    !AUTH_PATHS_NO_REFRESH.some(skipPath => path.includes(skipPath))
   ) {
     if (!isRefreshing) {
       isRefreshing = true;

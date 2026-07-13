@@ -129,7 +129,7 @@ describe('apiFetch', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('skips refresh for /api/auth/ endpoints even on 401', async () => {
+  it('skips refresh for auth login/register/refresh/logout endpoints on 401', async () => {
     localStorage.setItem('arena_access_token', 'tok');
     localStorage.setItem('arena_refresh_token', 'ref');
 
