@@ -167,18 +167,26 @@ class Settings(BaseSettings):
             errors.append("ANTHROPIC_API_KEY is a placeholder value")
 
         # --- OPENAI_API_KEY ---
+        # Note: model_router.py gracefully falls back to Claude Sonnet when the
+        # OpenAI client is None, so a missing key is non-fatal. We still validate
+        # the format if a key is supplied so typos surface immediately.
         if not self.openai_api_key:
-            errors.append("OPENAI_API_KEY not set")
+            print(
+                "[WARNING] OPENAI_API_KEY not set. OpenAI personas "
+                "(philosopher, historian, pragmatist, optimist) will fall back to Claude."
+            )
         elif not self.openai_api_key.startswith("sk-"):
             errors.append("OPENAI_API_KEY must start with 'sk-'")
 
         # --- RAZORPAY CREDENTIALS ---
+        # These are optional until billing is enabled — _get_razorpay_client()
+        # returns 503 when called without keys, so missing values are non-fatal.
         if not self.razorpay_api_key:
-            errors.append("RAZORPAY_API_KEY not set")
+            print("[WARNING] RAZORPAY_API_KEY not set. Payment endpoints will return 503.")
         if not self.razorpay_key_secret:
-            errors.append("RAZORPAY_KEY_SECRET not set")
+            print("[WARNING] RAZORPAY_KEY_SECRET not set. Payment endpoints will return 503.")
         if not self.razorpay_webhook_secret:
-            errors.append("RAZORPAY_WEBHOOK_SECRET not set")
+            print("[WARNING] RAZORPAY_WEBHOOK_SECRET not set. Webhooks will be ignored.")
 
         # --- ENCRYPTION_KEY ---
         if not self.encryption_key:

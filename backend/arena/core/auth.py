@@ -2,7 +2,6 @@
 
 import base64
 import hashlib
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -10,15 +9,17 @@ import bcrypt as _bcrypt
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
+from arena.config import get_settings
 from arena.core.feedback_calibrator import get_feedback_calibration
 from arena.core.tier_config import get_tier_str
 from arena.db_models import Subscription, User, UserTier
 from arena.models.schemas import FeedbackCalibrationInfo, UserResponse
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "")
+_settings = get_settings()
+SECRET_KEY = _settings.secret_key
 ALGORITHM = "HS256"
-ACCESS_TOKEN_MAX_AGE_SECONDS = 86400  # 24h
-REFRESH_TOKEN_MAX_AGE_SECONDS = 2592000  # 30 days
+ACCESS_TOKEN_MAX_AGE_SECONDS = _settings.access_token_expire_minutes * 60
+REFRESH_TOKEN_MAX_AGE_SECONDS = _settings.refresh_token_expire_days * 86400
 
 
 def _prehash(plain: str) -> bytes:

@@ -177,15 +177,16 @@ def create_app() -> FastAPI:
         )
 
     # ── Middleware (order matters — outermost runs first) ─────
-    # Explicit origins (Bearer tokens in headers; credentials flag off)
-    allowed_origins = [
-        "https://multi-ai-agents-chi.vercel.app",
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ]
-    if settings.is_production and "*" in allowed_origins:
-        logger.error("[SECURITY ERROR] CORS wildcard (*) is not allowed in production")
-        raise ValueError("CORS wildcard not allowed in production")
+    # Origins come from ALLOWED_ORIGINS env (validated against wildcards above).
+    # Dev convenience: include the common Vite ports if not already listed.
+    allowed_origins = list(settings.allowed_origins_list)
+    if not settings.is_production:
+        for dev_origin in ("http://localhost:5173", "http://127.0.0.1:5173"):
+            if dev_origin not in allowed_origins:
+                allowed_origins.append(dev_origin)
+    if not allowed_origins:
+        logger.error("[SECURITY ERROR] No allowed_origins configured")
+        raise ValueError("At least one origin must be in ALLOWED_ORIGINS")
 
     app.add_middleware(
         CORSMiddleware,
@@ -222,6 +223,27 @@ def create_app() -> FastAPI:
     async def run_startup_tasks() -> None:
         db = SessionLocal()
         try:
+            # Migration status check — warns if alembic hasn't been applied yet.
+            # create_all() will succeed without alembic_version; that doesn't mean
+            # schema is current. Surface this so prod ops doesn't run on stale schema.
+            try:
+                has_alembic = db.execute(
+                    text("SELECT 1 FROM information_schema.tables "
+                         "WHERE table_name = 'alembic_version'")
+                ).scalar()
+                if not has_alembic and settings.is_production:
+                    logger.error(
+                        "[CRITICAL] alembic_version table missing in production. "
+                        "Run 'alembic upgrade head' before serving traffic."
+                    )
+                elif not has_alembic:
+                    logger.warning(
+                        "alembic_version table missing — falling back to "
+                        "create_all(). Run 'alembic upgrade head' for prod parity."
+                    )
+            except Exception as check_exc:
+                logger.debug("Alembic status check skipped: %s", check_exc)
+
             await seed_persona_library(db)
         except Exception as exc:
             logger.exception("Persona library seed failed: %s", exc)
