@@ -228,11 +228,42 @@ def auth_headers(make_user):
 
 # ─── AsyncClient for FastAPI endpoint tests ────────────────────────────────
 
+class _MagicStub:
+    """Placeholder for python-magic so tests don't need libmagic installed."""
+
+    def from_buffer(self, _buf):
+        return "application/octet-stream"
+
+    def from_file(self, _path):
+        return "application/octet-stream"
+
+
+@pytest.fixture(autouse=True)
+def _stub_python_magic(monkeypatch):
+    """python-magic requires libmagic at import time. The CI image doesn't ship
+    it, so inject a stub before any route module imports file_ingest."""
+    import sys
+    import types
+    fake = types.ModuleType("magic")
+    fake.Magic = lambda *a, **kw: _MagicStub()
+    fake.from_buffer = lambda *a, **kw: "application/octet-stream"
+    fake.from_file = lambda *a, **kw: "application/octet-stream"
+    monkeypatch.setitem(sys.modules, "magic", fake)
+
+
 @pytest.fixture
 async def app_client(isolated_db, monkeypatch):
     """httpx.AsyncClient wired to the FastAPI app with DB overridden."""
     import httpx
     from arena.database import get_db
+    from arena.config import Settings as _Settings
+    from arena.core.seed_personas import seed_persona_library
+
+    # Skip startup validation so SQLite test URLs and stub keys don't trip the
+    # production hard-fail guards in settings.validate_secrets.
+    monkeypatch.setattr(_Settings, "validate_secrets", lambda self: None)
+    monkeypatch.setattr(_Settings, "validate_api_keys", lambda self: None)
+
     # main.py lives at web/backend/main.py, not inside the arena package.
     from main import create_app
 
@@ -247,6 +278,16 @@ async def app_client(isolated_db, monkeypatch):
 
     app = create_app()
     app.dependency_overrides[get_db] = _override_get_db
+
+    # httpx's ASGITransport does not fire lifespan events — manually seed
+    # the persona library so tests can hit /api/personas etc.
+    seed_db = SessionLocal()
+    try:
+        # seed_persona_library is async but does only sync DB work internally;
+        # calling it from the event loop is fine (no asyncio.run() needed).
+        await seed_persona_library(seed_db)
+    finally:
+        seed_db.close()
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),

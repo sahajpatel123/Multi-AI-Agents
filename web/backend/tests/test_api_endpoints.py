@@ -13,8 +13,9 @@ class TestHealthEndpoint:
         res = await app_client.get("/api/health")
         assert res.status_code == 200
         body = res.json()
-        assert body["status"] in {"healthy", "ok", "degraded"}
-        assert "db_connected" in body or "db_ok" in body or "checks" in body
+        # /api/health returns: status, version, uptime_seconds, database
+        assert body["status"] in {"healthy", "degraded"}
+        assert "database" in body or "db_connected" in body or "db_ok" in body
 
 
 class TestAuthEndpoints:

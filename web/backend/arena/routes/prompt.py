@@ -14,7 +14,9 @@ from arena.core.contradiction_detector import get_contradiction_detector
 from arena.core.cost_tracker import (
     RateLimitExceeded,
     RequestCostAccumulator,
+    TokenBudgetExceeded,
     check_and_increment_user,
+    check_token_budget,
     record_usage,
 )
 from arena.core.input_pipeline import run_input_pipeline
@@ -74,10 +76,32 @@ def _check_rate_limit(
             status_code=429,
             detail={
                 "error": "rate_limit_exceeded",
+                "scope": e.scope,
                 "message": e.message,
                 "tier": e.tier,
                 "prompts_used": e.used,
                 "daily_limit": e.limit,
+            },
+        )
+
+
+def _check_token_budget(
+    user: UserResponse,
+    db: Session,
+) -> None:
+    """Block the request if the user is over their daily token budget."""
+    try:
+        check_token_budget(db, user.id)
+    except TokenBudgetExceeded as e:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "scope": "tokens",
+                "message": e.message,
+                "tier": e.tier,
+                "tokens_used": e.used,
+                "daily_token_budget": e.limit,
             },
         )
 
@@ -130,6 +154,7 @@ async def submit_prompt(
     user_label = str(user.id)
 
     _check_rate_limit(request, user, db, request_id)
+    _check_token_budget(user, db)
     user_tier = _get_request_tier(user)
     _enforce_persona_access(user_tier, body.persona_ids)
     memory_enabled = has_feature(user_tier, "memory")
@@ -302,6 +327,7 @@ async def stream_prompt(
     user_label = str(user.id)
 
     _check_rate_limit(request, user, db, request_id)
+    _check_token_budget(user, db)
     user_tier = _get_request_tier(user)
     _enforce_persona_access(user_tier, body.persona_ids)
     memory_enabled = has_feature(user_tier, "memory")

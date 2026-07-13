@@ -15,6 +15,7 @@ from arena.core.cost_tracker import (
     _reset_if_new_day,
     check_and_increment_guest,
     check_and_increment_user,
+    check_token_budget,
     estimate_cost,
     get_today_token_usage,
     record_usage,
@@ -243,3 +244,48 @@ class TestGetTodayTokenUsage:
             assert get_today_token_usage(db, user.id) == 450  # 100+50+200+100
         finally:
             db.close()
+
+
+class TestTokenBudget:
+    """Daily token budget enforcement — separate from message count."""
+
+    def test_under_budget_passes(self, make_user):
+        from arena.core.cost_tracker import check_token_budget
+        from arena.database import SessionLocal
+        from arena.db_models import UserTier
+
+        user = make_user(tier=UserTier.PRO)  # 300k budget
+        db = SessionLocal()
+        try:
+            # Should not raise — 0 tokens used
+            check_token_budget(db, user.id)
+        finally:
+            db.close()
+
+    def test_over_budget_raises(self, make_user):
+        from arena.core.cost_tracker import TokenBudgetExceeded, check_token_budget
+        from arena.database import SessionLocal
+        from arena.db_models import UsageRecord, UserTier
+
+        user = make_user(tier=UserTier.FREE)  # 25k budget
+        db = SessionLocal()
+        try:
+            now = _now_utc()
+            # Add a usage record that exhausts the budget
+            db.add(UsageRecord(
+                user_id=user.id, request_id="big", input_tokens=20000, output_tokens=5000,
+                mode="arena", timestamp=now,
+            ))
+            db.commit()
+            with pytest.raises(TokenBudgetExceeded) as exc:
+                check_token_budget(db, user.id)
+            assert exc.value.scope == "tokens"
+            assert exc.value.used == 25000
+            assert exc.value.limit == 25000
+        finally:
+            db.close()
+
+    def test_missing_user_silently_passes(self, db_session):
+        from arena.core.cost_tracker import check_token_budget
+        # No raise for unknown user.
+        check_token_budget(db_session, 99999)

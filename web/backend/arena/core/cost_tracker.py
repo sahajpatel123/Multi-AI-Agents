@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.model_router import estimate_call_cost
-from arena.core.tier_config import get_daily_limit, get_tier_str, normalize_tier, upgrade_target
+from arena.core.tier_config import get_credit_budget, get_daily_limit, get_tier_str, normalize_tier, upgrade_target
 from arena.db_models import GuestRateLimit, User, UsageRecord
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,16 @@ class RequestCostAccumulator:
 # ─────────────────────────────────────────────────
 
 class RateLimitExceeded(Exception):
-    def __init__(self, message: str, tier: str, used: int, limit: int, reset_at: Optional[str] = None, window_hours: Optional[int] = None):
+    def __init__(
+        self,
+        message: str,
+        tier: str,
+        used: int,
+        limit: int,
+        reset_at: Optional[str] = None,
+        window_hours: Optional[int] = None,
+        scope: str = "messages",
+    ):
         super().__init__(message)
         self.message = message
         self.tier = tier
@@ -82,6 +91,16 @@ class RateLimitExceeded(Exception):
         self.limit = limit
         self.reset_at = reset_at
         self.window_hours = window_hours
+        # scope = "messages" (default) | "tokens" — distinguishes message-count
+        # caps from token-budget caps so the client can render the right UI.
+        self.scope = scope
+
+
+class TokenBudgetExceeded(RateLimitExceeded):
+    """Raised when a user is over their daily token budget."""
+
+    def __init__(self, message: str, tier: str, used: int, limit: int):
+        super().__init__(message, tier, used, limit, scope="tokens")
 
 
 def _reset_if_new_day(reset_at: datetime) -> bool:
@@ -136,7 +155,7 @@ def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
     """
     Check registered/pro rate limit. Increments counter.
     Raises RateLimitExceeded if over limit.
-    
+
     Message counting rules:
     - User submits a prompt → agents respond = 1 message
     - User triggers debate mode = 1 message
@@ -174,6 +193,34 @@ def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
     user.prompt_count_today += 1
     user.last_active = now
     db.commit()
+
+
+def check_token_budget(db: Session, user_id: int, estimated_cost: float = 0.0) -> None:
+    """Block the request when the user is over their daily token budget.
+
+    `estimated_cost` is the USD cost of THIS request (best-effort pre-check).
+    The daily budget is per-tier (see TIER_DAILY_LIMITS in tier_config.py).
+    The check runs BEFORE the LLM fan-out so we never burn tokens for a
+    request we're going to reject.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return
+
+    normalized_tier = normalize_tier(get_tier_str(user))
+    budget = get_credit_budget(normalized_tier)  # tokens/day
+
+    used = get_today_token_usage(db, user_id)
+    if used + int(estimated_cost) >= budget:
+        raise TokenBudgetExceeded(
+            message=(
+                f"You've used {used} of your {budget} daily tokens. "
+                f"Try again tomorrow or upgrade to a higher tier."
+            ),
+            tier=normalized_tier.value,
+            used=used,
+            limit=budget,
+        )
 
 
 # ─────────────────────────────────────────────────
