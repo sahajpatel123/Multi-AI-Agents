@@ -134,8 +134,6 @@ jobs:
           sleep 5
 
       - name: Run Playwright tests
-        env:
-          PLAYWRIGHT_BASE_URL: http://localhost:5173
         run: npx playwright test
 
       - name: Upload Playwright report on failure
