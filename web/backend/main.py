@@ -226,11 +226,27 @@ def create_app() -> FastAPI:
             # Migration status check — warns if alembic hasn't been applied yet.
             # create_all() will succeed without alembic_version; that doesn't mean
             # schema is current. Surface this so prod ops doesn't run on stale schema.
+            # The system catalog query is dialect-specific (information_schema on
+            # Postgres, sqlite_master on SQLite) so the right one is picked at
+            # runtime; otherwise the SQLite fallback path would either silently
+            # raise or return zero rows and emit a misleading "alembic_version
+            # missing" warning that masks the real Postgres-down failure mode.
             try:
-                has_alembic = db.execute(
-                    text("SELECT 1 FROM information_schema.tables "
-                         "WHERE table_name = 'alembic_version'")
-                ).scalar()
+                dialect = db.bind.dialect.name if db.bind else ""
+                if dialect == "sqlite":
+                    has_alembic = db.execute(
+                        text(
+                            "SELECT 1 FROM sqlite_master "
+                            "WHERE type='table' AND name='alembic_version'"
+                        )
+                    ).scalar()
+                else:
+                    has_alembic = db.execute(
+                        text(
+                            "SELECT 1 FROM information_schema.tables "
+                            "WHERE table_name = 'alembic_version'"
+                        )
+                    ).scalar()
                 if not has_alembic and settings.is_production:
                     logger.error(
                         "[CRITICAL] alembic_version table missing in production. "

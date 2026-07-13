@@ -8,7 +8,7 @@
 
 Send a prompt. Four AI agents — each with a distinct reasoning style — answer simultaneously, streamed token-by-token. A scorer LLM evaluates every response on relevance, insight, clarity, and intellectual honesty, then surfaces the winner. Drill into any agent's full answer, challenge its reasoning in **Debate Mode**, or have a private follow-up thread in **Focus Mode**.
 
-A separate **Agent Mode** runs a 7-stage research pipeline (planner → researcher → steelman → solver → critic → verifier → synthesizer → judge) on long-form questions, with refinement loops and intelligence scoring.
+A separate **Agent Mode** runs an 8-stage research pipeline (planner → researcher → steelman → solver → critic → verifier → synthesizer → judge) on long-form questions, with refinement loops and intelligence scoring.
 
 ## The personas
 
@@ -65,7 +65,7 @@ Each prompt picks 4 of these 16 for the panel. The panel is fully editable.
 ### Backend
 
 ```bash
-cd backend
+cd web/backend
 
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
@@ -88,7 +88,7 @@ API lives at `http://localhost:8000`. Health check at `/api/health`.
 ### Frontend
 
 ```bash
-cd frontend
+cd web/frontend
 
 npm install
 npm run dev
@@ -129,49 +129,53 @@ PATCH /api/user/profile
 
 ```
 Multi-Agents/
-├── backend/
-│   ├── arena/
-│   │   ├── core/
-│   │   │   ├── agents.py            16 persona prompts + routing
-│   │   │   ├── orchestrator.py      Parallel fan-out + streaming
-│   │   │   ├── scorer.py            5th LLM scoring + winner pick
-│   │   │   ├── agent_pipeline.py    7-stage Agent Mode pipeline
-│   │   │   ├── stages/              planner / researcher / solver / critic / verifier / synthesizer / judge
-│   │   │   ├── input_pipeline.py    Sanitize, classify, toxicity check
-│   │   │   ├── model_router.py      Per-persona, per-task model routes
-│   │   │   ├── tier_config.py       Tier matrix, feature flags, limits
-│   │   │   ├── rate_limits.py       In-memory IP/user throttling
-│   │   │   ├── rate_limiter_pro.py  Pro rolling window
-│   │   │   ├── cost_tracker.py      Per-request token accounting
-│   │   │   ├── memory.py            Short-term + long-term memory
-│   │   │   ├── persona_integrity.py Drift detection
-│   │   │   ├── contradiction_detector.py
-│   │   │   ├── observability.py     JSON logging + health
-│   │   │   ├── mcp_runtime.py       MCP tool integration
-│   │   │   └── tools/               calculator / datetime / web_search
-│   │   ├── routes/                  FastAPI routers — one per feature area
-│   │   ├── db_models.py             15 SQLAlchemy tables
-│   │   ├── models/schemas.py        Pydantic request/response models
-│   │   ├── database.py              PG-primary, SQLite-fallback engine
-│   │   └── config.py                Settings + secret validation
-│   ├── alembic/                     Migrations (3 revs so far)
-│   ├── main.py                      App factory, middleware, lifespan
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/
-│   ├── src/
-│   │   ├── api.ts                   All backend calls, typed
-│   │   ├── App.tsx                  Arena view (2×2 grid + streaming)
-│   │   ├── main.tsx                 Routes + provider stack
-│   │   ├── pages/                   Home / Arena / Agent / Rooms / Pricing / ...
-│   │   ├── components/              AgentCard, PromptInput, DebateMode, ...
-│   │   ├── context/                 Auth / Tier / Panel / ProfileModal
-│   │   ├── hooks/                   useAuth, useIsMobile, useCalligraphyCanvas
-│   │   ├── lib/                     apiFetch, tokenStorage
-│   │   └── types.ts                 Shared TypeScript types
-│   ├── vercel.json                  Production CSP + headers
-│   ├── tailwind.config.js
-│   └── vite.config.ts
+├── web/                            ← all web application source
+│   ├── backend/
+│   │   ├── arena/
+│   │   │   ├── core/
+│   │   │   │   ├── agents.py            16 persona prompts + routing
+│   │   │   │   ├── orchestrator.py      Parallel fan-out + streaming
+│   │   │   │   ├── scorer.py            5th LLM scoring + winner pick
+│   │   │   │   ├── agent_pipeline.py    7-stage Agent Mode pipeline
+│   │   │   │   ├── stages/              planner / researcher / solver / critic / verifier / synthesizer / judge
+│   │   │   │   ├── input_pipeline.py    Sanitize, classify, toxicity check
+│   │   │   │   ├── model_router.py      Per-persona, per-task model routes
+│   │   │   │   ├── tier_config.py       Tier matrix, feature flags, limits
+│   │   │   │   ├── rate_limits.py       In-memory IP/user throttling
+│   │   │   │   ├── rate_limiter_pro.py  Pro rolling window
+│   │   │   │   ├── cost_tracker.py      Per-request token accounting
+│   │   │   │   ├── memory.py            Short-term + long-term memory
+│   │   │   │   ├── persona_integrity.py Drift detection
+│   │   │   │   ├── contradiction_detector.py
+│   │   │   │   ├── observability.py     JSON logging + health
+│   │   │   │   ├── mcp_runtime.py       MCP tool integration
+│   │   │   │   └── tools/               calculator / datetime / web_search
+│   │   │   ├── routes/                  FastAPI routers — one per feature area
+│   │   │   ├── db_models.py             15 SQLAlchemy tables
+│   │   │   ├── models/schemas.py        Pydantic request/response models
+│   │   │   ├── database.py              PG-primary, SQLite-fallback engine
+│   │   │   └── config.py                Settings + secret validation
+│   │   ├── alembic/                     Migrations (3 revs so far)
+│   │   ├── main.py                      App factory, middleware, lifespan
+│   │   ├── requirements.txt
+│   │   └── .env.example
+│   ├── frontend/
+│   │   ├── src/
+│   │   │   ├── api.ts                   All backend calls, typed
+│   │   │   ├── App.tsx                  Arena view (2×2 grid + streaming)
+│   │   │   ├── main.tsx                 Routes + provider stack
+│   │   │   ├── pages/                   Home / Arena / Agent / Rooms / Pricing / ...
+│   │   │   ├── components/              AgentCard, PromptInput, DebateMode, ...
+│   │   │   ├── context/                 Auth / Tier / Panel / ProfileModal
+│   │   │   ├── hooks/                   useAuth, useIsMobile, useCalligraphyCanvas
+│   │   │   ├── lib/                     apiFetch, tokenStorage
+│   │   │   └── types.ts                 Shared TypeScript types
+│   │   ├── vercel.json                  Production CSP + headers
+│   │   ├── tailwind.config.js
+│   │   └── vite.config.ts
+│   └── README.md                       Web app run instructions
+├── app/                            ← built / runnable application output
+├── PRO_TIER_RATE_LIMITING_SUMMARY.md
 └── README.md
 ```
 

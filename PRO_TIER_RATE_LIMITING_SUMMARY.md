@@ -10,20 +10,20 @@ Implemented rolling window rate limiting for Pro tier users: **45 messages per 5
 
 ## Backend Changes
 
-### 1. Config (`backend/arena/config.py`)
+### 1. Config (`web/backend/arena/config.py`)
 Added Pro tier window configuration:
 ```python
 pro_window_messages: int = 45
 pro_window_hours: int = 5
 ```
 
-### 2. New Module (`backend/arena/core/rate_limiter_pro.py`)
+### 2. New Module (`web/backend/arena/core/rate_limiter_pro.py`)
 Created dedicated Pro tier rolling window rate limiter:
 - `check_pro_window_limit(db, user_id)` - Checks if Pro user exceeded window limit
 - Returns error dict with `reset_at`, `window_hours`, `current_count` if limit exceeded
 - Calculates reset time based on oldest message in window + 5 hours
 
-### 3. Cost Tracker (`backend/arena/core/cost_tracker.py`)
+### 3. Cost Tracker (`web/backend/arena/core/cost_tracker.py`)
 Updated rate limiting logic:
 - Added import for `check_pro_window_limit`
 - Updated `RateLimitExceeded` exception to include `reset_at` and `window_hours` parameters
@@ -32,17 +32,17 @@ Updated rate limiting logic:
 
 ## Frontend Changes
 
-### 1. Pricing Page (`frontend/src/pages/PricingPage.tsx`)
+### 1. Pricing Page (`web/frontend/src/pages/PricingPage.tsx`)
 - Updated Pro tier card: "45 messages per 5 hour window" (was "Unlimited questions")
 - Updated FAQ answer about Pro tier
 
-### 2. User Menu (`frontend/src/components/UserMenu.tsx`)
+### 2. User Menu (`web/frontend/src/components/UserMenu.tsx`)
 - Updated `REGISTERED_LIMIT` constant from 10 to 7
 - Updated Pro tier usage display:
   - Shows: "{used} / 45 messages this window"
   - Shows: "Rolling 5 hour window" instead of "Unlimited prompts"
 
-### 3. App Component (`frontend/src/App.tsx`)
+### 3. App Component (`web/frontend/src/App.tsx`)
 - Added state for rate limit banner: `rateLimitBanner`
 - Will display banner when 429 response received with reset time
 
@@ -67,18 +67,18 @@ When Pro user hits limit, backend returns 429 with:
 
 ## Files Modified
 **Backend:**
-1. `backend/arena/config.py` - Added Pro window config
-2. `backend/arena/core/rate_limiter_pro.py` - NEW FILE
-3. `backend/arena/core/cost_tracker.py` - Updated rate limiting logic
+1. `web/backend/arena/config.py` - Added Pro window config
+2. `web/backend/arena/core/rate_limiter_pro.py` - NEW FILE
+3. `web/backend/arena/core/cost_tracker.py` - Updated rate limiting logic
 
 **Frontend:**
-1. `frontend/src/pages/PricingPage.tsx` - Updated Pro tier display
-2. `frontend/src/components/UserMenu.tsx` - Updated usage counter
-3. `frontend/src/App.tsx` - Added rate limit banner state
+1. `web/frontend/src/pages/PricingPage.tsx` - Updated Pro tier display
+2. `web/frontend/src/components/UserMenu.tsx` - Updated usage counter
+3. `web/frontend/src/App.tsx` - Added rate limit banner state
 
 ## Next Steps (TODO)
 1. Add 429 error handling in App.tsx handleSubmit function
 2. Add rate limit banner UI component above prompt input
-3. Test compilation: `python3 -m compileall backend/arena`
+3. Test compilation: `python3 -m compileall web/backend/arena`
 4. Test compilation: `npm run build` in frontend
 5. Test Pro tier rate limiting with actual usage

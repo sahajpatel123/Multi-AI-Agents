@@ -1280,7 +1280,6 @@ export function AgentPage() {
   useEffect(() => {
     if (!orchActiveId || !isRunning) return;
     let cancelled = false;
-    let intervalId: ReturnType<typeof setInterval> | undefined;
 
     const tick = async () => {
       try {
@@ -1314,10 +1313,10 @@ export function AgentPage() {
     };
 
     void tick();
-    intervalId = setInterval(() => void tick(), 2500);
+    const intervalId = setInterval(() => void tick(), 2500);
     return () => {
       cancelled = true;
-      if (intervalId) clearInterval(intervalId);
+      clearInterval(intervalId);
     };
   }, [orchActiveId, isRunning, loadTaskHistory]);
 

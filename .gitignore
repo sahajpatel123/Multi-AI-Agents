@@ -38,12 +38,12 @@ env/
 *.db
 *.sqlite
 *.sqlite3
-backend/data/
+web/backend/data/
 
 # Logs
 *.log
 logs/
-backend/logs/
+web/backend/logs/
 *.log.*
 
 # IDE
@@ -74,3 +74,16 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Accidental duplicates from macOS "Save As" and Windows "Save a Copy":
+# catches the "<name> 2.<ext>" / "<name> - Copy.<ext>" / "<name> (1).<ext>"
+# pattern that produced four orphan files (memory 2.py, DebateMode 2.tsx,
+# package-lock 2.json, memory_v2.py) in the chore cleanup. Patterns here
+# target filenames only — directories like "release 2026" or files like
+# "release-v2.md" (no space before 2) still commit normally.
+* [0-9].*
+* - Copy.*
+* - Copy (*.*
+* (*).*
+
+

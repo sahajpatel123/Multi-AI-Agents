@@ -31,7 +31,7 @@ function formatRelativeFuture(iso: string | null | undefined): string {
   const d = new Date(iso);
   const t = d.getTime();
   if (Number.isNaN(t)) return '—';
-  let sec = Math.round((t - Date.now()) / 1000);
+  const sec = Math.round((t - Date.now()) / 1000);
   if (sec < 0) return 'due now';
   if (sec < 60) return 'in <1m';
   const min = Math.floor(sec / 60);
