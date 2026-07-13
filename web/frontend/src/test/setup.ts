@@ -19,6 +19,6 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
 
 // Polyfill fetch + Response if not already in jsdom.
 if (typeof globalThis.fetch === 'undefined') {
-  // @ts-expect-error -- minimal stub for unit tests; integration tests should mock properly.
-  globalThis.fetch = () => Promise.reject(new Error('fetch not mocked'));
+  // minimal stub for unit tests; integration tests should mock properly.
+  globalThis.fetch = (() => Promise.reject(new Error('fetch not mocked'))) as typeof fetch;
 }
