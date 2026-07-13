@@ -34,18 +34,23 @@ def _build_engine():
             logger.info("Connected to PostgreSQL")
             return engine
         except Exception as e:
-            # SQLite fallback is unsafe in production — surface loudly.
+            # SQLite fallback is unsafe in production — refuse to start.
+            # Serving traffic against a freshly-empty SQLite would silently
+            # drop every existing row, so production must fail closed.
             if settings.is_production:
                 logger.error(
                     "[CRITICAL] PostgreSQL unavailable in production (%s) — "
-                    "falling back to SQLite. Set DATABASE_URL to a reachable "
-                    "Postgres instance.",
+                    "refusing to start with SQLite fallback. "
+                    "Set DATABASE_URL to a reachable Postgres instance.",
                     e,
                 )
-            else:
-                logger.warning(f"PostgreSQL unavailable ({e}), falling back to SQLite")
+                raise RuntimeError(
+                    f"PostgreSQL unavailable in production: {e}. "
+                    "SQLite fallback is disabled when ENVIRONMENT=production."
+                ) from e
+            logger.warning(f"PostgreSQL unavailable ({e}), falling back to SQLite")
 
-    # SQLite fallback
+    # SQLite fallback (dev only — production raises above)
     fallback_url = settings.database_url_fallback or "sqlite:///./arena.db"
     engine = create_engine(
         fallback_url,
