@@ -124,8 +124,8 @@ jobs:
         working-directory: web/frontend
         run: npm ci
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright
+        run: npm install --no-save @playwright/test && npx playwright install --with-deps chromium
 
       - name: Start backend
         working-directory: web/backend
@@ -136,7 +136,7 @@ jobs:
       - name: Run Playwright tests
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:5173
-        run: npm run test:e2e
+        run: npx playwright test
 
       - name: Upload Playwright report on failure
         if: failure()
