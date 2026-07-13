@@ -75,6 +75,9 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# Separate project (not part of this repo's web/ monorepo)
+arena-video/
+
 # Accidental duplicates from macOS "Save As" and Windows "Save a Copy":
 # catches the "<name> 2.<ext>" / "<name> - Copy.<ext>" / "<name> (1).<ext>"
 # pattern that produced four orphan files (memory 2.py, DebateMode 2.tsx,

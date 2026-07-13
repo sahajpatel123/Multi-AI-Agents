@@ -175,7 +175,6 @@ Multi-Agents/
 │   │   └── vite.config.ts
 │   └── README.md                       Web app run instructions
 ├── app/                            ← built / runnable application output
-├── PRO_TIER_RATE_LIMITING_SUMMARY.md
 └── README.md
 ```
 
@@ -189,7 +188,6 @@ Multi-Agents/
 - Razorpay MCP tokens encrypted at rest with Fernet
 - Passwords: bcrypt 12-round with SHA-256 prehash; legacy verify path retained for backwards compatibility
 - Prompt-injection detection (17 known phrases) + two-tier toxicity gate (rules + LLM)
-- See `PRO_TIER_RATE_LIMITING_SUMMARY.md` for the rate-limit design
 
 ## License
 
