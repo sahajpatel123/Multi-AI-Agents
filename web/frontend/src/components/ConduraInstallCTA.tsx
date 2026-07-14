@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ConduraProbeState, HandoffPayload } from '../types/condura';
 import { probeLocalCondura } from '../lib/conduraLocalProbe';
 import { handoffClipboardUrl } from '../lib/conduraHandoff';
 import markUrl from '../assets/condura/mark.svg';
+
+const TITLE_ID = 'condura-cta-title';
 
 function isMobileUa(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -34,6 +36,8 @@ export function ConduraInstallCTA({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const mobile = isMobileUa();
+  const firstBtnRef = useRef<HTMLButtonElement | null>(null);
+  const lastBtnRef = useRef<HTMLButtonElement | null>(null);
 
   const runProbe = useCallback(async () => {
     setProbing(true);
@@ -51,7 +55,45 @@ export function ConduraInstallCTA({
       setProbe({ kind: 'unknown' });
       setError(null);
       setCopied(false);
+      return;
     }
+    // Focus the primary button on open so keyboard users can act immediately.
+    firstBtnRef.current?.focus();
+  }, [open]);
+
+  // Escape-key closes the modal.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open, onClose]);
+
+  // Basic focus trap: if tabbing past the last focusable button, cycle
+  // back to the first (and Shift+Tab past the first goes to the last).
+  useEffect(() => {
+    if (!open) return;
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const first = firstBtnRef.current;
+      const last = lastBtnRef.current;
+      if (!first || !last) return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', trap);
+    return () => window.removeEventListener('keydown', trap);
   }, [open]);
 
   if (!open) return null;
@@ -76,6 +118,7 @@ export function ConduraInstallCTA({
     <div
       role="dialog"
       aria-modal="true"
+      aria-labelledby={TITLE_ID}
       style={{
         position: 'fixed',
         inset: 0,
@@ -102,7 +145,7 @@ export function ConduraInstallCTA({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <img src={markUrl} alt="" width={22} height={22} />
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, color: '#2c1810' }}>{title}</h2>
+          <h2 id={TITLE_ID} style={{ margin: 0, fontSize: 20, fontWeight: 500, color: '#2c1810' }}>{title}</h2>
         </div>
         <p style={{ margin: '0 0 16px', fontSize: 15, color: '#6B6460', lineHeight: 1.6 }}>{message}</p>
         {mobile && (
@@ -116,6 +159,7 @@ export function ConduraInstallCTA({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button
             type="button"
+            ref={firstBtnRef}
             className="arena-btn arena-btn--primary arena-btn--md arena-btn--full"
             disabled={busy || probing}
             onClick={async () => {
@@ -161,6 +205,7 @@ export function ConduraInstallCTA({
           )}
           <button
             type="button"
+            ref={lastBtnRef}
             className="arena-btn arena-btn--ghost arena-btn--md arena-btn--full"
             onClick={onClose}
           >

@@ -21,7 +21,7 @@ from arena.core.handoff_status import (
     STREAMING,
 )
 from arena.core.migration import list_open_flags_for_user, resolve_flag
-from arena.core.telemetry import record_handoff_dispatched, record_probe_state
+from arena.core.telemetry import admin_metrics_payload, record_handoff_dispatched, record_probe_state
 from arena.database import get_db
 from arena.db_models import HandoffDraft, HandoffEvent, HandoffRecord
 from arena.models.schemas import UserResponse
@@ -257,3 +257,16 @@ async def probe_telemetry(
     """Opt-in categorical probe state only (no ports/paths)."""
     record_probe_state(body.kind)
     return JSONResponse(content={"ok": True})
+
+
+@router.get("/metrics")
+async def get_condura_metrics(
+    user: UserResponse = Depends(get_current_user_required),
+):
+    """Admin-level aggregate Condura handoff counters.
+
+    Returns process-local telemetry snapshot: one JSON payload with all
+    counter names and values since last restart.  No PII, no per-user
+    breakdown — raw counters suitable for a dashboard.
+    """
+    return JSONResponse(content=admin_metrics_payload())

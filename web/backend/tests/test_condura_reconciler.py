@@ -74,6 +74,81 @@ def test_mark_stale_handoffs_flips_old_streaming_rows(isolated_db):
         db.close()
 
 
+def test_purge_expired_handoffs_deletes_only_terminal_old_rows(isolated_db):
+    from arena.core.condura_reconciler import purge_expired_handoffs
+    from arena.core.handoff_status import COMPLETE, STREAMING
+    from arena.db_models import HandoffRecord, User, UserTier
+
+    SessionLocal = isolated_db
+    db = SessionLocal()
+    try:
+        u = User(
+            email="purge@test.com",
+            password_hash="x",
+            tier=UserTier.PRO,
+            name="Purge",
+        )
+        db.add(u)
+        db.commit()
+        db.refresh(u)
+
+        very_old = _utc_naive() - timedelta(days=200)
+        recent = _utc_naive()
+        expired = HandoffRecord(
+            user_id=u.id,
+            capability="agent.long_research",
+            execution_env="hybrid_delegate",
+            status=COMPLETE,
+            retention_class="standard",
+            created_at=very_old,
+            updated_at=very_old,
+        )
+        expired_delegate = HandoffRecord(
+            user_id=u.id,
+            capability="agent.long_research",
+            execution_env="hybrid_delegate",
+            status=COMPLETE,
+            retention_class="delegate",
+            created_at=very_old,
+            updated_at=very_old,
+        )
+        still_fresh = HandoffRecord(
+            user_id=u.id,
+            capability="agent.research",
+            execution_env="web",
+            status=COMPLETE,
+            retention_class="standard",
+            created_at=recent,
+            updated_at=recent,
+        )
+        in_flight = HandoffRecord(
+            user_id=u.id,
+            capability="app.open_in_linear",
+            execution_env="condura",
+            status=STREAMING,
+            retention_class="standard",
+            created_at=very_old,
+            updated_at=very_old,
+        )
+        db.add_all([expired, expired_delegate, still_fresh, in_flight])
+        db.commit()
+
+        n = purge_expired_handoffs(db)
+        # expired: standard + >180d → deleted ✓
+        # expired_delegate: delegate + <365d → NOT deleted (only ~200d old)
+        # still_fresh: recent → not deleted ✓
+        # in_flight: streaming → not deleted (not terminal) ✓
+        assert n == 1, f"expected 1 expired row purged, got {n}"
+
+        all_ids = {r.id for r in db.query(HandoffRecord).all()}
+        assert expired.id not in all_ids
+        assert expired_delegate.id in all_ids  # delegate gets 365d
+        assert still_fresh.id in all_ids
+        assert in_flight.id in all_ids
+    finally:
+        db.close()
+
+
 def test_handoff_status_constants_are_disjoint():
     from arena.core.handoff_status import (
         ALL_KNOWN_STATUSES,

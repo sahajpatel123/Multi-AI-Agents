@@ -1,12 +1,12 @@
 """Nightly scheduler for Condura handoff reconciliation.
 
 Mirrors the watchlist_runner / live_scheduler pattern: opens an own DB
-session per tick, calls condura_reconciler.mark_stale_handoffs(), then
-sleeps until the next tick.
+session per tick, calls condura_reconciler.mark_stale_handoffs() and
+condura_reconciler.purge_expired_handoffs(), then sleeps until the next tick.
 
 Reconciliation is browser-mediated by design (no server path to the user's
-loopback). This job only flags stale mirror rows so the user can be prompted
-to reopen Condura with Last-Event-ID resume. See ADR-0001 §4 Phase 4.
+loopback). This job only flags stale mirror rows and prunes expired ones
+so the UI doesn't accumulate drift. See ADR-0001 §4 Phase 4.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from arena.core.condura_reconciler import mark_stale_handoffs
+from arena.core.condura_reconciler import mark_stale_handoffs, purge_expired_handoffs
 from arena.database import SessionLocal
 
 logger = logging.getLogger("arena.condura_scheduler")
@@ -36,10 +36,12 @@ async def schedule_condura_reconciler() -> None:
             db = SessionLocal()
             try:
                 marked = mark_stale_handoffs(db, older_than_hours=STALE_AFTER_HOURS)
-                if marked:
+                purged = purge_expired_handoffs(db)
+                if marked or purged:
                     logger.info(
-                        "[CONDURA-RECONCILE] sweep marked %s stale handoff(s)",
+                        "[CONDURA-RECONCILE] sweep: %s stale flagged, %s rows purged",
                         marked,
+                        purged,
                     )
             finally:
                 db.close()
