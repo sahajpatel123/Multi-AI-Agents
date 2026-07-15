@@ -139,7 +139,7 @@ class DebateRequest(BaseModel):
     original_prompt: str = Field(..., min_length=1, description="The original user prompt")
     challenged_agent_id: str = Field(..., description="Agent being challenged")
     challenged_verdict: str = Field(..., description="The challenged agent's verdict")
-    round_number: int = Field(1, ge=1, le=3, description="Current round (1-3)")
+    round_number: int = Field(1, ge=1, le=4, description="Current round (1-3 standard, optional 4th follow-up)")
     debate_history: list[DebateMessage] = Field(default_factory=list, description="Previous debate messages")
     user_interjection: str | None = Field(None, description="Optional user message to redirect the debate")
     session_id: str | None = Field(None, description="Session ID for continuity")
