@@ -45,6 +45,7 @@ export function PersonasPage() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [savingPanel, setSavingPanel] = useState(false);
+  const [pendingReset, setPendingReset] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [revealedLibraryIds, setRevealedLibraryIds] = useState<Record<string, boolean>>({});
   const [libraryQuery, setLibraryQuery] = useState('');
@@ -134,6 +135,40 @@ export function PersonasPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [activeSlot]);
+
+  // Esc cancels a pending panel reset (when swap modal is not open).
+  useEffect(() => {
+    if (!pendingReset || activeSlot !== null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setPendingReset(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pendingReset, activeSlot]);
+
+  // Leaving the default state or opening swap clears confirm UI.
+  useEffect(() => {
+    if (isDefaultPanel || activeSlot !== null) setPendingReset(false);
+  }, [isDefaultPanel, activeSlot]);
+
+  const handleResetPanel = () => {
+    if (!pendingReset) {
+      setPendingReset(true);
+      return;
+    }
+    resetPanel();
+    setPendingReset(false);
+    void track('panel_reset');
+    setToast({
+      message: 'Panel reset to the four default minds',
+      color: '#1A1714',
+      iconColor: '#C4956A',
+      kind: 'success',
+    });
+  };
 
   const unlockedSlotMap = useMemo(
     () =>
@@ -384,24 +419,30 @@ export function PersonasPage() {
             {!isDefaultPanel && (
               <button
                 type="button"
-                onClick={resetPanel}
+                onClick={handleResetPanel}
+                aria-label={
+                  pendingReset
+                    ? 'Confirm reset panel to default minds'
+                    : 'Reset panel to default minds'
+                }
                 style={{
                   fontSize: '12px',
-                  color: '#6B6460',
-                  background: 'none',
-                  border: 'none',
+                  color: pendingReset ? '#D85A30' : '#6B6460',
+                  background: pendingReset ? 'rgba(216, 90, 48, 0.08)' : 'none',
+                  border: pendingReset ? '0.5px solid rgba(216, 90, 48, 0.35)' : 'none',
+                  borderRadius: pendingReset ? 999 : 0,
                   cursor: 'pointer',
-                  padding: 0,
-                  transition: 'color 150ms ease',
+                  padding: pendingReset ? '6px 12px' : 0,
+                  transition: 'color 150ms ease, background 150ms ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.color = '#1A1714';
+                  if (!pendingReset) e.currentTarget.style.color = '#1A1714';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.color = '#6B6460';
+                  if (!pendingReset) e.currentTarget.style.color = '#6B6460';
                 }}
               >
-                Reset to default
+                {pendingReset ? 'Reset panel? Confirm' : 'Reset to default'}
               </button>
             )}
           </div>

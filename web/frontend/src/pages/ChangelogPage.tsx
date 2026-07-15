@@ -75,6 +75,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Press / and ? on Agent Watchlist for search focus and shortcuts help',
       '[NEW] Share Room invites via the system share sheet (with copy fallback)',
       '[NEW] Press / and ? on Personas for library search focus and shortcuts help',
+      '[IMPROVED] Personas reset requires confirmation before restoring default minds',
     ],
   },
   {

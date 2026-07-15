@@ -53,7 +53,7 @@ const WATCHLIST: ShortcutHint[] = [
 
 const PERSONAS: ShortcutHint[] = [
   { keys: '/', action: 'Focus library or swap search' },
-  { keys: 'Esc', action: 'Close the slot-swap dialog' },
+  { keys: 'Esc', action: 'Close swap dialog or cancel reset' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
 
