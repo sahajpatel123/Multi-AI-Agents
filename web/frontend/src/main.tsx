@@ -10,6 +10,7 @@ import { TierProvider } from './context/TierContext'
 import { ProfileModalProvider } from './context/ProfileModalContext'
 import { ProfileModal } from './components/ProfileModal'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
+import { DocumentTitle } from './components/DocumentTitle'
 import './index.css'
 
 // Lazy-load each page so they're split into separate chunks. The Suspense
@@ -174,6 +175,7 @@ if (!rootElement) {
             <TierProvider>
               <PanelProvider>
                 <ProfileModalProvider>
+                <DocumentTitle />
                 <ProfileModal />
                 <NetworkStatusBanner />
                 <a href="#main-content" className="skip-to-content">
