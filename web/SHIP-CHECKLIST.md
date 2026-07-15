@@ -69,6 +69,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **404 recovery**: shows attempted path; signed-in users get Arena / Agent / Watchlist; tab title “Not found”.
 - **Sidebar recents search**: filter history by prompt/title with clear + empty match state.
 - **Leaderboard copy**: session rankings as markdown table; UserMenu loading respects reduced motion.
+- **Agent history search**: filter research history by title/task text (shared search helper).
 
 ## Required production environment
 

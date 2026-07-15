@@ -55,6 +55,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Agent Copy pastes markdown (question + answer) with failure feedback',
       '[NEW] Search Arena sidebar recents by prompt or renamed title',
       '[NEW] Copy session Agent Leaderboard rankings as markdown',
+      '[NEW] Search Agent Mode research history by title or task text',
     ],
   },
   {

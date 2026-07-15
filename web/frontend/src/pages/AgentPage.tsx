@@ -78,6 +78,7 @@ import {
 import { copyToClipboard } from '../lib/clipboard';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { motionDuration } from '../lib/motion';
+import { filterBySearchQuery } from '../lib/sidebarSearch';
 
 /** Agent result view — shared palette (mockup) */
 const AR = {
@@ -689,6 +690,7 @@ export function AgentPage() {
   const [steelmanInnerExpanded, setSteelmanInnerExpanded] = useState(false);
   const [showAllSourcePills, setShowAllSourcePills] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [dismissedChipIds, setDismissedChipIds] = useState<Set<string>>(
     () => loadDismissedAgentChipIds(),
   );
@@ -699,6 +701,7 @@ export function AgentPage() {
   const [editingValue, setEditingValue] = useState('');
   const menuLayerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const historySearchRef = useRef<HTMLInputElement | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [confActive, setConfActive] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -1674,6 +1677,17 @@ export function AgentPage() {
   }, [result?.assumptions]);
 
   const hasRefinementMetadataNote = (result?.refinement_count ?? 0) > 0;
+
+  const filteredTaskHistory = useMemo(
+    () =>
+      filterBySearchQuery(taskHistory, historySearchQuery, (item) => [
+        item.title,
+        item.task_text,
+        agentHistoryDisplayTitle(item),
+      ]),
+    [taskHistory, historySearchQuery],
+  );
+
   const sortedAssumptionItems = useMemo(() => {
     if (!assumptions?.assumptions?.length) return [];
     return [...assumptions.assumptions].sort((a, b) => Number(!!b.flag) - Number(!!a.flag));
@@ -2645,9 +2659,83 @@ export function AgentPage() {
             </div>
           ) : null}
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 16px' }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A9A2', padding: '12px 4px 6px', marginBottom: 4 }}>
-              History
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                padding: '12px 4px 6px',
+                marginBottom: 4,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 10,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: '#B0A9A2',
+                }}
+              >
+                History
+              </div>
+              {taskHistory.length > 0 ? (
+                <span style={{ fontSize: 10, color: '#A89070' }}>
+                  {filteredTaskHistory.length}
+                  {historySearchQuery.trim() ? ` / ${taskHistory.length}` : ''}
+                </span>
+              ) : null}
             </div>
+            {taskHistory.length > 0 ? (
+              <div style={{ marginBottom: 10, position: 'relative', padding: '0 2px' }}>
+                <input
+                  ref={historySearchRef}
+                  type="search"
+                  value={historySearchQuery}
+                  onChange={(e) => setHistorySearchQuery(e.target.value)}
+                  placeholder="Search history…"
+                  aria-label="Search research history"
+                  autoComplete="off"
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: 12,
+                    fontFamily: 'Georgia, serif',
+                    color: '#2C1810',
+                    background: '#FAF7F4',
+                    border: '0.5px solid #E0D5C5',
+                    borderRadius: 8,
+                    padding: '7px 28px 7px 10px',
+                    outline: 'none',
+                  }}
+                />
+                {historySearchQuery ? (
+                  <button
+                    type="button"
+                    aria-label="Clear history search"
+                    onClick={() => {
+                      setHistorySearchQuery('');
+                      historySearchRef.current?.focus();
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: 8,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      color: '#A89070',
+                      lineHeight: 1,
+                      padding: 4,
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {historyLoading ? (
               <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>Loading…</div>
             ) : taskHistory.length === 0 ? (
@@ -2656,8 +2744,34 @@ export function AgentPage() {
                 <br />
                 <span style={{ color: '#A89070' }}>Ask something hard below — it will show up here.</span>
               </div>
+            ) : filteredTaskHistory.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '1.5rem 0.75rem', lineHeight: 1.5 }}>
+                No history matches “{historySearchQuery.trim()}”
+                <br />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHistorySearchQuery('');
+                    historySearchRef.current?.focus();
+                  }}
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    color: '#C4956A',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: 'Georgia, serif',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Clear search
+                </button>
+              </div>
             ) : (
-              <div className="space-y-1">{taskHistory.map((item) => renderAgentHistoryRow(item))}</div>
+              <div className="space-y-1">
+                {filteredTaskHistory.map((item) => renderAgentHistoryRow(item))}
+              </div>
             )}
           </div>
           <AgentProfileSidebarRow user={user} />

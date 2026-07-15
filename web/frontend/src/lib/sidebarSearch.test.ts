@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterTurnsBySearchQuery } from './sidebarSearch';
+import { filterBySearchQuery, filterTurnsBySearchQuery } from './sidebarSearch';
 
 const turns = [
   { turn_id: '1', prompt: 'Should I ship today?', title: 'Ship check' },
@@ -21,5 +21,19 @@ describe('filterTurnsBySearchQuery', () => {
 
   it('returns empty when nothing matches', () => {
     expect(filterTurnsBySearchQuery(turns, 'quantum')).toEqual([]);
+  });
+});
+
+describe('filterBySearchQuery', () => {
+  it('matches Agent history-style fields', () => {
+    const history = [
+      { task_id: 'a', task_text: 'Research quantum computing', title: 'QC brief' },
+      { task_id: 'b', task_text: 'Draft a product FAQ', title: null },
+    ];
+    const hit = filterBySearchQuery(history, 'quantum', (h) => [h.task_text, h.title]);
+    expect(hit.map((h) => h.task_id)).toEqual(['a']);
+    expect(
+      filterBySearchQuery(history, 'FAQ', (h) => [h.task_text, h.title]).map((h) => h.task_id),
+    ).toEqual(['b']);
   });
 });
