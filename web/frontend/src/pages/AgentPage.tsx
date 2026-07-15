@@ -4625,7 +4625,36 @@ export function AgentPage() {
                             }}
                           >
                             {uploadErr ? (
-                              <p style={{ fontSize: 11, color: '#C0392B', margin: 0 }}>{uploadErr}</p>
+                              <div
+                                role="alert"
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'flex-start',
+                                  gap: 8,
+                                  margin: 0,
+                                }}
+                              >
+                                <p style={{ fontSize: 11, color: '#C0392B', margin: 0, flex: 1, lineHeight: 1.4 }}>
+                                  {uploadErr}
+                                </p>
+                                <button
+                                  type="button"
+                                  aria-label="Dismiss upload error"
+                                  onClick={() => setUploadErr(null)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: 14,
+                                    color: '#A89070',
+                                    lineHeight: 1,
+                                    padding: 0,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
                             ) : null}
                             {attachments.length > 0 || activeMcpSources.length > 0 ? (
                               <div
@@ -5243,11 +5272,70 @@ export function AgentPage() {
               </>
             )}
 
-            {error && (
-              <p role="alert" style={{ color: '#E57373', fontSize: 13, marginTop: '1rem' }}>
-                {error}
-              </p>
-            )}
+            {error ? (
+              <div
+                role="alert"
+                style={{
+                  marginTop: '1rem',
+                  maxWidth: 640,
+                  marginLeft: 'auto',
+                  marginRight: 'auto',
+                  padding: '12px 14px',
+                  background: '#FDF5F0',
+                  border: '0.5px solid rgba(216, 90, 48, 0.35)',
+                  borderRadius: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      flex: 1,
+                      fontSize: 13,
+                      color: '#993C1D',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {error}
+                  </p>
+                  <button
+                    type="button"
+                    aria-label="Dismiss error"
+                    onClick={() => setError(null)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      color: '#A89070',
+                      lineHeight: 1,
+                      padding: 0,
+                      flexShrink: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      setError(null);
+                      requestAnimationFrame(() => {
+                        idleTaskInputRef.current?.focus();
+                        followUpInputRef.current?.focus();
+                      });
+                    }}
+                  >
+                    Edit compose
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             {isRunning && (
               <div

@@ -110,6 +110,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Arena Stop**: header control aborts in-flight panel/stream or focused chat; phase returns to idle cleanly.
 - **Agent Stop**: header control cancels pipeline poll / refine / challenge loops without a stuck busy state.
 - **Cross-pollinate busy**: loading label while opening Arena; Discuss/Debate errors are dismissible.
+- **Agent error recovery**: dismissible alert card + Edit compose; upload errors dismissible; Pricing success/error live regions.
 
 ## Required production environment
 

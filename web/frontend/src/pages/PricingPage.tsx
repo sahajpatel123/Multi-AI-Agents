@@ -317,6 +317,8 @@ export function PricingPage() {
       <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '2rem 24px 1.5rem' }}>
         {upgradeSuccess && (
           <div
+            role="status"
+            aria-live="polite"
             style={{
               background: '#EDF2EF',
               border: '0.5px solid #8AA899',
@@ -336,6 +338,7 @@ export function PricingPage() {
 
         {checkoutError && (
           <div
+            role="alert"
             style={{
               background: '#FEF2F2',
               border: '0.5px solid #E57373',
