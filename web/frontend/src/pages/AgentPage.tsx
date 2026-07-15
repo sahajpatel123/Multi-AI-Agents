@@ -78,6 +78,7 @@ import {
 } from '../lib/charBudget';
 import { copyToClipboard } from '../lib/clipboard';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
+import { formatAgentHistoryExport } from '../lib/agentHistoryExport';
 import { motionDuration } from '../lib/motion';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import {
@@ -696,6 +697,8 @@ export function AgentPage() {
   const [showAllSourcePills, setShowAllSourcePills] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const historyCopyTimerRef = useRef<number | null>(null);
   const [dismissedChipIds, setDismissedChipIds] = useState<Set<string>>(
     () => loadDismissedAgentChipIds(),
   );
@@ -1694,6 +1697,45 @@ export function AgentPage() {
     [taskHistory, historySearchQuery],
   );
 
+  useEffect(() => {
+    return () => {
+      if (historyCopyTimerRef.current != null) {
+        window.clearTimeout(historyCopyTimerRef.current);
+      }
+    };
+  }, []);
+
+  const copyFilteredHistory = async () => {
+    const q = historySearchQuery.trim();
+    const markdown = formatAgentHistoryExport({
+      items: filteredTaskHistory.map((item) => ({
+        title: item.title,
+        question: item.task_text,
+        score: item.final_score,
+        confidence: item.final_confidence,
+        createdAt: item.created_at,
+        topics: item.topics,
+        isLive: item.is_live,
+        taskId: item.task_id,
+      })),
+      totalCount: taskHistory.length,
+      filterNote: q ? `search: “${q}”` : undefined,
+    });
+    const ok = await copyToClipboard(markdown);
+    if (historyCopyTimerRef.current != null) {
+      window.clearTimeout(historyCopyTimerRef.current);
+    }
+    setHistoryCopyStatus(ok ? 'copied' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not copy history — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historyCopyTimerRef.current = window.setTimeout(() => {
+      setHistoryCopyStatus('idle');
+      historyCopyTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
   const sortedAssumptionItems = useMemo(() => {
     if (!assumptions?.assumptions?.length) return [];
     return [...assumptions.assumptions].sort((a, b) => Number(!!b.flag) - Number(!!a.flag));
@@ -2686,10 +2728,48 @@ export function AgentPage() {
                 History
               </div>
               {taskHistory.length > 0 ? (
-                <span style={{ fontSize: 10, color: '#A89070' }}>
-                  {filteredTaskHistory.length}
-                  {historySearchQuery.trim() ? ` / ${taskHistory.length}` : ''}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 10, color: '#A89070' }}>
+                    {filteredTaskHistory.length}
+                    {historySearchQuery.trim() ? ` / ${taskHistory.length}` : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void copyFilteredHistory()}
+                    title="Copy current history view as markdown"
+                    aria-label={
+                      historyCopyStatus === 'copied'
+                        ? 'History copied'
+                        : historyCopyStatus === 'failed'
+                          ? 'Copy failed'
+                          : 'Copy research history as markdown'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyCopyStatus === 'failed'
+                          ? '#D85A30'
+                          : historyCopyStatus === 'copied'
+                            ? '#5A8C6A'
+                            : '#A89070',
+                      cursor: 'pointer',
+                      fontFamily: 'Georgia, serif',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {historyCopyStatus === 'copied'
+                      ? 'Copied'
+                      : historyCopyStatus === 'failed'
+                        ? 'Failed'
+                        : 'Copy'}
+                  </button>
+                </div>
               ) : null}
             </div>
             {taskHistory.length > 0 ? (
