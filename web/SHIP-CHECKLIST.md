@@ -24,6 +24,8 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Keyboard**: `/` focuses Arena prompt; Esc closes focused mind.
 - **Social share honesty**: X / WhatsApp / Email use the same public `/share` URL as Copy link (never `/app`).
 - **Post-auth redirect**: only same-app relative paths; default `/app`; open redirects rejected.
+- **Agent pipeline honesty**: marketing + Agent idle copy say **7 stages** (matches runtime status stages).
+- **Footer health**: re-probes `/api/health` every 45s via shared interpreter.
 
 ## Required production environment
 

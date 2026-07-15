@@ -24,7 +24,7 @@ This document mirrors the registry for Condura and product review.
 | `arena.respond` | 4-agent panel response | Core Arena |
 | `arena.debate` | Debate mode | Plus+ |
 | `arena.discuss` | 1:1 focused chat | Plus+ |
-| `agent.research` | 8-stage research pipeline | Pro / agent add-on; attachments OK |
+| `agent.research` | 7-stage research pipeline | Pro / agent add-on; attachments OK |
 | `agent.orchestrate` | Multi-task synthesis | Pro |
 | `agent.refine` | Refinement loop | Pro |
 | `agent.feedback` | Answer feedback | Pro |

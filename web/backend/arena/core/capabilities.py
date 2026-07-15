@@ -143,7 +143,7 @@ def _build_registry() -> dict[str, Capability]:
         ),
         "agent.research": WebCapability(
             id="agent.research",
-            description="Eight-stage research pipeline",
+            description="Seven-stage research pipeline",
         ),
         "agent.orchestrate": WebCapability(
             id="agent.orchestrate",

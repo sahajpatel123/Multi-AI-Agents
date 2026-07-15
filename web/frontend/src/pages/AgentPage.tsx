@@ -3101,7 +3101,7 @@ export function AgentPage() {
                         maxWidth: 520,
                       }}
                     >
-                      Seven stages of reasoning, working for you.
+                      Seven stages of reasoning — plan through judge — working for you.
                     </p>
                     <div
                       className="horizontal-scroll"

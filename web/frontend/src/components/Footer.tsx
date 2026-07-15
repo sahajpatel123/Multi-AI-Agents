@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_ORIGIN } from '../api';
+import { interpretHealthPayload, type SystemStatus } from '../lib/healthStatus';
+import { motionDuration } from '../lib/motion';
 
-type SystemStatus = 'checking' | 'operational' | 'degraded' | 'unreachable';
+const HEALTH_POLL_MS = 45_000;
 
 export function Footer() {
   const navigate = useNavigate();
@@ -10,35 +12,37 @@ export function Footer() {
 
   useEffect(() => {
     let cancelled = false;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 4000);
+    let abortController: AbortController | null = null;
 
-    void fetch(`${API_ORIGIN}/api/health`, { signal: controller.signal })
-      .then(async (r) => {
-        if (!r.ok) throw new Error('health failed');
-        const data = (await r.json()) as { status?: string; database?: string };
-        if (cancelled) return;
-        if (data.status === 'healthy') {
-          setSystemStatus(
-            data.database && data.database !== 'connected' ? 'degraded' : 'operational',
-          );
-        } else if (data.status === 'degraded') {
-          setSystemStatus('degraded');
-        } else {
-          setSystemStatus('degraded');
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setSystemStatus('unreachable');
-      })
-      .finally(() => {
-        window.clearTimeout(timer);
-      });
+    const probe = () => {
+      abortController?.abort();
+      const controller = new AbortController();
+      abortController = controller;
+      const timer = window.setTimeout(() => controller.abort(), 4000);
+
+      void fetch(`${API_ORIGIN}/api/health`, { signal: controller.signal })
+        .then(async (r) => {
+          if (!r.ok) throw new Error('health failed');
+          const data = (await r.json()) as { status?: string; database?: string };
+          if (!cancelled) setSystemStatus(interpretHealthPayload(data));
+        })
+        .catch(() => {
+          if (!cancelled) setSystemStatus('unreachable');
+        })
+        .finally(() => {
+          window.clearTimeout(timer);
+        });
+    };
+
+    probe();
+    const intervalMs = motionDuration(HEALTH_POLL_MS);
+    const intervalId =
+      intervalMs > 0 ? window.setInterval(probe, intervalMs) : undefined;
 
     return () => {
       cancelled = true;
-      controller.abort();
-      window.clearTimeout(timer);
+      abortController?.abort();
+      if (intervalId !== undefined) window.clearInterval(intervalId);
     };
   }, []);
 
