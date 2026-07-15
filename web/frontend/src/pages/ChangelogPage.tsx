@@ -40,6 +40,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Debate end state no longer fakes “Ask a follow-up” as exit',
       '[IMPROVED] Upgrade modal: Escape, dialog a11y, scroll lock (safe during checkout)',
       '[IMPROVED] Room / Agent / Condura copy actions use robust clipboard with failure feedback',
+      '[IMPROVED] Auth modal dialog a11y — scroll lock, tabs, labelled title, error alerts',
     ],
   },
   {

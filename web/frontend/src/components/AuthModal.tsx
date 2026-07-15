@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { clearRedirectIntent } from '../utils/redirectIntent';
 
@@ -26,6 +26,7 @@ export function AuthModal({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
 
   // Reset form when modal opens or tab changes
   useEffect(() => {
@@ -49,6 +50,16 @@ export function AuthModal({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, onClose]);
+
+  // Lock background scroll while open
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -76,6 +87,7 @@ export function AuthModal({
       {/* Backdrop */}
       <div
         className="auth-modal-overlay"
+        role="presentation"
         style={{
           position: 'fixed',
           inset: 0,
@@ -91,6 +103,9 @@ export function AuthModal({
         {/* Modal card */}
         <div
           className="auth-modal-card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
           style={{
             background: '#FFFFFF',
             border: '0.5px solid #E0D8D0',
@@ -103,10 +118,11 @@ export function AuthModal({
         >
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem 1rem', borderBottom: '0.5px solid #E0D8D0' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#1A1714' }}>
+            <h2 id={titleId} style={{ fontSize: '18px', fontWeight: 500, color: '#1A1714' }}>
               {tab === 'login' ? 'Welcome back' : 'Create account'}
             </h2>
             <button
+              type="button"
               onClick={onClose}
               style={{
                 color: '#6B6460',
@@ -121,15 +137,18 @@ export function AuthModal({
               onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}
               aria-label="Close"
             >
-              <X style={{ width: '16px', height: '16px' }} />
+              <X style={{ width: '16px', height: '16px' }} aria-hidden />
             </button>
           </div>
 
           {/* Tabs */}
-          <div style={{ display: 'flex', borderBottom: '0.5px solid #E0D8D0' }}>
+          <div style={{ display: 'flex', borderBottom: '0.5px solid #E0D8D0' }} role="tablist" aria-label="Auth mode">
             {(['login', 'signup'] as Tab[]).map((t) => (
               <button
                 key={t}
+                type="button"
+                role="tab"
+                aria-selected={tab === t}
                 onClick={() => { setTab(t); setError(null); }}
                 style={{
                   flex: 1,
@@ -262,7 +281,7 @@ export function AuthModal({
             </div>
 
             {error && (
-              <p style={{ fontSize: '13px', color: '#C4956A' }}>{error}</p>
+              <p role="alert" style={{ fontSize: '13px', color: '#C4956A' }}>{error}</p>
             )}
 
             <button
