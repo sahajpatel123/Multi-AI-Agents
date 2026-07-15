@@ -103,6 +103,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Create-room share**: system share sheet after room create (with copy fallback); Agent toasts use status/alert by severity.
 - **Templates load honesty**: failed catalog fetch ≠ empty (Retry); history delete restores row on API failure.
 - **Agent refine follow-up**: 1000-char budget (API-aligned), restore draft on failure, role=alert on errors.
+- **Agent multi-task + challenge**: 2000-char caps per parallel question; challenge failures alert + Retry.
 
 ## Required production environment
 

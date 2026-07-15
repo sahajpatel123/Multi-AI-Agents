@@ -2081,7 +2081,7 @@ export function AgentPage() {
   };
 
   const handleChallengeAnswer = useCallback(async () => {
-    if (!result) return;
+    if (!result || isChallengingAnswer) return;
     setChallengesVisible(true);
     setIsChallengingAnswer(true);
     setChallengeSectionError(null);
@@ -2094,13 +2094,18 @@ export function AgentPage() {
       );
       setChallenges(data.challenges || []);
     } catch (err) {
-      console.error('Challenge failed:', err);
-      setChallengeSectionError(err instanceof Error ? err.message : 'Challenge failed');
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Challenge failed. Try again.';
+      setChallengeSectionError(msg);
       setChallenges([]);
     } finally {
       setIsChallengingAnswer(false);
     }
-  }, [result, plainAnswerText, task]);
+  }, [result, plainAnswerText, task, isChallengingAnswer]);
 
   const handleGetRebuttal = useCallback(
     async (challengeText: string, challengerKey: string) => {
@@ -2111,10 +2116,15 @@ export function AgentPage() {
         const data = await getAgentRebuttal(result.task || task, plainAnswer, challengeText);
         setRebuttals((prev) => ({ ...prev, [challengerKey]: data.rebuttal }));
       } catch (err) {
-        console.error('Rebuttal failed:', err);
+        const msg =
+          err instanceof ApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : 'Unknown error';
         setRebuttals((prev) => ({
           ...prev,
-          [challengerKey]: `Rebuttal failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+          [challengerKey]: `Rebuttal failed: ${msg}`,
         }));
       } finally {
         setRebuttalLoadingFor(null);
@@ -4184,35 +4194,56 @@ export function AgentPage() {
                                 >
                                   {String(i + 1).padStart(2, '0')}
                                 </div>
-                                <textarea
-                                  value={multiTasks[i] ?? ''}
-                                  onChange={(e) =>
-                                    setMultiTasks((prev) => {
-                                      const next = [...prev];
-                                      next[i] = e.target.value;
-                                      return next;
-                                    })
-                                  }
-                                  placeholder={placeholders[i]}
-                                  disabled={isRunning}
-                                  rows={2}
-                                  style={{
-                                    flex: 1,
-                                    minWidth: 0,
-                                    border: 'none',
-                                    background: 'transparent',
-                                    resize: 'vertical',
-                                    fontSize: 14,
-                                    fontFamily: 'Georgia, serif',
-                                    color: '#2C1810',
-                                    outline: 'none',
-                                  }}
-                                />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <textarea
+                                    value={multiTasks[i] ?? ''}
+                                    maxLength={AGENT_TASK_MAX_CHARS}
+                                    onChange={(e) =>
+                                      setMultiTasks((prev) => {
+                                        const next = [...prev];
+                                        next[i] = clampToMax(e.target.value, AGENT_TASK_MAX_CHARS);
+                                        return next;
+                                      })
+                                    }
+                                    placeholder={placeholders[i]}
+                                    disabled={isRunning}
+                                    rows={2}
+                                    aria-label={`Multi-task question ${i + 1}`}
+                                    style={{
+                                      width: '100%',
+                                      border: 'none',
+                                      background: 'transparent',
+                                      resize: 'vertical',
+                                      fontSize: 14,
+                                      fontFamily: 'Georgia, serif',
+                                      color: '#2C1810',
+                                      outline: 'none',
+                                    }}
+                                  />
+                                  {(multiTasks[i] ?? '').length >= Math.floor(AGENT_TASK_MAX_CHARS * 0.85) ? (
+                                    <div
+                                      style={{
+                                        fontSize: 10,
+                                        textAlign: 'right',
+                                        color:
+                                          charBudgetTone((multiTasks[i] ?? '').length) === 'danger'
+                                            ? '#D85A30'
+                                            : charBudgetTone((multiTasks[i] ?? '').length) === 'warn'
+                                              ? '#B07840'
+                                              : '#A89070',
+                                      }}
+                                    >
+                                      {charBudgetLabel((multiTasks[i] ?? '').length)}
+                                    </div>
+                                  ) : null}
+                                </div>
                               </div>
                             );
                           })}
                           {!multiTasks.slice(0, activeTaskCount).every((t) => t.trim().length >= 10) ? (
-                            <p style={{ fontSize: 11, color: '#A89070', margin: 0 }}>Fill all fields</p>
+                            <p style={{ fontSize: 11, color: '#A89070', margin: 0 }}>
+                              Each question needs at least 10 characters (max {AGENT_TASK_MAX_CHARS}).
+                            </p>
                           ) : null}
                           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                             <button
@@ -7886,15 +7917,42 @@ export function AgentPage() {
                         3 opposing minds will attack this answer
                       </p>
                       {challengeSectionError ? (
-                        <p style={{ color: '#E57373', fontSize: 13, marginTop: 10, marginBottom: 0 }}>
-                          {challengeSectionError}
-                        </p>
+                        <div style={{ marginTop: 10 }}>
+                          <p
+                            role="alert"
+                            style={{ color: '#E57373', fontSize: 13, margin: 0, lineHeight: 1.45 }}
+                          >
+                            {challengeSectionError}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => void handleChallengeAnswer()}
+                            style={{
+                              marginTop: 8,
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              fontSize: 12,
+                              color: AR.GOLD,
+                              cursor: 'pointer',
+                              fontFamily: 'Georgia, serif',
+                              textDecoration: 'underline',
+                            }}
+                          >
+                            Try challenge again
+                          </button>
+                        </div>
                       ) : null}
                     </>
                   ) : null}
 
                   {isChallengingAnswer ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#6B6460' }}>
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      aria-busy="true"
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#6B6460' }}
+                    >
                       <span className="agent-chal-dot" style={{ background: '#8C9BAB', animationDelay: '0ms' }} />
                       <span className="agent-chal-dot" style={{ background: '#9B8FAA', animationDelay: '0.15s' }} />
                       <span className="agent-chal-dot" style={{ background: '#B0977E', animationDelay: '0.3s' }} />
