@@ -105,6 +105,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent refine follow-up**: 1000-char budget (API-aligned), restore draft on failure, role=alert on errors.
 - **Agent multi-task + challenge**: 2000-char caps per parallel question; challenge failures alert + Retry.
 - **Arena recent chips**: visible remove (×) + Delete key; stress-from-Agent banner dismissible status.
+- **Arena prompt draft autosave**: long prompts survive refresh / route changes; cleared once the pipeline accepts (preserved if it rejects).
 
 ## Required production environment
 

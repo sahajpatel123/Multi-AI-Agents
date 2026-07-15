@@ -98,6 +98,9 @@ function App() {
   const [isFocusedChatStreaming, setIsFocusedChatStreaming] = useState(false);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [upgradeModalSubtitle, setUpgradeModalSubtitle] = useState('Debate mode lets you challenge any mind and watch the others react in real time.');
+  // Bumped once an Arena submit is confirmed (pipeline passed → streaming),
+  // so PromptInput can clear its autosaved draft from localStorage.
+  const [arenaPromptClearSignal, setArenaPromptClearSignal] = useState(0);
   const isMobile = useIsMobile();
 
   const [phase, setPhase] = useState<Phase>('idle');
@@ -646,6 +649,9 @@ function App() {
             setStreamPreviews({});
           } else {
             setPhase('streaming');
+            // Pipeline accepted — the draft in PromptInput is now safely
+            // delivered and can be cleared from storage.
+            setArenaPromptClearSignal((prev) => prev + 1);
           }
         },
         onToken: (data) => {
@@ -1831,6 +1837,8 @@ function App() {
                     : 'You have used today’s Arena messages. Your limit resets at midnight UTC.',
                 );
               }}
+              draftKey={focusedAgentId ? undefined : 'arena_prompt_draft:v1'}
+              clearDraftSignal={arenaPromptClearSignal}
             />
           </div>
         </>

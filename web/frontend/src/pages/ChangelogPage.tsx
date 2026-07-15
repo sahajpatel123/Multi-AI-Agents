@@ -90,6 +90,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Agent follow-up refine: live char budget, keep draft if refine fails',
       '[IMPROVED] Multi-task fields honor 2000-char caps; Challenge shows Retry on failure',
       '[IMPROVED] Arena recent prompts: tap × to remove (mobile-friendly); dismiss stress banner',
+      '[NEW] Arena prompt draft autosave — long prompts survive refresh and route changes (cleared once the pipeline accepts)',
     ],
   },
   {

@@ -13,6 +13,11 @@ import {
   promptSendOrbAnimation,
   promptSendSpinnerAnimation,
 } from '../lib/promptInputMotion';
+import {
+  clearPromptDraft,
+  loadPromptDraft,
+  savePromptDraft,
+} from '../lib/promptDraft';
 
 const CYCLING_PLACEHOLDERS = [
   'Ask something and watch four minds respond...',
@@ -41,6 +46,18 @@ interface PromptInputProps {
   submitBlockedTitle?: string;
   /** Fired when the user tries to send while `submitBlocked` (prompt is not cleared). */
   onBlockedAttempt?: () => void;
+  /**
+   * When set, the prompt is autosaved to localStorage under this key and
+   * restored on mount. The caller is responsible for bumping
+   * `clearDraftSignal` once the submit succeeds so the draft is cleared
+   * from storage; failing to do so preserves the draft for the next mount.
+   */
+  draftKey?: string;
+  /**
+   * Bump this (e.g. on submit success) to clear the stored draft. Safe to
+   * ignore when `draftKey` is not set.
+   */
+  clearDraftSignal?: number;
 }
 
 export function PromptInput({
@@ -56,6 +73,8 @@ export function PromptInput({
   submitBlocked = false,
   submitBlockedTitle,
   onBlockedAttempt,
+  draftKey,
+  clearDraftSignal,
 }: PromptInputProps) {
   const [prompt, setPrompt] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -98,6 +117,40 @@ export function PromptInput({
       autoResize(el);
     });
   }, [presetPrompt, presetPromptNonce]);
+
+  // Restore the draft once on mount — runs before any presetPrompt injection
+  // so templates still win, and is skipped entirely when no draftKey was given.
+  const draftRestoreDoneRef = useRef(false);
+  useEffect(() => {
+    if (!draftKey) return;
+    if (draftRestoreDoneRef.current) return;
+    draftRestoreDoneRef.current = true;
+    const stored = loadPromptDraft(draftKey);
+    if (!stored) return;
+    setPrompt(stored);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      autoResize(el);
+    });
+  }, [draftKey]);
+
+  // Debounced autosave — typing fast should not hammer localStorage.
+  useEffect(() => {
+    if (!draftKey) return;
+    const handle = window.setTimeout(() => {
+      savePromptDraft(draftKey, prompt);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [prompt, draftKey]);
+
+  // Parent bumps clearDraftSignal after a confirmed submit to clear storage.
+  useEffect(() => {
+    if (!draftKey) return;
+    if (clearDraftSignal === undefined) return;
+    clearPromptDraft(draftKey);
+  }, [clearDraftSignal, draftKey]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
