@@ -13,8 +13,10 @@ import {
   ApiError,
   LocalExecutionRequiredError,
   addRoomTask,
+  agentDetailMessage,
   challengeAgentAnswer,
   createRoom,
+  crossPollinateAgentAnswer,
   deleteAgentTask,
   exportAgentTaskPdf,
   exportOrchestrationPdf,
@@ -53,6 +55,7 @@ import { buildHandoffPayload } from '../lib/conduraHandoff';
 import { dispatchHandoff, pairDevice, ConduraClientError } from '../lib/conduraClient';
 import { getOrCreateSigningKey, rotateSigningKey } from '../lib/conduraHandoffCrypto';
 import type { HandoffPayload } from '../types/condura';
+import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { useAuth } from '../hooks/useAuth';
@@ -62,7 +65,7 @@ import { agentWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForAgentBusy } from '../lib/documentTitle';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { User } from '../types';
-import { setRedirectIntent } from '../utils/redirectIntent';
+// setRedirectIntent is unused but kept for future use
 import {
   clearDismissedAgentChips,
   dismissAgentChip,
@@ -858,6 +861,9 @@ export function AgentPage() {
 
   const urlTaskId = searchParams.get('task_id');
 
+  const { panel } = usePanel();
+  const personaIds = panel.map((p) => p.id);
+
   const expertiseLevelForRun = normalizeExpertiseLevel(user?.expertise_level);
   const expertiseDomainForRun =
     domainForExpertiseLevel(expertiseLevelForRun, user?.expertise_domain || '');
@@ -1590,6 +1596,33 @@ export function AgentPage() {
       setError(e instanceof Error ? e.message : 'Export failed');
     } finally {
       setExportingPdf(false);
+    }
+  };
+
+  const handleCrossPollinate = async () => {
+    if (!result?.task_id || isRunning || isRefining) return;
+    const taskId = result.task_id;
+    const plainAnswer = plainAnswerText || '';
+    const answerText = plainAnswer.trim() || result.final_answer || '';
+
+    if (!answerText) {
+      setError('No answer to cross-pollinate');
+      return;
+    }
+
+    setError(null);
+    try {
+      await crossPollinateAgentAnswer(taskId, personaIds);
+      navigate('/app', {
+        state: {
+          agentStressPrompt: answerText,
+          fromAgent: true,
+          crossPollinateSource: taskId,
+        },
+      });
+    } catch (e) {
+      const msg = e instanceof ApiError ? agentDetailMessage(e.detail, 'Cross-pollination failed') : e instanceof Error ? e.message : 'Cross-pollination failed';
+      setError(msg);
     }
   };
 
@@ -7307,18 +7340,10 @@ export function AgentPage() {
                       type="button"
                       variant="secondary"
                       size="sm"
-                      icon={Icons.flame(14)}
-                      onClick={() => {
-                        setRedirectIntent('/app');
-                        navigate('/app', {
-                          state: {
-                            agentStressPrompt: plainAnswerText,
-                            fromAgent: true,
-                          },
-                        });
-                      }}
+                      icon={Icons.refresh(14)}
+                      onClick={() => void handleCrossPollinate()}
                     >
-                      Test in Arena
+                      Cross-pollinate to Arena
                     </Button>
                     {result.task_id && result.memory_saved ? (
                       <button

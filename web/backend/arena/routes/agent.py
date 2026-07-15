@@ -1961,3 +1961,91 @@ async def verify_arena_answer(
             "message": "Agent is verifying the Arena answer",
         }
     )
+
+
+class CrossPollinateRequest(BaseModel):
+    task_id: str
+    persona_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("task_id")
+    @classmethod
+    def validate_task_id(cls, v: str) -> str:
+        return sanitize_model_text(v, max_length=100, field_name="task_id")
+
+    @field_validator("persona_ids", mode="before")
+    @classmethod
+    def validate_persona_ids(cls, v: list[str] | None) -> list[str]:
+        if v is None:
+            return []
+        return [sanitize_model_text(str(pid), max_length=100, field_name="persona_id") for pid in v if pid]
+
+
+@router.post("/pollinate")
+async def cross_pollinate_agent_answer(
+    body: CrossPollinateRequest,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """
+    Cross-pollinate: prepare an Agent Mode answer to send through the Arena for 4-mind perspectives.
+
+    This creates a bridge where an Agent answer becomes an Arena prompt, generating
+    additional viewpoints that can challenge or refine the original answer.
+    """
+    _ensure_agent_access(user, db)
+
+    tid = body.task_id.strip()
+    if not tid:
+        raise HTTPException(status_code=400, detail="task_id required")
+
+    # Load the completed task
+    bb = get_blackboard(tid)
+    row = None
+    if not bb:
+        row = (
+            db.query(AgentTaskRow)
+            .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+            .first()
+        )
+
+    # If blackboard exists, verify ownership
+    if bb:
+        _ensure_task_owner(bb, user)
+        answer_text = bb.final_answer or ""
+        original_task = bb.original_task or bb.task or ""
+    elif row and (row.final_answer or "").strip():
+        _ensure_task_owner(Blackboard(task_id=tid, user_id=user.id), user)
+        answer_text = row.final_answer or ""
+        original_task = row.task_text or ""
+    else:
+        raise HTTPException(status_code=404, detail="Task not found or not complete")
+
+    # Extract one_liner if answer is JSON-structured
+    if isinstance(answer_text, str) and answer_text.strip().startswith("{"):
+        try:
+            parsed_answer = json.loads(answer_text)
+            if isinstance(parsed_answer, dict):
+                answer_text = parsed_answer.get("one_liner", parsed_answer.get("text", answer_text)) or answer_text
+        except json.JSONDecodeError:
+            pass
+
+    user_tier = normalize_tier(get_tier_str(user))
+    _enforce_persona_access(user_tier, body.persona_ids)
+
+    pollinate_prompt = (
+        f"ORIGINAL RESEARCH QUESTION: {original_task}\n\n"
+        f"AGENT RESEARCH ANSWER: {answer_text}\n\n"
+        f"CHALLENGE: Review this research answer and provide your perspective on it. "
+        f"Do you agree, disagree, or see important nuances missed? "
+        f"Give a concise verdict (one-liner) and confidence score."
+    )
+
+    session_id = str(uuid.uuid4())
+
+    return JSONResponse(
+        content={
+            "status": "ready",
+            "session_id": session_id,
+            "prompt": pollinate_prompt,
+        }
+    )

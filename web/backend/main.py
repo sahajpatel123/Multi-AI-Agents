@@ -66,19 +66,32 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         if path.endswith("/api/agent/upload"):
             max_allowed = 11 * 1024 * 1024  # 10MB file + multipart overhead
         content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > max_allowed:
-            msg = (
-                "File too large (max 10MB)"
-                if path.endswith("/api/agent/upload")
-                else "Request too large. Maximum 10KB allowed."
-            )
-            return JSONResponse(
-                status_code=413,
-                content={
-                    "error": "payload_too_large",
-                    "message": msg,
-                },
-            )
+        if content_length:
+            try:
+                length = int(content_length)
+            except (ValueError, TypeError):
+                # Malformed/duplicated Content-Length (e.g. header folding)
+                # must not crash the middleware with a 500 — reject cleanly.
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_content_length",
+                        "message": "Malformed Content-Length header.",
+                    },
+                )
+            if length > max_allowed:
+                msg = (
+                    "File too large (max 10MB)"
+                    if path.endswith("/api/agent/upload")
+                    else "Request too large. Maximum 10KB allowed."
+                )
+                return JSONResponse(
+                    status_code=413,
+                    content={
+                        "error": "payload_too_large",
+                        "message": msg,
+                    },
+                )
         return await call_next(request)
 
 

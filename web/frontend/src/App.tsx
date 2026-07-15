@@ -115,14 +115,20 @@ function App() {
   const [presetPromptNonce, setPresetPromptNonce] = useState(0);
   const [stressFromAgentBanner, setStressFromAgentBanner] = useState(false);
   const [verifyingWinnerAgentId, setVerifyingWinnerAgentId] = useState<string | null>(null);
+  const [crossPollinateSourceTaskId, setCrossPollinateSourceTaskId] = useState<string | null>(null);
 
   useEffect(() => {
-    const st = location.state as { agentStressPrompt?: string; fromAgent?: boolean } | null | undefined;
+    const st = location.state as {
+      agentStressPrompt?: string;
+      fromAgent?: boolean;
+      crossPollinateSource?: string;
+    } | null | undefined;
     const prompt = st?.agentStressPrompt;
     if (typeof prompt === 'string' && prompt.trim()) {
       setPresetPrompt(prompt.trim());
       setPresetPromptNonce((n) => n + 1);
       if (st?.fromAgent) setStressFromAgentBanner(true);
+      if (st?.crossPollinateSource) setCrossPollinateSourceTaskId(st.crossPollinateSource);
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, navigate]);
@@ -598,6 +604,7 @@ function App() {
     }
 
     setStressFromAgentBanner(false);
+    setCrossPollinateSourceTaskId(null);
     setHasSubmittedPrompt(true);
     setRecentPrompts(pushRecentPrompt(prompt));
 
@@ -693,6 +700,7 @@ function App() {
           }, 750);
           setExpandedAgent(data.winner_agent_id);
           setPhase('done');
+          setCrossPollinateSourceTaskId(null);
 
           // Save session ID to localStorage
           localStorage.setItem('arena_session_id', data.session_id);
@@ -1399,6 +1407,50 @@ function App() {
                     type="button"
                     aria-label="Dismiss stress-test notice"
                     onClick={() => setStressFromAgentBanner(false)}
+                    style={{
+                      flexShrink: 0,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      color: '#A89070',
+                      lineHeight: 1,
+                      padding: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+
+              {crossPollinateSourceTaskId && phase === 'idle' && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    background: 'rgba(114, 137, 190, 0.08)',
+                    borderRadius: 12,
+                    padding: '10px 14px',
+                    marginBottom: '1rem',
+                    maxWidth: 600,
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                    fontSize: 13,
+                    color: '#7289BE',
+                    textAlign: 'center',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <span style={{ flex: 1, minWidth: 0, lineHeight: 1.45 }}>
+                    Cross-pollinating Agent answer — gathering perspectives from 4 minds
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Dismiss cross-pollination notice"
+                    onClick={() => setCrossPollinateSourceTaskId(null)}
                     style={{
                       flexShrink: 0,
                       background: 'none',

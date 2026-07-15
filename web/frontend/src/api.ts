@@ -1358,7 +1358,7 @@ export async function getAgentSavedTask(taskId: string): Promise<unknown> {
   return data;
 }
 
-function agentDetailMessage(data: unknown, fallback: string): string {
+export function agentDetailMessage(data: unknown, fallback: string): string {
   if (!data || typeof data !== 'object') return fallback;
   const d = (data as { detail?: unknown }).detail;
   if (typeof d === 'string') return d;
@@ -1416,6 +1416,36 @@ export async function verifyArenaAnswerInAgent(
     throw new ApiError(agentDetailMessage(data, 'Verification failed'), response.status, data);
   }
   if (!data?.task_id) throw new Error('Empty bridge response');
+  return data;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Cross-Pollination (Agent → Arena bridge)
+// ──────────────────────────────────────────────────────────────
+
+type CrossPollinateResponse = {
+  status: string;
+  session_id: string;
+  prompt: string;
+};
+
+export async function crossPollinateAgentAnswer(
+  taskId: string,
+  personaIds: string[] = [],
+): Promise<CrossPollinateResponse> {
+  const response = await apiFetch(`/api/agent/pollinate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      task_id: taskId,
+      persona_ids: personaIds,
+    }),
+  });
+  const data = await parseJsonSafely<CrossPollinateResponse & { detail?: unknown }>(response);
+  if (!response.ok) {
+    throw new ApiError(agentDetailMessage(data, 'Cross-pollination failed'), response.status, data);
+  }
+  if (!data?.status) throw new Error('Empty cross-pollination response');
   return data;
 }
 
