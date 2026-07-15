@@ -51,6 +51,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Press / on Agent Mode to focus compose or follow-up (Arena parity)',
       '[IMPROVED] Offline banner safe-area + dismiss; live tab titles while work runs',
       '[NEW] Public /share Copy take / Copy link / system Share…',
+      '[NEW] Copy Discuss thread and Debate transcript as markdown',
     ],
   },
   {

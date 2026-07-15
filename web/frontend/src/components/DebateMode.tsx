@@ -27,6 +27,8 @@ import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { debateWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForArenaBusy } from '../lib/documentTitle';
 import { scrollBehavior } from '../lib/motion';
+import { copyToClipboard } from '../lib/clipboard';
+import { formatDebateExport } from '../lib/threadExport';
 
 interface DebateModeProps {
   originalPrompt: string;
@@ -100,6 +102,7 @@ export function DebateMode({
   const [interjection, setInterjection] = useState('');
   /** After round 3, user may unlock one bonus follow-up round (max 4). */
   const [followUpUnlocked, setFollowUpUnlocked] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const threadEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -107,6 +110,12 @@ export function DebateMode({
   const debateBusy = debateWorkInFlight(phase);
   useBusyNavigationGuard(debateBusy);
   useBusyDocumentTitle(debateBusy, titleForArenaBusy('debate'), '/app');
+
+  useEffect(() => {
+    if (copyFeedback === 'idle') return;
+    const t = window.setTimeout(() => setCopyFeedback('idle'), 1600);
+    return () => window.clearTimeout(t);
+  }, [copyFeedback]);
 
   useEffect(() => {
     return () => {
@@ -119,6 +128,25 @@ export function DebateMode({
   const reactingIds = AGENT_SLOT_IDS.filter(
     (id) => id !== challengedAgent.response.agent_id
   );
+
+  const handleCopyDebate = async () => {
+    const md = formatDebateExport({
+      originalPrompt,
+      challengedAgentName: challengedConfig.name,
+      challengedOneLiner: challengedAgent.response.one_liner,
+      rounds: rounds.map((round) => ({
+        roundNumber: round.roundNumber,
+        userInterjection: round.userInterjection,
+        reactions: round.reactions.map((r) => ({
+          agentName: getAgentDisplay(r.agent_id).name,
+          content: r.content,
+          stance: r.stance,
+        })),
+      })),
+    });
+    const ok = await copyToClipboard(md);
+    setCopyFeedback(ok ? 'copied' : 'failed');
+  };
 
   const flushTokens = useCallback(() => {
     setStreamingTexts((prev) => {
@@ -535,7 +563,42 @@ export function DebateMode({
           <span style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
+          <button
+            type="button"
+            onClick={() => {
+              void handleCopyDebate();
+            }}
+            disabled={phase === 'streaming' || rounds.length === 0}
+            title={
+              rounds.length === 0
+                ? 'Start a debate round to copy the transcript'
+                : 'Copy debate transcript as markdown'
+            }
+            style={{
+              fontSize: 12,
+              color:
+                copyFeedback === 'failed'
+                  ? '#993C1D'
+                  : phase === 'streaming' || rounds.length === 0
+                    ? '#A89070'
+                    : '#C4956A',
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 999,
+              padding: '4px 10px',
+              cursor:
+                phase === 'streaming' || rounds.length === 0 ? 'not-allowed' : 'pointer',
+              fontFamily: 'Georgia, serif',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {copyFeedback === 'copied'
+              ? 'Copied'
+              : copyFeedback === 'failed'
+                ? 'Copy failed'
+                : 'Copy debate'}
+          </button>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '96px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
               <span style={{ fontSize: '11px', color: '#6B6460', letterSpacing: '.08em', textTransform: 'uppercase', marginRight: '4px' }}>Round</span>

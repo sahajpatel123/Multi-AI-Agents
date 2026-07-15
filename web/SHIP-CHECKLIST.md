@@ -63,6 +63,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Debate / Discuss streams**: beforeunload + busy tab titles; scroll-into-view honors reduced motion.
 - **Network banner**: safe-area padding, reconnected dismiss, reconnect timer cleaned up on unmount.
 - **Agent `/` focus**: press `/` to focus research compose or follow-up (shared slash-focus helper with Arena).
+- **Discuss / Debate copy**: markdown thread export (Copy thread / Copy debate) with clipboard feedback.
 
 ## Required production environment
 

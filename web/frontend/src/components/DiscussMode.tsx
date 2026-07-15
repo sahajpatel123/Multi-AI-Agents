@@ -19,6 +19,8 @@ import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { discussWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForArenaBusy } from '../lib/documentTitle';
 import { scrollBehavior } from '../lib/motion';
+import { copyToClipboard } from '../lib/clipboard';
+import { formatDiscussExport } from '../lib/threadExport';
 
 interface DiscussModeProps {
   originalPrompt: string;
@@ -59,6 +61,7 @@ export function DiscussMode({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   const tokenBuffer = useRef('');
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -70,6 +73,32 @@ export function DiscussMode({
   const discussBusy = discussWorkInFlight(isStreaming);
   useBusyNavigationGuard(discussBusy);
   useBusyDocumentTitle(discussBusy, titleForArenaBusy('discuss'), '/app');
+
+  useEffect(() => {
+    if (copyFeedback === 'idle') return;
+    const t = window.setTimeout(() => setCopyFeedback('idle'), 1600);
+    return () => window.clearTimeout(t);
+  }, [copyFeedback]);
+
+  const handleCopyThread = async () => {
+    const seed: DiscussChatMessage[] =
+      currentHistory.length > 0
+        ? currentHistory
+        : [
+            {
+              role: 'agent',
+              content: activeAgent.response.verdict || activeAgent.response.one_liner || '',
+              timestamp: new Date().toISOString(),
+            },
+          ];
+    const md = formatDiscussExport({
+      agentName: agentConfig.name,
+      originalPrompt,
+      messages: seed.map((m) => ({ role: m.role, content: m.content })),
+    });
+    const ok = await copyToClipboard(md);
+    setCopyFeedback(ok ? 'copied' : 'failed');
+  };
 
   const flushTokens = useCallback(() => {
     setStreamingText(tokenBuffer.current);
@@ -331,14 +360,45 @@ export function DiscussMode({
             <ArrowLeft style={{ width: '14px', height: '14px' }} />
             Back to Arena
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <AgentDot agentId={activeAgent.response.agent_id} size={10} />
             <span style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714' }}>
               {agentConfig.name}
             </span>
             <span style={{ fontSize: '11px', color: '#6B6460' }}>1-on-1</span>
+            <button
+              type="button"
+              onClick={() => {
+                void handleCopyThread();
+              }}
+              disabled={isStreaming}
+              title="Copy conversation as markdown"
+              style={{
+                marginLeft: 4,
+                fontSize: 12,
+                color: copyFeedback === 'failed' ? '#993C1D' : '#C4956A',
+                background: 'none',
+                border: '0.5px solid #E0D8D0',
+                borderRadius: 999,
+                padding: '4px 10px',
+                cursor: isStreaming ? 'not-allowed' : 'pointer',
+                opacity: isStreaming ? 0.5 : 1,
+                fontFamily: 'Georgia, serif',
+              }}
+            >
+              {copyFeedback === 'copied'
+                ? 'Copied'
+                : copyFeedback === 'failed'
+                  ? 'Copy failed'
+                  : 'Copy thread'}
+            </button>
           </div>
         </div>
+        {copyFeedback === 'failed' ? (
+          <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: '0 0 8px' }}>
+            Could not copy — try again or select text manually.
+          </p>
+        ) : null}
 
         {/* Messages */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem', paddingRight: '4px', maxHeight: '55vh' }}>
