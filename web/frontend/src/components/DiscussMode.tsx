@@ -8,6 +8,12 @@ import {
 } from '../types';
 import { AgentDot } from './AgentDot';
 import { usePanel } from '../context/PanelContext';
+import {
+  charBudgetLabel,
+  charBudgetTone,
+  clampToMax,
+  DISCUSS_MESSAGE_MAX_CHARS,
+} from '../lib/charBudget';
 
 interface DiscussModeProps {
   originalPrompt: string;
@@ -415,12 +421,14 @@ export function DiscussMode({
         )}
 
         {/* Input */}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
           <input
             ref={inputRef}
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            maxLength={DISCUSS_MESSAGE_MAX_CHARS}
+            onChange={(e) => setInput(clampToMax(e.target.value, DISCUSS_MESSAGE_MAX_CHARS))}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -429,6 +437,7 @@ export function DiscussMode({
             }}
             placeholder={`Message ${agentConfig.name}...`}
             disabled={isStreaming}
+            aria-describedby="discuss-char-budget"
             style={{
               flex: 1,
               background: '#FFFFFF',
@@ -445,8 +454,10 @@ export function DiscussMode({
             onBlur={(e) => e.currentTarget.style.borderColor = '#E0D8D0'}
           />
           <button
+            type="button"
             onClick={handleSend}
             disabled={isStreaming || !input.trim()}
+            aria-label={`Send message to ${agentConfig.name}`}
             style={{
               padding: '12px 16px',
               background: '#1A1714',
@@ -467,8 +478,25 @@ export function DiscussMode({
               if (!isStreaming && input.trim()) e.currentTarget.style.opacity = '1';
             }}
           >
-            <Send style={{ width: '16px', height: '16px' }} />
+            <Send style={{ width: '16px', height: '16px' }} aria-hidden />
           </button>
+          </div>
+          <span
+            id="discuss-char-budget"
+            title="Character budget (server max 2000)"
+            style={{
+              alignSelf: 'flex-end',
+              fontSize: 11,
+              color:
+                charBudgetTone(input.length, DISCUSS_MESSAGE_MAX_CHARS) === 'danger'
+                  ? '#D85A30'
+                  : charBudgetTone(input.length, DISCUSS_MESSAGE_MAX_CHARS) === 'warn'
+                    ? '#C4956A'
+                    : '#A89070',
+            }}
+          >
+            {charBudgetLabel(input.length, DISCUSS_MESSAGE_MAX_CHARS)}
+          </span>
         </div>
       </div>
       </div>

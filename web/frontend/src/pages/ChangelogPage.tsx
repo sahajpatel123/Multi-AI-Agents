@@ -43,6 +43,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Auth modal dialog a11y — scroll lock, tabs, labelled title, error alerts',
       '[IMPROVED] Room empty board + branded load recovery; guest Sign-in returns to room',
       '[IMPROVED] Templates modal locks background scroll and focuses Close on open',
+      '[IMPROVED] Discuss + Debate interjection show 2000-char budgets (server-aligned)',
     ],
   },
   {

@@ -16,6 +16,12 @@ import {
   DEBATE_BONUS_ROUNDS,
   DEBATE_STANDARD_ROUNDS,
 } from '../lib/debateRounds';
+import {
+  charBudgetLabel,
+  charBudgetTone,
+  clampToMax,
+  DEBATE_INTERJECTION_MAX_CHARS,
+} from '../lib/charBudget';
 
 interface DebateModeProps {
   originalPrompt: string;
@@ -811,7 +817,10 @@ export function DebateMode({
                     ref={inputRef}
                     type="text"
                     value={interjection}
-                    onChange={(e) => setInterjection(e.target.value)}
+                    maxLength={DEBATE_INTERJECTION_MAX_CHARS}
+                    onChange={(e) =>
+                      setInterjection(clampToMax(e.target.value, DEBATE_INTERJECTION_MAX_CHARS))
+                    }
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -823,6 +832,7 @@ export function DebateMode({
                         ? 'Final redirect for the bonus round...'
                         : 'Redirect the debate...'
                     }
+                    aria-describedby="debate-interjection-budget"
                     style={{
                       width: '100%',
                       background: '#FFFFFF',
@@ -836,6 +846,22 @@ export function DebateMode({
                     onFocus={(e) => e.currentTarget.style.borderColor = '#C4956A'}
                     onBlur={(e) => e.currentTarget.style.borderColor = '#E0D8D0'}
                   />
+                  <span
+                    id="debate-interjection-budget"
+                    title="Character budget (server max 2000)"
+                    style={{
+                      alignSelf: 'flex-end',
+                      fontSize: 11,
+                      color:
+                        charBudgetTone(interjection.length, DEBATE_INTERJECTION_MAX_CHARS) === 'danger'
+                          ? '#D85A30'
+                          : charBudgetTone(interjection.length, DEBATE_INTERJECTION_MAX_CHARS) === 'warn'
+                            ? '#C4956A'
+                            : '#A89070',
+                    }}
+                  >
+                    {charBudgetLabel(interjection.length, DEBATE_INTERJECTION_MAX_CHARS)}
+                  </span>
                   <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
                     <button
                       className="debate-action-btn debate-shimmer-button debate-shimmer-button-light"

@@ -40,6 +40,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Auth modal a11y**: dialog semantics, labelled title, tab roles, body scroll lock, alert on errors.
 - **Room recovery**: empty-task board guidance; branded load-error with Retry; guest Sign-in CTA with redirect intent.
 - **Templates modal**: body scroll lock while open/closing + initial focus on Close (Personas parity).
+- **Discuss / Debate compose**: live 2000-char budgets matching server sanitize caps.
 
 ## Required production environment
 
