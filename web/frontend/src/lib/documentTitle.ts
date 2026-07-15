@@ -88,6 +88,40 @@ export function titleForArenaBusy(
   return `Four minds responding… · Arena panel · ${BRAND}`;
 }
 
+/** Max chars for names embedded in the tab title (keep tabs scannable). */
+const TITLE_NAME_MAX = 48;
+
+function compactTitlePart(raw: string, max = TITLE_NAME_MAX): string {
+  const s = (raw || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  if (s.length <= max) return s;
+  return `${s.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
+}
+
+/**
+ * Tab title for a collaborative Room once the room name is known.
+ * Falls back to the generic route title when name is empty.
+ */
+export function titleForRoom(roomName?: string | null): string {
+  const name = compactTitlePart(roomName || '');
+  if (!name) return `Room · ${BRAND}`;
+  return `${name} · Room · ${BRAND}`;
+}
+
+/**
+ * Tab title for a public shared take — prefer the mind name, then a prompt snippet.
+ */
+export function titleForShare(opts: {
+  agentName?: string | null;
+  prompt?: string | null;
+} = {}): string {
+  const agent = compactTitlePart(opts.agentName || '', 32);
+  if (agent) return `${agent} · Shared take · ${BRAND}`;
+  const prompt = compactTitlePart(opts.prompt || '', 40);
+  if (prompt) return `${prompt} · Shared take · ${BRAND}`;
+  return `Shared take · ${BRAND}`;
+}
+
 export function applyDocumentTitle(pathname: string): void {
   if (typeof document === 'undefined') return;
   document.title = titleForPath(pathname);

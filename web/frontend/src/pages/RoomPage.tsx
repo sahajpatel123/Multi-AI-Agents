@@ -6,6 +6,11 @@ import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getUserColor, getUserInitials } from '../utils/roomUtils';
 import { copyToClipboard } from '../lib/clipboard';
+import {
+  applyAbsoluteDocumentTitle,
+  applyDocumentTitle,
+  titleForRoom,
+} from '../lib/documentTitle';
 import { formatRoomSynthesisExport } from '../lib/roomSynthesisExport';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import { setRedirectIntent } from '../utils/redirectIntent';
@@ -113,6 +118,18 @@ export function RoomPage() {
   useEffect(() => {
     void loadRoom();
   }, [loadRoom]);
+
+  // Contextual tab title once the room name is known (DocumentTitle only knows the path).
+  useEffect(() => {
+    if (!slug) return;
+    const path = `/room/${slug}`;
+    if (room?.name) {
+      applyAbsoluteDocumentTitle(titleForRoom(room.name));
+      return () => applyDocumentTitle(path);
+    }
+    applyDocumentTitle(path);
+    return () => applyDocumentTitle(path);
+  }, [slug, room?.name]);
 
   useEffect(() => {
     if (!slug || !user || authLoading) return;

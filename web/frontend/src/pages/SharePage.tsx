@@ -8,6 +8,11 @@ import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
 import {
+  applyAbsoluteDocumentTitle,
+  applyDocumentTitle,
+  titleForShare,
+} from '../lib/documentTitle';
+import {
   buildNativeShareData,
   buildShareTakeClipboardText,
   canUseNativeShare,
@@ -72,6 +77,17 @@ export function SharePage() {
   const agent = useMemo(() => resolveAgent(agentId), [agentId]);
 
   const hasContent = Boolean(response || prompt);
+
+  // Prefer mind name (then prompt) in the tab so shared links are scannable in multitasking.
+  useEffect(() => {
+    applyAbsoluteDocumentTitle(
+      titleForShare({
+        agentName: agentId ? agent.name : '',
+        prompt: hasContent ? prompt : '',
+      }),
+    );
+    return () => applyDocumentTitle('/share');
+  }, [agentId, agent.name, prompt, hasContent]);
 
   const pageUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';

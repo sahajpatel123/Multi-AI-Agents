@@ -70,6 +70,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Search research tasks on Room boards and in the add-task picker',
       '[NEW] Copy Room group synthesis as markdown (contradictions, patterns, tasks)',
       '[NEW] Copy Agent Watchlist as markdown (respects search and status filters)',
+      '[IMPROVED] Browser tabs show Room names and shared-take mind names',
     ],
   },
   {

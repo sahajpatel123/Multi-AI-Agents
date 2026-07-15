@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { titleForAgentBusy, titleForArenaBusy, titleForPath } from './documentTitle';
+import {
+  titleForAgentBusy,
+  titleForArenaBusy,
+  titleForPath,
+  titleForRoom,
+  titleForShare,
+} from './documentTitle';
 
 describe('titleForPath', () => {
   it('labels marketing and product surfaces', () => {
@@ -38,5 +44,26 @@ describe('busy document titles', () => {
     expect(titleForArenaBusy('chat')).toContain('Mind replying');
     expect(titleForArenaBusy('debate')).toContain('Debate in progress');
     expect(titleForArenaBusy('discuss')).toContain('Discussing');
+  });
+});
+
+describe('contextual document titles', () => {
+  it('embeds room names and falls back when empty', () => {
+    expect(titleForRoom('Climate board')).toBe('Climate board · Room · Arena');
+    expect(titleForRoom('')).toBe('Room · Arena');
+    expect(titleForRoom(null)).toBe('Room · Arena');
+    const long = titleForRoom('A'.repeat(80));
+    expect(long.length).toBeLessThan(80);
+    expect(long).toMatch(/… · Room · Arena$/);
+  });
+
+  it('prefers agent name then prompt snippet for shared takes', () => {
+    expect(titleForShare({ agentName: 'The Contrarian' })).toBe(
+      'The Contrarian · Shared take · Arena',
+    );
+    expect(titleForShare({ prompt: 'Should we raise prices?' })).toBe(
+      'Should we raise prices? · Shared take · Arena',
+    );
+    expect(titleForShare({})).toBe('Shared take · Arena');
   });
 });

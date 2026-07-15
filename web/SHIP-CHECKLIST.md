@@ -86,6 +86,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Room board search**: filter tasks by title/answer/member; search Agent history in the add-task picker; Escape + body scroll lock.
 - **Room synthesis copy**: export group synthesis (contradictions, patterns, tasks) as markdown with success/failure feedback.
 - **Watchlist copy**: export current filtered watchlist as markdown (status, cadence, latest run) with clipboard feedback.
+- **Contextual tab titles**: Rooms show the room name; public `/share` shows the mind (or prompt snippet).
 
 ## Required production environment
 
