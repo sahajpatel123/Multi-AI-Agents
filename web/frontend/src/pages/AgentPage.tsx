@@ -80,6 +80,10 @@ import { copyToClipboard } from '../lib/clipboard';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { motionDuration } from '../lib/motion';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
+import {
+  domainForExpertiseLevel,
+  normalizeExpertiseLevel,
+} from '../lib/expertiseSelector';
 
 /** Agent result view — shared palette (mockup) */
 const AR = {
@@ -805,8 +809,9 @@ export function AgentPage() {
 
   const urlTaskId = searchParams.get('task_id');
 
-  const expertiseLevelForRun = (user?.expertise_level || 'curious').toLowerCase();
-  const expertiseDomainForRun = user?.expertise_domain || '';
+  const expertiseLevelForRun = normalizeExpertiseLevel(user?.expertise_level);
+  const expertiseDomainForRun =
+    domainForExpertiseLevel(expertiseLevelForRun, user?.expertise_domain || '');
 
   const loadTaskHistory = useCallback(async () => {
     if (!hasAgentAccess || authLoading) return;

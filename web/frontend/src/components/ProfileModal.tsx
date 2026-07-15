@@ -26,14 +26,11 @@ import { Icons } from './Icons';
 import { SERVICES } from './integrationServices';
 import MicroLoader from './MicroLoader';
 import { RazorpayCheckout } from './RazorpayCheckout';
-
-const EXPERTISE_PILLS = [
-  { id: 'none', label: 'None' },
-  { id: 'curious', label: 'Curious' },
-  { id: 'practitioner', label: 'Practitioner' },
-  { id: 'expert', label: 'Expert' },
-  { id: 'researcher', label: 'Researcher' },
-] as const;
+import { ExpertiseSelector } from './ExpertiseSelector';
+import {
+  domainForExpertiseLevel,
+  normalizeExpertiseLevel,
+} from '../lib/expertiseSelector';
 
 function profileInitials(name: string | undefined, email: string): string {
   const n = (name || '').trim();
@@ -285,7 +282,7 @@ export function ProfileModal() {
   useEffect(() => {
     if (!isOpen || !user) return;
     setFullName(user.name || '');
-    setExpertiseLevel((user.expertise_level || 'curious').toLowerCase());
+    setExpertiseLevel(normalizeExpertiseLevel(user.expertise_level));
     setExpertiseDomain(user.expertise_domain || '');
   }, [isOpen, user]);
 
@@ -420,13 +417,15 @@ export function ProfileModal() {
     setSaveBusy(true);
     setSaveOk(false);
     try {
+      const level = normalizeExpertiseLevel(expertiseLevel);
+      const domain = domainForExpertiseLevel(level, expertiseDomain);
       await patchUserProfile({
         name: fullName.trim(),
-        expertise_level: expertiseLevel,
-        expertise_domain: expertiseDomain.trim(),
+        expertise_level: level,
+        expertise_domain: domain,
       });
-      localStorage.setItem('arena_expertise_level', expertiseLevel);
-      localStorage.setItem('arena_expertise_domain', expertiseDomain.trim());
+      localStorage.setItem('arena_expertise_level', level);
+      localStorage.setItem('arena_expertise_domain', domain);
       await refreshUser();
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2000);
@@ -773,56 +772,17 @@ export function ProfileModal() {
             <p style={{ fontSize: 12, color: '#A89070', margin: '4px 0 10px' }}>
               Arena calibrates response depth and terminology to match your background across all tasks.
             </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-              {EXPERTISE_PILLS.map((p) => {
-                const sel = expertiseLevel === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setExpertiseLevel(p.id)}
-                    style={{
-                      fontSize: 11,
-                      padding: '4px 13px',
-                      borderRadius: 12,
-                      border: sel ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
-                      color: sel ? '#FAF7F2' : '#8C7355',
-                      background: sel ? '#C4956A' : 'transparent',
-                      cursor: 'pointer',
-                      fontFamily: 'Georgia, serif',
-                    }}
-                  >
-                    {p.label}
-                  </button>
-                );
-              })}
+            <div style={{ marginBottom: 18 }}>
+              <ExpertiseSelector
+                level={expertiseLevel}
+                domain={expertiseDomain}
+                disabled={saveBusy}
+                onChange={(level, domain) => {
+                  setExpertiseLevel(level);
+                  setExpertiseDomain(domain);
+                }}
+              />
             </div>
-            {expertiseLevel !== 'none' ? (
-              <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 10, letterSpacing: '0.13em', textTransform: 'uppercase', color: '#A89070', marginBottom: 6 }}>
-                  Your domain
-                </div>
-                <input
-                  value={expertiseDomain}
-                  onChange={(e) => setExpertiseDomain(e.target.value)}
-                  placeholder="e.g. cardiology, ML research, corporate law..."
-                  style={{
-                    width: '100%',
-                    border: '0.5px solid #DDD0BC',
-                    borderRadius: 6,
-                    padding: '8px 12px',
-                    fontSize: 13,
-                    color: '#2C1810',
-                    background: '#FDFAF6',
-                    fontFamily: 'Georgia, serif',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = '#C4956A')}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = '#DDD0BC')}
-                />
-              </div>
-            ) : null}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20 }}>
               <button

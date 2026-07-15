@@ -63,6 +63,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Copy saved Arena takes as markdown from the sidebar',
       '[NEW] Search the Personas library by name, quote, or trait',
       '[NEW] Search Agent task templates by title, description, or example',
+      '[IMPROVED] Agent expertise selector: screen-reader roles and domain label',
     ],
   },
   {
