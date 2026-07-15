@@ -146,6 +146,7 @@ export function AgentCard({
   const [showContradictionBanner, setShowContradictionBanner] = useState(false);
   const [showContradictionTooltip, setShowContradictionTooltip] = useState(false);
   const contradictionTooltipRef = useRef<HTMLDivElement>(null);
+  const reducedMotion = prefersReducedMotion();
 
   useEffect(() => {
     if (response?.confidence == null) {
@@ -154,7 +155,7 @@ export function AgentCard({
       return;
     }
 
-    if (!animateConfidenceBar) {
+    if (!animateConfidenceBar || prefersReducedMotion()) {
       setBarWidth(response.confidence);
       prevConfidence.current = response.confidence;
       return;
@@ -202,7 +203,7 @@ export function AgentCard({
   const useBottomReplyZone = !isIdle;
 
   useEffect(() => {
-    if (!showThinkingPhrase) {
+    if (!shouldRotateThinkingPhrases(!!showThinkingPhrase, prefersReducedMotion())) {
       setThinkingPhrasePhase('visible');
       return;
     }
@@ -228,19 +229,23 @@ export function AgentCard({
     };
   }, [showThinkingPhrase, thinkingPhrases.length, thinkingPhraseIndex]);
 
+  const hoverLift = isHovered && !reducedMotion;
+  const cardTransition = reducedMotion ? 'none' : 'all 200ms ease';
+  const pulseAnim = reducedMotion ? 'none' : undefined;
+
   return (
     <div
       ref={cardRef}
       className="agent-card"
       style={{
         background: isWinner ? '#FFFCF9' : (isLoadingState ? `linear-gradient(90deg, ${agentBackgrounds[agentId]} 0%, rgba(255,255,255,0.6) 50%, ${agentBackgrounds[agentId]} 100%)` : agentBackgrounds[agentId]),
-        backgroundSize: isLoadingState ? '200% 100%' : 'auto',
-        animation: isLoadingState ? 'shimmer 1.5s infinite' : (isWinner ? 'winnerPulse 400ms ease-out' : 'none'),
+        backgroundSize: agentCardLoadingBackgroundSize(!!isLoadingState, reducedMotion),
+        animation: agentCardLoadingAnimation(!!isLoadingState, isWinner, reducedMotion),
         border: isWinner ? '1px solid #C4956A' : '0.5px solid #E0D8D0',
         borderRadius: '16px',
-        boxShadow: isHovered ? '0 8px 24px rgba(26,23,20,0.07)' : (isHighlighted ? '0 12px 30px rgba(196, 149, 106, 0.2)' : 'none'),
-        transition: 'all 200ms ease',
-        transform: isHovered ? 'translateY(-3px)' : 'translateY(0)',
+        boxShadow: hoverLift ? '0 8px 24px rgba(26,23,20,0.07)' : (isHighlighted ? '0 12px 30px rgba(196, 149, 106, 0.2)' : 'none'),
+        transition: cardTransition,
+        transform: hoverLift ? 'translateY(-3px)' : 'translateY(0)',
         position: 'relative',
         overflow: 'hidden',
         display: 'flex',
@@ -248,7 +253,7 @@ export function AgentCard({
         height: '100%',
         minHeight: '220px',
         cursor: isLoadingState ? 'default' : 'pointer',
-        willChange: 'transform',
+        willChange: reducedMotion ? 'auto' : 'transform',
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -287,7 +292,14 @@ export function AgentCard({
             )}
             {isStreaming && (
               <span
-                style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: resolvedDisplay.color, animation: 'breathe 2.4s ease-in-out infinite' }}
+                style={{
+                  display: 'inline-block',
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: resolvedDisplay.color,
+                  animation: pulseAnim ?? 'breathe 2.4s ease-in-out infinite',
+                }}
               />
             )}
           </div>
@@ -332,14 +344,15 @@ export function AgentCard({
                   color: '#6B6460',
                   fontStyle: 'italic',
                   fontSize: '13px',
-                  opacity: thinkingPhrasePhase === 'exiting' ? 0 : 1,
-                  transform:
-                    thinkingPhrasePhase === 'exiting'
+                  opacity: reducedMotion ? 1 : thinkingPhrasePhase === 'exiting' ? 0 : 1,
+                  transform: reducedMotion
+                    ? 'none'
+                    : thinkingPhrasePhase === 'exiting'
                       ? 'translateY(-6px)'
                       : thinkingPhrasePhase === 'entering'
                         ? 'translateY(6px)'
                         : 'translateY(0)',
-                  transition: 'opacity 300ms ease, transform 300ms ease',
+                  transition: reducedMotion ? 'none' : 'opacity 300ms ease, transform 300ms ease',
                 }}
               >
                 {thinkingPhrases[thinkingPhraseIndex]}
@@ -349,7 +362,17 @@ export function AgentCard({
             <div>
               <p className="agent-response-text" style={{ whiteSpace: 'pre-wrap' }}>
                 {displayText}
-                <span style={{ display: 'inline-block', width: '2px', height: '16px', marginLeft: '2px', background: 'rgba(107,100,96,0.5)', animation: 'breathe 1.2s ease-in-out infinite', verticalAlign: 'text-bottom' }} />
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '2px',
+                    height: '16px',
+                    marginLeft: '2px',
+                    background: 'rgba(107,100,96,0.5)',
+                    animation: pulseAnim ?? 'breathe 1.2s ease-in-out infinite',
+                    verticalAlign: 'text-bottom',
+                  }}
+                />
               </p>
             </div>
           ) : response ? (
@@ -578,7 +601,7 @@ export function AgentCard({
               borderRadius: '999px',
               width: `${barWidth}%`,
               backgroundColor: agentConfig.color,
-              transition: 'width 700ms cubic-bezier(0.16,1,0.3,1)',
+              transition: reducedMotion ? 'none' : 'width 700ms cubic-bezier(0.16,1,0.3,1)',
             }}
           />
         </div>
