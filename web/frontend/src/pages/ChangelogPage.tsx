@@ -45,6 +45,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Templates modal locks background scroll and focuses Close on open',
       '[IMPROVED] Discuss + Debate interjection show 2000-char budgets (server-aligned)',
       '[IMPROVED] Privacy & Terms aligned with Postgres storage and Razorpay billing',
+      '[IMPROVED] Leaderboard shows your panel personas and respects reduced motion',
     ],
   },
   {

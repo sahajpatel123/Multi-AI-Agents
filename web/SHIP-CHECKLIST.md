@@ -44,6 +44,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Templates modal**: body scroll lock while open/closing + initial focus on Close (Personas parity).
 - **Discuss / Debate compose**: live 2000-char budgets matching server sanitize caps.
 - **Legal honesty**: Privacy/Terms reflect Postgres + Razorpay (no SQLite / “no payment info” claims).
+- **Leaderboard honesty**: rows use active panel persona names/colors; bars respect reduced motion.
 
 ## Required production environment
 
