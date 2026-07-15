@@ -55,6 +55,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Protected routes**: redirect intent set in effect (not during render); share menu ARIA.
 - **Native share**: system share sheet (`navigator.share`) when available; still uses public `/share` URL; focus first menu item.
 - **MicroLoader / footer motion**: static loading label under reduced motion; footer anchors + breathe dots honor `prefers-reduced-motion`.
+- **Watchlist recovery**: load failure ≠ empty state (Retry); two-step remove confirm; pause switch labels.
 
 ## Required production environment
 

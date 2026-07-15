@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MicroLoader from '../components/MicroLoader';
 import {
@@ -9,10 +9,12 @@ import {
   type AgentWatchlistItem,
 } from '../api';
 import { useTier } from '../context/TierContext';
+import { prefersReducedMotion } from '../lib/motion';
 import {
   WATCHLIST_INTERVALS,
   type WatchlistIntervalHours,
 } from '../lib/watchlistIntervals';
+import { watchlistBodyMode } from '../lib/watchlistView';
 
 function formatRelativePast(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -57,11 +59,15 @@ export function WatchlistPage() {
   const { canUseFeature } = useTier();
   const canWatchlist = canUseFeature('agent_watchlist');
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [items, setItems] = useState<AgentWatchlistItem[]>([]);
   const [activeCount, setActiveCount] = useState(0);
   const [activeCap, setActiveCap] = useState(10);
   const [error, setError] = useState<string | null>(null);
   const [cadenceBusyId, setCadenceBusyId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const reducedMotion = prefersReducedMotion();
 
   const load = useCallback(async () => {
     if (!canWatchlist) {
@@ -75,9 +81,11 @@ export function WatchlistPage() {
       setItems(data.items);
       setActiveCount(data.active_count);
       setActiveCap(data.active_cap);
+      setLoadFailed(false);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not load watchlist');
       setItems([]);
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -86,6 +94,20 @@ export function WatchlistPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!error) return;
+    errorRef.current?.focus();
+  }, [error]);
+
+  useEffect(() => {
+    if (!pendingDeleteId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPendingDeleteId(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [pendingDeleteId]);
 
   const onToggle = async (item: AgentWatchlistItem) => {
     try {
@@ -118,12 +140,19 @@ export function WatchlistPage() {
       setError(null);
       await deleteAgentWatchlist(id);
       setItems((prev) => prev.filter((x) => x.id !== id));
+      setPendingDeleteId(null);
       const data = await getAgentWatchlist();
       setActiveCount(data.active_count);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Delete failed');
     }
   };
+
+  const bodyMode = watchlistBodyMode({
+    loading,
+    loadFailed,
+    itemCount: items.length,
+  });
 
   if (!canWatchlist) {
     return (
@@ -213,15 +242,59 @@ export function WatchlistPage() {
         }}>
           Watched tasks re-run automatically on your chosen schedule. Arena compares new findings to the original answer and notifies you when something meaningful changes.
         </p>
-        {error ? (
-          <p style={{ color: '#D85A30', fontSize: 13, textAlign: 'center', marginBottom: 16 }}>{error}</p>
+        {error && bodyMode !== 'load_error' ? (
+          <div
+            ref={errorRef}
+            role="alert"
+            tabIndex={-1}
+            style={{
+              color: '#D85A30',
+              fontSize: 13,
+              textAlign: 'center',
+              marginBottom: 16,
+              outline: 'none',
+            }}
+          >
+            {error}
+          </div>
         ) : null}
 
-        {loading ? (
+        {bodyMode === 'loading' ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem 0' }}>
-            <MicroLoader />
+            <MicroLoader label="Loading watchlist" />
           </div>
-        ) : items.length === 0 ? (
+        ) : bodyMode === 'load_error' ? (
+          <div
+            className="arena-empty-state"
+            role="alert"
+            ref={errorRef}
+            tabIndex={-1}
+            style={{ outline: 'none' }}
+          >
+            <p style={{ fontSize: 15, color: '#4A3728', fontWeight: 500, marginBottom: 0 }}>
+              Could not load watchlist
+            </p>
+            <p style={{ fontSize: 13, color: '#8C7355', marginTop: 8, maxWidth: 340, lineHeight: 1.6 }}>
+              {error || 'Something went wrong reaching the server. Your watched tasks are safe — try again.'}
+            </p>
+            <button
+              type="button"
+              className="arena-btn arena-btn--primary arena-btn--md"
+              style={{ marginTop: 20 }}
+              onClick={() => void load()}
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              className="arena-btn arena-btn--ghost arena-btn--md"
+              style={{ marginTop: 8 }}
+              onClick={() => navigate('/agent')}
+            >
+              Back to Agent
+            </button>
+          </div>
+        ) : bodyMode === 'empty' ? (
           <div className="arena-empty-state">
             <svg width={48} height={48} viewBox="0 0 24 24" fill="none" aria-hidden style={{ color: '#D4C4B0' }}>
               <path
@@ -366,6 +439,7 @@ export function WatchlistPage() {
                       type="button"
                       role="switch"
                       aria-checked={item.is_active}
+                      aria-label={item.is_active ? 'Pause watch' : 'Resume watch'}
                       onClick={() => void onToggle(item)}
                       style={{
                         width: 32,
@@ -386,31 +460,46 @@ export function WatchlistPage() {
                           borderRadius: '50%',
                           background: '#FAF7F2',
                           marginLeft: item.is_active ? 14 : 0,
-                          transition: 'margin 0.15s ease',
+                          transition: reducedMotion ? 'none' : 'margin 0.15s ease',
                         }}
                       />
                     </button>
                     <button
                       type="button"
-                      onClick={() => void onDelete(item.id)}
-                      aria-label="Remove from watchlist"
+                      onClick={() => {
+                        if (pendingDeleteId === item.id) {
+                          void onDelete(item.id);
+                          return;
+                        }
+                        setPendingDeleteId(item.id);
+                      }}
+                      aria-label={
+                        pendingDeleteId === item.id
+                          ? 'Confirm remove from watchlist'
+                          : 'Remove from watchlist'
+                      }
                       style={{
-                        background: 'none',
-                        border: 'none',
+                        background: pendingDeleteId === item.id ? 'rgba(216, 90, 48, 0.1)' : 'none',
+                        border:
+                          pendingDeleteId === item.id
+                            ? '0.5px solid rgba(216, 90, 48, 0.45)'
+                            : 'none',
+                        borderRadius: 6,
                         cursor: 'pointer',
-                        fontSize: 14,
-                        color: '#C4A882',
-                        padding: 0,
+                        fontSize: pendingDeleteId === item.id ? 11 : 14,
+                        color: pendingDeleteId === item.id ? '#D85A30' : '#C4A882',
+                        padding: pendingDeleteId === item.id ? '3px 8px' : 0,
                         lineHeight: 1,
+                        fontFamily: 'Georgia, serif',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.color = '#D85A30';
+                        if (pendingDeleteId !== item.id) e.currentTarget.style.color = '#D85A30';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.color = '#C4A882';
+                        if (pendingDeleteId !== item.id) e.currentTarget.style.color = '#C4A882';
                       }}
                     >
-                      ×
+                      {pendingDeleteId === item.id ? 'Remove?' : '×'}
                     </button>
                   </div>
                 </div>
