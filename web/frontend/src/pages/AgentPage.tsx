@@ -48,6 +48,7 @@ import {
   type TaskAnswerFeedback,
 } from '../api';
 import { ConduraInstallCTA } from '../components/ConduraInstallCTA';
+import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { buildHandoffPayload } from '../lib/conduraHandoff';
 import { dispatchHandoff, pairDevice, ConduraClientError } from '../lib/conduraClient';
 import { getOrCreateSigningKey, rotateSigningKey } from '../lib/conduraHandoffCrypto';
@@ -8028,6 +8029,7 @@ export function AgentPage() {
           </>
       </main>
       </div>
+      <KeyboardShortcutsHelp surface="agent" />
       <ConduraInstallCTA
         open={conduraCtaOpen}
         onClose={() => {

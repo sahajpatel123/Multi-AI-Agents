@@ -11,6 +11,7 @@ import { UpgradeModal } from './components/UpgradeModal';
 import { UserMenu } from './components/UserMenu';
 import { AgentDot } from './components/AgentDot';
 import { CollapsiblePrompt } from './components/CollapsiblePrompt';
+import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
 import {
   streamPrompt,
   streamDiscuss,
@@ -1261,9 +1262,58 @@ function App() {
 
               {/* Error */}
               {error && (
-                <div style={{ marginBottom: '1rem', padding: '1rem', background: '#FFFFFF', border: '0.5px solid rgba(196,149,106,0.3)', borderRadius: '12px', maxWidth: '600px', margin: '0 auto 1rem' }}>
-                  <p style={{ fontSize: '13px', fontWeight: 500, color: '#C4956A', marginBottom: '0.25rem' }}>Cannot process</p>
-                  <p style={{ fontSize: '13px', color: '#6B6460' }}>{error}</p>
+                <div
+                  role="alert"
+                  style={{
+                    marginBottom: '1rem',
+                    padding: '1rem',
+                    background: '#FFFFFF',
+                    border: '0.5px solid rgba(196,149,106,0.3)',
+                    borderRadius: '12px',
+                    maxWidth: '600px',
+                    margin: '0 auto 1rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      marginBottom: '0.25rem',
+                    }}
+                  >
+                    <p style={{ fontSize: '13px', fontWeight: 500, color: '#C4956A', margin: 0 }}>
+                      Cannot process
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setError(null)}
+                      aria-label="Dismiss error"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 16,
+                        color: '#A89070',
+                        lineHeight: 1,
+                        padding: 0,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <p style={{ fontSize: '13px', color: '#6B6460', margin: '0 0 10px' }}>{error}</p>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      setError(null);
+                      document.getElementById('arena-prompt')?.focus();
+                    }}
+                  >
+                    Edit prompt
+                  </button>
                 </div>
               )}
 
@@ -1791,6 +1841,12 @@ function App() {
           />
         </div>
       )}
+
+      {viewMode === 'arena' || viewMode === 'leaderboard' ? (
+        <KeyboardShortcutsHelp surface="arena" />
+      ) : null}
+      {viewMode === 'debate' ? <KeyboardShortcutsHelp surface="debate" /> : null}
+      {viewMode === 'discuss' ? <KeyboardShortcutsHelp surface="discuss" /> : null}
 
       <UpgradeModal
         isOpen={upgradeModalOpen}
