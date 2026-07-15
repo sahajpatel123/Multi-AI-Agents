@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AGENT_REFINE_MAX_CHARS,
   AGENT_TASK_MAX_CHARS,
   ARENA_PROMPT_MAX_CHARS,
   agentMinLengthHint,
@@ -30,6 +31,12 @@ describe('charBudget', () => {
   it('shares the 2000-char cap with Arena prompts', () => {
     expect(ARENA_PROMPT_MAX_CHARS).toBe(2000);
     expect(ARENA_PROMPT_MAX_CHARS).toBe(AGENT_TASK_MAX_CHARS);
+  });
+
+  it('matches the refine follow-up 1000-char server cap', () => {
+    expect(AGENT_REFINE_MAX_CHARS).toBe(1000);
+    expect(charBudgetLabel(42, AGENT_REFINE_MAX_CHARS)).toBe('42 / 1000');
+    expect(clampToMax('x'.repeat(1500), AGENT_REFINE_MAX_CHARS).length).toBe(1000);
   });
 
   it('hints when under the agent minimum length', () => {

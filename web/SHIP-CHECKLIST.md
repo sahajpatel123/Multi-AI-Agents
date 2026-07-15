@@ -102,6 +102,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Arena sidebar renames**: custom turn titles persist in localStorage; validation + Esc-safe save.
 - **Create-room share**: system share sheet after room create (with copy fallback); Agent toasts use status/alert by severity.
 - **Templates load honesty**: failed catalog fetch ≠ empty (Retry); history delete restores row on API failure.
+- **Agent refine follow-up**: 1000-char budget (API-aligned), restore draft on failure, role=alert on errors.
 
 ## Required production environment
 

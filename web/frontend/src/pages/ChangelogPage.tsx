@@ -87,6 +87,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Share a new Room invite from the create modal (system share + copy)',
       '[IMPROVED] Agent toasts announce failures as alerts for screen readers',
       '[IMPROVED] Task templates show load errors with Retry (not a blank catalog)',
+      '[IMPROVED] Agent follow-up refine: live char budget, keep draft if refine fails',
     ],
   },
   {

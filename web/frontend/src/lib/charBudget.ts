@@ -4,6 +4,8 @@ export const AGENT_TASK_MAX_CHARS = 2000;
 export const AGENT_TASK_MIN_CHARS = 10;
 /** Same server sanitize cap as agent tasks (`input_pipeline` / prompt schema). */
 export const ARENA_PROMPT_MAX_CHARS = 2000;
+/** Agent refine follow-up sanitize cap (`RefineRequest.message`). */
+export const AGENT_REFINE_MAX_CHARS = 1000;
 /** Discuss message sanitize cap (`DiscussRequest.message`). */
 export const DISCUSS_MESSAGE_MAX_CHARS = 2000;
 /** Debate interjection sanitize cap (`DebateRequest.user_interjection`). */

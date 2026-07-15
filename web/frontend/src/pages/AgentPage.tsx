@@ -70,6 +70,7 @@ import {
   pickRecentAgentChips,
 } from '../lib/agentRecentChips';
 import {
+  AGENT_REFINE_MAX_CHARS,
   AGENT_TASK_MAX_CHARS,
   agentMinLengthHint,
   charBudgetLabel,
@@ -1588,6 +1589,13 @@ export function AgentPage() {
   const handleRefine = async () => {
     const msg = followUp.trim();
     if (!msg || !result?.task_id || isRefining || isRunning) return;
+    if (msg.length > AGENT_REFINE_MAX_CHARS) {
+      setRefinementError(
+        `Follow-up is too long — keep it to ${AGENT_REFINE_MAX_CHARS} characters.`,
+      );
+      return;
+    }
+    // Clear only after we know we'll send; restore on failure so the draft isn't lost.
     setFollowUp('');
     setIsRunning(true);
     setIsRefining(true);
@@ -1596,9 +1604,11 @@ export function AgentPage() {
       await refineAgentAnswer(result.task_id, msg);
       await pollAgentTaskUntilDone(result.task_id);
     } catch (err) {
+      setFollowUp(msg);
       setRefinementError(
         err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Refinement failed.',
       );
+      followUpInputRef.current?.focus();
     } finally {
       setIsRunning(false);
       setIsRefining(false);
@@ -7699,75 +7709,74 @@ export function AgentPage() {
                   (!isRunning || isRefining) ? (
                     <div style={{ marginBottom: 20 }}>
                       {!isRefining ? (
-                        <div
-                          className="agent-follow-shell"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            border: '0.5px solid #D4C4B0',
-                            borderRadius: 12,
-                            padding: '12px 16px',
-                            background: AR.SURFACE_ALT,
-                            transition: 'border-color 0.2s',
-                            marginBottom: 8,
-                          }}
-                        >
-                          <input
-                            id="agent-follow-up"
-                            ref={followUpInputRef}
-                            type="text"
-                            value={followUp}
-                            onChange={(e) => setFollowUp(e.target.value.slice(0, 1000))}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                void handleRefine();
-                              }
-                            }}
-                            placeholder="Ask a follow-up, request more depth, challenge an assumption..."
-                            aria-label="Follow-up research question"
-                            disabled={isRefining}
+                        <div style={{ marginBottom: 8 }}>
+                          <div
+                            className="agent-follow-shell"
                             style={{
-                              flex: 1,
-                              border: 'none',
-                              background: 'transparent',
-                              outline: 'none',
-                              fontSize: 14,
-                              color: AR.TEXT_PRIMARY,
-                              fontFamily: 'Georgia, serif',
-                            }}
-                          />
-                          <button
-                            type="button"
-                            disabled={!followUp.trim() || isRefining}
-                            onClick={() => void handleRefine()}
-                            style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: '50%',
-                              border: 'none',
-                              background: followUp.trim() ? AR.GOLD : '#E8DDD0',
-                              transition: 'background 0.2s, cursor 0.2s',
-                              cursor: followUp.trim() ? 'pointer' : 'default',
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
+                              border: '0.5px solid #D4C4B0',
+                              borderRadius: 12,
+                              padding: '12px 16px',
+                              background: AR.SURFACE_ALT,
+                              transition: 'border-color 0.2s',
                             }}
                           >
-                            {isRefining ? (
-                              <span
-                                style={{
-                                  width: 14,
-                                  height: 14,
-                                  border: '2px solid #F0EBE3',
-                                  borderTopColor: AR.GOLD,
-                                  borderRadius: '50%',
-                                  animation: 'agentSpin 0.9s linear infinite',
-                                  display: 'inline-block',
-                                }}
-                              />
-                            ) : (
+                            <input
+                              id="agent-follow-up"
+                              ref={followUpInputRef}
+                              type="text"
+                              value={followUp}
+                              maxLength={AGENT_REFINE_MAX_CHARS}
+                              onChange={(e) => {
+                                setFollowUp(clampToMax(e.target.value, AGENT_REFINE_MAX_CHARS));
+                                if (refinementError) setRefinementError(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  void handleRefine();
+                                }
+                              }}
+                              placeholder="Ask a follow-up, request more depth, challenge an assumption..."
+                              aria-label="Follow-up research question"
+                              aria-describedby={
+                                refinementError
+                                  ? 'agent-refine-error'
+                                  : followUp.length > 0
+                                    ? 'agent-refine-budget'
+                                    : undefined
+                              }
+                              disabled={isRefining}
+                              style={{
+                                flex: 1,
+                                border: 'none',
+                                background: 'transparent',
+                                outline: 'none',
+                                fontSize: 14,
+                                color: AR.TEXT_PRIMARY,
+                                fontFamily: 'Georgia, serif',
+                              }}
+                            />
+                            <button
+                              type="button"
+                              disabled={!followUp.trim() || isRefining}
+                              onClick={() => void handleRefine()}
+                              aria-label="Send follow-up"
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: '50%',
+                                border: 'none',
+                                background: followUp.trim() ? AR.GOLD : '#E8DDD0',
+                                transition: 'background 0.2s, cursor 0.2s',
+                                cursor: followUp.trim() ? 'pointer' : 'default',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                            >
                               <svg
                                 width="16"
                                 height="16"
@@ -7782,16 +7791,44 @@ export function AgentPage() {
                                   strokeLinecap="round"
                                 />
                               </svg>
-                            )}
-                          </button>
+                            </button>
+                          </div>
+                          {followUp.length > 0 ? (
+                            <div
+                              id="agent-refine-budget"
+                              title={`Character budget (server max ${AGENT_REFINE_MAX_CHARS})`}
+                              style={{
+                                marginTop: 6,
+                                fontSize: 11,
+                                textAlign: 'right',
+                                color:
+                                  charBudgetTone(followUp.length, AGENT_REFINE_MAX_CHARS) === 'danger'
+                                    ? '#D85A30'
+                                    : charBudgetTone(followUp.length, AGENT_REFINE_MAX_CHARS) === 'warn'
+                                      ? '#B07840'
+                                      : '#A89070',
+                              }}
+                            >
+                              {charBudgetLabel(followUp.length, AGENT_REFINE_MAX_CHARS)}
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
-                        <p style={{ fontSize: 12, color: AR.TEXT_MUTED, marginBottom: 0 }}>
+                        <p
+                          role="status"
+                          aria-live="polite"
+                          aria-busy="true"
+                          style={{ fontSize: 12, color: AR.TEXT_MUTED, marginBottom: 0 }}
+                        >
                           Refining your answer...
                         </p>
                       )}
                       {refinementError ? (
-                        <p style={{ color: '#E57373', fontSize: 12, marginTop: 8, marginBottom: 0 }}>
+                        <p
+                          id="agent-refine-error"
+                          role="alert"
+                          style={{ color: '#E57373', fontSize: 12, marginTop: 8, marginBottom: 0 }}
+                        >
                           {refinementError}
                         </p>
                       ) : null}
