@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
+  ApiError,
   cancelAgentAddon,
   cancelSubscription,
   deleteMcpIntegration,
@@ -31,6 +32,13 @@ import {
   domainForExpertiseLevel,
   normalizeExpertiseLevel,
 } from '../lib/expertiseSelector';
+import {
+  PROFILE_NAME_MAX,
+  profileSaveCaughtErrorMessage,
+  profileSaveIssueMessage,
+  validateProfileName,
+} from '../lib/profileSave';
+import { motionDuration } from '../lib/motion';
 
 function profileInitials(name: string | undefined, email: string): string {
   const n = (name || '').trim();
@@ -229,6 +237,9 @@ export function ProfileModal() {
   const [expertiseDomain, setExpertiseDomain] = useState('');
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const saveErrorRef = useRef<HTMLParagraphElement | null>(null);
+  const saveOkTimerRef = useRef<number | null>(null);
 
   const [usage, setUsage] = useState<UserUsageResponse | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
@@ -412,10 +423,29 @@ export function ProfileModal() {
     [closeModal],
   );
 
+  useEffect(() => {
+    if (!saveError) return;
+    saveErrorRef.current?.focus();
+  }, [saveError]);
+
+  useEffect(() => {
+    return () => {
+      if (saveOkTimerRef.current != null) {
+        window.clearTimeout(saveOkTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleSaveProfile = async () => {
     if (!user) return;
-    setSaveBusy(true);
     setSaveOk(false);
+    setSaveError(null);
+    const issue = validateProfileName(fullName);
+    if (issue) {
+      setSaveError(profileSaveIssueMessage(issue));
+      return;
+    }
+    setSaveBusy(true);
     try {
       const level = normalizeExpertiseLevel(expertiseLevel);
       const domain = domainForExpertiseLevel(level, expertiseDomain);
@@ -428,9 +458,18 @@ export function ProfileModal() {
       localStorage.setItem('arena_expertise_domain', domain);
       await refreshUser();
       setSaveOk(true);
-      window.setTimeout(() => setSaveOk(false), 2000);
-    } catch {
-      // silent; could show error
+      if (saveOkTimerRef.current != null) window.clearTimeout(saveOkTimerRef.current);
+      const hold = motionDuration(2000);
+      saveOkTimerRef.current = window.setTimeout(() => {
+        setSaveOk(false);
+        saveOkTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : profileSaveCaughtErrorMessage(err);
+      setSaveError(msg);
     } finally {
       setSaveBusy(false);
     }
@@ -703,10 +742,28 @@ export function ProfileModal() {
             <p style={{ fontSize: 14, color: '#A89070', marginBottom: 24 }}>Manage your profile and expertise calibration</p>
 
             <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.13em', textTransform: 'uppercase', color: '#A89070', marginBottom: 6 }}>Full name</div>
+              <label
+                htmlFor="profile-full-name"
+                style={{
+                  display: 'block',
+                  fontSize: 10,
+                  letterSpacing: '0.13em',
+                  textTransform: 'uppercase',
+                  color: '#A89070',
+                  marginBottom: 6,
+                }}
+              >
+                Full name
+              </label>
               <input
+                id="profile-full-name"
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                maxLength={PROFILE_NAME_MAX}
+                autoComplete="name"
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  if (saveError) setSaveError(null);
+                }}
                 style={{
                   width: '100%',
                   border: '0.5px solid #DDD0BC',
@@ -784,7 +841,24 @@ export function ProfileModal() {
               />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20 }}>
+            {saveError ? (
+              <p
+                ref={saveErrorRef}
+                role="alert"
+                tabIndex={-1}
+                style={{
+                  fontSize: 13,
+                  color: '#993C1D',
+                  margin: '0 0 12px',
+                  lineHeight: 1.5,
+                  outline: 'none',
+                }}
+              >
+                {saveError}
+              </p>
+            ) : null}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
               <button
                 type="button"
                 disabled={saveBusy}
@@ -808,9 +882,13 @@ export function ProfileModal() {
                   e.currentTarget.style.background = '#2C1810';
                 }}
               >
-                Save changes
+                {saveBusy ? 'Saving…' : 'Save changes'}
               </button>
-              {saveOk ? <span style={{ fontSize: 12, color: '#8C7355' }}>Saved</span> : null}
+              {saveOk ? (
+                <span role="status" style={{ fontSize: 12, color: '#5A8C6A' }}>
+                  Saved
+                </span>
+              ) : null}
             </div>
           </div>
 
