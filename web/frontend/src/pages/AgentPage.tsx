@@ -89,6 +89,11 @@ import {
 import { agentToastAriaLive, agentToastKind, agentToastRole } from '../lib/agentToast';
 import { motionDuration } from '../lib/motion';
 import {
+  clearPromptDraft,
+  loadPromptDraft,
+  savePromptDraft,
+} from '../lib/promptDraft';
+import {
   roomCreateButtonLabel,
   roomCreateCaughtErrorMessage,
   roomNameIssueMessage,
@@ -122,6 +127,10 @@ const AR = {
   TEXT_MUTED: '#8C7355',
   TEXT_FAINT: '#A89070',
 } as const;
+
+/** localStorage keys for Agent compose drafts (parity with Arena prompt drafts). */
+const AGENT_TASK_DRAFT_KEY = 'agent_task_draft:v1';
+const agentFollowUpDraftKey = (taskId: string) => `agent_followup_draft:v1:${taskId}`;
 
 const TEMPORAL_DECAY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   permanent: { bg: '#1A2E1A', text: '#6FCF6F', label: 'TIMELESS' },
@@ -1096,6 +1105,43 @@ export function AgentPage() {
     } catch { /* ignore */ }
   }, []);
 
+  // Restore idle compose draft after q/prefill effects (do not clobber deep links).
+  useEffect(() => {
+    if (searchParams.get('task_id') || searchParams.get('q')) return;
+    setTask((prev) => {
+      if (prev.trim()) return prev;
+      const stored = loadPromptDraft(AGENT_TASK_DRAFT_KEY);
+      return stored || prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount after deep-link reads
+  }, []);
+
+  // Debounced autosave for idle Agent compose (not while viewing a finished result).
+  useEffect(() => {
+    if (result || isRunning || multiMode || selectedTemplate) return;
+    const handle = window.setTimeout(() => {
+      savePromptDraft(AGENT_TASK_DRAFT_KEY, task);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [task, result, isRunning, multiMode, selectedTemplate]);
+
+  // Per-task follow-up draft: restore when opening a completed task; save while typing.
+  useEffect(() => {
+    if (!result?.task_id || result.status !== 'complete') {
+      setFollowUp('');
+      return;
+    }
+    setFollowUp(loadPromptDraft(agentFollowUpDraftKey(result.task_id)) || '');
+  }, [result?.task_id, result?.status]);
+
+  useEffect(() => {
+    if (!result?.task_id || result.status !== 'complete') return;
+    const handle = window.setTimeout(() => {
+      savePromptDraft(agentFollowUpDraftKey(result.task_id!), followUp);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [followUp, result?.task_id, result?.status]);
+
   useEffect(() => {
     if (!openMenuTaskId && !confirmDeleteTaskId) return;
     const handleOutsideClick = (event: MouseEvent) => {
@@ -1391,6 +1437,8 @@ export function AgentPage() {
       if (!startData.task_id) {
         throw new Error('No task ID received');
       }
+      // Pipeline accepted a real task — draft is safely delivered.
+      clearPromptDraft(AGENT_TASK_DRAFT_KEY);
       await pollAgentTaskUntilDone(startData.task_id);
       await loadTaskHistory();
       setAttachments([]);
@@ -1602,6 +1650,7 @@ export function AgentPage() {
     setRefinementError(null);
     try {
       await refineAgentAnswer(result.task_id, msg);
+      clearPromptDraft(agentFollowUpDraftKey(result.task_id));
       await pollAgentTaskUntilDone(result.task_id);
     } catch (err) {
       setFollowUp(msg);

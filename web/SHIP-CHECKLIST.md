@@ -106,6 +106,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent multi-task + challenge**: 2000-char caps per parallel question; challenge failures alert + Retry.
 - **Arena recent chips**: visible remove (×) + Delete key; stress-from-Agent banner dismissible status.
 - **Arena prompt draft autosave**: long prompts survive refresh / route changes; cleared once the pipeline accepts (preserved if it rejects).
+- **Agent compose drafts**: idle task + per-task follow-up autosave to localStorage; cleared only after successful start/refine.
 
 ## Required production environment
 
