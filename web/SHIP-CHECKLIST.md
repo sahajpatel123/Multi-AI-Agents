@@ -70,6 +70,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Sidebar recents search**: filter history by prompt/title with clear + empty match state.
 - **Leaderboard copy**: session rankings as markdown table; UserMenu loading respects reduced motion.
 - **Agent history search**: filter research history by title/task text (shared search helper).
+- **Arena prompt motion**: border/waveform/send pulse honor reduced motion; `/` focus hinted in title.
 
 ## Required production environment
 

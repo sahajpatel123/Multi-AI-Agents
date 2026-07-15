@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Swords, ArrowUp } from 'lucide-react';
-import { motionDuration, prefersReducedMotion } from '../lib/motion';
+import { motionDuration, motionTransition, prefersReducedMotion } from '../lib/motion';
 import {
   ARENA_PROMPT_MAX_CHARS,
   charBudgetLabel,
   charBudgetTone,
   clampToMax,
 } from '../lib/charBudget';
+import {
+  promptBorderAnimation,
+  promptDotWaveAnimation,
+  promptSendOrbAnimation,
+  promptSendSpinnerAnimation,
+} from '../lib/promptInputMotion';
 
 const CYCLING_PLACEHOLDERS = [
   'Ask something and watch four minds respond...',
@@ -112,6 +118,8 @@ export function PromptInput({
 
   const hasContent = Boolean(prompt.trim());
   const canSubmit = hasContent && !isLoading && !submitBlocked;
+  const reducedMotion = prefersReducedMotion();
+  const chromeTransition = motionTransition('all', 220);
 
   return (
     <>
@@ -140,7 +148,7 @@ export function PromptInput({
           display: none;
         }
         .arena-textarea::placeholder {
-          transition: opacity 350ms ease, color 200ms ease;
+          transition: ${reducedMotion ? 'none' : 'opacity 350ms ease, color 200ms ease'};
           color: #9A9088;
         }
         .arena-textarea.ph-fade::placeholder {
@@ -175,11 +183,11 @@ export function PromptInput({
                 ? 'linear-gradient(110deg, #C4956A, #D4B896, #A8C4A4, #C4A8B8, #C4956A)'
                 : 'linear-gradient(110deg, #D8D0C8, #EDE5DC, #D0D8CC, #DDD4CC)',
               backgroundSize: '300% 300%',
-              animation: isFocused ? 'borderFlow 4s ease infinite' : 'none',
+              animation: promptBorderAnimation(isFocused, reducedMotion),
               boxShadow: isFocused
                 ? '0 8px 40px rgba(196,149,106,0.18), 0 2px 8px rgba(0,0,0,0.07)'
                 : '0 4px 20px rgba(26,23,20,0.07), 0 1px 4px rgba(0,0,0,0.04)',
-              transition: 'box-shadow 300ms ease',
+              transition: motionTransition('box-shadow', 300),
             }}
           >
             {/* Inner container */}
@@ -223,7 +231,7 @@ export function PromptInput({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      transition: 'all 180ms ease',
+                      transition: chromeTransition,
                     }}
                     onMouseEnter={(e) => {
                       if (isChallengeEnabled) e.currentTarget.style.background = 'rgba(196,149,106,0.18)';
@@ -245,7 +253,7 @@ export function PromptInput({
                       gap: '3px',
                       height: '16px',
                       opacity: isFocused ? 1 : 0.55,
-                      transition: 'opacity 300ms ease',
+                      transition: motionTransition('opacity', 300),
                     }}
                   >
                     {DOT_COLORS.map((color, i) => (
@@ -256,15 +264,11 @@ export function PromptInput({
                           height: '12px',
                           borderRadius: '2px',
                           background: color,
-                          animation: isLoading
-                            ? `dotWave 1.2s ease-in-out infinite`
-                            : isFocused
-                            ? `dotWave 2.4s ease-in-out infinite`
-                            : 'none',
-                          animationDelay: `${i * 0.18}s`,
+                          animation: promptDotWaveAnimation(isLoading, isFocused, reducedMotion),
+                          animationDelay: reducedMotion ? undefined : `${i * 0.18}s`,
                           transform: isLoading || isFocused ? undefined : 'scaleY(0.7)',
                           opacity: isLoading || isFocused ? undefined : 0.5,
-                          transition: 'transform 300ms ease, opacity 300ms ease',
+                          transition: motionTransition('transform, opacity', 300),
                         }}
                       />
                     ))}
@@ -280,7 +284,7 @@ export function PromptInput({
                   background: isFocused ? 'rgba(196,149,106,0.25)' : 'rgba(0,0,0,0.08)',
                   flexShrink: 0,
                   borderRadius: '1px',
-                  transition: 'background 300ms ease',
+                  transition: motionTransition('background', 300),
                 }}
               />
 
@@ -302,7 +306,11 @@ export function PromptInput({
                 }
                 className={`arena-textarea${placeholderFading ? ' ph-fade' : ''}`}
                 aria-label="Arena prompt"
-                title={submitBlocked ? submitBlockedTitle : undefined}
+                title={
+                  submitBlocked
+                    ? submitBlockedTitle
+                    : 'Press / anywhere to focus · Enter to send'
+                }
                 style={{
                   flex: 1,
                   minWidth: 0,
@@ -381,15 +389,15 @@ export function PromptInput({
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: !hasContent || isLoading ? 'not-allowed' : 'pointer',
-                  transition: 'all 220ms ease',
-                  animation: canSubmit ? 'orbPulse 2.4s ease-in-out infinite' : 'none',
+                  transition: chromeTransition,
+                  animation: promptSendOrbAnimation(canSubmit, reducedMotion),
                   boxShadow: canSubmit
                     ? '0 2px 12px rgba(196,149,106,0.5)'
                     : 'none',
                   opacity: submitBlocked && hasContent ? 0.88 : 1,
                 }}
                 onMouseEnter={(e) => {
-                  if (hasContent && !isLoading) {
+                  if (hasContent && !isLoading && !reducedMotion) {
                     e.currentTarget.style.transform = 'scale(1.06) translateY(-1px)';
                     e.currentTarget.style.background = 'linear-gradient(140deg, #B8895E 0%, #C9965E 100%)';
                   }
@@ -403,7 +411,12 @@ export function PromptInput({
               >
                 {isLoading ? (
                   <Loader2
-                    style={{ width: '15px', height: '15px', color: '#FAF7F4', animation: 'spin 1s linear infinite' }}
+                    style={{
+                      width: '15px',
+                      height: '15px',
+                      color: '#FAF7F4',
+                      animation: promptSendSpinnerAnimation(true, reducedMotion),
+                    }}
                   />
                 ) : (
                   <ArrowUp
