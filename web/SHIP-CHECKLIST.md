@@ -59,6 +59,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent pipeline loader**: CalligraphyLoader static path under reduced motion; stage progressbar + live status.
 - **Share landing actions**: public `/share` can Copy take, Copy link, and system Share… when available.
 - **Busy leave guard**: beforeunload warns during Arena streams and Agent run/refine/challenge.
+- **Busy tab titles**: live document.title while Arena streams / Agent pipeline stages run.
 
 ## Required production environment
 

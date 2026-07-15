@@ -1,6 +1,18 @@
 /** Browser tab titles for primary Arena routes. */
 
+import { getStageKey, type StageKey } from './agentPipelineStages';
+
 const BRAND = 'Arena';
+
+const STAGE_SHORT: Record<StageKey, string> = {
+  planner: 'Planning',
+  researcher: 'Researching',
+  solver: 'Solving',
+  critic: 'Critiquing',
+  verifier: 'Verifying',
+  synthesizer: 'Synthesizing',
+  judge: 'Judging',
+};
 
 /**
  * Map a location pathname to a document title.
@@ -46,7 +58,40 @@ export function titleForPath(pathname: string): string {
   }
 }
 
+/**
+ * Live tab title while Agent research (or refine) is in flight.
+ * Helps multitaskers see progress without returning to the tab.
+ */
+export function titleForAgentBusy(opts: {
+  stage?: string;
+  refining?: boolean;
+  challenging?: boolean;
+} = {}): string {
+  if (opts.challenging) return `Challenging… · Agent Mode · ${BRAND}`;
+  if (opts.refining) return `Refining… · Agent Mode · ${BRAND}`;
+  const key = getStageKey(opts.stage);
+  const short = key ? STAGE_SHORT[key] : 'Working';
+  return `${short}… · Agent Mode · ${BRAND}`;
+}
+
+/**
+ * Live tab title while the Arena panel is producing takes.
+ */
+export function titleForArenaBusy(
+  kind: 'pipeline' | 'streaming' | 'chat' = 'streaming',
+): string {
+  if (kind === 'pipeline') return `Starting… · Arena panel · ${BRAND}`;
+  if (kind === 'chat') return `Mind replying… · Arena panel · ${BRAND}`;
+  return `Four minds responding… · Arena panel · ${BRAND}`;
+}
+
 export function applyDocumentTitle(pathname: string): void {
   if (typeof document === 'undefined') return;
   document.title = titleForPath(pathname);
+}
+
+/** Set an absolute title string (busy overlays). No-op outside the browser. */
+export function applyAbsoluteDocumentTitle(title: string): void {
+  if (typeof document === 'undefined') return;
+  document.title = title;
 }

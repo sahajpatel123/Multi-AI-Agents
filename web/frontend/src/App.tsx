@@ -32,9 +32,11 @@ import {
   type RecentPrompt,
 } from './lib/recentPrompts';
 import { useAuth } from './hooks/useAuth';
+import { useBusyDocumentTitle } from './hooks/useBusyDocumentTitle';
 import { useBusyNavigationGuard } from './hooks/useBusyNavigationGuard';
 import { useIsMobile } from './hooks/useIsMobile';
 import { arenaWorkInFlight } from './lib/busyNavigationGuard';
+import { titleForArenaBusy } from './lib/documentTitle';
 import { usePanel } from './context/PanelContext';
 import { useTier } from './context/TierContext';
 import { useProfileModal } from './context/ProfileModalContext';
@@ -1031,12 +1033,22 @@ function App() {
   const isLoading = phase === 'pipeline';
   const isStreaming = phase === 'streaming' || phase === 'scoring';
   const isDone = phase === 'done';
-  useBusyNavigationGuard(
-    arenaWorkInFlight({
-      isLoading,
-      isStreaming,
-      isFocusedChatStreaming,
-    }),
+  const arenaBusy = arenaWorkInFlight({
+    isLoading,
+    isStreaming,
+    isFocusedChatStreaming,
+  });
+  useBusyNavigationGuard(arenaBusy);
+  useBusyDocumentTitle(
+    arenaBusy,
+    titleForArenaBusy(
+      isFocusedChatStreaming && !isLoading && !isStreaming
+        ? 'chat'
+        : isLoading
+          ? 'pipeline'
+          : 'streaming',
+    ),
+    '/app',
   );
   const sortedResponses = currentResponses
     ? [...currentResponses.all_responses].sort((a, b) => b.score - a.score)

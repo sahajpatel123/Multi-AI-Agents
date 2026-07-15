@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { titleForPath } from './documentTitle';
+import { titleForAgentBusy, titleForArenaBusy, titleForPath } from './documentTitle';
 
 describe('titleForPath', () => {
   it('labels marketing and product surfaces', () => {
@@ -20,5 +20,20 @@ describe('titleForPath', () => {
     expect(titleForPath('/room/abc')).toBe('Room · Arena');
     expect(titleForPath('/share')).toBe('Shared take · Arena');
     expect(titleForPath('/pricing/')).toBe('Pricing · Arena');
+  });
+});
+
+describe('busy document titles', () => {
+  it('reflects Agent pipeline stages', () => {
+    expect(titleForAgentBusy({ stage: 'researcher' })).toBe('Researching… · Agent Mode · Arena');
+    expect(titleForAgentBusy({ stage: 'judge' })).toBe('Judging… · Agent Mode · Arena');
+    expect(titleForAgentBusy({ refining: true })).toBe('Refining… · Agent Mode · Arena');
+    expect(titleForAgentBusy({ challenging: true })).toBe('Challenging… · Agent Mode · Arena');
+  });
+
+  it('labels Arena in-flight modes', () => {
+    expect(titleForArenaBusy('pipeline')).toContain('Starting');
+    expect(titleForArenaBusy('streaming')).toContain('Four minds responding');
+    expect(titleForArenaBusy('chat')).toContain('Mind replying');
   });
 });

@@ -55,8 +55,10 @@ import type { HandoffPayload } from '../types/condura';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { useAuth } from '../hooks/useAuth';
+import { useBusyDocumentTitle } from '../hooks/useBusyDocumentTitle';
 import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { agentWorkInFlight } from '../lib/busyNavigationGuard';
+import { titleForAgentBusy } from '../lib/documentTitle';
 import { User } from '../types';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import {
@@ -660,8 +662,16 @@ export function AgentPage() {
   const [_liveStages, setLiveStages] = useState<Partial<Record<StageId, string>>>({});
   const [challenges, setChallenges] = useState<AgentChallengeItem[]>([]);
   const [isChallengingAnswer, setIsChallengingAnswer] = useState(false);
-  useBusyNavigationGuard(
-    agentWorkInFlight({ isRunning, isRefining, isChallengingAnswer }),
+  const agentBusy = agentWorkInFlight({ isRunning, isRefining, isChallengingAnswer });
+  useBusyNavigationGuard(agentBusy);
+  useBusyDocumentTitle(
+    agentBusy,
+    titleForAgentBusy({
+      stage: currentStage,
+      refining: isRefining && !isRunning,
+      challenging: isChallengingAnswer && !isRunning,
+    }),
+    '/agent',
   );
   const [challengesVisible, setChallengesVisible] = useState(false);
   const [challengeSectionError, setChallengeSectionError] = useState<string | null>(null);
