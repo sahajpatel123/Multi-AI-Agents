@@ -2,6 +2,8 @@
 
 export const AGENT_TASK_MAX_CHARS = 2000;
 export const AGENT_TASK_MIN_CHARS = 10;
+/** Same server sanitize cap as agent tasks (`input_pipeline` / prompt schema). */
+export const ARENA_PROMPT_MAX_CHARS = 2000;
 
 export type CharBudgetTone = 'muted' | 'warn' | 'danger' | 'ready';
 

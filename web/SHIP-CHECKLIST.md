@@ -31,6 +31,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Personas modal**: Escape closes + body scroll lock; Agent answer Copy uses robust clipboard + feedback.
 - **Debate**: optional 4th bonus round after three standard rounds (API + UI aligned).
 - **Sign-in**: password-manager autocomplete + post-auth destination preview.
+- **Arena prompt**: character budget (max 2000) matches server sanitize cap.
 - **Debate end honesty**: after max rounds, only Back to Arena — no fake “Ask a follow-up”.
 - **Upgrade modal a11y**: Escape closes (gated during Razorpay), dialog semantics, body scroll lock.
 - **Clipboard consistency**: Room invite, Agent room link, and Condura handoff use shared copy helper + failure feedback.

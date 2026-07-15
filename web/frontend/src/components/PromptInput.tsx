@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Swords, ArrowUp } from 'lucide-react';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
+import {
+  ARENA_PROMPT_MAX_CHARS,
+  charBudgetLabel,
+  charBudgetTone,
+  clampToMax,
+} from '../lib/charBudget';
 
 const CYCLING_PLACEHOLDERS = [
   'Ask something and watch four minds respond...',
@@ -94,7 +100,7 @@ export function PromptInput({
       onBlockedAttempt?.();
       return;
     }
-    onSubmit(prompt.trim());
+    onSubmit(clampToMax(prompt.trim(), ARENA_PROMPT_MAX_CHARS));
     setPrompt('');
     // Reset height after clear
     requestAnimationFrame(() => {
@@ -284,8 +290,9 @@ export function PromptInput({
                 ref={textareaRef}
                 rows={1}
                 value={prompt}
+                maxLength={ARENA_PROMPT_MAX_CHARS}
                 onChange={(e) => {
-                  setPrompt(e.target.value);
+                  setPrompt(clampToMax(e.target.value, ARENA_PROMPT_MAX_CHARS));
                   autoResize(e.target);
                 }}
                 placeholder={
@@ -324,6 +331,29 @@ export function PromptInput({
                   }
                 }}
               />
+
+              {(prompt.length >= 80 ||
+                prompt.length >= Math.floor(ARENA_PROMPT_MAX_CHARS * 0.85)) && (
+                <span
+                  aria-live="polite"
+                  title="Character budget (server max 2000)"
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 10,
+                    fontFamily: 'Georgia, serif',
+                    color:
+                      charBudgetTone(prompt.length, ARENA_PROMPT_MAX_CHARS) === 'danger'
+                        ? '#993C1D'
+                        : charBudgetTone(prompt.length, ARENA_PROMPT_MAX_CHARS) === 'warn'
+                          ? '#C4956A'
+                          : '#A89070',
+                    minWidth: 44,
+                    textAlign: 'right',
+                  }}
+                >
+                  {charBudgetLabel(prompt.length, ARENA_PROMPT_MAX_CHARS)}
+                </span>
+              )}
 
               {/* Send orb */}
               <button
