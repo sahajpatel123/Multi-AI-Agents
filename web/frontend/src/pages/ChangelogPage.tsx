@@ -36,6 +36,8 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Soft daily-quota gate with upgrade path; clearer 429 stream errors',
       '[IMPROVED] Press / anywhere to focus the Arena prompt',
       '[NEW] Change Watchlist re-check cadence in place (24h / 3d / 7d)',
+      '[NEW] Optional Debate bonus round after three standard rounds',
+      '[IMPROVED] Debate end state no longer fakes “Ask a follow-up” as exit',
     ],
   },
   {

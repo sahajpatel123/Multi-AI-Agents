@@ -13,6 +13,7 @@ import {
   canOfferDebateFollowUp,
   canStartDebateRound,
   debateMaxRounds,
+  DEBATE_BONUS_ROUNDS,
   DEBATE_STANDARD_ROUNDS,
 } from '../lib/debateRounds';
 
@@ -783,7 +784,10 @@ export function DebateMode({
                   <button
                     type="button"
                     className="arena-btn arena-btn--primary arena-btn--sm"
-                    onClick={() => setFollowUpUnlocked(true)}
+                    onClick={() => {
+                      setFollowUpUnlocked(true);
+                      window.setTimeout(() => inputRef.current?.focus(), 50);
+                    }}
                   >
                     Unlock bonus round
                   </button>
@@ -864,9 +868,11 @@ export function DebateMode({
                         : 'Next round — push further'}
                     </button>
                     <button
+                      type="button"
                       className="debate-action-btn"
                       onClick={handleInterjection}
                       disabled={!interjection.trim()}
+                      aria-label="Send interjection to redirect the debate"
                       style={{
                         minWidth: '160px',
                         padding: '14px 24px',
@@ -886,25 +892,29 @@ export function DebateMode({
                 </div>
               </>
             ) : (
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                <button
-                  className="debate-action-btn"
-                  onClick={onExit}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                <p
                   style={{
-                    padding: '14px 24px',
-                    borderRadius: '999px',
-                    background: '#F0EBE3',
-                    color: '#1A1714',
-                    border: '0.5px solid #E0D8D0',
-                    fontSize: '14px',
-                    cursor: 'pointer',
+                    margin: 0,
+                    fontSize: 13,
+                    color: '#6B6460',
+                    textAlign: 'center',
+                    fontFamily: 'Georgia, serif',
+                    lineHeight: 1.5,
                   }}
                 >
-                  Back to Arena
-                </button>
+                  {currentRound >= DEBATE_BONUS_ROUNDS
+                    ? 'Bonus round complete — the arena rests.'
+                    : 'Debate complete.'}
+                </p>
                 <button
+                  type="button"
                   className="debate-action-btn"
-                  onClick={onExit}
+                  aria-label="Return to Arena"
+                  onClick={() => {
+                    abortRef.current?.abort();
+                    onExit();
+                  }}
                   style={{
                     padding: '14px 24px',
                     borderRadius: '999px',
@@ -915,7 +925,7 @@ export function DebateMode({
                     cursor: 'pointer',
                   }}
                 >
-                  Ask a follow-up
+                  Back to Arena
                 </button>
               </div>
             )}
