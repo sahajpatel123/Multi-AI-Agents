@@ -5,6 +5,29 @@
 
 ---
 
+## Entry 4 — Backend honesty gate hardened (2026-07-15)
+
+**Status:** Local-intent detection, shared gate, and background re-gating shipped.
+
+### What works
+
+- `evaluate_capability_gate()` is the single decision for Agent HTTP + watchlist + live re-runs.
+- Classifier covers demo save-local (`~/Documents…`, "save it to…"), open Linear/Notion/Terminal, on-my-machine, and hybrid_delegate loops with machine language.
+- Flag on → HTTP 409 `requires_local_execution` on `/api/agent/run` for local intents; web research still 200.
+- Flag off → fallback allow (staged rollout). Default remains **off**.
+- Watchlist runner and live thread checker skip starting web pipelines when decision is `reject`.
+- Tests: `test_capabilities.py`, `test_agent_capability_gate.py` (+ prior Condura suite).
+
+### Ops still required for production honesty
+
+```bash
+CONDURA_HONEST_REJECTION_ENABLED=true
+```
+
+Kill switch: set false. Migration scan still manual before broad flip.
+
+---
+
 ## Entry 3 — Retention, metrics, a11y, rollout docs (2026-07-14)
 
 **Status:** Reconciliation passes now include retention enforcement (purge

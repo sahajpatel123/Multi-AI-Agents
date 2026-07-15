@@ -149,7 +149,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setTokens(data.access_token, data.refresh_token);
       setUser(data.user);
-      navigate('/agent');
+
+      // Honor deep-link / protected-route intent (same as login).
+      const intent = getRedirectIntent();
+      clearRedirectIntent();
+      navigate(intent || '/agent');
     },
     [navigate],
   );

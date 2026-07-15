@@ -1,7 +1,46 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_ORIGIN } from '../api';
+
+type SystemStatus = 'checking' | 'operational' | 'degraded' | 'unreachable';
 
 export function Footer() {
   const navigate = useNavigate();
+  const [systemStatus, setSystemStatus] = useState<SystemStatus>('checking');
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 4000);
+
+    void fetch(`${API_ORIGIN}/api/health`, { signal: controller.signal })
+      .then(async (r) => {
+        if (!r.ok) throw new Error('health failed');
+        const data = (await r.json()) as { status?: string; database?: string };
+        if (cancelled) return;
+        if (data.status === 'healthy') {
+          setSystemStatus(
+            data.database && data.database !== 'connected' ? 'degraded' : 'operational',
+          );
+        } else if (data.status === 'degraded') {
+          setSystemStatus('degraded');
+        } else {
+          setSystemStatus('degraded');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSystemStatus('unreachable');
+      })
+      .finally(() => {
+        window.clearTimeout(timer);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   const scrollToHowItWorks = () => {
     if (window.location.pathname === '/') {
@@ -13,6 +52,23 @@ export function Footer() {
       }, 100);
     }
   };
+
+  const statusLabel =
+    systemStatus === 'operational'
+      ? 'All systems operational'
+      : systemStatus === 'degraded'
+        ? 'Systems degraded'
+        : systemStatus === 'unreachable'
+          ? 'Status unavailable'
+          : 'Checking status…';
+  const statusColor =
+    systemStatus === 'operational'
+      ? '#8AA899'
+      : systemStatus === 'degraded'
+        ? '#C4956A'
+        : systemStatus === 'unreachable'
+          ? '#A89070'
+          : '#C4A882';
 
   return (
     <footer
@@ -62,11 +118,27 @@ export function Footer() {
 
       </div>
 
-      <div className="footer-bottom" style={{ borderTop: '0.5px solid #E0D8D0', marginTop: '1.5rem', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="footer-bottom" style={{ borderTop: '0.5px solid #E0D8D0', marginTop: '1.5rem', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ fontSize: '12px', color: '#6B6460' }}>© 2026 Arena. All rights reserved.</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#8AA899' }} className="breathe-slow" />
-          <span style={{ fontSize: '12px', color: '#8AA899' }}>All systems operational</span>
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          role="status"
+          aria-live="polite"
+          title={
+            systemStatus === 'operational'
+              ? 'API health check passed'
+              : systemStatus === 'degraded'
+                ? 'API reported degraded status'
+                : systemStatus === 'unreachable'
+                  ? 'Could not reach the API health endpoint'
+                  : 'Checking API health'
+          }
+        >
+          <div
+            style={{ width: '5px', height: '5px', borderRadius: '50%', background: statusColor }}
+            className={systemStatus === 'operational' || systemStatus === 'checking' ? 'breathe-slow' : undefined}
+          />
+          <span style={{ fontSize: '12px', color: statusColor }}>{statusLabel}</span>
         </div>
       </div>
     </footer>

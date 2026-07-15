@@ -9,6 +9,7 @@ import { PanelProvider } from './context/PanelContext'
 import { TierProvider } from './context/TierContext'
 import { ProfileModalProvider } from './context/ProfileModalContext'
 import { ProfileModal } from './components/ProfileModal'
+import { NetworkStatusBanner } from './components/NetworkStatusBanner'
 import './index.css'
 
 // Lazy-load each page so they're split into separate chunks. The Suspense
@@ -55,6 +56,12 @@ const RoomPage = lazy(() =>
 const WatchlistPage = lazy(() =>
   import('./pages/WatchlistPage').then((m) => ({ default: m.WatchlistPage })),
 )
+const SharePage = lazy(() =>
+  import('./pages/SharePage').then((m) => ({ default: m.SharePage })),
+)
+const NotFoundPage = lazy(() =>
+  import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
+)
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -71,11 +78,82 @@ class ErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError) {
+      const msg =
+        this.state.error instanceof Error
+          ? this.state.error.message
+          : 'Something unexpected happened.';
       return (
-        <div style={{ padding: '2rem', fontFamily: 'monospace', color: 'red' }}>
-          <h2>App crashed:</h2>
-          <pre>{this.state.error?.message}</pre>
-          <pre>{this.state.error?.stack}</pre>
+        <div
+          role="alert"
+          style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '2rem',
+            background: '#F5F0E8',
+            fontFamily: 'Georgia, Times New Roman, serif',
+            color: '#2c1810',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 420,
+              width: '100%',
+              background: '#FAF7F4',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 16,
+              padding: '28px 24px',
+              boxShadow: '0 12px 32px rgba(44,24,16,0.08)',
+            }}
+          >
+            <p
+              style={{
+                margin: '0 0 8px',
+                fontSize: 12,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: '#C4956A',
+              }}
+            >
+              Arena
+            </p>
+            <h2 style={{ margin: '0 0 12px', fontSize: 22, fontWeight: 500 }}>
+              This screen hit a snag
+            </h2>
+            <p style={{ margin: '0 0 20px', fontSize: 15, lineHeight: 1.65, color: '#6B6460' }}>
+              Your session is fine. Reload to continue — if it keeps happening, try signing out
+              and back in.
+            </p>
+            <p
+              style={{
+                margin: '0 0 20px',
+                fontSize: 12,
+                color: '#A89070',
+                wordBreak: 'break-word',
+              }}
+            >
+              {msg}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button
+                type="button"
+                className="arena-btn arena-btn--primary arena-btn--md arena-btn--full"
+                onClick={() => window.location.reload()}
+              >
+                Reload Arena
+              </button>
+              <button
+                type="button"
+                className="arena-btn arena-btn--ghost arena-btn--md arena-btn--full"
+                onClick={() => {
+                  window.location.href = '/';
+                }}
+              >
+                Back to home
+              </button>
+            </div>
+          </div>
         </div>
       );
     }
@@ -97,6 +175,10 @@ if (!rootElement) {
               <PanelProvider>
                 <ProfileModalProvider>
                 <ProfileModal />
+                <NetworkStatusBanner />
+                <a href="#main-content" className="skip-to-content">
+                  Skip to content
+                </a>
                 <Suspense fallback={
                   <div style={{
                     display: 'flex',
@@ -108,6 +190,7 @@ if (!rootElement) {
                     <MicroLoader />
                   </div>
                 }>
+                <div id="main-content" className="page-enter" tabIndex={-1} style={{ outline: 'none' }}>
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/arena" element={
@@ -123,6 +206,7 @@ if (!rootElement) {
                   <Route path="/terms" element={<TermsPage />} />
                   <Route path="/privacy" element={<PrivacyPage />} />
                   <Route path="/personas" element={<PersonasPage />} />
+                  <Route path="/share" element={<SharePage />} />
                   <Route path="/app" element={
                     <ProtectedRoute>
                       <App />
@@ -149,7 +233,9 @@ if (!rootElement) {
                     </ProtectedRoute>
                   } />
                   <Route path="/room/:slug" element={<RoomPage />} />
+                  <Route path="*" element={<NotFoundPage />} />
                 </Routes>
+                </div>
                 </Suspense>
                 </ProfileModalProvider>
               </PanelProvider>

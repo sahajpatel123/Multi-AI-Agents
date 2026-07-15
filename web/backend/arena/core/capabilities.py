@@ -232,20 +232,96 @@ def honest_rejection_enabled() -> bool:
 
 
 # Patterns that strongly imply local / machine-only intent in free-text tasks.
+# High precision over recall: prefer missing ambiguous web research over
+# false-positive 409s. Demo "On device" templates must always match.
+# Matches ~/…, absolute-ish paths, and natural phrases like "my Documents folder".
+_LOCAL_PATH_TOKEN = (
+    r"(?:"
+    r"~(?:/[\w.\-]+)+"  # ~/Documents/foo.md
+    r"|~"
+    r"|/home/\S+"
+    r"|C:\\"
+    r"|(?:my\s+|the\s+)?(?:disk|desktop|documents?|downloads?)\b"
+    r")"
+)
+
 _CONDURA_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\bopen\s+(linear|notion\.app|things|finder|terminal|chrome|safari)\b", re.I),
-    re.compile(r"\bsave\s+(this|the|report|file)\s+to\s+(~|/|disk|desktop|documents)\b", re.I),
-    re.compile(r"\b(my\s+)?(local\s+)?(file\s+system|hard\s+drive|~/)\b", re.I),
-    re.compile(r"\brun\s+(a\s+)?(shell|terminal|bash|zsh)\s+command\b", re.I),
+    # Open / launch desktop apps
+    re.compile(
+        r"\b(?:open|launch)\s+(linear|notion(?:\.app)?|things|finder|terminal|"
+        r"chrome|safari|vscode|slack|obsidian)\b",
+        re.I,
+    ),
+    # Save / write / export to a local path (allows intervening words: "save it to ~/…")
+    re.compile(
+        rf"\b(?:save|export)\s+(?:(?:it|this|the|a|my|your)\s+)*(?:report|file|document|brief|"
+        rf"markdown|pdf|docx|notes?)?\s*to\s+{_LOCAL_PATH_TOKEN}",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:save|export)\s+(?:(?:it|this|the|a|my)\s+)*(?:report|file|document|brief)?\s*"
+        r"(?:locally|on\s+(?:my\s+)?(?:machine|computer|disk|desktop|laptop|mac))\b",
+        re.I,
+    ),
+    re.compile(
+        rf"\bwrite\s+(?:(?:it|this|the)\s+)*(?:report|file|document)?\s*"
+        rf"to\s+{_LOCAL_PATH_TOKEN}",
+        re.I,
+    ),
+    # Bare home-path / filesystem language
+    re.compile(r"(?:^|[\s\"'(])~/[A-Za-z0-9_.\-]+", re.I),
+    re.compile(r"\b(?:local\s+)?(?:file\s+system|hard\s+drive)\b", re.I),
+    # Shell / terminal agency
+    re.compile(r"\brun\s+(?:a\s+)?(?:shell|terminal|bash|zsh)\s+command\b", re.I),
+    re.compile(r"\b(?:in|via|using)\s+(?:the\s+)?(?:terminal|shell|bash|zsh)\b", re.I),
+    re.compile(r"\blaunch\s+terminal\b", re.I),
+    # UI computer-use
     re.compile(r"\b(click|type|scroll)\s+(on|in)\s+(my\s+)?(screen|desktop|app)\b", re.I),
+    # Linear / Notion local filing — do NOT match bare "project" (web research:
+    # "file it under project governance" must stay web).
     re.compile(r"\bcreate\s+(a\s+)?ticket\s+in\s+linear\b", re.I),
-    re.compile(r"\bon\s+my\s+(mac|windows|linux|computer|machine|laptop)\b", re.I),
+    re.compile(r"\bfile\s+(?:it\s+)?(?:under|in)\s+linear\b", re.I),
+    re.compile(r"\bcreate\s+(a\s+)?(?:page|note)\s+in\s+notion\b", re.I),
+    # Explicit machine ownership
+    re.compile(r"\bon\s+my\s+(mac|windows|linux|computer|machine|laptop|device)\b", re.I),
+    re.compile(r"\buse\s+my\s+(computer|machine|laptop|mac|device)\b", re.I),
+    re.compile(r"\bon\s+(?:your|the)\s+(?:user'?s\s+)?(?:machine|computer|laptop)\b", re.I),
 ]
 
+# Long-running on-device loops. Always pair duration/loop language with machine
+# or on-device signals so pure web research like "long-running analysis of SaaS"
+# is never false-rejected when honesty is on.
+_ON_DEVICE = (
+    r"(?:on\s+my\s+(?:machine|computer|mac|laptop|device)|on[- ]device|"
+    r"until\s+I\s+cancel)"
+)
 _HYBRID_DELEGATE_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\b(every|each)\s+\d+\s*(hour|hr|day|minute)s?\b", re.I),
-    re.compile(r"\b(keep\s+running|long[- ]running|watch\s+this|monitor\s+for)\b", re.I),
-    re.compile(r"\bschedule\s+(this|a)\s+(on\s+)?(my\s+)?(machine|computer)\b", re.I),
+    re.compile(
+        r"\b(?:every|each)\s+\d+\s*(?:hour|hr|day|minute)s?\b"
+        rf".{{0,100}}\b{_ON_DEVICE}\b",
+        re.I | re.S,
+    ),
+    re.compile(
+        rf"\b{_ON_DEVICE}\b"
+        r".{0,100}\b(?:every|each)\s+\d+\s*(?:hour|hr|day|minute)s?\b",
+        re.I | re.S,
+    ),
+    # "keep running" / "long-running" alone is NOT enough (web research theater).
+    re.compile(
+        r"\b(?:keep\s+running|long[- ]running)\b"
+        rf".{{0,100}}\b{_ON_DEVICE}\b",
+        re.I | re.S,
+    ),
+    re.compile(
+        rf"\b{_ON_DEVICE}\b"
+        r".{0,100}\b(?:keep\s+running|long[- ]running)\b",
+        re.I | re.S,
+    ),
+    re.compile(r"\bschedule\s+(?:this|a)\s+(?:on\s+)?(?:my\s+)?(?:machine|computer)\b", re.I),
+    re.compile(
+        r"\bmonitor\s+(?:for|this)\b.{0,60}\bon\s+my\s+(?:machine|computer|mac|laptop)\b",
+        re.I | re.S,
+    ),
 ]
 
 
@@ -279,6 +355,9 @@ def execution_for_request(
     as a safety net — a user can type a local-intent prompt ("open Linear")
     into a web-capability route (/run). If the heuristic detects local intent,
     the heuristic result takes precedence so the honest rejection gate fires.
+
+    Explicit non-web capabilities (condura / hybrid_*) keep their registry env
+    even when free-text is empty or ambiguous.
     """
     if capability_id:
         try:
@@ -296,7 +375,12 @@ def execution_for_request(
 
 
 def requires_local_rejection(env: ExecutionEnvironment) -> bool:
-    """True if this env must be rejected on web when the feature flag is on."""
+    """True if this env must be rejected on web when the feature flag is on.
+
+    hybrid_prep is intentionally excluded: Arena may still plan on web while
+    Condura executes the machine step via browser handoff. Free-text that only
+    implies "save/open on machine" is classified as CONDURA so /run rejects it.
+    """
     return env in {
         ExecutionEnvironment.CONDURA,
         ExecutionEnvironment.HYBRID_DELEGATE,
@@ -319,6 +403,51 @@ def local_execution_error_body(
         "title": fallback.title,
         "install_url": fallback.install_url,
         "handoff_spec": "arena.handoff.v1",
+    }
+
+
+def evaluate_capability_gate(
+    *,
+    capability_id: str | None = None,
+    task_text: str | None = None,
+) -> dict[str, Any]:
+    """Single honesty decision for HTTP routes and background runners.
+
+    Returns a dict:
+      decision: "allow" | "fallback" | "reject"
+      env: ExecutionEnvironment
+      capability: Capability | None
+      capability_id: str
+      error_body: dict | None  (only when decision == "reject")
+
+    - allow: pure web work (or hybrid_prep explicit capability)
+    - fallback: would need Condura, but CONDURA_HONEST_REJECTION_ENABLED is off
+    - reject: need Condura and flag is on — do not start a web pipeline
+    """
+    env, cap = execution_for_request(capability_id=capability_id, task_text=task_text)
+    cid = capability_id or (cap.id if cap else "inferred")
+    if not requires_local_rejection(env):
+        return {
+            "decision": "allow",
+            "env": env,
+            "capability": cap,
+            "capability_id": cid,
+            "error_body": None,
+        }
+    if not honest_rejection_enabled():
+        return {
+            "decision": "fallback",
+            "env": env,
+            "capability": cap,
+            "capability_id": cid,
+            "error_body": None,
+        }
+    return {
+        "decision": "reject",
+        "env": env,
+        "capability": cap,
+        "capability_id": cid,
+        "error_body": local_execution_error_body(env, cap),
     }
 
 

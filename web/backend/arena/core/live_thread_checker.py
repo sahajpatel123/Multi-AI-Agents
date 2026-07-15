@@ -11,9 +11,11 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from arena.core.blackboard import Blackboard, StageStatus
+from arena.core.capabilities import evaluate_capability_gate
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 from arena.core.stages.researcher import run_researcher
+from arena.core.telemetry import record_guard_decision
 from arena.db_models import AgentTask
 
 logger = logging.getLogger("arena.live_thread_checker")
@@ -21,6 +23,14 @@ logger = logging.getLogger("arena.live_thread_checker")
 
 def _utc_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _gate_live_task_text(task_text: str) -> dict:
+    """Shared honesty decision for live re-runs (testable without LLM)."""
+    return evaluate_capability_gate(
+        capability_id="agent.research",
+        task_text=task_text,
+    )
 
 
 async def check_if_update_meaningful(
@@ -78,12 +88,39 @@ async def check_live_task(task: AgentTask, db: Session) -> bool:
     """
     Re-run researcher on the stored question; if findings are meaningfully new vs final answer,
     append to live_updates. Always advances last_checked and next_check (24h guard).
+
+    When honest rejection is on and the stored question needs the user's machine,
+    skip the web researcher re-run (no theater) and still advance the schedule.
     """
     now = _utc_naive()
     if task.live_next_check and task.live_next_check > now:
         return False
 
     db.refresh(task)
+
+    gate = _gate_live_task_text(task.task_text or "")
+    record_guard_decision(gate["capability_id"], f"live_{gate['decision']}")
+    if gate["decision"] == "reject":
+        logger.warning(
+            "[LIVE] skip local-intent task_id=%s env=%s (needs Condura; honesty on)",
+            task.task_id,
+            gate["env"].value,
+        )
+        task.live_last_checked = now
+        task.live_next_check = now + timedelta(hours=24)
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.warning("[LIVE] commit failed task_id=%s: %s", task.task_id, e)
+            raise
+        return False
+    if gate["decision"] == "fallback":
+        logger.info(
+            "[LIVE] local-intent task_id=%s env=%s (flag off — web fallback)",
+            task.task_id,
+            gate["env"].value,
+        )
 
     new_research = ""
     try:

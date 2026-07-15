@@ -263,10 +263,12 @@ async def probe_telemetry(
 async def get_condura_metrics(
     user: UserResponse = Depends(get_current_user_required),
 ):
-    """Admin-level aggregate Condura handoff counters.
+    """Admin-only aggregate Condura handoff counters.
 
-    Returns process-local telemetry snapshot: one JSON payload with all
-    counter names and values since last restart.  No PII, no per-user
-    breakdown — raw counters suitable for a dashboard.
+    Process-local telemetry snapshot (no PII). Requires ADMIN_EMAIL match —
+    same gate as /api/metrics so any logged-in user cannot scrape ops counters.
     """
+    from arena.core.admin_gate import require_admin_email
+
+    require_admin_email(user.email)
     return JSONResponse(content=admin_metrics_payload())

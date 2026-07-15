@@ -29,24 +29,10 @@ router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
 
 def _admin_only(user: User) -> None:
-    """Lightweight admin gate.
+    """Lightweight admin gate — shared with Condura metrics."""
+    from arena.core.admin_gate import require_admin_email
 
-    For now: the user must match ADMIN_EMAIL from settings. Tighten this once
-    a real RBAC system exists.
-    """
-    from arena.config import get_settings
-
-    settings = get_settings()
-    if not settings.admin_email:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Metrics endpoint is not configured",
-        )
-    if (user.email or "").lower() != settings.admin_email.lower():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required",
-        )
+    require_admin_email(getattr(user, "email", None))
 
 
 def _percentile(values: list[int], pct: float) -> int:

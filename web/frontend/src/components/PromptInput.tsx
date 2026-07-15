@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Swords, ArrowUp } from 'lucide-react';
+import { motionDuration, prefersReducedMotion } from '../lib/motion';
 
 const CYCLING_PLACEHOLDERS = [
   'Ask something and watch four minds respond...',
@@ -23,6 +24,11 @@ interface PromptInputProps {
   onChallengeClick?: () => void;
   isChallengeEnabled?: boolean;
   challengeTitle?: string;
+  /** Soft-disable submit (e.g. daily quota exhausted) while still allowing type/focus. */
+  submitBlocked?: boolean;
+  submitBlockedTitle?: string;
+  /** Fired when the user tries to send while `submitBlocked` (prompt is not cleared). */
+  onBlockedAttempt?: () => void;
 }
 
 export function PromptInput({
@@ -35,6 +41,9 @@ export function PromptInput({
   onChallengeClick,
   isChallengeEnabled = false,
   challengeTitle = 'Challenge',
+  submitBlocked = false,
+  submitBlockedTitle,
+  onBlockedAttempt,
 }: PromptInputProps) {
   const [prompt, setPrompt] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -44,16 +53,20 @@ export function PromptInput({
 
   const activePlaceholder = placeholder ?? CYCLING_PLACEHOLDERS[placeholderIndex];
 
-  // Cycle placeholder text every 4 seconds
+  // Cycle placeholder text — skip timed fades when the user prefers reduced motion.
   useEffect(() => {
     if (placeholder) return;
+    if (prefersReducedMotion()) return;
+    const fadeMs = motionDuration(350);
+    const holdMs = motionDuration(4000);
+    if (holdMs === 0) return;
     const interval = setInterval(() => {
       setPlaceholderFading(true);
-      setTimeout(() => {
-        setPlaceholderIndex(i => (i + 1) % CYCLING_PLACEHOLDERS.length);
+      window.setTimeout(() => {
+        setPlaceholderIndex((i) => (i + 1) % CYCLING_PLACEHOLDERS.length);
         setPlaceholderFading(false);
-      }, 350);
-    }, 4000);
+      }, fadeMs || 0);
+    }, holdMs);
     return () => clearInterval(interval);
   }, [placeholder]);
 
@@ -76,19 +89,23 @@ export function PromptInput({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (prompt.trim() && !isLoading) {
-      onSubmit(prompt.trim());
-      setPrompt('');
-      // Reset height after clear
-      requestAnimationFrame(() => {
-        if (textareaRef.current) {
-          textareaRef.current.style.height = 'auto';
-        }
-      });
+    if (!prompt.trim() || isLoading) return;
+    if (submitBlocked) {
+      onBlockedAttempt?.();
+      return;
     }
+    onSubmit(prompt.trim());
+    setPrompt('');
+    // Reset height after clear
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+    });
   };
 
   const hasContent = Boolean(prompt.trim());
+  const canSubmit = hasContent && !isLoading && !submitBlocked;
 
   return (
     <>
@@ -263,6 +280,7 @@ export function PromptInput({
 
               {/* Textarea — rows=1 + auto-resize → perfect vertical centering */}
               <textarea
+                id="arena-prompt"
                 ref={textareaRef}
                 rows={1}
                 value={prompt}
@@ -270,8 +288,14 @@ export function PromptInput({
                   setPrompt(e.target.value);
                   autoResize(e.target);
                 }}
-                placeholder={activePlaceholder}
+                placeholder={
+                  submitBlocked
+                    ? submitBlockedTitle || 'Daily limit reached — upgrade for more'
+                    : activePlaceholder
+                }
                 className={`arena-textarea${placeholderFading ? ' ph-fade' : ''}`}
+                aria-label="Arena prompt"
+                title={submitBlocked ? submitBlockedTitle : undefined}
                 style={{
                   flex: 1,
                   minWidth: 0,
@@ -305,6 +329,13 @@ export function PromptInput({
               <button
                 type="submit"
                 disabled={!hasContent || isLoading}
+                title={
+                  submitBlocked
+                    ? submitBlockedTitle || 'Daily limit reached'
+                    : canSubmit
+                      ? 'Send to Arena'
+                      : undefined
+                }
                 style={{
                   flexShrink: 0,
                   width: '34px',
@@ -319,12 +350,13 @@ export function PromptInput({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: (!hasContent || isLoading) ? 'not-allowed' : 'pointer',
+                  cursor: !hasContent || isLoading ? 'not-allowed' : 'pointer',
                   transition: 'all 220ms ease',
-                  animation: hasContent && !isLoading ? 'orbPulse 2.4s ease-in-out infinite' : 'none',
-                  boxShadow: hasContent && !isLoading
+                  animation: canSubmit ? 'orbPulse 2.4s ease-in-out infinite' : 'none',
+                  boxShadow: canSubmit
                     ? '0 2px 12px rgba(196,149,106,0.5)'
                     : 'none',
+                  opacity: submitBlocked && hasContent ? 0.88 : 1,
                 }}
                 onMouseEnter={(e) => {
                   if (hasContent && !isLoading) {

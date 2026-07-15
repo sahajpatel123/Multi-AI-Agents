@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ConduraProbeState, HandoffPayload } from '../types/condura';
 import { probeLocalCondura } from '../lib/conduraLocalProbe';
 import { handoffClipboardUrl } from '../lib/conduraHandoff';
+import { motionDuration } from '../lib/motion';
 import markUrl from '../assets/condura/mark.svg';
 
 const TITLE_ID = 'condura-cta-title';
@@ -15,7 +16,7 @@ export function ConduraInstallCTA({
   open,
   onClose,
   title = 'This needs your machine',
-  message = 'Powered by Condura — free, local-first agent for on-device actions.',
+  message = 'Arena cannot control your computer from the browser. Install Condura (free, local-first) for on-device actions.',
   installUrl = 'https://condura.app',
   handoffPayload,
   onSendToCondura,
@@ -103,7 +104,13 @@ export function ConduraInstallCTA({
     const url = handoffClipboardUrl(handoffPayload);
     await navigator.clipboard.writeText(url);
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
+    const resetMs = motionDuration(2000);
+    if (resetMs > 0) {
+      window.setTimeout(() => setCopied(false), resetMs);
+    } else {
+      // Reduced motion: still clear the "Copied" label, just without a long hold.
+      window.setTimeout(() => setCopied(false), 0);
+    }
   };
 
   const primaryLabel = (() => {
@@ -132,6 +139,7 @@ export function ConduraInstallCTA({
       onClick={onClose}
     >
       <div
+        className="condura-cta-panel"
         style={{
           background: '#FAF7F4',
           borderRadius: mobile ? '20px 20px 0 0' : 16,
@@ -148,6 +156,9 @@ export function ConduraInstallCTA({
           <h2 id={TITLE_ID} style={{ margin: 0, fontSize: 20, fontWeight: 500, color: '#2c1810' }}>{title}</h2>
         </div>
         <p style={{ margin: '0 0 16px', fontSize: 15, color: '#6B6460', lineHeight: 1.6 }}>{message}</p>
+        <p style={{ margin: '0 0 16px', fontSize: 12, color: '#a89070', lineHeight: 1.5 }}>
+          No browser shims, cloud desktops, or fake local control — if Condura is not installed, this step stays pending.
+        </p>
         {mobile && (
           <p style={{ margin: '0 0 16px', fontSize: 13, color: '#8c7355' }}>
             Condura runs on macOS / Windows / Linux. Save this handoff and open it on your desktop.

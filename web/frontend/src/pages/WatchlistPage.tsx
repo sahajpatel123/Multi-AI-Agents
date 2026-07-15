@@ -118,18 +118,17 @@ export function WatchlistPage() {
           <p style={{ fontSize: 15, color: '#4A3728' }}>Watchlist is available on Arena Plus and Pro.</p>
           <button
             type="button"
+            className="arena-btn arena-btn--primary arena-btn--md"
+            style={{ marginTop: 16 }}
+            onClick={() => navigate('/pricing')}
+          >
+            View plans →
+          </button>
+          <button
+            type="button"
+            className="arena-btn arena-btn--ghost arena-btn--md"
+            style={{ marginTop: 8 }}
             onClick={() => navigate('/agent')}
-            style={{
-              marginTop: 16,
-              padding: '10px 20px',
-              borderRadius: 20,
-              border: 'none',
-              background: '#2C1810',
-              color: '#C4956A',
-              cursor: 'pointer',
-              fontSize: 13,
-              fontFamily: 'Georgia, serif',
-            }}
           >
             Back to Agent
           </button>
@@ -202,16 +201,7 @@ export function WatchlistPage() {
             <MicroLoader />
           </div>
         ) : items.length === 0 ? (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '4rem 20px',
-              textAlign: 'center',
-            }}
-          >
+          <div className="arena-empty-state">
             <svg width={48} height={48} viewBox="0 0 24 24" fill="none" aria-hidden style={{ color: '#D4C4B0' }}>
               <path
                 d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
@@ -221,12 +211,21 @@ export function WatchlistPage() {
                 strokeLinejoin="round"
               />
             </svg>
-            <p style={{ fontSize: 14, color: '#A89070', fontStyle: 'italic', marginTop: 16 }}>
+            <p style={{ fontSize: 15, color: '#4A3728', fontWeight: 500, marginTop: 16, marginBottom: 0 }}>
               No watched tasks yet
             </p>
-            <p style={{ fontSize: 11, color: '#C4A882', marginTop: 8, maxWidth: 320 }}>
-              Add tasks to watchlist from any result page
+            <p style={{ fontSize: 13, color: '#8C7355', marginTop: 8, maxWidth: 340, lineHeight: 1.6 }}>
+              Run a research task in Agent Mode, then watch it — Arena re-checks on your schedule
+              and only notifies you when findings actually change.
             </p>
+            <button
+              type="button"
+              className="arena-btn arena-btn--primary arena-btn--md"
+              style={{ marginTop: 20 }}
+              onClick={() => navigate('/agent')}
+            >
+              Start a research task →
+            </button>
           </div>
         ) : (
           <div

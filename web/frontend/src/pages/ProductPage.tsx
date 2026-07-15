@@ -256,7 +256,7 @@ export function ProductPage() {
             </p>
 
             <div style={{ marginBottom: 'auto' }}>
-              {['8-stage intelligent pipeline', 'Planner → Researcher → Solver → Critic', 'Verifier checks every claim', 'When work needs your machine — Powered by Condura'].map((feature, idx) => (
+              {['8-stage web research pipeline', 'Planner → Researcher → Solver → Critic', 'Verifier checks every claim', 'On-device work routes to Condura — not the browser'].map((feature, idx) => (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '9px' }}>
                   <div
                     style={{

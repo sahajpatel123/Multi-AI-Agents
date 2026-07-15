@@ -1476,16 +1476,25 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Persona Library */}
+      {/* Persona Library — live product surface (not vaporware) */}
       <section ref={personaLibraryReveal.ref} style={{ ...personaLibraryReveal.style, maxWidth: '1080px', margin: '5rem auto 0', padding: '0 24px' }} className={personaLibraryReveal.className}>
-        <div className="persona-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
+        <div className="persona-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', gap: 16, flexWrap: 'wrap' }}>
           <div>
-            <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#C4956A', marginBottom: '.4rem' }}>Coming soon</p>
+            <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#C4956A', marginBottom: '.4rem' }}>Available now</p>
             <h2 style={{ fontSize: '24px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714' }}>The Persona Library</h2>
           </div>
-          <p className="persona-subtitle" style={{ fontSize: '14px', color: '#6B6460', maxWidth: '240px', textAlign: 'right', lineHeight: 1.6 }}>
-            16 distinct minds. Pick any four to build your panel. Different problems call for different thinkers.
-          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, maxWidth: 280 }}>
+            <p className="persona-subtitle" style={{ fontSize: '14px', color: '#6B6460', textAlign: 'right', lineHeight: 1.6, margin: 0 }}>
+              16 distinct minds. Pick any four to build your panel. Different problems call for different thinkers.
+            </p>
+            <button
+              type="button"
+              className="arena-btn arena-btn--secondary arena-btn--sm"
+              onClick={() => navigate('/personas')}
+            >
+              Build your panel →
+            </button>
+          </div>
         </div>
 
         <div className="persona-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>

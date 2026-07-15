@@ -632,7 +632,7 @@ export function AgentPage() {
   const [error, setError] = useState<string | null>(null);
   const [conduraCtaOpen, setConduraCtaOpen] = useState(false);
   const [conduraCtaMessage, setConduraCtaMessage] = useState(
-    'Powered by Condura — free, local-first agent for on-device actions.',
+    'Arena cannot control your computer from the browser. Install Condura (free, local-first) for on-device actions.',
   );
   const [conduraCtaTitle, setConduraCtaTitle] = useState('This needs your machine');
   const [conduraInstallUrl, setConduraInstallUrl] = useState('https://condura.app');
@@ -1248,8 +1248,8 @@ export function AgentPage() {
         setConduraCtaTitle('This needs your machine');
         setConduraCtaMessage(
           selectedTemplate.execution === 'hybrid_prep'
-            ? 'Arena can plan on the web; saving or opening apps on your machine is Powered by Condura.'
-            : 'Powered by Condura — free, local-first agent for on-device actions.',
+            ? 'Arena stays in the browser for research. Writing files or opening local apps needs Condura on your computer — we will not pretend it succeeded here.'
+            : 'Arena cannot open apps or control your machine from the web. Condura (free, local-first) handles on-device actions.',
         );
         setConduraInstallUrl('https://condura.app');
         setConduraCtaOpen(true);

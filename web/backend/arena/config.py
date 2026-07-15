@@ -143,16 +143,7 @@ class Settings(BaseSettings):
                 "Generate a strong key with: python3 -c 'import secrets; print(secrets.token_hex(32))'"
             )
 
-        # --- DATABASE_URL ---
-        if not self.database_url:
-            errors.append("DATABASE_URL is not set")
-        elif not self.database_url.startswith("postgresql://"):
-            errors.append(
-                "DATABASE_URL must start with 'postgresql://' for production use. "
-                "SQLite is not recommended for production."
-            )
-
-        # --- ANTHROPIC_API_KEY ---
+        # --- ANTHROPIC_API_KEY (required in every environment that starts the API) ---
         if not self.anthropic_api_key:
             errors.append("ANTHROPIC_API_KEY not set")
         elif not self.anthropic_api_key.startswith("sk-ant-"):
@@ -188,33 +179,73 @@ class Settings(BaseSettings):
         if not self.razorpay_webhook_secret:
             print("[WARNING] RAZORPAY_WEBHOOK_SECRET not set. Webhooks will be ignored.")
 
-        # --- ENCRYPTION_KEY ---
-        if not self.encryption_key:
-            errors.append(
-                "ENCRYPTION_KEY not set. Generate with: python -c "
-                "\"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
-            )
-        elif len(self.encryption_key) != 44:
-            errors.append("ENCRYPTION_KEY must be a 44-character Fernet key")
-        else:
-            try:
-                Fernet(self.encryption_key.encode("utf-8"))
-            except Exception:
-                errors.append("ENCRYPTION_KEY is not a valid Fernet key")
-
         # --- ENVIRONMENT validation ---
         render_flag = (os.getenv("RENDER") or "").strip().lower()
         render_service_id = (os.getenv("RENDER_SERVICE_ID") or "").strip()
         if (render_flag in {"true", "1"} or render_service_id) and not self.is_production:
             errors.append("ENVIRONMENT must be 'production' on Render")
 
-        # --- CORS validation ---
+        # --- CORS: no trailing slashes in any environment ---
         origins = self.allowed_origins_list
-        if self.is_production and "*" in origins:
-            errors.append("ALLOWED_ORIGINS must not contain '*' in production")
         for origin in origins:
             if origin.endswith("/"):
                 errors.append(f"ALLOWED_ORIGINS entries must not have trailing slashes: {origin}")
+
+        # ── Production-only hard fail-closed ─────────────────
+        if self.is_production:
+            if not self.database_url:
+                errors.append("DATABASE_URL is not set")
+            elif not self.database_url.startswith("postgresql://"):
+                errors.append(
+                    "DATABASE_URL must start with 'postgresql://' for production use. "
+                    "SQLite is not allowed in production."
+                )
+
+            if not self.encryption_key:
+                errors.append(
+                    "ENCRYPTION_KEY not set. Generate with: python -c "
+                    "\"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+                )
+            elif len(self.encryption_key) != 44:
+                errors.append("ENCRYPTION_KEY must be a 44-character Fernet key")
+            else:
+                try:
+                    Fernet(self.encryption_key.encode("utf-8"))
+                except Exception:
+                    errors.append("ENCRYPTION_KEY is not a valid Fernet key")
+
+            if "*" in origins:
+                errors.append("ALLOWED_ORIGINS must not contain '*' in production")
+            if not origins:
+                errors.append("ALLOWED_ORIGINS must list at least one production origin")
+            # Refuse shipping with only localhost CORS (misconfigured prod).
+            non_local = [
+                o
+                for o in origins
+                if "localhost" not in o.lower() and "127.0.0.1" not in o
+            ]
+            if origins and not non_local:
+                errors.append(
+                    "ALLOWED_ORIGINS must include a non-localhost production origin "
+                    "(localhost-only CORS is not ship-safe)."
+                )
+            if "localhost" in (self.frontend_public_url or "").lower() or "127.0.0.1" in (
+                self.frontend_public_url or ""
+            ):
+                errors.append(
+                    "FRONTEND_PUBLIC_URL must be the public HTTPS frontend URL in production "
+                    "(not localhost)."
+                )
+        else:
+            # Dev: SQLite fallback is fine; warn if encryption missing (MCP).
+            if not self.encryption_key:
+                print(
+                    "[WARNING] ENCRYPTION_KEY not set. MCP token encryption disabled until set."
+                )
+            if not self.database_url:
+                print(
+                    "[WARNING] DATABASE_URL not set — using SQLite fallback for local development."
+                )
 
         # Exit if any critical errors
         if errors:

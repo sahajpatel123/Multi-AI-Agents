@@ -405,6 +405,40 @@ export function parseStreamedAgentPreview(rawText: string): string | null {
   }
 }
 
+/**
+ * Live stream preview for Arena cards: full JSON when possible, otherwise a
+ * partial `one_liner` field as tokens arrive. After agent_done the buffer is
+ * often the plain one_liner string. Returns empty when nothing user-facing yet.
+ */
+export function extractStreamingPreview(rawText: string): string {
+  if (!rawText) return '';
+  const complete = parseStreamedAgentPreview(rawText);
+  if (complete) return complete;
+
+  const trimmed = rawText.trim();
+  if (trimmed.startsWith('[Error')) return trimmed;
+
+  // Partial JSON: `"one_liner": "…` may still be open while tokens stream.
+  const match = rawText.match(/"one_liner"\s*:\s*"((?:[^"\\]|\\.)*)/);
+  if (match) {
+    try {
+      return JSON.parse(`"${match[1]}"`) as string;
+    } catch {
+      return match[1]
+        .replace(/\\n/g, '\n')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+    }
+  }
+
+  // Completed agent buffer is the plain one_liner (not JSON).
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('```')) {
+    return trimmed;
+  }
+
+  return '';
+}
+
 export async function streamPrompt(
   prompt: string,
   callbacks: StreamCallbacks,
@@ -420,7 +454,18 @@ export async function streamPrompt(
   });
 
   if (!response.ok) {
-    const error = await parseJsonSafely<{ detail?: string }>(response);
+    const error = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    if (response.status === 429) {
+      throw new Error(
+        getErrorMessage(
+          error,
+          'Daily message limit reached. Resets at midnight UTC — or upgrade for more headroom.',
+        ),
+      );
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(getErrorMessage(error, 'Sign in to run this prompt in Arena.'));
+    }
     throw new Error(getErrorMessage(error, 'Failed to start stream'));
   }
 

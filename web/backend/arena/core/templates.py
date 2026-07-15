@@ -141,9 +141,11 @@ TEMPLATES: list[dict[str, Any]] = [
         "title": "Save report locally",
         "icon": "chart",
         "description": "Write a report then save it on your machine (Condura)",
+        # Phrasing must match capabilities.classify_task_text local-path patterns
+        # so /api/agent/run honest-rejection cannot miss this demo template.
         "prompt_template": (
-            "Write a concise research report on {topic}, then save it to "
-            "~/Documents/{filename}."
+            "Write a concise research report on {topic}, then save the report to "
+            "~/Documents/{filename} on my machine."
         ),
         "slots": ["topic", "filename"],
         "default_expertise": "practitioner",

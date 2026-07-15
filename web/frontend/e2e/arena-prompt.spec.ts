@@ -26,4 +26,23 @@ test.describe('Arena prompt flow (mocked)', () => {
     // are acceptable first-pass behaviors for a non-authed request.
     await expect(page).toHaveURL(/\/(signin|app)/);
   });
+
+  test('share landing renders a public take without auth', async ({ page }) => {
+    const qs = new URLSearchParams({
+      agent: 'agent_3',
+      prompt: 'What should we build next?',
+      response: 'Ship the flow users already try to complete.',
+    });
+    await page.goto(`/share?${qs.toString()}`);
+    await expect(page.getByText(/shared from arena/i)).toBeVisible();
+    await expect(page.getByText('What should we build next?')).toBeVisible();
+    await expect(page.getByText('Ship the flow users already try to complete.')).toBeVisible();
+    await expect(page.getByRole('button', { name: /try this in arena/i })).toBeVisible();
+  });
+
+  test('unknown routes show a branded 404 with recovery CTAs', async ({ page }) => {
+    await page.goto('/this-route-does-not-exist-xyz');
+    await expect(page.getByText(/isn't in the arena/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /back to home/i })).toBeVisible();
+  });
 });

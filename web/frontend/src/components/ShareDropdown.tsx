@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link2, Copy, Mail, Check } from 'lucide-react';
+import { copyToClipboard } from '../lib/clipboard';
 
 interface ShareDropdownProps {
   agentId: string;
@@ -22,6 +23,7 @@ export function ShareDropdown({
 }: ShareDropdownProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [copiedState, setCopiedState] = useState<'link' | 'text' | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -66,12 +68,12 @@ export function ShareDropdown({
 
   const handleCopyLink = async () => {
     const shareUrl = `${domain}/share?agent=${encodeURIComponent(agentId)}&prompt=${encodeURIComponent(prompt)}&response=${encodeURIComponent(oneLiner)}`;
-    
-    try {
-      await navigator.clipboard.writeText(shareUrl);
+    setCopyError(null);
+    const ok = await copyToClipboard(shareUrl);
+    if (ok) {
       setCopiedState('link');
-    } catch (err) {
-      console.error('Failed to copy link:', err);
+    } else {
+      setCopyError('Could not copy — select and copy the link manually.');
     }
   };
 
@@ -81,12 +83,12 @@ export function ShareDropdown({
 "${oneLiner}"
 
 arena.app`;
-    
-    try {
-      await navigator.clipboard.writeText(textContent);
+    setCopyError(null);
+    const ok = await copyToClipboard(textContent);
+    if (ok) {
       setCopiedState('text');
-    } catch (err) {
-      console.error('Failed to copy text:', err);
+    } else {
+      setCopyError('Could not copy text. Try again or long-press to select.');
     }
   };
 
@@ -191,16 +193,34 @@ Check it out: ${currentUrl}`;
       />
 
       <div style={{ marginTop: '2px' }}>
+        {copyError ? (
+          <p
+            role="alert"
+            style={{
+              fontSize: 11,
+              color: '#993C1D',
+              padding: '6px 10px 8px',
+              margin: 0,
+              lineHeight: 1.45,
+            }}
+          >
+            {copyError}
+          </p>
+        ) : null}
         <ShareOption
           icon={copiedState === 'link' ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
           label={copiedState === 'link' ? 'Copied!' : 'Copy link'}
-          onClick={handleCopyLink}
+          onClick={() => {
+            void handleCopyLink();
+          }}
         />
 
         <ShareOption
           icon={copiedState === 'text' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           label={copiedState === 'text' ? 'Copied!' : 'Copy as text'}
-          onClick={handleCopyText}
+          onClick={() => {
+            void handleCopyText();
+          }}
         />
 
         <ShareOption

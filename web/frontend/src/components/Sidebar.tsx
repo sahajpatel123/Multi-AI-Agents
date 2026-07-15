@@ -177,7 +177,7 @@ export function Sidebar({
               New task
             </Button>
           </div>
-          <div className="mb-5">
+          <div className="mb-5" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <MenuAction
               icon={<Trophy style={{ width: '14px', height: '14px', color: '#C4956A' }} />}
               label="Leaderboard"
@@ -186,10 +186,26 @@ export function Sidebar({
                 onLeaderboardClick();
               }}
             />
-          </div>
-          <div className="mb-5">
             <MenuAction
               icon={<Sparkles style={{ width: '14px', height: '14px', color: '#9B8FAA' }} />}
+              label="Agent Mode"
+              onClick={() => {
+                void track('agent_nav_from_sidebar');
+                onClose();
+                navigate('/agent');
+              }}
+            />
+            <MenuAction
+              icon={<Bookmark style={{ width: '14px', height: '14px', color: '#8C7355' }} />}
+              label="Watchlist"
+              onClick={() => {
+                void track('watchlist_nav_from_sidebar');
+                onClose();
+                navigate('/agent/watchlist');
+              }}
+            />
+            <MenuAction
+              icon={<LayoutGrid style={{ width: '14px', height: '14px', color: '#9B8FAA' }} />}
               label="Personas"
               onClick={() => {
                 onClose();

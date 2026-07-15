@@ -7,8 +7,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from arena.core.blackboard import AgentStatus, create_blackboard
+from arena.core.capabilities import evaluate_capability_gate
+from arena.core.telemetry import record_guard_decision
 from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
-from arena.database import SessionLocal
+from arena import database as arena_database
 from arena.db_models import User, WatchlistItem
 
 logger = logging.getLogger("arena.watchlist")
@@ -18,9 +20,22 @@ def _utc_naive():
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _gate_watchlist_question(question: str) -> dict:
+    """Apply the same honesty gate used by Agent HTTP entry points.
+
+    Extracted so unit tests can drive the runner decision without starting
+    a full pipeline or the async scheduler loop.
+    """
+    return evaluate_capability_gate(
+        capability_id="watchlist.create",
+        task_text=question,
+    )
+
+
 async def run_due_watchlist() -> None:
     """Pick up to 10 due active items and start pipelines (one session per sweep)."""
-    db = SessionLocal()
+    # Late-bind SessionLocal so tests can monkeypatch arena.database.SessionLocal.
+    db = arena_database.SessionLocal()
     try:
         now = _utc_naive()
         due = (
@@ -43,6 +58,31 @@ async def run_due_watchlist() -> None:
                 if not q or len(q) > 2000:
                     logger.warning("[WATCHLIST] skip item id=%s: bad question", item.id)
                     continue
+
+                # Re-apply honesty gate so items saved before the flag flip
+                # (or that slipped create-time heuristics) cannot keep running
+                # as pure web research theater.
+                gate = _gate_watchlist_question(q)
+                record_guard_decision(gate["capability_id"], f"watchlist_{gate['decision']}")
+                if gate["decision"] == "reject":
+                    logger.warning(
+                        "[WATCHLIST] skip local-intent item id=%s env=%s "
+                        "(needs Condura; honesty on)",
+                        item.id,
+                        gate["env"].value,
+                    )
+                    # Advance schedule so we do not spin every sweep; item
+                    # stays active for user review / migration flags.
+                    item.next_run_at = now + timedelta(hours=int(item.interval_hours or 24))
+                    db.commit()
+                    continue
+                if gate["decision"] == "fallback":
+                    logger.info(
+                        "[WATCHLIST] local-intent item id=%s env=%s "
+                        "(flag off — running web fallback)",
+                        item.id,
+                        gate["env"].value,
+                    )
 
                 bb = create_blackboard(user_id=item.user_id, task=q)
                 bb.status = AgentStatus.RUNNING

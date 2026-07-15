@@ -1,5 +1,6 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { ButtonSpinner } from './Icons';
+import { motionTransition } from '../lib/motion';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -24,6 +25,7 @@ export function Button({
   children,
   className = '',
   type = 'button',
+  style,
   ...rest
 }: ButtonProps) {
   const classes = [
@@ -38,9 +40,24 @@ export function Button({
     .join(' ');
 
   const left = loading ? <ButtonSpinner size={14} /> : icon;
+  // Inline transition collapses to `none` when prefers-reduced-motion is on,
+  // so press/hover feedback never fights the user's OS setting.
+  const motionStyle: CSSProperties = {
+    transition: motionTransition(
+      'background, color, border-color, opacity, transform, box-shadow',
+      180,
+    ),
+    ...style,
+  };
 
   return (
-    <button type={type} disabled={disabled || loading} className={classes} {...rest}>
+    <button
+      type={type}
+      disabled={disabled || loading}
+      className={classes}
+      style={motionStyle}
+      {...rest}
+    >
       {left ? <span className="arena-btn__icon">{left}</span> : null}
       <span className="arena-btn__label">{children}</span>
       {!loading && iconRight ? (

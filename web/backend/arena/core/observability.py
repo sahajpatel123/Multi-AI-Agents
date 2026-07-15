@@ -297,11 +297,16 @@ def log_unhandled_exception(request_id: str, user_id: str, exc: Exception) -> No
 # ─────────────────────────────────────────────────
 
 def get_health_data(db_connected: bool) -> dict:
+    """Ship-facing health payload.
+
+    status is healthy only when the database is reachable; otherwise degraded.
+    Callers (load balancers, Render) should treat degraded as not fully ready.
+    """
     from arena.config import get_settings
     settings = get_settings()
     uptime = int(time.time() - _app_start_time)
     return {
-        "status": "healthy",
+        "status": "healthy" if db_connected else "degraded",
         "version": settings.app_version,
         "uptime_seconds": uptime,
         "database": "connected" if db_connected else "disconnected",

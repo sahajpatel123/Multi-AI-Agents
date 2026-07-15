@@ -77,6 +77,7 @@ export function RoomPage() {
   const [inviteToast, setInviteToast] = useState(false);
   const [hoverTask, setHoverTask] = useState<string | null>(null);
   const [synthesisRefreshing, setSynthesisRefreshing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!slug) return;
@@ -160,22 +161,27 @@ export function RoomPage() {
   const patterns: string[] = Array.isArray(synthesis?.patterns) ? synthesis.patterns : [];
   const synthText = typeof synthesis?.synthesis === 'string' ? synthesis.synthesis : '';
 
-  const copyInvite = () => {
+  const copyInvite = async () => {
     const url = room?.share_url || `${window.location.origin}/room/${slug}`;
-    void navigator.clipboard.writeText(url).then(() => {
+    try {
+      await navigator.clipboard.writeText(url);
       setInviteToast(true);
       window.setTimeout(() => setInviteToast(false), 2000);
-    });
+    } catch {
+      setActionError('Could not copy invite link — copy from the address bar instead.');
+      window.setTimeout(() => setActionError(null), 3200);
+    }
   };
 
   const handleAddExisting = async (taskId: string) => {
     if (!slug) return;
+    setActionError(null);
     try {
       const data = await addRoomTask(slug, taskId);
       setRoom(data);
       setShowTaskPicker(false);
     } catch (e: unknown) {
-      console.error(e);
+      setActionError(e instanceof Error ? e.message : 'Could not add task to room');
     }
   };
 
@@ -185,22 +191,24 @@ export function RoomPage() {
     const can =
       tasks.find((t: any) => t.task_id === taskId)?.user_id === user.id || room.creator_id === user.id;
     if (!can) return;
+    setActionError(null);
     try {
       const data = await removeRoomTask(slug, taskId);
       setRoom(data);
     } catch (err) {
-      console.error(err);
+      setActionError(err instanceof Error ? err.message : 'Could not remove task');
     }
   };
 
   const handleRefreshSynthesis = async () => {
     if (!slug || synthesisRefreshing) return;
     setSynthesisRefreshing(true);
+    setActionError(null);
     try {
       const s = await getRoomSynthesis(slug, true);
       setRoom((prev: any) => prev ? { ...prev, synthesis: s.synthesis, synthesis_updated_at: s.synthesis_updated_at } : prev);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not refresh synthesis');
     } finally {
       setSynthesisRefreshing(false);
     }
@@ -621,6 +629,39 @@ export function RoomPage() {
           }}
         >
           Sign in to join this room and add tasks
+        </div>
+      ) : null}
+      {actionError ? (
+        <div
+          role="alert"
+          style={{
+            background: 'rgba(153, 60, 29, 0.08)',
+            borderBottom: '0.5px solid rgba(153, 60, 29, 0.25)',
+            padding: '10px 16px',
+            fontSize: 13,
+            color: '#993C1D',
+            textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+          }}
+        >
+          <span>{actionError}</span>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#993C1D',
+              cursor: 'pointer',
+              fontSize: 12,
+              textDecoration: 'underline',
+            }}
+          >
+            Dismiss
+          </button>
         </div>
       ) : null}
       {inviteToast ? (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Send } from 'lucide-react';
 import { streamDiscuss } from '../api';
 import {
@@ -29,7 +29,18 @@ export function DiscussMode({
   onSuccess,
 }: DiscussModeProps) {
   const { panel } = usePanel();
-  const agentConfig = AGENTS[activeAgent.response.agent_id];
+  const slotIndex = ['agent_1', 'agent_2', 'agent_3', 'agent_4'].indexOf(
+    activeAgent.response.agent_id,
+  );
+  const persona = slotIndex >= 0 ? panel[slotIndex] : null;
+  const agentConfig = useMemo(
+    () => ({
+      ...AGENTS[activeAgent.response.agent_id],
+      name: persona?.name || AGENTS[activeAgent.response.agent_id]?.name || activeAgent.response.agent_id,
+      color: persona?.color || AGENTS[activeAgent.response.agent_id]?.color || '#6B6460',
+    }),
+    [activeAgent.response.agent_id, persona?.name, persona?.color],
+  );
 
   // Per-agent conversation histories (so switching back preserves context)
   const [histories, setHistories] = useState<Record<string, DiscussChatMessage[]>>({});
@@ -42,6 +53,7 @@ export function DiscussMode({
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const currentHistory = histories[activeAgent.response.agent_id] || [];
 
@@ -60,9 +72,20 @@ export function DiscussMode({
     inputRef.current?.focus();
   }, [activeAgent.response.agent_id]);
 
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      if (flushTimer.current) clearInterval(flushTimer.current);
+    };
+  }, []);
+
   const handleSend = async () => {
     const msg = input.trim();
     if (!msg || isStreaming) return;
+
+    abortRef.current?.abort();
+    const abortController = new AbortController();
+    abortRef.current = abortController;
 
     setInput('');
     setError(null);
@@ -81,6 +104,7 @@ export function DiscussMode({
     }));
     scrollToBottom();
 
+    if (flushTimer.current) clearInterval(flushTimer.current);
     flushTimer.current = setInterval(flushTokens, 50);
 
     try {
@@ -96,9 +120,11 @@ export function DiscussMode({
         },
         {
           onToken: (data) => {
+            if (abortController.signal.aborted) return;
             tokenBuffer.current += data.token;
           },
           onResult: (data) => {
+            if (abortController.signal.aborted) return;
             if (flushTimer.current) clearInterval(flushTimer.current);
             setStreamingText('');
             setHistories((prev) => ({
@@ -112,14 +138,19 @@ export function DiscussMode({
             if (onSuccess) onSuccess();
           },
           onError: (data) => {
+            if (abortController.signal.aborted) return;
             if (flushTimer.current) clearInterval(flushTimer.current);
             setError(data.detail);
             setIsStreaming(false);
           },
-        }
+        },
+        abortController.signal,
       );
     } catch (err) {
       if (flushTimer.current) clearInterval(flushTimer.current);
+      if (abortController.signal.aborted) return;
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof Error && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to send message');
       setIsStreaming(false);
     }
@@ -129,20 +160,146 @@ export function DiscussMode({
     (s) => s.response.agent_id !== activeAgent.response.agent_id
   );
 
+  const resolveOtherDisplay = (agentId: string) => {
+    const idx = ['agent_1', 'agent_2', 'agent_3', 'agent_4'].indexOf(agentId);
+    const p = idx >= 0 ? panel[idx] : null;
+    const base = AGENTS[agentId];
+    return {
+      name: p?.name || base?.name || agentId,
+      color: p?.color || base?.color || '#6B6460',
+    };
+  };
+
   return (
-    <div style={{ display: 'flex', gap: '1rem', minHeight: '60vh', background: '#FAF7F4' }}>
+    <div
+      className="discuss-layout"
+      style={{ display: 'flex', gap: '1rem', minHeight: '60vh', background: '#FAF7F4' }}
+    >
       <style>{`
         @keyframes breathe {
           0%, 100% { transform: scale(1); opacity: 1; }
           50% { transform: scale(1.5); opacity: 0.6; }
         }
+        .discuss-layout {
+          flex-direction: column;
+        }
+        .discuss-body {
+          display: flex;
+          flex: 1;
+          min-height: 0;
+          min-width: 0;
+        }
+        .discuss-switcher {
+          display: flex;
+          flex-direction: row;
+          gap: 8px;
+          overflow-x: auto;
+          padding-bottom: 4px;
+          -webkit-overflow-scrolling: touch;
+          order: -1;
+        }
+        .discuss-switcher-label {
+          display: none;
+        }
+        @media (min-width: 900px) {
+          .discuss-layout {
+            flex-direction: row;
+            align-items: stretch;
+          }
+          .discuss-switcher {
+            order: 2;
+            flex-direction: column;
+            width: 13.5rem;
+            flex-shrink: 0;
+            overflow-x: visible;
+            padding-bottom: 0;
+          }
+          .discuss-switcher-label {
+            display: block;
+          }
+          .discuss-body {
+            order: 1;
+            flex: 1;
+          }
+        }
       `}</style>
+
+      {/* Switch minds — always available (was permanently display:none) */}
+      {otherAgents.length > 0 ? (
+        <div className="discuss-switcher" aria-label="Switch to another mind">
+          <p className="discuss-switcher-label" style={{ fontSize: '11px', color: '#6B6460', fontWeight: 500, margin: '0 0 0.25rem' }}>
+            Other minds
+          </p>
+          {otherAgents.map((scored) => {
+            const other = resolveOtherDisplay(scored.response.agent_id);
+            const hasHistory = (histories[scored.response.agent_id] || []).length > 0;
+            return (
+              <button
+                key={scored.response.agent_id}
+                type="button"
+                onClick={() => onSwitchAgent(scored.response.agent_id)}
+                disabled={isStreaming}
+                title={scored.response.one_liner}
+                style={{
+                  textAlign: 'left',
+                  background: '#FFFFFF',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: '12px',
+                  padding: '0.65rem 0.75rem',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer',
+                  opacity: isStreaming ? 0.5 : 1,
+                  transition: 'all 200ms ease',
+                  minWidth: '140px',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => {
+                  if (!isStreaming) e.currentTarget.style.borderColor = 'rgba(107,100,96,0.35)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isStreaming) e.currentTarget.style.borderColor = '#E0D8D0';
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.25rem' }}>
+                  <AgentDot agentId={scored.response.agent_id} size={8} />
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: '#1A1714' }}>{other.name}</span>
+                  {hasHistory ? (
+                    <span
+                      style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(196,149,106,0.7)', marginLeft: 'auto' }}
+                      title="Has conversation history"
+                    />
+                  ) : null}
+                </div>
+                <p
+                  style={{
+                    fontSize: '11px',
+                    color: '#6B6460',
+                    lineHeight: 1.45,
+                    margin: 0,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {scored.response.one_liner}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div className="discuss-body">
       {/* Main chat area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {/* Chat header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
           <button
-            onClick={onExit}
+            type="button"
+            onClick={() => {
+              abortRef.current?.abort();
+              onExit();
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -314,51 +471,6 @@ export function DiscussMode({
           </button>
         </div>
       </div>
-
-      {/* Sidebar — other agents as tiles */}
-      <div style={{ display: 'none' }} className="md:flex flex-col gap-3 w-52 shrink-0">
-        <p style={{ fontSize: '11px', color: '#6B6460', fontWeight: 500, marginBottom: '0.25rem' }}>Other agents</p>
-        {otherAgents.map((scored) => {
-          const other = AGENTS[scored.response.agent_id];
-          const hasHistory = (histories[scored.response.agent_id] || []).length > 0;
-
-          return (
-            <button
-              key={scored.response.agent_id}
-              onClick={() => onSwitchAgent(scored.response.agent_id)}
-              disabled={isStreaming}
-              style={{
-                textAlign: 'left',
-                background: '#FFFFFF',
-                border: '0.5px solid #E0D8D0',
-                borderRadius: '12px',
-                padding: '0.75rem',
-                cursor: isStreaming ? 'not-allowed' : 'pointer',
-                opacity: isStreaming ? 0.5 : 1,
-                transition: 'all 200ms ease',
-              }}
-              onMouseEnter={(e) => {
-                if (!isStreaming) e.currentTarget.style.borderColor = 'rgba(107,100,96,0.3)';
-              }}
-              onMouseLeave={(e) => {
-                if (!isStreaming) e.currentTarget.style.borderColor = '#E0D8D0';
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.375rem' }}>
-                <AgentDot agentId={scored.response.agent_id} size={8} />
-                <span style={{ fontSize: '12px', fontWeight: 500, color: '#1A1714' }}>
-                  {other.name}
-                </span>
-                {hasHistory && (
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(196,149,106,0.6)' }} />
-                )}
-              </div>
-              <p style={{ fontSize: '11px', color: '#6B6460', lineHeight: '1.6', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                {scored.response.one_liner}
-              </p>
-            </button>
-          );
-        })}
       </div>
     </div>
   );

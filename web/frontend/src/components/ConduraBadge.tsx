@@ -8,7 +8,7 @@ const LABELS: Record<string, string> = {
 };
 
 const TOOLTIP =
-  'Cloud accounts (Notion.com, GitHub.com) connect through Arena. Local apps (Linear.app, Things 3) need Condura.';
+  'Arena is web-only. On-device actions need Condura on your computer — not this browser. Cloud accounts (Notion.com, GitHub.com) still connect through Arena.';
 
 export function ConduraBadge({
   execution,

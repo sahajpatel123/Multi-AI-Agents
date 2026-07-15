@@ -20,11 +20,16 @@ import {
   saveResponse,
   deleteSavedResponse,
   verifyArenaAnswerInAgent,
+  extractStreamingPreview,
 } from './api';
+import { copyToClipboard } from './lib/clipboard';
+import { formatArenaExport } from './lib/arenaExport';
+import { loadRecentPrompts, pushRecentPrompt, type RecentPrompt } from './lib/recentPrompts';
 import { useAuth } from './hooks/useAuth';
 import { useIsMobile } from './hooks/useIsMobile';
 import { usePanel } from './context/PanelContext';
 import { useTier } from './context/TierContext';
+import { useProfileModal } from './context/ProfileModalContext';
 import track from './utils/track';
 import { setRedirectIntent } from './utils/redirectIntent';
 import {
@@ -62,7 +67,11 @@ function App() {
   const location = useLocation();
   const { user, isLoading: authLoading, login, register, logout, refreshUser } = useAuth();
   const { panel } = usePanel();
-  const { canUseFeature, refreshTier } = useTier();
+  const { canUseFeature, refreshTier, messagesRemaining, isFree } = useTier();
+  const { openModal: openProfileModal } = useProfileModal();
+  const [exportCopied, setExportCopied] = useState(false);
+  const [recentPrompts, setRecentPrompts] = useState<RecentPrompt[]>(() => loadRecentPrompts());
+  const quotaExhausted = messagesRemaining <= 0;
   const personaIds = panel.map((persona) => persona.id);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'signup'>('login');
@@ -131,6 +140,8 @@ function App() {
 
   // Per-agent streaming state
   const [doneAgents, setDoneAgents] = useState<Set<string>>(new Set());
+  /** Live one-liner previews while SSE tokens arrive (core Arena feedback). */
+  const [streamPreviews, setStreamPreviews] = useState<Record<string, string>>({});
 
   const panelByAgentId = useMemo(
     () =>
@@ -156,21 +167,83 @@ function App() {
   const feedbackTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const agentCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const promptAbortRef = useRef<AbortController | null>(null);
+  const discussAbortRef = useRef<AbortController | null>(null);
+
+  const flushStreamPreviews = useCallback(() => {
+    const next: Record<string, string> = {};
+    for (const id of AGENT_IDS) {
+      const preview = extractStreamingPreview(tokenBuffers.current[id] || '');
+      if (preview) next[id] = preview;
+    }
+    setStreamPreviews((prev) => {
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (
+        prevKeys.length === nextKeys.length &&
+        nextKeys.every((k) => prev[k] === next[k])
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
 
   // Session restore on mount
   useEffect(() => {
     const storedSessionId = localStorage.getItem('arena_session_id');
-    if (storedSessionId) {
-      getSession(storedSessionId).then((data) => {
+    if (!storedSessionId) return;
+    void getSession(storedSessionId)
+      .then((data) => {
         if (data && data.turns.length > 0) {
           setSessionData(data);
-          // Load most recent turn
           const lastTurn = data.turns[data.turns.length - 1];
           loadTurn(lastTurn);
+        } else {
+          localStorage.removeItem('arena_session_id');
         }
+      })
+      .catch(() => {
+        localStorage.removeItem('arena_session_id');
       });
-    }
   }, []);
+
+  // Abort in-flight SSE when leaving Arena (or remounting).
+  useEffect(() => {
+    return () => {
+      promptAbortRef.current?.abort();
+      discussAbortRef.current?.abort();
+      if (flushTimer.current) clearInterval(flushTimer.current);
+      if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
+    };
+  }, []);
+
+  // Escape closes focused agent; `/` focuses the Arena prompt when not typing elsewhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && focusedAgentId) {
+        e.preventDefault();
+        closeFocusedAgent();
+        return;
+      }
+      if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const t = e.target as HTMLElement | null;
+        if (
+          t &&
+          (t.tagName === 'INPUT' ||
+            t.tagName === 'TEXTAREA' ||
+            t.tagName === 'SELECT' ||
+            t.isContentEditable)
+        ) {
+          return;
+        }
+        e.preventDefault();
+        document.getElementById('arena-prompt')?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [focusedAgentId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -261,7 +334,7 @@ function App() {
   }, []);
 
   const copyText = useCallback(async (text: string) => {
-    await navigator.clipboard.writeText(text);
+    await copyToClipboard(text);
   }, []);
 
   const handleTurnClick = (turnId: string) => {
@@ -287,6 +360,23 @@ function App() {
     await copyText(`${agent.name} on Arena:\n${scoredAgent.response.one_liner}\n\narena.ai`);
     queueFeedbackReset('share', key);
   }, [activeTurnId, copyText, getPersonaForAgentId, getResponseKey, queueFeedbackReset]);
+
+  const handleExportAllTakes = useCallback(async () => {
+    if (!response) return;
+    const md = formatArenaExport(response, (agentId) => {
+      const persona = getPersonaForAgentId(agentId);
+      const fallback = AGENTS[agentId];
+      return { name: persona?.name || fallback?.name || agentId, color: persona?.color || fallback?.color };
+    });
+    const ok = await copyToClipboard(md);
+    if (ok) {
+      setExportCopied(true);
+      window.setTimeout(() => setExportCopied(false), 1800);
+      void track('arena_export_all');
+    } else {
+      setError('Could not copy the comparison. Try again or select text manually.');
+    }
+  }, [getPersonaForAgentId, response]);
 
   const handleLikeResponse = useCallback((scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
@@ -402,6 +492,7 @@ function App() {
       const answer = scoredAgent.response.one_liner?.trim() || '';
       const question = (response?.prompt || currentPrompt).trim() || 'Arena discussion';
       setVerifyingWinnerAgentId(aid);
+      setError(null);
       try {
         const data = await verifyArenaAnswerInAgent(answer, question, personaName, scoredAgent.score);
         navigate('/agent', {
@@ -412,7 +503,11 @@ function App() {
           },
         });
       } catch (e) {
-        console.error('Bridge failed:', e);
+        setError(
+          e instanceof Error
+            ? e.message
+            : 'Could not start Agent verification. Try again in a moment.',
+        );
       } finally {
         setVerifyingWinnerAgentId(null);
       }
@@ -451,6 +546,8 @@ function App() {
       }
     }
 
+    promptAbortRef.current?.abort();
+    discussAbortRef.current?.abort();
     if (flushTimer.current) clearInterval(flushTimer.current);
     if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
     if (currentResponseBarTimer.current) clearTimeout(currentResponseBarTimer.current);
@@ -466,6 +563,7 @@ function App() {
     setPresetPrompt('');
     setPresetPromptNonce((prev) => prev + 1);
     setDoneAgents(new Set());
+    setStreamPreviews({});
     setViewMode('arena');
     setChallengedAgent(null);
     setDiscussAgent(null);
@@ -485,8 +583,25 @@ function App() {
   }, [sessionData, user]);
 
   const handleSubmit = async (prompt: string) => {
+    if (quotaExhausted) {
+      showPlusUpgrade(
+        isFree
+          ? 'You have used today’s Arena messages. Upgrade for a higher daily limit — or come back after midnight UTC.'
+          : 'You have used today’s Arena messages. Your limit resets at midnight UTC.',
+      );
+      return;
+    }
+
     setStressFromAgentBanner(false);
     setHasSubmittedPrompt(true);
+    setRecentPrompts(pushRecentPrompt(prompt));
+
+    // Cancel any in-flight stream before starting a new one
+    promptAbortRef.current?.abort();
+    discussAbortRef.current?.abort();
+    if (flushTimer.current) clearInterval(flushTimer.current);
+    const abortController = new AbortController();
+    promptAbortRef.current = abortController;
 
     // Reset all state
     setPhase('pipeline');
@@ -497,6 +612,7 @@ function App() {
     setExpandedAgent(null);
     setCurrentPrompt(prompt);
     setDoneAgents(new Set());
+    setStreamPreviews({});
     setViewMode('arena');
     setChallengedAgent(null);
     setDiscussAgent(null);
@@ -513,21 +629,30 @@ function App() {
     // Pass existing session_id if available
     const existingSessionId = sessionData?.session_id || localStorage.getItem('arena_session_id') || undefined;
 
+    // Flush buffered tokens to React state ~20fps so cards feel alive without
+    // re-rendering on every SSE token.
+    flushTimer.current = setInterval(flushStreamPreviews, 50);
+
     try {
       await streamPrompt(prompt, {
         onPipeline: (data) => {
+          if (abortController.signal.aborted) return;
           if (!data.passed) {
+            if (flushTimer.current) clearInterval(flushTimer.current);
             setError(data.rejection_reason || 'Prompt rejected');
             setPhase('idle');
+            setStreamPreviews({});
           } else {
             setPhase('streaming');
           }
         },
         onToken: (data) => {
+          if (abortController.signal.aborted) return;
           tokenBuffers.current[data.agent_id] =
             (tokenBuffers.current[data.agent_id] || '') + data.token;
         },
         onAgentDone: (data) => {
+          if (abortController.signal.aborted) return;
           // Parse the accumulated JSON and extract one_liner for display
           const rawJson = tokenBuffers.current[data.agent_id] || '';
           try {
@@ -537,14 +662,19 @@ function App() {
             // If parsing fails, keep the raw text
           }
           setDoneAgents((prev) => new Set(prev).add(data.agent_id));
+          flushStreamPreviews();
         },
         onAgentError: (data) => {
+          if (abortController.signal.aborted) return;
           tokenBuffers.current[data.agent_id] =
             `[Error: ${data.error}]`;
           setDoneAgents((prev) => new Set(prev).add(data.agent_id));
+          flushStreamPreviews();
         },
         onResult: (data) => {
+          if (abortController.signal.aborted) return;
           if (flushTimer.current) clearInterval(flushTimer.current);
+          setStreamPreviews({});
 
           setResponse(data);
           setCurrentResponses(data);
@@ -585,7 +715,7 @@ function App() {
               // New session or first turn
               return {
                 session_id: data.session_id,
-                user_id: String(user!.id),
+                user_id: String(user?.id ?? ''),
                 turns: prev ? [...prev.turns, newTurn] : [newTurn],
                 topics: [],
                 created_at: prev?.created_at || currentTimestamp,
@@ -598,14 +728,21 @@ function App() {
           void refreshTier();
         },
         onError: (data) => {
+          if (abortController.signal.aborted) return;
           if (flushTimer.current) clearInterval(flushTimer.current);
+          setStreamPreviews({});
           setError(data.detail);
           setPhase('idle');
         },
-      }, existingSessionId, personaIds);
+      }, existingSessionId, personaIds, abortController.signal);
     } catch (err) {
       if (flushTimer.current) clearInterval(flushTimer.current);
+      setStreamPreviews({});
+      // AbortError is expected when the user navigates away or starts a new prompt.
+      if (abortController.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Something went wrong';
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof Error && err.name === 'AbortError') return;
       setError(msg);
       setPhase('idle');
     }
@@ -776,6 +913,10 @@ function App() {
     const trimmed = message.trim();
     if (!trimmed) return;
 
+    discussAbortRef.current?.abort();
+    const abortController = new AbortController();
+    discussAbortRef.current = abortController;
+
     setFocusedChatError(null);
     setIsFocusedChatStreaming(true);
     setFocusedStreamingText('');
@@ -790,6 +931,7 @@ function App() {
       ],
     }));
 
+    if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
     focusedFlushTimer.current = setInterval(flushFocusedTokens, 50);
 
     try {
@@ -805,9 +947,11 @@ function App() {
         },
         {
           onToken: (data) => {
+            if (abortController.signal.aborted) return;
             focusedTokenBuffer.current += data.token;
           },
           onResult: (data) => {
+            if (abortController.signal.aborted) return;
             if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
             setFocusedStreamingText('');
             setFocusedHistories((prev) => ({
@@ -819,14 +963,19 @@ function App() {
             void refreshTier();
           },
           onError: (data) => {
+            if (abortController.signal.aborted) return;
             if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
             setFocusedChatError(data.detail);
             setIsFocusedChatStreaming(false);
           },
-        }
+        },
+        abortController.signal,
       );
     } catch (err) {
       if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
+      if (abortController.signal.aborted) return;
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof Error && err.name === 'AbortError') return;
       setFocusedChatError(err instanceof Error ? err.message : 'Failed to message agent');
       setIsFocusedChatStreaming(false);
     }
@@ -1040,6 +1189,32 @@ function App() {
                 <span className="wordmark-text" style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
               </div>
             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {isDone && response ? (
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--ghost arena-btn--sm"
+                  onClick={() => {
+                    void handleExportAllTakes();
+                  }}
+                  title="Copy all four takes as markdown"
+                  style={{ fontSize: 12 }}
+                >
+                  {exportCopied ? 'Copied comparison' : 'Copy all takes'}
+                </button>
+              ) : null}
+              <UserMenu
+                user={user}
+                isLoading={authLoading}
+                onSignInClick={() => {
+                  setRedirectIntent('/app');
+                  setAuthModalTab('login');
+                  setAuthModalOpen(true);
+                }}
+                onLogout={logout}
+                onProfileClick={() => openProfileModal('top-right', 'account')}
+              />
+            </div>
           </header>
 
           {/* Main Content Area */}
@@ -1123,18 +1298,25 @@ function App() {
                 />
               ))}
 
-              {/* Streaming phase — show live tokens */}
-              {isStreaming && AGENT_IDS.map((id) => (
-                <AgentCard
-                  key={id}
-                  agentId={id}
-                  displayConfig={getPersonaForAgentId(id) || undefined}
-                  displayPersonaId={getPersonaForAgentId(id)?.id}
-                  isExpanded={false}
-                  onToggle={(cardRect) => openFocusedAgent(id, cardRect)}
-                  isLoadingState={true}
-                />
-              ))}
+              {/* Streaming phase — live one-liner previews as tokens arrive */}
+              {isStreaming && AGENT_IDS.map((id) => {
+                const preview = streamPreviews[id] || '';
+                const agentDone = doneAgents.has(id);
+                return (
+                  <AgentCard
+                    key={id}
+                    agentId={id}
+                    displayConfig={getPersonaForAgentId(id) || undefined}
+                    displayPersonaId={getPersonaForAgentId(id)?.id}
+                    isExpanded={false}
+                    onToggle={(cardRect) => openFocusedAgent(id, cardRect)}
+                    isStreaming={true}
+                    streamingText={preview}
+                    // Keep shimmer only until we have something to show
+                    isLoadingState={!preview && !agentDone}
+                  />
+                );
+              })}
 
               {/* Final results */}
               {isDone && currentResponses && sortedResponses.map((scoredAgent, index) => {
@@ -1359,6 +1541,56 @@ function App() {
               pointerEvents: 'none',
             }}
           >
+            {viewMode === 'arena' && phase === 'idle' && !focusedAgentId && recentPrompts.length > 0 && (
+              <div
+                style={{
+                  pointerEvents: 'all',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  justifyContent: 'center',
+                  maxWidth: '100%',
+                  padding: isMobile ? '0 12px' : 0,
+                }}
+                aria-label="Recent prompts"
+              >
+                {recentPrompts.slice(0, 4).map((item) => (
+                  <button
+                    key={`${item.at}-${item.text.slice(0, 24)}`}
+                    type="button"
+                    onClick={() => handleExamplePromptClick(item.text)}
+                    title={item.text}
+                    style={{
+                      maxWidth: isMobile ? '46vw' : 200,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      fontSize: 12,
+                      color: '#6B6460',
+                      background: 'rgba(255,255,255,0.72)',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 999,
+                      padding: '6px 12px',
+                      cursor: 'pointer',
+                      transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#F0EBE3';
+                      e.currentTarget.style.borderColor = '#C4956A';
+                      e.currentTarget.style.color = '#1A1714';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.72)';
+                      e.currentTarget.style.borderColor = '#E0D8D0';
+                      e.currentTarget.style.color = '#6B6460';
+                    }}
+                  >
+                    {item.text}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {viewMode === 'arena' && phase === 'idle' && !error && !hasSubmittedPrompt && (
               <button
                 className="rotating-chip"
@@ -1417,7 +1649,9 @@ function App() {
               placeholder={
                 focusedAgentId && focusedAgentConfig
                   ? `Message ${focusedAgentConfig.name} directly...`
-                  : 'Ask something and watch four minds respond...'
+                  : quotaExhausted
+                    ? 'Daily limit reached — upgrade or try again after midnight UTC'
+                    : 'Ask something and watch four minds respond…  (press / to focus)'
               }
               presetPrompt={presetPrompt}
               presetPromptNonce={presetPromptNonce}
@@ -1429,6 +1663,15 @@ function App() {
                   ? `Challenge ${getPersonaForAgentId(challengeTarget.response.agent_id)?.name || AGENTS[challengeTarget.response.agent_id].name}`
                   : 'Challenge is available after responses are ready'
               }
+              submitBlocked={!focusedAgentId && quotaExhausted}
+              submitBlockedTitle="Daily Arena message limit reached"
+              onBlockedAttempt={() => {
+                showPlusUpgrade(
+                  isFree
+                    ? 'You have used today’s Arena messages. Upgrade for a higher daily limit — or come back after midnight UTC.'
+                    : 'You have used today’s Arena messages. Your limit resets at midnight UTC.',
+                );
+              }}
             />
           </div>
         </>
@@ -1459,6 +1702,7 @@ function App() {
                 setAuthModalOpen(true);
               }}
               onLogout={logout}
+              onProfileClick={() => openProfileModal('top-right', 'account')}
             />
           </header>
           <LeaderboardView
@@ -1468,67 +1712,39 @@ function App() {
         </div>
       )}
 
-      {/* Debate & Discuss Views - Keep Original Layout */}
-      {(viewMode === 'debate' || viewMode === 'discuss') && (
-        <div style={{ maxWidth: '1024px', margin: '0 auto', padding: '3rem 1rem', background: '#FAF7F4' }}>
-          <header style={{ marginBottom: '3rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
-              <UserMenu
-                user={user}
-                isLoading={authLoading}
-                onSignInClick={() => {
-                  setRedirectIntent('/app');
-                  setAuthModalTab('login');
-                  setAuthModalOpen(true);
-                }}
-                onLogout={logout}
-              />
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <h1
-                style={{ fontSize: '36px', fontWeight: 500, color: '#1A1714', marginBottom: '0.5rem', cursor: 'pointer', letterSpacing: '-0.02em' }}
-                onClick={exitToArena}
-              >
-                Arena
-              </h1>
-              <p style={{ fontSize: '14px', color: '#6B6460' }}>
-                Four minds. One question. The best answer wins.
-              </p>
-            </div>
-          </header>
+      {/* Debate & Discuss — full-bleed modes (they own their chrome; no double header) */}
+      {viewMode === 'debate' && response && challengedAgent && (
+        <DebateMode
+          originalPrompt={response.prompt}
+          challengedAgent={challengedAgent}
+          sessionId={response.session_id}
+          onExit={exitToArena}
+          onSuccess={() => {
+            void refreshUser();
+            void refreshTier();
+          }}
+        />
+      )}
 
-          {viewMode === 'debate' && response && challengedAgent && (
-            <DebateMode
-              originalPrompt={response.prompt}
-              challengedAgent={challengedAgent}
-              sessionId={response.session_id}
-              onExit={exitToArena}
-              onSuccess={() => {
-                void refreshUser();
-                void refreshTier();
-              }}
-            />
-          )}
-
-          {viewMode === 'discuss' && response && discussAgent && (
-            <DiscussMode
-              originalPrompt={response.prompt}
-              activeAgent={discussAgent}
-              allResponses={response.all_responses}
-              sessionId={response.session_id}
-              onExit={exitToArena}
-              onSuccess={() => {
-                void refreshUser();
-                void refreshTier();
-              }}
-              onSwitchAgent={(agentId) => {
-                const found = response.all_responses.find(
-                  (s) => s.response.agent_id === agentId
-                );
-                if (found) setDiscussAgent(found);
-              }}
-            />
-          )}
+      {viewMode === 'discuss' && response && discussAgent && (
+        <div style={{ maxWidth: '1024px', margin: '0 auto', padding: '2rem 1rem 3rem', background: '#FAF7F4', minHeight: '100dvh' }}>
+          <DiscussMode
+            originalPrompt={response.prompt}
+            activeAgent={discussAgent}
+            allResponses={response.all_responses}
+            sessionId={response.session_id}
+            onExit={exitToArena}
+            onSuccess={() => {
+              void refreshUser();
+              void refreshTier();
+            }}
+            onSwitchAgent={(agentId) => {
+              const found = response.all_responses.find(
+                (s) => s.response.agent_id === agentId
+              );
+              if (found) setDiscussAgent(found);
+            }}
+          />
         </div>
       )}
 

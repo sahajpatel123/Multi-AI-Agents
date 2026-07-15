@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 from pydantic import ValidationError
 
@@ -32,18 +30,64 @@ def test_non_web_capability_rejects_missing_args_schema():
         )
 
 
-def test_classify_task_text_local_intent():
+@pytest.mark.parametrize(
+    "task,expected",
+    [
+        ("Research the SaaS market", "web"),
+        ("Analyse Linear vs Jira", "web"),
+        ("Check market news every 24 hours", "web"),
+        # Bare "long-running" is web research language, not on-device agency.
+        ("Do a long-running analysis of the SaaS market", "web"),
+        ("Keep running the competitor landscape review for Q3", "web"),
+        # "project" is web research wording — must not trip Linear filing heuristic.
+        ("How should we file it under project governance for the board?", "web"),
+        ("Research how teams file work under project management frameworks", "web"),
+        (
+            "Create a ticket in Linear from this research",
+            "condura",
+        ),
+        (
+            "Open Linear and create a ticket from this research",
+            "condura",
+        ),
+        (
+            "Write a concise research report on AI, then save it to ~/Documents/report.md.",
+            "condura",
+        ),
+        (
+            "Write a concise research report on AI, then save the report to "
+            "~/Documents/brief.md on my machine.",
+            "condura",
+        ),
+        ("save this report to ~/Documents/x.md", "condura"),
+        ("save the file to disk", "condura"),
+        ("Please save the report to my Documents folder", "condura"),
+        ("export this file to disk", "condura"),
+        ("open Notion and create a page", "condura"),
+        ("Create a page in Notion for the research", "condura"),
+        ("launch Terminal and run ls", "condura"),
+        ("use my computer to file a ticket", "condura"),
+        ("Click on my screen to open settings", "condura"),
+        (
+            "Watch AI regulation every 4 hours on my machine",
+            "hybrid_delegate",
+        ),
+    ],
+)
+def test_classify_task_text_matrix(task, expected):
     from arena.core.capabilities import ExecutionEnvironment, classify_task_text
 
-    assert classify_task_text("Research the SaaS market") == ExecutionEnvironment.WEB
-    assert (
-        classify_task_text("Create a ticket in Linear from this research")
-        == ExecutionEnvironment.CONDURA
-    )
-    assert (
-        classify_task_text("Watch AI regulation every 4 hours on my machine")
-        == ExecutionEnvironment.HYBRID_DELEGATE
-    )
+    assert classify_task_text(task) == ExecutionEnvironment(expected)
+
+
+def test_demo_save_report_template_classifies_local():
+    """Demo On-device template must never miss the honesty gate."""
+    from arena.core.capabilities import ExecutionEnvironment, classify_task_text
+    from arena.core.templates import TEMPLATES
+
+    t = next(x for x in TEMPLATES if x["id"] == "save_report_local")
+    filled = t["prompt_template"].format(topic="AI market", filename="brief.md")
+    assert classify_task_text(filled) == ExecutionEnvironment.CONDURA
 
 
 def test_local_execution_error_body_shape():
@@ -89,19 +133,15 @@ def test_execution_for_request_web_capability_with_local_text_returns_condura():
     """CRITICAL regression: /run passes capability_id='agent.research' (WEB)
     but the user might type 'open Linear'. The heuristic safety net MUST
     override WEB and return CONDURA so the 409 gate fires.
-
-    Without this test, the gate on /run is a silent no-op.
     """
     from arena.core.capabilities import ExecutionEnvironment, execution_for_request
 
-    # Explicit WEB capability + generic text → stays WEB
     env, _ = execution_for_request(
         capability_id="agent.research",
         task_text="Analyse the B2B SaaS market",
     )
     assert env == ExecutionEnvironment.WEB
 
-    # Explicit WEB capability + local-intent text → overrides to CONDURA
     env, _ = execution_for_request(
         capability_id="agent.research",
         task_text="Open Linear and create a ticket from this research",
@@ -111,9 +151,58 @@ def test_execution_for_request_web_capability_with_local_text_returns_condura():
         f"the /run honest-rejection gate is a no-op without this safety net"
     )
 
-    # Explicit WEB capability + delegate-intent text → overrides to HYBRID_DELEGATE
     env, _ = execution_for_request(
         capability_id="agent.research",
         task_text="Watch AI regulation every 4 hours on my machine",
     )
     assert env == ExecutionEnvironment.HYBRID_DELEGATE
+
+    env, _ = execution_for_request(
+        capability_id="agent.research",
+        task_text="save the report to ~/Documents/out.md",
+    )
+    assert env == ExecutionEnvironment.CONDURA
+
+
+def test_evaluate_capability_gate_flag_on_off(monkeypatch):
+    from arena.core.capabilities import evaluate_capability_gate
+
+    monkeypatch.delenv("CONDURA_HONEST_REJECTION_ENABLED", raising=False)
+    r = evaluate_capability_gate(
+        capability_id="agent.research",
+        task_text="Open Linear and create a ticket",
+    )
+    assert r["decision"] == "fallback"
+    assert r["error_body"] is None
+
+    monkeypatch.setenv("CONDURA_HONEST_REJECTION_ENABLED", "true")
+    r = evaluate_capability_gate(
+        capability_id="agent.research",
+        task_text="Open Linear and create a ticket",
+    )
+    assert r["decision"] == "reject"
+    assert r["error_body"]["error"] == "requires_local_execution"
+    assert r["error_body"]["execution_environment"] == "condura"
+    assert r["error_body"]["handoff_spec"] == "arena.handoff.v1"
+
+    r = evaluate_capability_gate(
+        capability_id="agent.research",
+        task_text="Research B2B SaaS market size",
+    )
+    assert r["decision"] == "allow"
+
+    # Regression: bare "long-running" web research must stay allow when honesty is on.
+    r = evaluate_capability_gate(
+        capability_id="agent.research",
+        task_text="Do a long-running analysis of the SaaS market",
+    )
+    assert r["decision"] == "allow"
+    assert r["env"].value == "web"
+
+    # Regression: "file it under project …" is web research, not Linear handoff.
+    r = evaluate_capability_gate(
+        capability_id="agent.research",
+        task_text="How should we file it under project governance for the board?",
+    )
+    assert r["decision"] == "allow"
+    assert r["env"].value == "web"

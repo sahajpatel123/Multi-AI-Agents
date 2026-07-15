@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { streamDebateRound } from '../api';
 import {
@@ -76,10 +76,19 @@ export function DebateMode({
   const [doneAgents, setDoneAgents] = useState<Set<string>>(new Set());
   const tokenBuffers = useRef<Record<string, string>>({});
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const roundInFlightRef = useRef(false);
 
   const [interjection, setInterjection] = useState('');
   const threadEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      if (flushTimer.current) clearInterval(flushTimer.current);
+    };
+  }, []);
 
   const challengedConfig = getAgentDisplay(challengedAgent.response.agent_id);
   const reactingIds = AGENT_SLOT_IDS.filter(
@@ -109,6 +118,12 @@ export function DebateMode({
   const runRound = async (userMessage?: string) => {
     const nextRound = currentRound + 1;
     if (nextRound > 3) return;
+    if (roundInFlightRef.current) return;
+
+    abortRef.current?.abort();
+    const abortController = new AbortController();
+    abortRef.current = abortController;
+    roundInFlightRef.current = true;
 
     setPhase('streaming');
     setError(null);
@@ -116,6 +131,7 @@ export function DebateMode({
     setDoneAgents(new Set());
     tokenBuffers.current = {};
 
+    if (flushTimer.current) clearInterval(flushTimer.current);
     flushTimer.current = setInterval(flushTokens, 50);
 
     try {
@@ -132,14 +148,17 @@ export function DebateMode({
         },
         {
           onReactionToken: (data) => {
+            if (abortController.signal.aborted) return;
             tokenBuffers.current[data.agent_id] =
               (tokenBuffers.current[data.agent_id] || '') + data.token;
           },
           onReactionDone: (data) => {
+            if (abortController.signal.aborted) return;
             setDoneAgents((prev) => new Set(prev).add(data.agent_id));
             scrollToBottom();
           },
           onResult: (data) => {
+            if (abortController.signal.aborted) return;
             flushTokens();
             if (flushTimer.current) clearInterval(flushTimer.current);
 
@@ -159,16 +178,25 @@ export function DebateMode({
             if (onSuccess) onSuccess();
           },
           onError: (data) => {
+            if (abortController.signal.aborted) return;
             if (flushTimer.current) clearInterval(flushTimer.current);
             setError(data.detail);
             setPhase('done');
           },
-        }
+        },
+        abortController.signal,
       );
     } catch (err) {
       if (flushTimer.current) clearInterval(flushTimer.current);
+      if (abortController.signal.aborted) return;
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof Error && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Debate round failed');
       setPhase('done');
+    } finally {
+      if (abortRef.current === abortController) {
+        roundInFlightRef.current = false;
+      }
     }
   };
 
@@ -434,7 +462,11 @@ export function DebateMode({
       >
         <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
           <button
-            onClick={onExit}
+            type="button"
+            onClick={() => {
+              abortRef.current?.abort();
+              onExit();
+            }}
             style={{
               display: 'inline-flex',
               alignItems: 'center',

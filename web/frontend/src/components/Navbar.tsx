@@ -64,6 +64,15 @@ export function Navbar() {
     setMenuOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
   const isActive = (path: string) => location.pathname === path;
   const isChatPage =
     location.pathname === '/app' ||
@@ -106,27 +115,55 @@ export function Navbar() {
             </div>
 
             <div className="navbar-nav-links" aria-label="Primary navigation">
-              <button
-                type="button"
-                className={`navbar-nav-link${isActive('/product') ? ' navbar-nav-link--active' : ''}`}
-                onClick={() => navigate('/product')}
-              >
-                Product
-              </button>
-              <button
-                type="button"
-                className={`navbar-nav-link${isActive('/pricing') ? ' navbar-nav-link--active' : ''}`}
-                onClick={() => navigate('/pricing')}
-              >
-                Pricing
-              </button>
-              <button
-                type="button"
-                className={`navbar-nav-link${isActive('/about') ? ' navbar-nav-link--active' : ''}`}
-                onClick={() => navigate('/about')}
-              >
-                About
-              </button>
+              {isAuthenticated ? (
+                <>
+                  <button
+                    type="button"
+                    className={`navbar-nav-link${isActive('/app') ? ' navbar-nav-link--active' : ''}`}
+                    onClick={() => navigate('/app')}
+                  >
+                    Arena
+                  </button>
+                  <button
+                    type="button"
+                    className={`navbar-nav-link${location.pathname.startsWith('/agent') ? ' navbar-nav-link--active' : ''}`}
+                    onClick={() => navigate('/agent')}
+                  >
+                    Agent
+                  </button>
+                  <button
+                    type="button"
+                    className={`navbar-nav-link${isActive('/pricing') ? ' navbar-nav-link--active' : ''}`}
+                    onClick={() => navigate('/pricing')}
+                  >
+                    Pricing
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={`navbar-nav-link${isActive('/product') ? ' navbar-nav-link--active' : ''}`}
+                    onClick={() => navigate('/product')}
+                  >
+                    Product
+                  </button>
+                  <button
+                    type="button"
+                    className={`navbar-nav-link${isActive('/pricing') ? ' navbar-nav-link--active' : ''}`}
+                    onClick={() => navigate('/pricing')}
+                  >
+                    Pricing
+                  </button>
+                  <button
+                    type="button"
+                    className={`navbar-nav-link${isActive('/about') ? ' navbar-nav-link--active' : ''}`}
+                    onClick={() => navigate('/about')}
+                  >
+                    About
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="navbar-right-cluster">
@@ -245,11 +282,20 @@ export function Navbar() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          {[
-            { label: 'Product', path: '/product' },
-            { label: 'Pricing', path: '/pricing' },
-            { label: 'About', path: '/about' },
-          ].map((item) => (
+          {(isAuthenticated
+            ? [
+                { label: 'Arena', path: '/app' },
+                { label: 'Agent', path: '/agent' },
+                { label: 'Watchlist', path: '/agent/watchlist' },
+                { label: 'Pricing', path: '/pricing' },
+                { label: 'About', path: '/about' },
+              ]
+            : [
+                { label: 'Product', path: '/product' },
+                { label: 'Pricing', path: '/pricing' },
+                { label: 'About', path: '/about' },
+              ]
+          ).map((item) => (
             <button
               key={item.path}
               type="button"
@@ -276,26 +322,8 @@ export function Navbar() {
             </button>
           ) : (
             <>
-              <button
-                type="button"
-                className="navbar-mobile-link"
-                onClick={() => {
-                  setMenuOpen(false);
-                  navigate('/app');
-                }}
-              >
-                Arena
-              </button>
-              <button
-                type="button"
-                className="navbar-mobile-link"
-                onClick={() => {
-                  setMenuOpen(false);
-                  navigate('/agent');
-                }}
-              >
-                Agent
-              </button>
+              {/* Product destinations (Arena/Agent/Watchlist) already listed above —
+                  only account actions here to avoid duplicate buttons. */}
               <button
                 type="button"
                 className="navbar-mobile-link"

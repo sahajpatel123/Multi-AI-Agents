@@ -41,10 +41,7 @@ from arena.core.report_generator import (
 )
 from arena.core.templates import get_templates_grouped_by_category
 from arena.core.capabilities import (
-    execution_for_request,
-    honest_rejection_enabled,
-    local_execution_error_body,
-    requires_local_rejection,
+    evaluate_capability_gate,
     list_capabilities,
 )
 from arena.core.telemetry import record_guard_decision
@@ -69,24 +66,28 @@ def _enforce_capability_gate(
     capability_id: str | None = None,
     task_text: str | None = None,
 ) -> None:
-    """Reject condura / hybrid_delegate work on web when feature flag is on."""
-    env, cap = execution_for_request(capability_id=capability_id, task_text=task_text)
-    cid = capability_id or (cap.id if cap else "inferred")
-    if not requires_local_rejection(env):
-        record_guard_decision(cid, "allow")
+    """Reject condura / hybrid_delegate work on web when feature flag is on.
+
+    Uses the shared evaluate_capability_gate decision so HTTP routes and
+    background runners cannot drift.
+    """
+    result = evaluate_capability_gate(capability_id=capability_id, task_text=task_text)
+    cid = result["capability_id"]
+    env = result["env"]
+    decision = result["decision"]
+    record_guard_decision(cid, decision)
+    if decision == "allow":
         return
-    if not honest_rejection_enabled():
-        record_guard_decision(cid, "fallback")
+    if decision == "fallback":
         logger.info(
             "Condura gate: would reject capability=%s env=%s (flag off)",
             cid,
             env.value,
         )
         return
-    record_guard_decision(cid, "reject")
     raise HTTPException(
         status_code=409,
-        detail=local_execution_error_body(env, cap),
+        detail=result["error_body"],
     )
 
 # Sidebar history window by subscription tier (not related to temporal_profile / recheck_by).

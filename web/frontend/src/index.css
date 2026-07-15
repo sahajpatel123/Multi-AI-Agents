@@ -2024,6 +2024,116 @@ canvas {
   }
 }
 
+/* Focus rings — keyboard users get clear affordance; mouse users do not get clutter */
+.arena-btn:focus {
+  outline: none;
+}
+.arena-btn:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 3px;
+}
+.navbar-nav-link:focus {
+  outline: none;
+}
+.navbar-nav-link:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.navbar-brand:focus-visible,
+.navbar-hamburger:focus-visible,
+.navbar-cta-pill:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 3px;
+}
+
+/* Soft page enter for primary app shells */
+.page-enter {
+  animation: page-enter 320ms var(--ease-out-premium) both;
+}
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Skip link — first tab target on every route shell that includes it */
+.skip-to-content {
+  position: absolute;
+  left: 12px;
+  top: -48px;
+  z-index: 10000;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #2c1810;
+  color: #c4956a;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13px;
+  text-decoration: none;
+  transition: top 0.18s var(--ease-btn);
+}
+.skip-to-content:focus {
+  top: 12px;
+  outline: 2px solid #c4956a;
+  outline-offset: 2px;
+}
+
+/* Condura modal surface: subtle rise without claiming success */
+.condura-cta-panel {
+  animation: condura-cta-in 280ms var(--ease-out-premium) both;
+}
+@keyframes condura-cta-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Empty-state helper used by Watchlist / Agent */
+.arena-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 3rem 1.25rem;
+  animation: page-enter 360ms var(--ease-out-premium) both;
+}
+
+/* Reduced motion: kill infinite decorative loops + collapse transitions */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .page-enter,
+  .condura-cta-panel,
+  .arena-empty-state,
+  .blur-reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .navbar-brand-dot,
+  .breathe,
+  .arena-btn-spinner {
+    animation: none !important;
+  }
+}
+
 /* Arena / debate persona response copy */
 .agent-response-text {
   font-size: 15px;
