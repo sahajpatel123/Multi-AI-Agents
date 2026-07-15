@@ -83,6 +83,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Copy your Personas panel as markdown (four minds, quotes, traits)',
       '[IMPROVED] Upgrade modal shows payment errors; offline banner uses assertive alert',
       '[IMPROVED] Agent history rename validates titles and rolls back on failure',
+      '[IMPROVED] Arena sidebar conversation renames persist and validate titles',
     ],
   },
   {

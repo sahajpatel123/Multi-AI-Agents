@@ -28,6 +28,13 @@ import { filterBySearchQuery, filterTurnsBySearchQuery } from '../lib/sidebarSea
 import { copyToClipboard } from '../lib/clipboard';
 import { formatSavedTakeExport } from '../lib/savedTakeExport';
 import { motionDuration } from '../lib/motion';
+import {
+  SIDEBAR_TURN_TITLE_MAX,
+  loadSidebarTurnTitles,
+  saveSidebarTurnTitle,
+  sidebarTurnTitleIssueMessage,
+  validateSidebarTurnTitle,
+} from '../lib/sidebarTurnTitles';
 
 interface SidebarTurn {
   turn_id: string;
@@ -84,8 +91,12 @@ export function Sidebar({
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
-  const [customTitles, setCustomTitles] = useState<Record<string, string>>({});
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [customTitles, setCustomTitles] = useState<Record<string, string>>(() =>
+    loadSidebarTurnTitles(),
+  );
   const [deletedTurnIds, setDeletedTurnIds] = useState<Set<string>>(new Set());
+  const renameCancelledRef = useRef(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const menuLayerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -184,24 +195,34 @@ export function Sidebar({
 
   const startRename = (turn: SidebarTurn) => {
     const currentLabel = customTitles[turn.turn_id] || turn.prompt;
+    renameCancelledRef.current = false;
     setEditingTurnId(turn.turn_id);
     setEditingValue(currentLabel);
+    setRenameError(null);
     setOpenMenuTurnId(null);
     setConfirmDeleteTurnId(null);
   };
 
   const saveRename = (turnId: string) => {
+    if (renameCancelledRef.current) return;
     const nextValue = editingValue.trim();
-    if (nextValue) {
-      setCustomTitles((prev) => ({ ...prev, [turnId]: nextValue }));
+    const issue = validateSidebarTurnTitle(nextValue);
+    if (issue) {
+      setRenameError(sidebarTurnTitleIssueMessage(issue));
+      editInputRef.current?.focus();
+      return;
     }
+    setCustomTitles((prev) => saveSidebarTurnTitle(turnId, nextValue, prev));
     setEditingTurnId(null);
     setEditingValue('');
+    setRenameError(null);
   };
 
   const cancelRename = () => {
+    renameCancelledRef.current = true;
     setEditingTurnId(null);
     setEditingValue('');
+    setRenameError(null);
   };
 
   const deleteTurn = (turnId: string) => {
@@ -433,24 +454,55 @@ export function Sidebar({
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           {isEditing ? (
-                            <input
-                              ref={editInputRef}
-                              value={editingValue}
-                              onChange={(e) => setEditingValue(e.target.value)}
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  saveRename(turn.turn_id);
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <input
+                                ref={editInputRef}
+                                value={editingValue}
+                                maxLength={SIDEBAR_TURN_TITLE_MAX + 20}
+                                aria-invalid={Boolean(renameError)}
+                                aria-describedby={
+                                  renameError ? `sidebar-rename-error-${turn.turn_id}` : undefined
                                 }
-                                if (e.key === 'Escape') {
-                                  e.preventDefault();
-                                  cancelRename();
-                                }
-                              }}
-                              onBlur={() => saveRename(turn.turn_id)}
-                              className="w-full bg-white border border-border rounded-md px-2 py-1 text-[13px] text-text-primary outline-none"
-                            />
+                                aria-label="Rename conversation"
+                                onChange={(e) => {
+                                  setEditingValue(e.target.value);
+                                  if (renameError) setRenameError(null);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    saveRename(turn.turn_id);
+                                  }
+                                  if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    cancelRename();
+                                  }
+                                }}
+                                onBlur={() => {
+                                  if (!renameCancelledRef.current) {
+                                    saveRename(turn.turn_id);
+                                  }
+                                }}
+                                className="w-full bg-white border border-border rounded-md px-2 py-1 text-[13px] text-text-primary outline-none"
+                                style={{
+                                  borderColor: renameError ? '#D85A30' : undefined,
+                                }}
+                              />
+                              {renameError && editingTurnId === turn.turn_id ? (
+                                <p
+                                  id={`sidebar-rename-error-${turn.turn_id}`}
+                                  role="alert"
+                                  style={{
+                                    margin: '4px 0 0',
+                                    fontSize: 11,
+                                    color: '#D85A30',
+                                    lineHeight: 1.35,
+                                  }}
+                                >
+                                  {renameError}
+                                </p>
+                              ) : null}
+                            </div>
                           ) : (
                             <button
                               type="button"

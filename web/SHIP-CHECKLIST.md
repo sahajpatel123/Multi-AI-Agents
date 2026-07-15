@@ -99,6 +99,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Personas panel copy**: export the current four minds as markdown (slots, quotes, descriptions).
 - **Upgrade checkout honesty**: Razorpay failures surface as role=alert (no silent dismiss); offline banner is assertive alert.
 - **Agent history rename**: title validation (required/max), optimistic update with rollback, role=alert on failure.
+- **Arena sidebar renames**: custom turn titles persist in localStorage; validation + Esc-safe save.
 
 ## Required production environment
 
