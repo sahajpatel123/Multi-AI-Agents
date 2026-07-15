@@ -22,6 +22,7 @@ import { useTier } from '../context/TierContext';
 import { useAuth } from '../hooks/useAuth';
 import { useProfileModal } from '../context/ProfileModalContext';
 import track from '../utils/track';
+import { filterTurnsBySearchQuery } from '../lib/sidebarSearch';
 
 interface SidebarTurn {
   turn_id: string;
@@ -70,6 +71,7 @@ export function Sidebar({
   const { isDefaultPanel, resetPanel } = usePanel();
   const { messagesRemaining, dailyLimit, tier, isFree } = useTier();
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
@@ -79,16 +81,23 @@ export function Sidebar({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const menuLayerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const reversedTurns = useMemo(
     () => [...turns].reverse().filter((turn) => !deletedTurnIds.has(turn.turn_id)),
     [turns, deletedTurnIds],
   );
 
-  const filteredTurns = useMemo(
-    () => reversedTurns.filter((turn) => activeFilter === 'all' || turn.prompt_category === activeFilter),
-    [activeFilter, reversedTurns],
-  );
+  const filteredTurns = useMemo(() => {
+    const byCategory = reversedTurns.filter(
+      (turn) => activeFilter === 'all' || turn.prompt_category === activeFilter,
+    );
+    const withTitles = byCategory.map((turn) => ({
+      ...turn,
+      title: customTitles[turn.turn_id],
+    }));
+    return filterTurnsBySearchQuery(withTitles, searchQuery);
+  }, [activeFilter, reversedTurns, searchQuery, customTitles]);
   const usedPercent = dailyLimit > 0
     ? Math.min(((dailyLimit - messagesRemaining) / dailyLimit) * 100, 100)
     : 0;
@@ -241,10 +250,16 @@ export function Sidebar({
             )}
           </div>
 
-          <div style={{ margin: '1.2rem 0 0.6rem' }}>
-            <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6B6460' }}>Recents</p>
+          <div style={{ margin: '1.2rem 0 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6B6460', margin: 0 }}>Recents</p>
+            {reversedTurns.length > 0 ? (
+              <span style={{ fontSize: 10, color: '#A89070' }}>
+                {filteredTurns.length}
+                {searchQuery.trim() || activeFilter !== 'all' ? ` / ${reversedTurns.length}` : ''}
+              </span>
+            ) : null}
           </div>
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-2">
             {FILTERS.map((filter) => {
               const isActive = activeFilter === filter.value;
               return (
@@ -275,6 +290,63 @@ export function Sidebar({
               );
             })}
           </div>
+          {reversedTurns.length > 0 ? (
+            <div style={{ marginBottom: 10, position: 'relative' }}>
+              <input
+                id="sidebar-recents-search"
+                ref={searchInputRef}
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search recents…"
+                aria-label="Search recents"
+                autoComplete="off"
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  fontSize: 12,
+                  fontFamily: 'Georgia, serif',
+                  color: '#1A1714',
+                  background: '#FAF7F4',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: 8,
+                  padding: '7px 28px 7px 10px',
+                  outline: 'none',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(196,149,106,0.55)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#E0D8D0';
+                }}
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    setSearchQuery('');
+                    searchInputRef.current?.focus();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: 6,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    color: '#A89070',
+                    lineHeight: 1,
+                    padding: 4,
+                  }}
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="flex-1 overflow-y-auto pr-1 pb-4" ref={scrollAreaRef}>
             {filteredTurns.length > 0 ? (
@@ -460,6 +532,30 @@ export function Sidebar({
                 <p style={{ fontSize: '13px', color: '#6B6460' }}>
                   Your history will appear here.
                 </p>
+              </div>
+            ) : searchQuery.trim() ? (
+              <div style={{ padding: '1.5rem 0.5rem', textAlign: 'center' }}>
+                <p style={{ fontSize: '13px', color: '#6B6460', margin: '0 0 8px' }}>
+                  No recents match “{searchQuery.trim()}”
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    searchInputRef.current?.focus();
+                  }}
+                  style={{
+                    fontSize: 12,
+                    color: '#C4956A',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: 'Georgia, serif',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Clear search
+                </button>
               </div>
             ) : (
               <div style={{ padding: '2rem 0', textAlign: 'center' }}>

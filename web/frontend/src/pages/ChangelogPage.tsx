@@ -53,6 +53,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Public /share Copy take / Copy link / system Share…',
       '[NEW] Copy Discuss thread and Debate transcript as markdown',
       '[IMPROVED] Agent Copy pastes markdown (question + answer) with failure feedback',
+      '[NEW] Search Arena sidebar recents by prompt or renamed title',
     ],
   },
   {
