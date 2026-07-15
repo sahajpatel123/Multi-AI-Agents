@@ -62,6 +62,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Search and filter Agent Watchlist (All / Active / Paused)',
       '[NEW] Copy saved Arena takes as markdown from the sidebar',
       '[NEW] Search the Personas library by name, quote, or trait',
+      '[NEW] Search Agent task templates by title, description, or example',
     ],
   },
   {

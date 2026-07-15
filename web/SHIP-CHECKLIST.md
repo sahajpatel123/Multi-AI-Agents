@@ -78,6 +78,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Watchlist find**: search questions + Active/Paused filters with clear empty-match state.
 - **Saved take copy**: sidebar bookmark rows can copy markdown (question + take).
 - **Persona library search**: find minds by name/quote/description; reduced-motion card hover.
+- **Agent templates search**: free-text find in Templates modal (works with category tabs); reduced-motion open.
 
 ## Required production environment
 
