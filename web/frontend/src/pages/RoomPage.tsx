@@ -5,6 +5,7 @@ import { addRoomTask, getAgentHistory, getRoom, getRoomSynthesis, joinRoom, remo
 import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getUserColor, getUserInitials } from '../utils/roomUtils';
+import { copyToClipboard } from '../lib/clipboard';
 
 function LayersIcon() {
   return (
@@ -163,11 +164,11 @@ export function RoomPage() {
 
   const copyInvite = async () => {
     const url = room?.share_url || `${window.location.origin}/room/${slug}`;
-    try {
-      await navigator.clipboard.writeText(url);
+    const ok = await copyToClipboard(url);
+    if (ok) {
       setInviteToast(true);
       window.setTimeout(() => setInviteToast(false), 2000);
-    } catch {
+    } else {
       setActionError('Could not copy invite link — copy from the address bar instead.');
       window.setTimeout(() => setActionError(null), 3200);
     }

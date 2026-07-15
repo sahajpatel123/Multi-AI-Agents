@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ConduraProbeState, HandoffPayload } from '../types/condura';
 import { probeLocalCondura } from '../lib/conduraLocalProbe';
 import { handoffClipboardUrl } from '../lib/conduraHandoff';
+import { copyToClipboard } from '../lib/clipboard';
 import { motionDuration } from '../lib/motion';
 import markUrl from '../assets/condura/mark.svg';
 
@@ -102,7 +103,13 @@ export function ConduraInstallCTA({
   const copyHandoff = async () => {
     if (!handoffPayload) return;
     const url = handoffClipboardUrl(handoffPayload);
-    await navigator.clipboard.writeText(url);
+    const ok = await copyToClipboard(url);
+    if (!ok) {
+      setError('Could not copy handoff link — long-press to select and copy.');
+      setCopied(false);
+      return;
+    }
+    setError(null);
     setCopied(true);
     const resetMs = motionDuration(2000);
     if (resetMs > 0) {

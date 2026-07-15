@@ -730,7 +730,7 @@ export function AgentPage() {
   const [createdRoom, setCreatedRoom] = useState<any>(null);
   const [myRooms, setMyRooms] = useState<any[]>([]);
   const [myRoomsLoading, setMyRoomsLoading] = useState(false);
-  const [copyRoomLinkFeedback, setCopyRoomLinkFeedback] = useState(false);
+  const [copyRoomLinkFeedback, setCopyRoomLinkFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [copyAnswerFeedback, setCopyAnswerFeedback] = useState(false);
   const pendingRoomHandledRef = useRef<string | null>(null);
 
@@ -6613,22 +6613,28 @@ export function AgentPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                const url = createdRoom.share_url || `${window.location.origin}/room/${createdRoom.slug}`;
-                                void navigator.clipboard.writeText(url).then(() => {
-                                  setCopyRoomLinkFeedback(true);
-                                  window.setTimeout(() => setCopyRoomLinkFeedback(false), 1500);
+                                const url =
+                                  createdRoom.share_url ||
+                                  `${window.location.origin}/room/${createdRoom.slug}`;
+                                void copyToClipboard(url).then((ok) => {
+                                  setCopyRoomLinkFeedback(ok ? 'copied' : 'failed');
+                                  window.setTimeout(() => setCopyRoomLinkFeedback('idle'), 1800);
                                 });
                               }}
                               style={{
                                 background: 'none',
                                 border: 'none',
-                                color: '#C4956A',
+                                color: copyRoomLinkFeedback === 'failed' ? '#D85A30' : '#C4956A',
                                 cursor: 'pointer',
                                 fontSize: 12,
                                 fontFamily: 'Georgia, serif',
                               }}
                             >
-                              {copyRoomLinkFeedback ? 'Copied!' : 'Copy link'}
+                              {copyRoomLinkFeedback === 'copied'
+                                ? 'Copied!'
+                                : copyRoomLinkFeedback === 'failed'
+                                  ? 'Couldn’t copy'
+                                  : 'Copy link'}
                             </button>
                           </div>
                           <button

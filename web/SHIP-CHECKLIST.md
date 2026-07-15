@@ -33,6 +33,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Sign-in**: password-manager autocomplete + post-auth destination preview.
 - **Debate end honesty**: after max rounds, only Back to Arena — no fake “Ask a follow-up”.
 - **Upgrade modal a11y**: Escape closes (gated during Razorpay), dialog semantics, body scroll lock.
+- **Clipboard consistency**: Room invite, Agent room link, and Condura handoff use shared copy helper + failure feedback.
 
 ## Required production environment
 
