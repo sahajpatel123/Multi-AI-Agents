@@ -53,6 +53,29 @@ class UXEventRequest(BaseModel):
     def validate_optional_text(cls, v: str | None, info) -> str | None:
         return sanitize_model_optional_text(v, max_length=100, field_name=info.field_name)
 
+    @field_validator("metadata")
+    @classmethod
+    def validate_metadata(cls, v: dict | None) -> dict | None:
+        # This endpoint is anonymous-writable, so bound the free-form metadata
+        # blob explicitly instead of relying only on the 10KB request-body cap:
+        # cap key count and serialized size so callers can't bloat the uxevents
+        # table with large or pathological payloads.
+        if v is None:
+            return None
+        if not isinstance(v, dict):
+            raise ValueError("metadata must be an object")
+        if len(v) > 30:
+            raise ValueError("metadata has too many keys (max 30)")
+        import json
+
+        try:
+            serialized = json.dumps(v, default=str)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("metadata is not JSON-serializable") from exc
+        if len(serialized) > 4000:
+            raise ValueError("metadata is too large (max 4000 chars)")
+        return v
+
 
 @router.post("/analytics/event")
 async def track_event(
