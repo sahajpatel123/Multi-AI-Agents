@@ -98,6 +98,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent history load honesty**: failed history fetch ≠ empty (Retry); watchlist cadence radios + Esc cancel.
 - **Personas panel copy**: export the current four minds as markdown (slots, quotes, descriptions).
 - **Upgrade checkout honesty**: Razorpay failures surface as role=alert (no silent dismiss); offline banner is assertive alert.
+- **Agent history rename**: title validation (required/max), optimistic update with rollback, role=alert on failure.
 
 ## Required production environment
 

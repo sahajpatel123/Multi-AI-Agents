@@ -79,6 +79,12 @@ import {
 import { copyToClipboard } from '../lib/clipboard';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { formatAgentHistoryExport } from '../lib/agentHistoryExport';
+import {
+  AGENT_TASK_TITLE_MAX,
+  agentTaskRenameCaughtErrorMessage,
+  agentTaskRenameIssueMessage,
+  validateAgentTaskTitle,
+} from '../lib/agentTaskRename';
 import { motionDuration } from '../lib/motion';
 import {
   roomCreateButtonLabel,
@@ -716,6 +722,9 @@ export function AgentPage() {
   const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameBusy, setRenameBusy] = useState(false);
+  const renameCancelledRef = useRef(false);
   const menuLayerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const historySearchRef = useRef<HTMLInputElement | null>(null);
@@ -1950,32 +1959,66 @@ export function AgentPage() {
 
   const startRenameAgent = (item: HistoryTask) => {
     const currentLabel = item.title?.trim() || item.task_text;
+    renameCancelledRef.current = false;
     setEditingTaskId(item.task_id);
     setEditingValue(currentLabel);
+    setRenameError(null);
+    setRenameBusy(false);
     setOpenMenuTaskId(null);
     setConfirmDeleteTaskId(null);
   };
 
   const cancelRenameAgent = () => {
+    renameCancelledRef.current = true;
     setEditingTaskId(null);
     setEditingValue('');
+    setRenameError(null);
+    setRenameBusy(false);
   };
 
-  const saveRenameAgent = (taskId: string) => {
+  const saveRenameAgent = async (taskId: string) => {
+    if (renameBusy || renameCancelledRef.current) return;
     const nextValue = editingValue.trim();
-    if (!nextValue) {
-      cancelRenameAgent();
+    const issue = validateAgentTaskTitle(nextValue);
+    if (issue) {
+      setRenameError(agentTaskRenameIssueMessage(issue));
+      editInputRef.current?.focus();
       return;
     }
+    const previous = taskHistory.find((t) => t.task_id === taskId);
+    const previousTitle = previous?.title ?? null;
+    setRenameError(null);
+    setRenameBusy(true);
+    // Optimistic update with validated title.
     setTaskHistory((prev) =>
       prev.map((t) => (t.task_id === taskId ? { ...t, title: nextValue } : t)),
     );
-    setEditingTaskId(null);
-    setEditingValue('');
-    void renameAgentTask(taskId, nextValue).catch(() => {
-      setToastMessage('Could not rename task');
-      void loadTaskHistory();
-    });
+    try {
+      const res = await renameAgentTask(taskId, nextValue);
+      if (renameCancelledRef.current) return;
+      const saved = (res.title || nextValue).trim() || nextValue;
+      setTaskHistory((prev) =>
+        prev.map((t) => (t.task_id === taskId ? { ...t, title: saved } : t)),
+      );
+      setEditingTaskId(null);
+      setEditingValue('');
+      setRenameBusy(false);
+    } catch (err) {
+      if (renameCancelledRef.current) return;
+      setTaskHistory((prev) =>
+        prev.map((t) =>
+          t.task_id === taskId ? { ...t, title: previousTitle } : t,
+        ),
+      );
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : agentTaskRenameCaughtErrorMessage(err);
+      setRenameError(msg);
+      setToastMessage(msg);
+      setRenameBusy(false);
+      editInputRef.current?.focus();
+    }
   };
 
   const deleteHistoryItem = (taskId: string) => {
@@ -2204,24 +2247,56 @@ export function AgentPage() {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             {isEditing ? (
-              <input
-                ref={editInputRef}
-                value={editingValue}
-                onChange={(e) => setEditingValue(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    saveRenameAgent(item.task_id);
-                  }
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    cancelRenameAgent();
-                  }
-                }}
-                onBlur={() => saveRenameAgent(item.task_id)}
-                className="w-full bg-white border border-border rounded-md px-2 py-1 text-[13px] text-text-primary outline-none"
-              />
+              <div onClick={(e) => e.stopPropagation()}>
+                <input
+                  ref={editInputRef}
+                  value={editingValue}
+                  maxLength={AGENT_TASK_TITLE_MAX + 20}
+                  disabled={renameBusy}
+                  aria-invalid={Boolean(renameError)}
+                  aria-describedby={renameError ? `rename-error-${item.task_id}` : undefined}
+                  aria-label="Rename research task"
+                  onChange={(e) => {
+                    setEditingValue(e.target.value);
+                    if (renameError) setRenameError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void saveRenameAgent(item.task_id);
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      cancelRenameAgent();
+                    }
+                  }}
+                  onBlur={() => {
+                    // Skip if Esc already cancelled (blur still fires after cancel).
+                    if (!renameCancelledRef.current) {
+                      void saveRenameAgent(item.task_id);
+                    }
+                  }}
+                  className="w-full bg-white border border-border rounded-md px-2 py-1 text-[13px] text-text-primary outline-none"
+                  style={{
+                    borderColor: renameError ? '#D85A30' : undefined,
+                    opacity: renameBusy ? 0.75 : 1,
+                  }}
+                />
+                {renameError && editingTaskId === item.task_id ? (
+                  <p
+                    id={`rename-error-${item.task_id}`}
+                    role="alert"
+                    style={{
+                      margin: '4px 0 0',
+                      fontSize: 11,
+                      color: '#D85A30',
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {renameError}
+                  </p>
+                ) : null}
+              </div>
             ) : (
               <button
                 type="button"

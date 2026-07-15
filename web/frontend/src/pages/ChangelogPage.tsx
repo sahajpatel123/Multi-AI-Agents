@@ -82,6 +82,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Agent history load errors show Retry (not a false empty state)',
       '[NEW] Copy your Personas panel as markdown (four minds, quotes, traits)',
       '[IMPROVED] Upgrade modal shows payment errors; offline banner uses assertive alert',
+      '[IMPROVED] Agent history rename validates titles and rolls back on failure',
     ],
   },
   {
