@@ -32,16 +32,26 @@ export function UserMenu({
     }
   `;
 
-  // Close on outside click
+  // Close on outside click or Escape
   useEffect(() => {
     if (!isOpen) return;
-    const handler = (e: MouseEvent) => {
+    const onPointer = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointer);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      window.removeEventListener('keydown', onKey);
+    };
   }, [isOpen]);
 
   if (isLoading) {
@@ -58,6 +68,7 @@ export function UserMenu({
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <button
+          type="button"
           onClick={onSignInClick}
           style={{
             fontSize: '13px',
@@ -74,6 +85,7 @@ export function UserMenu({
           Sign in
         </button>
         <button
+          type="button"
           className="desktop-only"
           onClick={onSignInClick}
           style={{
@@ -112,7 +124,11 @@ export function UserMenu({
     <div style={{ position: 'relative', zIndex: 90 }} ref={menuRef}>
       {/* Avatar button */}
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
+        aria-label="Account menu"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
         style={{
           width: '32px',
           height: '32px',
@@ -130,7 +146,6 @@ export function UserMenu({
         }}
         onMouseEnter={(e) => e.currentTarget.style.background = '#E0D8D0'}
         onMouseLeave={(e) => e.currentTarget.style.background = '#F0EBE3'}
-        aria-label="Account menu"
       >
         {initial}
       </button>
@@ -138,6 +153,8 @@ export function UserMenu({
       {/* Dropdown */}
       {isOpen && (
         <div
+          role="menu"
+          aria-label="Account"
           style={{
             position: 'absolute',
             right: 0,
@@ -200,6 +217,7 @@ export function UserMenu({
           {onProfileClick ? (
             <button
               type="button"
+              role="menuitem"
               onClick={() => {
                 setIsOpen(false);
                 onProfileClick();
@@ -231,6 +249,8 @@ export function UserMenu({
             </button>
           ) : null}
           <button
+            type="button"
+            role="menuitem"
             onClick={() => { setIsOpen(false); onLogout(); }}
             style={{
               width: '100%',
@@ -255,7 +275,7 @@ export function UserMenu({
               e.currentTarget.style.background = 'transparent';
             }}
           >
-            <LogOut style={{ width: '14px', height: '14px' }} />
+            <LogOut style={{ width: '14px', height: '14px' }} aria-hidden />
             Sign out
           </button>
         </div>
