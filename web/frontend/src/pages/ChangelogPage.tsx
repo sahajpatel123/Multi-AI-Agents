@@ -66,6 +66,8 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Agent expertise selector: screen-reader roles and domain label',
       '[IMPROVED] Profile save shows validation and server errors (no silent failure)',
       '[NEW] Search minds when swapping a panel slot on Personas',
+      '[IMPROVED] Personas panel save: busy state, real errors, accessible toasts',
+      '[NEW] Search research tasks on Room boards and in the add-task picker',
     ],
   },
   {

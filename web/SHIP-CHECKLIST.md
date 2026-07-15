@@ -82,6 +82,8 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Expertise selector a11y**: radiogroup levels, labelled domain field; wired into Profile settings with normalized save.
 - **Profile save honesty**: name validation, role=alert on failure, Saved status feedback (no silent catch).
 - **Persona swap search**: find minds in the slot-swap dialog; dialog a11y + reduced-motion open.
+- **Personas panel save**: busy Save, real error copy, status/alert toast roles.
+- **Room board search**: filter tasks by title/answer/member; search Agent history in the add-task picker; Escape + body scroll lock.
 
 ## Required production environment
 

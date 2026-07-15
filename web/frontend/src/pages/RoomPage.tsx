@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { addRoomTask, getAgentHistory, getRoom, getRoomSynthesis, joinRoom, removeRoomTask } from '../api';
@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getUserColor, getUserInitials } from '../utils/roomUtils';
 import { copyToClipboard } from '../lib/clipboard';
+import { filterBySearchQuery } from '../lib/sidebarSearch';
 import { setRedirectIntent } from '../utils/redirectIntent';
 
 function LayersIcon() {
@@ -80,6 +81,10 @@ export function RoomPage() {
   const [hoverTask, setHoverTask] = useState<string | null>(null);
   const [synthesisRefreshing, setSynthesisRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [boardQuery, setBoardQuery] = useState('');
+  const [pickerQuery, setPickerQuery] = useState('');
+  const boardSearchRef = useRef<HTMLInputElement | null>(null);
+  const pickerSearchRef = useRef<HTMLInputElement | null>(null);
 
   const refresh = useCallback(async () => {
     if (!slug) return;
@@ -154,6 +159,62 @@ export function RoomPage() {
     };
   }, [showTaskPicker, user, taskIdsInRoom]);
 
+  const closeTaskPicker = useCallback(() => {
+    setShowTaskPicker(false);
+    setPickerQuery('');
+    setNewTaskText('');
+  }, []);
+
+  // Escape closes the task picker; lock body scroll while open; focus search.
+  useEffect(() => {
+    if (!showTaskPicker) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeTaskPicker();
+      }
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusId = window.setTimeout(() => pickerSearchRef.current?.focus(), 50);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+      window.clearTimeout(focusId);
+    };
+  }, [showTaskPicker, closeTaskPicker]);
+
+  const memberNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const m of members) {
+      if (m?.user_id) map[m.user_id] = m.name || 'Member';
+    }
+    return map;
+  }, [members]);
+
+  const filteredBoardTasks = useMemo(
+    () =>
+      filterBySearchQuery(tasks, boardQuery, (t) => [
+        getTaskTitle(t),
+        t.question,
+        t.task_text,
+        t.final_answer,
+        memberNameById[t.user_id],
+      ]),
+    [tasks, boardQuery, memberNameById],
+  );
+
+  const filteredHistoryTasks = useMemo(
+    () =>
+      filterBySearchQuery(historyTasks, pickerQuery, (ht) => [
+        ht.task_text,
+        ht.title,
+        ht.question,
+      ]),
+    [historyTasks, pickerQuery],
+  );
+
   const contradictions: any[] = Array.isArray(synthesis?.contradictions) ? synthesis.contradictions : [];
   const patterns: string[] = Array.isArray(synthesis?.patterns) ? synthesis.patterns : [];
   const synthText = typeof synthesis?.synthesis === 'string' ? synthesis.synthesis : '';
@@ -176,7 +237,7 @@ export function RoomPage() {
     try {
       const data = await addRoomTask(slug, taskId);
       setRoom(data);
-      setShowTaskPicker(false);
+      closeTaskPicker();
     } catch (e: unknown) {
       setActionError(e instanceof Error ? e.message : 'Could not add task to room');
     }
@@ -520,115 +581,239 @@ export function RoomPage() {
         ) : null}
       </div>
     ) : (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
-        gap: 12,
-      }}
-    >
-      {tasks.map((t: any) => {
-        const mem = members.find((m: any) => m.user_id === t.user_id);
-        const name = mem?.name || 'Member';
-        const excerpt = getExcerpt(t);
-        const canRemove = user && (t.user_id === user.id || room?.creator_id === user.id);
-        return (
-          <div
-            key={t.task_id}
-            role="button"
-            tabIndex={0}
-            onMouseEnter={() => setHoverTask(t.task_id)}
-            onMouseLeave={() => setHoverTask(null)}
-            onClick={() => navigate(`/agent?task_id=${encodeURIComponent(t.task_id)}`)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') navigate(`/agent?task_id=${encodeURIComponent(t.task_id)}`);
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          marginBottom: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#C4A882' }}>
+          Research board
+          <span style={{ marginLeft: 8, color: '#A89070', letterSpacing: 0, textTransform: 'none', fontSize: 11 }}>
+            {filteredBoardTasks.length}
+            {boardQuery.trim() ? ` / ${tasks.length}` : ''}
+          </span>
+        </div>
+        <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 280 }}>
+          <input
+            ref={boardSearchRef}
+            type="search"
+            value={boardQuery}
+            onChange={(e) => setBoardQuery(e.target.value)}
+            placeholder="Search tasks…"
+            aria-label="Search room tasks"
+            autoComplete="off"
+            style={{
+              width: '100%',
+              boxSizing: 'border-box',
+              fontSize: 12,
+              fontFamily: 'Georgia, serif',
+              color: '#2C1810',
+              background: '#FAF7F2',
+              border: '0.5px solid #E0D5C5',
+              borderRadius: 8,
+              padding: '7px 28px 7px 10px',
+              outline: 'none',
+            }}
+          />
+          {boardQuery ? (
+            <button
+              type="button"
+              aria-label="Clear task search"
+              onClick={() => {
+                setBoardQuery('');
+                boardSearchRef.current?.focus();
+              }}
+              style={{
+                position: 'absolute',
+                right: 6,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 14,
+                color: '#A89070',
+                lineHeight: 1,
+                padding: 4,
+              }}
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {filteredBoardTasks.length === 0 ? (
+        <div
+          style={{
+            background: '#FAF7F2',
+            border: '0.5px solid #E0D5C5',
+            borderRadius: 12,
+            padding: '28px 20px',
+            textAlign: 'center',
+            marginBottom: 12,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 14, color: '#4A3728', fontWeight: 500 }}>
+            No tasks match “{boardQuery.trim()}”
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setBoardQuery('');
+              boardSearchRef.current?.focus();
             }}
             style={{
-              position: 'relative',
-              background: '#FAF7F2',
-              border: hoverTask === t.task_id ? '0.5px solid #C4956A' : '0.5px solid #E0D5C5',
-              borderRadius: 10,
-              padding: 14,
+              marginTop: 12,
+              background: 'none',
+              border: 'none',
+              color: '#C4956A',
+              fontSize: 13,
               cursor: 'pointer',
-              transition: 'border-color 0.15s, box-shadow 0.15s',
-              boxShadow: hoverTask === t.task_id ? '0 2px 8px rgba(196,149,106,0.12)' : 'none',
+              textDecoration: 'underline',
             }}
           >
-            {canRemove && hoverTask === t.task_id ? (
-              <button
-                type="button"
-                onClick={(e) => void handleRemoveTask(t.task_id, e)}
-                style={{
-                  position: 'absolute',
-                  top: 10,
-                  right: 12,
-                  background: 'none',
-                  border: 'none',
-                  fontSize: 12,
-                  color: '#C4A882',
-                  cursor: 'pointer',
-                }}
-              >
-                ×
-              </button>
-            ) : null}
-            <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginBottom: 8 }}>
+            Clear search
+          </button>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+            gap: 12,
+          }}
+        >
+          {filteredBoardTasks.map((t: any) => {
+            const mem = members.find((m: any) => m.user_id === t.user_id);
+            const name = mem?.name || 'Member';
+            const excerpt = getExcerpt(t);
+            const canRemove = user && (t.user_id === user.id || room?.creator_id === user.id);
+            return (
               <div
+                key={t.task_id}
+                role="button"
+                tabIndex={0}
+                onMouseEnter={() => setHoverTask(t.task_id)}
+                onMouseLeave={() => setHoverTask(null)}
+                onClick={() => navigate(`/agent?task_id=${encodeURIComponent(t.task_id)}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') navigate(`/agent?task_id=${encodeURIComponent(t.task_id)}`);
+                }}
                 style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: '50%',
-                  background: getUserColor(t.user_id),
-                  color: '#FAF7F2',
-                  fontSize: 9,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  position: 'relative',
+                  background: '#FAF7F2',
+                  border: hoverTask === t.task_id ? '0.5px solid #C4956A' : '0.5px solid #E0D5C5',
+                  borderRadius: 10,
+                  padding: 14,
+                  cursor: 'pointer',
+                  transition: 'border-color 0.15s, box-shadow 0.15s',
+                  boxShadow: hoverTask === t.task_id ? '0 2px 8px rgba(196,149,106,0.12)' : 'none',
                 }}
               >
-                {getUserInitials(name)}
+                {canRemove && hoverTask === t.task_id ? (
+                  <button
+                    type="button"
+                    onClick={(e) => void handleRemoveTask(t.task_id, e)}
+                    style={{
+                      position: 'absolute',
+                      top: 10,
+                      right: 12,
+                      background: 'none',
+                      border: 'none',
+                      fontSize: 12,
+                      color: '#C4A882',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+                <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginBottom: 8 }}>
+                  <div
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      background: getUserColor(t.user_id),
+                      color: '#FAF7F2',
+                      fontSize: 9,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {getUserInitials(name)}
+                  </div>
+                  <span style={{ fontSize: 11, color: '#A89070' }}>{name}</span>
+                  {t.final_score != null ? (
+                    <span style={{ fontSize: 10, color: '#C4956A', marginLeft: 'auto' }}>{t.final_score}/100</span>
+                  ) : null}
+                  <span style={{ fontSize: 10, color: '#A89070' }}>
+                    {t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: '#2C1810',
+                    fontWeight: 500,
+                    lineHeight: 1.4,
+                    marginBottom: 6,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {getTaskTitle(t)}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: '#8C7355',
+                    fontStyle: 'italic',
+                    lineHeight: 1.4,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {excerpt}
+                </div>
               </div>
-              <span style={{ fontSize: 11, color: '#A89070' }}>{name}</span>
-              {t.final_score != null ? (
-                <span style={{ fontSize: 10, color: '#C4956A', marginLeft: 'auto' }}>{t.final_score}/100</span>
-              ) : null}
-              <span style={{ fontSize: 10, color: '#A89070' }}>
-                {t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}
-              </span>
-            </div>
-            <div
+            );
+          })}
+          {user && isMember ? (
+            <button
+              type="button"
+              onClick={() => setShowTaskPicker(true)}
               style={{
+                border: '0.5px dashed #D4C4B0',
+                borderRadius: 10,
+                padding: 14,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                cursor: 'pointer',
+                color: '#C4A882',
                 fontSize: 13,
-                color: '#2C1810',
-                fontWeight: 500,
-                lineHeight: 1.4,
-                marginBottom: 6,
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
+                background: 'transparent',
               }}
             >
-              {getTaskTitle(t)}
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: '#8C7355',
-                fontStyle: 'italic',
-                lineHeight: 1.4,
-                display: '-webkit-box',
-                WebkitLineClamp: 3,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-              }}
-            >
-              {excerpt}
-            </div>
-          </div>
-        );
-      })}
-      {user && isMember ? (
+              + Add task
+            </button>
+          ) : null}
+        </div>
+      )}
+      {filteredBoardTasks.length === 0 && user && isMember ? (
         <button
           type="button"
           onClick={() => setShowTaskPicker(true)}
@@ -637,6 +822,7 @@ export function RoomPage() {
             borderRadius: 10,
             padding: 14,
             display: 'flex',
+            width: '100%',
             alignItems: 'center',
             justifyContent: 'center',
             gap: 8,
@@ -819,6 +1005,8 @@ export function RoomPage() {
       ) : null}
       {inviteToast ? (
         <div
+          role="status"
+          aria-live="polite"
           style={{
             position: 'fixed',
             top: 60,
@@ -966,7 +1154,7 @@ export function RoomPage() {
         ? createPortal(
             <div
               role="presentation"
-              onMouseDown={() => setShowTaskPicker(false)}
+              onMouseDown={() => closeTaskPicker()}
               style={{
                 position: 'fixed',
                 inset: 0,
@@ -980,6 +1168,8 @@ export function RoomPage() {
             >
               <div
                 role="dialog"
+                aria-modal="true"
+                aria-labelledby="room-task-picker-title"
                 onMouseDown={(e) => e.stopPropagation()}
                 style={{
                   width: 'min(480px, 100%)',
@@ -991,20 +1181,109 @@ export function RoomPage() {
                 }}
               >
                 <div style={{ borderBottom: '0.5px solid #EDE4D8', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 16, color: '#2C1810', fontWeight: 500 }}>Add a task to this room</span>
-                  <button type="button" style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#8C7355' }} onClick={() => setShowTaskPicker(false)}>
+                  <span id="room-task-picker-title" style={{ fontSize: 16, color: '#2C1810', fontWeight: 500 }}>
+                    Add a task to this room
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Close"
+                    style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#8C7355' }}
+                    onClick={() => closeTaskPicker()}
+                  >
                     ×
                   </button>
                 </div>
                 <div style={{ padding: '16px 20px' }}>
-                  <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A89070', marginBottom: 8 }}>From your history</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A89070' }}>From your history</div>
+                    {historyTasks.length > 0 ? (
+                      <span style={{ fontSize: 10, color: '#A89070' }}>
+                        {filteredHistoryTasks.length}
+                        {pickerQuery.trim() ? ` / ${historyTasks.length}` : ''}
+                      </span>
+                    ) : null}
+                  </div>
+                  {historyTasks.length > 0 ? (
+                    <div style={{ position: 'relative', marginBottom: 10 }}>
+                      <input
+                        ref={pickerSearchRef}
+                        type="search"
+                        value={pickerQuery}
+                        onChange={(e) => setPickerQuery(e.target.value)}
+                        placeholder="Search history…"
+                        aria-label="Search agent history to add"
+                        autoComplete="off"
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          fontSize: 12,
+                          fontFamily: 'Georgia, serif',
+                          color: '#2C1810',
+                          background: '#FAF7F2',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 8,
+                          padding: '7px 28px 7px 10px',
+                          outline: 'none',
+                        }}
+                      />
+                      {pickerQuery ? (
+                        <button
+                          type="button"
+                          aria-label="Clear history search"
+                          onClick={() => {
+                            setPickerQuery('');
+                            pickerSearchRef.current?.focus();
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: 6,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: 14,
+                            color: '#A89070',
+                            lineHeight: 1,
+                            padding: 4,
+                          }}
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {historyLoading ? (
                     <p style={{ fontSize: 12, color: '#A89070' }}>Loading…</p>
                   ) : historyTasks.length === 0 ? (
                     <p style={{ fontSize: 12, color: '#A89070' }}>No tasks to add</p>
+                  ) : filteredHistoryTasks.length === 0 ? (
+                    <p style={{ fontSize: 12, color: '#A89070', marginBottom: 20 }}>
+                      No history matches “{pickerQuery.trim()}”
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPickerQuery('');
+                          pickerSearchRef.current?.focus();
+                        }}
+                        style={{
+                          display: 'block',
+                          marginTop: 8,
+                          background: 'none',
+                          border: 'none',
+                          color: '#C4956A',
+                          fontSize: 12,
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          padding: 0,
+                        }}
+                      >
+                        Clear search
+                      </button>
+                    </p>
                   ) : (
                     <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 20 }}>
-                      {historyTasks.map((ht: any) => (
+                      {filteredHistoryTasks.map((ht: any) => (
                         <button
                           key={ht.task_id}
                           type="button"
@@ -1063,8 +1342,8 @@ export function RoomPage() {
                       } catch {
                         /* ignore */
                       }
-                      setShowTaskPicker(false);
                       const q = newTaskText.trim();
+                      closeTaskPicker();
                       navigate(q ? `/agent?q=${encodeURIComponent(q)}` : '/agent');
                     }}
                     style={{
