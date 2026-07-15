@@ -95,6 +95,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent history copy**: export the current filtered research history as markdown (scores, topics, task ids).
 - **Agent Rooms list honesty**: load failure ≠ empty (Retry); search when you have 3+ rooms; real empty copy.
 - **Create room modal**: works from idle Agent sidebar; name validation, busy state, Esc close, real errors.
+- **Agent history load honesty**: failed history fetch ≠ empty (Retry); watchlist cadence radios + Esc cancel.
 
 ## Required production environment
 

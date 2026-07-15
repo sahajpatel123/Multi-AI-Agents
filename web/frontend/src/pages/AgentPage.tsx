@@ -711,6 +711,7 @@ export function AgentPage() {
     () => loadDismissedAgentChipIds(),
   );
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoadFailed, setHistoryLoadFailed] = useState(false);
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
   const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -836,8 +837,10 @@ export function AgentPage() {
     try {
       const raw = (await getAgentHistory(1)) as HistoryPayload;
       setTaskHistory(raw.tasks || []);
+      setHistoryLoadFailed(false);
     } catch {
       setTaskHistory([]);
+      setHistoryLoadFailed(true);
     } finally {
       setHistoryLoading(false);
     }
@@ -1534,6 +1537,19 @@ export function AgentPage() {
     }
   };
 
+  // Esc closes the watchlist cadence picker (when not busy).
+  useEffect(() => {
+    if (!showScheduler || watchlistBusy) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowScheduler(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showScheduler, watchlistBusy]);
+
   const handleRefine = async () => {
     const msg = followUp.trim();
     if (!msg || !result?.task_id || isRefining || isRunning) return;
@@ -1757,6 +1773,12 @@ export function AgentPage() {
     loading: myRoomsLoading,
     loadFailed: myRoomsLoadFailed,
     itemCount: myRooms.length,
+  });
+
+  const historyBodyMode = roomsListBodyMode({
+    loading: historyLoading,
+    loadFailed: historyLoadFailed,
+    itemCount: taskHistory.length,
   });
 
   const filteredMyRooms = useMemo(
@@ -3047,9 +3069,35 @@ export function AgentPage() {
                 ) : null}
               </div>
             ) : null}
-            {historyLoading ? (
+            {historyBodyMode === 'loading' ? (
               <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>Loading…</div>
-            ) : taskHistory.length === 0 ? (
+            ) : historyBodyMode === 'load_error' ? (
+              <div
+                role="alert"
+                style={{ fontSize: 12, color: '#8C7355', textAlign: 'center', padding: '1.5rem 0.75rem', lineHeight: 1.5 }}
+              >
+                Could not load research history.
+                <br />
+                <span style={{ color: '#A89070' }}>Your past tasks are safe — try again.</span>
+                <button
+                  type="button"
+                  onClick={() => void loadTaskHistory()}
+                  style={{
+                    display: 'block',
+                    margin: '10px auto 0',
+                    fontSize: 12,
+                    color: '#C4956A',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: 'Georgia, serif',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : historyBodyMode === 'empty' ? (
               <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 1rem', lineHeight: 1.5 }}>
                 No research yet.
                 <br />
@@ -7055,6 +7103,8 @@ export function AgentPage() {
                   </div>
                   {showScheduler && result.status === 'complete' && !isRunning && canWatchlist ? (
                     <div
+                      role="group"
+                      aria-label="Watchlist schedule"
                       style={{
                         marginTop: 8,
                         background: '#FAF7F2',
@@ -7063,38 +7113,52 @@ export function AgentPage() {
                         padding: '12px 16px',
                       }}
                     >
-                      <div style={{ fontSize: 12, color: '#8C7355' }}>Auto-run this task every</div>
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                      <div style={{ fontSize: 12, color: '#8C7355' }} id="watchlist-cadence-label">
+                        Auto-run this task every
+                      </div>
+                      <div
+                        role="radiogroup"
+                        aria-labelledby="watchlist-cadence-label"
+                        style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}
+                      >
                         {(
                           [
                             { h: 24 as const, label: 'Daily' },
                             { h: 72 as const, label: 'Every 3 days' },
                             { h: 168 as const, label: 'Weekly' },
                           ] as const
-                        ).map(({ h, label }) => (
-                          <button
-                            key={h}
-                            type="button"
-                            onClick={() => setWatchlistPickHours(h)}
-                            style={{
-                              padding: '6px 14px',
-                              borderRadius: 999,
-                              border: 'none',
-                              cursor: 'pointer',
-                              fontSize: 12,
-                              fontFamily: 'Georgia, serif',
-                              background: watchlistPickHours === h ? '#C4956A' : '#F0E8DC',
-                              color: watchlistPickHours === h ? '#FAF7F2' : '#8C7355',
-                            }}
-                          >
-                            {label}
-                          </button>
-                        ))}
+                        ).map(({ h, label }) => {
+                          const selected = watchlistPickHours === h;
+                          return (
+                            <button
+                              key={h}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              disabled={watchlistBusy}
+                              onClick={() => setWatchlistPickHours(h)}
+                              style={{
+                                padding: '6px 14px',
+                                borderRadius: 999,
+                                border: 'none',
+                                cursor: watchlistBusy ? 'default' : 'pointer',
+                                fontSize: 12,
+                                fontFamily: 'Georgia, serif',
+                                background: selected ? '#C4956A' : '#F0E8DC',
+                                color: selected ? '#FAF7F2' : '#8C7355',
+                                opacity: watchlistBusy ? 0.75 : 1,
+                              }}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
                       </div>
                       <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                         <button
                           type="button"
                           onClick={() => setShowScheduler(false)}
+                          disabled={watchlistBusy}
                           style={{
                             padding: '7px 14px',
                             borderRadius: 20,
@@ -7103,7 +7167,7 @@ export function AgentPage() {
                             color: '#8C7355',
                             fontSize: 12,
                             fontFamily: 'Georgia, serif',
-                            cursor: 'pointer',
+                            cursor: watchlistBusy ? 'default' : 'pointer',
                           }}
                         >
                           Cancel
