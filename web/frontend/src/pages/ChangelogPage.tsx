@@ -65,6 +65,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Search Agent task templates by title, description, or example',
       '[IMPROVED] Agent expertise selector: screen-reader roles and domain label',
       '[IMPROVED] Profile save shows validation and server errors (no silent failure)',
+      '[NEW] Search minds when swapping a panel slot on Personas',
     ],
   },
   {

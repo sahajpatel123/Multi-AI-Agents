@@ -36,8 +36,10 @@ export function PersonasPage() {
   const [modalVisible, setModalVisible] = useState(false);
   const [revealedLibraryIds, setRevealedLibraryIds] = useState<Record<string, boolean>>({});
   const [libraryQuery, setLibraryQuery] = useState('');
+  const [swapQuery, setSwapQuery] = useState('');
   const libraryRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const librarySearchRef = useRef<HTMLInputElement | null>(null);
+  const swapSearchRef = useRef<HTMLInputElement | null>(null);
   const reducedMotion = prefersReducedMotion();
 
   const slotLabels = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'] as const;
@@ -51,6 +53,7 @@ export function PersonasPage() {
 
   const closeModal = useCallback(() => {
     setModalVisible(false);
+    setSwapQuery('');
     const delay = motionDuration(220);
     window.setTimeout(() => setActiveSlot(null), delay > 0 ? delay : 0);
   }, []);
@@ -58,11 +61,16 @@ export function PersonasPage() {
   useEffect(() => {
     if (activeSlot === null) {
       setModalVisible(false);
+      setSwapQuery('');
       return;
     }
 
     const frameId = window.requestAnimationFrame(() => setModalVisible(true));
-    return () => window.cancelAnimationFrame(frameId);
+    const focusId = window.setTimeout(() => swapSearchRef.current?.focus(), 50);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.clearTimeout(focusId);
+    };
   }, [activeSlot]);
 
   // Escape closes the swap modal; lock body scroll while open.
@@ -111,6 +119,17 @@ export function PersonasPage() {
     if (activePersona === null) return [];
     return personas.filter((persona) => persona.id !== activePersona.id);
   }, [activePersona, personas]);
+
+  const filteredSwapOptions = useMemo(
+    () =>
+      filterBySearchQuery(modalOptions, swapQuery, (persona) => [
+        persona.name,
+        persona.quote,
+        persona.description,
+        persona.id,
+      ]),
+    [modalOptions, swapQuery],
+  );
 
   const filteredLibrary = useMemo(
     () =>
@@ -561,13 +580,14 @@ export function PersonasPage() {
 
       {activeSlot !== null && activePersona && (
         <div
+          role="presentation"
           onClick={closeModal}
           style={{
             position: 'fixed',
             inset: 0,
             zIndex: 100,
             background: 'rgba(26,23,20,0.4)',
-            backdropFilter: 'blur(4px)',
+            backdropFilter: reducedMotion ? 'none' : 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -576,6 +596,9 @@ export function PersonasPage() {
         >
           <div
             className="swap-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="swap-slot-title"
             onClick={(e) => e.stopPropagation()}
             style={{
               background: '#FAF7F4',
@@ -586,18 +609,23 @@ export function PersonasPage() {
               maxHeight: '80vh',
               overflowY: 'auto',
               opacity: modalVisible ? 1 : 0,
-              transform: modalVisible ? 'scale(1)' : 'scale(0.95)',
-              transition: 'opacity 250ms ease, transform 250ms ease',
+              transform: modalVisible || reducedMotion ? 'scale(1)' : 'scale(0.95)',
+              transition: reducedMotion ? 'none' : 'opacity 250ms ease, transform 250ms ease',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#1A1714' }}>Swap slot {activeSlot + 1}</h2>
-                <p style={{ fontSize: '13px', color: '#6B6460', marginTop: '.35rem' }}>Currently: {activePersona.name}</p>
+                <h2 id="swap-slot-title" style={{ fontSize: '18px', fontWeight: 500, color: '#1A1714', margin: 0 }}>
+                  Swap slot {activeSlot + 1}
+                </h2>
+                <p style={{ fontSize: '13px', color: '#6B6460', marginTop: '.35rem' }}>
+                  Currently: {activePersona.name}
+                </p>
               </div>
               <button
                 type="button"
                 onClick={closeModal}
+                aria-label="Close swap dialog"
                 style={{
                   width: '28px',
                   height: '28px',
@@ -609,7 +637,7 @@ export function PersonasPage() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  transition: 'background 150ms ease',
+                  transition: reducedMotion ? 'none' : 'background 150ms ease',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = '#E0D8D0';
@@ -624,64 +652,160 @@ export function PersonasPage() {
 
             <div style={{ height: '0.5px', background: '#E0D8D0', margin: '1rem 0' }} />
 
-            <p style={{ ...eyebrowStyle, marginBottom: '.8rem' }}>Available to swap</p>
-            <div className="current-panel-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
-              {modalOptions.map((persona) => {
-                const isLocked = !canUsePersona(persona.id);
+            <div style={{ position: 'relative', marginBottom: 12 }}>
+              <input
+                ref={swapSearchRef}
+                type="search"
+                value={swapQuery}
+                onChange={(e) => setSwapQuery(e.target.value)}
+                placeholder="Search minds to swap…"
+                aria-label="Search minds to swap into this slot"
+                autoComplete="off"
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  fontSize: 13,
+                  fontFamily: 'Georgia, serif',
+                  color: '#1A1714',
+                  background: '#FFFFFF',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: 10,
+                  padding: '9px 32px 9px 12px',
+                  outline: 'none',
+                }}
+              />
+              {swapQuery ? (
+                <button
+                  type="button"
+                  aria-label="Clear swap search"
+                  onClick={() => {
+                    setSwapQuery('');
+                    swapSearchRef.current?.focus();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 16,
+                    color: '#A89070',
+                    lineHeight: 1,
+                    padding: 4,
+                  }}
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
 
-                return (
-                  <button
-                    key={persona.id}
-                    type="button"
-                    onClick={() => {
-                      if (isLocked) {
-                        navigate('/pricing');
-                        return;
-                      }
-                      handleSwap(activeSlot, persona);
-                    }}
-                    style={{
-                      background: persona.bgTint,
-                      border: '0.5px solid #E0D8D0',
-                      borderRadius: '12px',
-                      padding: '1rem',
-                      cursor: 'pointer',
-                      transition: 'all 150ms ease',
-                      textAlign: 'left',
-                      opacity: isLocked ? 0.65 : 1,
-                      position: 'relative',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isLocked) {
+            <p style={{ ...eyebrowStyle, marginBottom: '.8rem' }}>
+              Available to swap
+              {swapQuery.trim()
+                ? ` · ${filteredSwapOptions.length} / ${modalOptions.length}`
+                : ` · ${modalOptions.length}`}
+            </p>
+            {filteredSwapOptions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '1.5rem 0.5rem' }}>
+                <p style={{ margin: 0, fontSize: 14, color: '#1A1714', fontWeight: 500 }}>
+                  No minds match “{swapQuery.trim()}”
+                </p>
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--ghost arena-btn--sm"
+                  style={{ marginTop: 12 }}
+                  onClick={() => {
+                    setSwapQuery('');
+                    swapSearchRef.current?.focus();
+                  }}
+                >
+                  Clear search
+                </button>
+              </div>
+            ) : (
+              <div
+                className="current-panel-grid"
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}
+              >
+                {filteredSwapOptions.map((persona) => {
+                  const isLocked = !canUsePersona(persona.id);
+
+                  return (
+                    <button
+                      key={persona.id}
+                      type="button"
+                      onClick={() => {
+                        if (isLocked) {
+                          navigate('/pricing');
+                          return;
+                        }
+                        handleSwap(activeSlot, persona);
+                      }}
+                      style={{
+                        background: persona.bgTint,
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: '12px',
+                        padding: '1rem',
+                        cursor: 'pointer',
+                        transition: reducedMotion ? 'none' : 'all 150ms ease',
+                        textAlign: 'left',
+                        opacity: isLocked ? 0.65 : 1,
+                        position: 'relative',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (isLocked || reducedMotion) return;
                         e.currentTarget.style.borderColor = persona.color;
                         e.currentTarget.style.transform = 'translateY(-2px)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#E0D8D0';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }}
-                  >
-                    {isLocked && (
-                      <div style={{ position: 'absolute', top: '10px', right: '10px', color: '#1A1714' }}>
-                        <Lock style={{ width: '13px', height: '13px' }} />
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = '#E0D8D0';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }}
+                    >
+                      {isLocked && (
+                        <div style={{ position: 'absolute', top: '10px', right: '10px', color: '#1A1714' }}>
+                          <Lock style={{ width: '13px', height: '13px' }} />
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            width: '7px',
+                            height: '7px',
+                            borderRadius: '50%',
+                            background: persona.color,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>
+                          {persona.name}
+                        </span>
                       </div>
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: persona.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>{persona.name}</span>
-                    </div>
-                    <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.5, marginTop: '.4rem' }}>{persona.description}</p>
-                    <p style={{ fontSize: '11px', color: '#6B6460', fontStyle: 'italic', marginTop: '.4rem' }}>{persona.quote}</p>
-                    {isLocked && (
-                      <div style={{ marginTop: '.6rem', fontSize: '11px', color: '#1A1714' }}>
-                        Unlock with Plus — $12/month
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+                      <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.5, marginTop: '.4rem' }}>
+                        {persona.description}
+                      </p>
+                      <p
+                        style={{
+                          fontSize: '11px',
+                          color: '#6B6460',
+                          fontStyle: 'italic',
+                          marginTop: '.4rem',
+                        }}
+                      >
+                        {persona.quote}
+                      </p>
+                      {isLocked && (
+                        <div style={{ marginTop: '.6rem', fontSize: '11px', color: '#1A1714' }}>
+                          Unlock with Plus — $12/month
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             <div style={{ height: '0.5px', background: '#E0D8D0', margin: '1rem 0' }} />
           </div>
