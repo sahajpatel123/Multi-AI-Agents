@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getUserColor, getUserInitials } from '../utils/roomUtils';
 import { copyToClipboard } from '../lib/clipboard';
+import { formatRoomSynthesisExport } from '../lib/roomSynthesisExport';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import { setRedirectIntent } from '../utils/redirectIntent';
 
@@ -83,8 +84,10 @@ export function RoomPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [boardQuery, setBoardQuery] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const boardSearchRef = useRef<HTMLInputElement | null>(null);
   const pickerSearchRef = useRef<HTMLInputElement | null>(null);
+  const copyStatusTimerRef = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
     if (!slug) return;
@@ -227,6 +230,57 @@ export function RoomPage() {
       window.setTimeout(() => setInviteToast(false), 2000);
     } else {
       setActionError('Could not copy invite link — copy from the address bar instead.');
+      window.setTimeout(() => setActionError(null), 3200);
+    }
+  };
+
+  const flashCopyStatus = (status: 'copied' | 'failed') => {
+    if (copyStatusTimerRef.current != null) {
+      window.clearTimeout(copyStatusTimerRef.current);
+    }
+    setCopyStatus(status);
+    copyStatusTimerRef.current = window.setTimeout(() => {
+      setCopyStatus('idle');
+      copyStatusTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (copyStatusTimerRef.current != null) {
+        window.clearTimeout(copyStatusTimerRef.current);
+      }
+    };
+  }, []);
+
+  const copySynthesis = async () => {
+    if (!room) return;
+    const markdown = formatRoomSynthesisExport({
+      roomName: room.name || 'Research room',
+      shareUrl: room.share_url || `${window.location.origin}/room/${slug}`,
+      memberCount: members.length,
+      taskCount: tasks.length,
+      synthesis: synthText,
+      patterns,
+      contradictions: contradictions.map((c: any) => ({
+        member_a: c.member_a,
+        member_b: c.member_b,
+        claim_a: c.claim_a,
+        claim_b: c.claim_b,
+        resolution_hint: c.resolution_hint,
+      })),
+      tasks: tasks.map((t: any) => ({
+        title: getTaskTitle(t),
+        author: memberNameById[t.user_id] || undefined,
+        score: t.final_score,
+      })),
+    });
+    const ok = await copyToClipboard(markdown);
+    if (ok) {
+      flashCopyStatus('copied');
+    } else {
+      flashCopyStatus('failed');
+      setActionError('Could not copy synthesis — select the text and copy manually.');
       window.setTimeout(() => setActionError(null), 3200);
     }
   };
@@ -390,27 +444,58 @@ export function RoomPage() {
             </span>
           ) : null}
           {synthesis && tasks.length >= 2 ? (
-            <button
-              type="button"
-              title="Refresh synthesis"
-              onClick={() => void handleRefreshSynthesis()}
-              disabled={synthesisRefreshing}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: synthesisRefreshing ? 'default' : 'pointer',
-                color: '#C4956A',
-                padding: 4,
-                opacity: synthesisRefreshing ? 0.5 : 1,
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            >
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden style={synthesisRefreshing ? { animation: 'spin 1s linear infinite' } : undefined}>
-                <path d="M21 2v6h-6M3 22v-6h6" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M3 12a9 9 0 0115.36-6.36L21 8M21 12a9 9 0 01-15.36 6.36L3 16" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
+            <>
+              <button
+                type="button"
+                title="Copy synthesis as markdown"
+                aria-label={
+                  copyStatus === 'copied'
+                    ? 'Synthesis copied'
+                    : copyStatus === 'failed'
+                      ? 'Copy failed'
+                      : 'Copy synthesis as markdown'
+                }
+                onClick={() => void copySynthesis()}
+                style={{
+                  background: 'none',
+                  border: '0.5px solid rgba(196,149,106,0.45)',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  color: copyStatus === 'failed' ? '#F0997B' : '#C4956A',
+                  padding: '3px 8px',
+                  fontSize: 10,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy'}
+              </button>
+              <button
+                type="button"
+                title="Refresh synthesis"
+                aria-label="Refresh synthesis"
+                onClick={() => void handleRefreshSynthesis()}
+                disabled={synthesisRefreshing}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: synthesisRefreshing ? 'default' : 'pointer',
+                  color: '#C4956A',
+                  padding: 4,
+                  opacity: synthesisRefreshing ? 0.5 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden style={synthesisRefreshing ? { animation: 'spin 1s linear infinite' } : undefined}>
+                  <path d="M21 2v6h-6M3 22v-6h6" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M3 12a9 9 0 0115.36-6.36L21 8M21 12a9 9 0 01-15.36 6.36L3 16" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </>
           ) : null}
         </div>
       </div>

@@ -68,6 +68,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Search minds when swapping a panel slot on Personas',
       '[IMPROVED] Personas panel save: busy state, real errors, accessible toasts',
       '[NEW] Search research tasks on Room boards and in the add-task picker',
+      '[NEW] Copy Room group synthesis as markdown (contradictions, patterns, tasks)',
     ],
   },
   {
