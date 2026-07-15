@@ -197,7 +197,7 @@ export function Navbar() {
                         navigate('/app');
                         return;
                       }
-                      setRedirectIntent('/arena');
+                      setRedirectIntent('/app');
                       navigate('/signin');
                     }}
                   >
@@ -369,7 +369,7 @@ export function Navbar() {
                 navigate('/app');
                 return;
               }
-              setRedirectIntent('/arena');
+              setRedirectIntent('/app');
               navigate('/signin');
             }}
           >

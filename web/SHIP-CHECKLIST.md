@@ -100,6 +100,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Upgrade checkout honesty**: Razorpay failures surface as role=alert (no silent dismiss); offline banner is assertive alert.
 - **Agent history rename**: title validation (required/max), optimistic update with rollback, role=alert on failure.
 - **Arena sidebar renames**: custom turn titles persist in localStorage; validation + Esc-safe save.
+- **Create-room share**: system share sheet after room create (with copy fallback); Agent toasts use status/alert by severity.
 
 ## Required production environment
 

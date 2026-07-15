@@ -85,6 +85,7 @@ import {
   agentTaskRenameIssueMessage,
   validateAgentTaskTitle,
 } from '../lib/agentTaskRename';
+import { agentToastAriaLive, agentToastKind, agentToastRole } from '../lib/agentToast';
 import { motionDuration } from '../lib/motion';
 import {
   roomCreateButtonLabel,
@@ -94,6 +95,11 @@ import {
   validateRoomName,
 } from '../lib/roomCreate';
 import { roomsListBodyMode } from '../lib/roomsListView';
+import {
+  buildRoomInviteShareData,
+  canUseNativeShare,
+  invokeNativeShare,
+} from '../lib/shareUrl';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import {
   domainForExpertiseLevel,
@@ -792,6 +798,8 @@ export function AgentPage() {
   const [roomsSearchQuery, setRoomsSearchQuery] = useState('');
   const roomsSearchRef = useRef<HTMLInputElement | null>(null);
   const [copyRoomLinkFeedback, setCopyRoomLinkFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [shareRoomInviteStatus, setShareRoomInviteStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
+  const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [copyAnswerFeedback, setCopyAnswerFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const pendingRoomHandledRef = useRef<string | null>(null);
 
@@ -924,6 +932,10 @@ export function AgentPage() {
     const timer = window.setTimeout(() => setToastMessage(null), 3000);
     return () => window.clearTimeout(timer);
   }, [toastMessage]);
+
+  useEffect(() => {
+    setNativeShareAvailable(canUseNativeShare());
+  }, []);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -1641,6 +1653,8 @@ export function AgentPage() {
     setCreatedRoom(null);
     setRoomName('');
     setRoomNameError(null);
+    setCopyRoomLinkFeedback('idle');
+    setShareRoomInviteStatus('idle');
   }, [creatingRoom]);
 
   useEffect(() => {
@@ -3345,9 +3359,32 @@ export function AgentPage() {
           </header>
 
       {toastMessage ? (
-        <div style={{ position: 'fixed', top: 64, right: 20, zIndex: 80, background: '#1A1714', color: '#FAF7F4', padding: '10px 14px', borderRadius: 10, fontSize: 12 }}>
-          {toastMessage}
-        </div>
+        (() => {
+          const kind = agentToastKind(toastMessage);
+          const isError = kind === 'error';
+          return (
+            <div
+              role={agentToastRole(kind)}
+              aria-live={agentToastAriaLive(kind)}
+              style={{
+                position: 'fixed',
+                top: 64,
+                right: 20,
+                zIndex: 80,
+                background: isError ? '#4A2A22' : '#1A1714',
+                color: '#FAF7F4',
+                padding: '10px 14px',
+                borderRadius: 10,
+                fontSize: 12,
+                maxWidth: 'min(360px, calc(100vw - 40px))',
+                lineHeight: 1.45,
+                boxShadow: '0 8px 24px rgba(26,23,20,0.18)',
+              }}
+            >
+              {toastMessage}
+            </div>
+          );
+        })()
       ) : null}
 
       <main
@@ -7102,7 +7139,7 @@ export function AgentPage() {
                       size="sm"
                       icon={Icons.flame(14)}
                       onClick={() => {
-                        setRedirectIntent('/arena');
+                        setRedirectIntent('/app');
                         navigate('/app', {
                           state: {
                             agentStressPrompt: plainAnswerText,
@@ -8525,32 +8562,82 @@ export function AgentPage() {
                   <span style={{ wordBreak: 'break-all' }}>
                     {(createdRoom.share_url || '').replace(/^https?:\/\//, '')}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const url =
-                        createdRoom.share_url ||
-                        `${window.location.origin}/room/${createdRoom.slug}`;
-                      void copyToClipboard(url).then((ok) => {
-                        setCopyRoomLinkFeedback(ok ? 'copied' : 'failed');
-                        window.setTimeout(() => setCopyRoomLinkFeedback('idle'), 1800);
-                      });
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: copyRoomLinkFeedback === 'failed' ? '#D85A30' : '#C4956A',
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      fontFamily: 'Georgia, serif',
-                    }}
-                  >
-                    {copyRoomLinkFeedback === 'copied'
-                      ? 'Copied!'
-                      : copyRoomLinkFeedback === 'failed'
-                        ? 'Couldn’t copy'
-                        : 'Copy link'}
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                    {nativeShareAvailable ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url =
+                            createdRoom.share_url ||
+                            `${window.location.origin}/room/${createdRoom.slug}`;
+                          const data = buildRoomInviteShareData({
+                            roomName: createdRoom.name || roomName || 'Research room',
+                            shareUrl: url,
+                          });
+                          void invokeNativeShare(data).then(async (result) => {
+                            if (result === 'shared') {
+                              setShareRoomInviteStatus('shared');
+                              window.setTimeout(() => setShareRoomInviteStatus('idle'), 2200);
+                              return;
+                            }
+                            if (result === 'cancelled') return;
+                            const ok = await copyToClipboard(url);
+                            setCopyRoomLinkFeedback(ok ? 'copied' : 'failed');
+                            setShareRoomInviteStatus(ok ? 'idle' : 'failed');
+                            window.setTimeout(() => {
+                              setCopyRoomLinkFeedback('idle');
+                              setShareRoomInviteStatus('idle');
+                            }, 1800);
+                          });
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color:
+                            shareRoomInviteStatus === 'failed'
+                              ? '#D85A30'
+                              : shareRoomInviteStatus === 'shared'
+                                ? '#5A8C6A'
+                                : '#C4956A',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontFamily: 'Georgia, serif',
+                        }}
+                      >
+                        {shareRoomInviteStatus === 'shared'
+                          ? 'Shared!'
+                          : shareRoomInviteStatus === 'failed'
+                            ? 'Share failed'
+                            : 'Share…'}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url =
+                          createdRoom.share_url ||
+                          `${window.location.origin}/room/${createdRoom.slug}`;
+                        void copyToClipboard(url).then((ok) => {
+                          setCopyRoomLinkFeedback(ok ? 'copied' : 'failed');
+                          window.setTimeout(() => setCopyRoomLinkFeedback('idle'), 1800);
+                        });
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: copyRoomLinkFeedback === 'failed' ? '#D85A30' : '#C4956A',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontFamily: 'Georgia, serif',
+                      }}
+                    >
+                      {copyRoomLinkFeedback === 'copied'
+                        ? 'Copied!'
+                        : copyRoomLinkFeedback === 'failed'
+                          ? 'Couldn’t copy'
+                          : 'Copy link'}
+                    </button>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 14, alignItems: 'center' }}>
                   <button

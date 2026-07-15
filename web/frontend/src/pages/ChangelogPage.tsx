@@ -84,6 +84,8 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Upgrade modal shows payment errors; offline banner uses assertive alert',
       '[IMPROVED] Agent history rename validates titles and rolls back on failure',
       '[IMPROVED] Arena sidebar conversation renames persist and validate titles',
+      '[NEW] Share a new Room invite from the create modal (system share + copy)',
+      '[IMPROVED] Agent toasts announce failures as alerts for screen readers',
     ],
   },
   {

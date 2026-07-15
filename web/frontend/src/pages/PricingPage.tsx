@@ -276,7 +276,7 @@ export function PricingPage() {
 
   const handleUpgrade = (planKey: string) => {
     if (!isAuthenticated) {
-      setRedirectIntent('/arena');
+      setRedirectIntent('/app');
       navigate('/signin');
       return;
     }
