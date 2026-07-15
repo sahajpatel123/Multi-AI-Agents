@@ -46,6 +46,10 @@ logs/
 web/backend/logs/
 *.log.*
 
+# Playwright (generated per-run; CI uploads the HTML report as an artifact)
+web/frontend/test-results/
+web/frontend/playwright-report/
+
 # IDE
 .vscode/
 .idea/
