@@ -94,6 +94,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Personas reset confirm**: two-step “Reset panel?” before wiping custom slots; Esc cancels; toast on success.
 - **Agent history copy**: export the current filtered research history as markdown (scores, topics, task ids).
 - **Agent Rooms list honesty**: load failure ≠ empty (Retry); search when you have 3+ rooms; real empty copy.
+- **Create room modal**: works from idle Agent sidebar; name validation, busy state, Esc close, real errors.
 
 ## Required production environment
 
