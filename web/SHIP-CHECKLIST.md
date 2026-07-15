@@ -36,6 +36,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Upgrade modal a11y**: Escape closes (gated during Razorpay), dialog semantics, body scroll lock.
 - **Clipboard consistency**: Room invite, Agent room link, and Condura handoff use shared copy helper + failure feedback.
 - **Auth modal a11y**: dialog semantics, labelled title, tab roles, body scroll lock, alert on errors.
+- **Room recovery**: empty-task board guidance; branded load-error with Retry; guest Sign-in CTA with redirect intent.
 
 ## Required production environment
 

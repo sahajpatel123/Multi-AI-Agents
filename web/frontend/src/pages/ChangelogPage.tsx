@@ -41,6 +41,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Upgrade modal: Escape, dialog a11y, scroll lock (safe during checkout)',
       '[IMPROVED] Room / Agent / Condura copy actions use robust clipboard with failure feedback',
       '[IMPROVED] Auth modal dialog a11y — scroll lock, tabs, labelled title, error alerts',
+      '[IMPROVED] Room empty board + branded load recovery; guest Sign-in returns to room',
     ],
   },
   {

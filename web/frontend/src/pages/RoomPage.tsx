@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getUserColor, getUserInitials } from '../utils/roomUtils';
 import { copyToClipboard } from '../lib/clipboard';
+import { setRedirectIntent } from '../utils/redirectIntent';
 
 function LayersIcon() {
   return (
@@ -86,29 +87,24 @@ export function RoomPage() {
     setRoom(data);
   }, [slug]);
 
-  useEffect(() => {
+  const loadRoom = useCallback(async () => {
     if (!slug) return;
-    let cancelled = false;
     setLoading(true);
     setLoadErr(null);
-    void getRoom(slug)
-      .then((data) => {
-        if (!cancelled) {
-          setRoom(data);
-        }
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setLoadErr(e instanceof Error ? e.message : 'Could not load room');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const data = await getRoom(slug);
+      setRoom(data);
+    } catch (e: unknown) {
+      setLoadErr(e instanceof Error ? e.message : 'Could not load room');
+      setRoom(null);
+    } finally {
+      setLoading(false);
+    }
   }, [slug]);
+
+  useEffect(() => {
+    void loadRoom();
+  }, [loadRoom]);
 
   useEffect(() => {
     if (!slug || !user || authLoading) return;
@@ -455,7 +451,75 @@ export function RoomPage() {
     </div>
   );
 
-  const tasksGrid = (
+  const tasksGrid =
+    tasks.length === 0 ? (
+      <div
+        style={{
+          background: '#FAF7F2',
+          border: '0.5px solid #E0D5C5',
+          borderRadius: 12,
+          padding: '36px 24px',
+          textAlign: 'center',
+        }}
+      >
+        <svg
+          width={40}
+          height={40}
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden
+          style={{ margin: '0 auto 14px', display: 'block', color: '#D4C4B0' }}
+        >
+          <path
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+          />
+          <rect x="9" y="3" width="6" height="4" rx="1" stroke="currentColor" strokeWidth={1.5} />
+        </svg>
+        <p style={{ margin: 0, fontSize: 15, color: '#4A3728', fontWeight: 500, fontFamily: 'Georgia, serif' }}>
+          No research tasks yet
+        </p>
+        <p
+          style={{
+            margin: '8px auto 0',
+            maxWidth: 340,
+            fontSize: 13,
+            color: '#8C7355',
+            lineHeight: 1.55,
+          }}
+        >
+          {user && isMember
+            ? 'Add completed Agent tasks to this room so the group can synthesize shared findings.'
+            : user
+              ? 'Join this room to contribute your Agent research to the board.'
+              : 'Sign in to join this room and add your research tasks.'}
+        </p>
+        {user && isMember ? (
+          <button
+            type="button"
+            className="arena-btn arena-btn--primary arena-btn--md"
+            style={{ marginTop: 18 }}
+            onClick={() => setShowTaskPicker(true)}
+          >
+            Add your first task →
+          </button>
+        ) : !user ? (
+          <button
+            type="button"
+            className="arena-btn arena-btn--primary arena-btn--md"
+            style={{ marginTop: 18 }}
+            onClick={() => {
+              setRedirectIntent(`/room/${slug}`);
+              navigate('/signin');
+            }}
+          >
+            Sign in to join →
+          </button>
+        ) : null}
+      </div>
+    ) : (
     <div
       style={{
         display: 'grid',
@@ -586,7 +650,7 @@ export function RoomPage() {
         </button>
       ) : null}
     </div>
-  );
+    );
 
   if (!slug) {
     return <div style={{ padding: 24 }}>Invalid room</div>;
@@ -602,11 +666,75 @@ export function RoomPage() {
 
   if (loadErr || !room) {
     return (
-      <div style={{ minHeight: '100vh', background: '#F5F0E8', padding: 24 }}>
-        <p style={{ color: '#993C1D' }}>{loadErr || 'Room not found'}</p>
-        <button type="button" style={{ color: '#C4956A', marginTop: 12, cursor: 'pointer', background: 'none', border: 'none' }} onClick={() => navigate('/')}>
-          ← Home
-        </button>
+      <div
+        style={{
+          minHeight: '100vh',
+          background: '#F5F0E8',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '48px 24px',
+          textAlign: 'center',
+        }}
+      >
+        <p
+          style={{
+            fontSize: 12,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: '#C4956A',
+            marginBottom: 12,
+          }}
+        >
+          Room
+        </p>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: 'clamp(24px, 4vw, 32px)',
+            fontWeight: 500,
+            color: '#1A1714',
+            fontFamily: 'Georgia, serif',
+          }}
+        >
+          Couldn’t open this room
+        </h1>
+        <p
+          role="alert"
+          style={{
+            margin: '12px auto 0',
+            maxWidth: 400,
+            fontSize: 14,
+            color: '#6B6460',
+            lineHeight: 1.6,
+          }}
+        >
+          {loadErr || 'This room may have been removed, or the invite link is no longer valid.'}
+        </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginTop: 24 }}>
+          <button
+            type="button"
+            className="arena-btn arena-btn--primary arena-btn--md"
+            onClick={() => void loadRoom()}
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            className="arena-btn arena-btn--ghost arena-btn--md"
+            onClick={() => navigate('/app')}
+          >
+            Back to Arena
+          </button>
+          <button
+            type="button"
+            className="arena-btn arena-btn--ghost arena-btn--md"
+            onClick={() => navigate('/')}
+          >
+            Home
+          </button>
+        </div>
       </div>
     );
   }
@@ -627,9 +755,33 @@ export function RoomPage() {
             fontSize: 13,
             color: '#854F0B',
             textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
           }}
         >
-          Sign in to join this room and add tasks
+          <span>Sign in to join this room and add tasks</span>
+          <button
+            type="button"
+            onClick={() => {
+              setRedirectIntent(`/room/${slug}`);
+              navigate('/signin');
+            }}
+            style={{
+              background: '#1A1714',
+              color: '#FAF7F4',
+              border: 'none',
+              borderRadius: 999,
+              padding: '6px 14px',
+              fontSize: 12,
+              cursor: 'pointer',
+              fontFamily: 'Georgia, serif',
+            }}
+          >
+            Sign in
+          </button>
         </div>
       ) : null}
       {actionError ? (
