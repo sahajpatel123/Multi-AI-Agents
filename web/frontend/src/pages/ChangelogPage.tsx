@@ -94,6 +94,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Agent compose drafts autosave (idle question + per-task follow-up)',
       '[NEW] Stop control on Arena while minds are generating or a focused chat is streaming',
       '[NEW] Stop control on Agent Mode while research, refine, or challenge is running',
+      '[IMPROVED] Cross-pollinate shows busy state; Discuss/Debate errors can be dismissed',
     ],
   },
   {

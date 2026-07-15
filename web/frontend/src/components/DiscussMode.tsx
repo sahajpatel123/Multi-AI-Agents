@@ -525,9 +525,29 @@ export function DiscussMode({
               background: '#FFFFFF',
               border: '0.5px solid rgba(196,149,106,0.3)',
               borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
             }}
           >
-            <p style={{ fontSize: '11px', color: '#6B6460', margin: 0 }}>{error}</p>
+            <p style={{ fontSize: '12px', color: '#6B6460', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
+            <button
+              type="button"
+              aria-label="Dismiss error"
+              onClick={() => setError(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 16,
+                color: '#A89070',
+                lineHeight: 1,
+                padding: 0,
+                flexShrink: 0,
+              }}
+            >
+              ×
+            </button>
           </div>
         )}
 

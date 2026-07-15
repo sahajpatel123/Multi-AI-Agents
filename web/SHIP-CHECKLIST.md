@@ -109,6 +109,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent compose drafts**: idle task + per-task follow-up autosave to localStorage; cleared only after successful start/refine.
 - **Arena Stop**: header control aborts in-flight panel/stream or focused chat; phase returns to idle cleanly.
 - **Agent Stop**: header control cancels pipeline poll / refine / challenge loops without a stuck busy state.
+- **Cross-pollinate busy**: loading label while opening Arena; Discuss/Debate errors are dismissible.
 
 ## Required production environment
 

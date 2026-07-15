@@ -689,6 +689,7 @@ export function AgentPage() {
   const [agentAddonCheckout, setAgentAddonCheckout] = useState(false);
   const [task, setTask] = useState('');
   const [isRunning, setIsRunning] = useState(false);
+  const [crossPollinateBusy, setCrossPollinateBusy] = useState(false);
   /** Bumped to cancel in-flight poll loops (run / refine / bridge). */
   const runGenerationRef = useRef(0);
   const [isRefining, setIsRefining] = useState(false);
@@ -1600,7 +1601,7 @@ export function AgentPage() {
   };
 
   const handleCrossPollinate = async () => {
-    if (!result?.task_id || isRunning || isRefining) return;
+    if (!result?.task_id || isRunning || isRefining || crossPollinateBusy) return;
     const taskId = result.task_id;
     const plainAnswer = plainAnswerText || '';
     const answerText = plainAnswer.trim() || result.final_answer || '';
@@ -1611,6 +1612,7 @@ export function AgentPage() {
     }
 
     setError(null);
+    setCrossPollinateBusy(true);
     try {
       await crossPollinateAgentAnswer(taskId, personaIds);
       navigate('/app', {
@@ -1623,6 +1625,7 @@ export function AgentPage() {
     } catch (e) {
       const msg = e instanceof ApiError ? agentDetailMessage(e.detail, 'Cross-pollination failed') : e instanceof Error ? e.message : 'Cross-pollination failed';
       setError(msg);
+      setCrossPollinateBusy(false);
     }
   };
 
@@ -7340,10 +7343,13 @@ export function AgentPage() {
                       type="button"
                       variant="secondary"
                       size="sm"
-                      icon={Icons.refresh(14)}
+                      icon={crossPollinateBusy ? undefined : Icons.refresh(14)}
+                      loading={crossPollinateBusy}
+                      disabled={crossPollinateBusy || isRunning || isRefining}
+                      title="Send this answer to Arena so four minds can challenge it"
                       onClick={() => void handleCrossPollinate()}
                     >
-                      Cross-pollinate to Arena
+                      {crossPollinateBusy ? 'Opening Arena…' : 'Cross-pollinate to Arena'}
                     </Button>
                     {result.task_id && result.memory_saved ? (
                       <button

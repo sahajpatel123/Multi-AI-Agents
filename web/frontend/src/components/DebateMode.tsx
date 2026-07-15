@@ -760,9 +760,29 @@ export function DebateMode({
                 background: '#FFFFFF',
                 border: '0.5px solid rgba(196,149,106,0.3)',
                 borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 12,
               }}
             >
-              <p style={{ fontSize: '13px', color: '#6B6460', margin: 0 }}>{error}</p>
+              <p style={{ fontSize: '13px', color: '#6B6460', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
+              <button
+                type="button"
+                aria-label="Dismiss error"
+                onClick={() => setError(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 16,
+                  color: '#A89070',
+                  lineHeight: 1,
+                  padding: 0,
+                  flexShrink: 0,
+                }}
+              >
+                ×
+              </button>
             </div>
           ) : null}
           <div ref={threadEndRef} />
@@ -868,9 +888,29 @@ export function DebateMode({
                   background: '#FFFFFF',
                   border: '0.5px solid rgba(196,149,106,0.3)',
                   borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 12,
                 }}
               >
-                <p style={{ fontSize: '13px', color: '#6B6460', margin: 0 }}>{error}</p>
+                <p style={{ fontSize: '13px', color: '#6B6460', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
+                <button
+                  type="button"
+                  aria-label="Dismiss error"
+                  onClick={() => setError(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 16,
+                    color: '#A89070',
+                    lineHeight: 1,
+                    padding: 0,
+                    flexShrink: 0,
+                  }}
+                >
+                  ×
+                </button>
               </div>
             ) : null}
 
