@@ -104,6 +104,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Templates load honesty**: failed catalog fetch ≠ empty (Retry); history delete restores row on API failure.
 - **Agent refine follow-up**: 1000-char budget (API-aligned), restore draft on failure, role=alert on errors.
 - **Agent multi-task + challenge**: 2000-char caps per parallel question; challenge failures alert + Retry.
+- **Arena recent chips**: visible remove (×) + Delete key; stress-from-Agent banner dismissible status.
 
 ## Required production environment
 

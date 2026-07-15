@@ -89,6 +89,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Task templates show load errors with Retry (not a blank catalog)',
       '[IMPROVED] Agent follow-up refine: live char budget, keep draft if refine fails',
       '[IMPROVED] Multi-task fields honor 2000-char caps; Challenge shows Retry on failure',
+      '[IMPROVED] Arena recent prompts: tap × to remove (mobile-friendly); dismiss stress banner',
     ],
   },
   {
