@@ -64,6 +64,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Network banner**: safe-area padding, reconnected dismiss, reconnect timer cleaned up on unmount.
 - **Agent `/` focus**: press `/` to focus research compose or follow-up (shared slash-focus helper with Arena).
 - **Discuss / Debate copy**: markdown thread export (Copy thread / Copy debate) with clipboard feedback.
+- **Condura CTA modal**: body scroll lock + copy-timer cleanup; collapsible Arena prompt honors reduced motion.
 
 ## Required production environment
 

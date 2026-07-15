@@ -1,5 +1,11 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useIsMobile } from '../hooks/useIsMobile';
+import {
+  collapsiblePromptAriaLabel,
+  collapsiblePromptHint,
+  isCollapsiblePrompt,
+} from '../lib/collapsiblePrompt';
+import { motionTransition, prefersReducedMotion } from '../lib/motion';
 
 const TEXT_STYLE: CSSProperties = {
   fontFamily: 'Georgia, serif',
@@ -8,7 +14,6 @@ const TEXT_STYLE: CSSProperties = {
   color: '#4A3728',
   lineHeight: 1.65,
   textAlign: 'center',
-  transition: 'all 0.3s ease',
   margin: 0,
   whiteSpace: 'pre-wrap',
   wordBreak: 'break-word',
@@ -33,7 +38,8 @@ type CollapsiblePromptProps = {
 export function CollapsiblePrompt({ text }: CollapsiblePromptProps) {
   const [expanded, setExpanded] = useState(false);
   const isMobile = useIsMobile();
-  const isLong = text.length > 120;
+  const isLong = isCollapsiblePrompt(text);
+  const reducedMotion = prefersReducedMotion();
 
   useEffect(() => {
     setExpanded(false);
@@ -49,6 +55,7 @@ export function CollapsiblePrompt({ text }: CollapsiblePromptProps) {
   const textStyle: CSSProperties = {
     ...TEXT_STYLE,
     fontSize: isMobile ? 13 : 15,
+    transition: motionTransition('all', 300),
   };
 
   if (!isLong) {
@@ -72,6 +79,7 @@ export function CollapsiblePrompt({ text }: CollapsiblePromptProps) {
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
+      aria-label={collapsiblePromptAriaLabel(expanded)}
     >
       <div
         style={{
@@ -79,7 +87,9 @@ export function CollapsiblePrompt({ text }: CollapsiblePromptProps) {
           overflow: 'hidden',
           whiteSpace: expanded ? 'normal' : 'nowrap',
           textOverflow: expanded ? 'clip' : 'ellipsis',
-          transition: 'max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: reducedMotion
+            ? 'none'
+            : 'max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
         <p
@@ -92,7 +102,7 @@ export function CollapsiblePrompt({ text }: CollapsiblePromptProps) {
           {text}
         </p>
       </div>
-      <span style={HINT_STYLE}>{expanded ? 'Collapse ↑' : 'Read full prompt ↓'}</span>
+      <span style={HINT_STYLE}>{collapsiblePromptHint(expanded)}</span>
     </div>
   );
 }

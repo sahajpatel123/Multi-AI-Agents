@@ -41,7 +41,15 @@ export function ConduraInstallCTA({
   const mobile = isMobileUa();
   const firstBtnRef = useRef<HTMLButtonElement | null>(null);
   const lastBtnRef = useRef<HTMLButtonElement | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
   const safeInstallUrl = resolveInstallUrl(installUrl);
+
+  const clearCopyTimer = () => {
+    if (copyTimerRef.current != null) {
+      window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
+  };
 
   const runProbe = useCallback(async () => {
     setProbing(true);
@@ -59,10 +67,21 @@ export function ConduraInstallCTA({
       setProbe({ kind: 'unknown' });
       setError(null);
       setCopied(false);
+      clearCopyTimer();
       return;
     }
     // Focus the primary button on open so keyboard users can act immediately.
     firstBtnRef.current?.focus();
+  }, [open]);
+
+  // Lock background scroll while the honesty CTA is open (parity with other modals).
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
   }, [open]);
 
   // Escape-key closes the modal.
@@ -100,6 +119,8 @@ export function ConduraInstallCTA({
     return () => window.removeEventListener('keydown', trap);
   }, [open]);
 
+  useEffect(() => () => clearCopyTimer(), []);
+
   if (!open) return null;
 
   const copyHandoff = async () => {
@@ -113,13 +134,12 @@ export function ConduraInstallCTA({
     }
     setError(null);
     setCopied(true);
+    clearCopyTimer();
     const resetMs = motionDuration(2000);
-    if (resetMs > 0) {
-      window.setTimeout(() => setCopied(false), resetMs);
-    } else {
-      // Reduced motion: still clear the "Copied" label, just without a long hold.
-      window.setTimeout(() => setCopied(false), 0);
-    }
+    copyTimerRef.current = window.setTimeout(() => {
+      setCopied(false);
+      copyTimerRef.current = null;
+    }, resetMs > 0 ? resetMs : 0);
   };
 
   return (
