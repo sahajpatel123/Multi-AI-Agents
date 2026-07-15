@@ -57,6 +57,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **MicroLoader / footer motion**: static loading label under reduced motion; footer anchors + breathe dots honor `prefers-reduced-motion`.
 - **Watchlist recovery**: load failure ≠ empty state (Retry); two-step remove confirm; pause switch labels.
 - **Agent pipeline loader**: CalligraphyLoader static path under reduced motion; stage progressbar + live status.
+- **Share landing actions**: public `/share` can Copy take, Copy link, and system Share… when available.
 
 ## Required production environment
 

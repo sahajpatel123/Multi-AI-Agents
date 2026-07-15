@@ -61,6 +61,35 @@ ${agentName} says:
 Check it out: ${shareUrl}`;
 }
 
+/**
+ * Plain-text clipboard payload for the public /share landing.
+ * Includes attribution + optional share URL so recipients can keep or re-send the take.
+ */
+export function buildShareTakeClipboardText(opts: {
+  agentName: string;
+  prompt?: string;
+  response?: string;
+  shareUrl?: string;
+}): string {
+  const agentName = (opts.agentName || 'Arena mind').trim() || 'Arena mind';
+  const prompt = (opts.prompt || '').trim();
+  const response = (opts.response || '').trim();
+  const shareUrl = (opts.shareUrl || '').trim();
+  const lines: string[] = [`${agentName} · Arena`];
+  if (prompt) {
+    lines.push('', `Q: ${prompt}`);
+  }
+  if (response) {
+    lines.push('', `"${response}"`);
+  } else if (!prompt) {
+    lines.push('', 'A take shared on Arena.');
+  }
+  if (shareUrl) {
+    lines.push('', shareUrl);
+  }
+  return lines.join('\n').trim();
+}
+
 /** Payload for the Web Share API (system share sheet on mobile / supported desktops). */
 export type NativeShareData = {
   title: string;

@@ -48,5 +48,7 @@ describe('SharePage', () => {
     expect(screen.getByText('Should I ship today?')).toBeInTheDocument();
     expect(screen.getByText('Ship the smallest honest slice.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try this in arena/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy take/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
   });
 });

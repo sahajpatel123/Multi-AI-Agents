@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
@@ -6,6 +6,13 @@ import { AGENTS } from '../types';
 import { PERSONAS } from '../data/personas';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
+import { copyToClipboard } from '../lib/clipboard';
+import {
+  buildNativeShareData,
+  buildShareTakeClipboardText,
+  canUseNativeShare,
+  invokeNativeShare,
+} from '../lib/shareUrl';
 
 const MAX_PARAM_LEN = 2000;
 
@@ -55,6 +62,9 @@ export function SharePage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const [copied, setCopied] = useState<'take' | 'link' | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
 
   const agentId = sanitizeParam(params.get('agent'), 64);
   const prompt = sanitizeParam(params.get('prompt'));
@@ -63,6 +73,21 @@ export function SharePage() {
 
   const hasContent = Boolean(response || prompt);
 
+  const pageUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return window.location.href;
+  }, [agentId, prompt, response]);
+
+  useEffect(() => {
+    setNativeShareAvailable(canUseNativeShare());
+  }, []);
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(null), 1600);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+
   const goTry = () => {
     if (isAuthenticated) {
       navigate('/app');
@@ -70,6 +95,47 @@ export function SharePage() {
     }
     setRedirectIntent('/app');
     navigate('/signin');
+  };
+
+  const handleCopyTake = async () => {
+    setCopyError(null);
+    const text = buildShareTakeClipboardText({
+      agentName: agent.name,
+      prompt,
+      response: response || agent.oneLiner,
+      shareUrl: pageUrl || undefined,
+    });
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopied('take');
+    } else {
+      setCopyError('Could not copy — select the take and copy manually.');
+    }
+  };
+
+  const handleCopyLink = async () => {
+    setCopyError(null);
+    const url = pageUrl || (typeof window !== 'undefined' ? window.location.href : '');
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      setCopied('link');
+    } else {
+      setCopyError('Could not copy the link. Long-press the address bar instead.');
+    }
+  };
+
+  const handleNativeShare = async () => {
+    setCopyError(null);
+    const oneLiner = response || agent.oneLiner;
+    const data = buildNativeShareData({
+      agentName: agent.name,
+      oneLiner,
+      shareUrl: pageUrl || (typeof window !== 'undefined' ? window.location.href : ''),
+    });
+    const result = await invokeNativeShare(data);
+    if (result === 'failed' || result === 'unavailable') {
+      setCopyError('Could not open system share. Try Copy link instead.');
+    }
   };
 
   return (
@@ -236,7 +302,46 @@ export function SharePage() {
               <p style={{ fontSize: 13, color: '#6B6460', margin: 0, lineHeight: 1.6 }}>
                 Four minds answer every question. Challenge any take. Keep the best.
               </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+
+              {copyError ? (
+                <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: 0, lineHeight: 1.45 }}>
+                  {copyError}
+                </p>
+              ) : null}
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--secondary arena-btn--sm"
+                  onClick={() => {
+                    void handleCopyTake();
+                  }}
+                >
+                  {copied === 'take' ? 'Copied take' : 'Copy take'}
+                </button>
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--secondary arena-btn--sm"
+                  onClick={() => {
+                    void handleCopyLink();
+                  }}
+                >
+                  {copied === 'link' ? 'Link copied' : 'Copy link'}
+                </button>
+                {nativeShareAvailable ? (
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--secondary arena-btn--sm"
+                    onClick={() => {
+                      void handleNativeShare();
+                    }}
+                  >
+                    Share…
+                  </button>
+                ) : null}
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
                 <button type="button" className="arena-btn arena-btn--primary arena-btn--md" onClick={goTry}>
                   {isAuthenticated ? 'Open Arena' : 'Try this in Arena'} →
                 </button>

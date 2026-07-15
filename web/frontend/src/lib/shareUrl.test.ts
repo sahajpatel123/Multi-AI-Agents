@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildNativeShareData,
+  buildShareTakeClipboardText,
   buildShareText,
   buildShareUrl,
   canUseNativeShare,
@@ -60,6 +61,32 @@ describe('buildShareText', () => {
       expect(text).toContain(shareUrl);
       expect(text).not.toMatch(/\/app(\?|$)/);
     }
+  });
+});
+
+describe('buildShareTakeClipboardText', () => {
+  it('formats take with question, response, and public URL', () => {
+    const text = buildShareTakeClipboardText({
+      agentName: 'Marcus',
+      prompt: 'What is enough?',
+      response: 'Enough is when desire ends.',
+      shareUrl: 'https://arena.app/share?agent=a',
+    });
+    expect(text).toContain('Marcus · Arena');
+    expect(text).toContain('Q: What is enough?');
+    expect(text).toContain('Enough is when desire ends.');
+    expect(text).toContain('https://arena.app/share?agent=a');
+    expect(text).not.toContain('/app');
+  });
+
+  it('handles response-only takes', () => {
+    const text = buildShareTakeClipboardText({
+      agentName: 'The Analyst',
+      response: 'Ship the smallest honest slice.',
+    });
+    expect(text).toContain('The Analyst · Arena');
+    expect(text).toContain('Ship the smallest honest slice.');
+    expect(text).not.toContain('Q:');
   });
 });
 
