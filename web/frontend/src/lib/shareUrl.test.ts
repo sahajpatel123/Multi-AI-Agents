@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildShareText, buildShareUrl, SHARE_MAX_TEXT_LEN } from './shareUrl';
+import {
+  buildNativeShareData,
+  buildShareText,
+  buildShareUrl,
+  canUseNativeShare,
+  invokeNativeShare,
+  SHARE_MAX_TEXT_LEN,
+} from './shareUrl';
 
 describe('buildShareUrl', () => {
   it('builds a public /share URL with query params', () => {
@@ -53,5 +60,52 @@ describe('buildShareText', () => {
       expect(text).toContain(shareUrl);
       expect(text).not.toMatch(/\/app(\?|$)/);
     }
+  });
+});
+
+describe('native share helpers', () => {
+  const shareUrl = 'https://arena.app/share?agent=a&prompt=p&response=r';
+
+  it('buildNativeShareData uses public share URL and agent voice', () => {
+    const data = buildNativeShareData({
+      agentName: 'Marcus',
+      oneLiner: 'Enough.',
+      shareUrl,
+    });
+    expect(data.url).toBe(shareUrl);
+    expect(data.title).toBe('Marcus on Arena');
+    expect(data.text).toContain('Enough.');
+    expect(data.text).toContain('Marcus');
+    expect(data.url).not.toContain('/app');
+  });
+
+  it('canUseNativeShare detects navigator.share', () => {
+    expect(canUseNativeShare({ share: async () => {} })).toBe(true);
+    expect(canUseNativeShare({})).toBe(false);
+    expect(canUseNativeShare(null)).toBe(false);
+  });
+
+  it('invokeNativeShare maps success, cancel, and failure', async () => {
+    const data = buildNativeShareData({
+      agentName: 'Marcus',
+      oneLiner: 'Enough.',
+      shareUrl,
+    });
+    expect(await invokeNativeShare(data, async () => {})).toBe('shared');
+
+    const abort = Object.assign(new Error('dismissed'), { name: 'AbortError' });
+    expect(
+      await invokeNativeShare(data, async () => {
+        throw abort;
+      }),
+    ).toBe('cancelled');
+
+    expect(
+      await invokeNativeShare(data, async () => {
+        throw new Error('nope');
+      }),
+    ).toBe('failed');
+
+    expect(await invokeNativeShare({ ...data, url: '' }, async () => {})).toBe('failed');
   });
 });

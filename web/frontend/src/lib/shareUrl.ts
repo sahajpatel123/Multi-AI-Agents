@@ -60,3 +60,68 @@ ${agentName} says:
 
 Check it out: ${shareUrl}`;
 }
+
+/** Payload for the Web Share API (system share sheet on mobile / supported desktops). */
+export type NativeShareData = {
+  title: string;
+  text: string;
+  url: string;
+};
+
+export function buildNativeShareData(opts: {
+  agentName: string;
+  oneLiner: string;
+  shareUrl: string;
+}): NativeShareData {
+  const agentName = (opts.agentName || 'Arena').trim() || 'Arena';
+  const oneLiner = (opts.oneLiner || '').trim();
+  const shareUrl = (opts.shareUrl || '').trim();
+  return {
+    title: `${agentName} on Arena`,
+    text: oneLiner
+      ? `"${oneLiner}" — ${agentName} on Arena`
+      : `A take from ${agentName} on Arena`,
+    url: shareUrl,
+  };
+}
+
+/**
+ * True when the runtime exposes navigator.share.
+ * Injectable for unit tests (no real navigator required).
+ */
+export function canUseNativeShare(
+  nav: { share?: unknown } | null | undefined =
+    typeof navigator !== 'undefined' ? navigator : undefined,
+): boolean {
+  return typeof nav?.share === 'function';
+}
+
+export type NativeShareResult = 'shared' | 'cancelled' | 'unavailable' | 'failed';
+
+/**
+ * Invoke the system share sheet. Pure-ish: share implementation is injectable for tests.
+ * AbortError (user dismisses the sheet) maps to `cancelled`, not failure.
+ */
+export async function invokeNativeShare(
+  data: NativeShareData,
+  share?: (payload: NativeShareData) => Promise<void>,
+): Promise<NativeShareResult> {
+  if (!data.url) return 'failed';
+  const fn =
+    share ??
+    (typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+      ? (payload: NativeShareData) => navigator.share(payload)
+      : undefined);
+  if (!fn) return 'unavailable';
+  try {
+    await fn(data);
+    return 'shared';
+  } catch (err) {
+    const name =
+      err && typeof err === 'object' && 'name' in err
+        ? String((err as { name?: string }).name)
+        : '';
+    if (name === 'AbortError') return 'cancelled';
+    return 'failed';
+  }
+}
