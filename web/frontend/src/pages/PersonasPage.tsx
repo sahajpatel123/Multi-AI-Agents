@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Lock, Sparkles, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
@@ -6,6 +6,7 @@ import { AgentDot } from '../components/AgentDot';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { type Persona } from '../data/personas';
+import { motionDuration } from '../lib/motion';
 import track from '../utils/track';
 
 type SlotIndex = 0 | 1 | 2 | 3;
@@ -44,6 +45,12 @@ export function PersonasPage() {
     return () => window.cancelAnimationFrame(frameId);
   }, []);
 
+  const closeModal = useCallback(() => {
+    setModalVisible(false);
+    const delay = motionDuration(220);
+    window.setTimeout(() => setActiveSlot(null), delay > 0 ? delay : 0);
+  }, []);
+
   useEffect(() => {
     if (activeSlot === null) {
       setModalVisible(false);
@@ -54,12 +61,32 @@ export function PersonasPage() {
     return () => window.cancelAnimationFrame(frameId);
   }, [activeSlot]);
 
+  // Escape closes the swap modal; lock body scroll while open.
+  useEffect(() => {
+    if (activeSlot === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal();
+      }
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [activeSlot, closeModal]);
+
   useEffect(() => {
     if (!toast) return;
 
     setToastVisible(true);
-    const hideTimer = window.setTimeout(() => setToastVisible(false), 2500);
-    const removeTimer = window.setTimeout(() => setToast(null), 2800);
+    const hideMs = motionDuration(2500) || 0;
+    const removeMs = motionDuration(2800) || 0;
+    const hideTimer = window.setTimeout(() => setToastVisible(false), hideMs);
+    const removeTimer = window.setTimeout(() => setToast(null), removeMs);
 
     return () => {
       window.clearTimeout(hideTimer);
@@ -108,11 +135,6 @@ export function PersonasPage() {
     if (activePersona === null) return [];
     return personas.filter((persona) => persona.id !== activePersona.id);
   }, [activePersona, personas]);
-
-  const closeModal = () => {
-    setModalVisible(false);
-    window.setTimeout(() => setActiveSlot(null), 220);
-  };
 
   const handleSwap = (slotIndex: SlotIndex, persona: Persona) => {
     if (!canUsePersona(persona.id)) {

@@ -64,6 +64,8 @@ import {
   charBudgetTone,
   clampToMax,
 } from '../lib/charBudget';
+import { copyToClipboard } from '../lib/clipboard';
+import { motionDuration } from '../lib/motion';
 
 /** Agent result view — shared palette (mockup) */
 const AR = {
@@ -729,6 +731,7 @@ export function AgentPage() {
   const [myRooms, setMyRooms] = useState<any[]>([]);
   const [myRoomsLoading, setMyRoomsLoading] = useState(false);
   const [copyRoomLinkFeedback, setCopyRoomLinkFeedback] = useState(false);
+  const [copyAnswerFeedback, setCopyAnswerFeedback] = useState(false);
   const pendingRoomHandledRef = useRef<string | null>(null);
 
   const closeTemplatesModal = useCallback(() => {
@@ -6375,10 +6378,18 @@ export function AgentPage() {
                       size="sm"
                       icon={Icons.copy(14)}
                       onClick={() => {
-                        void navigator.clipboard.writeText(plainAnswerText);
+                        void copyToClipboard(plainAnswerText).then((ok) => {
+                          if (!ok) return;
+                          setCopyAnswerFeedback(true);
+                          const hold = motionDuration(2000);
+                          window.setTimeout(
+                            () => setCopyAnswerFeedback(false),
+                            hold > 0 ? hold : 0,
+                          );
+                        });
                       }}
                     >
-                      Copy
+                      {copyAnswerFeedback ? 'Copied!' : 'Copy'}
                     </Button>
                     <Button type="button" variant="ghost" size="sm" icon={Icons.refresh(14)} onClick={runAgainWithSameQuestion}>
                       Run again
