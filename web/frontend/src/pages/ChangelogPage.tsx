@@ -77,6 +77,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Press / and ? on Personas for library search focus and shortcuts help',
       '[IMPROVED] Personas reset requires confirmation before restoring default minds',
       '[NEW] Copy Agent research history as markdown (respects history search filter)',
+      '[IMPROVED] Agent Rooms list: load errors with Retry, search when you have many rooms',
     ],
   },
   {

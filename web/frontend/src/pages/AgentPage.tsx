@@ -80,6 +80,7 @@ import { copyToClipboard } from '../lib/clipboard';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { formatAgentHistoryExport } from '../lib/agentHistoryExport';
 import { motionDuration } from '../lib/motion';
+import { roomsListBodyMode } from '../lib/roomsListView';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import {
   domainForExpertiseLevel,
@@ -767,6 +768,9 @@ export function AgentPage() {
   const [createdRoom, setCreatedRoom] = useState<any>(null);
   const [myRooms, setMyRooms] = useState<any[]>([]);
   const [myRoomsLoading, setMyRoomsLoading] = useState(false);
+  const [myRoomsLoadFailed, setMyRoomsLoadFailed] = useState(false);
+  const [roomsSearchQuery, setRoomsSearchQuery] = useState('');
+  const roomsSearchRef = useRef<HTMLInputElement | null>(null);
   const [copyRoomLinkFeedback, setCopyRoomLinkFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [copyAnswerFeedback, setCopyAnswerFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const pendingRoomHandledRef = useRef<string | null>(null);
@@ -939,27 +943,29 @@ export function AgentPage() {
     void loadTaskHistory();
   }, [loadTaskHistory]);
 
-  useEffect(() => {
+  const loadMyRooms = useCallback(async () => {
     if (!user) {
       setMyRooms([]);
+      setMyRoomsLoadFailed(false);
+      setMyRoomsLoading(false);
       return;
     }
-    let cancelled = false;
     setMyRoomsLoading(true);
-    void getMyRooms()
-      .then((r) => {
-        if (!cancelled) setMyRooms(r.rooms || []);
-      })
-      .catch(() => {
-        if (!cancelled) setMyRooms([]);
-      })
-      .finally(() => {
-        if (!cancelled) setMyRoomsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const r = await getMyRooms();
+      setMyRooms(r.rooms || []);
+      setMyRoomsLoadFailed(false);
+    } catch {
+      setMyRooms([]);
+      setMyRoomsLoadFailed(true);
+    } finally {
+      setMyRoomsLoading(false);
+    }
   }, [user]);
+
+  useEffect(() => {
+    void loadMyRooms();
+  }, [loadMyRooms]);
 
   useEffect(() => {
     if (searchParams.get('createRoom') === '1') {
@@ -1018,7 +1024,7 @@ export function AgentPage() {
           /* ignore */
         }
         setToastMessage(rname ? `Task added to ${rname}` : 'Task added to room');
-        void getMyRooms().then((r) => setMyRooms(r.rooms || []));
+        void loadMyRooms();
       })
       .catch(() => {
         try {
@@ -1028,7 +1034,7 @@ export function AgentPage() {
           /* ignore */
         }
       });
-  }, [result?.status, result?.task_id, user]);
+  }, [result?.status, result?.task_id, user, loadMyRooms]);
 
   useEffect(() => {
     try {
@@ -1602,7 +1608,7 @@ export function AgentPage() {
       if (tid) payload.task_id = tid;
       const data = await createRoom(payload);
       setCreatedRoom(data);
-      void getMyRooms().then((r) => setMyRooms(r.rooms || []));
+      void loadMyRooms();
     } catch (e) {
       setToastMessage(e instanceof ApiError ? e.message : 'Could not create room');
     }
@@ -1695,6 +1701,23 @@ export function AgentPage() {
         agentHistoryDisplayTitle(item),
       ]),
     [taskHistory, historySearchQuery],
+  );
+
+  const roomsBodyMode = roomsListBodyMode({
+    loading: myRoomsLoading,
+    loadFailed: myRoomsLoadFailed,
+    itemCount: myRooms.length,
+  });
+
+  const filteredMyRooms = useMemo(
+    () =>
+      filterBySearchQuery(myRooms, roomsSearchQuery, (r) => [
+        r.name,
+        r.slug,
+        r.topic,
+        r.description,
+      ]),
+    [myRooms, roomsSearchQuery],
   );
 
   useEffect(() => {
@@ -2620,61 +2643,206 @@ export function AgentPage() {
           ) : null}
           {user ? (
             <div style={{ padding: '0 16px 12px', borderBottom: '0.5px solid #E8E2DA' }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A9A2', padding: '8px 4px 6px', marginBottom: 4 }}>
-                Rooms
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  padding: '8px 4px 6px',
+                  marginBottom: 4,
+                }}
+              >
+                <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A9A2' }}>
+                  Rooms
+                </div>
+                {roomsBodyMode === 'list' ? (
+                  <span style={{ fontSize: 10, color: '#A89070' }}>
+                    {filteredMyRooms.length}
+                    {roomsSearchQuery.trim() ? ` / ${myRooms.length}` : ''}
+                  </span>
+                ) : null}
               </div>
-              {myRoomsLoading ? (
+              {roomsBodyMode === 'loading' ? (
                 <div style={{ fontSize: 11, color: '#C4B8AE', padding: '4px 0' }}>Loading…</div>
+              ) : roomsBodyMode === 'load_error' ? (
+                <div role="alert" style={{ fontSize: 12, color: '#8C7355', padding: '4px 2px 8px', lineHeight: 1.45 }}>
+                  Could not load rooms.
+                  <button
+                    type="button"
+                    onClick={() => void loadMyRooms()}
+                    style={{
+                      display: 'block',
+                      marginTop: 6,
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: '#C4956A',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      fontFamily: 'Georgia, serif',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : roomsBodyMode === 'empty' ? (
+                <div style={{ fontSize: 12, color: '#C4B8AE', padding: '4px 2px 6px', lineHeight: 1.45 }}>
+                  No rooms yet — create one to research with others.
+                </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {myRooms.map((r: any) => {
-                    const rName = (r.name || 'Room');
-                    const truncated = rName.length > 22 ? rName.slice(0, 22) + '…' : rName;
-                    const hasUnread = r.synthesis_updated_at && r.last_seen_at && new Date(r.synthesis_updated_at) > new Date(r.last_seen_at);
-                    return (
+                <>
+                  {myRooms.length > 2 ? (
+                    <div style={{ position: 'relative', marginBottom: 8 }}>
+                      <input
+                        ref={roomsSearchRef}
+                        type="search"
+                        value={roomsSearchQuery}
+                        onChange={(e) => setRoomsSearchQuery(e.target.value)}
+                        placeholder="Search rooms…"
+                        aria-label="Search your rooms"
+                        autoComplete="off"
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          fontSize: 12,
+                          fontFamily: 'Georgia, serif',
+                          color: '#2C1810',
+                          background: '#FAF7F4',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 8,
+                          padding: '6px 26px 6px 10px',
+                          outline: 'none',
+                        }}
+                      />
+                      {roomsSearchQuery ? (
+                        <button
+                          type="button"
+                          aria-label="Clear rooms search"
+                          onClick={() => {
+                            setRoomsSearchQuery('');
+                            roomsSearchRef.current?.focus();
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: 6,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: 14,
+                            color: '#A89070',
+                            lineHeight: 1,
+                            padding: 4,
+                          }}
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {filteredMyRooms.length === 0 ? (
+                    <div style={{ fontSize: 12, color: '#C4B8AE', padding: '4px 2px 8px', lineHeight: 1.45 }}>
+                      No rooms match “{roomsSearchQuery.trim()}”
                       <button
-                        key={r.id}
                         type="button"
                         onClick={() => {
-                          navigate(`/room/${encodeURIComponent(r.slug)}`);
-                          if (isMobile) setSidebarOpen(false);
+                          setRoomsSearchQuery('');
+                          roomsSearchRef.current?.focus();
                         }}
                         style={{
-                          textAlign: 'left',
-                          background: 'transparent',
+                          display: 'block',
+                          marginTop: 6,
+                          background: 'none',
                           border: 'none',
+                          padding: 0,
+                          color: '#C4956A',
+                          fontSize: 12,
                           cursor: 'pointer',
-                          padding: '6px 8px',
-                          borderRadius: 6,
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          justifyContent: 'space-between',
-                          gap: 6,
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#F5EFE6';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
+                          fontFamily: 'Georgia, serif',
+                          textDecoration: 'underline',
                         }}
                       >
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13, color: '#2C1810', fontWeight: 400, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {truncated}
-                          </div>
-                          <div style={{ fontSize: 10, color: '#A89070', marginTop: 1 }}>
-                            {r.member_count ?? 0} members · {r.task_count ?? 0} tasks
-                          </div>
-                        </div>
-                        {hasUnread ? (
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C4956A', flexShrink: 0, marginTop: 5 }} />
-                        ) : null}
+                        Clear search
                       </button>
-                    );
-                  })}
-                </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {filteredMyRooms.map((r: any) => {
+                        const rName = (r.name || 'Room');
+                        const truncated = rName.length > 22 ? rName.slice(0, 22) + '…' : rName;
+                        const hasUnread =
+                          r.synthesis_updated_at &&
+                          r.last_seen_at &&
+                          new Date(r.synthesis_updated_at) > new Date(r.last_seen_at);
+                        return (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => {
+                              navigate(`/room/${encodeURIComponent(r.slug)}`);
+                              if (isMobile) setSidebarOpen(false);
+                            }}
+                            style={{
+                              textAlign: 'left',
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '6px 8px',
+                              borderRadius: 6,
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              justifyContent: 'space-between',
+                              gap: 6,
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = '#F5EFE6';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'transparent';
+                            }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  color: '#2C1810',
+                                  fontWeight: 400,
+                                  lineHeight: 1.3,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {truncated}
+                              </div>
+                              <div style={{ fontSize: 10, color: '#A89070', marginTop: 1 }}>
+                                {r.member_count ?? 0} members · {r.task_count ?? 0} tasks
+                              </div>
+                            </div>
+                            {hasUnread ? (
+                              <span
+                                style={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: '50%',
+                                  background: '#C4956A',
+                                  flexShrink: 0,
+                                  marginTop: 5,
+                                }}
+                              />
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
-              <div
+              <button
+                type="button"
                 onClick={() => {
                   setShowRoomCreate(true);
                   if (isMobile) setSidebarOpen(false);
@@ -2690,6 +2858,10 @@ export function AgentPage() {
                   borderRadius: '6px',
                   transition: 'background 0.15s',
                   marginTop: '4px',
+                  background: 'none',
+                  border: 'none',
+                  width: '100%',
+                  fontFamily: 'Georgia, serif',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = '#F5EFE6';
@@ -2698,12 +2870,12 @@ export function AgentPage() {
                   e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 New room
-              </div>
+              </button>
             </div>
           ) : null}
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 16px' }}>

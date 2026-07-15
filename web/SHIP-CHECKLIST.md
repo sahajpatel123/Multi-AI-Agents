@@ -93,6 +93,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Personas keyboard**: `/` focuses library or swap search; `?` opens Personas shortcuts; Esc closes swap.
 - **Personas reset confirm**: two-step “Reset panel?” before wiping custom slots; Esc cancels; toast on success.
 - **Agent history copy**: export the current filtered research history as markdown (scores, topics, task ids).
+- **Agent Rooms list honesty**: load failure ≠ empty (Retry); search when you have 3+ rooms; real empty copy.
 
 ## Required production environment
 
