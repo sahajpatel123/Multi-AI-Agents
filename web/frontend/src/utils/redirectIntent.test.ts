@@ -4,6 +4,7 @@ import {
   getRedirectIntent,
   clearRedirectIntent,
   isSafeRedirectPath,
+  normalizeRedirectPath,
   describeRedirectDestination,
   DEFAULT_REDIRECT_INTENT,
 } from './redirectIntent';
@@ -15,6 +16,13 @@ describe('redirectIntent', () => {
 
   it('returns /app by default (canonical Arena shell)', () => {
     expect(getRedirectIntent()).toBe(DEFAULT_REDIRECT_INTENT);
+    expect(getRedirectIntent()).toBe('/app');
+  });
+
+  it('normalizes legacy /arena alias to /app', () => {
+    expect(normalizeRedirectPath('/arena')).toBe('/app');
+    expect(normalizeRedirectPath('/arena?from=home')).toBe('/app?from=home');
+    setRedirectIntent('/arena');
     expect(getRedirectIntent()).toBe('/app');
   });
 

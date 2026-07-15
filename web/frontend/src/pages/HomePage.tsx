@@ -1597,11 +1597,10 @@ export function HomePage() {
               ref={ctaButtonRef}
               onClick={() => {
                 if (isAuthenticated) {
-                  setRedirectIntent('/arena');
                   navigate('/app');
                   return;
                 }
-                setRedirectIntent('/arena');
+                setRedirectIntent('/app');
                 navigate('/signin');
               }}
               onMouseMove={handleCTAButtonMouseMove}
@@ -1723,18 +1722,18 @@ export function HomePage() {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   setQuickOpen(false);
-                  if (isAuthenticated) navigate('/arena');
+                  if (isAuthenticated) navigate('/app');
                   else {
-                    setRedirectIntent('/arena');
+                    setRedirectIntent('/app');
                     navigate('/signin');
                   }
                 }
               }}
               onClick={() => {
                 setQuickOpen(false);
-                if (isAuthenticated) navigate('/arena');
+                if (isAuthenticated) navigate('/app');
                 else {
-                  setRedirectIntent('/arena');
+                  setRedirectIntent('/app');
                   navigate('/signin');
                 }
               }}

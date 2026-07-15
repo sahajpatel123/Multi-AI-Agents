@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   isBareQuestionHelpKey,
   shortcutsForSurface,
@@ -12,6 +12,7 @@ import { shouldCaptureSlashFocus } from '../lib/slashFocus';
  */
 export function KeyboardShortcutsHelp({ surface }: { surface: ShortcutSurface }) {
   const [open, setOpen] = useState(false);
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const shortcuts = shortcutsForSurface(surface);
   const title = shortcutsPanelTitle(surface);
 
@@ -30,13 +31,24 @@ export function KeyboardShortcutsHelp({ surface }: { surface: ShortcutSurface })
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = window.setTimeout(() => closeBtnRef.current?.focus(), 0);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.clearTimeout(focusTimer);
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={title}
+      aria-labelledby="keyboard-shortcuts-title"
       style={{
         position: 'fixed',
         inset: 0,
@@ -71,6 +83,7 @@ export function KeyboardShortcutsHelp({ surface }: { surface: ShortcutSurface })
           }}
         >
           <h2
+            id="keyboard-shortcuts-title"
             style={{
               margin: 0,
               fontSize: 16,
@@ -82,6 +95,7 @@ export function KeyboardShortcutsHelp({ surface }: { surface: ShortcutSurface })
             {title}
           </h2>
           <button
+            ref={closeBtnRef}
             type="button"
             onClick={() => setOpen(false)}
             aria-label="Close shortcuts"

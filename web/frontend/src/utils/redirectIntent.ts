@@ -21,10 +21,24 @@ export function isSafeRedirectPath(path: string): boolean {
   return true;
 }
 
+/**
+ * Canonicalize legacy aliases so post-auth never lands on a redirect hop.
+ * `/arena` is an alias of `/app` (see router Navigate).
+ */
+export function normalizeRedirectPath(path: string): string {
+  const raw = (path || '').trim();
+  if (!raw) return DEFAULT_REDIRECT_INTENT;
+  const qIndex = raw.indexOf('?');
+  const base = qIndex >= 0 ? raw.slice(0, qIndex) : raw;
+  const qs = qIndex >= 0 ? raw.slice(qIndex) : '';
+  if (base === '/arena' || base === '/arena/') return `/app${qs}`;
+  return raw;
+}
+
 export function setRedirectIntent(path: string): void {
   if (!isSafeRedirectPath(path)) return;
   try {
-    sessionStorage.setItem(INTENT_KEY, path.trim());
+    sessionStorage.setItem(INTENT_KEY, normalizeRedirectPath(path.trim()));
   } catch {
     /* private mode / quota */
   }
@@ -33,7 +47,7 @@ export function setRedirectIntent(path: string): void {
 export function getRedirectIntent(): string {
   try {
     const raw = sessionStorage.getItem(INTENT_KEY);
-    if (raw && isSafeRedirectPath(raw)) return raw.trim();
+    if (raw && isSafeRedirectPath(raw)) return normalizeRedirectPath(raw.trim());
   } catch {
     /* ignore */
   }
