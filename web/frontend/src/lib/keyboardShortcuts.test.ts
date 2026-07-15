@@ -16,6 +16,7 @@ describe('keyboardShortcuts', () => {
     expect(shortcutsForSurface('watchlist').some((s) => s.action.includes('watchlist search'))).toBe(
       true,
     );
+    expect(shortcutsForSurface('personas').some((s) => s.action.includes('library'))).toBe(true);
   });
 
   it('titles panels by surface', () => {
@@ -23,6 +24,7 @@ describe('keyboardShortcuts', () => {
     expect(shortcutsPanelTitle('agent')).toContain('Agent');
     expect(shortcutsPanelTitle('room')).toContain('Room');
     expect(shortcutsPanelTitle('watchlist')).toContain('Watchlist');
+    expect(shortcutsPanelTitle('personas')).toContain('Personas');
   });
 
   it('detects bare question-mark help key', () => {

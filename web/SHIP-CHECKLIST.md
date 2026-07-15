@@ -90,6 +90,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Room keyboard**: `/` focuses board or picker search; `?` opens Room shortcuts; Esc still closes add-task.
 - **Watchlist keyboard**: `/` focuses search; `?` opens Watchlist shortcuts; Esc cancels pending remove.
 - **Room invite share**: system share sheet when available (public `/room` URL); clipboard fallback + Copy link.
+- **Personas keyboard**: `/` focuses library or swap search; `?` opens Personas shortcuts; Esc closes swap.
 
 ## Required production environment
 

@@ -3,6 +3,7 @@ import { Lock, Sparkles, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { AgentDot } from '../components/AgentDot';
+import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { type Persona } from '../data/personas';
@@ -16,6 +17,7 @@ import {
   type PanelSaveToastKind,
 } from '../lib/panelSave';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
+import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import track from '../utils/track';
 
 type SlotIndex = 0 | 1 | 2 | 3;
@@ -115,6 +117,23 @@ export function PersonasPage() {
       window.clearTimeout(removeTimer);
     };
   }, [toast]);
+
+  // `/` focuses library search, or swap search when the slot dialog is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBareSlashKey(e) || !shouldCaptureSlashFocus(e.target)) return;
+      e.preventDefault();
+      if (activeSlot !== null) {
+        swapSearchRef.current?.focus();
+        swapSearchRef.current?.select();
+        return;
+      }
+      librarySearchRef.current?.focus();
+      librarySearchRef.current?.select();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeSlot]);
 
   const unlockedSlotMap = useMemo(
     () =>
@@ -873,6 +892,8 @@ export function PersonasPage() {
           <span>{toast.message}</span>
         </div>
       )}
+
+      <KeyboardShortcutsHelp surface="personas" />
     </div>
   );
 }

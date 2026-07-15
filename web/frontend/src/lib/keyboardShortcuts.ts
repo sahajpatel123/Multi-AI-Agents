@@ -5,7 +5,14 @@ export type ShortcutHint = {
   action: string;
 };
 
-export type ShortcutSurface = 'arena' | 'agent' | 'discuss' | 'debate' | 'room' | 'watchlist';
+export type ShortcutSurface =
+  | 'arena'
+  | 'agent'
+  | 'discuss'
+  | 'debate'
+  | 'room'
+  | 'watchlist'
+  | 'personas';
 
 const ARENA: ShortcutHint[] = [
   { keys: '/', action: 'Focus the Arena prompt' },
@@ -44,6 +51,12 @@ const WATCHLIST: ShortcutHint[] = [
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
 
+const PERSONAS: ShortcutHint[] = [
+  { keys: '/', action: 'Focus library or swap search' },
+  { keys: 'Esc', action: 'Close the slot-swap dialog' },
+  { keys: '?', action: 'Toggle this shortcuts list' },
+];
+
 export function shortcutsForSurface(surface: ShortcutSurface): ShortcutHint[] {
   switch (surface) {
     case 'agent':
@@ -56,6 +69,8 @@ export function shortcutsForSurface(surface: ShortcutSurface): ShortcutHint[] {
       return [...ROOM];
     case 'watchlist':
       return [...WATCHLIST];
+    case 'personas':
+      return [...PERSONAS];
     case 'arena':
     default:
       return [...ARENA];
@@ -74,6 +89,8 @@ export function shortcutsPanelTitle(surface: ShortcutSurface): string {
       return 'Room shortcuts';
     case 'watchlist':
       return 'Watchlist shortcuts';
+    case 'personas':
+      return 'Personas shortcuts';
     case 'arena':
     default:
       return 'Arena shortcuts';
