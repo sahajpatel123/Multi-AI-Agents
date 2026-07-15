@@ -19,6 +19,11 @@ import magic
 logger = logging.getLogger(__name__)
 
 MAX_TEXT = 3000
+# Upper bound on decoded image size. A tiny file can declare enormous
+# dimensions (a "decompression bomb") that exhaust memory when decoded, so we
+# reject anything above this pixel count. 50 MP is comfortably above any
+# legitimate upload (a 50-megapixel photo is already professional-grade).
+MAX_IMAGE_PIXELS = 50_000_000
 DISALLOWED_EXTENSIONS = {".exe", ".sh", ".py", ".js"}
 ALLOWED_MIME_TYPES = {
     "application/pdf",
@@ -70,12 +75,27 @@ def extract_plain_text(data: bytes) -> str:
 def image_b64_and_mime(data: bytes, content_type: str) -> Tuple[str, str]:
     from PIL import Image
 
-    im = Image.open(BytesIO(data))
-    im.load()
+    # Harden against decompression bombs: reject based on the declared pixel
+    # count (read cheaply from the header) BEFORE forcing a full decode with
+    # load(), and convert PIL's own bomb/parse errors into a clean ValueError
+    # (surfaced as HTTP 400) instead of an unhandled 500 plus a memory spike.
+    Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+    try:
+        im = Image.open(BytesIO(data))
+        width, height = im.size
+        if width * height > MAX_IMAGE_PIXELS:
+            raise ValueError("Image dimensions are too large to process.")
+        im.load()
+    except ValueError:
+        raise
+    except Image.DecompressionBombError as e:  # type: ignore[attr-defined]
+        raise ValueError("Image is too large to process.") from e
+    except Exception as e:
+        raise ValueError("Could not read image file.") from e
+
+    fmt = (im.format or "").upper()
     mime = content_type.split(";")[0].strip().lower()
     if mime not in ("image/png", "image/jpeg", "image/webp"):
-        im = Image.open(BytesIO(data))
-        fmt = (im.format or "PNG").upper()
         if fmt == "JPEG":
             mime = "image/jpeg"
         elif fmt == "PNG":
