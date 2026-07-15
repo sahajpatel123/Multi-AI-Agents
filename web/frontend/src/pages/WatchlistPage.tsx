@@ -9,12 +9,14 @@ import {
   type AgentWatchlistItem,
 } from '../api';
 import { useTier } from '../context/TierContext';
+import { copyToClipboard } from '../lib/clipboard';
 import { prefersReducedMotion } from '../lib/motion';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import {
   WATCHLIST_INTERVALS,
   type WatchlistIntervalHours,
 } from '../lib/watchlistIntervals';
+import { formatWatchlistExport } from '../lib/watchlistExport';
 import { watchlistBodyMode } from '../lib/watchlistView';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
@@ -71,8 +73,10 @@ export function WatchlistPage() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<WatchlistStatusFilter>('all');
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const errorRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const copyStatusTimerRef = useRef<number | null>(null);
   const reducedMotion = prefersReducedMotion();
 
   const load = useCallback(async () => {
@@ -173,6 +177,56 @@ export function WatchlistPage() {
     ]);
   }, [items, searchQuery, statusFilter]);
 
+  useEffect(() => {
+    return () => {
+      if (copyStatusTimerRef.current != null) {
+        window.clearTimeout(copyStatusTimerRef.current);
+      }
+    };
+  }, []);
+
+  const flashCopyStatus = (status: 'copied' | 'failed') => {
+    if (copyStatusTimerRef.current != null) {
+      window.clearTimeout(copyStatusTimerRef.current);
+    }
+    setCopyStatus(status);
+    copyStatusTimerRef.current = window.setTimeout(() => {
+      setCopyStatus('idle');
+      copyStatusTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
+  const copyWatchlist = async () => {
+    const filterBits: string[] = [];
+    if (statusFilter !== 'all') filterBits.push(`status: ${statusFilter}`);
+    const q = searchQuery.trim();
+    if (q) filterBits.push(`search: “${q}”`);
+    const markdown = formatWatchlistExport({
+      items: filteredItems.map((item) => ({
+        question: item.question,
+        intervalHours: item.interval_hours,
+        isActive: item.is_active,
+        runCount: item.run_count,
+        lastRunAt: item.last_run_at,
+        nextRunAt: item.next_run_at,
+        latestTitle: item.latest_task?.title,
+        latestScore: item.latest_task?.final_score,
+        expertiseLevel: item.expertise_level,
+        expertiseDomain: item.expertise_domain,
+      })),
+      activeCount,
+      activeCap,
+      filterNote: filterBits.length > 0 ? filterBits.join(' · ') : undefined,
+    });
+    const ok = await copyToClipboard(markdown);
+    if (ok) {
+      flashCopyStatus('copied');
+    } else {
+      flashCopyStatus('failed');
+      setError('Could not copy watchlist — try again or copy from a notes app after export.');
+    }
+  };
+
   if (!canWatchlist) {
     return (
       <div
@@ -247,6 +301,40 @@ export function WatchlistPage() {
           </div>
           <span style={{ fontSize: 12, color: '#8C7355' }}>Tasks that research themselves.</span>
         </div>
+        {bodyMode === 'list' && items.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => void copyWatchlist()}
+            title="Copy current view as markdown"
+            aria-label={
+              copyStatus === 'copied'
+                ? 'Watchlist copied'
+                : copyStatus === 'failed'
+                  ? 'Copy failed'
+                  : 'Copy watchlist as markdown'
+            }
+            style={{
+              flexShrink: 0,
+              background: 'none',
+              border: '0.5px solid #D4C4B0',
+              borderRadius: 8,
+              padding: '6px 12px',
+              fontSize: 11,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              color:
+                copyStatus === 'failed'
+                  ? '#D85A30'
+                  : copyStatus === 'copied'
+                    ? '#5A8C6A'
+                    : '#8C7355',
+              cursor: 'pointer',
+              fontFamily: 'Georgia, serif',
+            }}
+          >
+            {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy'}
+          </button>
+        ) : null}
       </header>
 
       <main style={{ flex: 1, padding: '24px 16px 48px', overflowY: 'auto' }}>

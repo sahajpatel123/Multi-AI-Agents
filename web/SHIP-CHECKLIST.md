@@ -85,6 +85,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Personas panel save**: busy Save, real error copy, status/alert toast roles.
 - **Room board search**: filter tasks by title/answer/member; search Agent history in the add-task picker; Escape + body scroll lock.
 - **Room synthesis copy**: export group synthesis (contradictions, patterns, tasks) as markdown with success/failure feedback.
+- **Watchlist copy**: export current filtered watchlist as markdown (status, cadence, latest run) with clipboard feedback.
 
 ## Required production environment
 
