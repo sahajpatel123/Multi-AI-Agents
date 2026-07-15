@@ -86,6 +86,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Arena sidebar conversation renames persist and validate titles',
       '[NEW] Share a new Room invite from the create modal (system share + copy)',
       '[IMPROVED] Agent toasts announce failures as alerts for screen readers',
+      '[IMPROVED] Task templates show load errors with Retry (not a blank catalog)',
     ],
   },
   {

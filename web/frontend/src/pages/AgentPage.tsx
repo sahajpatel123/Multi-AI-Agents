@@ -758,6 +758,8 @@ export function AgentPage() {
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templatesClosing, setTemplatesClosing] = useState(false);
   const [templateCategories, setTemplateCategories] = useState<Record<string, AgentTaskTemplate[]>>({});
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesLoadFailed, setTemplatesLoadFailed] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<AgentTaskTemplate | null>(null);
   const [templateSlots, setTemplateSlots] = useState<Record<string, string>>({});
   const [taskAnswerFeedback, setTaskAnswerFeedback] = useState<TaskAnswerFeedback | null | undefined>(undefined);
@@ -944,11 +946,23 @@ export function AgentPage() {
     return () => window.clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    void getAgentTemplates()
-      .then((r) => setTemplateCategories(r.categories))
-      .catch(() => setTemplateCategories({}));
+  const loadAgentTemplates = useCallback(async () => {
+    setTemplatesLoading(true);
+    try {
+      const r = await getAgentTemplates();
+      setTemplateCategories(r.categories || {});
+      setTemplatesLoadFailed(false);
+    } catch {
+      setTemplateCategories({});
+      setTemplatesLoadFailed(true);
+    } finally {
+      setTemplatesLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadAgentTemplates();
+  }, [loadAgentTemplates]);
 
   useEffect(() => {
     const tid = result?.task_id;
@@ -2036,13 +2050,21 @@ export function AgentPage() {
   };
 
   const deleteHistoryItem = (taskId: string) => {
-    if (result?.task_id === taskId) {
+    const removed = taskHistory.find((t) => t.task_id === taskId) ?? null;
+    const wasActive = result?.task_id === taskId;
+    if (wasActive) {
       resetRun();
     }
     setOpenMenuTaskId(null);
     setConfirmDeleteTaskId(null);
     setTaskHistory((prev) => prev.filter((t) => t.task_id !== taskId));
     void deleteAgentTask(taskId).catch(() => {
+      if (removed) {
+        setTaskHistory((prev) => {
+          if (prev.some((t) => t.task_id === taskId)) return prev;
+          return [removed, ...prev];
+        });
+      }
       setToastMessage('Could not delete task');
       void loadTaskHistory();
     });
@@ -3997,6 +4019,11 @@ export function AgentPage() {
                       open={templatesOpen}
                       closing={templatesClosing}
                       categories={templateCategories}
+                      loading={templatesLoading}
+                      loadFailed={templatesLoadFailed}
+                      onRetryLoad={() => {
+                        void loadAgentTemplates();
+                      }}
                       onClose={closeTemplatesModal}
                       onSelect={(t) => {
                         const next: Record<string, string> = {};

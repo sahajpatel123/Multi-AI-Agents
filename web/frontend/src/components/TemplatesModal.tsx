@@ -4,6 +4,7 @@ import type { AgentTaskTemplate } from '../api';
 import { ConduraBadge } from './ConduraBadge';
 import { prefersReducedMotion } from '../lib/motion';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
+import { templatesListBodyMode } from '../lib/templatesListView';
 
 const TAB_ORDER = [
   'All',
@@ -25,9 +26,23 @@ type TemplatesModalProps = {
   categories: Record<string, AgentTaskTemplate[]>;
   onClose: () => void;
   onSelect: (t: AgentTaskTemplate) => void;
+  /** True while the first (or retry) fetch is in flight. */
+  loading?: boolean;
+  /** True when the last fetch failed — must not look like an empty catalog. */
+  loadFailed?: boolean;
+  onRetryLoad?: () => void;
 };
 
-export function TemplatesModal({ open, closing, categories, onClose, onSelect }: TemplatesModalProps) {
+export function TemplatesModal({
+  open,
+  closing,
+  categories,
+  onClose,
+  onSelect,
+  loading = false,
+  loadFailed = false,
+  onRetryLoad,
+}: TemplatesModalProps) {
   const [activeTab, setActiveTab] = useState<TabId>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -60,6 +75,12 @@ export function TemplatesModal({ open, closing, categories, onClose, onSelect }:
       ]),
     [tabTemplates, searchQuery],
   );
+
+  const catalogMode = templatesListBodyMode({
+    loading,
+    loadFailed,
+    itemCount: flatTemplates.length,
+  });
 
   useEffect(() => {
     if (open) {
@@ -311,28 +332,58 @@ export function TemplatesModal({ open, closing, categories, onClose, onSelect }:
           ))}
         </div>
         <div style={{ overflowY: 'auto', padding: 16, flex: 1 }}>
-          {visibleTemplates.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+          {catalogMode === 'loading' ? (
+            <div style={{ textAlign: 'center', padding: '2.5rem 1rem' }}>
+              <p style={{ margin: 0, fontSize: 14, color: '#8C7355' }}>Loading templates…</p>
+            </div>
+          ) : catalogMode === 'load_error' ? (
+            <div
+              role="alert"
+              style={{ textAlign: 'center', padding: '2rem 1rem' }}
+            >
               <p style={{ margin: 0, fontSize: 15, color: '#2C1810', fontWeight: 500 }}>
-                No templates match
+                Could not load templates
               </p>
               <p style={{ margin: '8px 0 0', fontSize: 13, color: '#8C7355', lineHeight: 1.55 }}>
-                {searchQuery.trim()
-                  ? `Nothing found for “${searchQuery.trim()}”${activeTab !== 'All' ? ` in ${activeTab}` : ''}.`
-                  : `No templates in ${activeTab} yet.`}
+                Check your connection and try again. Your compose box still works without a template.
               </p>
-              <button
-                type="button"
-                className="arena-btn arena-btn--ghost arena-btn--md"
-                style={{ marginTop: 16 }}
-                onClick={() => {
-                  setSearchQuery('');
-                  setActiveTab('All');
-                  searchRef.current?.focus();
-                }}
-              >
-                Clear filters
-              </button>
+              {onRetryLoad ? (
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--primary arena-btn--md"
+                  style={{ marginTop: 16 }}
+                  onClick={() => onRetryLoad()}
+                >
+                  Retry
+                </button>
+              ) : null}
+            </div>
+          ) : catalogMode === 'empty' || visibleTemplates.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+              <p style={{ margin: 0, fontSize: 15, color: '#2C1810', fontWeight: 500 }}>
+                {catalogMode === 'empty' ? 'No templates yet' : 'No templates match'}
+              </p>
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: '#8C7355', lineHeight: 1.55 }}>
+                {catalogMode === 'empty'
+                  ? 'Templates will show up here when available. You can still write a custom research question.'
+                  : searchQuery.trim()
+                    ? `Nothing found for “${searchQuery.trim()}”${activeTab !== 'All' ? ` in ${activeTab}` : ''}.`
+                    : `No templates in ${activeTab} yet.`}
+              </p>
+              {catalogMode === 'list' ? (
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--ghost arena-btn--md"
+                  style={{ marginTop: 16 }}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setActiveTab('All');
+                    searchRef.current?.focus();
+                  }}
+                >
+                  Clear filters
+                </button>
+              ) : null}
             </div>
           ) : (
             <div
