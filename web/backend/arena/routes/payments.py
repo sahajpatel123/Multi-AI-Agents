@@ -236,7 +236,14 @@ def _apply_agent_addon_subscription_event(
     db.add(row)
 
 
-def _loyalty_on_pro_monthly_charged(db: Session, row: Subscription, settings: Any) -> None:
+def _loyalty_on_pro_monthly_charged(
+    db: Session, row: Subscription, settings: Any, *, is_new_charge: bool = True
+) -> None:
+    if not is_new_charge:
+        # Redelivered / duplicate charge webhook — do not accrue loyalty again,
+        # otherwise a user could reach the 10-payment reward with fewer than 10
+        # actual payments (Razorpay retries webhooks at least once).
+        return
     if get_tier_str(row) != "pro" or row.billing_period != "monthly":
         return
     expected = (settings.razorpay_pro_monthly_plan_id or "").strip()
@@ -665,8 +672,16 @@ def _apply_subscription_event(
     row.status = "active"
     row.current_start = _razorpay_ts_to_naive_utc(entity.get("current_start")) or row.current_start
     row.current_end = _razorpay_ts_to_naive_utc(entity.get("current_end")) or row.current_end
+    is_new_charge = False
     if trigger == "subscription.charged":
-        row.payment_count = int(entity.get("paid_count", int(row.payment_count or 0) + 1))
+        prev_paid_count = int(row.payment_count or 0)
+        new_paid_count = int(entity.get("paid_count", prev_paid_count + 1))
+        # Razorpay delivers webhooks at least once, so the same charge event can
+        # arrive multiple times. paid_count is monotonic and authoritative, so we
+        # only treat a strictly higher value as a genuinely new charge — this keeps
+        # loyalty accrual idempotent under redelivery and never regresses the count.
+        is_new_charge = new_paid_count > prev_paid_count
+        row.payment_count = max(new_paid_count, prev_paid_count)
 
     user = _activate_subscription_and_user(
         db,
@@ -681,7 +696,9 @@ def _apply_subscription_event(
             pass
 
     if trigger == "subscription.charged" and get_tier_str(row) == "pro":
-        _loyalty_on_pro_monthly_charged(db, row, get_settings())
+        _loyalty_on_pro_monthly_charged(
+            db, row, get_settings(), is_new_charge=is_new_charge
+        )
 
 
 @router.post("/webhook")
