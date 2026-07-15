@@ -3,6 +3,7 @@ import type { ConduraProbeState, HandoffPayload } from '../types/condura';
 import { probeLocalCondura } from '../lib/conduraLocalProbe';
 import { handoffClipboardUrl } from '../lib/conduraHandoff';
 import { copyToClipboard } from '../lib/clipboard';
+import { conduraPrimaryLabel, resolveInstallUrl } from '../lib/conduraCta';
 import { motionDuration } from '../lib/motion';
 import markUrl from '../assets/condura/mark.svg';
 
@@ -40,6 +41,7 @@ export function ConduraInstallCTA({
   const mobile = isMobileUa();
   const firstBtnRef = useRef<HTMLButtonElement | null>(null);
   const lastBtnRef = useRef<HTMLButtonElement | null>(null);
+  const safeInstallUrl = resolveInstallUrl(installUrl);
 
   const runProbe = useCallback(async () => {
     setProbing(true);
@@ -120,14 +122,6 @@ export function ConduraInstallCTA({
     }
   };
 
-  const primaryLabel = (() => {
-    if (mobile) return 'Save handoff — run on desktop';
-    if (probe.kind === 'ready') return 'Send to Condura';
-    if (probe.kind === 'installed_not_running') return 'Start Condura, then retry';
-    if (probe.kind === 'not_installed') return 'Install Condura';
-    return 'Detect Condura';
-  })();
-
   return (
     <div
       role="dialog"
@@ -171,9 +165,22 @@ export function ConduraInstallCTA({
             Condura runs on macOS / Windows / Linux. Save this handoff and open it on your desktop.
           </p>
         )}
-        {error && (
-          <p style={{ margin: '0 0 12px', fontSize: 13, color: '#a94442' }}>{error}</p>
-        )}
+        {error ? (
+          <p
+            role="alert"
+            style={{
+              margin: '0 0 12px',
+              fontSize: 13,
+              color: '#a94442',
+              padding: '10px 12px',
+              background: 'rgba(169,68,66,0.06)',
+              borderRadius: 10,
+              border: '0.5px solid rgba(169,68,66,0.2)',
+            }}
+          >
+            {error}
+          </p>
+        ) : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button
             type="button"
@@ -194,11 +201,12 @@ export function ConduraInstallCTA({
                   return;
                 }
                 if (probe.kind === 'not_installed') {
-                  window.open(installUrl, '_blank', 'noopener,noreferrer');
+                  window.open(safeInstallUrl, '_blank', 'noopener,noreferrer');
                   return;
                 }
                 if (probe.kind === 'installed_not_running') {
-                  window.open('condura://', '_blank');
+                  // Custom protocol — still request noopener when supported.
+                  window.open('condura://', '_blank', 'noopener,noreferrer');
                   await runProbe();
                   return;
                 }
@@ -210,7 +218,7 @@ export function ConduraInstallCTA({
               }
             }}
           >
-            {probing ? 'Detecting…' : busy ? 'Working…' : primaryLabel}
+            {conduraPrimaryLabel({ mobile, probe, probing, busy })}
           </button>
           {handoffPayload && (
             <button
