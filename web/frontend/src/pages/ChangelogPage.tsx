@@ -80,6 +80,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Agent Rooms list: load errors with Retry, search when you have many rooms',
       '[IMPROVED] Create research room works from idle Agent; validated name + busy modal',
       '[IMPROVED] Agent history load errors show Retry (not a false empty state)',
+      '[NEW] Copy your Personas panel as markdown (four minds, quotes, traits)',
     ],
   },
   {

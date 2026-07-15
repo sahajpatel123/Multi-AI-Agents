@@ -7,7 +7,9 @@ import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { type Persona } from '../data/personas';
+import { copyToClipboard } from '../lib/clipboard';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
+import { formatPanelExport } from '../lib/panelExport';
 import {
   panelSaveButtonLabel,
   panelSaveCaughtErrorMessage,
@@ -46,6 +48,8 @@ export function PersonasPage() {
   const [toastVisible, setToastVisible] = useState(false);
   const [savingPanel, setSavingPanel] = useState(false);
   const [pendingReset, setPendingReset] = useState(false);
+  const [panelCopyStatus, setPanelCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const panelCopyTimerRef = useRef<number | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [revealedLibraryIds, setRevealedLibraryIds] = useState<Record<string, boolean>>({});
   const [libraryQuery, setLibraryQuery] = useState('');
@@ -168,6 +172,43 @@ export function PersonasPage() {
       iconColor: '#C4956A',
       kind: 'success',
     });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (panelCopyTimerRef.current != null) {
+        window.clearTimeout(panelCopyTimerRef.current);
+      }
+    };
+  }, []);
+
+  const copyPanelMarkdown = async () => {
+    const markdown = formatPanelExport({
+      isDefault: isDefaultPanel,
+      minds: panel.map((p) => ({
+        id: p.id,
+        name: p.name,
+        quote: p.quote,
+        description: p.description,
+      })),
+    });
+    const ok = await copyToClipboard(markdown);
+    if (panelCopyTimerRef.current != null) {
+      window.clearTimeout(panelCopyTimerRef.current);
+    }
+    setPanelCopyStatus(ok ? 'copied' : 'failed');
+    setToast({
+      message: ok ? 'Panel copied as markdown' : 'Could not copy panel — try again',
+      color: ok ? '#1A1714' : '#E57373',
+      iconColor: ok ? '#C4956A' : '#FAF7F4',
+      kind: ok ? 'success' : 'error',
+    });
+    if (ok) void track('panel_copied');
+    const hold = motionDuration(ok ? 2200 : 3000);
+    panelCopyTimerRef.current = window.setTimeout(() => {
+      setPanelCopyStatus('idle');
+      panelCopyTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
   };
 
   const unlockedSlotMap = useMemo(
@@ -394,28 +435,65 @@ export function PersonasPage() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.9rem', gap: '12px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => {
-                void handleSavePanel();
-              }}
-              className="save-panel-btn"
-              disabled={savingPanel}
-              aria-busy={savingPanel}
-              aria-label={panelSaveButtonLabel(savingPanel)}
-              style={{
-                background: '#1A1714',
-                color: '#FAF7F4',
-                border: 'none',
-                borderRadius: '999px',
-                padding: '10px 24px',
-                fontSize: '13px',
-                cursor: savingPanel ? 'wait' : 'pointer',
-                opacity: savingPanel ? 0.72 : 1,
-              }}
-            >
-              {panelSaveButtonLabel(savingPanel)}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleSavePanel();
+                }}
+                className="save-panel-btn"
+                disabled={savingPanel}
+                aria-busy={savingPanel}
+                aria-label={panelSaveButtonLabel(savingPanel)}
+                style={{
+                  background: '#1A1714',
+                  color: '#FAF7F4',
+                  border: 'none',
+                  borderRadius: '999px',
+                  padding: '10px 24px',
+                  fontSize: '13px',
+                  cursor: savingPanel ? 'wait' : 'pointer',
+                  opacity: savingPanel ? 0.72 : 1,
+                }}
+              >
+                {panelSaveButtonLabel(savingPanel)}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void copyPanelMarkdown();
+                }}
+                title="Copy this panel as markdown"
+                aria-label={
+                  panelCopyStatus === 'copied'
+                    ? 'Panel copied'
+                    : panelCopyStatus === 'failed'
+                      ? 'Copy failed'
+                      : 'Copy panel as markdown'
+                }
+                style={{
+                  background: 'none',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: 999,
+                  padding: '9px 16px',
+                  fontSize: 12,
+                  color:
+                    panelCopyStatus === 'failed'
+                      ? '#D85A30'
+                      : panelCopyStatus === 'copied'
+                        ? '#5A8C6A'
+                        : '#6B6460',
+                  cursor: 'pointer',
+                  fontFamily: 'Georgia, serif',
+                }}
+              >
+                {panelCopyStatus === 'copied'
+                  ? 'Copied'
+                  : panelCopyStatus === 'failed'
+                    ? 'Copy failed'
+                    : 'Copy panel'}
+              </button>
+            </div>
             {!isDefaultPanel && (
               <button
                 type="button"
