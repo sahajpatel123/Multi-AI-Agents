@@ -87,6 +87,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Room synthesis copy**: export group synthesis (contradictions, patterns, tasks) as markdown with success/failure feedback.
 - **Watchlist copy**: export current filtered watchlist as markdown (status, cadence, latest run) with clipboard feedback.
 - **Contextual tab titles**: Rooms show the room name; public `/share` shows the mind (or prompt snippet).
+- **Room keyboard**: `/` focuses board or picker search; `?` opens Room shortcuts; Esc still closes add-task.
 
 ## Required production environment
 

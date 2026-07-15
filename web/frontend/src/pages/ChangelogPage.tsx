@@ -71,6 +71,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Copy Room group synthesis as markdown (contradictions, patterns, tasks)',
       '[NEW] Copy Agent Watchlist as markdown (respects search and status filters)',
       '[IMPROVED] Browser tabs show Room names and shared-take mind names',
+      '[NEW] Press / and ? for Room board search focus and keyboard shortcuts help',
     ],
   },
   {

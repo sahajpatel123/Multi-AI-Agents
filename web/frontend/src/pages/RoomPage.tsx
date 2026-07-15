@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { addRoomTask, getAgentHistory, getRoom, getRoomSynthesis, joinRoom, removeRoomTask } from '../api';
+import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getUserColor, getUserInitials } from '../utils/roomUtils';
@@ -13,6 +14,7 @@ import {
 } from '../lib/documentTitle';
 import { formatRoomSynthesisExport } from '../lib/roomSynthesisExport';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
+import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { setRedirectIntent } from '../utils/redirectIntent';
 
 function LayersIcon() {
@@ -204,6 +206,27 @@ export function RoomPage() {
       window.clearTimeout(focusId);
     };
   }, [showTaskPicker, closeTaskPicker]);
+
+  // `/` focuses board search, or history search when the add-task picker is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBareSlashKey(e) || !shouldCaptureSlashFocus(e.target)) return;
+      e.preventDefault();
+      if (showTaskPicker) {
+        pickerSearchRef.current?.focus();
+        pickerSearchRef.current?.select();
+        return;
+      }
+      // Switch to tasks tab on mobile so the search field is visible.
+      if (isMobile) setMobileTab('tasks');
+      window.requestAnimationFrame(() => {
+        boardSearchRef.current?.focus();
+        boardSearchRef.current?.select();
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showTaskPicker, isMobile]);
 
   const memberNameById = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1520,6 +1543,8 @@ export function RoomPage() {
           })}
         </nav>
       ) : null}
+
+      <KeyboardShortcutsHelp surface="room" />
     </div>
   );
 }

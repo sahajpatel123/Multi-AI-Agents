@@ -11,11 +11,14 @@ describe('keyboardShortcuts', () => {
     expect(shortcutsForSurface('agent').some((s) => s.action.includes('follow-up'))).toBe(true);
     expect(shortcutsForSurface('discuss').some((s) => s.keys === 'Enter')).toBe(true);
     expect(shortcutsForSurface('debate').some((s) => s.keys === '?')).toBe(true);
+    expect(shortcutsForSurface('room').some((s) => s.action.includes('board'))).toBe(true);
+    expect(shortcutsForSurface('room').some((s) => s.keys === 'Esc')).toBe(true);
   });
 
   it('titles panels by surface', () => {
     expect(shortcutsPanelTitle('arena')).toContain('Arena');
     expect(shortcutsPanelTitle('agent')).toContain('Agent');
+    expect(shortcutsPanelTitle('room')).toContain('Room');
   });
 
   it('detects bare question-mark help key', () => {
