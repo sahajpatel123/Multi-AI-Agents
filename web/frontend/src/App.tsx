@@ -37,6 +37,7 @@ import { useBusyNavigationGuard } from './hooks/useBusyNavigationGuard';
 import { useIsMobile } from './hooks/useIsMobile';
 import { arenaWorkInFlight } from './lib/busyNavigationGuard';
 import { titleForArenaBusy } from './lib/documentTitle';
+import { isBareSlashKey, shouldCaptureSlashFocus } from './lib/slashFocus';
 import { usePanel } from './context/PanelContext';
 import { useTier } from './context/TierContext';
 import { useProfileModal } from './context/ProfileModalContext';
@@ -236,17 +237,7 @@ function App() {
         closeFocusedAgent();
         return;
       }
-      if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        const t = e.target as HTMLElement | null;
-        if (
-          t &&
-          (t.tagName === 'INPUT' ||
-            t.tagName === 'TEXTAREA' ||
-            t.tagName === 'SELECT' ||
-            t.isContentEditable)
-        ) {
-          return;
-        }
+      if (isBareSlashKey(e) && shouldCaptureSlashFocus(e.target)) {
         e.preventDefault();
         document.getElementById('arena-prompt')?.focus();
       }

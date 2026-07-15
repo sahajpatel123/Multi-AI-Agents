@@ -62,6 +62,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Busy tab titles**: live document.title while Arena streams / Agent pipeline stages run.
 - **Debate / Discuss streams**: beforeunload + busy tab titles; scroll-into-view honors reduced motion.
 - **Network banner**: safe-area padding, reconnected dismiss, reconnect timer cleaned up on unmount.
+- **Agent `/` focus**: press `/` to focus research compose or follow-up (shared slash-focus helper with Arena).
 
 ## Required production environment
 

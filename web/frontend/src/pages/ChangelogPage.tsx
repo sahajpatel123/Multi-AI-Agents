@@ -48,6 +48,9 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Leaderboard shows your panel personas and respects reduced motion',
       '[IMPROVED] Account menu: Escape closes; proper menu ARIA on profile/sign-out',
       '[IMPROVED] ProtectedRoute stores post-auth intent safely; share menu ARIA',
+      '[IMPROVED] Press / on Agent Mode to focus compose or follow-up (Arena parity)',
+      '[IMPROVED] Offline banner safe-area + dismiss; live tab titles while work runs',
+      '[NEW] Public /share Copy take / Copy link / system Share…',
     ],
   },
   {

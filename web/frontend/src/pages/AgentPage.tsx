@@ -59,6 +59,7 @@ import { useBusyDocumentTitle } from '../hooks/useBusyDocumentTitle';
 import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { agentWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForAgentBusy } from '../lib/documentTitle';
+import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { User } from '../types';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import {
@@ -847,6 +848,26 @@ export function AgentPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [attachMenuOpen]);
+
+  // `/` focuses compose (parity with Arena) when not typing in another field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBareSlashKey(e) || !shouldCaptureSlashFocus(e.target)) return;
+      e.preventDefault();
+      if (result?.status === 'complete' && followUpInputRef.current) {
+        followUpInputRef.current.focus();
+        return;
+      }
+      const prompt = document.getElementById('agent-prompt') as HTMLInputElement | null;
+      if (prompt && !prompt.disabled) {
+        prompt.focus();
+        return;
+      }
+      idleTaskInputRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [result?.status]);
 
   useEffect(() => {
     if (!attachMenuOpen) return;
@@ -3979,12 +4000,14 @@ export function AgentPage() {
                                 </svg>
                               </button>
                               <input
+                                id="agent-prompt"
                                 ref={idleTaskInputRef}
                                 type="text"
                                 value={task}
                                 disabled={isRunning}
                                 placeholder=""
                                 maxLength={AGENT_TASK_MAX_CHARS}
+                                aria-label="Research task"
                                 onChange={(e) => setTask(clampToMax(e.target.value))}
                                 style={{
                                   flex: 1,
@@ -7188,6 +7211,7 @@ export function AgentPage() {
                           }}
                         >
                           <input
+                            id="agent-follow-up"
                             ref={followUpInputRef}
                             type="text"
                             value={followUp}
@@ -7199,6 +7223,7 @@ export function AgentPage() {
                               }
                             }}
                             placeholder="Ask a follow-up, request more depth, challenge an assumption..."
+                            aria-label="Follow-up research question"
                             disabled={isRefining}
                             style={{
                               flex: 1,
