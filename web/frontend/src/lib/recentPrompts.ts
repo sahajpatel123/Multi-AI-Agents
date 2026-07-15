@@ -56,3 +56,22 @@ export function clearRecentPrompts(): void {
     /* ignore */
   }
 }
+
+/** Remove one recent prompt (case-insensitive match). Returns the new list. */
+export function removeRecentPrompt(text: string): RecentPrompt[] {
+  const clean = normalize(text);
+  if (!clean) return loadRecentPrompts();
+  const next = loadRecentPrompts().filter(
+    (p) => p.text.toLowerCase() !== clean.toLowerCase(),
+  );
+  try {
+    if (next.length === 0) {
+      localStorage.removeItem(STORAGE_KEY);
+    } else {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    }
+  } catch {
+    /* ignore */
+  }
+  return next;
+}

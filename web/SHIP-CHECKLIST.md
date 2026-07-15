@@ -33,6 +33,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Sign-in**: password-manager autocomplete + post-auth destination preview.
 - **Arena prompt**: character budget (max 2000) matches server sanitize cap.
 - **Pricing FAQ**: accessible accordion + Condura computer-control honesty item.
+- **Recent prompts**: Clear all + right-click remove single chip (local only).
 - **Debate end honesty**: after max rounds, only Back to Arena — no fake “Ask a follow-up”.
 - **Upgrade modal a11y**: Escape closes (gated during Razorpay), dialog semantics, body scroll lock.
 - **Clipboard consistency**: Room invite, Agent room link, and Condura handoff use shared copy helper + failure feedback.

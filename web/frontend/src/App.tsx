@@ -24,7 +24,13 @@ import {
 } from './api';
 import { copyToClipboard } from './lib/clipboard';
 import { formatArenaExport } from './lib/arenaExport';
-import { loadRecentPrompts, pushRecentPrompt, type RecentPrompt } from './lib/recentPrompts';
+import {
+  clearRecentPrompts,
+  loadRecentPrompts,
+  pushRecentPrompt,
+  removeRecentPrompt,
+  type RecentPrompt,
+} from './lib/recentPrompts';
 import { useAuth } from './hooks/useAuth';
 import { useIsMobile } from './hooks/useIsMobile';
 import { usePanel } from './context/PanelContext';
@@ -1549,6 +1555,7 @@ function App() {
                   flexWrap: 'wrap',
                   gap: 8,
                   justifyContent: 'center',
+                  alignItems: 'center',
                   maxWidth: '100%',
                   padding: isMobile ? '0 12px' : 0,
                 }}
@@ -1559,7 +1566,11 @@ function App() {
                     key={`${item.at}-${item.text.slice(0, 24)}`}
                     type="button"
                     onClick={() => handleExamplePromptClick(item.text)}
-                    title={item.text}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setRecentPrompts(removeRecentPrompt(item.text));
+                    }}
+                    title={`${item.text} — right-click to remove`}
                     style={{
                       maxWidth: isMobile ? '46vw' : 200,
                       overflow: 'hidden',
@@ -1588,6 +1599,27 @@ function App() {
                     {item.text}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearRecentPrompts();
+                    setRecentPrompts([]);
+                  }}
+                  title="Clear recent prompts from this device"
+                  style={{
+                    fontSize: 11,
+                    color: '#A89070',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px 8px',
+                    fontFamily: 'Georgia, serif',
+                    textDecoration: 'underline',
+                    textUnderlineOffset: 3,
+                  }}
+                >
+                  Clear
+                </button>
               </div>
             )}
 

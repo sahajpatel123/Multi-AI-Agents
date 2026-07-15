@@ -3,6 +3,7 @@ import {
   clearRecentPrompts,
   loadRecentPrompts,
   pushRecentPrompt,
+  removeRecentPrompt,
 } from './recentPrompts';
 
 describe('recentPrompts', () => {
@@ -34,5 +35,13 @@ describe('recentPrompts', () => {
     }
     expect(loadRecentPrompts()).toHaveLength(8);
     expect(loadRecentPrompts()[0].text).toBe('Prompt number 11');
+  });
+
+  it('removes a single prompt case-insensitively', () => {
+    pushRecentPrompt('Alpha');
+    pushRecentPrompt('Beta');
+    const next = removeRecentPrompt('alpha');
+    expect(next.map((i) => i.text)).toEqual(['Beta']);
+    expect(loadRecentPrompts().map((i) => i.text)).toEqual(['Beta']);
   });
 });
