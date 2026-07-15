@@ -72,6 +72,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Copy Agent Watchlist as markdown (respects search and status filters)',
       '[IMPROVED] Browser tabs show Room names and shared-take mind names',
       '[NEW] Press / and ? for Room board search focus and keyboard shortcuts help',
+      '[NEW] Press / and ? on Agent Watchlist for search focus and shortcuts help',
     ],
   },
   {

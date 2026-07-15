@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MicroLoader from '../components/MicroLoader';
+import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import {
   ApiError,
   deleteAgentWatchlist,
@@ -12,6 +13,7 @@ import { useTier } from '../context/TierContext';
 import { copyToClipboard } from '../lib/clipboard';
 import { prefersReducedMotion } from '../lib/motion';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
+import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import {
   WATCHLIST_INTERVALS,
   type WatchlistIntervalHours,
@@ -118,6 +120,18 @@ export function WatchlistPage() {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [pendingDeleteId]);
+
+  // `/` focuses watchlist search when not typing in another field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBareSlashKey(e) || !shouldCaptureSlashFocus(e.target)) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const onToggle = async (item: AgentWatchlistItem) => {
     try {
@@ -748,6 +762,8 @@ export function WatchlistPage() {
           </div>
         )}
       </main>
+
+      <KeyboardShortcutsHelp surface="watchlist" />
     </div>
   );
 }
