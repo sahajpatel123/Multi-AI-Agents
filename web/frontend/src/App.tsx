@@ -746,14 +746,46 @@ function App() {
     } catch (err) {
       if (flushTimer.current) clearInterval(flushTimer.current);
       setStreamPreviews({});
-      // AbortError is expected when the user navigates away or starts a new prompt.
-      if (abortController.signal.aborted) return;
+      // AbortError is expected when the user stops, navigates away, or starts a new prompt.
+      if (abortController.signal.aborted) {
+        setPhase((prev) => (prev === 'pipeline' || prev === 'streaming' || prev === 'scoring' ? 'idle' : prev));
+        return;
+      }
       const msg = err instanceof Error ? err.message : 'Something went wrong';
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      if (err instanceof Error && err.name === 'AbortError') return;
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setPhase((prev) => (prev === 'pipeline' || prev === 'streaming' || prev === 'scoring' ? 'idle' : prev));
+        return;
+      }
+      if (err instanceof Error && err.name === 'AbortError') {
+        setPhase((prev) => (prev === 'pipeline' || prev === 'streaming' || prev === 'scoring' ? 'idle' : prev));
+        return;
+      }
       setError(msg);
       setPhase('idle');
     }
+  };
+
+  /** User-initiated cancel of Arena panel generation (or focused mind chat stream). */
+  const handleStopGeneration = () => {
+    promptAbortRef.current?.abort();
+    discussAbortRef.current?.abort();
+    if (flushTimer.current) {
+      clearInterval(flushTimer.current);
+      flushTimer.current = null;
+    }
+    if (focusedFlushTimer.current) {
+      clearInterval(focusedFlushTimer.current);
+      focusedFlushTimer.current = null;
+    }
+    tokenBuffers.current = {};
+    focusedTokenBuffer.current = '';
+    setStreamPreviews({});
+    setFocusedStreamingText('');
+    setIsFocusedChatStreaming(false);
+    setDoneAgents(new Set());
+    setPhase((prev) =>
+      prev === 'pipeline' || prev === 'streaming' || prev === 'scoring' ? 'idle' : prev,
+    );
   };
 
   const handleChallenge = (scored: ScoredAgent) => {
@@ -1215,6 +1247,22 @@ function App() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {isLoading || isStreaming || isFocusedChatStreaming ? (
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--ghost arena-btn--sm"
+                  onClick={handleStopGeneration}
+                  title="Stop generating"
+                  aria-label="Stop generating"
+                  style={{
+                    fontSize: 12,
+                    color: '#993C1D',
+                    borderColor: 'rgba(153, 60, 29, 0.35)',
+                  }}
+                >
+                  Stop
+                </button>
+              ) : null}
               {isDone && response ? (
                 <button
                   type="button"

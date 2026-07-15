@@ -92,6 +92,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Arena recent prompts: tap × to remove (mobile-friendly); dismiss stress banner',
       '[NEW] Arena prompt draft autosave — long prompts survive refresh and route changes (cleared once the pipeline accepts)',
       '[NEW] Agent compose drafts autosave (idle question + per-task follow-up)',
+      '[NEW] Stop control on Arena while minds are generating or a focused chat is streaming',
     ],
   },
   {
