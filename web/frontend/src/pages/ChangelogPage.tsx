@@ -23,6 +23,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Arena cards stream live one-liner previews instead of endless shimmer',
       '[IMPROVED] Verify-in-Agent, room actions, and signup redirect failures surface to the user',
       '[NEW] Public /share landing so copied Arena take links actually open',
+      '[IMPROVED] X / WhatsApp / Email share the public /share URL (not private /app)',
       '[IMPROVED] Debate/Discuss abort cleanly on exit; debate no longer double-headers Arena',
       '[NEW] Branded 404 for unknown routes with recovery CTAs',
       '[IMPROVED] /account shell + redirect after profile modal closes (no blank page)',

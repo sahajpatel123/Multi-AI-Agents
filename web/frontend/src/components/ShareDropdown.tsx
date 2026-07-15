@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link2, Copy, Mail, Check } from 'lucide-react';
 import { copyToClipboard } from '../lib/clipboard';
+import { buildShareText, buildShareUrl } from '../lib/shareUrl';
 
 interface ShareDropdownProps {
   agentId: string;
@@ -63,11 +64,13 @@ export function ShareDropdown({
 
   if (!isOpen) return null;
 
-  const currentUrl = window.location.href;
-  const domain = window.location.origin;
+  const shareUrl = buildShareUrl({
+    agentId,
+    prompt,
+    response: oneLiner,
+  });
 
   const handleCopyLink = async () => {
-    const shareUrl = `${domain}/share?agent=${encodeURIComponent(agentId)}&prompt=${encodeURIComponent(prompt)}&response=${encodeURIComponent(oneLiner)}`;
     setCopyError(null);
     const ok = await copyToClipboard(shareUrl);
     if (ok) {
@@ -82,7 +85,7 @@ export function ShareDropdown({
 ─────────────────────
 "${oneLiner}"
 
-arena.app`;
+${shareUrl}`;
     setCopyError(null);
     const ok = await copyToClipboard(textContent);
     if (ok) {
@@ -93,39 +96,36 @@ arena.app`;
   };
 
   const handleShareX = () => {
-    const shareText = `"${oneLiner}"
-— ${agentName} on Arena
-
-${currentUrl}
-
-#Arena #AI`;
-    
+    const shareText = buildShareText({
+      agentName,
+      oneLiner,
+      shareUrl,
+      channel: 'x',
+    });
     const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
     window.open(xUrl, '_blank', 'noopener,noreferrer');
     onClose();
   };
 
   const handleShareWhatsApp = () => {
-    const shareText = `Check out this take on Arena:
-
-"${oneLiner}"
-— ${agentName}
-
-${currentUrl}`;
-    
+    const shareText = buildShareText({
+      agentName,
+      oneLiner,
+      shareUrl,
+      channel: 'whatsapp',
+    });
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
     window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
     onClose();
   };
 
   const handleShareEmail = () => {
-    const emailBody = `I found this on Arena:
-
-${agentName} says:
-"${oneLiner}"
-
-Check it out: ${currentUrl}`;
-    
+    const emailBody = buildShareText({
+      agentName,
+      oneLiner,
+      shareUrl,
+      channel: 'email',
+    });
     const mailtoUrl = `mailto:?subject=${encodeURIComponent('A take on Arena')}&body=${encodeURIComponent(emailBody)}`;
     window.location.href = mailtoUrl;
     onClose();

@@ -22,6 +22,8 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Recent prompts**: last asks cached locally as chips for one-click re-run.
 - **Quota honesty**: soft-block at 0 remaining with upgrade CTA; 429 stream errors are human-readable.
 - **Keyboard**: `/` focuses Arena prompt; Esc closes focused mind.
+- **Social share honesty**: X / WhatsApp / Email use the same public `/share` URL as Copy link (never `/app`).
+- **Post-auth redirect**: only same-app relative paths; default `/app`; open redirects rejected.
 
 ## Required production environment
 
