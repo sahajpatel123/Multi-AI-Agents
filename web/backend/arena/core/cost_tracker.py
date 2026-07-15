@@ -124,7 +124,16 @@ def check_and_increment_guest(db: Session, ip: str) -> None:
     """
     limit = get_daily_limit("GUEST")
 
-    record = db.query(GuestRateLimit).filter(GuestRateLimit.ip_address == ip).first()
+    # Lock the row (when it exists) so concurrent requests from the same IP
+    # can't both pass the check and each increment — a TOCTOU race that lets a
+    # guest exceed the free daily limit. Released by db.commit() below. SQLite
+    # ignores FOR UPDATE; Postgres (production) enforces it.
+    record = (
+        db.query(GuestRateLimit)
+        .filter(GuestRateLimit.ip_address == ip)
+        .with_for_update()
+        .first()
+    )
     now = _now_utc()
 
     if record is None:
@@ -164,8 +173,13 @@ def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
     - Toxicity rejections do NOT count toward the limit
     - Only successful responses count
     """
-    # Fetch fresh User instance from DB to avoid detached instance issues
-    user = db.query(User).filter(User.id == user_id).first()
+    # Fetch fresh User instance from DB to avoid detached instance issues.
+    # Lock the row for this short transaction so two concurrent requests from
+    # the same user can't both read the pre-increment count and each pass the
+    # check — a TOCTOU race that lets a user exceed their daily limit. The lock
+    # is released by db.commit() below, before any LLM work runs. SQLite ignores
+    # FOR UPDATE; Postgres (production) enforces it.
+    user = db.query(User).filter(User.id == user_id).with_for_update().first()
     if not user:
         return
 
