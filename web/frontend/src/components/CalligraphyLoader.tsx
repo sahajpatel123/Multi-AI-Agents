@@ -1,48 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { getWordPoints } from '../hooks/useCalligraphyCanvas';
+import {
+  formatElapsedSeconds,
+  getStageKey,
+  pipelineStatusText,
+  STAGE_KEYS,
+  STAGE_STATUS,
+  STAGE_WORDS,
+  stageProgressIndex,
+  type StageKey,
+} from '../lib/agentPipelineStages';
+import { prefersReducedMotion } from '../lib/motion';
 
-const STAGE_KEYS = [
-  'planner',
-  'researcher',
-  'solver',
-  'critic',
-  'verifier',
-  'synthesizer',
-  'judge',
-] as const;
-
-type StageKey = (typeof STAGE_KEYS)[number];
 type LoaderPhase = 'draw' | 'hold' | 'fade';
-
-const STAGE_WORDS: Record<StageKey, string> = {
-  planner: 'truth',
-  researcher: 'reason',
-  solver: 'clarity',
-  critic: 'logic',
-  verifier: 'wisdom',
-  synthesizer: 'insight',
-  judge: 'judge',
-};
-
-const STAGE_STATUS: Record<StageKey, string> = {
-  planner: 'Planning your task...',
-  researcher: 'Researching sources...',
-  solver: 'Building the answer...',
-  critic: 'Stress-testing logic...',
-  verifier: 'Verifying claims...',
-  synthesizer: 'Synthesizing insights...',
-  judge: 'Final judgement...',
-};
-
-function formatElapsedSeconds(elapsedSeconds: number): string {
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = elapsedSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-function getStageKey(stage?: string): StageKey | null {
-  return STAGE_KEYS.includes(stage as StageKey) ? (stage as StageKey) : null;
-}
 
 export function CalligraphyLoader({
   stage,
@@ -53,14 +23,17 @@ export function CalligraphyLoader({
   width?: number;
   height?: number;
 }) {
+  const reducedMotion = prefersReducedMotion();
   const [dims, setDims] = useState(() => {
     if (typeof window === 'undefined') return { w: 320, h: 200 };
     const w = Math.min(600, Math.max(260, window.innerWidth - 40));
     const h = Math.round((200 / 320) * w);
     return { w, h };
   });
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   useEffect(() => {
+    if (reducedMotion) return;
     const ro = () => {
       const w = Math.min(600, Math.max(260, window.innerWidth - 40));
       const h = Math.round((200 / 320) * w);
@@ -69,6 +42,14 @@ export function CalligraphyLoader({
     ro();
     window.addEventListener('resize', ro);
     return () => window.removeEventListener('resize', ro);
+  }, [reducedMotion]);
+
+  useEffect(() => {
+    setElapsedSeconds(0);
+    const intervalId = window.setInterval(() => {
+      setElapsedSeconds((current) => current + 1);
+    }, 1000);
+    return () => window.clearInterval(intervalId);
   }, []);
 
   const width = widthProp ?? dims.w;
@@ -87,16 +68,20 @@ export function CalligraphyLoader({
   const wordIndexRef = useRef(0);
   const currentStageKeyRef = useRef<StageKey>('planner');
   const stageCycleTimerRef = useRef<number | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const syncStatus = (stageKey: StageKey) => {
     if (statusRef.current) {
-      statusRef.current.style.opacity = '0';
-      window.setTimeout(() => {
-        if (!statusRef.current) return;
+      if (prefersReducedMotion()) {
         statusRef.current.textContent = STAGE_STATUS[stageKey];
         statusRef.current.style.opacity = '1';
-      }, 120);
+      } else {
+        statusRef.current.style.opacity = '0';
+        window.setTimeout(() => {
+          if (!statusRef.current) return;
+          statusRef.current.textContent = STAGE_STATUS[stageKey];
+          statusRef.current.style.opacity = '1';
+        }, 120);
+      }
     }
 
     dotRefs.current.forEach((dot, idx) => {
@@ -106,7 +91,7 @@ export function CalligraphyLoader({
         dot.style.transform = 'scale(1)';
       } else if (idx === STAGE_KEYS.indexOf(stageKey)) {
         dot.style.background = '#C4956A';
-        dot.style.transform = 'scale(1.5)';
+        dot.style.transform = prefersReducedMotion() ? 'scale(1)' : 'scale(1.5)';
       } else {
         dot.style.background = '#DDD4C4';
         dot.style.transform = 'scale(1)';
@@ -129,14 +114,8 @@ export function CalligraphyLoader({
   };
 
   useEffect(() => {
-    setElapsedSeconds(0);
-    const intervalId = window.setInterval(() => {
-      setElapsedSeconds((current) => current + 1);
-    }, 1000);
-    return () => window.clearInterval(intervalId);
-  }, []);
+    if (reducedMotion) return;
 
-  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -234,21 +213,103 @@ export function CalligraphyLoader({
         window.clearTimeout(stageCycleTimerRef.current);
       }
     };
-  }, [height, stage, width]);
+  }, [height, reducedMotion, stage, width]);
 
   useEffect(() => {
+    if (reducedMotion) return;
     const nextStageKey = getStageKey(stage);
     if (!nextStageKey || nextStageKey === currentStageKeyRef.current) return;
     loadStageWord(nextStageKey);
-  }, [stage]);
+  }, [reducedMotion, stage]);
+
+  const activeIndex = stageProgressIndex(stage);
+  const statusText = pipelineStatusText(stage);
+  const stageWord = STAGE_WORDS[getStageKey(stage) || 'planner'];
+
+  if (reducedMotion) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0' }}
+      >
+        <p
+          style={{
+            fontFamily: 'Georgia, serif',
+            fontSize: 'clamp(28px, 6vw, 42px)',
+            color: '#C4956A',
+            letterSpacing: '0.04em',
+            margin: 0,
+            textTransform: 'lowercase',
+          }}
+        >
+          {stageWord}
+        </p>
+        <div
+          style={{
+            fontFamily: 'Georgia, serif',
+            fontSize: 13,
+            color: '#8C7355',
+            letterSpacing: '0.05em',
+            textAlign: 'center',
+            marginTop: 22,
+          }}
+        >
+          {statusText}
+        </div>
+        <div
+          style={{
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            fontSize: 11,
+            color: '#C4A882',
+            marginTop: 7,
+            textAlign: 'center',
+            letterSpacing: '0.08em',
+          }}
+        >
+          {formatElapsedSeconds(elapsedSeconds)} elapsed
+        </div>
+        <div
+          role="progressbar"
+          aria-valuemin={1}
+          aria-valuemax={STAGE_KEYS.length}
+          aria-valuenow={activeIndex + 1}
+          aria-label={`Research pipeline stage ${activeIndex + 1} of ${STAGE_KEYS.length}`}
+          style={{ display: 'flex', gap: 7, marginTop: 20, alignItems: 'center' }}
+        >
+          {STAGE_KEYS.map((stageKey, idx) => (
+            <span
+              key={stageKey}
+              title={STAGE_STATUS[stageKey]}
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: '50%',
+                background: idx <= activeIndex ? '#C4956A' : '#DDD4C4',
+                display: 'block',
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label={statusText}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+    >
       <canvas
         ref={canvasRef}
         width={width}
         height={height}
         style={{ width, height, display: 'block', background: 'transparent' }}
+        aria-hidden
       />
       <div
         ref={statusRef}
@@ -277,7 +338,14 @@ export function CalligraphyLoader({
       >
         {formatElapsedSeconds(elapsedSeconds)} elapsed
       </div>
-      <div style={{ display: 'flex', gap: 7, marginTop: 20, alignItems: 'center' }}>
+      <div
+        role="progressbar"
+        aria-valuemin={1}
+        aria-valuemax={STAGE_KEYS.length}
+        aria-valuenow={activeIndex + 1}
+        aria-label={`Research pipeline stage ${activeIndex + 1} of ${STAGE_KEYS.length}`}
+        style={{ display: 'flex', gap: 7, marginTop: 20, alignItems: 'center' }}
+      >
         {STAGE_KEYS.map((stageKey, idx) => (
           <span
             key={stageKey}
