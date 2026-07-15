@@ -37,6 +37,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **About page**: copy matches shipped product + Condura honesty (no “still in development” vaporware).
 - **Document titles**: per-route browser tab labels (Agent, Pricing, Rooms, etc.).
 - **Scroll**: route changes reset to top; hash links scroll to section (reduced-motion aware).
+- **Sign-in errors**: role=alert, focused on failure, shared validation helpers.
 - **Debate end honesty**: after max rounds, only Back to Arena — no fake “Ask a follow-up”.
 - **Upgrade modal a11y**: Escape closes (gated during Razorpay), dialog semantics, body scroll lock.
 - **Clipboard consistency**: Room invite, Agent room link, and Condura handoff use shared copy helper + failure feedback.

@@ -8,6 +8,11 @@ import {
   clearRedirectIntent,
   describeRedirectDestination,
 } from '../utils/redirectIntent';
+import {
+  authCaughtErrorMessage,
+  signupClientIssueMessage,
+  validateSignupFields,
+} from '../lib/authFormMessages';
 
 type Tab = 'signin' | 'signup';
 type PasswordStrength = 'weak' | 'fair' | 'good' | 'strong' | null;
@@ -16,6 +21,7 @@ export function SignInPage() {
   const navigate = useNavigate();
   const { user, login, register, isLoading: authLoading } = useAuth();
   const handledInitialUser = useRef(false);
+  const errorRef = useRef<HTMLParagraphElement | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -46,8 +52,14 @@ export function SignInPage() {
     if (!user) return;
     const destination = getRedirectIntent();
     clearRedirectIntent();
-    navigate(destination || '/agent', { replace: true });
+    navigate(destination, { replace: true });
   }, [user, navigate]);
+
+  useEffect(() => {
+    if (!error) return;
+    // Move focus to the alert so keyboard / SR users hear failures immediately.
+    errorRef.current?.focus();
+  }, [error]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +69,7 @@ export function SignInPage() {
     try {
       await login(email, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign in failed');
+      setError(authCaughtErrorMessage(err, 'Sign in failed'));
     } finally {
       setIsLoading(false);
     }
@@ -67,18 +79,9 @@ export function SignInPage() {
     e.preventDefault();
     setError('');
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (!name.trim()) {
-      setError('Name is required');
-      return;
-    }
-
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+    const issue = validateSignupFields({ name, password, confirmPassword });
+    if (issue) {
+      setError(signupClientIssueMessage(issue));
       return;
     }
 
@@ -87,7 +90,7 @@ export function SignInPage() {
     try {
       await register(name.trim(), email, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Account creation failed');
+      setError(authCaughtErrorMessage(err, 'Account creation failed'));
     } finally {
       setIsLoading(false);
     }
@@ -322,9 +325,25 @@ export function SignInPage() {
                 </button>
               </div>
 
-              {error && (
-                <p style={{ fontSize: '13px', color: '#993C1D', marginBottom: '1rem' }}>{error}</p>
-              )}
+              {error ? (
+                <p
+                  ref={errorRef}
+                  role="alert"
+                  tabIndex={-1}
+                  style={{
+                    fontSize: '13px',
+                    color: '#993C1D',
+                    marginBottom: '1rem',
+                    outline: 'none',
+                    padding: '10px 12px',
+                    background: 'rgba(153,60,29,0.06)',
+                    borderRadius: 10,
+                    border: '0.5px solid rgba(153,60,29,0.2)',
+                  }}
+                >
+                  {error}
+                </p>
+              ) : null}
 
               <div style={{ marginBottom: '1.5rem' }}>
                 <Button
