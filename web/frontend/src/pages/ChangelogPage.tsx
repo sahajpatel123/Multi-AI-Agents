@@ -38,6 +38,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Change Watchlist re-check cadence in place (24h / 3d / 7d)',
       '[NEW] Optional Debate bonus round after three standard rounds',
       '[IMPROVED] Debate end state no longer fakes “Ask a follow-up” as exit',
+      '[IMPROVED] Upgrade modal: Escape, dialog a11y, scroll lock (safe during checkout)',
     ],
   },
   {

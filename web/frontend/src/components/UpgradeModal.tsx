@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { Lock, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { RazorpayCheckout } from './RazorpayCheckout';
 import { useAuth } from '../hooks/useAuth';
 import { useTier } from '../context/TierContext';
 import { setRedirectIntent } from '../utils/redirectIntent';
+import { shouldUpgradeModalEscapeClose } from '../lib/upgradeModalEscape';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -27,12 +28,42 @@ export function UpgradeModal({
   const { isAuthenticated, refreshUser, user } = useAuth();
   const { refreshTier } = useTier();
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
+  const titleId = useId();
+
+  const handleClose = useCallback(() => {
+    setCheckoutPlan(null);
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setCheckoutPlan(null);
+      return;
+    }
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (!shouldUpgradeModalEscapeClose(checkoutPlan)) return;
+      e.preventDefault();
+      handleClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, checkoutPlan, handleClose]);
 
   const handleUpgradePlusMonthly = () => {
     if (!isAuthenticated) {
       setRedirectIntent('/arena');
       navigate('/signin');
-      onClose();
+      handleClose();
       return;
     }
     setCheckoutPlan('plus_monthly');
@@ -58,7 +89,8 @@ export function UpgradeModal({
   return (
     <div
       className="upgrade-modal-overlay"
-      onClick={onClose}
+      role="presentation"
+      onClick={handleClose}
       style={{
         position: 'fixed',
         inset: 0,
@@ -83,6 +115,9 @@ export function UpgradeModal({
       )}
       <div
         className="upgrade-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: '#FAF7F4',
@@ -105,9 +140,10 @@ export function UpgradeModal({
             justifyContent: 'center',
           }}
         >
-          <Lock style={{ width: '32px', height: '32px' }} />
+          <Lock style={{ width: '32px', height: '32px' }} aria-hidden />
         </div>
         <h2
+          id={titleId}
           style={{
             fontSize: '22px',
             fontWeight: 500,
@@ -154,6 +190,7 @@ export function UpgradeModal({
                   justifyContent: 'center',
                   flexShrink: 0,
                 }}
+                aria-hidden
               >
                 <Check style={{ width: '10px', height: '10px' }} />
               </span>
@@ -182,7 +219,7 @@ export function UpgradeModal({
         <button
           type="button"
           onClick={() => {
-            onClose();
+            handleClose();
             navigate('/pricing');
           }}
           style={{
@@ -201,7 +238,7 @@ export function UpgradeModal({
         </button>
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleClose}
           style={{
             fontSize: '13px',
             color: '#6B6460',
