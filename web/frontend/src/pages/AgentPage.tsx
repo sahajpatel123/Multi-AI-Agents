@@ -76,6 +76,7 @@ import {
   clampToMax,
 } from '../lib/charBudget';
 import { copyToClipboard } from '../lib/clipboard';
+import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { motionDuration } from '../lib/motion';
 
 /** Agent result view — shared palette (mockup) */
@@ -756,7 +757,7 @@ export function AgentPage() {
   const [myRooms, setMyRooms] = useState<any[]>([]);
   const [myRoomsLoading, setMyRoomsLoading] = useState(false);
   const [copyRoomLinkFeedback, setCopyRoomLinkFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
-  const [copyAnswerFeedback, setCopyAnswerFeedback] = useState(false);
+  const [copyAnswerFeedback, setCopyAnswerFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const pendingRoomHandledRef = useRef<string | null>(null);
 
   const closeTemplatesModal = useCallback(() => {
@@ -6474,19 +6475,32 @@ export function AgentPage() {
                       variant="ghost"
                       size="sm"
                       icon={Icons.copy(14)}
+                      title="Copy answer as markdown (question + answer)"
                       onClick={() => {
-                        void copyToClipboard(plainAnswerText).then((ok) => {
-                          if (!ok) return;
-                          setCopyAnswerFeedback(true);
-                          const hold = motionDuration(2000);
+                        const md = formatAgentAnswerExport({
+                          question:
+                            result.original_task ||
+                            result.task ||
+                            task ||
+                            '',
+                          answer: plainAnswerText || result.final_answer || '',
+                          taskId: result.task_id,
+                        });
+                        void copyToClipboard(md).then((ok) => {
+                          setCopyAnswerFeedback(ok ? 'copied' : 'failed');
+                          const hold = motionDuration(ok ? 2000 : 2800);
                           window.setTimeout(
-                            () => setCopyAnswerFeedback(false),
+                            () => setCopyAnswerFeedback('idle'),
                             hold > 0 ? hold : 0,
                           );
                         });
                       }}
                     >
-                      {copyAnswerFeedback ? 'Copied!' : 'Copy'}
+                      {copyAnswerFeedback === 'copied'
+                        ? 'Copied!'
+                        : copyAnswerFeedback === 'failed'
+                          ? 'Copy failed'
+                          : 'Copy'}
                     </Button>
                     <Button type="button" variant="ghost" size="sm" icon={Icons.refresh(14)} onClick={runAgainWithSameQuestion}>
                       Run again

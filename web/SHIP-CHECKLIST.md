@@ -65,6 +65,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent `/` focus**: press `/` to focus research compose or follow-up (shared slash-focus helper with Arena).
 - **Discuss / Debate copy**: markdown thread export (Copy thread / Copy debate) with clipboard feedback.
 - **Condura CTA modal**: body scroll lock + copy-timer cleanup; collapsible Arena prompt honors reduced motion.
+- **Agent answer copy**: markdown export (question + answer) with success/failure feedback; Product Arena CTA sets sign-in redirect.
 
 ## Required production environment
 

@@ -52,6 +52,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Offline banner safe-area + dismiss; live tab titles while work runs',
       '[NEW] Public /share Copy take / Copy link / system Share…',
       '[NEW] Copy Discuss thread and Debate transcript as markdown',
+      '[IMPROVED] Agent Copy pastes markdown (question + answer) with failure feedback',
     ],
   },
   {

@@ -41,7 +41,15 @@ export function ProductPage() {
         <div className="product-cards-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '2rem' }}>
           {/* Arena Mode Card */}
           <button
-            onClick={() => navigate('/app')}
+            type="button"
+            onClick={() => {
+              if (!isAuthenticated) {
+                setRedirectIntent('/app');
+                navigate('/signin');
+                return;
+              }
+              navigate('/app');
+            }}
             className="product-parchment-card"
             style={{
               background: '#FDFAF6',
