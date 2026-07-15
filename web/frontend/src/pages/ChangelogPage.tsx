@@ -54,6 +54,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Copy Discuss thread and Debate transcript as markdown',
       '[IMPROVED] Agent Copy pastes markdown (question + answer) with failure feedback',
       '[NEW] Search Arena sidebar recents by prompt or renamed title',
+      '[NEW] Copy session Agent Leaderboard rankings as markdown',
     ],
   },
   {

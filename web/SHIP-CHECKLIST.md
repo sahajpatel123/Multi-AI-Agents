@@ -68,6 +68,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent answer copy**: markdown export (question + answer) with success/failure feedback; Product Arena CTA sets sign-in redirect.
 - **404 recovery**: shows attempted path; signed-in users get Arena / Agent / Watchlist; tab title “Not found”.
 - **Sidebar recents search**: filter history by prompt/title with clear + empty match state.
+- **Leaderboard copy**: session rankings as markdown table; UserMenu loading respects reduced motion.
 
 ## Required production environment
 

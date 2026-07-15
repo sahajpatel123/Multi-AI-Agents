@@ -4,6 +4,8 @@ import { AGENTS, type SessionTurn } from '../types';
 import { AgentDot } from './AgentDot';
 import { usePanel } from '../context/PanelContext';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
+import { copyToClipboard } from '../lib/clipboard';
+import { formatLeaderboardExport } from '../lib/leaderboardExport';
 
 interface LeaderboardViewProps {
   turns: SessionTurn[];
@@ -26,6 +28,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
   const [animatedWidths, setAnimatedWidths] = useState<Record<string, number>>({});
   const [showNumbers, setShowNumbers] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   const leaderboard = useMemo(() => {
     const winsByAgent = turns.reduce<Record<string, number>>((acc, turn) => {
@@ -94,6 +97,26 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
     ? 'none'
     : 'width 800ms cubic-bezier(0.16,1,0.3,1)';
 
+  useEffect(() => {
+    if (copyFeedback === 'idle') return;
+    const hold = motionDuration(copyFeedback === 'copied' ? 1600 : 2400);
+    const t = window.setTimeout(() => setCopyFeedback('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [copyFeedback]);
+
+  const handleCopy = async () => {
+    const md = formatLeaderboardExport({
+      totalPrompts,
+      rows: leaderboard.map((r) => ({
+        name: r.name,
+        wins: r.wins,
+        percentage: r.percentage,
+      })),
+    });
+    const ok = await copyToClipboard(md);
+    setCopyFeedback(ok ? 'copied' : 'failed');
+  };
+
   return (
     <div
       className="leaderboard-container"
@@ -130,17 +153,63 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
       </button>
 
       <div style={{ marginBottom: '36px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-          <Trophy style={{ width: '20px', height: '20px', color: '#C4956A', flexShrink: 0 }} aria-hidden />
-          <h1 style={{ fontSize: '22px', fontWeight: 500, color: '#1A1714', letterSpacing: '-0.02em', margin: 0 }}>
-            Agent Leaderboard
-          </h1>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginBottom: '6px',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Trophy style={{ width: '20px', height: '20px', color: '#C4956A', flexShrink: 0 }} aria-hidden />
+            <h1 style={{ fontSize: '22px', fontWeight: 500, color: '#1A1714', letterSpacing: '-0.02em', margin: 0 }}>
+              Agent Leaderboard
+            </h1>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              void handleCopy();
+            }}
+            disabled={!hasData}
+            title={hasData ? 'Copy leaderboard as markdown' : 'Prompt first to build rankings'}
+            style={{
+              fontSize: 12,
+              fontFamily: 'Georgia, serif',
+              color:
+                copyFeedback === 'failed'
+                  ? '#993C1D'
+                  : !hasData
+                    ? '#A89070'
+                    : '#C4956A',
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 999,
+              padding: '5px 12px',
+              cursor: hasData ? 'pointer' : 'not-allowed',
+              opacity: hasData ? 1 : 0.7,
+            }}
+          >
+            {copyFeedback === 'copied'
+              ? 'Copied'
+              : copyFeedback === 'failed'
+                ? 'Copy failed'
+                : 'Copy rankings'}
+          </button>
         </div>
         <p style={{ fontSize: '13px', color: '#9A9088', margin: 0 }}>
           {hasData
             ? `Based on ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'} in this session`
             : 'Win rates will appear once you start prompting'}
         </p>
+        {copyFeedback === 'failed' ? (
+          <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: '8px 0 0' }}>
+            Could not copy — try again or select text manually.
+          </p>
+        ) : null}
       </div>
 
       <div style={{ height: '0.5px', background: '#E8E0D8', marginBottom: '32px' }} />

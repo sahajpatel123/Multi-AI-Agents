@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { LogOut, Zap } from 'lucide-react';
 import { User } from '../types';
+import { prefersReducedMotion } from '../lib/motion';
 
 interface UserMenuProps {
   user: User | null;
@@ -55,10 +56,21 @@ export function UserMenu({
   }, [isOpen]);
 
   if (isLoading) {
+    const reduced = prefersReducedMotion();
     return (
       <>
-        <style>{breatheStyle}</style>
-        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#E0D8D0', animation: 'breathe 2.4s ease-in-out infinite' }} />
+        {!reduced ? <style>{breatheStyle}</style> : null}
+        <div
+          role="status"
+          aria-label="Loading account"
+          style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            background: '#E0D8D0',
+            animation: reduced ? 'none' : 'breathe 2.4s ease-in-out infinite',
+          }}
+        />
       </>
     );
   }
