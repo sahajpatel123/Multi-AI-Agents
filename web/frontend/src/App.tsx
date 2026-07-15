@@ -32,7 +32,9 @@ import {
   type RecentPrompt,
 } from './lib/recentPrompts';
 import { useAuth } from './hooks/useAuth';
+import { useBusyNavigationGuard } from './hooks/useBusyNavigationGuard';
 import { useIsMobile } from './hooks/useIsMobile';
+import { arenaWorkInFlight } from './lib/busyNavigationGuard';
 import { usePanel } from './context/PanelContext';
 import { useTier } from './context/TierContext';
 import { useProfileModal } from './context/ProfileModalContext';
@@ -1029,6 +1031,13 @@ function App() {
   const isLoading = phase === 'pipeline';
   const isStreaming = phase === 'streaming' || phase === 'scoring';
   const isDone = phase === 'done';
+  useBusyNavigationGuard(
+    arenaWorkInFlight({
+      isLoading,
+      isStreaming,
+      isFocusedChatStreaming,
+    }),
+  );
   const sortedResponses = currentResponses
     ? [...currentResponses.all_responses].sort((a, b) => b.score - a.score)
     : [];

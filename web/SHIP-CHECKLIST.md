@@ -58,6 +58,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Watchlist recovery**: load failure ≠ empty state (Retry); two-step remove confirm; pause switch labels.
 - **Agent pipeline loader**: CalligraphyLoader static path under reduced motion; stage progressbar + live status.
 - **Share landing actions**: public `/share` can Copy take, Copy link, and system Share… when available.
+- **Busy leave guard**: beforeunload warns during Arena streams and Agent run/refine/challenge.
 
 ## Required production environment
 
