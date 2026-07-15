@@ -81,6 +81,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Create research room works from idle Agent; validated name + busy modal',
       '[IMPROVED] Agent history load errors show Retry (not a false empty state)',
       '[NEW] Copy your Personas panel as markdown (four minds, quotes, traits)',
+      '[IMPROVED] Upgrade modal shows payment errors; offline banner uses assertive alert',
     ],
   },
   {

@@ -97,6 +97,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Create room modal**: works from idle Agent sidebar; name validation, busy state, Esc close, real errors.
 - **Agent history load honesty**: failed history fetch ≠ empty (Retry); watchlist cadence radios + Esc cancel.
 - **Personas panel copy**: export the current four minds as markdown (slots, quotes, descriptions).
+- **Upgrade checkout honesty**: Razorpay failures surface as role=alert (no silent dismiss); offline banner is assertive alert.
 
 ## Required production environment
 

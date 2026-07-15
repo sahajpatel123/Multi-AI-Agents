@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { RazorpayCheckout } from './RazorpayCheckout';
 import { useAuth } from '../hooks/useAuth';
 import { useTier } from '../context/TierContext';
-import { setRedirectIntent } from '../utils/redirectIntent';
+import { DEFAULT_REDIRECT_INTENT, setRedirectIntent } from '../utils/redirectIntent';
 import { shouldUpgradeModalEscapeClose } from '../lib/upgradeModalEscape';
 
 interface UpgradeModalProps {
@@ -28,16 +28,20 @@ export function UpgradeModal({
   const { isAuthenticated, refreshUser, user } = useAuth();
   const { refreshTier } = useTier();
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const titleId = useId();
+  const errorId = useId();
 
   const handleClose = useCallback(() => {
     setCheckoutPlan(null);
+    setCheckoutError(null);
     onClose();
   }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) {
       setCheckoutPlan(null);
+      setCheckoutError(null);
       return;
     }
     const prevOverflow = document.body.style.overflow;
@@ -61,23 +65,28 @@ export function UpgradeModal({
 
   const handleUpgradePlusMonthly = () => {
     if (!isAuthenticated) {
-      setRedirectIntent('/arena');
+      setRedirectIntent(DEFAULT_REDIRECT_INTENT);
       navigate('/signin');
       handleClose();
       return;
     }
+    setCheckoutError(null);
     setCheckoutPlan('plus_monthly');
   };
 
   const onCheckoutSuccess = useCallback(async () => {
     setCheckoutPlan(null);
+    setCheckoutError(null);
     onClose();
     await refreshTier();
     await refreshUser();
   }, [onClose, refreshTier, refreshUser]);
 
-  const onCheckoutError = useCallback((_message: string) => {
+  const onCheckoutError = useCallback((message: string) => {
     setCheckoutPlan(null);
+    setCheckoutError(
+      (message || '').trim() || 'Payment failed. Try again or open Pricing for other plans.',
+    );
   }, []);
 
   const onCheckoutDismiss = useCallback(() => {
@@ -199,9 +208,26 @@ export function UpgradeModal({
           ))}
         </div>
 
+        {checkoutError ? (
+          <p
+            id={errorId}
+            role="alert"
+            style={{
+              margin: '1.25rem 0 0',
+              fontSize: 13,
+              color: '#D85A30',
+              lineHeight: 1.5,
+              textAlign: 'left',
+            }}
+          >
+            {checkoutError}
+          </p>
+        ) : null}
+
         <button
           type="button"
           onClick={handleUpgradePlusMonthly}
+          aria-describedby={checkoutError ? errorId : undefined}
           style={{
             width: '100%',
             padding: '13px 24px',
@@ -209,12 +235,12 @@ export function UpgradeModal({
             background: '#1A1714',
             color: '#FAF7F4',
             fontSize: '14px',
-            marginTop: '1.5rem',
+            marginTop: checkoutError ? '0.85rem' : '1.5rem',
             border: 'none',
             cursor: 'pointer',
           }}
         >
-          Upgrade to Plus — ₹999/mo
+          {checkoutError ? 'Try upgrade again — ₹999/mo' : 'Upgrade to Plus — ₹999/mo'}
         </button>
         <button
           type="button"

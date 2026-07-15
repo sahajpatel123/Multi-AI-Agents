@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { networkBannerKind, networkBannerMessage } from './networkStatus';
+import {
+  networkBannerAriaLive,
+  networkBannerKind,
+  networkBannerMessage,
+  networkBannerRole,
+} from './networkStatus';
 
 describe('networkStatus', () => {
   it('prefers offline over reconnected toast', () => {
@@ -16,5 +21,13 @@ describe('networkStatus', () => {
     expect(networkBannerMessage('offline')).toMatch(/offline/i);
     expect(networkBannerMessage('reconnected')).toMatch(/online/i);
     expect(networkBannerMessage('hidden')).toBeNull();
+  });
+
+  it('uses assertive alert offline and polite status when reconnected', () => {
+    expect(networkBannerRole('offline')).toBe('alert');
+    expect(networkBannerAriaLive('offline')).toBe('assertive');
+    expect(networkBannerRole('reconnected')).toBe('status');
+    expect(networkBannerAriaLive('reconnected')).toBe('polite');
+    expect(networkBannerRole('hidden')).toBeNull();
   });
 });

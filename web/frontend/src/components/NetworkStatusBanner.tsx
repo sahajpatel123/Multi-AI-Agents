@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { motionDuration } from '../lib/motion';
 import {
   NETWORK_RECONNECTED_HOLD_MS,
+  networkBannerAriaLive,
   networkBannerKind,
   networkBannerMessage,
+  networkBannerRole,
 } from '../lib/networkStatus';
 
 /**
@@ -55,14 +57,16 @@ export function NetworkStatusBanner() {
 
   const kind = networkBannerKind({ online, showReconnected });
   const message = networkBannerMessage(kind);
-  if (!message) return null;
+  const role = networkBannerRole(kind);
+  const ariaLive = networkBannerAriaLive(kind);
+  if (!message || !role || !ariaLive) return null;
 
   const offline = kind === 'offline';
 
   return (
     <div
-      role="status"
-      aria-live="polite"
+      role={role}
+      aria-live={ariaLive}
       style={{
         position: 'fixed',
         top: 0,

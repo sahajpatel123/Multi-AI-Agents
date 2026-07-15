@@ -21,5 +21,18 @@ export function networkBannerMessage(kind: NetworkBannerKind): string | null {
   return null;
 }
 
+/** Offline is urgent (assertive alert); reconnected is polite status. */
+export function networkBannerRole(kind: NetworkBannerKind): 'alert' | 'status' | null {
+  if (kind === 'offline') return 'alert';
+  if (kind === 'reconnected') return 'status';
+  return null;
+}
+
+export function networkBannerAriaLive(kind: NetworkBannerKind): 'assertive' | 'polite' | null {
+  if (kind === 'offline') return 'assertive';
+  if (kind === 'reconnected') return 'polite';
+  return null;
+}
+
 /** How long to show the reconnected toast (ms). 0 under reduced motion callers. */
 export const NETWORK_RECONNECTED_HOLD_MS = 2800;
