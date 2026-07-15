@@ -57,7 +57,12 @@ import { useProfileModal } from '../context/ProfileModalContext';
 import { useAuth } from '../hooks/useAuth';
 import { User } from '../types';
 import { setRedirectIntent } from '../utils/redirectIntent';
-import { pickRecentAgentChips } from '../lib/agentRecentChips';
+import {
+  clearDismissedAgentChips,
+  dismissAgentChip,
+  loadDismissedAgentChipIds,
+  pickRecentAgentChips,
+} from '../lib/agentRecentChips';
 import {
   AGENT_TASK_MAX_CHARS,
   agentMinLengthHint,
@@ -667,6 +672,9 @@ export function AgentPage() {
   const [steelmanInnerExpanded, setSteelmanInnerExpanded] = useState(false);
   const [showAllSourcePills, setShowAllSourcePills] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
+  const [dismissedChipIds, setDismissedChipIds] = useState<Set<string>>(
+    () => loadDismissedAgentChipIds(),
+  );
   const [historyLoading, setHistoryLoading] = useState(false);
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
   const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
@@ -3227,7 +3235,11 @@ export function AgentPage() {
                       </span>
                     </div>
                     {(() => {
-                      const recentChips = pickRecentAgentChips(taskHistory, 4);
+                      const recentChips = pickRecentAgentChips(
+                        taskHistory,
+                        4,
+                        dismissedChipIds,
+                      );
                       if (recentChips.length === 0) return null;
                       return (
                       <div
@@ -3236,6 +3248,7 @@ export function AgentPage() {
                           flexWrap: 'wrap',
                           gap: 8,
                           justifyContent: 'center',
+                          alignItems: 'center',
                           marginBottom: 12,
                           maxWidth: 640,
                           marginLeft: 'auto',
@@ -3247,13 +3260,17 @@ export function AgentPage() {
                             <button
                               key={chip.task_id}
                               type="button"
-                              title={chip.task_text}
+                              title={`${chip.task_text} — right-click to hide`}
                               onClick={() => {
                                 setSelectedTemplate(null);
                                 setTemplateSlots({});
                                 setMultiMode(false);
                                 setTask(chip.task_text);
                                 requestAnimationFrame(() => idleTaskInputRef.current?.focus());
+                              }}
+                              onContextMenu={(e) => {
+                                e.preventDefault();
+                                setDismissedChipIds(dismissAgentChip(chip.task_id));
                               }}
                               style={{
                                 maxWidth: isMobile ? '46vw' : 200,
@@ -3284,6 +3301,24 @@ export function AgentPage() {
                               {chip.label}
                             </button>
                         ))}
+                        <button
+                          type="button"
+                          title="Show all recent chips again (local)"
+                          onClick={() => setDismissedChipIds(clearDismissedAgentChips())}
+                          style={{
+                            fontSize: 11,
+                            color: '#A89070',
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '4px 8px',
+                            fontFamily: 'Georgia, serif',
+                            textDecoration: 'underline',
+                            textUnderlineOffset: 3,
+                          }}
+                        >
+                          Reset chips
+                        </button>
                       </div>
                       );
                     })()}

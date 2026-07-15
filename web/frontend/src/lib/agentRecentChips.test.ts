@@ -1,7 +1,21 @@
-import { describe, expect, it } from 'vitest';
-import { pickRecentAgentChips } from './agentRecentChips';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  clearDismissedAgentChips,
+  dismissAgentChip,
+  loadDismissedAgentChipIds,
+  pickRecentAgentChips,
+} from './agentRecentChips';
 
 describe('pickRecentAgentChips', () => {
+  beforeEach(() => {
+    clearDismissedAgentChips();
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    clearDismissedAgentChips();
+  });
+
   it('takes up to limit items with title preferred for label', () => {
     const chips = pickRecentAgentChips(
       [
@@ -30,5 +44,21 @@ describe('pickRecentAgentChips', () => {
         { task_id: 'y', task_text: 'Real question' },
       ]),
     ).toEqual([{ task_id: 'y', label: 'Real question', task_text: 'Real question' }]);
+  });
+
+  it('skips dismissed ids and persists dismissals', () => {
+    dismissAgentChip('1');
+    expect(loadDismissedAgentChipIds().has('1')).toBe(true);
+    const chips = pickRecentAgentChips(
+      [
+        { task_id: '1', task_text: 'Hidden' },
+        { task_id: '2', task_text: 'Visible' },
+      ],
+      4,
+      loadDismissedAgentChipIds(),
+    );
+    expect(chips.map((c) => c.task_id)).toEqual(['2']);
+    clearDismissedAgentChips();
+    expect(loadDismissedAgentChipIds().size).toBe(0);
   });
 });
