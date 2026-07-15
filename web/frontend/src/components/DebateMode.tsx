@@ -9,6 +9,12 @@ import {
 } from '../types';
 import { AgentDot } from './AgentDot';
 import { usePanel } from '../context/PanelContext';
+import {
+  canOfferDebateFollowUp,
+  canStartDebateRound,
+  debateMaxRounds,
+  DEBATE_STANDARD_ROUNDS,
+} from '../lib/debateRounds';
 
 interface DebateModeProps {
   originalPrompt: string;
@@ -80,8 +86,12 @@ export function DebateMode({
   const roundInFlightRef = useRef(false);
 
   const [interjection, setInterjection] = useState('');
+  /** After round 3, user may unlock one bonus follow-up round (max 4). */
+  const [followUpUnlocked, setFollowUpUnlocked] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const MAX_ROUNDS = debateMaxRounds(followUpUnlocked);
 
   useEffect(() => {
     return () => {
@@ -117,7 +127,7 @@ export function DebateMode({
 
   const runRound = async (userMessage?: string) => {
     const nextRound = currentRound + 1;
-    if (nextRound > 3) return;
+    if (nextRound > MAX_ROUNDS) return;
     if (roundInFlightRef.current) return;
 
     abortRef.current?.abort();
@@ -207,10 +217,21 @@ export function DebateMode({
     runRound(msg);
   };
 
-  const canStartNewRound = phase !== 'streaming' && currentRound < 3;
+  const canStartNewRound = canStartDebateRound(
+    currentRound,
+    followUpUnlocked,
+    phase === 'streaming',
+  );
+  const canOfferFollowUp = canOfferDebateFollowUp(
+    currentRound,
+    followUpUnlocked,
+    phase === 'streaming',
+  );
   const previousRounds = rounds.slice(0, -1);
   const latestRound = rounds.length > 0 ? rounds[rounds.length - 1] : null;
   const isPreDebate = currentRound === 0 && phase === 'idle';
+  const displayRoundCap = MAX_ROUNDS;
+  const displayRoundDots = Array.from({ length: MAX_ROUNDS }, (_, i) => i + 1);
 
   const toggleRound = (roundNumber: number) => {
     setExpandedRounds((prev) => ({ ...prev, [roundNumber]: !prev[roundNumber] }));
@@ -505,10 +526,10 @@ export function DebateMode({
               <span style={{ fontSize: '11px', color: '#6B6460', letterSpacing: '.08em', textTransform: 'uppercase', marginRight: '4px' }}>Round</span>
               <span style={{ fontSize: '18px', fontWeight: 500, color: '#1A1714' }}>{Math.max(currentRound, phase === 'streaming' ? currentRound + 1 : currentRound || 1)}</span>
               <span style={{ color: '#6B6460' }}>/</span>
-              <span style={{ fontSize: '14px', color: '#6B6460' }}>3</span>
+              <span style={{ fontSize: '14px', color: '#6B6460' }}>{displayRoundCap}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-              {[1, 2, 3].map((dot) => {
+              {displayRoundDots.map((dot) => {
                 const activeRound = Math.max(currentRound, phase === 'streaming' ? currentRound + 1 : currentRound || 1);
                 const state = dot < activeRound ? 'done' : dot === activeRound ? 'active' : 'upcoming';
                 return (
@@ -731,6 +752,54 @@ export function DebateMode({
           >
             {currentRound > 0 && phase !== 'streaming' ? (
           <div style={{ maxWidth: '680px', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+            {canOfferFollowUp ? (
+              <div
+                style={{
+                  width: '100%',
+                  maxWidth: '520px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '12px 16px',
+                  background: '#FFFFFF',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: 14,
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 13,
+                    color: '#6B6460',
+                    textAlign: 'center',
+                    lineHeight: 1.55,
+                    fontFamily: 'Georgia, serif',
+                  }}
+                >
+                  Three rounds in. Want one optional bonus round to finish the thread?
+                </p>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--primary arena-btn--sm"
+                    onClick={() => setFollowUpUnlocked(true)}
+                  >
+                    Unlock bonus round
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      abortRef.current?.abort();
+                      onExit();
+                    }}
+                  >
+                    End debate
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {canStartNewRound ? (
               <>
                 <div style={{ width: '100%', maxWidth: '520px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -745,7 +814,11 @@ export function DebateMode({
                         handleInterjection();
                       }
                     }}
-                    placeholder="Redirect the debate..."
+                    placeholder={
+                      followUpUnlocked && currentRound === DEBATE_STANDARD_ROUNDS
+                        ? 'Final redirect for the bonus round...'
+                        : 'Redirect the debate...'
+                    }
                     style={{
                       width: '100%',
                       background: '#FFFFFF',
@@ -786,7 +859,9 @@ export function DebateMode({
                         e.currentTarget.style.transform = 'translateY(0)';
                       }}
                     >
-                      Next round — push further
+                      {followUpUnlocked && currentRound === DEBATE_STANDARD_ROUNDS
+                        ? 'Bonus round — final push'
+                        : 'Next round — push further'}
                     </button>
                     <button
                       className="debate-action-btn"

@@ -212,8 +212,8 @@ async def run_debate_round(
     if request.challenged_agent_id not in active_agent_map:
         raise HTTPException(status_code=400, detail="Invalid challenged agent ID")
 
-    if request.round_number > 3:
-        raise HTTPException(status_code=400, detail="Maximum 3 debate rounds")
+    if request.round_number > 4:
+        raise HTTPException(status_code=400, detail="Maximum 4 debate rounds")
 
     session_id = request.session_id or str(uuid.uuid4())
 

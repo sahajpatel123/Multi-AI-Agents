@@ -29,6 +29,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Watchlist cadence**: change 24h / 3d / 7d in place on each card (no delete + re-add).
 - **Agent compose budget**: live character counter (max 2000, matches API).
 - **Personas modal**: Escape closes + body scroll lock; Agent answer Copy uses robust clipboard + feedback.
+- **Debate**: optional 4th bonus round after three standard rounds (API + UI aligned).
 
 ## Required production environment
 
