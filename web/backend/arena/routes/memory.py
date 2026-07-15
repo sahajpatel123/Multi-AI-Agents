@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -46,6 +46,26 @@ async def save_memory(
     exchanges = list(session_state["exchanges"])
     stances_saved = 0
     partial_error: str | None = None
+
+    # Ownership guard: session_id is globally unique, so a summary row belonging
+    # to another user must never be reassigned or overwritten. Reject cross-user
+    # writes here — before any compression work or session mutation — so the 403
+    # propagates cleanly instead of being swallowed by the persistence try/except
+    # below (which would otherwise return a misleading 200 and clear the victim's
+    # in-memory session).
+    existing_summary = (
+        db.query(SessionSummary)
+        .filter(SessionSummary.session_id == body.session_id)
+        .first()
+    )
+    if existing_summary is not None and existing_summary.user_id != user.id:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "forbidden",
+                "message": "Session does not belong to this user",
+            },
+        )
 
     try:
         summary = await memory.compressor.compress_session(
