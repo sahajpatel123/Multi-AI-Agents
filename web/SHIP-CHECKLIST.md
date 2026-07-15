@@ -66,6 +66,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Discuss / Debate copy**: markdown thread export (Copy thread / Copy debate) with clipboard feedback.
 - **Condura CTA modal**: body scroll lock + copy-timer cleanup; collapsible Arena prompt honors reduced motion.
 - **Agent answer copy**: markdown export (question + answer) with success/failure feedback; Product Arena CTA sets sign-in redirect.
+- **404 recovery**: shows attempted path; signed-in users get Arena / Agent / Watchlist; tab title “Not found”.
 
 ## Required production environment
 

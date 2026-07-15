@@ -4453,7 +4453,9 @@ export function AgentPage() {
             )}
 
             {error && (
-              <p style={{ color: '#E57373', fontSize: 13, marginTop: '1rem' }}>{error}</p>
+              <p role="alert" style={{ color: '#E57373', fontSize: 13, marginTop: '1rem' }}>
+                {error}
+              </p>
             )}
 
             {isRunning && (

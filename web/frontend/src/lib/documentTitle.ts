@@ -54,7 +54,8 @@ export function titleForPath(pathname: string): string {
     default:
       if (path.startsWith('/room/')) return `Room · ${BRAND}`;
       if (path.startsWith('/agent/')) return `Agent · ${BRAND}`;
-      return BRAND;
+      // Unknown routes render NotFoundPage — label the tab honestly.
+      return `Not found · ${BRAND}`;
   }
 }
 

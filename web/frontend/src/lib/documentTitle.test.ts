@@ -16,10 +16,11 @@ describe('titleForPath', () => {
     expect(titleForPath('/personas')).toBe('Personas · Arena');
   });
 
-  it('handles rooms, share, and trailing slashes', () => {
+  it('handles rooms, share, trailing slashes, and unknown routes', () => {
     expect(titleForPath('/room/abc')).toBe('Room · Arena');
     expect(titleForPath('/share')).toBe('Shared take · Arena');
     expect(titleForPath('/pricing/')).toBe('Pricing · Arena');
+    expect(titleForPath('/this-does-not-exist')).toBe('Not found · Arena');
   });
 });
 
