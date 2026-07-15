@@ -13,6 +13,8 @@ import {
   Bookmark,
   Pencil,
   Trash2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
@@ -23,6 +25,9 @@ import { useAuth } from '../hooks/useAuth';
 import { useProfileModal } from '../context/ProfileModalContext';
 import track from '../utils/track';
 import { filterBySearchQuery, filterTurnsBySearchQuery } from '../lib/sidebarSearch';
+import { copyToClipboard } from '../lib/clipboard';
+import { formatSavedTakeExport } from '../lib/savedTakeExport';
+import { motionDuration } from '../lib/motion';
 
 interface SidebarTurn {
   turn_id: string;
@@ -73,6 +78,8 @@ export function Sidebar({
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [savedSearchQuery, setSavedSearchQuery] = useState('');
+  const [copiedSavedId, setCopiedSavedId] = useState<string | number | null>(null);
+  const [copySavedFailed, setCopySavedFailed] = useState(false);
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
@@ -113,6 +120,35 @@ export function Sidebar({
       ]),
     [reversedSaved, savedSearchQuery],
   );
+
+  useEffect(() => {
+    if (copiedSavedId == null && !copySavedFailed) return;
+    const hold = motionDuration(copySavedFailed ? 2200 : 1600);
+    const t = window.setTimeout(() => {
+      setCopiedSavedId(null);
+      setCopySavedFailed(false);
+    }, hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [copiedSavedId, copySavedFailed]);
+
+  const handleCopySaved = async (item: SavedResponseItem, displayName: string) => {
+    const md = formatSavedTakeExport({
+      agentName: displayName,
+      prompt: item.prompt,
+      oneLiner: item.one_liner,
+      verdict: item.verdict,
+      score: item.score,
+    });
+    const ok = await copyToClipboard(md);
+    if (ok) {
+      setCopySavedFailed(false);
+      setCopiedSavedId(item.id);
+      void track('saved_take_copied', String(item.agent_id));
+    } else {
+      setCopiedSavedId(null);
+      setCopySavedFailed(true);
+    }
+  };
 
   const usedPercent = dailyLimit > 0
     ? Math.min(((dailyLimit - messagesRemaining) / dailyLimit) * 100, 100)
@@ -688,75 +724,120 @@ export function Sidebar({
                       const displayName =
                         item.persona_name || agent?.name || item.agent_id || 'Mind';
                       const line = (item.one_liner || '').trim();
+                      const justCopied = copiedSavedId === item.id;
                       return (
-                        <button
+                        <div
                           key={item.id}
-                          type="button"
-                          onClick={() => onSavedItemClick(item)}
                           style={{
                             width: '100%',
                             borderRadius: '10px',
                             padding: '8px 10px',
-                            textAlign: 'left',
-                            transition: 'all 150ms ease',
+                            transition: 'background 150ms ease',
                             background: 'transparent',
-                            border: 'none',
-                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'start',
+                            gap: '6px',
                           }}
                           onMouseEnter={(e) => (e.currentTarget.style.background = '#F0EBE3')}
                           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                         >
-                          <div
+                          <button
+                            type="button"
+                            onClick={() => onSavedItemClick(item)}
                             style={{
-                              display: 'flex',
-                              alignItems: 'start',
-                              justifyContent: 'space-between',
-                              gap: '8px',
+                              flex: 1,
+                              minWidth: 0,
+                              textAlign: 'left',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: 0,
                             }}
                           >
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <AgentDot agentId={item.agent_id} size={5} />
-                                <span
-                                  style={{
-                                    fontSize: '11px',
-                                    fontWeight: 500,
-                                    color: '#1A1714',
-                                  }}
-                                >
-                                  {displayName}
-                                </span>
-                              </div>
-                              <p
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <AgentDot agentId={item.agent_id} size={5} />
+                              <span
                                 style={{
-                                  marginTop: '4px',
                                   fontSize: '11px',
-                                  lineHeight: '1.6',
-                                  color: '#6B6460',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
+                                  fontWeight: 500,
+                                  color: '#1A1714',
                                 }}
                               >
-                                {line.slice(0, 40)}
-                                {line.length > 40 ? '…' : ''}
-                              </p>
+                                {displayName}
+                              </span>
+                              <Bookmark
+                                style={{
+                                  width: '11px',
+                                  height: '11px',
+                                  flexShrink: 0,
+                                  color: '#C4956A',
+                                  fill: 'currentColor',
+                                  marginLeft: 2,
+                                }}
+                              />
                             </div>
-                            <Bookmark
+                            <p
                               style={{
-                                width: '12px',
-                                height: '12px',
-                                flexShrink: 0,
-                                color: '#C4956A',
-                                fill: 'currentColor',
+                                marginTop: '4px',
+                                fontSize: '11px',
+                                lineHeight: '1.6',
+                                color: '#6B6460',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
                               }}
-                            />
-                          </div>
-                        </button>
+                            >
+                              {line.slice(0, 40)}
+                              {line.length > 40 ? '…' : ''}
+                            </p>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={justCopied ? 'Copied' : `Copy ${displayName} take as markdown`}
+                            title={justCopied ? 'Copied' : 'Copy as markdown'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleCopySaved(item, displayName);
+                            }}
+                            style={{
+                              flexShrink: 0,
+                              width: 28,
+                              height: 28,
+                              borderRadius: 6,
+                              border: 'none',
+                              background: justCopied ? 'rgba(196,149,106,0.15)' : 'transparent',
+                              color: justCopied ? '#C4956A' : '#A89070',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 0,
+                            }}
+                          >
+                            {justCopied ? (
+                              <Check style={{ width: 13, height: 13 }} />
+                            ) : (
+                              <Copy style={{ width: 13, height: 13 }} />
+                            )}
+                          </button>
+                        </div>
                       );
                     })
                   )}
                 </div>
+                {copySavedFailed ? (
+                  <p
+                    role="alert"
+                    style={{
+                      fontSize: 11,
+                      color: '#993C1D',
+                      margin: '8px 0 0',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Could not copy — try again.
+                  </p>
+                ) : null}
               </div>
             )}
           </div>
