@@ -620,9 +620,25 @@ export function SignInPage() {
                 Min 8 characters · One uppercase · One number
               </p>
 
-              {error && (
-                <p style={{ fontSize: '13px', color: '#993C1D', marginBottom: '1rem' }}>{error}</p>
-              )}
+              {error ? (
+                <p
+                  ref={errorRef}
+                  role="alert"
+                  tabIndex={-1}
+                  style={{
+                    fontSize: '13px',
+                    color: '#993C1D',
+                    marginBottom: '1rem',
+                    outline: 'none',
+                    padding: '10px 12px',
+                    background: 'rgba(153,60,29,0.06)',
+                    borderRadius: 10,
+                    border: '0.5px solid rgba(153,60,29,0.2)',
+                  }}
+                >
+                  {error}
+                </p>
+              ) : null}
 
               <div style={{ marginBottom: '1.5rem' }}>
                 <Button
