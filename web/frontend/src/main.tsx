@@ -11,6 +11,7 @@ import { ProfileModalProvider } from './context/ProfileModalContext'
 import { ProfileModal } from './components/ProfileModal'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
 import { DocumentTitle } from './components/DocumentTitle'
+import { ScrollToTop } from './components/ScrollToTop'
 import './index.css'
 
 // Lazy-load each page so they're split into separate chunks. The Suspense
@@ -176,6 +177,7 @@ if (!rootElement) {
               <PanelProvider>
                 <ProfileModalProvider>
                 <DocumentTitle />
+                <ScrollToTop />
                 <ProfileModal />
                 <NetworkStatusBanner />
                 <a href="#main-content" className="skip-to-content">
