@@ -12,7 +12,11 @@ const SECTIONS = [
   },
   {
     title: 'User Accounts',
-    body: 'You are responsible for maintaining the security of your account. Arena stores minimal user data — email, hashed password, and session history. We do not sell your data.',
+    body: 'You are responsible for maintaining the security of your account. Arena stores account credentials (email and hashed password), session and prompt history, and subscription status metadata needed for plan entitlements. We do not sell your data. Paid plans are billed through Razorpay; card details are handled by Razorpay, not stored as full card numbers on Arena servers.',
+  },
+  {
+    title: 'Subscriptions & Billing',
+    body: 'Optional Plus and Pro subscriptions unlock additional features. Fees, renewals, and cancellations are processed through Razorpay according to the plan you select on the Pricing page. Feature access follows your active plan tier.',
   },
   {
     title: 'Intellectual Property',
@@ -56,7 +60,7 @@ export function TermsPage() {
         <div className="animate-fade-up legal-hero" style={{ marginBottom: '3rem' }}>
           <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#6B6460', marginBottom: '1rem' }}>Legal</p>
           <h1 style={{ fontSize: '48px', fontWeight: 500, letterSpacing: '-.03em', color: '#1A1714', lineHeight: 1.1, marginBottom: '.8rem' }}>Terms of Service</h1>
-          <p style={{ fontSize: '12px', color: '#6B6460' }}>Last updated: March 2026</p>
+          <p style={{ fontSize: '12px', color: '#6B6460' }}>Last updated: July 2026</p>
         </div>
 
         {/* Content */}

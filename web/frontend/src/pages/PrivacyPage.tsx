@@ -4,23 +4,23 @@ import { Footer } from '../components/Footer';
 const SECTIONS = [
   {
     title: 'What We Collect',
-    body: 'Arena collects your email address and hashed password when you create an account. We store your prompt history and session data to power the history and leaderboard features.',
+    body: 'Arena collects your email address and hashed password when you create an account. We store your prompt history, session data, and subscription status metadata (plan tier, billing period, and payment-provider identifiers) needed to power history, leaderboard, and billing features.',
   },
   {
     title: 'What We Do Not Collect',
-    body: 'We do not collect payment information, location data, or any personally identifiable information beyond your email. We do not track you across other websites.',
+    body: 'We do not collect location data or track you across other websites. We do not store your full card numbers or bank credentials on Arena servers — payment card details are handled by our payment processor (Razorpay) when you subscribe.',
   },
   {
     title: 'How We Use Your Data',
-    body: 'Your data is used solely to provide the Arena service — session history, leaderboard tracking, and account authentication. Nothing else.',
+    body: 'Your data is used to provide the Arena service — authentication, session history, leaderboard tracking, plan entitlements, and subscription management. We do not sell your personal data.',
   },
   {
     title: 'Data Storage',
-    body: 'Data is stored in a secured SQLite database. Passwords are hashed using bcrypt and never stored in plain text.',
+    body: 'Production data is stored in a managed PostgreSQL database. Passwords are hashed using bcrypt and never stored in plain text.',
   },
   {
     title: 'Third Parties',
-    body: 'Arena relies on trusted infrastructure and service providers to operate securely, including hosting, analytics, and authentication support. We only share the minimum information required for those services to function.',
+    body: 'Arena relies on trusted infrastructure and service providers to operate securely, including hosting, analytics, authentication support, and payment processing via Razorpay. We only share the minimum information required for those services to function. Razorpay processes payments under its own privacy policy (razorpay.com/privacy).',
   },
   {
     title: 'AI Model Providers',
@@ -60,7 +60,7 @@ export function PrivacyPage() {
         <div className="animate-fade-up legal-hero" style={{ marginBottom: '3rem' }}>
           <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#6B6460', marginBottom: '1rem' }}>Legal</p>
           <h1 style={{ fontSize: '48px', fontWeight: 500, letterSpacing: '-.03em', color: '#1A1714', lineHeight: 1.1, marginBottom: '.8rem' }}>Privacy Policy</h1>
-          <p style={{ fontSize: '12px', color: '#6B6460' }}>Last updated: March 2026</p>
+          <p style={{ fontSize: '12px', color: '#6B6460' }}>Last updated: July 2026</p>
         </div>
 
         {/* Content */}

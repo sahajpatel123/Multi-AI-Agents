@@ -44,6 +44,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Room empty board + branded load recovery; guest Sign-in returns to room',
       '[IMPROVED] Templates modal locks background scroll and focuses Close on open',
       '[IMPROVED] Discuss + Debate interjection show 2000-char budgets (server-aligned)',
+      '[IMPROVED] Privacy & Terms aligned with Postgres storage and Razorpay billing',
     ],
   },
   {
