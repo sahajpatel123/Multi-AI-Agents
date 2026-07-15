@@ -1,5 +1,5 @@
-import type { ReactElement } from 'react';
-import { Navigate } from 'react-router-dom';
+import { useEffect, type ReactElement } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import MicroLoader from './MicroLoader';
@@ -10,6 +10,12 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (loading || user) return;
+    setRedirectIntent(`${location.pathname}${location.search}`);
+  }, [loading, user, location.pathname, location.search]);
 
   if (loading) {
     return (
@@ -30,7 +36,6 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!user) {
-    setRedirectIntent(`${window.location.pathname}${window.location.search}`);
     return <Navigate to="/signin" replace />;
   }
 

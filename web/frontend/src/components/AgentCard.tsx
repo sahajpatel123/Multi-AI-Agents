@@ -492,6 +492,9 @@ export function AgentCard({
               }}
               active={isShareDropdownOpen}
               activeColor="#C4956A"
+              ariaLabel="Share this take"
+              ariaHaspopup="menu"
+              ariaExpanded={isShareDropdownOpen}
             />
             <ActionButton
               icon={<Bookmark style={{ width: '15px', height: '15px', fill: isSaved ? 'currentColor' : 'none' }} />}
@@ -596,9 +599,21 @@ interface ActionButtonProps {
   active?: boolean;
   activeColor?: string;
   ref?: React.RefObject<HTMLButtonElement>;
+  ariaLabel?: string;
+  ariaHaspopup?: boolean | 'menu' | 'listbox' | 'tree' | 'grid' | 'dialog';
+  ariaExpanded?: boolean;
 }
 
-const ActionButton = ({ icon, onClick, active = false, activeColor = '#1A1714', ref }: ActionButtonProps) => {
+const ActionButton = ({
+  icon,
+  onClick,
+  active = false,
+  activeColor = '#1A1714',
+  ref,
+  ariaLabel,
+  ariaHaspopup,
+  ariaExpanded,
+}: ActionButtonProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isClicked, setIsClicked] = useState(false);
 
@@ -606,6 +621,9 @@ const ActionButton = ({ icon, onClick, active = false, activeColor = '#1A1714', 
     <button
       ref={ref}
       type="button"
+      aria-label={ariaLabel}
+      aria-haspopup={ariaHaspopup}
+      aria-expanded={ariaExpanded}
       onClick={(e) => {
         e.stopPropagation();
         setIsClicked(true);

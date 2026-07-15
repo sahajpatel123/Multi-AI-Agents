@@ -47,6 +47,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Privacy & Terms aligned with Postgres storage and Razorpay billing',
       '[IMPROVED] Leaderboard shows your panel personas and respects reduced motion',
       '[IMPROVED] Account menu: Escape closes; proper menu ARIA on profile/sign-out',
+      '[IMPROVED] ProtectedRoute stores post-auth intent safely; share menu ARIA',
     ],
   },
   {

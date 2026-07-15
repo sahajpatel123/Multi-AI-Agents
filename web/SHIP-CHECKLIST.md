@@ -48,6 +48,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Legal honesty**: Privacy/Terms reflect Postgres + Razorpay (no SQLite / “no payment info” claims).
 - **Leaderboard honesty**: rows use active panel persona names/colors; bars respect reduced motion.
 - **User menu a11y**: Escape closes dropdown; aria-expanded / menu roles on account actions.
+- **Protected routes**: redirect intent set in effect (not during render); share menu ARIA.
 
 ## Required production environment
 

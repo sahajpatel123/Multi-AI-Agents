@@ -145,6 +145,8 @@ ${shareUrl}`;
   return (
     <div
       ref={dropdownRef}
+      role="menu"
+      aria-label="Share this take"
       style={{
         ...getDropdownPosition(),
         background: '#FFFFFF',
@@ -265,6 +267,7 @@ function ShareOption({ icon, label, onClick }: ShareOptionProps) {
   return (
     <button
       type="button"
+      role="menuitem"
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
