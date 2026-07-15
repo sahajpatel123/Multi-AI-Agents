@@ -57,6 +57,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Copy session Agent Leaderboard rankings as markdown',
       '[NEW] Search Agent Mode research history by title or task text',
       '[NEW] Search saved Arena takes in the sidebar',
+      '[IMPROVED] Press / in Discuss and Debate to focus compose',
     ],
   },
   {

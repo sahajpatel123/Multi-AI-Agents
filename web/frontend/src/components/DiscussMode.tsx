@@ -18,9 +18,10 @@ import { useBusyDocumentTitle } from '../hooks/useBusyDocumentTitle';
 import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { discussWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForArenaBusy } from '../lib/documentTitle';
-import { scrollBehavior } from '../lib/motion';
+import { prefersReducedMotion, scrollBehavior } from '../lib/motion';
 import { copyToClipboard } from '../lib/clipboard';
 import { formatDiscussExport } from '../lib/threadExport';
+import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 
 interface DiscussModeProps {
   originalPrompt: string;
@@ -115,12 +116,26 @@ export function DiscussMode({
     inputRef.current?.focus();
   }, [activeAgent.response.agent_id]);
 
+  // `/` focuses discuss compose (Arena / Agent parity) when not typing elsewhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBareSlashKey(e) || !shouldCaptureSlashFocus(e.target)) return;
+      if (isStreaming) return;
+      e.preventDefault();
+      inputRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isStreaming]);
+
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
       if (flushTimer.current) clearInterval(flushTimer.current);
     };
   }, []);
+
+  const reducedMotion = prefersReducedMotion();
 
   const handleSend = async () => {
     const msg = input.trim();
@@ -460,7 +475,17 @@ export function DiscussMode({
                 </div>
                 <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
                   {streamingText}
-                  <span style={{ display: 'inline-block', width: '2px', height: '16px', marginLeft: '2px', background: 'rgba(107,100,96,0.5)', animation: 'breathe 1.2s ease-in-out infinite', verticalAlign: 'text-bottom' }} />
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: '2px',
+                      height: '16px',
+                      marginLeft: '2px',
+                      background: 'rgba(107,100,96,0.5)',
+                      animation: reducedMotion ? 'none' : 'breathe 1.2s ease-in-out infinite',
+                      verticalAlign: 'text-bottom',
+                    }}
+                  />
                 </p>
               </div>
             </div>
@@ -470,8 +495,17 @@ export function DiscussMode({
           {isStreaming && !streamingText && (
             <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
               <div style={{ background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: agentConfig.color, animation: 'breathe 2.4s ease-in-out infinite' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} role="status" aria-live="polite">
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      background: agentConfig.color,
+                      animation: reducedMotion ? 'none' : 'breathe 2.4s ease-in-out infinite',
+                    }}
+                  />
                   <span style={{ fontSize: '11px', color: '#6B6460', fontStyle: 'italic' }}>Thinking...</span>
                 </div>
               </div>
@@ -483,8 +517,17 @@ export function DiscussMode({
 
         {/* Error */}
         {error && (
-          <div style={{ marginBottom: '0.75rem', padding: '0.75rem', background: '#FFFFFF', border: '0.5px solid rgba(196,149,106,0.3)', borderRadius: '10px' }}>
-            <p style={{ fontSize: '11px', color: '#6B6460' }}>{error}</p>
+          <div
+            role="alert"
+            style={{
+              marginBottom: '0.75rem',
+              padding: '0.75rem',
+              background: '#FFFFFF',
+              border: '0.5px solid rgba(196,149,106,0.3)',
+              borderRadius: '10px',
+            }}
+          >
+            <p style={{ fontSize: '11px', color: '#6B6460', margin: 0 }}>{error}</p>
           </div>
         )}
 
@@ -492,6 +535,7 @@ export function DiscussMode({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', gap: '8px' }}>
           <input
+            id="discuss-prompt"
             ref={inputRef}
             type="text"
             value={input}
@@ -505,6 +549,8 @@ export function DiscussMode({
             }}
             placeholder={`Message ${agentConfig.name}...`}
             disabled={isStreaming}
+            aria-label={`Message ${agentConfig.name}`}
+            title="Press / to focus · Enter to send"
             aria-describedby="discuss-char-budget"
             style={{
               flex: 1,

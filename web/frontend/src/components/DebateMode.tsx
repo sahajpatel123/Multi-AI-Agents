@@ -26,9 +26,10 @@ import { useBusyDocumentTitle } from '../hooks/useBusyDocumentTitle';
 import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { debateWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForArenaBusy } from '../lib/documentTitle';
-import { scrollBehavior } from '../lib/motion';
+import { prefersReducedMotion, scrollBehavior } from '../lib/motion';
 import { copyToClipboard } from '../lib/clipboard';
 import { formatDebateExport } from '../lib/threadExport';
+import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 
 interface DebateModeProps {
   originalPrompt: string;
@@ -124,6 +125,19 @@ export function DebateMode({
     };
   }, []);
 
+  // `/` focuses interjection compose when not streaming and not typing elsewhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBareSlashKey(e) || !shouldCaptureSlashFocus(e.target)) return;
+      if (phase === 'streaming') return;
+      e.preventDefault();
+      inputRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [phase]);
+
+  const reducedMotion = prefersReducedMotion();
   const challengedConfig = getAgentDisplay(challengedAgent.response.agent_id);
   const reactingIds = AGENT_SLOT_IDS.filter(
     (id) => id !== challengedAgent.response.agent_id
@@ -367,14 +381,19 @@ export function DebateMode({
                     height: '16px',
                     marginLeft: '3px',
                     background: 'rgba(107,100,96,0.45)',
-                    animation: 'breathe 1.2s ease-in-out infinite',
+                    animation: reducedMotion ? 'none' : 'breathe 1.2s ease-in-out infinite',
                     verticalAlign: 'text-bottom',
                   }}
                 />
               ) : null}
             </p>
           ) : (
-            <div style={{ fontSize: '20px', letterSpacing: '4px', color: agent.color }} className="debate-thinking-pulse">
+            <div
+              style={{ fontSize: '20px', letterSpacing: '4px', color: agent.color }}
+              className={reducedMotion ? undefined : 'debate-thinking-pulse'}
+              role="status"
+              aria-live="polite"
+            >
               ...
             </div>
           )}
@@ -437,7 +456,15 @@ export function DebateMode({
         />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: challengedConfig.color, animation: 'breathe 2.4s ease-in-out infinite' }} />
+            <div
+              style={{
+                width: '9px',
+                height: '9px',
+                borderRadius: '50%',
+                background: challengedConfig.color,
+                animation: reducedMotion ? 'none' : 'breathe 2.4s ease-in-out infinite',
+              }}
+            />
             <span style={{ fontSize: '16px', fontWeight: 500, color: '#1A1714' }}>
               {challengedConfig.name}
             </span>
@@ -559,7 +586,15 @@ export function DebateMode({
         </div>
 
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifySelf: 'center' }}>
-          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#C4956A', animation: 'breathe 2.4s ease-in-out infinite' }} />
+          <div
+            style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: '#C4956A',
+              animation: reducedMotion ? 'none' : 'breathe 2.4s ease-in-out infinite',
+            }}
+          />
           <span style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
         </div>
 
@@ -656,7 +691,15 @@ export function DebateMode({
                           animationDelay: `${300 + index * 150}ms`,
                         }}
                       >
-                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: agent.color, animation: 'breathe 2.4s ease-in-out infinite' }} />
+                        <div
+                          style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            background: agent.color,
+                            animation: reducedMotion ? 'none' : 'breathe 2.4s ease-in-out infinite',
+                          }}
+                        />
                         <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>{agent.name}</span>
                         <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#6B6460' }}>Ready</span>
                       </div>
@@ -708,8 +751,18 @@ export function DebateMode({
           </div>
 
           {error ? (
-            <div style={{ maxWidth: '680px', margin: '24px auto 0', padding: '0.9rem 1rem', background: '#FFFFFF', border: '0.5px solid rgba(196,149,106,0.3)', borderRadius: '12px' }}>
-              <p style={{ fontSize: '13px', color: '#6B6460' }}>{error}</p>
+            <div
+              role="alert"
+              style={{
+                maxWidth: '680px',
+                margin: '24px auto 0',
+                padding: '0.9rem 1rem',
+                background: '#FFFFFF',
+                border: '0.5px solid rgba(196,149,106,0.3)',
+                borderRadius: '12px',
+              }}
+            >
+              <p style={{ fontSize: '13px', color: '#6B6460', margin: 0 }}>{error}</p>
             </div>
           ) : null}
           <div ref={threadEndRef} />
@@ -806,8 +859,18 @@ export function DebateMode({
             ) : null}
 
             {error ? (
-              <div style={{ maxWidth: '680px', margin: '24px auto 0', padding: '0.9rem 1rem', background: '#FFFFFF', border: '0.5px solid rgba(196,149,106,0.3)', borderRadius: '12px' }}>
-                <p style={{ fontSize: '13px', color: '#6B6460' }}>{error}</p>
+              <div
+                role="alert"
+                style={{
+                  maxWidth: '680px',
+                  margin: '24px auto 0',
+                  padding: '0.9rem 1rem',
+                  background: '#FFFFFF',
+                  border: '0.5px solid rgba(196,149,106,0.3)',
+                  borderRadius: '12px',
+                }}
+              >
+                <p style={{ fontSize: '13px', color: '#6B6460', margin: 0 }}>{error}</p>
               </div>
             ) : null}
 
@@ -885,6 +948,7 @@ export function DebateMode({
               <>
                 <div style={{ width: '100%', maxWidth: '520px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <input
+                    id="debate-prompt"
                     ref={inputRef}
                     type="text"
                     value={interjection}
@@ -898,6 +962,8 @@ export function DebateMode({
                         handleInterjection();
                       }
                     }}
+                    aria-label="Debate interjection"
+                    title="Press / to focus · Enter to send"
                     placeholder={
                       followUpUnlocked && currentRound === DEBATE_STANDARD_ROUNDS
                         ? 'Final redirect for the bonus round...'

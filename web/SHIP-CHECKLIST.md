@@ -72,6 +72,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent history search**: filter research history by title/task text (shared search helper).
 - **Arena prompt motion**: border/waveform/send pulse honor reduced motion; `/` focus hinted in title.
 - **Sidebar saved search**: filter bookmarked takes by one-liner, prompt, or persona.
+- **Discuss / Debate `/` focus**: compose shortcuts + alert errors; stream dots honor reduced motion.
 
 ## Required production environment
 
