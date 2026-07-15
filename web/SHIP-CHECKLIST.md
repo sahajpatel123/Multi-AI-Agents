@@ -61,6 +61,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Busy leave guard**: beforeunload warns during Arena streams and Agent run/refine/challenge.
 - **Busy tab titles**: live document.title while Arena streams / Agent pipeline stages run.
 - **Debate / Discuss streams**: beforeunload + busy tab titles; scroll-into-view honors reduced motion.
+- **Network banner**: safe-area padding, reconnected dismiss, reconnect timer cleaned up on unmount.
 
 ## Required production environment
 

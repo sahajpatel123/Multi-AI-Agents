@@ -1,5 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motionDuration } from '../lib/motion';
+import {
+  NETWORK_RECONNECTED_HOLD_MS,
+  networkBannerKind,
+  networkBannerMessage,
+} from '../lib/networkStatus';
 
 /**
  * Sticky banner when the browser reports offline (or reconnects briefly).
@@ -10,15 +15,32 @@ export function NetworkStatusBanner() {
     typeof navigator === 'undefined' ? true : navigator.onLine,
   );
   const [showReconnected, setShowReconnected] = useState(false);
+  const reconnectTimerRef = useRef<number | null>(null);
+
+  const clearReconnectTimer = () => {
+    if (reconnectTimerRef.current != null) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     const onOnline = () => {
       setOnline(true);
       setShowReconnected(true);
-      const hold = motionDuration(2800);
-      window.setTimeout(() => setShowReconnected(false), hold > 0 ? hold : 0);
+      clearReconnectTimer();
+      const hold = motionDuration(NETWORK_RECONNECTED_HOLD_MS);
+      if (hold <= 0) {
+        setShowReconnected(false);
+        return;
+      }
+      reconnectTimerRef.current = window.setTimeout(() => {
+        setShowReconnected(false);
+        reconnectTimerRef.current = null;
+      }, hold);
     };
     const onOffline = () => {
+      clearReconnectTimer();
       setOnline(false);
       setShowReconnected(false);
     };
@@ -27,12 +49,15 @@ export function NetworkStatusBanner() {
     return () => {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
+      clearReconnectTimer();
     };
   }, []);
 
-  if (online && !showReconnected) return null;
+  const kind = networkBannerKind({ online, showReconnected });
+  const message = networkBannerMessage(kind);
+  if (!message) return null;
 
-  const offline = !online;
+  const offline = kind === 'offline';
 
   return (
     <div
@@ -44,7 +69,11 @@ export function NetworkStatusBanner() {
         left: 0,
         right: 0,
         zIndex: 10000,
-        padding: '10px 16px',
+        padding: `max(10px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px))`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
         textAlign: 'center',
         fontSize: 13,
         fontFamily: 'Georgia, Times New Roman, serif',
@@ -56,9 +85,30 @@ export function NetworkStatusBanner() {
         boxShadow: '0 4px 16px rgba(44, 24, 16, 0.06)',
       }}
     >
-      {offline
-        ? 'You are offline — new prompts and streams will wait until the connection returns.'
-        : 'Back online — you can continue.'}
+      <span style={{ flex: 1, minWidth: 0, lineHeight: 1.45 }}>{message}</span>
+      {!offline ? (
+        <button
+          type="button"
+          onClick={() => {
+            clearReconnectTimer();
+            setShowReconnected(false);
+          }}
+          aria-label="Dismiss back-online notice"
+          style={{
+            flexShrink: 0,
+            background: 'transparent',
+            border: '0.5px solid rgba(44, 74, 54, 0.25)',
+            borderRadius: 6,
+            padding: '2px 8px',
+            fontSize: 12,
+            color: '#2C4A36',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          Dismiss
+        </button>
+      ) : null}
     </div>
   );
 }
