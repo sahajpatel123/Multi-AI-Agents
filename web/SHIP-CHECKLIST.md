@@ -9,6 +9,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Honesty**: on-device → Condura CTA / 409; no browser computer-control claims; honesty gate stays behind `CONDURA_HONEST_REJECTION_ENABLED`.
 - **Recovery UX**: branded error boundary with reload/home instead of raw stack dumps.
 - **Ops**: `/api/condura/metrics` admin-gated via `ADMIN_EMAIL` (same gate as `/api/metrics`).
+- **Agent idle**: recent research chips from task history (one-click re-compose).
 - **Arena live stream**: cards show one-liner previews while SSE tokens arrive (not eternal shimmer); streams abort on navigate/new chat.
 - **Silent failure fixups**: verify-in-Agent, room task actions, register redirect intent, clipboard fallback.
 - **Share links work**: public `/share` route renders agent/prompt/response; copy uses shared clipboard helper.

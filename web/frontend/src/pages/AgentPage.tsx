@@ -57,6 +57,7 @@ import { useProfileModal } from '../context/ProfileModalContext';
 import { useAuth } from '../hooks/useAuth';
 import { User } from '../types';
 import { setRedirectIntent } from '../utils/redirectIntent';
+import { pickRecentAgentChips } from '../lib/agentRecentChips';
 
 /** Agent result view — shared palette (mockup) */
 const AR = {
@@ -2593,7 +2594,11 @@ export function AgentPage() {
             {historyLoading ? (
               <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>Loading…</div>
             ) : taskHistory.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>No tasks yet</div>
+              <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 1rem', lineHeight: 1.5 }}>
+                No research yet.
+                <br />
+                <span style={{ color: '#A89070' }}>Ask something hard below — it will show up here.</span>
+              </div>
             ) : (
               <div className="space-y-1">{taskHistory.map((item) => renderAgentHistoryRow(item))}</div>
             )}
@@ -3209,6 +3214,67 @@ export function AgentPage() {
                         {AGENT_IDLE_SUGGESTIONS[suggIdx]}
                       </span>
                     </div>
+                    {(() => {
+                      const recentChips = pickRecentAgentChips(taskHistory, 4);
+                      if (recentChips.length === 0) return null;
+                      return (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 8,
+                          justifyContent: 'center',
+                          marginBottom: 12,
+                          maxWidth: 640,
+                          marginLeft: 'auto',
+                          marginRight: 'auto',
+                        }}
+                        aria-label="Recent research"
+                      >
+                        {recentChips.map((chip) => (
+                            <button
+                              key={chip.task_id}
+                              type="button"
+                              title={chip.task_text}
+                              onClick={() => {
+                                setSelectedTemplate(null);
+                                setTemplateSlots({});
+                                setMultiMode(false);
+                                setTask(chip.task_text);
+                                requestAnimationFrame(() => idleTaskInputRef.current?.focus());
+                              }}
+                              style={{
+                                maxWidth: isMobile ? '46vw' : 200,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                fontSize: 12,
+                                color: '#6B6460',
+                                background: 'rgba(255,255,255,0.72)',
+                                border: '0.5px solid #E0D8D0',
+                                borderRadius: 999,
+                                padding: '6px 12px',
+                                cursor: 'pointer',
+                                fontFamily: 'Georgia, serif',
+                                transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#F0EBE3';
+                                e.currentTarget.style.borderColor = '#C4956A';
+                                e.currentTarget.style.color = '#1A1714';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(255,255,255,0.72)';
+                                e.currentTarget.style.borderColor = '#E0D8D0';
+                                e.currentTarget.style.color = '#6B6460';
+                              }}
+                            >
+                              {chip.label}
+                            </button>
+                        ))}
+                      </div>
+                      );
+                    })()}
                     <div
                       style={{
                         display: 'flex',
