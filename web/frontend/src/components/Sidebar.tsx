@@ -143,7 +143,7 @@ export function Sidebar({
     if (ok) {
       setCopySavedFailed(false);
       setCopiedSavedId(item.id);
-      void track('saved_take_copied', String(item.agent_id));
+      void track('saved_take_copied', undefined, item.agent_id);
     } else {
       setCopiedSavedId(null);
       setCopySavedFailed(true);

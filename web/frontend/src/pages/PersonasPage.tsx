@@ -6,7 +6,8 @@ import { AgentDot } from '../components/AgentDot';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { type Persona } from '../data/personas';
-import { motionDuration } from '../lib/motion';
+import { motionDuration, prefersReducedMotion } from '../lib/motion';
+import { filterBySearchQuery } from '../lib/sidebarSearch';
 import track from '../utils/track';
 
 type SlotIndex = 0 | 1 | 2 | 3;
@@ -34,7 +35,10 @@ export function PersonasPage() {
   const [toastVisible, setToastVisible] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [revealedLibraryIds, setRevealedLibraryIds] = useState<Record<string, boolean>>({});
+  const [libraryQuery, setLibraryQuery] = useState('');
   const libraryRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const librarySearchRef = useRef<HTMLInputElement | null>(null);
+  const reducedMotion = prefersReducedMotion();
 
   const slotLabels = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'] as const;
   const activePersona = activeSlot !== null ? panel[activeSlot] : null;
@@ -94,6 +98,31 @@ export function PersonasPage() {
     };
   }, [toast]);
 
+  const unlockedSlotMap = useMemo(
+    () =>
+      panel.reduce<Record<string, number>>((acc, persona, index) => {
+        acc[persona.id] = index + 1;
+        return acc;
+      }, {}),
+    [panel],
+  );
+
+  const modalOptions = useMemo(() => {
+    if (activePersona === null) return [];
+    return personas.filter((persona) => persona.id !== activePersona.id);
+  }, [activePersona, personas]);
+
+  const filteredLibrary = useMemo(
+    () =>
+      filterBySearchQuery(personas, libraryQuery, (persona) => [
+        persona.name,
+        persona.quote,
+        persona.description,
+        persona.id,
+      ]),
+    [personas, libraryQuery],
+  );
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -120,21 +149,7 @@ export function PersonasPage() {
     });
 
     return () => observer.disconnect();
-  }, []);
-
-  const unlockedSlotMap = useMemo(
-    () =>
-      panel.reduce<Record<string, number>>((acc, persona, index) => {
-        acc[persona.id] = index + 1;
-        return acc;
-      }, {}),
-    [panel],
-  );
-
-  const modalOptions = useMemo(() => {
-    if (activePersona === null) return [];
-    return personas.filter((persona) => persona.id !== activePersona.id);
-  }, [activePersona, personas]);
+  }, [filteredLibrary.length, libraryQuery]);
 
   const handleSwap = (slotIndex: SlotIndex, persona: Persona) => {
     if (!canUsePersona(persona.id)) {
@@ -325,8 +340,99 @@ export function PersonasPage() {
         </section>
 
         <section>
-          <p style={{ ...eyebrowStyle, margin: '3rem 0 1rem' }}>Full library · 16 personas</p>
+          <div
+            style={{
+              margin: '3rem 0 1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
+            <p style={{ ...eyebrowStyle, margin: 0 }}>
+              Full library · {filteredLibrary.length}
+              {libraryQuery.trim() ? ` / ${personas.length}` : ' personas'}
+            </p>
+            <div style={{ position: 'relative', minWidth: 200, flex: '1 1 220px', maxWidth: 320 }}>
+              <input
+                ref={librarySearchRef}
+                type="search"
+                value={libraryQuery}
+                onChange={(e) => setLibraryQuery(e.target.value)}
+                placeholder="Search minds…"
+                aria-label="Search persona library"
+                autoComplete="off"
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  fontSize: 13,
+                  fontFamily: 'Georgia, serif',
+                  color: '#1A1714',
+                  background: '#FAF7F4',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: 10,
+                  padding: '9px 32px 9px 12px',
+                  outline: 'none',
+                }}
+              />
+              {libraryQuery ? (
+                <button
+                  type="button"
+                  aria-label="Clear persona search"
+                  onClick={() => {
+                    setLibraryQuery('');
+                    librarySearchRef.current?.focus();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 16,
+                    color: '#A89070',
+                    lineHeight: 1,
+                    padding: 4,
+                  }}
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+          </div>
 
+          {filteredLibrary.length === 0 ? (
+            <div
+              className="arena-empty-state"
+              style={{
+                background: '#FAF7F4',
+                border: '0.5px solid #E0D8D0',
+                borderRadius: 14,
+                padding: '2rem 1.25rem',
+              }}
+            >
+              <p style={{ fontSize: 15, color: '#1A1714', fontWeight: 500, margin: 0 }}>
+                No minds match “{libraryQuery.trim()}”
+              </p>
+              <p style={{ fontSize: 13, color: '#6B6460', marginTop: 8, maxWidth: 320, lineHeight: 1.6 }}>
+                Try a name, quote fragment, or trait — for example “analyst” or “what works”.
+              </p>
+              <button
+                type="button"
+                className="arena-btn arena-btn--ghost arena-btn--md"
+                style={{ marginTop: 16 }}
+                onClick={() => {
+                  setLibraryQuery('');
+                  librarySearchRef.current?.focus();
+                }}
+              >
+                Clear search
+              </button>
+            </div>
+          ) : (
           <div
             className="persona-library-grid"
             style={{
@@ -335,10 +441,13 @@ export function PersonasPage() {
               gap: '10px',
             }}
           >
-            {personas.map((persona, index) => {
+            {filteredLibrary.map((persona, index) => {
               const inSlot = unlockedSlotMap[persona.id];
-              const isVisible = revealedLibraryIds[persona.id] || index < 4;
+              const isVisible = revealedLibraryIds[persona.id] || index < 4 || Boolean(libraryQuery.trim());
               const isLocked = !canUsePersona(persona.id);
+              const cardTransition = reducedMotion
+                ? 'none'
+                : `opacity 300ms ease ${index * 30}ms, transform 300ms ease ${index * 30}ms, box-shadow 200ms ease, background 150ms ease`;
 
               return (
                 <div
@@ -355,12 +464,13 @@ export function PersonasPage() {
                     padding: '1.2rem',
                     minHeight: '168px',
                     position: 'relative',
-                    transform: isVisible ? 'translateY(0)' : 'translateY(16px)',
-                    transition: `opacity 300ms ease ${index * 30}ms, transform 300ms ease ${index * 30}ms, box-shadow 200ms ease, background 150ms ease`,
+                    transform: isVisible ? 'translateY(0)' : reducedMotion ? 'none' : 'translateY(16px)',
+                    transition: cardTransition,
                     boxShadow: 'none',
                     cursor: isLocked ? 'pointer' : 'default',
                   }}
                   onMouseEnter={(e) => {
+                    if (reducedMotion) return;
                     e.currentTarget.style.transform = isLocked ? 'translateY(0)' : 'translateY(-3px)';
                     e.currentTarget.style.boxShadow = '0 8px 20px rgba(26,23,20,0.07)';
                   }}
@@ -445,6 +555,7 @@ export function PersonasPage() {
               );
             })}
           </div>
+          )}
         </section>
       </main>
 

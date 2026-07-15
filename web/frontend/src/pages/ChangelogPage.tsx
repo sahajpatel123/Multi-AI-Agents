@@ -61,6 +61,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Press ? for keyboard shortcuts help on Arena and Agent',
       '[NEW] Search and filter Agent Watchlist (All / Active / Paused)',
       '[NEW] Copy saved Arena takes as markdown from the sidebar',
+      '[NEW] Search the Personas library by name, quote, or trait',
     ],
   },
   {

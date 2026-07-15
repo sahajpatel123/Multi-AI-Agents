@@ -77,6 +77,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Post-auth paths**: normalize `/arena` → `/app`; shortcuts panel locks body scroll and focuses Close.
 - **Watchlist find**: search questions + Active/Paused filters with clear empty-match state.
 - **Saved take copy**: sidebar bookmark rows can copy markdown (question + take).
+- **Persona library search**: find minds by name/quote/description; reduced-motion card hover.
 
 ## Required production environment
 
