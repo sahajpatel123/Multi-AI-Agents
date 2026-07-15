@@ -47,3 +47,17 @@ export function clearRedirectIntent(): void {
     /* ignore */
   }
 }
+
+/** Human label for where post-auth navigation will land. */
+export function describeRedirectDestination(path: string): string {
+  const base = (path || DEFAULT_REDIRECT_INTENT).split('?')[0] || DEFAULT_REDIRECT_INTENT;
+  if (base === '/app' || base === '/arena') return 'Arena';
+  if (base === '/agent') return 'Agent Mode';
+  if (base.startsWith('/agent/watchlist')) return 'Watchlist';
+  if (base === '/personas') return 'your panel';
+  if (base === '/pricing') return 'Pricing';
+  if (base === '/account') return 'your account';
+  if (base.startsWith('/room/')) return 'the shared room';
+  if (base === '/product') return 'Product';
+  return 'where you left off';
+}

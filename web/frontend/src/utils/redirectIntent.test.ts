@@ -4,6 +4,7 @@ import {
   getRedirectIntent,
   clearRedirectIntent,
   isSafeRedirectPath,
+  describeRedirectDestination,
   DEFAULT_REDIRECT_INTENT,
 } from './redirectIntent';
 
@@ -54,5 +55,15 @@ describe('isSafeRedirectPath', () => {
     expect(isSafeRedirectPath('//x.com')).toBe(false);
     expect(isSafeRedirectPath('javascript:alert(1)')).toBe(false);
     expect(isSafeRedirectPath('')).toBe(false);
+  });
+});
+
+describe('describeRedirectDestination', () => {
+  it('labels primary destinations for sign-in copy', () => {
+    expect(describeRedirectDestination('/app')).toBe('Arena');
+    expect(describeRedirectDestination('/agent')).toBe('Agent Mode');
+    expect(describeRedirectDestination('/agent/watchlist')).toBe('Watchlist');
+    expect(describeRedirectDestination('/room/abc')).toBe('the shared room');
+    expect(describeRedirectDestination('/weird')).toBe('where you left off');
   });
 });

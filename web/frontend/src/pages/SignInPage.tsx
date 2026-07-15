@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '../components/Button';
 import { useAuth } from '../hooks/useAuth';
-import { getRedirectIntent, clearRedirectIntent } from '../utils/redirectIntent';
+import {
+  getRedirectIntent,
+  clearRedirectIntent,
+  describeRedirectDestination,
+} from '../utils/redirectIntent';
 
 type Tab = 'signin' | 'signup';
 type PasswordStrength = 'weak' | 'fair' | 'good' | 'strong' | null;
@@ -21,6 +25,10 @@ export function SignInPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  // Snapshot once so clearing after login doesn't flicker the banner.
+  const [continueLabel] = useState(() =>
+    describeRedirectDestination(getRedirectIntent()),
+  );
 
   const getPasswordStrength = (pwd: string): PasswordStrength => {
     if (!pwd) return null;
@@ -208,12 +216,31 @@ export function SignInPage() {
           {activeTab === 'signin' && (
             <form onSubmit={handleSignIn}>
               <h2 style={{ fontSize: '22px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', marginBottom: '.4rem' }}>Welcome back</h2>
-              <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '2rem' }}>Sign in to your Arena account</p>
+              <p style={{ fontSize: '13px', color: '#6B6460', marginBottom: '1rem' }}>Sign in to your Arena account</p>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: '#8C7355',
+                  marginBottom: '1.5rem',
+                  padding: '10px 12px',
+                  background: 'rgba(196,149,106,0.08)',
+                  border: '0.5px solid rgba(196,149,106,0.25)',
+                  borderRadius: 10,
+                  lineHeight: 1.5,
+                }}
+              >
+                After sign in you&apos;ll continue to <strong style={{ color: '#2C1810', fontWeight: 500 }}>{continueLabel}</strong>.
+              </p>
 
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Email</label>
+                <label htmlFor="signin-email" style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Email</label>
                 <input
+                  id="signin-email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
+                  autoFocus
+                  inputMode="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -240,9 +267,12 @@ export function SignInPage() {
               </div>
 
               <div style={{ marginBottom: '1.5rem', position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Password</label>
+                <label htmlFor="signin-password" style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Password</label>
                 <input
+                  id="signin-password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -270,6 +300,7 @@ export function SignInPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   style={{
                     position: 'absolute',
                     right: '12px',
@@ -340,10 +371,27 @@ export function SignInPage() {
           {activeTab === 'signup' && (
             <form onSubmit={handleSignUp}>
               <h2 style={{ fontSize: '22px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', marginBottom: '.4rem' }}>Create your account</h2>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: '#8C7355',
+                  marginBottom: '1.25rem',
+                  padding: '10px 12px',
+                  background: 'rgba(196,149,106,0.08)',
+                  border: '0.5px solid rgba(196,149,106,0.25)',
+                  borderRadius: 10,
+                  lineHeight: 1.5,
+                }}
+              >
+                After signup you&apos;ll continue to <strong style={{ color: '#2C1810', fontWeight: 500 }}>{continueLabel}</strong>.
+              </p>
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Name</label>
+                <label htmlFor="signup-name" style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Name</label>
                 <input
+                  id="signup-name"
+                  name="name"
                   type="text"
+                  autoComplete="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
@@ -369,9 +417,13 @@ export function SignInPage() {
                 />
               </div>
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Email</label>
+                <label htmlFor="signup-email" style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Email</label>
                 <input
+                  id="signup-email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
+                  inputMode="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -398,9 +450,12 @@ export function SignInPage() {
               </div>
 
               <div style={{ marginBottom: '.6rem', position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Password</label>
+                <label htmlFor="signup-password" style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Password</label>
                 <input
+                  id="signup-password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -428,6 +483,7 @@ export function SignInPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   style={{
                     position: 'absolute',
                     right: '12px',
@@ -487,9 +543,12 @@ export function SignInPage() {
               )}
 
               <div style={{ marginBottom: '1.5rem', position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Confirm password</label>
+                <label htmlFor="signup-confirm" style={{ display: 'block', fontSize: '13px', color: '#6B5040', marginBottom: '.4rem' }}>Confirm password</label>
                 <input
+                  id="signup-confirm"
+                  name="confirm-password"
                   type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
