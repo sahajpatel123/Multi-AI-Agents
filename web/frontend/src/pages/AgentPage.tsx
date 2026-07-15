@@ -58,6 +58,12 @@ import { useAuth } from '../hooks/useAuth';
 import { User } from '../types';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { pickRecentAgentChips } from '../lib/agentRecentChips';
+import {
+  AGENT_TASK_MAX_CHARS,
+  charBudgetLabel,
+  charBudgetTone,
+  clampToMax,
+} from '../lib/charBudget';
 
 /** Agent result view — shared palette (mockup) */
 const AR = {
@@ -1214,7 +1220,9 @@ export function AgentPage() {
 
   const handleRunTask = async () => {
     if (!hasAgentAccess) return;
-    const t = selectedTemplate ? assembledTemplatePrompt.trim() : task.trim();
+    const t = clampToMax(
+      (selectedTemplate ? assembledTemplatePrompt : task).trim(),
+    );
     if (t.length < 10 || isRunning) return;
     if (selectedTemplate && !allTemplateSlotsFilled) return;
     setError(null);
@@ -3922,7 +3930,8 @@ export function AgentPage() {
                                 value={task}
                                 disabled={isRunning}
                                 placeholder=""
-                                onChange={(e) => setTask(e.target.value)}
+                                maxLength={AGENT_TASK_MAX_CHARS}
+                                onChange={(e) => setTask(clampToMax(e.target.value))}
                                 style={{
                                   flex: 1,
                                   minWidth: 0,
@@ -3934,6 +3943,30 @@ export function AgentPage() {
                                   fontFamily: 'Georgia, serif',
                                 }}
                               />
+                              <span
+                                aria-live="polite"
+                                title="Character budget (server max 2000)"
+                                style={{
+                                  fontSize: 10,
+                                  fontFamily: 'Georgia, serif',
+                                  color:
+                                    charBudgetTone(task.length) === 'danger'
+                                      ? '#993C1D'
+                                      : charBudgetTone(task.length) === 'warn'
+                                        ? '#C4956A'
+                                        : charBudgetTone(task.length) === 'ready'
+                                          ? '#8C7355'
+                                          : '#C4B8AE',
+                                  flexShrink: 0,
+                                  minWidth: isMobile ? 0 : 52,
+                                  textAlign: 'right',
+                                  display: isMobile && task.length < 10 ? 'none' : 'inline',
+                                }}
+                              >
+                                {task.length >= 10 || task.length >= Math.floor(AGENT_TASK_MAX_CHARS * 0.85)
+                                  ? charBudgetLabel(task.length)
+                                  : ''}
+                              </span>
                               <button
                                 type="submit"
                                 disabled={task.trim().length < 10 || isRunning || !hasAgentAccess}
