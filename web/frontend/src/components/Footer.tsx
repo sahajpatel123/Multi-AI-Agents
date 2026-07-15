@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_ORIGIN } from '../api';
 import { interpretHealthPayload, type SystemStatus } from '../lib/healthStatus';
-import { motionDuration } from '../lib/motion';
+import { motionDuration, motionTransition, prefersReducedMotion, scrollBehavior } from '../lib/motion';
 
 const HEALTH_POLL_MS = 45_000;
 
 export function Footer() {
   const navigate = useNavigate();
   const [systemStatus, setSystemStatus] = useState<SystemStatus>('checking');
+  const reducedMotion = prefersReducedMotion();
 
   useEffect(() => {
     let cancelled = false;
@@ -47,13 +48,14 @@ export function Footer() {
   }, []);
 
   const scrollToHowItWorks = () => {
+    const behavior = scrollBehavior();
     if (window.location.pathname === '/') {
-      document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+      document.getElementById('how-it-works')?.scrollIntoView({ behavior });
     } else {
       navigate('/');
-      setTimeout(() => {
-        document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+      window.setTimeout(() => {
+        document.getElementById('how-it-works')?.scrollIntoView({ behavior: scrollBehavior() });
+      }, reducedMotion ? 0 : 100);
     }
   };
 
@@ -74,6 +76,26 @@ export function Footer() {
           ? '#A89070'
           : '#C4A882';
 
+  const linkStyle: CSSProperties = {
+    display: 'block',
+    fontSize: '13px',
+    color: '#6B6460',
+    marginBottom: '.35rem',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: 0,
+    textAlign: 'left',
+    transition: motionTransition('color', 150),
+  };
+
+  const onLinkEnter = (e: MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.color = '#1A1714';
+  };
+  const onLinkLeave = (e: MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.color = '#6B6460';
+  };
+
   return (
     <footer
       style={{
@@ -85,7 +107,8 @@ export function Footer() {
         paddingBottom: 'max(2rem, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
       }}
     >
-      <style>{`
+      {!reducedMotion ? (
+        <style>{`
         @keyframes breathe {
           0%, 100% { transform: scale(1); opacity: 1; }
           50% { transform: scale(1.5); opacity: 0.6; }
@@ -93,14 +116,19 @@ export function Footer() {
         .breathe { animation: breathe 2.4s ease-in-out infinite; }
         .breathe-slow { animation: breathe 3.2s ease-in-out infinite; }
       `}</style>
+      ) : null}
 
       <div className="footer-top" style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
         <div>
           <button
+            type="button"
             onClick={() => navigate('/')}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '.8rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
-            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }} className="breathe" />
+            <div
+              style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }}
+              className={reducedMotion ? undefined : 'breathe'}
+            />
             <span style={{ fontSize: '16px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
           </button>
           <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.7 }}>Four minds. One question. The best answer wins.</p>
@@ -108,16 +136,16 @@ export function Footer() {
 
         <div>
           <h4 style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714', marginBottom: '.8rem', textTransform: 'uppercase', letterSpacing: '.08em' }}>Product</h4>
-          <button onClick={scrollToHowItWorks} style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>How it works</button>
-          <button onClick={() => navigate('/pricing')} style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>Pricing</button>
-          <button onClick={() => navigate('/changelog')} style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>Changelog</button>
+          <button type="button" onClick={scrollToHowItWorks} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>How it works</button>
+          <button type="button" onClick={() => navigate('/pricing')} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>Pricing</button>
+          <button type="button" onClick={() => navigate('/changelog')} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>Changelog</button>
         </div>
 
         <div>
           <h4 style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714', marginBottom: '.8rem', textTransform: 'uppercase', letterSpacing: '.08em' }}>Company</h4>
-          <button onClick={() => navigate('/about')} style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>About</button>
-          <button onClick={() => navigate('/terms')} style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>Terms</button>
-          <button onClick={() => navigate('/privacy')} style={{ display: 'block', fontSize: '13px', color: '#6B6460', marginBottom: '.35rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 150ms' }} onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'} onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}>Privacy</button>
+          <button type="button" onClick={() => navigate('/about')} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>About</button>
+          <button type="button" onClick={() => navigate('/terms')} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>Terms</button>
+          <button type="button" onClick={() => navigate('/privacy')} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>Privacy</button>
         </div>
 
       </div>
@@ -140,7 +168,11 @@ export function Footer() {
         >
           <div
             style={{ width: '5px', height: '5px', borderRadius: '50%', background: statusColor }}
-            className={systemStatus === 'operational' || systemStatus === 'checking' ? 'breathe-slow' : undefined}
+            className={
+              !reducedMotion && (systemStatus === 'operational' || systemStatus === 'checking')
+                ? 'breathe-slow'
+                : undefined
+            }
           />
           <span style={{ fontSize: '12px', color: statusColor }}>{statusLabel}</span>
         </div>

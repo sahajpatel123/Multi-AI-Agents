@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { motionDuration, motionTransition, prefersReducedMotion } from './motion';
+import {
+  motionDuration,
+  motionTransition,
+  prefersReducedMotion,
+  scrollBehavior,
+} from './motion';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -15,6 +20,7 @@ describe('prefersReducedMotion / motionDuration', () => {
     expect(prefersReducedMotion()).toBe(false);
     expect(motionDuration(200)).toBe(200);
     expect(motionTransition('opacity', 180)).toContain('180ms');
+    expect(scrollBehavior()).toBe('smooth');
   });
 
   it('collapses duration and transitions when reduce is preferred', () => {
@@ -25,5 +31,6 @@ describe('prefersReducedMotion / motionDuration', () => {
     expect(prefersReducedMotion()).toBe(true);
     expect(motionDuration(200)).toBe(0);
     expect(motionTransition('all', 200)).toBe('none');
+    expect(scrollBehavior()).toBe('auto');
   });
 });

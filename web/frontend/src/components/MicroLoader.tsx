@@ -1,11 +1,17 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { getWordPoints } from '../hooks/useCalligraphyCanvas';
+import { prefersReducedMotion } from '../lib/motion';
 
 type LoaderPhase = 'draw' | 'hold' | 'fade';
 
 const WORDS = ['thinking', 'loading', 'working', 'finding'] as const;
 
-export default function MicroLoader() {
+type MicroLoaderProps = {
+  /** Accessible status text (and reduced-motion label). */
+  label?: string;
+};
+
+export default function MicroLoader({ label = 'Loading' }: MicroLoaderProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number | null>(null);
   const pointsRef = useRef<Array<{ x: number; y: number }>>([]);
@@ -15,6 +21,7 @@ export default function MicroLoader() {
   const holdTimerRef = useRef(0);
   const frameRef = useRef(0);
   const wordIndexRef = useRef(0);
+  const reducedMotion = prefersReducedMotion();
 
   const loadWord = (word: string) => {
     const canvas = canvasRef.current;
@@ -27,6 +34,8 @@ export default function MicroLoader() {
   };
 
   useEffect(() => {
+    if (reducedMotion) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -113,18 +122,35 @@ export default function MicroLoader() {
         window.cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, []);
+  }, [reducedMotion]);
+
+  const shellStyle: CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '24px 0',
+  };
+
+  if (reducedMotion) {
+    return (
+      <div role="status" aria-live="polite" aria-busy="true" style={shellStyle}>
+        <span
+          style={{
+            fontSize: 13,
+            color: '#C4956A',
+            fontStyle: 'italic',
+            fontFamily: 'Georgia, Times New Roman, serif',
+          }}
+        >
+          {label}…
+        </span>
+      </div>
+    );
+  }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px 0',
-      }}
-    >
+    <div role="status" aria-live="polite" aria-busy="true" aria-label={label} style={shellStyle}>
       <canvas
         ref={canvasRef}
         width={160}

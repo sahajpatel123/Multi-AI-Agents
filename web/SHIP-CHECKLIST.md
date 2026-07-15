@@ -54,6 +54,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **User menu a11y**: Escape closes dropdown; aria-expanded / menu roles on account actions.
 - **Protected routes**: redirect intent set in effect (not during render); share menu ARIA.
 - **Native share**: system share sheet (`navigator.share`) when available; still uses public `/share` URL; focus first menu item.
+- **MicroLoader / footer motion**: static loading label under reduced motion; footer anchors + breathe dots honor `prefers-reduced-motion`.
 
 ## Required production environment
 

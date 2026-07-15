@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { prefersReducedMotion } from '../lib/motion';
+import { scrollBehavior } from '../lib/motion';
 import { scrollIntentForLocation } from '../lib/scrollIntent';
 
 /**
@@ -12,7 +12,7 @@ export function ScrollToTop() {
 
   useEffect(() => {
     const intent = scrollIntentForLocation(pathname, hash);
-    const behavior: ScrollBehavior = prefersReducedMotion() ? 'auto' : 'smooth';
+    const behavior = scrollBehavior();
 
     if (intent.type === 'hash') {
       // Wait a frame so lazy route content can paint.

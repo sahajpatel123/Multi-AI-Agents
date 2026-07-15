@@ -28,3 +28,8 @@ export function motionTransition(
   if (prefersReducedMotion()) return 'none';
   return `${property} ${ms}ms ${easing}`;
 }
+
+/** Scroll behavior for in-page anchors — instant when reduced motion is preferred. */
+export function scrollBehavior(): ScrollBehavior {
+  return prefersReducedMotion() ? 'auto' : 'smooth';
+}
