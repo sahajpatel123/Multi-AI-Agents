@@ -15,6 +15,12 @@ import { ScoredAgent, AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
 import { ShareDropdown } from './ShareDropdown';
 import track from '../utils/track';
+import {
+  agentCardLoadingAnimation,
+  agentCardLoadingBackgroundSize,
+  shouldRotateThinkingPhrases,
+} from '../lib/agentCardMotion';
+import { prefersReducedMotion } from '../lib/motion';
 
 interface AgentDisplayConfig {
   name: string;

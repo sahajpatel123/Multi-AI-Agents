@@ -41,6 +41,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent min length**: live “N more characters to run” hint + run-button titles.
 - **Agent recent chips**: right-click hide + Reset chips (local dismiss, history kept).
 - **Condura CTA**: safe install URL allow-list, alert errors, shared primary labels.
+- **Agent cards**: shimmer / hover lift / thinking rotation honor reduced motion.
 - **Debate end honesty**: after max rounds, only Back to Arena — no fake “Ask a follow-up”.
 - **Upgrade modal a11y**: Escape closes (gated during Razorpay), dialog semantics, body scroll lock.
 - **Clipboard consistency**: Room invite, Agent room link, and Condura handoff use shared copy helper + failure feedback.
