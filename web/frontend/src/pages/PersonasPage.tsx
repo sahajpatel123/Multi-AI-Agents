@@ -7,6 +7,14 @@ import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { type Persona } from '../data/personas';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
+import {
+  panelSaveButtonLabel,
+  panelSaveCaughtErrorMessage,
+  panelSaveSuccessMessage,
+  panelSaveToastAriaLive,
+  panelSaveToastRole,
+  type PanelSaveToastKind,
+} from '../lib/panelSave';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import track from '../utils/track';
 
@@ -16,6 +24,7 @@ interface ToastState {
   message: string;
   color: string;
   iconColor?: string;
+  kind?: PanelSaveToastKind;
 }
 
 const eyebrowStyle = {
@@ -33,6 +42,7 @@ export function PersonasPage() {
   const [activeSlot, setActiveSlot] = useState<SlotIndex | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
+  const [savingPanel, setSavingPanel] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [revealedLibraryIds, setRevealedLibraryIds] = useState<Record<string, boolean>>({});
   const [libraryQuery, setLibraryQuery] = useState('');
@@ -186,12 +196,26 @@ export function PersonasPage() {
   };
 
   const handleSavePanel = async () => {
+    if (savingPanel) return;
+    setSavingPanel(true);
     try {
       await savePanel();
       void track('panel_saved');
-      setToast({ message: 'Panel saved — loads every session', color: '#1A1714', iconColor: '#C4956A' });
-    } catch {
-      setToast({ message: 'Could not save panel', color: '#E57373', iconColor: '#FAF7F4' });
+      setToast({
+        message: panelSaveSuccessMessage(),
+        color: '#1A1714',
+        iconColor: '#C4956A',
+        kind: 'success',
+      });
+    } catch (err) {
+      setToast({
+        message: panelSaveCaughtErrorMessage(err),
+        color: '#E57373',
+        iconColor: '#FAF7F4',
+        kind: 'error',
+      });
+    } finally {
+      setSavingPanel(false);
     }
   };
 
@@ -318,8 +342,13 @@ export function PersonasPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.9rem', gap: '12px', flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={handleSavePanel}
+              onClick={() => {
+                void handleSavePanel();
+              }}
               className="save-panel-btn"
+              disabled={savingPanel}
+              aria-busy={savingPanel}
+              aria-label={panelSaveButtonLabel(savingPanel)}
               style={{
                 background: '#1A1714',
                 color: '#FAF7F4',
@@ -327,10 +356,11 @@ export function PersonasPage() {
                 borderRadius: '999px',
                 padding: '10px 24px',
                 fontSize: '13px',
-                cursor: 'pointer',
+                cursor: savingPanel ? 'wait' : 'pointer',
+                opacity: savingPanel ? 0.72 : 1,
               }}
             >
-              Save this panel
+              {panelSaveButtonLabel(savingPanel)}
             </button>
             {!isDefaultPanel && (
               <button
@@ -814,6 +844,9 @@ export function PersonasPage() {
 
       {toast && (
         <div
+          role={panelSaveToastRole(toast.kind ?? 'success')}
+          aria-live={panelSaveToastAriaLive(toast.kind ?? 'success')}
+          aria-atomic="true"
           style={{
             position: 'fixed',
             bottom: '90px',
@@ -832,8 +865,11 @@ export function PersonasPage() {
             transition: 'opacity 300ms ease, transform 300ms ease',
           }}
         >
-          <Sparkles style={{ width: '14px', height: '14px', color: toast.iconColor || '#FAF7F4' }} />
-          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: toast.iconColor || '#FAF7F4' }} />
+          <Sparkles style={{ width: '14px', height: '14px', color: toast.iconColor || '#FAF7F4' }} aria-hidden />
+          <span
+            style={{ width: '6px', height: '6px', borderRadius: '50%', background: toast.iconColor || '#FAF7F4' }}
+            aria-hidden
+          />
           <span>{toast.message}</span>
         </div>
       )}
