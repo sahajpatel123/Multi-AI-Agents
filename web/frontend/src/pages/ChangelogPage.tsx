@@ -59,6 +59,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Search saved Arena takes in the sidebar',
       '[IMPROVED] Press / in Discuss and Debate to focus compose',
       '[NEW] Press ? for keyboard shortcuts help on Arena and Agent',
+      '[NEW] Search and filter Agent Watchlist (All / Active / Paused)',
     ],
   },
   {

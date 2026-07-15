@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MicroLoader from '../components/MicroLoader';
 import {
@@ -10,11 +10,14 @@ import {
 } from '../api';
 import { useTier } from '../context/TierContext';
 import { prefersReducedMotion } from '../lib/motion';
+import { filterBySearchQuery } from '../lib/sidebarSearch';
 import {
   WATCHLIST_INTERVALS,
   type WatchlistIntervalHours,
 } from '../lib/watchlistIntervals';
 import { watchlistBodyMode } from '../lib/watchlistView';
+
+type WatchlistStatusFilter = 'all' | 'active' | 'paused';
 
 function formatRelativePast(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -66,7 +69,10 @@ export function WatchlistPage() {
   const [error, setError] = useState<string | null>(null);
   const [cadenceBusyId, setCadenceBusyId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<WatchlistStatusFilter>('all');
   const errorRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
   const reducedMotion = prefersReducedMotion();
 
   const load = useCallback(async () => {
@@ -153,6 +159,19 @@ export function WatchlistPage() {
     loadFailed,
     itemCount: items.length,
   });
+
+  const filteredItems = useMemo(() => {
+    const byStatus =
+      statusFilter === 'all'
+        ? items
+        : items.filter((item) =>
+            statusFilter === 'active' ? item.is_active : !item.is_active,
+          );
+    return filterBySearchQuery(byStatus, searchQuery, (item) => [
+      item.question,
+      item.latest_task?.title,
+    ]);
+  }, [items, searchQuery, statusFilter]);
 
   if (!canWatchlist) {
     return (
@@ -331,7 +350,139 @@ export function WatchlistPage() {
               margin: '0 auto',
             }}
           >
-            {items.map((item) => {
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                marginBottom: 4,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} role="group" aria-label="Filter by status">
+                  {(
+                    [
+                      { id: 'all' as const, label: 'All' },
+                      { id: 'active' as const, label: 'Active' },
+                      { id: 'paused' as const, label: 'Paused' },
+                    ] as const
+                  ).map((opt) => {
+                    const selected = statusFilter === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setStatusFilter(opt.id)}
+                        aria-pressed={selected}
+                        style={{
+                          padding: '4px 12px',
+                          borderRadius: 999,
+                          border: selected ? 'none' : '0.5px solid #D4C4B0',
+                          background: selected ? '#C4956A' : 'transparent',
+                          color: selected ? '#FAF7F2' : '#8C7355',
+                          fontSize: 12,
+                          fontFamily: 'Georgia, serif',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span style={{ fontSize: 11, color: '#A89070' }}>
+                  {filteredItems.length}
+                  {searchQuery.trim() || statusFilter !== 'all' ? ` / ${items.length}` : ''}
+                </span>
+              </div>
+              <div style={{ position: 'relative' }}>
+                <input
+                  ref={searchRef}
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search watched questions…"
+                  aria-label="Search watched questions"
+                  autoComplete="off"
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: 13,
+                    fontFamily: 'Georgia, serif',
+                    color: '#2C1810',
+                    background: '#FAF7F2',
+                    border: '0.5px solid #E0D5C5',
+                    borderRadius: 10,
+                    padding: '10px 32px 10px 12px',
+                    outline: 'none',
+                  }}
+                />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setSearchQuery('');
+                      searchRef.current?.focus();
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: 8,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      color: '#A89070',
+                      lineHeight: 1,
+                      padding: 4,
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {filteredItems.length === 0 ? (
+              <div
+                className="arena-empty-state"
+                style={{ padding: '2.5rem 1rem' }}
+              >
+                <p style={{ fontSize: 15, color: '#4A3728', fontWeight: 500, margin: 0 }}>
+                  No matches
+                </p>
+                <p style={{ fontSize: 13, color: '#8C7355', marginTop: 8, maxWidth: 320, lineHeight: 1.6 }}>
+                  {searchQuery.trim()
+                    ? `Nothing matches “${searchQuery.trim()}”${statusFilter !== 'all' ? ` in ${statusFilter} watches` : ''}.`
+                    : statusFilter === 'active'
+                      ? 'No active watches right now — resume a paused one or start a new research task.'
+                      : 'No paused watches.'}
+                </p>
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--ghost arena-btn--md"
+                  style={{ marginTop: 16 }}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setStatusFilter('all');
+                    searchRef.current?.focus();
+                  }}
+                >
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+            filteredItems.map((item) => {
               const badge = intervalBadge(item.interval_hours);
               return (
                 <div
@@ -504,7 +655,8 @@ export function WatchlistPage() {
                   </div>
                 </div>
               );
-            })}
+            })
+            )}
           </div>
         )}
       </main>

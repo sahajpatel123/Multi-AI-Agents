@@ -75,6 +75,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Discuss / Debate `/` focus**: compose shortcuts + alert errors; stream dots honor reduced motion.
 - **Keyboard shortcuts help**: press `?` on Arena / Agent / Discuss / Debate for a shortcuts panel; Arena errors are dismissible alerts.
 - **Post-auth paths**: normalize `/arena` → `/app`; shortcuts panel locks body scroll and focuses Close.
+- **Watchlist find**: search questions + Active/Paused filters with clear empty-match state.
 
 ## Required production environment
 
