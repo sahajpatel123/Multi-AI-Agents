@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentTaskTemplate } from '../api';
 import { ConduraBadge } from './ConduraBadge';
@@ -27,6 +27,8 @@ type TemplatesModalProps = {
 
 export function TemplatesModal({ open, closing, categories, onClose, onSelect }: TemplatesModalProps) {
   const [activeTab, setActiveTab] = useState<TabId>('All');
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const visible = open || closing;
 
   const flatTemplates = useMemo(() => {
     const out: AgentTaskTemplate[] = [];
@@ -45,6 +47,21 @@ export function TemplatesModal({ open, closing, categories, onClose, onSelect }:
     if (open) setActiveTab('All');
   }, [open]);
 
+  useEffect(() => {
+    if (!visible) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [visible]);
+
+  useEffect(() => {
+    if (!open) return;
+    const id = window.setTimeout(() => closeBtnRef.current?.focus(), 40);
+    return () => window.clearTimeout(id);
+  }, [open]);
+
   const handleOverlayPointerDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.target === e.currentTarget) onClose();
@@ -53,15 +70,15 @@ export function TemplatesModal({ open, closing, categories, onClose, onSelect }:
   );
 
   useEffect(() => {
-    if (!open && !closing) return;
+    if (!visible) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, closing, onClose]);
+  }, [visible, onClose]);
 
-  if (!open && !closing) return null;
+  if (!visible) return null;
 
   const overlayAnim = closing ? 'templatesModalOverlayOut 0.22s ease forwards' : 'templatesModalOverlayIn 0.2s ease forwards';
   const panelAnim = closing
@@ -138,6 +155,7 @@ export function TemplatesModal({ open, closing, categories, onClose, onSelect }:
             Task templates
           </h2>
           <button
+            ref={closeBtnRef}
             type="button"
             aria-label="Close"
             onClick={onClose}
