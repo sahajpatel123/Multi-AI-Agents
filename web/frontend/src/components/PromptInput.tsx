@@ -146,9 +146,10 @@ export function PromptInput({
   }, [prompt, draftKey]);
 
   // Parent bumps clearDraftSignal after a confirmed submit to clear storage.
+  // Skip the initial 0 so a freshly mounted input does not wipe a restored draft.
   useEffect(() => {
     if (!draftKey) return;
-    if (clearDraftSignal === undefined) return;
+    if (clearDraftSignal === undefined || clearDraftSignal <= 0) return;
     clearPromptDraft(draftKey);
   }, [clearDraftSignal, draftKey]);
 
