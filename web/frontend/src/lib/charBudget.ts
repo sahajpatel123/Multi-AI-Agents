@@ -29,3 +29,19 @@ export function clampToMax(text: string, max = AGENT_TASK_MAX_CHARS): string {
   if (text.length <= max) return text;
   return text.slice(0, max);
 }
+
+/**
+ * Hint when the user has started typing but is under the Agent min length.
+ * Empty string when no hint should show.
+ */
+export function agentMinLengthHint(
+  text: string,
+  min = AGENT_TASK_MIN_CHARS,
+): string {
+  const n = text.trim().length;
+  if (n === 0 || n >= min) return '';
+  const need = min - n;
+  return need === 1
+    ? '1 more character to run'
+    : `${need} more characters to run`;
+}

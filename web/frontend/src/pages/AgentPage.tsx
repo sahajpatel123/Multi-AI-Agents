@@ -60,6 +60,7 @@ import { setRedirectIntent } from '../utils/redirectIntent';
 import { pickRecentAgentChips } from '../lib/agentRecentChips';
 import {
   AGENT_TASK_MAX_CHARS,
+  agentMinLengthHint,
   charBudgetLabel,
   charBudgetTone,
   clampToMax,
@@ -3973,6 +3974,15 @@ export function AgentPage() {
                               <button
                                 type="submit"
                                 disabled={task.trim().length < 10 || isRunning || !hasAgentAccess}
+                                title={
+                                  !hasAgentAccess
+                                    ? 'Agent Mode requires Pro or the Agent add-on'
+                                    : isRunning
+                                      ? 'Running…'
+                                      : task.trim().length < 10
+                                        ? agentMinLengthHint(task) || 'Type at least 10 characters'
+                                        : 'Run research task'
+                                }
                                 onMouseEnter={(e) => {
                                   if (task.trim().length >= 10 && !isRunning && hasAgentAccess) {
                                     e.currentTarget.style.background = '#B07850';
@@ -4022,6 +4032,20 @@ export function AgentPage() {
                                 </svg>
                               </button>
                             </div>
+                            {agentMinLengthHint(task) ? (
+                              <p
+                                role="status"
+                                style={{
+                                  margin: '8px 0 0',
+                                  fontSize: 11,
+                                  color: '#A89070',
+                                  fontFamily: 'Georgia, serif',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                {agentMinLengthHint(task)}
+                              </p>
+                            ) : null}
                             {attachMenuOpen && !isMobile ? (
                               <div
                                 style={{
