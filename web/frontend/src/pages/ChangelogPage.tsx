@@ -73,6 +73,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Browser tabs show Room names and shared-take mind names',
       '[NEW] Press / and ? for Room board search focus and keyboard shortcuts help',
       '[NEW] Press / and ? on Agent Watchlist for search focus and shortcuts help',
+      '[NEW] Share Room invites via the system share sheet (with copy fallback)',
     ],
   },
   {

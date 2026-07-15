@@ -13,6 +13,11 @@ import {
   titleForRoom,
 } from '../lib/documentTitle';
 import { formatRoomSynthesisExport } from '../lib/roomSynthesisExport';
+import {
+  buildRoomInviteShareData,
+  canUseNativeShare,
+  invokeNativeShare,
+} from '../lib/shareUrl';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { setRedirectIntent } from '../utils/redirectIntent';
@@ -86,6 +91,8 @@ export function RoomPage() {
   const [historyTasks, setHistoryTasks] = useState<any[]>([]);
   const [newTaskText, setNewTaskText] = useState('');
   const [inviteToast, setInviteToast] = useState(false);
+  const [inviteShareStatus, setInviteShareStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
+  const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [hoverTask, setHoverTask] = useState<string | null>(null);
   const [synthesisRefreshing, setSynthesisRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -262,8 +269,15 @@ export function RoomPage() {
   const patterns: string[] = Array.isArray(synthesis?.patterns) ? synthesis.patterns : [];
   const synthText = typeof synthesis?.synthesis === 'string' ? synthesis.synthesis : '';
 
+  useEffect(() => {
+    setNativeShareAvailable(canUseNativeShare());
+  }, []);
+
+  const roomInviteUrl = () =>
+    room?.share_url || `${window.location.origin}/room/${slug}`;
+
   const copyInvite = async () => {
-    const url = room?.share_url || `${window.location.origin}/room/${slug}`;
+    const url = roomInviteUrl();
     const ok = await copyToClipboard(url);
     if (ok) {
       setInviteToast(true);
@@ -271,6 +285,35 @@ export function RoomPage() {
     } else {
       setActionError('Could not copy invite link — copy from the address bar instead.');
       window.setTimeout(() => setActionError(null), 3200);
+    }
+  };
+
+  const shareInvite = async () => {
+    if (!room) return;
+    const url = roomInviteUrl();
+    const data = buildRoomInviteShareData({
+      roomName: room.name || 'Research room',
+      shareUrl: url,
+    });
+    const result = await invokeNativeShare(data);
+    if (result === 'shared') {
+      setInviteShareStatus('shared');
+      window.setTimeout(() => setInviteShareStatus('idle'), 2200);
+      return;
+    }
+    if (result === 'cancelled') return;
+    // Unavailable or failed — fall back to clipboard so invites still ship.
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      setInviteToast(true);
+      window.setTimeout(() => setInviteToast(false), 2000);
+    } else {
+      setInviteShareStatus('failed');
+      setActionError('Could not share invite — copy the link from the address bar instead.');
+      window.setTimeout(() => {
+        setInviteShareStatus('idle');
+        setActionError(null);
+      }, 3200);
     }
   };
 
@@ -1220,24 +1263,61 @@ export function RoomPage() {
             </div>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={copyInvite}
-          style={{
-            background: 'rgba(196,149,106,0.15)',
-            border: '0.5px solid rgba(196,149,106,0.4)',
-            color: '#C4956A',
-            fontSize: 11,
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-            borderRadius: 999,
-            padding: '6px 14px',
-            cursor: 'pointer',
-            flexShrink: 0,
-          }}
-        >
-          {inviteToast ? '✓ Link copied!' : 'Copy invite link'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {nativeShareAvailable ? (
+            <button
+              type="button"
+              onClick={() => void shareInvite()}
+              aria-label={
+                inviteShareStatus === 'shared'
+                  ? 'Invite shared'
+                  : inviteShareStatus === 'failed'
+                    ? 'Share failed'
+                    : 'Share invite via system share sheet'
+              }
+              style={{
+                background: 'rgba(196,149,106,0.15)',
+                border: '0.5px solid rgba(196,149,106,0.4)',
+                color:
+                  inviteShareStatus === 'failed'
+                    ? '#F0997B'
+                    : inviteShareStatus === 'shared'
+                      ? '#A8C5A0'
+                      : '#C4956A',
+                fontSize: 11,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                borderRadius: 999,
+                padding: '6px 14px',
+                cursor: 'pointer',
+              }}
+            >
+              {inviteShareStatus === 'shared'
+                ? '✓ Shared'
+                : inviteShareStatus === 'failed'
+                  ? 'Share failed'
+                  : 'Share invite'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void copyInvite()}
+            aria-label={inviteToast ? 'Invite link copied' : 'Copy invite link'}
+            style={{
+              background: nativeShareAvailable ? 'transparent' : 'rgba(196,149,106,0.15)',
+              border: '0.5px solid rgba(196,149,106,0.4)',
+              color: '#C4956A',
+              fontSize: 11,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              borderRadius: 999,
+              padding: '6px 14px',
+              cursor: 'pointer',
+            }}
+          >
+            {inviteToast ? '✓ Link copied!' : nativeShareAvailable ? 'Copy link' : 'Copy invite link'}
+          </button>
+        </div>
       </header>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: 0, overflow: 'hidden' }}>

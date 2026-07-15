@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildNativeShareData,
+  buildRoomInviteShareData,
   buildShareTakeClipboardText,
   buildShareText,
   buildShareUrl,
@@ -103,6 +104,20 @@ describe('native share helpers', () => {
     expect(data.title).toBe('Marcus on Arena');
     expect(data.text).toContain('Enough.');
     expect(data.text).toContain('Marcus');
+    expect(data.url).not.toContain('/app');
+  });
+
+  it('buildRoomInviteShareData uses the public room URL', () => {
+    const roomUrl = 'https://arena.app/room/climate-board';
+    const data = buildRoomInviteShareData({
+      roomName: 'Climate board',
+      shareUrl: roomUrl,
+    });
+    expect(data.url).toBe(roomUrl);
+    expect(data.title).toContain('Climate board');
+    expect(data.title).toMatch(/Room/i);
+    expect(data.text).toContain('Climate board');
+    expect(data.url).toContain('/room/');
     expect(data.url).not.toContain('/app');
   });
 

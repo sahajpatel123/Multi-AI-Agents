@@ -115,6 +115,23 @@ export function buildNativeShareData(opts: {
 }
 
 /**
+ * Web Share payload for a collaborative Room invite link.
+ * Always points at the public `/room/:slug` URL (never a private shell route).
+ */
+export function buildRoomInviteShareData(opts: {
+  roomName: string;
+  shareUrl: string;
+}): NativeShareData {
+  const roomName = (opts.roomName || 'Research room').trim() || 'Research room';
+  const shareUrl = (opts.shareUrl || '').trim();
+  return {
+    title: `${roomName} · Arena Room`,
+    text: `Join “${roomName}” on Arena — compare research findings with the group.`,
+    url: shareUrl,
+  };
+}
+
+/**
  * True when the runtime exposes navigator.share.
  * Injectable for unit tests (no real navigator required).
  */
