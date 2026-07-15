@@ -111,3 +111,72 @@ def test_condura_metrics_route_rejects_non_admin(isolated_db, monkeypatch):
     )
     assert r_admin.status_code == 200, r_admin.text
     assert "counters" in r_admin.json()
+
+
+def test_analytics_admin_routes_uses_shared_gate(isolated_db, monkeypatch):
+    """/api/admin/routes must reject non-admins via the shared gate (403), not
+    the old ad-hoc inline check."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from arena.core.auth import create_access_token, hash_password
+    from arena.database import get_db
+    from arena.db_models import User, UserTier
+    from arena.routes.analytics import router as analytics_router
+
+    monkeypatch.setattr(
+        "arena.config.get_settings",
+        lambda: type("S", (), {"admin_email": "ops@arena.test"})(),
+    )
+
+    SessionLocal = isolated_db
+    db = SessionLocal()
+    try:
+        user = User(
+            email="user@example.com",
+            password_hash=hash_password("Strong1Pass"),
+            tier=UserTier.PRO,
+            name="User",
+        )
+        admin = User(
+            email="ops@arena.test",
+            password_hash=hash_password("Strong1Pass"),
+            tier=UserTier.PRO,
+            name="Ops",
+        )
+        db.add(user)
+        db.add(admin)
+        db.commit()
+        db.refresh(user)
+        db.refresh(admin)
+        user_id, admin_id = user.id, admin.id
+    finally:
+        db.close()
+
+    app = FastAPI()
+    app.include_router(analytics_router, prefix="/api")
+
+    def _override():
+        s = SessionLocal()
+        try:
+            yield s
+        finally:
+            s.close()
+
+    app.dependency_overrides[get_db] = _override
+    client = TestClient(app)
+
+    user_tok = create_access_token(user_id, "user@example.com")
+    admin_tok = create_access_token(admin_id, "ops@arena.test")
+
+    r_user = client.get(
+        "/api/admin/routes",
+        headers={"Authorization": f"Bearer {user_tok}"},
+    )
+    assert r_user.status_code == 403, r_user.text
+
+    r_admin = client.get(
+        "/api/admin/routes",
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert r_admin.status_code == 200, r_admin.text

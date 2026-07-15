@@ -7,7 +7,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from arena.config import get_settings
+from arena.core.admin_gate import require_admin_email
 from arena.core.dependencies import get_current_user_optional, get_current_user_required
 from arena.core.input_validation import sanitize_model_optional_text, sanitize_model_text
 from arena.core.model_router import get_all_routes_summary
@@ -160,7 +160,10 @@ async def analytics_summary(
 async def admin_routes_summary(
     user: UserResponse = Depends(get_current_user_required),
 ) -> dict:
-    admin_email = get_settings().admin_email
-    if str(user.email).lower() != str(admin_email).strip().lower():
-        raise HTTPException(status_code=404, detail="Not found")
+    # Use the shared admin gate so authorization is consistent across every
+    # admin endpoint: it fails closed with 503 when ADMIN_EMAIL is unset and
+    # 403 otherwise. The previous inline check did str(admin_email) on an unset
+    # value, yielding the literal "none" — a footgun that only failed closed by
+    # luck (no real account has the email "none").
+    require_admin_email(user.email)
     return get_all_routes_summary()
