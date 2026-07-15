@@ -11,6 +11,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { setRedirectIntent } from '../utils/redirectIntent';
+import { isFaqOpen, toggleFaqOpen } from '../lib/faqAccordion';
 
 const comparisonRows = [
   ['Credits per day', '25K', '100K', '300K'],
@@ -38,6 +39,11 @@ const faqs = [
   {
     question: 'Can I change plans anytime?',
     answer: 'Yes. Upgrade or downgrade at any time. Changes take effect immediately.',
+  },
+  {
+    question: 'Does Agent Mode control my computer?',
+    answer:
+      'No. Arena is web-only. On-device actions need Condura (free, local-first) on your machine. The browser never fakes local control.',
   },
 ];
 
@@ -216,6 +222,7 @@ export function PricingPage() {
   const [sectionHovered, setSectionHovered] = useState(false);
   const [hoveredMind, setHoveredMind] = useState<number | null>(null);
   const [mindsInView, setMindsInView] = useState(false);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const mindsSectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -1094,14 +1101,61 @@ export function PricingPage() {
           </div>
         </section>
 
-        <section style={{ maxWidth: '760px', marginTop: '1.5rem' }}>
+        <section style={{ maxWidth: '760px', marginTop: '1.5rem' }} aria-label="Common questions">
           <h2 style={{ fontSize: '20px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>Common questions</h2>
-          {faqs.map((faq) => (
-            <div key={faq.question} className="faq-item" style={{ borderBottom: '0.5px solid rgba(26,23,20,0.06)', padding: '1rem 0' }}>
-              <p style={{ fontSize: '14px', fontWeight: 400, color: '#1A1714', marginBottom: '.45rem' }}>{faq.question}</p>
-              <p style={{ fontSize: '13px', color: '#8B8480', lineHeight: 1.7 }}>{faq.answer}</p>
-            </div>
-          ))}
+          {faqs.map((faq, index) => {
+            const open = isFaqOpen(openFaqIndex, index);
+            const panelId = `pricing-faq-panel-${index}`;
+            const buttonId = `pricing-faq-button-${index}`;
+            return (
+              <div
+                key={faq.question}
+                className="faq-item"
+                style={{ borderBottom: '0.5px solid rgba(26,23,20,0.06)', padding: '0.35rem 0' }}
+              >
+                <button
+                  id={buttonId}
+                  type="button"
+                  aria-expanded={open}
+                  aria-controls={panelId}
+                  onClick={() => setOpenFaqIndex((prev) => toggleFaqOpen(prev, index))}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    background: 'none',
+                    border: 'none',
+                    padding: '0.75rem 0',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: 'Georgia, serif',
+                  }}
+                >
+                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714' }}>{faq.question}</span>
+                  <span
+                    aria-hidden
+                    style={{
+                      flexShrink: 0,
+                      fontSize: 18,
+                      color: '#C4956A',
+                      lineHeight: 1,
+                      transform: open ? 'rotate(45deg)' : 'none',
+                      transition: 'transform 160ms ease',
+                    }}
+                  >
+                    +
+                  </span>
+                </button>
+                {open ? (
+                  <div id={panelId} role="region" aria-labelledby={buttonId} style={{ padding: '0 0 0.85rem' }}>
+                    <p style={{ fontSize: '13px', color: '#8B8480', lineHeight: 1.7, margin: 0 }}>{faq.answer}</p>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </section>
       </div>
 
