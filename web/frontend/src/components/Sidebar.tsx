@@ -22,7 +22,7 @@ import { useTier } from '../context/TierContext';
 import { useAuth } from '../hooks/useAuth';
 import { useProfileModal } from '../context/ProfileModalContext';
 import track from '../utils/track';
-import { filterTurnsBySearchQuery } from '../lib/sidebarSearch';
+import { filterBySearchQuery, filterTurnsBySearchQuery } from '../lib/sidebarSearch';
 
 interface SidebarTurn {
   turn_id: string;
@@ -72,6 +72,7 @@ export function Sidebar({
   const { messagesRemaining, dailyLimit, tier, isFree } = useTier();
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [savedSearchQuery, setSavedSearchQuery] = useState('');
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
@@ -82,6 +83,7 @@ export function Sidebar({
   const menuLayerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const savedSearchInputRef = useRef<HTMLInputElement>(null);
 
   const reversedTurns = useMemo(
     () => [...turns].reverse().filter((turn) => !deletedTurnIds.has(turn.turn_id)),
@@ -98,6 +100,20 @@ export function Sidebar({
     }));
     return filterTurnsBySearchQuery(withTitles, searchQuery);
   }, [activeFilter, reversedTurns, searchQuery, customTitles]);
+
+  const reversedSaved = useMemo(() => [...savedItems].reverse(), [savedItems]);
+  const filteredSaved = useMemo(
+    () =>
+      filterBySearchQuery(reversedSaved, savedSearchQuery, (item) => [
+        item.one_liner,
+        item.prompt,
+        item.verdict,
+        item.persona_name,
+        AGENTS[item.agent_id]?.name,
+      ]),
+    [reversedSaved, savedSearchQuery],
+  );
+
   const usedPercent = dailyLimit > 0
     ? Math.min(((dailyLimit - messagesRemaining) / dailyLimit) * 100, 100)
     : 0;
@@ -567,46 +583,179 @@ export function Sidebar({
 
             {savedItems.length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
-                <div style={{ margin: '1.2rem 0 0.6rem' }}>
-                  <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6B6460' }}>Saved</p>
+                <div
+                  style={{
+                    margin: '1.2rem 0 0.6rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.12em',
+                      color: '#6B6460',
+                      margin: 0,
+                    }}
+                  >
+                    Saved
+                  </p>
+                  <span style={{ fontSize: 10, color: '#A89070' }}>
+                    {filteredSaved.length}
+                    {savedSearchQuery.trim() ? ` / ${savedItems.length}` : ''}
+                  </span>
+                </div>
+                <div style={{ marginBottom: 8, position: 'relative' }}>
+                  <input
+                    ref={savedSearchInputRef}
+                    type="search"
+                    value={savedSearchQuery}
+                    onChange={(e) => setSavedSearchQuery(e.target.value)}
+                    placeholder="Search saved…"
+                    aria-label="Search saved takes"
+                    autoComplete="off"
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      fontSize: 12,
+                      fontFamily: 'Georgia, serif',
+                      color: '#1A1714',
+                      background: '#FAF7F4',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 8,
+                      padding: '7px 28px 7px 10px',
+                      outline: 'none',
+                    }}
+                  />
+                  {savedSearchQuery ? (
+                    <button
+                      type="button"
+                      aria-label="Clear saved search"
+                      onClick={() => {
+                        setSavedSearchQuery('');
+                        savedSearchInputRef.current?.focus();
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: 6,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        color: '#A89070',
+                        lineHeight: 1,
+                        padding: 4,
+                      }}
+                    >
+                      ×
+                    </button>
+                  ) : null}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {[...savedItems].reverse().map((item) => {
-                    const agent = AGENTS[item.agent_id];
-                    return (
+                  {filteredSaved.length === 0 ? (
+                    <div style={{ padding: '0.75rem 0.25rem', textAlign: 'center' }}>
+                      <p style={{ fontSize: 12, color: '#6B6460', margin: '0 0 6px' }}>
+                        No saved takes match “{savedSearchQuery.trim()}”
+                      </p>
                       <button
-                        key={item.id}
                         type="button"
-                        onClick={() => onSavedItemClick(item)}
+                        onClick={() => {
+                          setSavedSearchQuery('');
+                          savedSearchInputRef.current?.focus();
+                        }}
                         style={{
-                          width: '100%',
-                          borderRadius: '10px',
-                          padding: '8px 10px',
-                          textAlign: 'left',
-                          transition: 'all 150ms ease',
-                          background: 'transparent',
+                          fontSize: 12,
+                          color: '#C4956A',
+                          background: 'none',
                           border: 'none',
                           cursor: 'pointer',
+                          fontFamily: 'Georgia, serif',
+                          textDecoration: 'underline',
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = '#F0EBE3'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
-                        <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: '8px' }}>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <AgentDot agentId={item.agent_id} size={5} />
-                              <span style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714' }}>{agent.name}</span>
-                            </div>
-                            <p style={{ marginTop: '4px', fontSize: '11px', lineHeight: '1.6', color: '#6B6460', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {item.one_liner.slice(0, 40)}
-                              {item.one_liner.length > 40 ? '…' : ''}
-                            </p>
-                          </div>
-                          <Bookmark style={{ width: '12px', height: '12px', flexShrink: 0, color: '#C4956A', fill: 'currentColor' }} />
-                        </div>
+                        Clear search
                       </button>
-                    );
-                  })}
+                    </div>
+                  ) : (
+                    filteredSaved.map((item) => {
+                      const agent = AGENTS[item.agent_id];
+                      const displayName =
+                        item.persona_name || agent?.name || item.agent_id || 'Mind';
+                      const line = (item.one_liner || '').trim();
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => onSavedItemClick(item)}
+                          style={{
+                            width: '100%',
+                            borderRadius: '10px',
+                            padding: '8px 10px',
+                            textAlign: 'left',
+                            transition: 'all 150ms ease',
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = '#F0EBE3')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'start',
+                              justifyContent: 'space-between',
+                              gap: '8px',
+                            }}
+                          >
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <AgentDot agentId={item.agent_id} size={5} />
+                                <span
+                                  style={{
+                                    fontSize: '11px',
+                                    fontWeight: 500,
+                                    color: '#1A1714',
+                                  }}
+                                >
+                                  {displayName}
+                                </span>
+                              </div>
+                              <p
+                                style={{
+                                  marginTop: '4px',
+                                  fontSize: '11px',
+                                  lineHeight: '1.6',
+                                  color: '#6B6460',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {line.slice(0, 40)}
+                                {line.length > 40 ? '…' : ''}
+                              </p>
+                            </div>
+                            <Bookmark
+                              style={{
+                                width: '12px',
+                                height: '12px',
+                                flexShrink: 0,
+                                color: '#C4956A',
+                                fill: 'currentColor',
+                              }}
+                            />
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             )}

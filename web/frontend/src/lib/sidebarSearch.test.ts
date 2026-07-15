@@ -36,4 +36,17 @@ describe('filterBySearchQuery', () => {
       filterBySearchQuery(history, 'FAQ', (h) => [h.task_text, h.title]).map((h) => h.task_id),
     ).toEqual(['b']);
   });
+
+  it('matches saved takes by one-liner or prompt', () => {
+    const saved = [
+      { id: 1, one_liner: 'Ship the smallest slice', prompt: 'Should I ship?' },
+      { id: 2, one_liner: 'Enough is peace', prompt: 'What is enough?' },
+    ];
+    expect(
+      filterBySearchQuery(saved, 'ship', (s) => [s.one_liner, s.prompt]).map((s) => s.id),
+    ).toEqual([1]);
+    expect(
+      filterBySearchQuery(saved, 'enough', (s) => [s.one_liner, s.prompt]).map((s) => s.id),
+    ).toEqual([2]);
+  });
 });

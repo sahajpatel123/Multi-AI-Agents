@@ -56,6 +56,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Search Arena sidebar recents by prompt or renamed title',
       '[NEW] Copy session Agent Leaderboard rankings as markdown',
       '[NEW] Search Agent Mode research history by title or task text',
+      '[NEW] Search saved Arena takes in the sidebar',
     ],
   },
   {
