@@ -9,6 +9,10 @@ import {
   type AgentWatchlistItem,
 } from '../api';
 import { useTier } from '../context/TierContext';
+import {
+  WATCHLIST_INTERVALS,
+  type WatchlistIntervalHours,
+} from '../lib/watchlistIntervals';
 
 function formatRelativePast(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -57,6 +61,7 @@ export function WatchlistPage() {
   const [activeCount, setActiveCount] = useState(0);
   const [activeCap, setActiveCap] = useState(10);
   const [error, setError] = useState<string | null>(null);
+  const [cadenceBusyId, setCadenceBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!canWatchlist) {
@@ -84,6 +89,7 @@ export function WatchlistPage() {
 
   const onToggle = async (item: AgentWatchlistItem) => {
     try {
+      setError(null);
       const updated = await patchAgentWatchlist(item.id, { is_active: !item.is_active });
       setItems((prev) => prev.map((x) => (x.id === item.id ? updated : x)));
       const data = await getAgentWatchlist();
@@ -93,8 +99,23 @@ export function WatchlistPage() {
     }
   };
 
+  const onCadence = async (item: AgentWatchlistItem, hours: WatchlistIntervalHours) => {
+    if (item.interval_hours === hours || cadenceBusyId === item.id) return;
+    setCadenceBusyId(item.id);
+    setError(null);
+    try {
+      const updated = await patchAgentWatchlist(item.id, { interval_hours: hours });
+      setItems((prev) => prev.map((x) => (x.id === item.id ? updated : x)));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not update schedule');
+    } finally {
+      setCadenceBusyId(null);
+    }
+  };
+
   const onDelete = async (id: string) => {
     try {
+      setError(null);
       await deleteAgentWatchlist(id);
       setItems((prev) => prev.filter((x) => x.id !== id));
       const data = await getAgentWatchlist();
@@ -284,6 +305,40 @@ export function WatchlistPage() {
                     <div style={{ fontSize: 12, color: '#8C7355', lineHeight: 1.5 }}>
                       Run {item.run_count} times · Last ran {formatRelativePast(item.last_run_at)} · Next:{' '}
                       {item.is_active ? formatRelativeFuture(item.next_run_at) : 'paused'}
+                    </div>
+                    <div
+                      role="radiogroup"
+                      aria-label="Re-check cadence"
+                      style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}
+                    >
+                      {WATCHLIST_INTERVALS.map(({ hours, label, short }) => {
+                        const selected = item.interval_hours === hours;
+                        const busy = cadenceBusyId === item.id;
+                        return (
+                          <button
+                            key={hours}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            aria-label={short}
+                            disabled={busy}
+                            onClick={() => void onCadence(item, hours)}
+                            style={{
+                              padding: '4px 10px',
+                              borderRadius: 999,
+                              border: selected ? 'none' : '0.5px solid #D4C4B0',
+                              cursor: busy ? 'wait' : 'pointer',
+                              fontSize: 11,
+                              fontFamily: 'Georgia, serif',
+                              background: selected ? '#C4956A' : 'transparent',
+                              color: selected ? '#FAF7F2' : '#8C7355',
+                              opacity: busy && !selected ? 0.55 : 1,
+                            }}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
                     </div>
                     {item.latest_task_id && item.latest_task ? (
                       <button

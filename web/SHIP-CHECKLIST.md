@@ -26,6 +26,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Post-auth redirect**: only same-app relative paths; default `/app`; open redirects rejected.
 - **Agent pipeline honesty**: marketing + Agent idle copy say **7 stages** (matches runtime status stages).
 - **Footer health**: re-probes `/api/health` every 45s via shared interpreter.
+- **Watchlist cadence**: change 24h / 3d / 7d in place on each card (no delete + re-add).
 - **Agent compose budget**: live character counter (max 2000, matches API).
 
 ## Required production environment
