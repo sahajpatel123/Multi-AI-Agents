@@ -47,6 +47,15 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
+# Precomputed bcrypt hash of a fixed throwaway value, using the same cost
+# factor as real password hashes. When a login targets a non-existent account
+# we still run one comparison against this so the response time does not reveal
+# whether the email is registered (mitigates username enumeration via timing).
+_DUMMY_PASSWORD_HASH = _bcrypt.hashpw(
+    _prehash("timing-equalization-placeholder"), _bcrypt.gensalt(rounds=12)
+).decode("utf-8")
+
+
 def create_access_token(user_id: int, email: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(seconds=ACCESS_TOKEN_MAX_AGE_SECONDS)
     payload = {
@@ -149,6 +158,10 @@ def create_user(db: Session, email: str, password: str, name: str = "") -> User:
 def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     user = get_user_by_email(db, email)
     if not user:
+        # Equalize timing: run a throwaway bcrypt comparison so an unregistered
+        # email takes about as long as a wrong password on a real account. This
+        # denies attackers a timing side-channel for username enumeration.
+        verify_password(password, _DUMMY_PASSWORD_HASH)
         return None
     if not verify_password(password, user.password_hash):
         return None
