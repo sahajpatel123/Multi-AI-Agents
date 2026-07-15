@@ -246,11 +246,35 @@ async def get_synthesis(
     force: bool = False,
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
+    current: Optional[User] = Depends(get_current_user_optional_orm),
 ) -> dict[str, Any]:
     room = db.query(Room).filter(Room.slug == slug).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     if force:
+        # Regenerating synthesis triggers an expensive LLM call (synthesise_room).
+        # Reading the cached synthesis stays open to match the shareable-link room
+        # model, but forcing a refresh must be restricted to authenticated room
+        # members — otherwise an anonymous caller who knows/guesses a slug could
+        # repeatedly hit ?force=true and burn API credits (cost amplification / DoS).
+        if current is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Authentication required to refresh synthesis",
+            )
+        is_member = (
+            db.query(RoomMember)
+            .filter(
+                RoomMember.room_id == room.id,
+                RoomMember.user_id == current.id,
+            )
+            .first()
+        )
+        if not is_member:
+            raise HTTPException(
+                status_code=403,
+                detail="Only room members can refresh synthesis",
+            )
         _schedule_synthesis(background_tasks, slug)
     return {
         "synthesis": room.synthesis,
