@@ -686,6 +686,8 @@ export function AgentPage() {
   const [agentAddonCheckout, setAgentAddonCheckout] = useState(false);
   const [task, setTask] = useState('');
   const [isRunning, setIsRunning] = useState(false);
+  /** Bumped to cancel in-flight poll loops (run / refine / bridge). */
+  const runGenerationRef = useRef(0);
   const [isRefining, setIsRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conduraCtaOpen, setConduraCtaOpen] = useState(false);
@@ -1275,10 +1277,16 @@ export function AgentPage() {
   }, [location.state, location.pathname, navigate, hasAgentAccess, authLoading]);
 
   const pollAgentTaskUntilDone = useCallback(async (taskId: string) => {
+    const generation = runGenerationRef.current;
     const maxAttempts = 60;
     for (let attempts = 0; attempts < maxAttempts; attempts++) {
+      if (runGenerationRef.current !== generation) {
+        // User stopped (or a newer run superseded this poll).
+        return;
+      }
       try {
         const statusData = await getAgentStatus(taskId);
+        if (runGenerationRef.current !== generation) return;
         const stages = statusData.stages || {};
 
         const next: Partial<Record<StageId, string>> = {};
@@ -1301,8 +1309,10 @@ export function AgentPage() {
 
         const st = String(statusData.status || '').toLowerCase();
         if (st === 'complete' || st === 'failed') {
+          if (runGenerationRef.current !== generation) return;
           try {
             const resultData = (await getAgentResult(taskId)) as AgentResult;
+            if (runGenerationRef.current !== generation) return;
             if (resultData) {
               setResult(resultData);
               setCompletedStages([...STAGE_ORDER]);
@@ -1317,6 +1327,7 @@ export function AgentPage() {
               }
             }
           } catch (resultErr) {
+            if (runGenerationRef.current !== generation) return;
             setError(resultErr instanceof Error ? resultErr.message : 'Could not load agent result');
           }
           setIsRunning(false);
@@ -1324,6 +1335,7 @@ export function AgentPage() {
           return;
         }
       } catch (pollErr) {
+        if (runGenerationRef.current !== generation) return;
         if (pollErr instanceof ApiError && (pollErr.status === 401 || pollErr.status === 403)) {
           setError(pollErr.message || 'Authentication required');
           setIsRunning(false);
@@ -1335,9 +1347,18 @@ export function AgentPage() {
       }
       await wait(3000);
     }
+    if (runGenerationRef.current !== generation) return;
     setError('Task timed out. Please try again.');
     setIsRunning(false);
     setIsRefining(false);
+  }, []);
+
+  const handleStopAgentWork = useCallback(() => {
+    runGenerationRef.current += 1;
+    setIsRunning(false);
+    setIsRefining(false);
+    setIsChallengingAnswer(false);
+    setToastMessage('Stopped.');
   }, []);
 
   useEffect(() => {
@@ -1388,6 +1409,7 @@ export function AgentPage() {
     );
     if (t.length < 10 || isRunning) return;
     if (selectedTemplate && !allTemplateSlotsFilled) return;
+    runGenerationRef.current += 1;
     setError(null);
     setBridgeMeta(null);
     if (isMobile) setSidebarOpen(false);
@@ -1479,6 +1501,7 @@ export function AgentPage() {
     if (!hasAgentAccess) return;
     const qs = multiTasks.slice(0, activeTaskCount).map((t) => t.trim());
     if (qs.length !== activeTaskCount || qs.some((q) => q.length < 10) || isRunning) return;
+    runGenerationRef.current += 1;
     try {
       sessionStorage.removeItem('pending_room_slug');
       sessionStorage.removeItem('pending_room_name');
@@ -1643,6 +1666,7 @@ export function AgentPage() {
       );
       return;
     }
+    runGenerationRef.current += 1;
     // Clear only after we know we'll send; restore on failure so the draft isn't lost.
     setFollowUp('');
     setIsRunning(true);
@@ -2131,6 +2155,7 @@ export function AgentPage() {
 
   const handleChallengeAnswer = useCallback(async () => {
     if (!result || isChallengingAnswer) return;
+    const generation = ++runGenerationRef.current;
     setChallengesVisible(true);
     setIsChallengingAnswer(true);
     setChallengeSectionError(null);
@@ -2141,8 +2166,10 @@ export function AgentPage() {
         plainAnswer,
         result.task || task,
       );
+      if (runGenerationRef.current !== generation) return;
       setChallenges(data.challenges || []);
     } catch (err) {
+      if (runGenerationRef.current !== generation) return;
       const msg =
         err instanceof ApiError
           ? err.message
@@ -2152,7 +2179,9 @@ export function AgentPage() {
       setChallengeSectionError(msg);
       setChallenges([]);
     } finally {
-      setIsChallengingAnswer(false);
+      if (runGenerationRef.current === generation) {
+        setIsChallengingAnswer(false);
+      }
     }
   }, [result, plainAnswerText, task, isChallengingAnswer]);
 
@@ -3442,9 +3471,33 @@ export function AgentPage() {
                 {agentProfileInitials(user)}
               </button>
             ) : null}
-            {isRunning ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, color: '#C4956A' }}>{currentStageLabel}</span>
+            {isRunning || isRefining || isChallengingAnswer ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 12, color: '#C4956A' }}>
+                  {isChallengingAnswer && !isRunning
+                    ? 'Challenging…'
+                    : isRefining && !isRunning
+                      ? 'Refining…'
+                      : currentStageLabel}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleStopAgentWork}
+                  title="Stop generating"
+                  aria-label="Stop generating"
+                  style={{
+                    fontSize: 12,
+                    fontFamily: 'Georgia, serif',
+                    color: '#993C1D',
+                    background: 'transparent',
+                    border: '0.5px solid rgba(153, 60, 29, 0.35)',
+                    borderRadius: 8,
+                    padding: '5px 10px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Stop
+                </button>
               </div>
             ) : null}
           </header>

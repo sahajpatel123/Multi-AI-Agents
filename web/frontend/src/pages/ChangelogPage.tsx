@@ -93,6 +93,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Arena prompt draft autosave — long prompts survive refresh and route changes (cleared once the pipeline accepts)',
       '[NEW] Agent compose drafts autosave (idle question + per-task follow-up)',
       '[NEW] Stop control on Arena while minds are generating or a focused chat is streaming',
+      '[NEW] Stop control on Agent Mode while research, refine, or challenge is running',
     ],
   },
   {
