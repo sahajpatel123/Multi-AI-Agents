@@ -35,5 +35,7 @@ describe('busy document titles', () => {
     expect(titleForArenaBusy('pipeline')).toContain('Starting');
     expect(titleForArenaBusy('streaming')).toContain('Four minds responding');
     expect(titleForArenaBusy('chat')).toContain('Mind replying');
+    expect(titleForArenaBusy('debate')).toContain('Debate in progress');
+    expect(titleForArenaBusy('discuss')).toContain('Discussing');
   });
 });

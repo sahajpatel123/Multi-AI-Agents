@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   agentWorkInFlight,
   arenaWorkInFlight,
+  debateWorkInFlight,
+  discussWorkInFlight,
   shouldWarnOnLeave,
 } from './busyNavigationGuard';
 
@@ -23,5 +25,13 @@ describe('busyNavigationGuard', () => {
     expect(agentWorkInFlight({ isRunning: true })).toBe(true);
     expect(agentWorkInFlight({ isRefining: true })).toBe(true);
     expect(agentWorkInFlight({ isChallengingAnswer: true })).toBe(true);
+  });
+
+  it('debate and discuss stream guards', () => {
+    expect(debateWorkInFlight('idle')).toBe(false);
+    expect(debateWorkInFlight('streaming')).toBe(true);
+    expect(debateWorkInFlight('done')).toBe(false);
+    expect(discussWorkInFlight(false)).toBe(false);
+    expect(discussWorkInFlight(true)).toBe(true);
   });
 });

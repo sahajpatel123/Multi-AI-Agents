@@ -22,6 +22,11 @@ import {
   clampToMax,
   DEBATE_INTERJECTION_MAX_CHARS,
 } from '../lib/charBudget';
+import { useBusyDocumentTitle } from '../hooks/useBusyDocumentTitle';
+import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
+import { debateWorkInFlight } from '../lib/busyNavigationGuard';
+import { titleForArenaBusy } from '../lib/documentTitle';
+import { scrollBehavior } from '../lib/motion';
 
 interface DebateModeProps {
   originalPrompt: string;
@@ -99,6 +104,9 @@ export function DebateMode({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const MAX_ROUNDS = debateMaxRounds(followUpUnlocked);
+  const debateBusy = debateWorkInFlight(phase);
+  useBusyNavigationGuard(debateBusy);
+  useBusyDocumentTitle(debateBusy, titleForArenaBusy('debate'), '/app');
 
   useEffect(() => {
     return () => {
@@ -128,7 +136,7 @@ export function DebateMode({
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
-      threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      threadEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
     }, 100);
   }, []);
 

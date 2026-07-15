@@ -78,10 +78,12 @@ export function titleForAgentBusy(opts: {
  * Live tab title while the Arena panel is producing takes.
  */
 export function titleForArenaBusy(
-  kind: 'pipeline' | 'streaming' | 'chat' = 'streaming',
+  kind: 'pipeline' | 'streaming' | 'chat' | 'debate' | 'discuss' = 'streaming',
 ): string {
   if (kind === 'pipeline') return `Starting… · Arena panel · ${BRAND}`;
   if (kind === 'chat') return `Mind replying… · Arena panel · ${BRAND}`;
+  if (kind === 'debate') return `Debate in progress… · Arena panel · ${BRAND}`;
+  if (kind === 'discuss') return `Discussing… · Arena panel · ${BRAND}`;
   return `Four minds responding… · Arena panel · ${BRAND}`;
 }
 

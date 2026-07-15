@@ -14,6 +14,11 @@ import {
   clampToMax,
   DISCUSS_MESSAGE_MAX_CHARS,
 } from '../lib/charBudget';
+import { useBusyDocumentTitle } from '../hooks/useBusyDocumentTitle';
+import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
+import { discussWorkInFlight } from '../lib/busyNavigationGuard';
+import { titleForArenaBusy } from '../lib/documentTitle';
+import { scrollBehavior } from '../lib/motion';
 
 interface DiscussModeProps {
   originalPrompt: string;
@@ -62,6 +67,9 @@ export function DiscussMode({
   const abortRef = useRef<AbortController | null>(null);
 
   const currentHistory = histories[activeAgent.response.agent_id] || [];
+  const discussBusy = discussWorkInFlight(isStreaming);
+  useBusyNavigationGuard(discussBusy);
+  useBusyDocumentTitle(discussBusy, titleForArenaBusy('discuss'), '/app');
 
   const flushTokens = useCallback(() => {
     setStreamingText(tokenBuffer.current);
@@ -69,7 +77,7 @@ export function DiscussMode({
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
     }, 50);
   }, []);
 

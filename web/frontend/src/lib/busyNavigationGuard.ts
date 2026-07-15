@@ -31,3 +31,13 @@ export function agentWorkInFlight(opts: {
 }): boolean {
   return Boolean(opts.isRunning || opts.isRefining || opts.isChallengingAnswer);
 }
+
+/** Debate colosseum round stream. */
+export function debateWorkInFlight(phase: string | undefined | null): boolean {
+  return phase === 'streaming';
+}
+
+/** One-on-one Discuss reply stream. */
+export function discussWorkInFlight(isStreaming: boolean): boolean {
+  return Boolean(isStreaming);
+}

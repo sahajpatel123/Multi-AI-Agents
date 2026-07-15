@@ -60,6 +60,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Share landing actions**: public `/share` can Copy take, Copy link, and system Share… when available.
 - **Busy leave guard**: beforeunload warns during Arena streams and Agent run/refine/challenge.
 - **Busy tab titles**: live document.title while Arena streams / Agent pipeline stages run.
+- **Debate / Discuss streams**: beforeunload + busy tab titles; scroll-into-view honors reduced motion.
 
 ## Required production environment
 
