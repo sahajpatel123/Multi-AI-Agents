@@ -15,6 +15,10 @@ from slowapi.errors import RateLimitExceeded
 
 from arena.config import get_settings
 from arena.core.dependencies import get_current_user_required
+from arena.core.request_size import (
+    DEFAULT_MAX_BODY_BYTES,
+    RequestSizeLimitMiddleware,
+)
 from arena.core.seed_personas import seed_persona_library
 from arena.core.observability import get_health_data, get_health_data_detailed, setup_logging
 from arena.core.rate_limits import client_ip, rate_limiter
@@ -48,54 +52,6 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────────────────────
 # Security middleware
 # ──────────────────────────────────────────────────────────────
-
-class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
-    """Reject requests whose Content-Length exceeds max_size bytes."""
-
-    def __init__(self, app, max_size: int = 10 * 1024):
-        super().__init__(app)
-        self.max_size = max_size
-
-    async def dispatch(self, request: Request, call_next):
-        path = request.url.path.rstrip("/")
-        # Razorpay webhooks can exceed the default API body limit
-        if path.endswith("/api/payments/webhook"):
-            return await call_next(request)
-        # Skip size check for OPTIONS preflight requests
-        if request.method == "OPTIONS":
-            return await call_next(request)
-        max_allowed = self.max_size
-        if path.endswith("/api/agent/upload"):
-            max_allowed = 11 * 1024 * 1024  # 10MB file + multipart overhead
-        content_length = request.headers.get("content-length")
-        if content_length:
-            try:
-                length = int(content_length)
-            except (ValueError, TypeError):
-                # Malformed/duplicated Content-Length (e.g. header folding)
-                # must not crash the middleware with a 500 — reject cleanly.
-                return JSONResponse(
-                    status_code=400,
-                    content={
-                        "error": "invalid_content_length",
-                        "message": "Malformed Content-Length header.",
-                    },
-                )
-            if length > max_allowed:
-                msg = (
-                    "File too large (max 10MB)"
-                    if path.endswith("/api/agent/upload")
-                    else "Request too large. Maximum 10KB allowed."
-                )
-                return JSONResponse(
-                    status_code=413,
-                    content={
-                        "error": "payload_too_large",
-                        "message": msg,
-                    },
-                )
-        return await call_next(request)
-
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to every response."""
@@ -277,7 +233,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(GlobalRateLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
-    app.add_middleware(RequestSizeLimitMiddleware, max_size=10 * 1024)
+    app.add_middleware(RequestSizeLimitMiddleware, max_size=DEFAULT_MAX_BODY_BYTES)
 
     # ── Routers ───────────────────────────────────────────────
     app.include_router(auth_router)

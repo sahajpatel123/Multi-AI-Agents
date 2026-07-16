@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from arena.core.dependencies import get_current_user_required
 from arena.core.input_validation import sanitize_model_html, sanitize_model_text
 from arena.core.mcp_runtime import search_integration_api
+from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.token_crypto import encrypt_token, get_fernet
 from arena.database import get_db
 from arena.db_models import MCPIntegration
@@ -68,13 +69,27 @@ def _integration_public(row: MCPIntegration) -> dict:
 
 class ManualConnectBody(BaseModel):
     service: str
-    access_token: str = Field(..., min_length=8)
+    # Cap token size so a client cannot force multi-MB ciphertext into DB.
+    access_token: str = Field(..., min_length=8, max_length=8192)
     display_name: str = Field(..., min_length=1, max_length=128)
 
     @field_validator("display_name")
     @classmethod
     def validate_display_name(cls, v: str) -> str:
         return sanitize_model_html(v, max_length=100, field_name="display_name")
+
+    @field_validator("access_token")
+    @classmethod
+    def validate_access_token(cls, v: str) -> str:
+        token = (v or "").strip()
+        if len(token) < 8:
+            raise ValueError("access_token is too short")
+        if len(token) > 8192:
+            raise ValueError("access_token is too long")
+        # Reject control characters that never belong in API tokens.
+        if any(ord(c) < 32 for c in token):
+            raise ValueError("access_token contains invalid characters")
+        return token
 
 
 class SearchBody(BaseModel):
@@ -106,6 +121,13 @@ async def connect_manual(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    enforce_user_rate_limit(
+        user.id,
+        scope="mcp_connect",
+        limit=20,
+        window_seconds=3600,
+        message="Too many integration connect attempts. Please try again later.",
+    )
     _ensure_encryption()
     svc = body.service.strip().lower()
     if svc not in VALID_SERVICES:
@@ -170,6 +192,14 @@ async def search_integration(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    # Bound outbound vendor calls (SSRF-allowlisted but still cost-bearing).
+    enforce_user_rate_limit(
+        user.id,
+        scope="mcp_search",
+        limit=60,
+        window_seconds=3600,
+        message="Too many integration searches. Please try again later.",
+    )
     row = (
         db.query(MCPIntegration)
         .filter(
