@@ -13,7 +13,13 @@ import { prefersReducedMotion } from '../lib/motion';
 interface ShareDropdownProps {
   agentId: string;
   agentName: string;
+  /** Short teaser for social channels (X / WhatsApp / native share). */
   oneLiner: string;
+  /**
+   * Full take body for the public /share URL and “Copy take” text.
+   * Falls back to `oneLiner` when omitted.
+   */
+  takeBody?: string;
   prompt: string;
   isOpen: boolean;
   onClose: () => void;
@@ -24,6 +30,7 @@ export function ShareDropdown({
   agentId,
   agentName,
   oneLiner,
+  takeBody,
   prompt,
   isOpen,
   onClose,
@@ -84,10 +91,12 @@ export function ShareDropdown({
 
   if (!isOpen) return null;
 
+  const fullTake = (takeBody || oneLiner || '').trim() || oneLiner;
+
   const shareUrl = buildShareUrl({
     agentId,
     prompt,
-    response: oneLiner,
+    response: fullTake,
   });
 
   const handleNativeShare = async () => {
@@ -119,7 +128,7 @@ export function ShareDropdown({
   const handleCopyText = async () => {
     const textContent = `${agentName} · Arena
 ─────────────────────
-"${oneLiner}"
+${fullTake}
 
 ${shareUrl}`;
     setCopyError(null);

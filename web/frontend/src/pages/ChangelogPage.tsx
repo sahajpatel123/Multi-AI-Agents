@@ -168,6 +168,8 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Room group synthesis renders as markdown with reading time + section outline',
       '[IMPROVED] Markdown downloads include today’s date so re-exports do not overwrite each other',
       '[IMPROVED] Pricing FAQ: Agent Mode, Watchlist vs Saved, and calibration explained',
+      '[IMPROVED] Arena copy/share uses the full take (not only the one-liner) as markdown',
+      '[IMPROVED] Profile recent ratings show relative “Rated …” timestamps',
     ],
   },
   {

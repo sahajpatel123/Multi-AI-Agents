@@ -29,6 +29,7 @@ import {
 import { copyToClipboard } from './lib/clipboard';
 import { downloadMarkdownFile } from './lib/downloadTextFile';
 import { formatArenaExport } from './lib/arenaExport';
+import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
 import { isScrollNearBottom, shouldAutoScrollChat } from './lib/chatScroll';
 import { scrollBehavior } from './lib/motion';
 import {
@@ -382,17 +383,48 @@ function App() {
   const handleCopyResponse = useCallback(async (scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
     const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
-    await copyText(scoredAgent.response.one_liner);
+    const agent =
+      getPersonaForAgentId(scoredAgent.response.agent_id) || AGENTS[scoredAgent.response.agent_id];
+    const md = formatArenaTakeClipboard({
+      agentName: agent?.name || scoredAgent.response.agent_id,
+      oneLiner: scoredAgent.response.one_liner,
+      verdict: scoredAgent.response.verdict,
+      prompt: response?.prompt || currentPrompt,
+    });
+    await copyText(md);
     queueFeedbackReset('copy', key);
-  }, [activeTurnId, copyText, getResponseKey, queueFeedbackReset]);
+  }, [
+    activeTurnId,
+    copyText,
+    currentPrompt,
+    getPersonaForAgentId,
+    getResponseKey,
+    queueFeedbackReset,
+    response?.prompt,
+  ]);
 
   const handleShareResponse = useCallback(async (scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
     const key = getResponseKey(activeTurnId, scoredAgent.response.agent_id);
-    const agent = getPersonaForAgentId(scoredAgent.response.agent_id) || AGENTS[scoredAgent.response.agent_id];
-    await copyText(`${agent.name} on Arena:\n${scoredAgent.response.one_liner}\n\narena.ai`);
+    const agent =
+      getPersonaForAgentId(scoredAgent.response.agent_id) || AGENTS[scoredAgent.response.agent_id];
+    const md = formatArenaTakeClipboard({
+      agentName: agent?.name || scoredAgent.response.agent_id,
+      oneLiner: scoredAgent.response.one_liner,
+      verdict: scoredAgent.response.verdict,
+      prompt: response?.prompt || currentPrompt,
+    });
+    await copyText(md);
     queueFeedbackReset('share', key);
-  }, [activeTurnId, copyText, getPersonaForAgentId, getResponseKey, queueFeedbackReset]);
+  }, [
+    activeTurnId,
+    copyText,
+    currentPrompt,
+    getPersonaForAgentId,
+    getResponseKey,
+    queueFeedbackReset,
+    response?.prompt,
+  ]);
 
   const buildArenaComparisonMarkdown = useCallback(() => {
     if (!response) return null;

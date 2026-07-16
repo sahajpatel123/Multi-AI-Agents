@@ -1611,6 +1611,16 @@ export function ProfileModal() {
                                 “{item.note}”
                               </p>
                             ) : null}
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: '#A89070',
+                                marginTop: 4,
+                              }}
+                              title={item.created_at ? new Date(item.created_at).toLocaleString() : undefined}
+                            >
+                              Rated {formatRelativeConnected(item.created_at)}
+                            </div>
                           </div>
                         </li>
                       );

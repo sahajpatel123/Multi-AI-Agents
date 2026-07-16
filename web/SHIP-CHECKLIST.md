@@ -174,6 +174,8 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Room synthesis markdown**: group synthesis body uses AgentAnswerMarkdown (reading time + outline when multi-section).
 - **Dated downloads**: `.md` exports append `yyyy-mm-dd` to the filename by default (stable stems still available via `{ dated: false }`).
 - **Pricing FAQ depth**: Agent Mode pipeline, Watchlist vs Saved, and calibration confidence explained for buyers.
+- **Arena full-take copy**: card Copy pastes full verdict as markdown (question + take); share links/copy use full body (social teasers stay short).
+- **Profile rating timestamps**: recent Agent ratings show relative “Rated …” times with absolute title tooltips.
 
 ## Required production environment
 

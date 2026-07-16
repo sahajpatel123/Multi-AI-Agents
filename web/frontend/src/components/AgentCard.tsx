@@ -14,6 +14,7 @@ import {
 import { ScoredAgent, AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
 import { ShareDropdown } from './ShareDropdown';
+import { pickArenaTakeBody, pickArenaTakeTeaser } from '../lib/arenaTakeClipboard';
 import track from '../utils/track';
 import {
   agentCardLoadingAnimation,
@@ -493,6 +494,7 @@ export function AgentCard({
               }}
               active={copyFeedbackActive}
               activeColor="#C4956A"
+              ariaLabel="Copy full take as markdown"
             />
             <ActionButton
               icon={<ThumbsUp style={{ width: '15px', height: '15px', fill: isLiked ? 'currentColor' : 'none' }} />}
@@ -610,8 +612,16 @@ export function AgentCard({
       {response && (
         <ShareDropdown
           agentId={agentId}
-          agentName={agentConfig.name}
-          oneLiner={response.one_liner}
+          agentName={resolvedDisplay.name}
+          oneLiner={pickArenaTakeTeaser({
+            oneLiner: response.one_liner,
+            verdict: response.verdict,
+            maxLen: 280,
+          })}
+          takeBody={pickArenaTakeBody({
+            oneLiner: response.one_liner,
+            verdict: response.verdict,
+          })}
           prompt={prompt}
           isOpen={isShareDropdownOpen}
           onClose={() => setIsShareDropdownOpen(false)}
