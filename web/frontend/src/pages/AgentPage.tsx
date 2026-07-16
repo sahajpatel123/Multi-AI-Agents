@@ -118,6 +118,13 @@ import {
   filterAgentRoomsByOccupancy,
   type AgentRoomsOccupancyFilter,
 } from '../lib/agentRoomsOccupancyFilter';
+import {
+  AGENT_ROOMS_MEMBERSHIP_OPTIONS,
+  agentRoomsMembershipFilterUseful,
+  agentRoomsMembershipLabel,
+  filterAgentRoomsByMembership,
+  type AgentRoomsMembershipFilter,
+} from '../lib/agentRoomsMembershipFilter';
 import { formatAgentRoomsExport } from '../lib/agentRoomsExport';
 import {
   AGENT_ROOMS_SORT_OPTIONS,
@@ -872,6 +879,8 @@ export function AgentPage() {
     useState<AgentRoomsActivityFilter>('all');
   const [roomsOccupancyFilter, setRoomsOccupancyFilter] =
     useState<AgentRoomsOccupancyFilter>('all');
+  const [roomsMembershipFilter, setRoomsMembershipFilter] =
+    useState<AgentRoomsMembershipFilter>('all');
   const roomsSearchRef = useRef<HTMLInputElement | null>(null);
   const [copyRoomLinkFeedback, setCopyRoomLinkFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [shareRoomInviteStatus, setShareRoomInviteStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
@@ -2036,19 +2045,35 @@ export function AgentPage() {
     }));
     const byActivity = filterAgentRoomsByActivity(annotated, roomsActivityFilter);
     const byOccupancy = filterAgentRoomsByOccupancy(byActivity, roomsOccupancyFilter);
-    const searched = filterBySearchQuery(byOccupancy, roomsSearchQuery, (r) => [
+    const byMembership = filterAgentRoomsByMembership(byOccupancy, roomsMembershipFilter);
+    const searched = filterBySearchQuery(byMembership, roomsSearchQuery, (r) => [
       r.name,
       r.slug,
       r.topic,
       r.description,
     ]);
     return sortAgentRooms(searched, roomsSort);
-  }, [myRooms, roomsSearchQuery, roomsSort, roomsActivityFilter, roomsOccupancyFilter]);
+  }, [
+    myRooms,
+    roomsSearchQuery,
+    roomsSort,
+    roomsActivityFilter,
+    roomsOccupancyFilter,
+    roomsMembershipFilter,
+  ]);
 
   const roomsOccupancyFilterUseful = useMemo(
     () =>
       agentRoomsOccupancyFilterUseful(
         myRooms.map((r: any) => ({ taskCount: r.task_count })),
+      ),
+    [myRooms],
+  );
+
+  const roomsMembershipFilterUseful = useMemo(
+    () =>
+      agentRoomsMembershipFilterUseful(
+        myRooms.map((r: any) => ({ memberCount: r.member_count })),
       ),
     [myRooms],
   );
@@ -2078,6 +2103,9 @@ export function AgentPage() {
     }
     if (roomsOccupancyFilter !== 'all') {
       filterBits.push(`occupancy: ${agentRoomsOccupancyLabel(roomsOccupancyFilter)}`);
+    }
+    if (roomsMembershipFilter !== 'all') {
+      filterBits.push(`membership: ${agentRoomsMembershipLabel(roomsMembershipFilter)}`);
     }
     if (q) filterBits.push(`search: “${q}”`);
     if (roomsSort !== 'recent') filterBits.push(`sort: ${agentRoomsSortLabel(roomsSort)}`);
@@ -3195,7 +3223,8 @@ export function AgentPage() {
                       {filteredMyRooms.length}
                       {roomsSearchQuery.trim() ||
                       roomsActivityFilter !== 'all' ||
-                      roomsOccupancyFilter !== 'all'
+                      roomsOccupancyFilter !== 'all' ||
+                      roomsMembershipFilter !== 'all'
                         ? ` / ${myRooms.length}`
                         : ''}
                     </span>
@@ -3361,6 +3390,46 @@ export function AgentPage() {
                             key={opt.value}
                             type="button"
                             onClick={() => setRoomsOccupancyFilter(opt.value)}
+                            aria-pressed={selected}
+                            style={{
+                              padding: '3px 9px',
+                              borderRadius: 999,
+                              border: selected
+                                ? '0.5px solid #C4956A'
+                                : '0.5px solid #D4C4B0',
+                              background: selected ? '#F0E6DA' : 'transparent',
+                              color: selected ? '#4A3728' : '#8C7355',
+                              fontSize: 10,
+                              fontFamily: 'Georgia, serif',
+                              cursor: 'pointer',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {roomsMembershipFilterUseful ? (
+                    <div
+                      role="group"
+                      aria-label="Filter rooms by membership size"
+                      style={{
+                        display: 'flex',
+                        gap: 6,
+                        marginBottom: 8,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {AGENT_ROOMS_MEMBERSHIP_OPTIONS.map((opt) => {
+                        const selected = roomsMembershipFilter === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setRoomsMembershipFilter(opt.value)}
                             aria-pressed={selected}
                             style={{
                               padding: '3px 9px',
