@@ -28,6 +28,7 @@ import { debateWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForArenaBusy } from '../lib/documentTitle';
 import { prefersReducedMotion, scrollBehavior } from '../lib/motion';
 import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatDebateExport } from '../lib/threadExport';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 
@@ -104,6 +105,7 @@ export function DebateMode({
   /** After round 3, user may unlock one bonus follow-up round (max 4). */
   const [followUpUnlocked, setFollowUpUnlocked] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
   const threadEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -117,6 +119,12 @@ export function DebateMode({
     const t = window.setTimeout(() => setCopyFeedback('idle'), 1600);
     return () => window.clearTimeout(t);
   }, [copyFeedback]);
+
+  useEffect(() => {
+    if (downloadFeedback === 'idle') return;
+    const t = window.setTimeout(() => setDownloadFeedback('idle'), 1600);
+    return () => window.clearTimeout(t);
+  }, [downloadFeedback]);
 
   useEffect(() => {
     return () => {
@@ -150,8 +158,8 @@ export function DebateMode({
     (id) => id !== challengedAgent.response.agent_id
   );
 
-  const handleCopyDebate = async () => {
-    const md = formatDebateExport({
+  const buildDebateMarkdown = () =>
+    formatDebateExport({
       originalPrompt,
       challengedAgentName: challengedConfig.name,
       challengedOneLiner: challengedAgent.response.one_liner,
@@ -165,8 +173,18 @@ export function DebateMode({
         })),
       })),
     });
+
+  const handleCopyDebate = async () => {
+    const md = buildDebateMarkdown();
     const ok = await copyToClipboard(md);
     setCopyFeedback(ok ? 'copied' : 'failed');
+  };
+
+  const handleDownloadDebate = () => {
+    const md = buildDebateMarkdown();
+    const stem = `debate-${challengedConfig.name || 'transcript'}`;
+    const ok = downloadMarkdownFile(md, stem);
+    setDownloadFeedback(ok ? 'done' : 'failed');
   };
 
   const flushTokens = useCallback(() => {
@@ -622,9 +640,11 @@ export function DebateMode({
               color:
                 copyFeedback === 'failed'
                   ? '#993C1D'
-                  : phase === 'streaming' || rounds.length === 0
-                    ? '#A89070'
-                    : '#C4956A',
+                  : copyFeedback === 'copied'
+                    ? '#5A8C6A'
+                    : phase === 'streaming' || rounds.length === 0
+                      ? '#A89070'
+                      : '#C4956A',
               background: 'none',
               border: '0.5px solid #E0D8D0',
               borderRadius: 999,
@@ -640,6 +660,41 @@ export function DebateMode({
               : copyFeedback === 'failed'
                 ? 'Copy failed'
                 : 'Copy debate'}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDownloadDebate()}
+            disabled={phase === 'streaming' || rounds.length === 0}
+            title={
+              rounds.length === 0
+                ? 'Start a debate round to download the transcript'
+                : 'Download debate transcript as markdown'
+            }
+            style={{
+              fontSize: 12,
+              color:
+                downloadFeedback === 'failed'
+                  ? '#993C1D'
+                  : downloadFeedback === 'done'
+                    ? '#5A8C6A'
+                    : phase === 'streaming' || rounds.length === 0
+                      ? '#A89070'
+                      : '#C4956A',
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 999,
+              padding: '4px 10px',
+              cursor:
+                phase === 'streaming' || rounds.length === 0 ? 'not-allowed' : 'pointer',
+              fontFamily: 'Georgia, serif',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {downloadFeedback === 'done'
+              ? 'Downloaded'
+              : downloadFeedback === 'failed'
+                ? 'Download failed'
+                : 'Download .md'}
           </button>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '96px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>

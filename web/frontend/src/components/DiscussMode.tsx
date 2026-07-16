@@ -20,6 +20,7 @@ import { discussWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForArenaBusy } from '../lib/documentTitle';
 import { prefersReducedMotion, scrollBehavior } from '../lib/motion';
 import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatDiscussExport } from '../lib/threadExport';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 
@@ -63,6 +64,7 @@ export function DiscussMode({
   const [streamingText, setStreamingText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
 
   const tokenBuffer = useRef('');
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -81,7 +83,13 @@ export function DiscussMode({
     return () => window.clearTimeout(t);
   }, [copyFeedback]);
 
-  const handleCopyThread = async () => {
+  useEffect(() => {
+    if (downloadFeedback === 'idle') return;
+    const t = window.setTimeout(() => setDownloadFeedback('idle'), 1600);
+    return () => window.clearTimeout(t);
+  }, [downloadFeedback]);
+
+  const buildThreadMarkdown = () => {
     const seed: DiscussChatMessage[] =
       currentHistory.length > 0
         ? currentHistory
@@ -92,13 +100,24 @@ export function DiscussMode({
               timestamp: new Date().toISOString(),
             },
           ];
-    const md = formatDiscussExport({
+    return formatDiscussExport({
       agentName: agentConfig.name,
       originalPrompt,
       messages: seed.map((m) => ({ role: m.role, content: m.content })),
     });
+  };
+
+  const handleCopyThread = async () => {
+    const md = buildThreadMarkdown();
     const ok = await copyToClipboard(md);
     setCopyFeedback(ok ? 'copied' : 'failed');
+  };
+
+  const handleDownloadThread = () => {
+    const md = buildThreadMarkdown();
+    const stem = `discuss-${agentConfig.name || 'thread'}`;
+    const ok = downloadMarkdownFile(md, stem);
+    setDownloadFeedback(ok ? 'done' : 'failed');
   };
 
   const flushTokens = useCallback(() => {
@@ -398,7 +417,12 @@ export function DiscussMode({
               style={{
                 marginLeft: 4,
                 fontSize: 12,
-                color: copyFeedback === 'failed' ? '#993C1D' : '#C4956A',
+                color:
+                  copyFeedback === 'failed'
+                    ? '#993C1D'
+                    : copyFeedback === 'copied'
+                      ? '#5A8C6A'
+                      : '#C4956A',
                 background: 'none',
                 border: '0.5px solid #E0D8D0',
                 borderRadius: 999,
@@ -414,11 +438,41 @@ export function DiscussMode({
                   ? 'Copy failed'
                   : 'Copy thread'}
             </button>
+            <button
+              type="button"
+              onClick={() => handleDownloadThread()}
+              disabled={isStreaming}
+              title="Download conversation as markdown"
+              style={{
+                fontSize: 12,
+                color:
+                  downloadFeedback === 'failed'
+                    ? '#993C1D'
+                    : downloadFeedback === 'done'
+                      ? '#5A8C6A'
+                      : '#C4956A',
+                background: 'none',
+                border: '0.5px solid #E0D8D0',
+                borderRadius: 999,
+                padding: '4px 10px',
+                cursor: isStreaming ? 'not-allowed' : 'pointer',
+                opacity: isStreaming ? 0.5 : 1,
+                fontFamily: 'Georgia, serif',
+              }}
+            >
+              {downloadFeedback === 'done'
+                ? 'Downloaded'
+                : downloadFeedback === 'failed'
+                  ? 'Download failed'
+                  : 'Download .md'}
+            </button>
           </div>
         </div>
-        {copyFeedback === 'failed' ? (
+        {copyFeedback === 'failed' || downloadFeedback === 'failed' ? (
           <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: '0 0 8px' }}>
-            Could not copy — try again or select text manually.
+            {copyFeedback === 'failed'
+              ? 'Could not copy — try again or select text manually.'
+              : 'Could not download — try Copy thread instead.'}
           </p>
         ) : null}
 

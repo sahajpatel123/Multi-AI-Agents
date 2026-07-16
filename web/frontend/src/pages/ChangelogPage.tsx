@@ -114,6 +114,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Answer Evolution: related-run timeline with snippets and open-prior-run links',
       '[IMPROVED] Perspective Drift and Leaderboard: download session analysis as .md (copy parity)',
       '[IMPROVED] Room synthesis/board and Watchlist: download current view as .md',
+      '[IMPROVED] Discuss thread and Debate transcript: download as .md (copy parity)',
     ],
   },
   {
