@@ -37,6 +37,7 @@ from arena.core.feedback_calibrator import (
     get_answer_feedback_distribution,
     get_recent_feedback,
 )
+from arena.core.agent_memory import get_watchlist_history
 from arena.core.report_generator import (
     generate_orchestration_report_html,
     generate_report_html,
@@ -1608,6 +1609,32 @@ async def delete_watchlist_item(
     db.delete(item)
     db.commit()
     return JSONResponse(content={"success": True})
+
+
+@router.get("/watchlist/{item_id}/history")
+async def get_watchlist_item_history(
+    item_id: str,
+    limit: int = 50,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Run history for a single watchlist item with aggregate stats.
+
+    Each item row is one spawned AgentTask (one re-check), newest
+    first. Stats summarize scored runs only — `scored_count` lets
+    the UI distinguish \"3 runs, 2 scored\" from \"2 runs, 2 scored\".
+    Limit is clamped to [1, 200].
+    """
+    _ensure_agent_watchlist_access(user)
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Watchlist item not found")
+    payload = get_watchlist_history(db, user.id, item.id, limit=limit)
+    return JSONResponse(content={"success": True, **payload})
 
 
 @router.get("/history")

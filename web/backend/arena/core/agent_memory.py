@@ -436,3 +436,54 @@ def get_user_task_history(
         "per_page": per_page,
         "total_pages": (total + per_page - 1) // per_page if per_page else 0,
     }
+
+
+def get_watchlist_history(
+    db: Session,
+    user_id: int,
+    watchlist_item_id: str,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """All spawned runs of a single watchlist item, newest first, with aggregate stats.
+
+    Returns a dict shaped for the Watchlist history surface:
+      - items: list of {task_id, title, final_score, final_confidence,
+        created_at, user_feedback} newest first
+      - stats: {count, avg_score, min_score, max_score, scored_count}
+    The stats ignore unscored rows for min/avg/max but report the
+    total run count separately so the UI can say \"3 runs, 2 scored\".
+    """
+    cap = max(1, min(int(limit), 200))
+    rows = (
+        db.query(AgentTask)
+        .filter(
+            AgentTask.user_id == user_id,
+            AgentTask.watchlist_item_id == watchlist_item_id,
+        )
+        .order_by(AgentTask.created_at.desc())
+        .limit(cap)
+        .all()
+    )
+
+    items = [
+        {
+            "task_id": t.task_id,
+            "title": t.title,
+            "final_score": t.final_score,
+            "final_confidence": t.final_confidence,
+            "user_feedback": t.user_feedback,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+        }
+        for t in rows
+    ]
+
+    scored = [t.final_score for t in rows if isinstance(t.final_score, (int, float))]
+    stats = {
+        "count": len(rows),
+        "scored_count": len(scored),
+        "avg_score": round(sum(scored) / len(scored), 1) if scored else None,
+        "min_score": min(scored) if scored else None,
+        "max_score": max(scored) if scored else None,
+    }
+
+    return {"items": items, "stats": stats}
