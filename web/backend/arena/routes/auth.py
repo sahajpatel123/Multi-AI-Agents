@@ -316,34 +316,36 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
     # as they want.
     #
     # Rotation closes the gap: every successful /refresh blacklists
-    # the OLD refresh token before returning the new pair. The
-    # legitimate client immediately stores the new refresh token and
-    # drops the old one; an attacker replaying the captured old
-    # token after the legit user refreshes will get 401.
-    #
-    # Plain failure modes (bad signature, expired, wrong type) and
-    # explicit revocations (logout) DO blacklist the token because
-    # the early-return / raise-401 path doesn't reach this rotation;
-    # that mirrors the design assumption that the blacklist already
-    # holds revoked or invalid tokens and there's nothing left to
-    # consume.
+    # the OLD refresh token BEFORE returning the new pair. Fail closed:
+    # if we cannot record the revocation (missing exp, DB error), we
+    # refuse to mint a new pair. Issuing while the old token stays
+    # valid would leave two live refresh tokens — the exact dual-
+    # session hole rotation is meant to close.
     refresh_exp = _payload_exp_seconds(refresh_token)
-    if refresh_exp is not None:
-        try:
-            token_blacklist.add(
-                refresh_token,
-                expires_at=_epoch_to_naive(refresh_exp),
-                db=db,
-                reason="refresh_rotation",
-            )
-        except Exception as _exc:
-            # Failure to blacklist the old token is a security issue
-            # but not a fatal one — the new pair still issues. Log
-            # loudly so this is visible in monitoring.
-            logger.error(
-                "Failed to blacklist rotated refresh token for user=%s: %s",
-                user.id, _exc,
-            )
+    if refresh_exp is None:
+        # Decoded payload without a usable exp cannot be TTL'd on the
+        # blacklist; reject rather than rotate with an immortal row
+        # or skip blacklisting entirely.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+    try:
+        token_blacklist.add(
+            refresh_token,
+            expires_at=_epoch_to_naive(refresh_exp),
+            db=db,
+            reason="refresh_rotation",
+        )
+    except Exception as _exc:
+        logger.error(
+            "Failed to blacklist rotated refresh token for user=%s: %s",
+            user.id, _exc,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to complete token rotation. Please try again.",
+        ) from _exc
 
     new_access = create_access_token(user.id, user.email)
     new_refresh = create_refresh_token(user.id, user.email)

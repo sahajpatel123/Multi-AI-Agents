@@ -83,7 +83,7 @@ jobs:
           import re, sys
           REQUIRED = {
               'fastapi':       '0.139.2',
-              'pyasn1':        '0.6.3',
+              'pyasn1':        '0.6.4',
               'python-jose':   '3.5.0',
               'python-multipart': '0.0.32',
               'cryptography':  '48.0.1',

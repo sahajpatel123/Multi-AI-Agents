@@ -12,9 +12,12 @@ import logging
 import os
 import re
 from io import BytesIO
+from pathlib import Path
 from typing import Any, Tuple
 
 import magic
+
+from arena.core.upload_store import UPLOAD_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +111,37 @@ def image_b64_and_mime(data: bytes, content_type: str) -> Tuple[str, str]:
     return b64, mime
 
 
+def _resolve_safe_dest(dest_path: str) -> Path:
+    """Resolve `dest_path` and require it stay under the upload sandbox.
+
+    Agent uploads write under UPLOAD_DIR (absolute, e.g. /tmp/arena_uploads).
+    An earlier check rejected *all* absolute paths, which made legitimate
+    agent uploads return 400 while still not being a sound traversal guard
+    (`startswith` on dirname is always true for the path's own parent).
+
+    Correct rule: resolve the destination, then require it is under
+    UPLOAD_DIR via Path.relative_to (no escape via `..`, symlinks, or
+    alternate absolute roots like /etc/passwd).
+    """
+    if not dest_path or not str(dest_path).strip():
+        raise ValueError("Invalid file path: empty destination.")
+    # Reject raw `..` segments before resolve() so obvious traversal
+    # attempts fail even if a platform-specific resolve quirk applies.
+    raw_parts = Path(dest_path).parts
+    if ".." in raw_parts:
+        raise ValueError("Invalid file path: path traversal not allowed.")
+
+    root = Path(UPLOAD_DIR).resolve()
+    dest = Path(dest_path).expanduser().resolve()
+    try:
+        dest.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(
+            "Invalid file path: path must be within uploads directory."
+        ) from exc
+    return dest
+
+
 def process_upload(
     *,
     filename: str,
@@ -116,18 +150,8 @@ def process_upload(
     dest_path: str,
 ) -> dict[str, Any]:
     """Return registry record: file_id, filename, type, content, b64?, mime_type?, path."""
-    # Security: Prevent path traversal attacks
-    # Normalize the path and ensure it doesn't escape the intended directory
-    normalized_path = os.path.normpath(dest_path)
-    if ".." in normalized_path or os.path.isabs(normalized_path):
-        raise ValueError("Invalid file path: path traversal not allowed.")
-
-    # Security: Ensure the normalized path stays within uploads directory
-    # (caller should set this up, but we validate here as defense-in-depth)
-    base_dir = os.path.abspath(os.path.dirname(dest_path) or ".")
-    final_path = os.path.abspath(dest_path)
-    if not final_path.startswith(base_dir):
-        raise ValueError("Invalid file path: path must be within uploads directory.")
+    safe_dest = _resolve_safe_dest(dest_path)
+    dest_path = str(safe_dest)
 
     ext = os.path.splitext((filename or "").lower())[1]
     if ext in DISALLOWED_EXTENSIONS:
@@ -137,7 +161,7 @@ def process_upload(
     if detected_mime not in ALLOWED_MIME_TYPES:
         raise ValueError("Unsupported file type.")
 
-    os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
+    os.makedirs(safe_dest.parent, mode=0o700, exist_ok=True)
     with open(dest_path, "wb") as f:
         f.write(data)
 

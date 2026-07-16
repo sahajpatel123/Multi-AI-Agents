@@ -167,3 +167,46 @@ class TestRefreshRotation:
             "/api/auth/refresh", json={"refresh_token": captured}
         )
         assert r4.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_rotation_fails_closed_when_blacklist_write_fails(
+        self, app_client, make_user, isolated_db, monkeypatch
+    ):
+        """If RevokedToken insert fails, do NOT mint a new pair.
+
+        Fail-open rotation (old token still live + new pair issued) is
+        exactly the dual-session hole single-use refresh is meant to
+        close. Blacklist write errors must surface as 503 and leave
+        the presented refresh token still usable for a retry.
+        """
+        from arena.core.token_blacklist import token_blacklist
+
+        _user, refresh = _user_and_refresh(make_user, isolated_db)
+        real_add = token_blacklist.add
+
+        def _boom(*_a, **_k):
+            raise RuntimeError("simulated db outage")
+
+        monkeypatch.setattr(token_blacklist, "add", _boom)
+
+        r = await app_client.post(
+            "/api/auth/refresh", json={"refresh_token": refresh}
+        )
+        assert r.status_code == 503, (
+            f"expected fail-closed 503 when blacklist write fails, got "
+            f"{r.status_code} {r.text}"
+        )
+        body = r.json()
+        assert "access_token" not in body
+        assert "refresh_token" not in body
+
+        # Restore blacklist writes — original refresh must still work
+        # (session was not partially consumed on the failed rotation).
+        monkeypatch.setattr(token_blacklist, "add", real_add)
+
+        r2 = await app_client.post(
+            "/api/auth/refresh", json={"refresh_token": refresh}
+        )
+        assert r2.status_code == 200, r2.text
+        assert r2.json()["access_token"]
+        assert r2.json()["refresh_token"] != refresh
