@@ -12,6 +12,9 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Room board: Copy question / Copy answer on each task card',
+      '[NEW] Room board confidence filter chips + per-card confidence badge',
+      '[IMPROVED] Room board live relative timestamps; member online dots tick every 60s',
       '[NEW] Agent history row actions: Re-run research and Copy question from the ⋯ menu',
       '[IMPROVED] History rows show live relative time + confidence badge (ticks every 60s)',
       '[IMPROVED] Live-update “found / last checked” clocks stay honest as time passes',

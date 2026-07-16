@@ -42,7 +42,22 @@ import {
   filterAgentHistoryByRecency,
   type AgentHistoryRecencyFilter,
 } from '../lib/agentHistoryRecencyFilter';
+import {
+  AGENT_HISTORY_CONFIDENCE_OPTIONS,
+  agentHistoryConfidenceFilterUseful,
+  agentHistoryConfidenceLabel,
+  filterAgentHistoryByConfidence,
+  type AgentHistoryConfidenceFilter,
+} from '../lib/agentHistoryConfidenceFilter';
+import { formatHistoryConfidenceBadge } from '../lib/agentHistoryRow';
 import { formatRoomSynthesisExport } from '../lib/roomSynthesisExport';
+import {
+  formatRoomBoardRelative,
+  roomBoardTaskAnswerText,
+  roomBoardTaskQuestionText,
+  roomBoardTimeTitle,
+  roomMemberOnline,
+} from '../lib/roomBoardTask';
 import {
   buildRoomInviteShareData,
   canUseNativeShare,
@@ -100,13 +115,6 @@ function getTaskTitle(task: any): string {
   return task.title || task.question || task.task_text || 'Untitled task';
 }
 
-function onlineActive(iso: string | null | undefined): boolean {
-  if (!iso) return false;
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return false;
-  return Date.now() - t < 5 * 60 * 1000;
-}
-
 export function RoomPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -134,6 +142,11 @@ export function RoomPage() {
     useState<AgentHistoryScoreFilter>('all');
   const [boardRecencyFilter, setBoardRecencyFilter] =
     useState<AgentHistoryRecencyFilter>('all');
+  const [boardConfidenceFilter, setBoardConfidenceFilter] =
+    useState<AgentHistoryConfidenceFilter>('all');
+  /** Ticks every 60s so board relative clocks + member online stay honest. */
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [taskActionToast, setTaskActionToast] = useState<string | null>(null);
   const [pickerQuery, setPickerQuery] = useState('');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [synthDownloadStatus, setSynthDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -299,7 +312,8 @@ export function RoomPage() {
       boardScoreFilter,
     );
     const byRecency = filterAgentHistoryByRecency(byScore, boardRecencyFilter);
-    const filtered = filterBySearchQuery(byRecency, boardQuery, (t) => [
+    const byConfidence = filterAgentHistoryByConfidence(byRecency, boardConfidenceFilter);
+    const filtered = filterBySearchQuery(byConfidence, boardQuery, (t) => [
       getTaskTitle(t),
       t.question,
       t.task_text,
@@ -325,6 +339,7 @@ export function RoomPage() {
     boardMemberFilter,
     boardScoreFilter,
     boardRecencyFilter,
+    boardConfidenceFilter,
   ]);
 
   const boardScoreFilterUseful = useMemo(
@@ -337,6 +352,14 @@ export function RoomPage() {
 
   const boardRecencyFilterUseful = useMemo(
     () => agentHistoryRecencyFilterUseful(tasks),
+    [tasks],
+  );
+
+  const boardConfidenceFilterUseful = useMemo(
+    () =>
+      agentHistoryConfidenceFilterUseful(
+        tasks.map((t: any) => ({ final_confidence: t.final_confidence ?? null })),
+      ),
     [tasks],
   );
 
@@ -358,10 +381,22 @@ export function RoomPage() {
     setNativeShareAvailable(canUseNativeShare());
   }, []);
 
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!taskActionToast) return;
+    const t = window.setTimeout(() => setTaskActionToast(null), 2200);
+    return () => window.clearTimeout(t);
+  }, [taskActionToast]);
+
   // Drop member filter when leaving the room or the filtered member is gone.
   useEffect(() => {
     setBoardMemberFilter('all');
     setBoardRecencyFilter('all');
+    setBoardConfidenceFilter('all');
   }, [slug]);
 
   useEffect(() => {
@@ -515,6 +550,9 @@ export function RoomPage() {
     if (boardRecencyFilter !== 'all') {
       bits.push(`recency: ${agentHistoryRecencyLabel(boardRecencyFilter)}`);
     }
+    if (boardConfidenceFilter !== 'all') {
+      bits.push(`confidence: ${agentHistoryConfidenceLabel(boardConfidenceFilter)}`);
+    }
     if (boardSort !== 'newest') bits.push(`sort: ${roomBoardSortLabel(boardSort)}`);
     return formatRoomBoardExport({
       roomName: room.name || 'Research room',
@@ -532,6 +570,26 @@ export function RoomPage() {
         taskId: t.task_id,
       })),
     });
+  };
+
+  const copyBoardTaskQuestion = async (task: any) => {
+    const text = roomBoardTaskQuestionText(task);
+    if (!text) {
+      setTaskActionToast('No question to copy on this task.');
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    setTaskActionToast(ok ? 'Question copied.' : 'Could not copy question — try again.');
+  };
+
+  const copyBoardTaskAnswer = async (task: any) => {
+    const text = roomBoardTaskAnswerText(task);
+    if (!text) {
+      setTaskActionToast('No answer to copy on this task yet.');
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    setTaskActionToast(ok ? 'Answer copied.' : 'Could not copy answer — try again.');
   };
 
   const copySynthesis = async () => {
@@ -699,7 +757,7 @@ export function RoomPage() {
                 width: 6,
                 height: 6,
                 borderRadius: '50%',
-                background: onlineActive(m.last_seen_at) ? '#639922' : '#D4C4B0',
+                background: roomMemberOnline(m.last_seen_at, nowMs) ? '#639922' : '#D4C4B0',
                 marginLeft: 'auto',
                 flexShrink: 0,
               }}
@@ -1082,7 +1140,8 @@ export function RoomPage() {
             {boardQuery.trim() ||
             boardMemberFilter !== 'all' ||
             boardScoreFilter !== 'all' ||
-            boardRecencyFilter !== 'all'
+            boardRecencyFilter !== 'all' ||
+            boardConfidenceFilter !== 'all'
               ? ` / ${tasks.length}`
               : ''}
             {boardMemberFilter !== 'all'
@@ -1093,6 +1152,9 @@ export function RoomPage() {
               : ''}
             {boardRecencyFilter !== 'all'
               ? ` · ${agentHistoryRecencyLabel(boardRecencyFilter)}`
+              : ''}
+            {boardConfidenceFilter !== 'all'
+              ? ` · ${agentHistoryConfidenceLabel(boardConfidenceFilter)}`
               : ''}
           </span>
         </div>
@@ -1394,6 +1456,57 @@ export function RoomPage() {
           })}
         </div>
       ) : null}
+      {boardConfidenceFilterUseful ? (
+        <div
+          role="group"
+          aria-label="Filter board by confidence"
+          style={{
+            display: 'flex',
+            gap: 6,
+            flexWrap: 'wrap',
+            marginBottom: 12,
+            alignItems: 'center',
+          }}
+        >
+          {AGENT_HISTORY_CONFIDENCE_OPTIONS.map((opt) => {
+            const selected = boardConfidenceFilter === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setBoardConfidenceFilter(opt.value)}
+                aria-pressed={selected}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                  background: selected ? '#F0E6DA' : 'transparent',
+                  color: selected ? '#4A3728' : '#8C7355',
+                  fontSize: 11,
+                  fontFamily: 'Georgia, serif',
+                  cursor: 'pointer',
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      {taskActionToast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            marginBottom: 10,
+            fontSize: 12,
+            color: '#5A4A3A',
+            fontFamily: 'Georgia, serif',
+          }}
+        >
+          {taskActionToast}
+        </div>
+      ) : null}
       {boardCopyStatus !== 'idle' ? (
         <div
           role="status"
@@ -1440,16 +1553,28 @@ export function RoomPage() {
                   boardRecencyFilter !== 'all'
                     ? ` · ${agentHistoryRecencyLabel(boardRecencyFilter)}`
                     : ''
+                }${
+                  boardConfidenceFilter !== 'all'
+                    ? ` · ${agentHistoryConfidenceLabel(boardConfidenceFilter)}`
+                    : ''
                 }`
-              : boardRecencyFilter !== 'all' &&
+              : boardConfidenceFilter !== 'all' &&
                   boardMemberFilter === 'all' &&
-                  boardScoreFilter === 'all'
-                ? `No tasks from ${agentHistoryRecencyLabel(boardRecencyFilter).toLowerCase()}`
-                : boardScoreFilter !== 'all' && boardMemberFilter === 'all'
-                  ? `No tasks with score ${agentHistoryScoreLabel(boardScoreFilter)}`
-                  : boardMemberFilter !== 'all'
-                    ? `${memberNameById[boardMemberFilter] || 'This member'} has no tasks on the board yet`
-                    : 'No tasks on the board'}
+                  boardScoreFilter === 'all' &&
+                  boardRecencyFilter === 'all'
+                ? `No tasks with confidence ${agentHistoryConfidenceLabel(boardConfidenceFilter)}`
+                : boardRecencyFilter !== 'all' &&
+                    boardMemberFilter === 'all' &&
+                    boardScoreFilter === 'all' &&
+                    boardConfidenceFilter === 'all'
+                  ? `No tasks from ${agentHistoryRecencyLabel(boardRecencyFilter).toLowerCase()}`
+                  : boardScoreFilter !== 'all' &&
+                      boardMemberFilter === 'all' &&
+                      boardConfidenceFilter === 'all'
+                    ? `No tasks with score ${agentHistoryScoreLabel(boardScoreFilter)}`
+                    : boardMemberFilter !== 'all'
+                      ? `${memberNameById[boardMemberFilter] || 'This member'} has no tasks on the board yet`
+                      : 'No tasks on the board'}
           </p>
           <button
             type="button"
@@ -1458,6 +1583,7 @@ export function RoomPage() {
               setBoardMemberFilter('all');
               setBoardScoreFilter('all');
               setBoardRecencyFilter('all');
+              setBoardConfidenceFilter('all');
               boardSearchRef.current?.focus();
             }}
             style={{
@@ -1472,7 +1598,8 @@ export function RoomPage() {
           >
             {(boardMemberFilter !== 'all' ||
               boardScoreFilter !== 'all' ||
-              boardRecencyFilter !== 'all') &&
+              boardRecencyFilter !== 'all' ||
+              boardConfidenceFilter !== 'all') &&
             !boardQuery.trim()
               ? 'Show all tasks'
               : 'Clear filters'}
@@ -1554,11 +1681,28 @@ export function RoomPage() {
                     {getUserInitials(name)}
                   </div>
                   <span style={{ fontSize: 11, color: '#A89070' }}>{name}</span>
+                  <span style={{ flex: 1, minWidth: 4 }} />
                   {t.final_score != null ? (
-                    <span style={{ fontSize: 10, color: '#C4956A', marginLeft: 'auto' }}>{t.final_score}/100</span>
+                    <span style={{ fontSize: 10, color: '#C4956A' }}>{t.final_score}/100</span>
                   ) : null}
-                  <span style={{ fontSize: 10, color: '#A89070' }}>
-                    {t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}
+                  {(() => {
+                    const conf = formatHistoryConfidenceBadge(t.final_confidence);
+                    if (!conf) return null;
+                    return (
+                      <span
+                        title={`Confidence ${conf}`}
+                        aria-label={`Confidence ${conf}`}
+                        style={{ fontSize: 10, color: '#8C5A2C' }}
+                      >
+                        {conf}
+                      </span>
+                    );
+                  })()}
+                  <span
+                    style={{ fontSize: 10, color: '#A89070' }}
+                    title={roomBoardTimeTitle(t.created_at) || undefined}
+                  >
+                    {formatRoomBoardRelative(t.created_at, nowMs)}
                   </span>
                 </div>
                 <div
@@ -1575,6 +1719,49 @@ export function RoomPage() {
                   }}
                 >
                   <HighlightQuery text={getTaskTitle(t)} query={boardQuery} />
+                </div>
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 10,
+                    marginBottom: 6,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => void copyBoardTaskQuestion(t)}
+                    style={{
+                      padding: 0,
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      color: '#C4956A',
+                      fontFamily: 'Georgia, serif',
+                    }}
+                  >
+                    Copy question
+                  </button>
+                  {fullAnswer ? (
+                    <button
+                      type="button"
+                      onClick={() => void copyBoardTaskAnswer(t)}
+                      style={{
+                        padding: 0,
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: 11,
+                        color: '#C4956A',
+                        fontFamily: 'Georgia, serif',
+                      }}
+                    >
+                      Copy answer
+                    </button>
+                  ) : null}
                 </div>
                 {isExpanded && canExpand && fullAnswer ? (
                   <div
@@ -1947,7 +2134,7 @@ export function RoomPage() {
                   width: 7,
                   height: 7,
                   borderRadius: '50%',
-                  background: onlineActive(m.last_seen_at) ? '#639922' : '#D4C4B0',
+                  background: roomMemberOnline(m.last_seen_at, nowMs) ? '#639922' : '#D4C4B0',
                   border: '1px solid #F5F0E8',
                 }}
               />

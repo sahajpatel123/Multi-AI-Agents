@@ -25,7 +25,10 @@ export type AgentHistoryConfidenceItem = {
 
 function resolveConfidence(item: AgentHistoryConfidenceItem): number | null {
   const raw = item.final_confidence;
-  return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
+  // Agent payloads sometimes store 0–1 fractions; band thresholds are percent.
+  if (raw >= 0 && raw <= 1) return raw * 100;
+  return raw;
 }
 
 /**

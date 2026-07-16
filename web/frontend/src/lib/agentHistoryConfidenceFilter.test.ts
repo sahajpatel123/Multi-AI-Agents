@@ -80,4 +80,15 @@ describe('agentHistoryConfidenceFilter', () => {
     expect(agentHistoryConfidenceLabel('unrated')).toBe('No rating');
     expect(agentHistoryConfidenceLabel('all')).toBe('All confidence');
   });
+
+  it('normalizes 0–1 fractions into percent bands', () => {
+    const frac = [
+      { id: 'hi', final_confidence: 0.88 },
+      { id: 'mid', final_confidence: 0.65 },
+      { id: 'lo', final_confidence: 0.4 },
+    ];
+    expect(filterAgentHistoryByConfidence(frac, 'high').map((i) => i.id)).toEqual(['hi']);
+    expect(filterAgentHistoryByConfidence(frac, 'solid').map((i) => i.id)).toEqual(['mid']);
+    expect(filterAgentHistoryByConfidence(frac, 'mixed').map((i) => i.id)).toEqual(['lo']);
+  });
 });
