@@ -10,6 +10,8 @@ import {
   RotateCcw,
   Loader2,
   ArrowUpRight,
+  MessageCircle,
+  Swords,
 } from 'lucide-react';
 import { ScoredAgent, AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
@@ -100,8 +102,8 @@ export function AgentCard({
   streamingText,
   isStreaming,
   agentId,
-  onChallenge: _onChallenge,
-  onDiscuss: _onDiscuss,
+  onChallenge,
+  onDiscuss,
   isIdle = false,
   dotFlashKey = 0,
   isHighlighted = false,
@@ -609,7 +611,88 @@ export function AgentCard({
               }}
               active={isSaved}
               activeColor="#C4956A"
+              ariaLabel="Save this take"
             />
+            {onDiscuss ? (
+              <button
+                type="button"
+                title="Talk 1-on-1 with this mind"
+                aria-label={`Discuss with ${resolvedDisplay.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void track('discuss_from_card', displayPersonaId, agentId);
+                  onDiscuss();
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '5px 10px',
+                  borderRadius: 999,
+                  background: 'transparent',
+                  border: '0.5px solid #E0D8D0',
+                  color: '#6B6460',
+                  fontSize: 11,
+                  fontFamily: 'Georgia, serif',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(196,149,106,0.1)';
+                  e.currentTarget.style.borderColor = 'rgba(196,149,106,0.45)';
+                  e.currentTarget.style.color = '#C4956A';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.borderColor = '#E0D8D0';
+                  e.currentTarget.style.color = '#6B6460';
+                }}
+              >
+                <MessageCircle style={{ width: 13, height: 13 }} aria-hidden />
+                Discuss
+              </button>
+            ) : null}
+            {onChallenge ? (
+              <button
+                type="button"
+                title="Challenge this take — other minds react"
+                aria-label={`Challenge ${resolvedDisplay.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void track('debate_from_card', displayPersonaId, agentId);
+                  onChallenge();
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '5px 10px',
+                  borderRadius: 999,
+                  background: 'transparent',
+                  border: '0.5px solid #E0D8D0',
+                  color: '#6B6460',
+                  fontSize: 11,
+                  fontFamily: 'Georgia, serif',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(196,149,106,0.1)';
+                  e.currentTarget.style.borderColor = 'rgba(196,149,106,0.45)';
+                  e.currentTarget.style.color = '#C4956A';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.borderColor = '#E0D8D0';
+                  e.currentTarget.style.color = '#6B6460';
+                }}
+              >
+                <Swords style={{ width: 13, height: 13 }} aria-hidden />
+                Challenge
+              </button>
+            ) : null}
             {isWinner && onVerifyInAgent && (
               <button
                 type="button"
@@ -657,13 +740,13 @@ export function AgentCard({
                 {verifyInAgentLoading ? 'Sending to Agent...' : 'Verify in Agent'}
               </button>
             )}
-            {!isIdle && (
+            {!isIdle && !onDiscuss && !onChallenge ? (
               <div style={{ marginLeft: 'auto', fontSize: '11px', color: '#6B6460', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span>Click</span>
                 <span style={{ fontSize: '14px', color: agentConfig.color }}>•</span>
                 <span>to go deeper</span>
               </div>
-            )}
+            ) : null}
           </div>
         )}
       </div>

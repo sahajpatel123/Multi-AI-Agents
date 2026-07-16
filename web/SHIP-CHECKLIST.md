@@ -184,6 +184,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Watchlist run history**: per-item expandable history (newest-first) with avg/min/max score stats and deep-link to each prior Agent run.
 - **Watchlist history export + trend**: expanded history shows ↑/↓ vs prior scored run; Copy history / Download .md export the full run list.
 - **Room board full answer**: long task answers expand in place as markdown (Show full answer); Open in Agent remains available.
+- **Arena card Discuss/Challenge**: every completed mind card exposes Discuss (1-on-1) and Challenge (debate) actions that honor tier gates.
 
 ## Required production environment
 
