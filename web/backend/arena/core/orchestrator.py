@@ -92,24 +92,30 @@ class Orchestrator:
         if not user_id or db is None or not session_id:
             return
 
-        topic = extract_topic(prompt)
-        prompt_snippet = prompt[:100]
-        for response in responses:
-            persona_id = get_persona_id_for_agent(response.agent_id, persona_ids)
-            stance = summarize_stance_text(response.one_liner or response.verdict)
-            try:
-                await save_agent_stance(
-                    user_id=user_id,
-                    persona_id=persona_id,
-                    topic=topic,
-                    stance=stance,
-                    confidence=response.confidence,
-                    session_id=session_id,
-                    prompt_snippet=prompt_snippet,
-                    db=db,
-                )
-            except Exception as exc:
-                logger.warning("Failed to archive stance for %s: %s", persona_id, exc)
+        # Stance archiving is best-effort telemetry and must never raise into the
+        # caller: on the streaming path a raise here would skip the all_done
+        # sentinel and hang the SSE consumer even though every agent succeeded.
+        try:
+            topic = extract_topic(prompt)
+            prompt_snippet = prompt[:100]
+            for response in responses:
+                persona_id = get_persona_id_for_agent(response.agent_id, persona_ids)
+                stance = summarize_stance_text(response.one_liner or response.verdict)
+                try:
+                    await save_agent_stance(
+                        user_id=user_id,
+                        persona_id=persona_id,
+                        topic=topic,
+                        stance=stance,
+                        confidence=response.confidence,
+                        session_id=session_id,
+                        prompt_snippet=prompt_snippet,
+                        db=db,
+                    )
+                except Exception as exc:
+                    logger.warning("Failed to archive stance for %s: %s", persona_id, exc)
+        except Exception as exc:
+            logger.warning("Stance archiving failed: %s", exc)
 
     async def _call_agent(
         self,
@@ -378,33 +384,40 @@ class Orchestrator:
         )
 
         async def _run_all() -> list[AgentResponse]:
-            if tracker:
-                tracker.mark("agents_start")
-            tasks = [
-                asyncio.create_task(
-                    self._stream_agent(
-                        agent,
-                        prompt,
-                        queue,
-                        tool_context,
-                        persona_ids,
-                        memory_contexts.get(agent.agent_id, ""),
+            responses: list[AgentResponse] = []
+            try:
+                if tracker:
+                    tracker.mark("agents_start")
+                tasks = [
+                    asyncio.create_task(
+                        self._stream_agent(
+                            agent,
+                            prompt,
+                            queue,
+                            tool_context,
+                            persona_ids,
+                            memory_contexts.get(agent.agent_id, ""),
+                        )
                     )
+                    for agent in active_agents
+                ]
+                responses = await asyncio.gather(*tasks)
+                if tracker:
+                    tracker.mark("agents_done")
+                await self._archive_stances(
+                    prompt=prompt,
+                    responses=responses,
+                    persona_ids=persona_ids,
+                    session_id=session_id,
+                    user_id=user_id,
+                    db=db,
                 )
-                for agent in active_agents
-            ]
-            responses = await asyncio.gather(*tasks)
-            if tracker:
-                tracker.mark("agents_done")
-            await self._archive_stances(
-                prompt=prompt,
-                responses=responses,
-                persona_ids=persona_ids,
-                session_id=session_id,
-                user_id=user_id,
-                db=db,
-            )
-            await queue.put({"type": "all_done", "responses": None})
+            finally:
+                # Always emit the completion sentinel so the SSE consumer never
+                # blocks forever on queue.get() if a post-streaming step raised.
+                # put_nowait is synchronous and safe during cancellation (the
+                # queue is unbounded, so it never raises QueueFull).
+                queue.put_nowait({"type": "all_done", "responses": None})
             return list(responses)
 
         gather_task = asyncio.create_task(_run_all())
