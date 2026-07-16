@@ -133,6 +133,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent history status filter**: All / Live / One-off chips filter weekly-update tasks vs one-off research (export notes filter).
 - **Agent rooms copy/download**: sidebar Rooms list can copy or download the filtered/sorted view as markdown.
 - **Templates sort**: Task templates modal sorts by catalog order, title, category, or most slots (works with search + category tabs).
+- **Templates copy/download**: Task templates modal exports the filtered/sorted catalog as markdown (prompts + slots).
 
 ## Required production environment
 

@@ -2,12 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentTaskTemplate } from '../api';
 import { ConduraBadge } from './ConduraBadge';
-import { prefersReducedMotion } from '../lib/motion';
+import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
+import { formatTemplatesExport } from '../lib/templatesExport';
 import { templatesListBodyMode } from '../lib/templatesListView';
 import {
   TEMPLATES_SORT_OPTIONS,
   sortTemplates,
+  templatesSortLabel,
   type TemplatesSort,
 } from '../lib/templatesSort';
 
@@ -51,8 +55,12 @@ export function TemplatesModal({
   const [activeTab, setActiveTab] = useState<TabId>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [templatesSort, setTemplatesSort] = useState<TemplatesSort>('default');
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+  const downloadTimerRef = useRef<number | null>(null);
   const visible = open || closing;
   const reducedMotion = prefersReducedMotion();
 
@@ -92,8 +100,17 @@ export function TemplatesModal({
       setActiveTab('All');
       setSearchQuery('');
       setTemplatesSort('default');
+      setCopyStatus('idle');
+      setDownloadStatus('idle');
     }
   }, [open]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
+      if (downloadTimerRef.current != null) window.clearTimeout(downloadTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -103,6 +120,55 @@ export function TemplatesModal({
       document.body.style.overflow = prevOverflow;
     };
   }, [visible]);
+
+  const buildTemplatesMarkdown = useCallback(() => {
+    const bits: string[] = [];
+    if (activeTab !== 'All') bits.push(`category ${activeTab}`);
+    const q = searchQuery.trim();
+    if (q) bits.push(`search “${q}”`);
+    if (templatesSort !== 'default') bits.push(`sort: ${templatesSortLabel(templatesSort)}`);
+    return formatTemplatesExport({
+      totalCount: flatTemplates.length,
+      filterNote: bits.length > 0 ? bits.join(' · ') : undefined,
+      items: visibleTemplates.map((t) => ({
+        title: t.title,
+        category: t.category,
+        description: t.description,
+        example: t.example,
+        promptTemplate: t.prompt_template,
+        slots: t.slots,
+        expertise: t.default_expertise,
+        id: t.id,
+        disabled: t.disabled,
+        disabledReason: t.disabled_reason,
+      })),
+    });
+  }, [activeTab, searchQuery, templatesSort, flatTemplates.length, visibleTemplates]);
+
+  const handleCopyTemplates = useCallback(() => {
+    const md = buildTemplatesMarkdown();
+    void copyToClipboard(md).then((ok) => {
+      if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
+      setCopyStatus(ok ? 'copied' : 'failed');
+      const hold = motionDuration(ok ? 2000 : 2800);
+      copyTimerRef.current = window.setTimeout(() => {
+        setCopyStatus('idle');
+        copyTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    });
+  }, [buildTemplatesMarkdown]);
+
+  const handleDownloadTemplates = useCallback(() => {
+    const md = buildTemplatesMarkdown();
+    const ok = downloadMarkdownFile(md, 'agent-task-templates');
+    if (downloadTimerRef.current != null) window.clearTimeout(downloadTimerRef.current);
+    setDownloadStatus(ok ? 'done' : 'failed');
+    const hold = motionDuration(ok ? 2000 : 2800);
+    downloadTimerRef.current = window.setTimeout(() => {
+      setDownloadStatus('idle');
+      downloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  }, [buildTemplatesMarkdown]);
 
   useEffect(() => {
     if (!open) return;
@@ -221,24 +287,116 @@ export function TemplatesModal({
           >
             Task templates
           </h2>
-          <button
-            ref={closeBtnRef}
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {catalogMode === 'list' && flatTemplates.length > 0 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleCopyTemplates()}
+                  title="Copy visible templates as markdown"
+                  aria-label={
+                    copyStatus === 'copied'
+                      ? 'Templates copied'
+                      : copyStatus === 'failed'
+                        ? 'Copy failed'
+                        : 'Copy templates as markdown'
+                  }
+                  style={{
+                    background: 'none',
+                    border: '0.5px solid #D4C4B0',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    color:
+                      copyStatus === 'failed'
+                        ? '#D85A30'
+                        : copyStatus === 'copied'
+                          ? '#5A8C6A'
+                          : '#C4956A',
+                    padding: '5px 10px',
+                    fontFamily: 'Georgia, serif',
+                  }}
+                >
+                  {copyStatus === 'copied'
+                    ? 'Copied'
+                    : copyStatus === 'failed'
+                      ? 'Failed'
+                      : 'Copy'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadTemplates()}
+                  title="Download visible templates as markdown"
+                  aria-label={
+                    downloadStatus === 'done'
+                      ? 'Templates downloaded'
+                      : downloadStatus === 'failed'
+                        ? 'Download failed'
+                        : 'Download templates as markdown'
+                  }
+                  style={{
+                    background: 'none',
+                    border: '0.5px solid #D4C4B0',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    color:
+                      downloadStatus === 'failed'
+                        ? '#D85A30'
+                        : downloadStatus === 'done'
+                          ? '#5A8C6A'
+                          : '#C4956A',
+                    padding: '5px 10px',
+                    fontFamily: 'Georgia, serif',
+                  }}
+                >
+                  {downloadStatus === 'done'
+                    ? 'Downloaded'
+                    : downloadStatus === 'failed'
+                      ? 'Failed'
+                      : 'Download'}
+                </button>
+              </>
+            ) : null}
+            <button
+              ref={closeBtnRef}
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              style={{
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                fontSize: 22,
+                lineHeight: 1,
+                color: '#8C7355',
+                padding: 4,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        {copyStatus === 'failed' || downloadStatus === 'failed' ? (
+          <p
+            role="alert"
             style={{
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              fontSize: 22,
-              lineHeight: 1,
-              color: '#8C7355',
-              padding: 4,
+              margin: 0,
+              padding: '0 18px 8px',
+              fontSize: 12,
+              color: '#993C1D',
+              lineHeight: 1.4,
             }}
           >
-            ×
-          </button>
-        </div>
+            {copyStatus === 'failed'
+              ? 'Could not copy templates — try Download instead.'
+              : 'Could not download templates — try Copy instead.'}
+          </p>
+        ) : null}
 
         <div style={{ padding: '12px 16px 0', flexShrink: 0 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

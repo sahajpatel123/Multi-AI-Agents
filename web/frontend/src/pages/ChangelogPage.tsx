@@ -127,6 +127,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Agent research history: filter by Live weekly vs One-off',
       '[NEW] Agent Rooms list: copy / download filtered view as .md',
       '[NEW] Agent task templates: sort by title, category, or slot count',
+      '[NEW] Agent task templates: copy / download filtered catalog as .md',
     ],
   },
   {
