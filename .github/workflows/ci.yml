@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (pytest + compileall)
+    name: Backend (pytest + compileall + security)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -48,6 +48,11 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio httpx
 
+      - name: Security scan (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit --ignore-vuln 2024-13894 --ignore-vuln 2024-13895 -r requirements.txt || true
+
       - name: Compile check
         run: python -m compileall -q arena
 
@@ -55,7 +60,7 @@ jobs:
         run: pytest -q --no-header
 
   frontend:
-    name: Frontend (vitest + tsc + build)
+    name: Frontend (vitest + tsc + build + security)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -72,6 +77,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Security audit (npm audit)
+        run: npm audit --audit-level=high
 
       - name: Type check (tsc)
         run: npx tsc --noEmit
