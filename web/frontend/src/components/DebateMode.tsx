@@ -32,7 +32,7 @@ import { isScrollNearBottom, shouldAutoScrollChat } from '../lib/chatScroll';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatDebateExport } from '../lib/threadExport';
-import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import { isBareEndKey, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 
 interface DebateModeProps {
   originalPrompt: string;
@@ -138,25 +138,6 @@ export function DebateMode({
     };
   }, []);
 
-  // `/` focuses interjection compose; Escape returns to Arena (when no modal is open).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
-        e.preventDefault();
-        abortRef.current?.abort();
-        onExit();
-        return;
-      }
-      if (!isBareSlashKey(e) || !shouldCaptureSlashFocus(e.target)) return;
-      if (phase === 'streaming') return;
-      e.preventDefault();
-      inputRef.current?.focus();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [phase, onExit]);
-
   const reducedMotion = prefersReducedMotion();
   const challengedConfig = getAgentDisplay(challengedAgent.response.agent_id);
   const reactingIds = AGENT_SLOT_IDS.filter(
@@ -234,6 +215,30 @@ export function DebateMode({
   const jumpToLatest = useCallback(() => {
     scrollToBottom({ force: true });
   }, [scrollToBottom]);
+
+  // `/` focuses interjection compose; End jumps to latest; Escape returns to Arena.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+        e.preventDefault();
+        abortRef.current?.abort();
+        onExit();
+        return;
+      }
+      if (isBareEndKey(e) && shouldCaptureSlashFocus(e.target)) {
+        e.preventDefault();
+        jumpToLatest();
+        return;
+      }
+      if (!isBareSlashKey(e) || !shouldCaptureSlashFocus(e.target)) return;
+      if (phase === 'streaming') return;
+      e.preventDefault();
+      inputRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [phase, jumpToLatest, onExit]);
 
   // Follow the live end of the thread only while the reader is stuck to bottom.
   useEffect(() => {

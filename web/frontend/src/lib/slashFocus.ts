@@ -25,3 +25,19 @@ export function isBareSlashKey(event: {
   if (event.metaKey || event.ctrlKey || event.altKey) return false;
   return true;
 }
+
+/**
+ * True for End without modifiers (used to jump to the live end of a chat
+ * thread when the user is not typing in a form control).
+ */
+export function isBareEndKey(event: {
+  key: string;
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
+}): boolean {
+  if (event.key !== 'End') return false;
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
+  return true;
+}

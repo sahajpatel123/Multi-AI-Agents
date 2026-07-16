@@ -15,10 +15,20 @@ describe('keyboardShortcuts', () => {
       ),
     ).toBe(true);
     expect(shortcutsForSurface('discuss').some((s) => s.keys === 'Enter')).toBe(true);
+    expect(
+      shortcutsForSurface('discuss').some(
+        (s) => s.keys === 'End' && s.action.toLowerCase().includes('latest'),
+      ),
+    ).toBe(true);
     expect(shortcutsForSurface('discuss').some((s) => s.keys === 'Esc' && s.action.includes('Arena'))).toBe(
       true,
     );
     expect(shortcutsForSurface('debate').some((s) => s.keys === '?')).toBe(true);
+    expect(
+      shortcutsForSurface('debate').some(
+        (s) => s.keys === 'End' && s.action.toLowerCase().includes('latest'),
+      ),
+    ).toBe(true);
     expect(shortcutsForSurface('debate').some((s) => s.keys === 'Esc' && s.action.includes('Arena'))).toBe(
       true,
     );

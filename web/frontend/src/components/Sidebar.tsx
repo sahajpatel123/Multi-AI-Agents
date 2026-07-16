@@ -125,6 +125,8 @@ export function Sidebar({
   const { isDefaultPanel, resetPanel, panel } = usePanel();
   const { messagesRemaining, dailyLimit, tier, isFree } = useTier();
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
+  /** Tick every 60s so relative timestamps stay accurate without a full reload. */
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [searchQuery, setSearchQuery] = useState('');
   const [savedSearchQuery, setSavedSearchQuery] = useState('');
   const [recentsSort, setRecentsSort] = useState<SidebarRecentsSort>('newest');
@@ -275,6 +277,11 @@ export function Sidebar({
       ),
     [reversedSaved],
   );
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // Drop mind filter when that mind no longer has any saved takes.
   useEffect(() => {
@@ -1019,7 +1026,10 @@ export function Sidebar({
                                 <AgentDot agentId={turn.winner_id} size={5} />
                                 <span style={{ fontSize: '11px', color: '#6B6460', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{winner.name}</span>
                                 <span style={{ fontSize: 11, color: '#A89070', marginLeft: 'auto', flexShrink: 0 }}>
-                                  {formatRelativePast(turn.timestamp, { localeAfterDays: 7 })}
+                                  {formatRelativePast(turn.timestamp, {
+                                    localeAfterDays: 7,
+                                    now: nowMs,
+                                  })}
                                 </span>
                               </div>
                             </button>
@@ -1671,7 +1681,10 @@ export function Sidebar({
                                     : undefined
                                 }
                               >
-                                {formatRelativePast(item.timestamp, { localeAfterDays: 7 })}
+                                {formatRelativePast(item.timestamp, {
+                                  localeAfterDays: 7,
+                                  now: nowMs,
+                                })}
                               </p>
                             ) : null}
                           </button>

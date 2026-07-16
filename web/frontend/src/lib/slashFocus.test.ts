@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isBareSlashKey, shouldCaptureSlashFocus } from './slashFocus';
+import { isBareEndKey, isBareSlashKey, shouldCaptureSlashFocus } from './slashFocus';
 
 describe('slashFocus', () => {
   it('isBareSlashKey ignores modified slashes', () => {
@@ -8,6 +8,13 @@ describe('slashFocus', () => {
     expect(isBareSlashKey({ key: '/', ctrlKey: true })).toBe(false);
     expect(isBareSlashKey({ key: '/', altKey: true })).toBe(false);
     expect(isBareSlashKey({ key: 'a' })).toBe(false);
+  });
+
+  it('isBareEndKey ignores modified End', () => {
+    expect(isBareEndKey({ key: 'End' })).toBe(true);
+    expect(isBareEndKey({ key: 'End', shiftKey: true })).toBe(false);
+    expect(isBareEndKey({ key: 'End', metaKey: true })).toBe(false);
+    expect(isBareEndKey({ key: 'Home' })).toBe(false);
   });
 
   it('shouldCaptureSlashFocus skips form controls', () => {

@@ -179,6 +179,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Perspective Comparison: expand full takes; keywords and export use full verdicts',
       '[IMPROVED] Shared relative-time helper used on Watchlist, Agent, Profile, and Saved takes',
       '[IMPROVED] Watchlist relative times refresh live; markdown exports use shared UTC timestamps',
+      '[IMPROVED] Discuss/Debate: End jumps to latest; Sidebar Recents/Saved times refresh live',
     ],
   },
   {

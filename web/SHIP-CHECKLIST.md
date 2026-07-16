@@ -189,6 +189,8 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Perspective comparison full takes**: each mind can expand full verdict as markdown; keyword analysis + export prefer full take over one-liner.
 - **Shared relative time**: Watchlist / Agent / Profile / Sidebar Saved use `lib/relativeTime` (Recents parity timestamps on Saved).
 - **Live Watchlist clocks**: relative last/next-run labels re-render every 60s; all markdown export helpers use shared `formatIsoWhen`.
+- **End → jump to latest**: Discuss and Debate bind bare End (when not typing) to force-scroll the live end; shortcuts help documents it.
+- **Live sidebar clocks**: Recents and Saved relative timestamps re-render every 60s (Watchlist parity).
 
 ## Required production environment
 

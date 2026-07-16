@@ -24,7 +24,7 @@ import { isScrollNearBottom, shouldAutoScrollChat } from '../lib/chatScroll';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatDiscussExport } from '../lib/threadExport';
-import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import { isBareEndKey, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 
 interface DiscussModeProps {
   originalPrompt: string;
@@ -177,7 +177,7 @@ export function DiscussMode({
     scrollToBottom({ force: true });
   }, [activeAgent.response.agent_id, scrollToBottom]);
 
-  // `/` focuses discuss compose; Escape returns to Arena (when no modal is open).
+  // `/` focuses discuss compose; End jumps to latest; Escape returns to Arena.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -187,6 +187,11 @@ export function DiscussMode({
         onExit();
         return;
       }
+      if (isBareEndKey(e) && shouldCaptureSlashFocus(e.target)) {
+        e.preventDefault();
+        jumpToLatest();
+        return;
+      }
       if (!isBareSlashKey(e) || !shouldCaptureSlashFocus(e.target)) return;
       if (isStreaming) return;
       e.preventDefault();
@@ -194,7 +199,7 @@ export function DiscussMode({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isStreaming, onExit]);
+  }, [isStreaming, jumpToLatest, onExit]);
 
   useEffect(() => {
     return () => {
