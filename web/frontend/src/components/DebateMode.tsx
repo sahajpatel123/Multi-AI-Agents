@@ -27,6 +27,7 @@ import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { debateWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForArenaBusy } from '../lib/documentTitle';
 import { prefersReducedMotion, scrollBehavior } from '../lib/motion';
+import { isScrollNearBottom, shouldAutoScrollChat } from '../lib/chatScroll';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatDebateExport } from '../lib/threadExport';
@@ -107,6 +108,9 @@ export function DebateMode({
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const [showJumpLatest, setShowJumpLatest] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const MAX_ROUNDS = debateMaxRounds(followUpUnlocked);
@@ -201,11 +205,44 @@ export function DebateMode({
     });
   }, []);
 
-  const scrollToBottom = useCallback(() => {
+  const syncScrollFlags = useCallback(() => {
+    const el = threadScrollRef.current;
+    const near = isScrollNearBottom(el);
+    stickToBottomRef.current = near;
+    setShowJumpLatest(!near);
+  }, []);
+
+  const scrollToBottom = useCallback((opts?: { force?: boolean }) => {
+    const force = opts?.force === true;
+    if (!force && !shouldAutoScrollChat({ stickToBottom: stickToBottomRef.current })) {
+      setShowJumpLatest(true);
+      return;
+    }
+    stickToBottomRef.current = true;
+    setShowJumpLatest(false);
     setTimeout(() => {
       threadEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
+      // Re-sync after layout so the jump chip hides reliably.
+      requestAnimationFrame(() => {
+        stickToBottomRef.current = true;
+        setShowJumpLatest(false);
+      });
     }, 100);
   }, []);
+
+  const jumpToLatest = useCallback(() => {
+    scrollToBottom({ force: true });
+  }, [scrollToBottom]);
+
+  // Follow the live end of the thread only while the reader is stuck to bottom.
+  useEffect(() => {
+    if (phase !== 'streaming') return;
+    if (!shouldAutoScrollChat({ stickToBottom: stickToBottomRef.current })) {
+      setShowJumpLatest(true);
+      return;
+    }
+    scrollToBottom();
+  }, [streamingTexts, phase, scrollToBottom]);
 
   const runRound = async (userMessage?: string) => {
     const nextRound = currentRound + 1;
@@ -314,6 +351,14 @@ export function DebateMode({
   const isPreDebate = currentRound === 0 && phase === 'idle';
   const displayRoundCap = MAX_ROUNDS;
   const displayRoundDots = Array.from({ length: MAX_ROUNDS }, (_, i) => i + 1);
+
+  // Reset stick-to-bottom whenever we land on the post-debate thread.
+  useEffect(() => {
+    if (isPreDebate) return;
+    stickToBottomRef.current = true;
+    setShowJumpLatest(false);
+    scrollToBottom({ force: true });
+  }, [isPreDebate, scrollToBottom]);
 
   const toggleRound = (roundNumber: number) => {
     setExpandedRounds((prev) => ({ ...prev, [roundNumber]: !prev[roundNumber] }));
@@ -851,7 +896,11 @@ export function DebateMode({
         </div>
       ) : (
         <>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '32px 24px', position: 'relative', zIndex: 1 }}>
+          <div
+            ref={threadScrollRef}
+            onScroll={syncScrollFlags}
+            style={{ flex: 1, overflowY: 'auto', padding: '32px 24px', position: 'relative', zIndex: 1 }}
+          >
             {challengedCard}
 
             <div className="debate-colosseum-divider" style={{ display: 'flex', alignItems: 'center', gap: '16px', margin: '0 auto 32px', maxWidth: '680px' }}>
@@ -978,6 +1027,40 @@ export function DebateMode({
 
             <div ref={threadEndRef} />
           </div>
+
+          {showJumpLatest ? (
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: 8,
+                display: 'flex',
+                justifyContent: 'center',
+                pointerEvents: 'none',
+                zIndex: 2,
+              }}
+            >
+              <button
+                type="button"
+                onClick={jumpToLatest}
+                style={{
+                  pointerEvents: 'auto',
+                  fontSize: 12,
+                  fontFamily: 'Georgia, serif',
+                  color: '#FAF7F2',
+                  background: '#C4956A',
+                  border: 'none',
+                  borderRadius: 999,
+                  padding: '6px 14px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(44,24,16,0.14)',
+                }}
+              >
+                {phase === 'streaming' ? 'Jump to latest · streaming' : 'Jump to latest'}
+              </button>
+            </div>
+          ) : null}
 
           <div
             className="debate-action-bar-enter"
