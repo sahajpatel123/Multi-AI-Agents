@@ -50,8 +50,8 @@ Each prompt picks 4 of these 16 for the panel. The panel is fully editable.
 |---|---|---|---|---|
 | **Guest** | 3 | 25k | 6 free | — |
 | **Free** (registered) | 5 | 25k | 6 free | — |
-| **Plus** | 15 | 100k | all 16 | Debate, Focus chat, Memory, Saved responses, Watchlist |
-| **Pro** | 35 + rolling 45/5h | 300k | all 16 | + Agent Mode, Orchestration, Scoring audit |
+| **Plus** | 15 | 100k | all 16 | Debate, Focus chat, Memory, Saved responses, Watchlist, Rooms |
+| **Pro** | 35 + rolling 45/5h | 300k | all 16 | + Agent Mode (7-stage research pipeline), Orchestration, Scoring audit, Calibration |
 | **Plus + Agent add-on** | — | — | all 16 | Unlocks Agent Mode for Plus users (₹599/mo) |
 
 ## Quick start
