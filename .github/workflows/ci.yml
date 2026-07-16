@@ -25,7 +25,9 @@ jobs:
       ALLOWED_ORIGINS: http://localhost:5173
       ENVIRONMENT: development
       DATABASE_URL: sqlite:///./arena_ci.db
-      ENCRYPTION_KEY: yFosmwgHKj-5dIFtmC5tl6yEWawwqRqZwE749ltw5Mc=
+      # ENCRYPTION_KEY is generated at runtime below to keep the workflow
+      # file free of any hardcoded Fernet key (gitleaks flags 44-char
+      # base64 strings as generic-api-key regardless of entropy origin).
       RAZORPAY_API_KEY: rzp_test_dummy
       RAZORPAY_KEY_SECRET: dummy_secret
       RAZORPAY_WEBHOOK_SECRET: dummy_webhook
@@ -47,6 +49,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-asyncio httpx
+
+      - name: Generate runtime encryption key
+        # Produce a fresh Fernet key per CI run so the workflow file never
+        # contains a long-lived credential. The key is exposed to later
+        # steps via $GITHUB_ENV.
+        run: |
+          pip install cryptography
+          KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+          echo "ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
 
       - name: Security scan (pip-audit)
         run: |
@@ -206,7 +217,8 @@ jobs:
       ALLOWED_ORIGINS: http://localhost:5173
       ENVIRONMENT: development
       DATABASE_URL: sqlite:///./arena_ci.db
-      ENCRYPTION_KEY: yFosmwgHKj-5dIFtmC5tl6yEWawwqRqZwE749ltw5Mc=
+      # ENCRYPTION_KEY is generated at runtime below to avoid committing
+      # a long-lived Fernet key in the workflow file.
       RAZORPAY_API_KEY: rzp_test_dummy
       RAZORPAY_KEY_SECRET: dummy_secret
       RAZORPAY_WEBHOOK_SECRET: dummy_webhook
@@ -229,6 +241,12 @@ jobs:
       - name: Install backend dependencies
         working-directory: web/backend
         run: pip install -r requirements.txt
+
+      - name: Generate runtime encryption key
+        working-directory: web/backend
+        run: |
+          KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+          echo "ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
 
       - name: Install frontend dependencies
         working-directory: web/frontend

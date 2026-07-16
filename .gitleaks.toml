@@ -48,15 +48,6 @@ title = "Multi-AI-Agents gitleaks config"
     '''sk-ol-[*]+[a-f0-9]{4}''',  # OpenAI key shape from earlier captured payload
   ]
 
-# CI workflow ENCRYPTION_KEY — base64-shaped but a fixture (Fernet keys for
-# tests need to be deterministic). Allowlisted by exact value rather than
-# pattern so a real secret here still trips generic-api-key.
-[[allowlists]]
-  description = "CI workflow ENCRYPTION_KEY fixture"
-  regexes = [
-    '''yFosmwgHKj-5dIFtmC5tl6yEWawwqRqZwE749ltw5Mc=''',
-  ]
-
 # Frontend localStorage key names — short high-entropy strings that match
 # generic-api-key by accident. Path-scoped to avoid masking real secrets
 # elsewhere.
@@ -68,22 +59,6 @@ title = "Multi-AI-Agents gitleaks config"
   ]
   regexes = [
     '''arena_recent_prompts_v1''',
-  ]
-
-# Path-based safety net: gitleaks-action v2 with --log-opts=-1 scans the
-# diff of HEAD against HEAD~1, but still reports findings whose CONTEXT
-# lines contain the secret (even when the line itself didn't change in
-# the latest commit). Regexes alone aren't enough to suppress those.
-# These two files contain only fixtures and key-name literals; any real
-# secret committed there would be caught by gitleaks' pre-commit hook or
-# the broader audit suite before reaching this gate.
-# Path regex uses (^|/) prefix to match against CI's absolute working
-# directory (/home/runner/work/Multi-AI-Agents/Multi-AI-Agents/...).
-[[allowlists]]
-  description = "Path safety net for ENCRYPTION_KEY + STORAGE_KEY false positives"
-  paths = [
-    '''(^|/)\.github/workflows/ci\.yml$''',
-    '''(^|/)web/frontend/src/lib/recentPrompts\.ts$''',
   ]
 
 # UI placeholder for Slack bot token entry, harmless literal.
