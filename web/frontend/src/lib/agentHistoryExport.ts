@@ -1,5 +1,7 @@
 /** Portable markdown for Agent Mode research history (list view). */
 
+import { formatIsoWhen } from './relativeTime';
+
 export type AgentHistoryExportItem = {
   title?: string | null;
   question?: string | null;
@@ -10,13 +12,6 @@ export type AgentHistoryExportItem = {
   isLive?: boolean;
   taskId?: string | null;
 };
-
-function formatWhen(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
-}
 
 function displayTitle(item: AgentHistoryExportItem): string {
   const title = (item.title || '').trim();
@@ -74,7 +69,7 @@ export function formatAgentHistoryExport(opts: {
         meta.push(`Confidence ${c}`);
       }
       if (item.isLive) meta.push('Live');
-      if (item.createdAt) meta.push(formatWhen(item.createdAt));
+      if (item.createdAt) meta.push(formatIsoWhen(item.createdAt, { fallback: '—' }));
       if (meta.length > 0) {
         lines.push(`- ${meta.join(' · ')}`);
       }
