@@ -111,6 +111,13 @@ import {
   roomNeedsAttention,
   type AgentRoomsActivityFilter,
 } from '../lib/agentRoomsActivityFilter';
+import {
+  AGENT_ROOMS_OCCUPANCY_OPTIONS,
+  agentRoomsOccupancyFilterUseful,
+  agentRoomsOccupancyLabel,
+  filterAgentRoomsByOccupancy,
+  type AgentRoomsOccupancyFilter,
+} from '../lib/agentRoomsOccupancyFilter';
 import { formatAgentRoomsExport } from '../lib/agentRoomsExport';
 import {
   AGENT_ROOMS_SORT_OPTIONS,
@@ -863,6 +870,8 @@ export function AgentPage() {
   const [roomsSort, setRoomsSort] = useState<AgentRoomsSort>('recent');
   const [roomsActivityFilter, setRoomsActivityFilter] =
     useState<AgentRoomsActivityFilter>('all');
+  const [roomsOccupancyFilter, setRoomsOccupancyFilter] =
+    useState<AgentRoomsOccupancyFilter>('all');
   const roomsSearchRef = useRef<HTMLInputElement | null>(null);
   const [copyRoomLinkFeedback, setCopyRoomLinkFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [shareRoomInviteStatus, setShareRoomInviteStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
@@ -2026,14 +2035,23 @@ export function AgentPage() {
       lastSeenAt: r.last_seen_at,
     }));
     const byActivity = filterAgentRoomsByActivity(annotated, roomsActivityFilter);
-    const searched = filterBySearchQuery(byActivity, roomsSearchQuery, (r) => [
+    const byOccupancy = filterAgentRoomsByOccupancy(byActivity, roomsOccupancyFilter);
+    const searched = filterBySearchQuery(byOccupancy, roomsSearchQuery, (r) => [
       r.name,
       r.slug,
       r.topic,
       r.description,
     ]);
     return sortAgentRooms(searched, roomsSort);
-  }, [myRooms, roomsSearchQuery, roomsSort, roomsActivityFilter]);
+  }, [myRooms, roomsSearchQuery, roomsSort, roomsActivityFilter, roomsOccupancyFilter]);
+
+  const roomsOccupancyFilterUseful = useMemo(
+    () =>
+      agentRoomsOccupancyFilterUseful(
+        myRooms.map((r: any) => ({ taskCount: r.task_count })),
+      ),
+    [myRooms],
+  );
 
   useEffect(() => {
     return () => {
@@ -2057,6 +2075,9 @@ export function AgentPage() {
     const filterBits: string[] = [];
     if (roomsActivityFilter !== 'all') {
       filterBits.push(`activity: ${agentRoomsActivityLabel(roomsActivityFilter)}`);
+    }
+    if (roomsOccupancyFilter !== 'all') {
+      filterBits.push(`occupancy: ${agentRoomsOccupancyLabel(roomsOccupancyFilter)}`);
     }
     if (q) filterBits.push(`search: “${q}”`);
     if (roomsSort !== 'recent') filterBits.push(`sort: ${agentRoomsSortLabel(roomsSort)}`);
@@ -3172,7 +3193,9 @@ export function AgentPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 10, color: '#A89070' }}>
                       {filteredMyRooms.length}
-                      {roomsSearchQuery.trim() || roomsActivityFilter !== 'all'
+                      {roomsSearchQuery.trim() ||
+                      roomsActivityFilter !== 'all' ||
+                      roomsOccupancyFilter !== 'all'
                         ? ` / ${myRooms.length}`
                         : ''}
                     </span>
@@ -3319,6 +3342,46 @@ export function AgentPage() {
                       })}
                     </div>
                   ) : null}
+                  {roomsOccupancyFilterUseful ? (
+                    <div
+                      role="group"
+                      aria-label="Filter rooms by task occupancy"
+                      style={{
+                        display: 'flex',
+                        gap: 6,
+                        marginBottom: 8,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {AGENT_ROOMS_OCCUPANCY_OPTIONS.map((opt) => {
+                        const selected = roomsOccupancyFilter === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setRoomsOccupancyFilter(opt.value)}
+                            aria-pressed={selected}
+                            style={{
+                              padding: '3px 9px',
+                              borderRadius: 999,
+                              border: selected
+                                ? '0.5px solid #C4956A'
+                                : '0.5px solid #D4C4B0',
+                              background: selected ? '#F0E6DA' : 'transparent',
+                              color: selected ? '#4A3728' : '#8C7355',
+                              fontSize: 10,
+                              fontFamily: 'Georgia, serif',
+                              cursor: 'pointer',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                   {myRooms.length > 1 ? (
                     <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
                       <select
@@ -3404,17 +3467,26 @@ export function AgentPage() {
                             roomsActivityFilter !== 'all'
                               ? ` in ${agentRoomsActivityLabel(roomsActivityFilter).toLowerCase()}`
                               : ''
+                          }${
+                            roomsOccupancyFilter !== 'all'
+                              ? ` · ${agentRoomsOccupancyLabel(roomsOccupancyFilter)}`
+                              : ''
                           }`
-                        : roomsActivityFilter === 'needs_attention'
-                          ? 'No rooms with new synthesis right now.'
-                          : roomsActivityFilter === 'caught_up'
-                            ? 'No caught-up rooms in this view.'
-                            : 'No rooms in this view.'}
+                        : roomsOccupancyFilter !== 'all' && roomsActivityFilter === 'all'
+                          ? roomsOccupancyFilter === 'empty'
+                            ? 'No empty rooms — every room has tasks.'
+                            : 'No rooms with tasks in this view.'
+                          : roomsActivityFilter === 'needs_attention'
+                            ? 'No rooms with new synthesis right now.'
+                            : roomsActivityFilter === 'caught_up'
+                              ? 'No caught-up rooms in this view.'
+                              : 'No rooms in this view.'}
                       <button
                         type="button"
                         onClick={() => {
                           setRoomsSearchQuery('');
                           setRoomsActivityFilter('all');
+                          setRoomsOccupancyFilter('all');
                           roomsSearchRef.current?.focus();
                         }}
                         style={{
@@ -3430,7 +3502,8 @@ export function AgentPage() {
                           textDecoration: 'underline',
                         }}
                       >
-                        {roomsActivityFilter !== 'all' && !roomsSearchQuery.trim()
+                        {(roomsActivityFilter !== 'all' || roomsOccupancyFilter !== 'all') &&
+                        !roomsSearchQuery.trim()
                           ? 'Show all rooms'
                           : 'Clear filters'}
                       </button>

@@ -148,6 +148,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Watchlist cadence filter**: chips for Daily / Every 3 days / Weekly when the list has mixed cadences (export notes filter; Clear resets cadence).
 - **Room board score filter**: All scores / 75+ / 60–74 / Below 60 / No score chips on the research board (export notes filter).
 - **Sidebar Saved score filter**: same score bands filter bookmarked takes (works with mind filter; export notes filter).
+- **Agent rooms occupancy filter**: All rooms / With tasks / Empty chips when the list is mixed (export notes filter).
 
 ## Required production environment
 

@@ -142,6 +142,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Room research board: filter by score band',
       '[NEW] Sidebar Saved takes: filter by score band',
       '[NEW] Agent Watchlist: filter by re-check cadence (Daily / 3-day / Weekly)',
+      '[NEW] Agent Rooms list: filter With tasks vs Empty',
     ],
   },
   {
