@@ -152,6 +152,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent rooms occupancy filter**: All rooms / With tasks / Empty chips when the list is mixed (export notes filter).
 - **Agent rooms membership filter**: All sizes / Solo / Shared chips when both exist (export notes filter).
 - **Templates expertise filter**: All levels / Curious / Practitioner / Researcher / Expert chips when mixed (export notes filter).
+- **Agent history topic filter**: All topics + top tags from research history (export notes filter).
 
 ## Required production environment
 

@@ -146,6 +146,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Agent Rooms list: filter Solo vs Shared',
       '[NEW] Agent Watchlist: filter by due timing (Overdue / Due soon / Later) with card emphasis',
       '[NEW] Agent task templates: filter by expertise level',
+      '[NEW] Agent research history: filter by topic tags',
     ],
   },
   {

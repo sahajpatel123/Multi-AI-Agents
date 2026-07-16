@@ -105,6 +105,14 @@ import {
   type AgentHistoryScoreFilter,
 } from '../lib/agentHistoryScoreFilter';
 import {
+  AGENT_HISTORY_TOPIC_ALL,
+  agentHistoryTopicFilterUseful,
+  agentHistoryTopicLabel,
+  collectHistoryTopicOptions,
+  filterAgentHistoryByTopic,
+  type AgentHistoryTopicFilter,
+} from '../lib/agentHistoryTopicFilter';
+import {
   AGENT_ROOMS_ACTIVITY_OPTIONS,
   agentRoomsActivityLabel,
   filterAgentRoomsByActivity,
@@ -787,6 +795,8 @@ export function AgentPage() {
     useState<AgentHistoryStatusFilter>('all');
   const [historyScoreFilter, setHistoryScoreFilter] =
     useState<AgentHistoryScoreFilter>('all');
+  const [historyTopicFilter, setHistoryTopicFilter] =
+    useState<AgentHistoryTopicFilter>(AGENT_HISTORY_TOPIC_ALL);
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
@@ -1997,10 +2007,12 @@ export function AgentPage() {
       historyStatusFilter,
     );
     const byScore = filterAgentHistoryByScore(byStatus, historyScoreFilter);
-    const searched = filterBySearchQuery(byScore, historySearchQuery, (item) => [
+    const byTopic = filterAgentHistoryByTopic(byScore, historyTopicFilter);
+    const searched = filterBySearchQuery(byTopic, historySearchQuery, (item) => [
       item.title,
       item.task_text,
       agentHistoryDisplayTitle(item),
+      ...(item.topics || []),
     ]);
     return sortAgentHistoryItems(
       searched.map((item) => ({
@@ -2014,12 +2026,37 @@ export function AgentPage() {
       })),
       historySort,
     );
-  }, [taskHistory, historySearchQuery, historySort, historyStatusFilter, historyScoreFilter]);
+  }, [
+    taskHistory,
+    historySearchQuery,
+    historySort,
+    historyStatusFilter,
+    historyScoreFilter,
+    historyTopicFilter,
+  ]);
 
   const historyScoreFilterUseful = useMemo(
     () => agentHistoryScoreFilterUseful(taskHistory),
     [taskHistory],
   );
+
+  const historyTopicOptions = useMemo(
+    () => collectHistoryTopicOptions(taskHistory),
+    [taskHistory],
+  );
+
+  const historyTopicFilterUseful = useMemo(
+    () => agentHistoryTopicFilterUseful(taskHistory),
+    [taskHistory],
+  );
+
+  // Drop topic filter when that topic no longer appears in history.
+  useEffect(() => {
+    if (historyTopicFilter === AGENT_HISTORY_TOPIC_ALL) return;
+    if (!historyTopicOptions.some((o) => o.value === historyTopicFilter)) {
+      setHistoryTopicFilter(AGENT_HISTORY_TOPIC_ALL);
+    }
+  }, [historyTopicFilter, historyTopicOptions]);
 
   const roomsBodyMode = roomsListBodyMode({
     loading: myRoomsLoading,
@@ -2178,6 +2215,11 @@ export function AgentPage() {
     }
     if (historyScoreFilter !== 'all') {
       filterBits.push(`score: ${agentHistoryScoreLabel(historyScoreFilter)}`);
+    }
+    if (historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL) {
+      filterBits.push(
+        `topic: ${agentHistoryTopicLabel(historyTopicFilter, historyTopicOptions)}`,
+      );
     }
     if (q) filterBits.push(`search: “${q}”`);
     if (historySort !== 'newest') filterBits.push(`sort: ${agentHistorySortLabel(historySort)}`);
@@ -3730,7 +3772,8 @@ export function AgentPage() {
                     {filteredTaskHistory.length}
                     {historySearchQuery.trim() ||
                     historyStatusFilter !== 'all' ||
-                    historyScoreFilter !== 'all'
+                    historyScoreFilter !== 'all' ||
+                    historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL
                       ? ` / ${taskHistory.length}`
                       : ''}
                   </span>
@@ -3883,6 +3926,43 @@ export function AgentPage() {
                     })}
                   </div>
                 ) : null}
+                {historyTopicFilterUseful ? (
+                  <div
+                    role="group"
+                    aria-label="Filter history by topic"
+                    style={{
+                      display: 'flex',
+                      gap: 6,
+                      marginBottom: 8,
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {historyTopicOptions.map((opt) => {
+                      const selected = historyTopicFilter === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setHistoryTopicFilter(opt.value)}
+                          aria-pressed={selected}
+                          style={{
+                            padding: '3px 10px',
+                            borderRadius: 999,
+                            border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                            background: selected ? '#F0E6DA' : 'transparent',
+                            color: selected ? '#4A3728' : '#8C7355',
+                            fontSize: 11,
+                            fontFamily: 'Georgia, serif',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                   <select
                     value={historySort}
@@ -4004,14 +4084,22 @@ export function AgentPage() {
                       historyScoreFilter !== 'all'
                         ? ` · ${agentHistoryScoreLabel(historyScoreFilter)}`
                         : ''
+                    }${
+                      historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL
+                        ? ` · ${agentHistoryTopicLabel(historyTopicFilter, historyTopicOptions)}`
+                        : ''
                     }`
-                  : historyScoreFilter !== 'all' && historyStatusFilter === 'all'
-                    ? `No tasks with score ${agentHistoryScoreLabel(historyScoreFilter)}.`
-                    : historyStatusFilter === 'live'
-                      ? 'No live weekly-update tasks yet.'
-                      : historyStatusFilter === 'completed'
-                        ? 'No one-off research tasks in this view.'
-                        : 'No matching history.'}
+                  : historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL &&
+                      historyStatusFilter === 'all' &&
+                      historyScoreFilter === 'all'
+                    ? `No tasks tagged ${agentHistoryTopicLabel(historyTopicFilter, historyTopicOptions)}.`
+                    : historyScoreFilter !== 'all' && historyStatusFilter === 'all'
+                      ? `No tasks with score ${agentHistoryScoreLabel(historyScoreFilter)}.`
+                      : historyStatusFilter === 'live'
+                        ? 'No live weekly-update tasks yet.'
+                        : historyStatusFilter === 'completed'
+                          ? 'No one-off research tasks in this view.'
+                          : 'No matching history.'}
                 <br />
                 <button
                   type="button"
@@ -4019,6 +4107,7 @@ export function AgentPage() {
                     setHistorySearchQuery('');
                     setHistoryStatusFilter('all');
                     setHistoryScoreFilter('all');
+                    setHistoryTopicFilter(AGENT_HISTORY_TOPIC_ALL);
                     historySearchRef.current?.focus();
                   }}
                   style={{
@@ -4032,7 +4121,9 @@ export function AgentPage() {
                     textDecoration: 'underline',
                   }}
                 >
-                  {(historyStatusFilter !== 'all' || historyScoreFilter !== 'all') &&
+                  {(historyStatusFilter !== 'all' ||
+                    historyScoreFilter !== 'all' ||
+                    historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL) &&
                   !historySearchQuery.trim()
                     ? 'Show all history'
                     : 'Clear filters'}
