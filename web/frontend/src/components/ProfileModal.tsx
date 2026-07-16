@@ -1583,7 +1583,14 @@ export function ProfileModal() {
                             {verdict || 'unknown'}
                           </span>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(
+                                  `/agent?task_id=${encodeURIComponent(item.task_id)}`,
+                                )
+                              }
+                              title="Open this research in Agent Mode"
                               style={{
                                 fontSize: 13,
                                 color: '#2C1810',
@@ -1593,10 +1600,20 @@ export function ProfileModal() {
                                 display: '-webkit-box',
                                 WebkitLineClamp: 2,
                                 WebkitBoxOrient: 'vertical',
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                font: 'inherit',
+                                width: '100%',
+                                textDecoration: 'underline',
+                                textDecorationColor: 'rgba(196,149,106,0.45)',
+                                textUnderlineOffset: 2,
                               }}
                             >
                               {item.title || item.task_text || item.task_id}
-                            </div>
+                            </button>
                             {item.note ? (
                               <p
                                 style={{
