@@ -4045,6 +4045,7 @@ export function AgentPage() {
                       if (recentChips.length === 0) return null;
                       return (
                       <div
+                        role="list"
                         style={{
                           display: 'flex',
                           flexWrap: 'wrap',
@@ -4059,10 +4060,23 @@ export function AgentPage() {
                         aria-label="Recent research"
                       >
                         {recentChips.map((chip) => (
+                          <div
+                            key={chip.task_id}
+                            role="listitem"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              maxWidth: isMobile ? '46vw' : 220,
+                              background: 'rgba(255,255,255,0.72)',
+                              border: '0.5px solid #E0D8D0',
+                              borderRadius: 999,
+                              overflow: 'hidden',
+                            }}
+                          >
                             <button
-                              key={chip.task_id}
                               type="button"
-                              title={`${chip.task_text} — right-click to hide`}
+                              title={chip.task_text}
+                              aria-label={`Reuse recent research: ${chip.label}`}
                               onClick={() => {
                                 setSelectedTemplate(null);
                                 setTemplateSlots({});
@@ -4070,42 +4084,61 @@ export function AgentPage() {
                                 setTask(chip.task_text);
                                 requestAnimationFrame(() => idleTaskInputRef.current?.focus());
                               }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Backspace' || e.key === 'Delete') {
+                                  e.preventDefault();
+                                  setDismissedChipIds(dismissAgentChip(chip.task_id));
+                                }
+                              }}
                               onContextMenu={(e) => {
                                 e.preventDefault();
                                 setDismissedChipIds(dismissAgentChip(chip.task_id));
                               }}
                               style={{
-                                maxWidth: isMobile ? '46vw' : 200,
+                                flex: 1,
+                                minWidth: 0,
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
                                 fontSize: 12,
                                 color: '#6B6460',
-                                background: 'rgba(255,255,255,0.72)',
-                                border: '0.5px solid #E0D8D0',
-                                borderRadius: 999,
-                                padding: '6px 12px',
+                                background: 'transparent',
+                                border: 'none',
+                                padding: '6px 4px 6px 12px',
                                 cursor: 'pointer',
                                 fontFamily: 'Georgia, serif',
-                                transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease',
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = '#F0EBE3';
-                                e.currentTarget.style.borderColor = '#C4956A';
-                                e.currentTarget.style.color = '#1A1714';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = 'rgba(255,255,255,0.72)';
-                                e.currentTarget.style.borderColor = '#E0D8D0';
-                                e.currentTarget.style.color = '#6B6460';
+                                textAlign: 'left',
                               }}
                             >
                               {chip.label}
                             </button>
+                            <button
+                              type="button"
+                              aria-label={`Hide recent research: ${chip.label}`}
+                              title="Hide this chip (local only)"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDismissedChipIds(dismissAgentChip(chip.task_id));
+                              }}
+                              style={{
+                                flexShrink: 0,
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: 14,
+                                color: '#A89070',
+                                lineHeight: 1,
+                                padding: '6px 10px 6px 4px',
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
                         ))}
                         <button
                           type="button"
                           title="Show all recent chips again (local)"
+                          aria-label="Reset hidden recent research chips"
                           onClick={() => setDismissedChipIds(clearDismissedAgentChips())}
                           style={{
                             fontSize: 11,

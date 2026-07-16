@@ -97,6 +97,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Cross-pollinate shows busy state; Discuss/Debate errors can be dismissed',
       '[IMPROVED] Agent errors are dismissible recovery cards; Pricing banners use live regions',
       '[NEW] Back to top floating control on long pages (Agent answers, changelog, marketing)',
+      '[IMPROVED] Agent recent research chips: tap × to hide (mobile-friendly)',
     ],
   },
   {
