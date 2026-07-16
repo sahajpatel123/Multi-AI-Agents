@@ -303,12 +303,11 @@ def get_health_data(db_connected: bool) -> dict:
     Callers (load balancers, Render) should treat degraded as not fully ready.
 
     This is the UNAUTHENTICATED surface — keep it minimal. Operational
-    detail (uptime, internal request counts) is exposed only via
+    detail (uptime, version, worker identity) is exposed only via
     get_health_data_detailed(), which the /api/health/detailed endpoint
-    gates behind authentication. The split exists because total_requests_today
-    alone is competitive intelligence, and uptime_seconds + version combined
-    pin the release window in a way that helps an attacker pick the right
-    exploit timing.
+    gates behind authentication. The split exists because uptime_seconds
+    + version pin the release window in a way that helps an attacker pick
+    the right exploit timing.
     """
     return {
         "status": "healthy" if db_connected else "degraded",
@@ -319,10 +318,16 @@ def get_health_data(db_connected: bool) -> dict:
 def get_health_data_detailed(db_connected: bool) -> dict:
     """Authenticated, operator-facing health payload.
 
-    Same shape as the public one plus uptime, app version, and the rolling
-    request count. Returned only by /api/health/detailed which requires a
-    valid bearer token. NEVER call this from an unauthenticated path.
+    Returns the public fields plus app version, process uptime, and the
+    worker's OS PID. Returned only by /api/health/detailed which requires
+    a valid bearer token. NEVER call this from an unauthenticated path.
+
+    Notably ABSENT here is a request-count field — a per-process counter
+    would be misleading (multi-worker Render deployments see N independent
+    counters, and showing a single one lies). Drop the field rather than
+    expose a value that silently misrepresents the deployment.
     """
+    import os
     from arena.config import get_settings
     settings = get_settings()
     uptime = int(time.time() - _app_start_time)
@@ -330,5 +335,5 @@ def get_health_data_detailed(db_connected: bool) -> dict:
         **get_health_data(db_connected),
         "version": settings.app_version,
         "uptime_seconds": uptime,
-        "total_requests_today": _requests_today,
+        "worker_pid": os.getpid(),
     }

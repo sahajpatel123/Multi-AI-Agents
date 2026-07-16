@@ -24,6 +24,7 @@ const ARENA: ShortcutHint[] = [
 const AGENT: ShortcutHint[] = [
   { keys: '/', action: 'Focus research compose or follow-up' },
   { keys: 'Enter', action: 'Run task or send follow-up' },
+  { keys: 'Esc', action: 'Close attach menu, cadence picker, or rename' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
 

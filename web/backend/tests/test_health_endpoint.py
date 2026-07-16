@@ -65,13 +65,33 @@ class TestDetailedHealth:
         body = res.json()
         # Authenticated callers see the operational panel.
         for required in ("status", "database", "version", "uptime_seconds",
-                         "total_requests_today"):
+                         "worker_pid"):
             assert required in body, (
                 f"authenticated /api/health/detailed must include {required!r}; "
                 f"got {sorted(body.keys())}"
             )
         assert isinstance(body["uptime_seconds"], int)
         assert body["uptime_seconds"] >= 0
+        assert isinstance(body["worker_pid"], int)
+
+    @pytest.mark.asyncio
+    async def test_detailed_does_not_expose_per_process_request_counter(
+        self, app_client, auth_headers, isolated_db
+    ):
+        # Per-worker in-memory counters misrepresented cross-worker traffic.
+        # The contract is: do not surface any field that pretends to be a
+        # global request count when it is really one worker's count.
+        headers = auth_headers()
+        res = await app_client.get("/api/health/detailed", headers=headers)
+        assert res.status_code == 200
+        body = res.json()
+        for sensitive in ("total_requests_today", "request_count",
+                          "requests_today", "total_requests"):
+            assert sensitive not in body, (
+                f"/api/health/detailed must not expose {sensitive!r} — it "
+                f"is a per-process counter and would silently misrepresent "
+                f"a multi-worker deployment."
+            )
 
 
 class TestGetHealthDataFunctions:
@@ -82,14 +102,14 @@ class TestGetHealthDataFunctions:
         body = get_health_data(db_connected=True)
         assert set(body.keys()) == {"status", "database"}
         # Make sure NO operational field is even reachable by accident.
-        for sensitive in ("version", "uptime_seconds", "total_requests_today"):
+        for sensitive in ("version", "uptime_seconds", "worker_pid"):
             assert sensitive not in body
 
     def test_detailed_helper_includes_operational_fields(self):
         from arena.core.observability import get_health_data_detailed
         body = get_health_data_detailed(db_connected=True)
         for required in ("status", "database", "version",
-                         "uptime_seconds", "total_requests_today"):
+                         "uptime_seconds", "worker_pid"):
             assert required in body
 
     def test_detailed_is_a_strict_superset_of_public(self):
@@ -102,5 +122,5 @@ class TestGetHealthDataFunctions:
         assert public.issubset(detailed)
         # And detailed adds at least the three sensitive fields.
         assert detailed - public >= {
-            "version", "uptime_seconds", "total_requests_today"
+            "version", "uptime_seconds", "worker_pid"
         }

@@ -9,6 +9,11 @@ describe('keyboardShortcuts', () => {
   it('lists primary shortcuts per surface', () => {
     expect(shortcutsForSurface('arena').some((s) => s.keys === '/')).toBe(true);
     expect(shortcutsForSurface('agent').some((s) => s.action.includes('follow-up'))).toBe(true);
+    expect(
+      shortcutsForSurface('agent').some(
+        (s) => s.keys === 'Esc' && s.action.toLowerCase().includes('rename'),
+      ),
+    ).toBe(true);
     expect(shortcutsForSurface('discuss').some((s) => s.keys === 'Enter')).toBe(true);
     expect(shortcutsForSurface('discuss').some((s) => s.keys === 'Esc' && s.action.includes('Arena'))).toBe(
       true,

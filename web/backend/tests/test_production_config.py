@@ -23,7 +23,7 @@ def test_get_health_data_healthy_when_db_connected():
     detailed = get_health_data_detailed(db_connected=True)
     assert "version" in detailed
     assert "uptime_seconds" in detailed
-    assert "total_requests_today" in detailed
+    assert "worker_pid" in detailed
 
 
 def test_get_health_data_degraded_when_db_disconnected():
