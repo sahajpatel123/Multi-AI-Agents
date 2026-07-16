@@ -128,6 +128,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Watchlist sort**: sort watches by next run, last run, score, run count, or question (export honors sort).
 - **Agent history download .md**: sidebar History can download the filtered/sorted research list as a markdown file.
 - **Room board member filter**: click a member (sidebar or chips) to show only their tasks; export notes the filter.
+- **Agent rooms sort**: sidebar Rooms list sorts by recent activity, newest, name, members, or tasks (search still applies).
 
 ## Required production environment
 

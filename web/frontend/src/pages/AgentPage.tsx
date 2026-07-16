@@ -92,6 +92,11 @@ import {
   type AgentHistorySort,
 } from '../lib/agentHistorySort';
 import {
+  AGENT_ROOMS_SORT_OPTIONS,
+  sortAgentRooms,
+  type AgentRoomsSort,
+} from '../lib/agentRoomsSort';
+import {
   AGENT_TASK_TITLE_MAX,
   agentTaskRenameCaughtErrorMessage,
   agentTaskRenameIssueMessage,
@@ -825,6 +830,7 @@ export function AgentPage() {
   const [myRoomsLoading, setMyRoomsLoading] = useState(false);
   const [myRoomsLoadFailed, setMyRoomsLoadFailed] = useState(false);
   const [roomsSearchQuery, setRoomsSearchQuery] = useState('');
+  const [roomsSort, setRoomsSort] = useState<AgentRoomsSort>('recent');
   const roomsSearchRef = useRef<HTMLInputElement | null>(null);
   const [copyRoomLinkFeedback, setCopyRoomLinkFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [shareRoomInviteStatus, setShareRoomInviteStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
@@ -1967,16 +1973,24 @@ export function AgentPage() {
     itemCount: taskHistory.length,
   });
 
-  const filteredMyRooms = useMemo(
-    () =>
-      filterBySearchQuery(myRooms, roomsSearchQuery, (r) => [
-        r.name,
-        r.slug,
-        r.topic,
-        r.description,
-      ]),
-    [myRooms, roomsSearchQuery],
-  );
+  const filteredMyRooms = useMemo(() => {
+    const searched = filterBySearchQuery(myRooms, roomsSearchQuery, (r) => [
+      r.name,
+      r.slug,
+      r.topic,
+      r.description,
+    ]);
+    return sortAgentRooms(
+      searched.map((r: any) => ({
+        ...r,
+        memberCount: r.member_count,
+        taskCount: r.task_count,
+        createdAt: r.created_at,
+        activityAt: r.synthesis_updated_at || r.last_seen_at || r.created_at,
+      })),
+      roomsSort,
+    );
+  }, [myRooms, roomsSearchQuery, roomsSort]);
 
   useEffect(() => {
     return () => {
@@ -3067,6 +3081,34 @@ export function AgentPage() {
                 </div>
               ) : (
                 <>
+                  {myRooms.length > 1 ? (
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
+                      <select
+                        value={roomsSort}
+                        onChange={(e) => setRoomsSort(e.target.value as AgentRoomsSort)}
+                        aria-label="Sort rooms"
+                        title="Sort rooms"
+                        style={{
+                          fontSize: 11,
+                          fontFamily: 'Georgia, serif',
+                          color: '#4A3728',
+                          background: '#FAF7F4',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 6,
+                          padding: '5px 8px',
+                          cursor: 'pointer',
+                          flex: '0 1 auto',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        {AGENT_ROOMS_SORT_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
                   {myRooms.length > 2 ? (
                     <div style={{ position: 'relative', marginBottom: 8 }}>
                       <input
