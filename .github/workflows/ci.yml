@@ -139,7 +139,17 @@ jobs:
         working-directory: web/backend
         run: |
           nohup python main.py > /tmp/backend.log 2>&1 &
-          sleep 5
+          # Wait for backend to be ready instead of fixed sleep
+          for i in {1..30}; do
+            if curl -s http://localhost:8000/api/health | grep -q ok; then
+              echo "Backend ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Backend failed to start"
+          cat /tmp/backend.log
+          exit 1
 
       - name: Run Playwright tests
         run: npx playwright test
