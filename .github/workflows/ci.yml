@@ -49,12 +49,59 @@ jobs:
           pip install pytest pytest-asyncio httpx
 
       - name: Security scan (pip-audit)
-        continue-on-error: true
         run: |
           pip install pip-audit
-          # Scan installed packages for vulnerabilities - report but don't block
-          # Security fixes are applied but some transitive deps require careful handling
-          pip-audit --ignore-vuln PYSEC-2026-161 --ignore-vuln PYSEC-2026-248 --ignore-vuln PYSEC-2026-249 --ignore-vuln PYSEC-2026-1941 --ignore-vuln PYSEC-2026-2280 --ignore-vuln PYSEC-2026-2281 --ignore-vuln PYSEC-2026-1943 || true
+          # Scan requirements.txt directly so we cover every dependency,
+          # not just what happens to be installed in the CI environment.
+          # A HIGH/CRITICAL finding now FAILS the build. Transitive deps
+          # without an upstream fix are individually triaged via the
+          # --ignore-vuln list below; the tier_config pin guard in the
+          # next step locks the direct-dep security floor.
+          pip-audit -r requirements.txt \
+            --ignore-vuln PYSEC-2026-161 \
+            --ignore-vuln PYSEC-2026-248 \
+            --ignore-vuln PYSEC-2026-249 \
+            --ignore-vuln PYSEC-2026-1941 \
+            --ignore-vuln PYSEC-2026-2280 \
+            --ignore-vuln PYSEC-2026-2281 \
+            --ignore-vuln PYSEC-2026-1943
+
+      - name: Pin floor guard (security-required versions)
+        run: |
+          # Defense-in-depth: even if a future pip-audit database update
+          # silently drops a vulnerable-package match, the package FLOOR
+          # below must stay. A regression to any older pin fails the build.
+          python -c "
+          import re, sys
+          REQUIRED = {
+              'python-jose':   '3.4.0',
+              'python-multipart': '0.0.22',
+              'cryptography':  '48.0.1',
+              'Pillow':        '12.3.0',
+              'python-dotenv': '1.2.2',
+              'markdown':      '3.8.1',
+              'weasyprint':    '68.0',
+              'pytest':        '9.0.3',
+          }
+          text = open('requirements.txt').read()
+          failures = []
+          for pkg, min_ver in REQUIRED.items():
+              pattern = rf'^{re.escape(pkg)}(?:\[.*?\])?==(\d+(?:\.\d+)+)'
+              match = re.search(pattern, text, re.MULTILINE)
+              if not match:
+                  failures.append(f'MISSING: {pkg}=={min_ver}')
+                  continue
+              current = tuple(int(x) for x in match.group(1).split('.'))
+              floor   = tuple(int(x) for x in min_ver.split('.'))
+              if current < floor:
+                  failures.append(f'REGRESSED: {pkg}=={match.group(1)} (require >= {min_ver})')
+          if failures:
+              print('Security floor violations:')
+              for f in failures:
+                  print(f'  - {f}')
+              sys.exit(1)
+          print('Security floor OK')
+          "
 
       - name: Compile check
         run: python -m compileall -q arena
