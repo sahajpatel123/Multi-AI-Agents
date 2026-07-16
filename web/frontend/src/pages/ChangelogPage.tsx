@@ -106,6 +106,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Perspective comparison: real mind names, Escape, copy markdown',
       '[IMPROVED] Perspective comparison highlights shared terms and each mind’s distinctive keywords',
       '[IMPROVED] Escape returns to Arena from Discuss, Debate, and Leaderboard (modals still take Esc first)',
+      '[IMPROVED] Agent Leaderboard shows session prompts with winners and copies the full transcript',
     ],
   },
   {

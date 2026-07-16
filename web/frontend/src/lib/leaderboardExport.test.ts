@@ -18,8 +18,27 @@ describe('formatLeaderboardExport', () => {
     expect(md).toContain('Shared from Arena');
   });
 
+  it('includes session prompt transcript when provided', () => {
+    const md = formatLeaderboardExport({
+      totalPrompts: 1,
+      rows: [{ name: 'The Analyst', wins: 1, percentage: 100 }],
+      turns: [
+        {
+          prompt: 'Should we expand?',
+          winnerName: 'The Analyst',
+          oneLiner: 'Stress-test the runway first.',
+        },
+      ],
+    });
+    expect(md).toContain('## Session prompts');
+    expect(md).toContain('Should we expand?');
+    expect(md).toContain('**Winner:** The Analyst');
+    expect(md).toContain('Stress-test the runway first.');
+  });
+
   it('handles empty sessions honestly', () => {
     const md = formatLeaderboardExport({ totalPrompts: 0, rows: [] });
     expect(md).toContain('No prompts scored');
+    expect(md).not.toContain('## Session prompts');
   });
 });

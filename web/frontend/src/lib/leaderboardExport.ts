@@ -6,9 +6,16 @@ export type LeaderboardExportRow = {
   percentage: number;
 };
 
+export type LeaderboardExportTurn = {
+  prompt: string;
+  winnerName: string;
+  oneLiner?: string;
+};
+
 export function formatLeaderboardExport(opts: {
   rows: LeaderboardExportRow[];
   totalPrompts: number;
+  turns?: LeaderboardExportTurn[];
 }): string {
   const total = Math.max(0, Math.floor(opts.totalPrompts || 0));
   const lines: string[] = [
@@ -38,7 +45,26 @@ export function formatLeaderboardExport(opts: {
     });
   }
 
-  lines.push('');
+  const turns = opts.turns || [];
+  if (turns.length > 0) {
+    lines.push('');
+    lines.push('## Session prompts');
+    lines.push('');
+    turns.forEach((turn, i) => {
+      const prompt = (turn.prompt || '').trim() || '(no prompt)';
+      const winner = (turn.winnerName || 'Mind').trim() || 'Mind';
+      const oneLiner = (turn.oneLiner || '').trim();
+      lines.push(`### ${i + 1}. ${prompt}`);
+      lines.push('');
+      lines.push(`**Winner:** ${winner}`);
+      if (oneLiner) {
+        lines.push('');
+        lines.push(`> ${oneLiner}`);
+      }
+      lines.push('');
+    });
+  }
+
   lines.push('---');
   lines.push('_Shared from Arena_');
   return lines.join('\n').trim() + '\n';

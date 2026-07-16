@@ -116,6 +116,26 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onBack]);
 
+  const turnSummaries = useMemo(() => {
+    const nameById = new Map(leaderboard.map((r) => [r.agent_id, r.name]));
+    return (turns || []).map((t) => {
+      const winnerId = t.winner_id;
+      const winnerName =
+        nameById.get(winnerId) ||
+        AGENTS[winnerId]?.name ||
+        winnerId ||
+        'Mind';
+      const oneLiner = (t.agent_responses?.[winnerId]?.one_liner || '').trim();
+      return {
+        turnId: t.turn_id,
+        prompt: (t.prompt || '').trim(),
+        winnerId,
+        winnerName,
+        oneLiner,
+      };
+    });
+  }, [turns, leaderboard]);
+
   const handleCopy = async () => {
     const md = formatLeaderboardExport({
       totalPrompts,
@@ -123,6 +143,11 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
         name: r.name,
         wins: r.wins,
         percentage: r.percentage,
+      })),
+      turns: turnSummaries.map((t) => ({
+        prompt: t.prompt,
+        winnerName: t.winnerName,
+        oneLiner: t.oneLiner,
       })),
     });
     const ok = await copyToClipboard(md);
@@ -187,7 +212,14 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
               void handleCopy();
             }}
             disabled={!hasData}
-            title={hasData ? 'Copy leaderboard as markdown' : 'Prompt first to build rankings'}
+            title={hasData ? 'Copy rankings and session prompts as markdown' : 'Prompt first to build rankings'}
+            aria-label={
+              copyFeedback === 'copied'
+                ? 'Session copied'
+                : copyFeedback === 'failed'
+                  ? 'Copy failed'
+                  : 'Copy rankings and session prompts as markdown'
+            }
             style={{
               fontSize: 12,
               fontFamily: 'Georgia, serif',
@@ -209,7 +241,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
               ? 'Copied'
               : copyFeedback === 'failed'
                 ? 'Copy failed'
-                : 'Copy rankings'}
+                : 'Copy session'}
           </button>
         </div>
         <p style={{ fontSize: '13px', color: '#9A9088', margin: 0 }}>
@@ -336,7 +368,85 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
             );
           })}
         </div>
-      ) : (
+      ) : null}
+
+      {hasData && turnSummaries.length > 0 ? (
+        <div style={{ marginTop: 28 }}>
+          <div
+            style={{
+              fontSize: 11,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              color: '#A89070',
+              marginBottom: 12,
+            }}
+          >
+            Session prompts
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {turnSummaries.map((t, index) => (
+              <div
+                key={t.turnId || index}
+                style={{
+                  background: '#FFFFFF',
+                  border: '0.5px solid #E8E0D8',
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: '#1A1714',
+                    lineHeight: 1.45,
+                    marginBottom: 8,
+                    fontFamily: 'Georgia, serif',
+                  }}
+                >
+                  {t.prompt || '(no prompt)'}
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    flexWrap: 'wrap',
+                    marginBottom: t.oneLiner ? 6 : 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      color: '#A89070',
+                    }}
+                  >
+                    Winner
+                  </span>
+                  <AgentDot agentId={t.winnerId} size={7} />
+                  <span style={{ fontSize: 12, color: '#4A3728', fontWeight: 500 }}>{t.winnerName}</span>
+                </div>
+                {t.oneLiner ? (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 12,
+                      color: '#6B6460',
+                      fontStyle: 'italic',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    “{t.oneLiner}”
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {!hasData ? (
         <div
           style={{
             display: 'flex',
@@ -397,7 +507,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
             Go to Arena
           </button>
         </div>
-      )}
+      ) : null}
 
       {hasData && topAgent && topAgent.wins > 0 && (
         <div
