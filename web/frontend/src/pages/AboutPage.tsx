@@ -90,7 +90,7 @@ export function AboutPage() {
               <div style={{ fontSize: '32px', fontWeight: 500, color: 'rgba(250,247,244,0.15)', marginBottom: '.8rem' }}>03</div>
               <h3 style={{ fontSize: '14px', fontWeight: 500, color: '#FAF7F4', marginBottom: '.5rem' }}>What ships today</h3>
               <p style={{ fontSize: '13px', color: 'rgba(250,247,244,0.6)', lineHeight: 1.65 }}>
-                Arena panel, debate, focus chat, 16 personas, and Agent Mode (plan through judge) are live. Local computer agency stays with Condura — free, on your machine — not a cloud desktop or browser shim.
+                Arena panel, debate, focus chat, 16 personas, Watchlist (recurring research), Saved takes, Rooms (collaboration), and Agent Mode (plan through judge) are live — with calibration so Arena learns how you evaluate answers. Local computer agency stays with Condura — free, on your machine — not a cloud desktop or browser shim.
               </p>
             </div>
           </div>
