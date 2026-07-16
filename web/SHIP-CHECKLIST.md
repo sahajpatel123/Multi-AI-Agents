@@ -171,6 +171,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Discuss jump-to-latest**: when the user scrolls up in a 1-on-1 thread, auto-scroll pauses and a “Jump to latest” chip appears; send still pins to the live end.
 - **Arena focused mind**: original + reply takes render as markdown (reading time / outline when useful); Jump to latest when scrolled up during focused chat.
 - **Discuss/Debate markdown takes**: agent messages, original verdict, and debate reactions use AgentAnswerMarkdown (reading chrome + section jump when multi-heading).
+- **Room synthesis markdown**: group synthesis body uses AgentAnswerMarkdown (reading time + outline when multi-section).
 
 ## Required production environment
 

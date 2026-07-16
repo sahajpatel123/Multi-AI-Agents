@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { addRoomTask, getAgentHistory, getRoom, getRoomSynthesis, joinRoom, removeRoomTask } from '../api';
+import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
 import { PerspectiveDriftPanel } from '../components/PerspectiveDriftPanel';
@@ -964,16 +965,23 @@ export function RoomPage() {
           {synthText ? (
             <div
               style={{
-                padding: '12px 12px 14px',
+                padding: '12px 14px 16px',
                 borderTop: '0.5px solid #EDE4D8',
                 marginTop: 4,
-                fontSize: 13,
-                color: '#4A3728',
-                fontStyle: 'italic',
-                lineHeight: 1.65,
               }}
             >
-              {synthText}
+              <div
+                style={{
+                  fontSize: 10,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: '#A89070',
+                  marginBottom: 8,
+                }}
+              >
+                Synthesis
+              </div>
+              <AgentAnswerMarkdown markdown={synthText} />
             </div>
           ) : null}
         </div>

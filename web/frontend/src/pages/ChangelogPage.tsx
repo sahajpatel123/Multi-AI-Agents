@@ -165,6 +165,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Discuss: Jump to latest when you scroll up; streaming no longer yanks the viewport',
       '[IMPROVED] Arena focused mind: full take as markdown + Jump to latest when you scroll up',
       '[IMPROVED] Discuss and Debate: agent takes render as markdown with reading time + outline',
+      '[IMPROVED] Room group synthesis renders as markdown with reading time + section outline',
     ],
   },
   {
