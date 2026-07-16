@@ -335,6 +335,7 @@ async def stream_prompt(
     cost = RequestCostAccumulator(request_id=request_id)
 
     async def event_generator():
+        gather_task = None
         try:
             try:
                 active_agents = get_all_agents(body.persona_ids)
@@ -487,6 +488,17 @@ async def stream_prompt(
         except Exception as e:
             log_unhandled_exception(request_id, user_label, e)
             yield _sse_event("error", {"detail": "Prompt request failed"})
+        finally:
+            # If the stream ends early — client disconnect (GeneratorExit) or a
+            # mid-stream error — the background agent task may still be running.
+            # Cancel it so agents stop generating instead of burning LLM tokens
+            # for a response nobody will receive, and to avoid orphaned tasks.
+            if gather_task is not None and not gather_task.done():
+                gather_task.cancel()
+                try:
+                    await gather_task
+                except BaseException:
+                    pass
 
     return StreamingResponse(
         event_generator(),

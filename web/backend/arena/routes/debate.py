@@ -316,6 +316,7 @@ async def stream_debate_round(
     authenticated_user = user
 
     async def event_generator():
+        run_task = None
         try:
             _ = authenticated_user
             queue: asyncio.Queue = asyncio.Queue()
@@ -392,7 +393,7 @@ async def stream_debate_round(
                 await asyncio.gather(*tasks)
                 await queue.put({"type": "all_done"})
 
-            asyncio.create_task(_run_all())
+            run_task = asyncio.create_task(_run_all())
 
             # Consume queue and yield SSE events
             while True:
@@ -459,6 +460,18 @@ async def stream_debate_round(
 
         except Exception as e:
             yield _sse_event("error", {"detail": "Debate request failed"})
+        finally:
+            # If the stream ends early — client disconnect (GeneratorExit) or a
+            # mid-stream error — the background reaction task may still be running.
+            # Cancel it (which cancels the child reaction tasks it gathers) so we
+            # don't burn LLM tokens for a response nobody will receive or leak
+            # orphaned tasks.
+            if run_task is not None and not run_task.done():
+                run_task.cancel()
+                try:
+                    await run_task
+                except BaseException:
+                    pass
 
     return StreamingResponse(
         event_generator(),
