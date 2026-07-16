@@ -26,6 +26,7 @@ import { useProfileModal } from '../context/ProfileModalContext';
 import track from '../utils/track';
 import { filterBySearchQuery, filterTurnsBySearchQuery } from '../lib/sidebarSearch';
 import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatArenaRecentsExport } from '../lib/arenaRecentsExport';
 import { formatSavedTakeExport, formatSavedTakesListExport } from '../lib/savedTakeExport';
 import { motionDuration } from '../lib/motion';
@@ -101,7 +102,9 @@ export function Sidebar({
   const [copiedSavedId, setCopiedSavedId] = useState<string | number | null>(null);
   const [copySavedFailed, setCopySavedFailed] = useState(false);
   const [copyAllSavedStatus, setCopyAllSavedStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadAllSavedStatus, setDownloadAllSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [copyRecentsStatus, setCopyRecentsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadRecentsStatus, setDownloadRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
@@ -181,11 +184,25 @@ export function Sidebar({
   }, [copyAllSavedStatus]);
 
   useEffect(() => {
+    if (downloadAllSavedStatus === 'idle') return;
+    const hold = motionDuration(downloadAllSavedStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadAllSavedStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadAllSavedStatus]);
+
+  useEffect(() => {
     if (copyRecentsStatus === 'idle') return;
     const hold = motionDuration(copyRecentsStatus === 'failed' ? 2800 : 2000);
     const t = window.setTimeout(() => setCopyRecentsStatus('idle'), hold > 0 ? hold : 0);
     return () => window.clearTimeout(t);
   }, [copyRecentsStatus]);
+
+  useEffect(() => {
+    if (downloadRecentsStatus === 'idle') return;
+    const hold = motionDuration(downloadRecentsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadRecentsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadRecentsStatus]);
 
   const handleCopySaved = async (item: SavedResponseItem, displayName: string) => {
     const md = formatSavedTakeExport({
@@ -206,12 +223,12 @@ export function Sidebar({
     }
   };
 
-  const handleCopyAllSaved = async () => {
+  const buildSavedTakesMarkdown = () => {
     const q = savedSearchQuery.trim();
     const filterBits: string[] = [];
     if (q) filterBits.push(`search “${q}”`);
     if (savedSort !== 'newest') filterBits.push(`sort: ${sidebarSavedSortLabel(savedSort)}`);
-    const md = formatSavedTakesListExport({
+    return formatSavedTakesListExport({
       totalCount: savedItems.length,
       filterNote: filterBits.length ? filterBits.join(' · ') : undefined,
       items: filteredSaved.map((item) => {
@@ -226,6 +243,10 @@ export function Sidebar({
         };
       }),
     });
+  };
+
+  const handleCopyAllSaved = async () => {
+    const md = buildSavedTakesMarkdown();
     const ok = await copyToClipboard(md);
     if (ok) {
       setCopySavedFailed(false);
@@ -237,7 +258,14 @@ export function Sidebar({
     }
   };
 
-  const handleCopyRecents = async () => {
+  const handleDownloadAllSaved = () => {
+    const md = buildSavedTakesMarkdown();
+    const ok = downloadMarkdownFile(md, 'arena-saved-takes');
+    setDownloadAllSavedStatus(ok ? 'done' : 'failed');
+    if (ok) void track('saved_takes_list_downloaded');
+  };
+
+  const buildRecentsMarkdown = () => {
     const parts: string[] = [];
     if (activeFilter !== 'all') {
       parts.push(`category ${activeFilter.charAt(0).toUpperCase()}${activeFilter.slice(1)}`);
@@ -245,7 +273,7 @@ export function Sidebar({
     const q = searchQuery.trim();
     if (q) parts.push(`search “${q}”`);
     if (recentsSort !== 'newest') parts.push(`sort: ${sidebarRecentsSortLabel(recentsSort)}`);
-    const md = formatArenaRecentsExport({
+    return formatArenaRecentsExport({
       totalCount: reversedTurns.length,
       filterNote: parts.length > 0 ? parts.join(' · ') : undefined,
       items: filteredTurns.map((turn) => ({
@@ -258,9 +286,20 @@ export function Sidebar({
         turnId: turn.turn_id,
       })),
     });
+  };
+
+  const handleCopyRecents = async () => {
+    const md = buildRecentsMarkdown();
     const ok = await copyToClipboard(md);
     setCopyRecentsStatus(ok ? 'copied' : 'failed');
     if (ok) void track('arena_recents_copied');
+  };
+
+  const handleDownloadRecents = () => {
+    const md = buildRecentsMarkdown();
+    const ok = downloadMarkdownFile(md, 'arena-recents');
+    setDownloadRecentsStatus(ok ? 'done' : 'failed');
+    if (ok) void track('arena_recents_downloaded');
   };
 
   const usedPercent = dailyLimit > 0
@@ -436,45 +475,81 @@ export function Sidebar({
               ) : null}
             </div>
             {reversedTurns.length > 0 ? (
-              <button
-                type="button"
-                title="Copy recents as markdown"
-                aria-label={
-                  copyRecentsStatus === 'copied'
-                    ? 'Recents copied'
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  title="Copy recents as markdown"
+                  aria-label={
+                    copyRecentsStatus === 'copied'
+                      ? 'Recents copied'
+                      : copyRecentsStatus === 'failed'
+                        ? 'Copy failed'
+                        : 'Copy recents as markdown'
+                  }
+                  onClick={() => void handleCopyRecents()}
+                  style={{
+                    background: 'none',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    color:
+                      copyRecentsStatus === 'failed'
+                        ? '#D85A30'
+                        : copyRecentsStatus === 'copied'
+                          ? '#5A8C6A'
+                          : '#C4956A',
+                    padding: '3px 8px',
+                    fontSize: 10,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'Georgia, serif',
+                  }}
+                >
+                  {copyRecentsStatus === 'copied'
+                    ? 'Copied'
                     : copyRecentsStatus === 'failed'
-                      ? 'Copy failed'
-                      : 'Copy recents as markdown'
-                }
-                onClick={() => void handleCopyRecents()}
-                style={{
-                  background: 'none',
-                  border: '0.5px solid #E0D8D0',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  color:
-                    copyRecentsStatus === 'failed'
-                      ? '#D85A30'
-                      : copyRecentsStatus === 'copied'
-                        ? '#5A8C6A'
-                        : '#C4956A',
-                  padding: '3px 8px',
-                  fontSize: 10,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                  flexShrink: 0,
-                  fontFamily: 'Georgia, serif',
-                }}
-              >
-                {copyRecentsStatus === 'copied'
-                  ? 'Copied'
-                  : copyRecentsStatus === 'failed'
-                    ? 'Failed'
-                    : 'Copy'}
-              </button>
+                      ? 'Failed'
+                      : 'Copy'}
+                </button>
+                <button
+                  type="button"
+                  title="Download recents as markdown"
+                  aria-label={
+                    downloadRecentsStatus === 'done'
+                      ? 'Recents downloaded'
+                      : downloadRecentsStatus === 'failed'
+                        ? 'Download failed'
+                        : 'Download recents as markdown'
+                  }
+                  onClick={() => handleDownloadRecents()}
+                  style={{
+                    background: 'none',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    color:
+                      downloadRecentsStatus === 'failed'
+                        ? '#D85A30'
+                        : downloadRecentsStatus === 'done'
+                          ? '#5A8C6A'
+                          : '#C4956A',
+                    padding: '3px 8px',
+                    fontSize: 10,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'Georgia, serif',
+                  }}
+                >
+                  {downloadRecentsStatus === 'done'
+                    ? 'Downloaded'
+                    : downloadRecentsStatus === 'failed'
+                      ? 'Failed'
+                      : 'Download'}
+                </button>
+              </div>
             ) : null}
           </div>
-          {copyRecentsStatus !== 'idle' ? (
+          {copyRecentsStatus !== 'idle' || downloadRecentsStatus !== 'idle' ? (
             <div
               role="status"
               aria-live="polite"
@@ -492,7 +567,13 @@ export function Sidebar({
             >
               {copyRecentsStatus === 'copied'
                 ? 'Arena recents copied to clipboard'
-                : 'Could not copy Arena recents'}
+                : copyRecentsStatus === 'failed'
+                  ? 'Could not copy Arena recents'
+                  : downloadRecentsStatus === 'done'
+                    ? 'Arena recents downloaded'
+                    : downloadRecentsStatus === 'failed'
+                      ? 'Could not download Arena recents'
+                      : ''}
             </div>
           ) : null}
           <div className="flex items-center gap-2 mb-2">
@@ -888,44 +969,80 @@ export function Sidebar({
                       {savedSearchQuery.trim() ? ` / ${savedItems.length}` : ''}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    title="Copy all saved takes as markdown"
-                    aria-label={
-                      copyAllSavedStatus === 'copied'
-                        ? 'Saved takes copied'
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      title="Copy all saved takes as markdown"
+                      aria-label={
+                        copyAllSavedStatus === 'copied'
+                          ? 'Saved takes copied'
+                          : copyAllSavedStatus === 'failed'
+                            ? 'Copy failed'
+                            : 'Copy all saved takes as markdown'
+                      }
+                      onClick={() => void handleCopyAllSaved()}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color:
+                          copyAllSavedStatus === 'failed'
+                            ? '#D85A30'
+                            : copyAllSavedStatus === 'copied'
+                              ? '#5A8C6A'
+                              : '#C4956A',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'Georgia, serif',
+                      }}
+                    >
+                      {copyAllSavedStatus === 'copied'
+                        ? 'Copied'
                         : copyAllSavedStatus === 'failed'
-                          ? 'Copy failed'
-                          : 'Copy all saved takes as markdown'
-                    }
-                    onClick={() => void handleCopyAllSaved()}
-                    style={{
-                      background: 'none',
-                      border: '0.5px solid #E0D8D0',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      color:
-                        copyAllSavedStatus === 'failed'
-                          ? '#D85A30'
-                          : copyAllSavedStatus === 'copied'
-                            ? '#5A8C6A'
-                            : '#C4956A',
-                      padding: '3px 8px',
-                      fontSize: 10,
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                      flexShrink: 0,
-                      fontFamily: 'Georgia, serif',
-                    }}
-                  >
-                    {copyAllSavedStatus === 'copied'
-                      ? 'Copied'
-                      : copyAllSavedStatus === 'failed'
-                        ? 'Failed'
-                        : 'Copy all'}
-                  </button>
+                          ? 'Failed'
+                          : 'Copy all'}
+                    </button>
+                    <button
+                      type="button"
+                      title="Download all saved takes as markdown"
+                      aria-label={
+                        downloadAllSavedStatus === 'done'
+                          ? 'Saved takes downloaded'
+                          : downloadAllSavedStatus === 'failed'
+                            ? 'Download failed'
+                            : 'Download all saved takes as markdown'
+                      }
+                      onClick={() => handleDownloadAllSaved()}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color:
+                          downloadAllSavedStatus === 'failed'
+                            ? '#D85A30'
+                            : downloadAllSavedStatus === 'done'
+                              ? '#5A8C6A'
+                              : '#C4956A',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'Georgia, serif',
+                      }}
+                    >
+                      {downloadAllSavedStatus === 'done'
+                        ? 'Downloaded'
+                        : downloadAllSavedStatus === 'failed'
+                          ? 'Failed'
+                          : 'Download'}
+                    </button>
+                  </div>
                 </div>
-                {copyAllSavedStatus !== 'idle' ? (
+                {copyAllSavedStatus !== 'idle' || downloadAllSavedStatus !== 'idle' ? (
                   <div
                     role="status"
                     aria-live="polite"
@@ -943,7 +1060,13 @@ export function Sidebar({
                   >
                     {copyAllSavedStatus === 'copied'
                       ? 'Saved takes copied to clipboard'
-                      : 'Could not copy saved takes'}
+                      : copyAllSavedStatus === 'failed'
+                        ? 'Could not copy saved takes'
+                        : downloadAllSavedStatus === 'done'
+                          ? 'Saved takes downloaded'
+                          : downloadAllSavedStatus === 'failed'
+                            ? 'Could not download saved takes'
+                            : ''}
                   </div>
                 ) : null}
                 <div style={{ marginBottom: 8 }}>

@@ -129,6 +129,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent history download .md**: sidebar History can download the filtered/sorted research list as a markdown file.
 - **Room board member filter**: click a member (sidebar or chips) to show only their tasks; export notes the filter.
 - **Agent rooms sort**: sidebar Rooms list sorts by recent activity, newest, name, members, or tasks (search still applies).
+- **Arena Recents / Saved download .md**: sidebar lists can download filtered/sorted views as markdown files (copy parity).
 
 ## Required production environment
 

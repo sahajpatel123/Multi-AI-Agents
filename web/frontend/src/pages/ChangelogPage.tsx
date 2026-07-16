@@ -123,6 +123,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Room board: filter tasks by member (sidebar + chips)',
       '[NEW] Arena sidebar Recents and Saved: sort by date, title/winner, score, or mind',
       '[NEW] Agent Rooms list: sort by recent activity, name, members, or tasks',
+      '[NEW] Arena Recents and Saved: download filtered list as .md',
     ],
   },
   {
