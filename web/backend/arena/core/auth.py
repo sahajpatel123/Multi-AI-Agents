@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -86,6 +87,12 @@ def create_access_token(user_id: int, email: str) -> str:
         "email": email,
         "exp": expire,
         "type": "access",
+        # jti (RFC 7519 §4.1.7) — guarantees each issued access token
+        # is byte-unique even when issued in the same second. Without
+        # this, two /refresh calls in the same second would mint
+        # identical access tokens, defeating the rotation's observable
+        # token-rotation property.
+        "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -98,6 +105,12 @@ def create_refresh_token(user_id: int, email: str) -> str:
         "email": email,
         "exp": expire,
         "type": "refresh",
+        # jti (JWT ID) — RFC 7519 §4.1.7. A fresh UUID per issuance means
+        # every refresh token is byte-unique even when the other payload
+        # fields match. This is what makes rotation observable: a rotated
+        # token is a different string than the old one, so the old one
+        # can be blacklisted and replay rejected.
+        "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
