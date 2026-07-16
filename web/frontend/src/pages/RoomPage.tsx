@@ -28,6 +28,13 @@ import {
   filterAgentHistoryByScore,
   type AgentHistoryScoreFilter,
 } from '../lib/agentHistoryScoreFilter';
+import {
+  AGENT_HISTORY_RECENCY_OPTIONS,
+  agentHistoryRecencyFilterUseful,
+  agentHistoryRecencyLabel,
+  filterAgentHistoryByRecency,
+  type AgentHistoryRecencyFilter,
+} from '../lib/agentHistoryRecencyFilter';
 import { formatRoomSynthesisExport } from '../lib/roomSynthesisExport';
 import {
   buildRoomInviteShareData,
@@ -117,6 +124,8 @@ export function RoomPage() {
   const [boardMemberFilter, setBoardMemberFilter] = useState<string>('all');
   const [boardScoreFilter, setBoardScoreFilter] =
     useState<AgentHistoryScoreFilter>('all');
+  const [boardRecencyFilter, setBoardRecencyFilter] =
+    useState<AgentHistoryRecencyFilter>('all');
   const [pickerQuery, setPickerQuery] = useState('');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [synthDownloadStatus, setSynthDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -281,7 +290,8 @@ export function RoomPage() {
       })),
       boardScoreFilter,
     );
-    const filtered = filterBySearchQuery(byScore, boardQuery, (t) => [
+    const byRecency = filterAgentHistoryByRecency(byScore, boardRecencyFilter);
+    const filtered = filterBySearchQuery(byRecency, boardQuery, (t) => [
       getTaskTitle(t),
       t.question,
       t.task_text,
@@ -299,13 +309,26 @@ export function RoomPage() {
       })),
       boardSort,
     );
-  }, [tasks, boardQuery, memberNameById, boardSort, boardMemberFilter, boardScoreFilter]);
+  }, [
+    tasks,
+    boardQuery,
+    memberNameById,
+    boardSort,
+    boardMemberFilter,
+    boardScoreFilter,
+    boardRecencyFilter,
+  ]);
 
   const boardScoreFilterUseful = useMemo(
     () =>
       agentHistoryScoreFilterUseful(
         tasks.map((t: any) => ({ score: t.final_score ?? null })),
       ),
+    [tasks],
+  );
+
+  const boardRecencyFilterUseful = useMemo(
+    () => agentHistoryRecencyFilterUseful(tasks),
     [tasks],
   );
 
@@ -330,6 +353,7 @@ export function RoomPage() {
   // Drop member filter when leaving the room or the filtered member is gone.
   useEffect(() => {
     setBoardMemberFilter('all');
+    setBoardRecencyFilter('all');
   }, [slug]);
 
   useEffect(() => {
@@ -479,6 +503,9 @@ export function RoomPage() {
     }
     if (boardScoreFilter !== 'all') {
       bits.push(`score: ${agentHistoryScoreLabel(boardScoreFilter)}`);
+    }
+    if (boardRecencyFilter !== 'all') {
+      bits.push(`recency: ${agentHistoryRecencyLabel(boardRecencyFilter)}`);
     }
     if (boardSort !== 'newest') bits.push(`sort: ${roomBoardSortLabel(boardSort)}`);
     return formatRoomBoardExport({
@@ -1037,7 +1064,10 @@ export function RoomPage() {
           Research board
           <span style={{ marginLeft: 8, color: '#A89070', letterSpacing: 0, textTransform: 'none', fontSize: 11 }}>
             {filteredBoardTasks.length}
-            {boardQuery.trim() || boardMemberFilter !== 'all' || boardScoreFilter !== 'all'
+            {boardQuery.trim() ||
+            boardMemberFilter !== 'all' ||
+            boardScoreFilter !== 'all' ||
+            boardRecencyFilter !== 'all'
               ? ` / ${tasks.length}`
               : ''}
             {boardMemberFilter !== 'all'
@@ -1045,6 +1075,9 @@ export function RoomPage() {
               : ''}
             {boardScoreFilter !== 'all'
               ? ` · ${agentHistoryScoreLabel(boardScoreFilter)}`
+              : ''}
+            {boardRecencyFilter !== 'all'
+              ? ` · ${agentHistoryRecencyLabel(boardRecencyFilter)}`
               : ''}
           </span>
         </div>
@@ -1309,6 +1342,43 @@ export function RoomPage() {
           })}
         </div>
       ) : null}
+      {boardRecencyFilterUseful ? (
+        <div
+          role="group"
+          aria-label="Filter board by recency"
+          style={{
+            display: 'flex',
+            gap: 6,
+            flexWrap: 'wrap',
+            marginBottom: 12,
+            alignItems: 'center',
+          }}
+        >
+          {AGENT_HISTORY_RECENCY_OPTIONS.map((opt) => {
+            const selected = boardRecencyFilter === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setBoardRecencyFilter(opt.value)}
+                aria-pressed={selected}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                  background: selected ? '#F0E6DA' : 'transparent',
+                  color: selected ? '#4A3728' : '#8C7355',
+                  fontSize: 11,
+                  fontFamily: 'Georgia, serif',
+                  cursor: 'pointer',
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       {boardCopyStatus !== 'idle' ? (
         <div
           role="status"
@@ -1351,12 +1421,20 @@ export function RoomPage() {
                   boardScoreFilter !== 'all'
                     ? ` · ${agentHistoryScoreLabel(boardScoreFilter)}`
                     : ''
+                }${
+                  boardRecencyFilter !== 'all'
+                    ? ` · ${agentHistoryRecencyLabel(boardRecencyFilter)}`
+                    : ''
                 }`
-              : boardScoreFilter !== 'all' && boardMemberFilter === 'all'
-                ? `No tasks with score ${agentHistoryScoreLabel(boardScoreFilter)}`
-                : boardMemberFilter !== 'all'
-                  ? `${memberNameById[boardMemberFilter] || 'This member'} has no tasks on the board yet`
-                  : 'No tasks on the board'}
+              : boardRecencyFilter !== 'all' &&
+                  boardMemberFilter === 'all' &&
+                  boardScoreFilter === 'all'
+                ? `No tasks from ${agentHistoryRecencyLabel(boardRecencyFilter).toLowerCase()}`
+                : boardScoreFilter !== 'all' && boardMemberFilter === 'all'
+                  ? `No tasks with score ${agentHistoryScoreLabel(boardScoreFilter)}`
+                  : boardMemberFilter !== 'all'
+                    ? `${memberNameById[boardMemberFilter] || 'This member'} has no tasks on the board yet`
+                    : 'No tasks on the board'}
           </p>
           <button
             type="button"
@@ -1364,6 +1442,7 @@ export function RoomPage() {
               setBoardQuery('');
               setBoardMemberFilter('all');
               setBoardScoreFilter('all');
+              setBoardRecencyFilter('all');
               boardSearchRef.current?.focus();
             }}
             style={{
@@ -1376,7 +1455,10 @@ export function RoomPage() {
               textDecoration: 'underline',
             }}
           >
-            {(boardMemberFilter !== 'all' || boardScoreFilter !== 'all') && !boardQuery.trim()
+            {(boardMemberFilter !== 'all' ||
+              boardScoreFilter !== 'all' ||
+              boardRecencyFilter !== 'all') &&
+            !boardQuery.trim()
               ? 'Show all tasks'
               : 'Clear filters'}
           </button>
