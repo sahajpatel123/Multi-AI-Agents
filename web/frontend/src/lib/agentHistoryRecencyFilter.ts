@@ -26,7 +26,7 @@ export type AgentHistoryRecencyItem = {
   created_at?: string | null;
 };
 
-function recencyMs(iso: string | null | undefined, now: number): number | null {
+function recencyMs(iso: string | null | undefined): number | null {
   if (!iso) return null;
   const t = new Date(iso).getTime();
   return Number.isNaN(t) ? null : t;
@@ -46,7 +46,7 @@ export function filterAgentHistoryByRecency<T extends AgentHistoryRecencyItem>(
   const list = items || [];
   if (filter === 'all') return [...list];
   return list.filter((item) => {
-    const ms = recencyMs(item.created_at, now);
+    const ms = recencyMs(item.created_at);
     if (ms == null) return false;
     const age = now - ms;
     if (filter === 'last_24h') return age >= 0 && age <= DAY_MS;
@@ -58,9 +58,6 @@ export function filterAgentHistoryByRecency<T extends AgentHistoryRecencyItem>(
 }
 
 /** True when recency chips add value (at least one dated item). */
-export function agentHistoryRecencyFilterUseful(
-  items: AgentHistoryRecencyItem[],
-  now: number = Date.now(),
-): boolean {
-  return (items || []).some((item) => recencyMs(item.created_at, now) != null);
+export function agentHistoryRecencyFilterUseful(items: AgentHistoryRecencyItem[]): boolean {
+  return (items || []).some((item) => recencyMs(item.created_at) != null);
 }
