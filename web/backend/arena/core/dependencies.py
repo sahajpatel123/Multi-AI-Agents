@@ -22,8 +22,10 @@ async def get_current_user(
 
     token = auth_header[7:]
 
-    # Check token blacklist for revoked JWTs
-    if token_blacklist.is_blacklisted(token):
+    # Check token blacklist for revoked JWTs. The DB-backed blacklist
+    # is process- and restart-safe (iter-12 hardening): a logout in one
+    # worker is honored by every other worker in the deployment.
+    if token_blacklist.is_blacklisted(token, db):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
 
     payload = decode_token(token)

@@ -31,14 +31,26 @@ def _make_user_and_tokens(make_user):
 
 
 @pytest.fixture(autouse=True)
-def _reset_blacklist():
-    """Each test starts with an empty blacklist so revocation from a
-    prior test never bleeds in.
+def _reset_blacklist(isolated_db):
+    """Each test starts with a wiped revoked_tokens table so revocation
+    from a prior test never bleeds in. The blacklist is now DB-backed,
+    so the reset has to actually delete the rows.
     """
-    from arena.core.token_blacklist import token_blacklist
-    token_blacklist.clear()
+    from arena.db_models import RevokedToken
+    SessionLocal = isolated_db
+    s = SessionLocal()
+    try:
+        s.query(RevokedToken).delete()
+        s.commit()
+    finally:
+        s.close()
     yield
-    token_blacklist.clear()
+    s = SessionLocal()
+    try:
+        s.query(RevokedToken).delete()
+        s.commit()
+    finally:
+        s.close()
 
 
 class TestLogoutInvalidatesAccessToken:
@@ -97,7 +109,7 @@ class TestLogoutInvalidatesRefreshToken:
 
     @pytest.mark.asyncio
     async def test_logout_blacklists_access_token_via_authorization_header(
-        self, app_client, make_user
+        self, app_client, make_user, isolated_db
     ):
         # /logout must also blacklist the access token in the header (the
         # one its auth dep validated). Otherwise logging out from a
@@ -111,7 +123,15 @@ class TestLogoutInvalidatesRefreshToken:
 
         # Access token blacklisted.
         from arena.core.token_blacklist import token_blacklist
-        assert token_blacklist.is_blacklisted(access)
+        # Use a fresh session to read the table, separate from the
+        # request-scoped app_client session.
+        from arena.db_models import RevokedToken
+        SessionLocal = isolated_db
+        s = SessionLocal()
+        try:
+            assert token_blacklist.is_blacklisted(access, s) is True
+        finally:
+            s.close()
 
         # /me rejects the blacklisted access token via the dep chain.
         after = await app_client.get("/api/auth/me", headers=headers)

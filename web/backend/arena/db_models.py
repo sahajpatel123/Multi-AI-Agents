@@ -645,6 +645,30 @@ class MCPIntegration(Base):
     user = relationship("User", back_populates="mcp_integrations")
 
 
+class RevokedToken(Base):
+    """DB-backed JWT revocation list.
+
+    Stores the SHA-256 hash of the raw token (NEVER the token itself) plus
+    its JWT `exp` claim. Entries whose `expires_at` is in the past are
+    eligible for lazy cleanup at lookup time.
+
+    Replacing the previous in-memory TokenBlacklist gives us:
+      - cross-process / cross-worker consistency (Render runs multiple uvicorn
+        workers; the in-memory set was per-process)
+      - survival across deploys and restarts (the in-memory set was wiped
+        on every restart, granting logged-out tokens fresh windows of
+        validity every time a worker bounced)
+    """
+
+    __tablename__ = "revoked_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    revoked_at = Column(DateTime, default=_now, nullable=False)
+    reason = Column(String(64), nullable=True)  # 'logout' / 'admin' / etc.
+
+
 class RoomTask(Base):
     __tablename__ = "room_tasks"
     __table_args__ = (UniqueConstraint("room_id", "task_id", name="uq_room_task_room_task"),)

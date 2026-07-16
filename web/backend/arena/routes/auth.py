@@ -2,7 +2,7 @@
 
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -20,6 +20,27 @@ from arena.core.auth import (
     get_user_by_email,
     orm_user_to_response,
 )
+
+
+def _payload_exp_seconds(token: str) -> Optional[int]:
+    """Return the JWT `exp` claim as an epoch second, or None if absent/invalid.
+
+    Used by /logout to record the token's natural expiry in the
+    persistent blacklist. We never crash if the token is malformed —
+    the caller just skips revocation for that token.
+    """
+    try:
+        payload = decode_token(token)
+    except Exception:
+        return None
+    if not payload:
+        return None
+    exp = payload.get("exp")
+    return int(exp) if isinstance(exp, (int, float)) else None
+
+
+def _epoch_to_naive(epoch_seconds: int) -> datetime:
+    return datetime.fromtimestamp(epoch_seconds, tz=timezone.utc).replace(tzinfo=None)
 from arena.core.token_blacklist import token_blacklist
 from arena.core.dependencies import get_current_user_required_orm
 from arena.core.feedback_calibrator import get_answer_feedback_distribution
@@ -210,10 +231,21 @@ async def logout(request: Request, db: Session = Depends(get_db), user: User = D
         # only ever sets one Authorization header can still log out cleanly.
         refresh_token = auth_header[7:].strip()
 
+    revoked_any = False
     if access_token:
-        token_blacklist.add(access_token)
+        access_exp = _payload_exp_seconds(access_token)
+        if access_exp is not None:
+            token_blacklist.add(
+                access_token, expires_at=_epoch_to_naive(access_exp), db=db, reason="logout"
+            )
+            revoked_any = True
     if refresh_token and refresh_token != access_token:
-        token_blacklist.add(refresh_token)
+        refresh_exp = _payload_exp_seconds(refresh_token)
+        if refresh_exp is not None:
+            token_blacklist.add(
+                refresh_token, expires_at=_epoch_to_naive(refresh_exp), db=db, reason="logout"
+            )
+            revoked_any = True
     logger.info(
         "Logout user=%d access_revoked=%s refresh_revoked=%s",
         user.id,
@@ -247,7 +279,7 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
 
     # Honor the blacklist: a logout that revoked the refresh token must
     # actually end the session, not just gate the access token.
-    if token_blacklist.is_blacklisted(refresh_token):
+    if token_blacklist.is_blacklisted(refresh_token, db):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has been revoked",
