@@ -37,6 +37,26 @@ const faqs = [
       'Plus unlocks all 16 minds, debate mode, memory, and focused chat. Pro adds full Agent Mode (7-stage pipeline), unlimited debates, scoring audit visibility, and priority response speed. Plus users can add Agent Mode as an optional in-app add-on.',
   },
   {
+    question: 'What is Agent Mode?',
+    answer:
+      'Agent Mode is a 7-stage research pipeline (planner → researcher → steelman → solver → critic → verifier → synthesizer → judge) that returns a single best-supported take with assumptions surfaced, sources attached, and a confidence score. Pro unlocks it fully; Plus can add it as an in-app add-on.',
+  },
+  {
+    question: 'What is Watchlist?',
+    answer:
+      'Watchlist lets you turn any research question into a recurring task. Arena re-runs it on your schedule (daily / every 3 days / weekly) and only surfaces a new finding when the latest answer actually changes — so you stay current without polling.',
+  },
+  {
+    question: 'What is the difference between Saved and Watchlist?',
+    answer:
+      'Saved takes are one-off bookmarks of past Arena or Agent answers you want to revisit. Watchlist is recurring — Arena re-checks the question on a schedule and notifies you when findings change.',
+  },
+  {
+    question: 'How does calibration work?',
+    answer:
+      'When you rate an Agent answer as Accurate, Partial, or Inaccurate, Arena updates your calibration profile. After enough ratings, Arena uses your history to gently adjust the displayed confidence so it matches how you actually evaluate answers.',
+  },
+  {
     question: 'Can I change plans anytime?',
     answer: 'Yes. Upgrade or downgrade at any time. Changes take effect immediately.',
   },
