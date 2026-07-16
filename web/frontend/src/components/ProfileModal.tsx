@@ -8,6 +8,7 @@ import {
   deleteMcpIntegration,
   getCalibrationStats,
   getMcpIntegrations,
+  getRecentAgentFeedback,
   getSubscriptionStatus,
   getUserAnswerFeedbackStats,
   getUserUsage,
@@ -15,6 +16,7 @@ import {
   postMcpManualConnect,
   reactivateAgentAddon,
   type AnswerFeedbackStats,
+  type RecentFeedbackItem,
   type SubscriptionStatusResponse,
   type UserUsageResponse,
 } from '../api';
@@ -256,6 +258,9 @@ export function ProfileModal() {
   const [fbAcc, setFbAcc] = useState<AnswerFeedbackStats | null>(null);
   const [fbAccLoading, setFbAccLoading] = useState(false);
   const [fbAccErr, setFbAccErr] = useState<string | null>(null);
+  const [recentFb, setRecentFb] = useState<RecentFeedbackItem[]>([]);
+  const [recentFbLoading, setRecentFbLoading] = useState(false);
+  const [recentFbErr, setRecentFbErr] = useState<string | null>(null);
 
   const [sub, setSub] = useState<SubscriptionStatusResponse | null>(null);
   const [subLoading, setSubLoading] = useState(false);
@@ -357,6 +362,21 @@ export function ProfileModal() {
       })
       .finally(() => {
         if (!cancelled) setFbAccLoading(false);
+      });
+    setRecentFbLoading(true);
+    setRecentFbErr(null);
+    void getRecentAgentFeedback(10)
+      .then((items) => {
+        if (!cancelled) setRecentFb(items);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRecentFbErr('Could not load recent feedback');
+          setRecentFb([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setRecentFbLoading(false);
       });
     return () => {
       cancelled = true;
@@ -1493,6 +1513,109 @@ export function ProfileModal() {
                   <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>
                     Rate completed Agent answers as correct, partial, or wrong to see your accuracy mix here.
                   </p>
+                )}
+                <div
+                  style={{
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    color: '#A89070',
+                    letterSpacing: '0.10em',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  Recent ratings
+                </div>
+                {recentFbLoading ? (
+                  <div style={{ padding: 12, display: 'flex', justifyContent: 'center' }}>
+                    <MicroLoader />
+                  </div>
+                ) : recentFbErr ? (
+                  <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>{recentFbErr}</p>
+                ) : recentFb.length === 0 ? (
+                  <p style={{ fontSize: 12, color: '#8C7355', marginBottom: 0 }}>
+                    Your latest ratings will show here as you rate Agent answers.
+                  </p>
+                ) : (
+                  <ul
+                    style={{
+                      listStyle: 'none',
+                      padding: 0,
+                      margin: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                    }}
+                  >
+                    {recentFb.map((item) => {
+                      const verdict = (item.verdict || '').toLowerCase();
+                      const tone =
+                        verdict === 'correct'
+                          ? { bg: 'rgba(138,168,153,0.18)', fg: '#3F6B4A' }
+                          : verdict === 'partial'
+                            ? { bg: 'rgba(196,149,106,0.18)', fg: '#8C5A2C' }
+                            : { bg: 'rgba(217,83,79,0.15)', fg: '#9C2F2A' };
+                      return (
+                        <li
+                          key={item.task_id}
+                          style={{
+                            background: '#F0E8DC',
+                            border: '0.5px solid #E0D5C5',
+                            borderRadius: 10,
+                            padding: '10px 14px',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 10,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 10,
+                              letterSpacing: '0.06em',
+                              textTransform: 'uppercase',
+                              borderRadius: 999,
+                              padding: '2px 8px',
+                              background: tone.bg,
+                              color: tone.fg,
+                              flexShrink: 0,
+                              marginTop: 1,
+                            }}
+                          >
+                            {verdict || 'unknown'}
+                          </span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                color: '#2C1810',
+                                lineHeight: 1.4,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                              }}
+                            >
+                              {item.title || item.task_text || item.task_id}
+                            </div>
+                            {item.note ? (
+                              <p
+                                style={{
+                                  fontSize: 11,
+                                  color: '#6B6460',
+                                  marginTop: 4,
+                                  marginBottom: 0,
+                                  fontStyle: 'italic',
+                                  lineHeight: 1.4,
+                                }}
+                              >
+                                “{item.note}”
+                              </p>
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 )}
               </>
             )}

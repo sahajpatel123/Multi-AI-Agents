@@ -772,6 +772,31 @@ export async function getUserAnswerFeedbackStats(): Promise<AnswerFeedbackStats>
   return data;
 }
 
+export type RecentFeedbackItem = {
+  task_id: string;
+  verdict: string;
+  note: string | null;
+  created_at: string | null;
+  title: string | null;
+  task_text: string | null;
+};
+
+export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedbackItem[]> {
+  const response = await apiFetch(
+    `/api/agent/feedback/recent?limit=${encodeURIComponent(String(limit))}`,
+  );
+  const raw = parseJsonSafely<unknown>(response);
+  const data = raw as { items?: RecentFeedbackItem[] } | null;
+  if (!response.ok) {
+    throw new ApiError(
+      getErrorMessage(raw as object, 'Failed to load recent feedback'),
+      response.status,
+      raw,
+    );
+  }
+  return data?.items ?? [];
+}
+
 export type AgentStartResponse = {
   task_id: string;
   status: string;
