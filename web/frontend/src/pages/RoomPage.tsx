@@ -13,6 +13,7 @@ import {
   applyDocumentTitle,
   titleForRoom,
 } from '../lib/documentTitle';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatRoomBoardExport, plainAnswerExcerpt } from '../lib/roomBoardExport';
 import { formatRoomSynthesisExport } from '../lib/roomSynthesisExport';
 import {
@@ -101,11 +102,15 @@ export function RoomPage() {
   const [boardQuery, setBoardQuery] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [synthDownloadStatus, setSynthDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [boardCopyStatus, setBoardCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [boardDownloadStatus, setBoardDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const boardSearchRef = useRef<HTMLInputElement | null>(null);
   const pickerSearchRef = useRef<HTMLInputElement | null>(null);
   const copyStatusTimerRef = useRef<number | null>(null);
   const boardCopyTimerRef = useRef<number | null>(null);
+  const synthDownloadTimerRef = useRef<number | null>(null);
+  const boardDownloadTimerRef = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
     if (!slug) return;
@@ -343,6 +348,28 @@ export function RoomPage() {
     }, status === 'copied' ? 2200 : 3200);
   };
 
+  const flashSynthDownloadStatus = (status: 'done' | 'failed') => {
+    if (synthDownloadTimerRef.current != null) {
+      window.clearTimeout(synthDownloadTimerRef.current);
+    }
+    setSynthDownloadStatus(status);
+    synthDownloadTimerRef.current = window.setTimeout(() => {
+      setSynthDownloadStatus('idle');
+      synthDownloadTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashBoardDownloadStatus = (status: 'done' | 'failed') => {
+    if (boardDownloadTimerRef.current != null) {
+      window.clearTimeout(boardDownloadTimerRef.current);
+    }
+    setBoardDownloadStatus(status);
+    boardDownloadTimerRef.current = window.setTimeout(() => {
+      setBoardDownloadStatus('idle');
+      boardDownloadTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
   useEffect(() => {
     return () => {
       if (copyStatusTimerRef.current != null) {
@@ -351,12 +378,18 @@ export function RoomPage() {
       if (boardCopyTimerRef.current != null) {
         window.clearTimeout(boardCopyTimerRef.current);
       }
+      if (synthDownloadTimerRef.current != null) {
+        window.clearTimeout(synthDownloadTimerRef.current);
+      }
+      if (boardDownloadTimerRef.current != null) {
+        window.clearTimeout(boardDownloadTimerRef.current);
+      }
     };
   }, []);
 
-  const copySynthesis = async () => {
-    if (!room) return;
-    const markdown = formatRoomSynthesisExport({
+  const buildSynthesisMarkdown = () => {
+    if (!room) return '';
+    return formatRoomSynthesisExport({
       roomName: room.name || 'Research room',
       shareUrl: room.share_url || `${window.location.origin}/room/${slug}`,
       memberCount: members.length,
@@ -376,20 +409,12 @@ export function RoomPage() {
         score: t.final_score,
       })),
     });
-    const ok = await copyToClipboard(markdown);
-    if (ok) {
-      flashCopyStatus('copied');
-    } else {
-      flashCopyStatus('failed');
-      setActionError('Could not copy synthesis — select the text and copy manually.');
-      window.setTimeout(() => setActionError(null), 3200);
-    }
   };
 
-  const copyBoard = async () => {
-    if (!room) return;
+  const buildBoardMarkdown = () => {
+    if (!room) return '';
     const q = boardQuery.trim();
-    const markdown = formatRoomBoardExport({
+    return formatRoomBoardExport({
       roomName: room.name || 'Research room',
       shareUrl: room.share_url || `${window.location.origin}/room/${slug}`,
       memberCount: members.length,
@@ -405,12 +430,58 @@ export function RoomPage() {
         taskId: t.task_id,
       })),
     });
+  };
+
+  const copySynthesis = async () => {
+    const markdown = buildSynthesisMarkdown();
+    if (!markdown) return;
+    const ok = await copyToClipboard(markdown);
+    if (ok) {
+      flashCopyStatus('copied');
+    } else {
+      flashCopyStatus('failed');
+      setActionError('Could not copy synthesis — select the text and copy manually.');
+      window.setTimeout(() => setActionError(null), 3200);
+    }
+  };
+
+  const downloadSynthesis = () => {
+    const markdown = buildSynthesisMarkdown();
+    if (!markdown) return;
+    const stem = `room-synthesis-${room?.name || slug || 'export'}`;
+    const ok = downloadMarkdownFile(markdown, stem);
+    if (ok) {
+      flashSynthDownloadStatus('done');
+    } else {
+      flashSynthDownloadStatus('failed');
+      setActionError('Could not download synthesis — try Copy instead.');
+      window.setTimeout(() => setActionError(null), 3200);
+    }
+  };
+
+  const copyBoard = async () => {
+    const markdown = buildBoardMarkdown();
+    if (!markdown) return;
     const ok = await copyToClipboard(markdown);
     if (ok) {
       flashBoardCopyStatus('copied');
     } else {
       flashBoardCopyStatus('failed');
       setActionError('Could not copy board — select the text and copy manually.');
+      window.setTimeout(() => setActionError(null), 3200);
+    }
+  };
+
+  const downloadBoard = () => {
+    const markdown = buildBoardMarkdown();
+    if (!markdown) return;
+    const stem = `room-board-${room?.name || slug || 'export'}`;
+    const ok = downloadMarkdownFile(markdown, stem);
+    if (ok) {
+      flashBoardDownloadStatus('done');
+    } else {
+      flashBoardDownloadStatus('failed');
+      setActionError('Could not download board — try Copy board instead.');
       window.setTimeout(() => setActionError(null), 3200);
     }
   };
@@ -591,7 +662,12 @@ export function RoomPage() {
                   border: '0.5px solid rgba(196,149,106,0.45)',
                   borderRadius: 6,
                   cursor: 'pointer',
-                  color: copyStatus === 'failed' ? '#F0997B' : '#C4956A',
+                  color:
+                    copyStatus === 'failed'
+                      ? '#F0997B'
+                      : copyStatus === 'copied'
+                        ? '#5A8C6A'
+                        : '#C4956A',
                   padding: '3px 8px',
                   fontSize: 10,
                   letterSpacing: '0.04em',
@@ -602,6 +678,40 @@ export function RoomPage() {
                 }}
               >
                 {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy'}
+              </button>
+              <button
+                type="button"
+                title="Download synthesis as markdown"
+                aria-label={
+                  synthDownloadStatus === 'done'
+                    ? 'Synthesis downloaded'
+                    : synthDownloadStatus === 'failed'
+                      ? 'Download failed'
+                      : 'Download synthesis as markdown'
+                }
+                onClick={() => downloadSynthesis()}
+                style={{
+                  background: 'none',
+                  border: '0.5px solid rgba(196,149,106,0.45)',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  color:
+                    synthDownloadStatus === 'failed'
+                      ? '#F0997B'
+                      : synthDownloadStatus === 'done'
+                        ? '#5A8C6A'
+                        : '#C4956A',
+                  padding: '3px 8px',
+                  fontSize: 10,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {synthDownloadStatus === 'done'
+                  ? 'Downloaded'
+                  : synthDownloadStatus === 'failed'
+                    ? 'Failed'
+                    : 'Download .md'}
               </button>
               <button
                 type="button"
@@ -816,41 +926,78 @@ export function RoomPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 220px', justifyContent: 'flex-end' }}>
           {tasks.length > 0 ? (
-            <button
-              type="button"
-              title="Copy board as markdown"
-              aria-label={
-                boardCopyStatus === 'copied'
-                  ? 'Board copied'
+            <>
+              <button
+                type="button"
+                title="Copy board as markdown"
+                aria-label={
+                  boardCopyStatus === 'copied'
+                    ? 'Board copied'
+                    : boardCopyStatus === 'failed'
+                      ? 'Copy failed'
+                      : 'Copy board as markdown'
+                }
+                onClick={() => void copyBoard()}
+                style={{
+                  background: 'none',
+                  border: '0.5px solid #D4C4B0',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  color:
+                    boardCopyStatus === 'failed'
+                      ? '#D85A30'
+                      : boardCopyStatus === 'copied'
+                        ? '#5A8C6A'
+                        : '#C4956A',
+                  padding: '4px 10px',
+                  fontSize: 10,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  flexShrink: 0,
+                }}
+              >
+                {boardCopyStatus === 'copied'
+                  ? 'Copied'
                   : boardCopyStatus === 'failed'
-                    ? 'Copy failed'
-                    : 'Copy board as markdown'
-              }
-              onClick={() => void copyBoard()}
-              style={{
-                background: 'none',
-                border: '0.5px solid #D4C4B0',
-                borderRadius: 6,
-                cursor: 'pointer',
-                color:
-                  boardCopyStatus === 'failed'
-                    ? '#D85A30'
-                    : boardCopyStatus === 'copied'
-                      ? '#5A8C6A'
-                      : '#C4956A',
-                padding: '4px 10px',
-                fontSize: 10,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-                flexShrink: 0,
-              }}
-            >
-              {boardCopyStatus === 'copied'
-                ? 'Copied'
-                : boardCopyStatus === 'failed'
-                  ? 'Failed'
-                  : 'Copy board'}
-            </button>
+                    ? 'Failed'
+                    : 'Copy board'}
+              </button>
+              <button
+                type="button"
+                title="Download board as markdown"
+                aria-label={
+                  boardDownloadStatus === 'done'
+                    ? 'Board downloaded'
+                    : boardDownloadStatus === 'failed'
+                      ? 'Download failed'
+                      : 'Download board as markdown'
+                }
+                onClick={() => downloadBoard()}
+                style={{
+                  background: 'none',
+                  border: '0.5px solid #D4C4B0',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  color:
+                    boardDownloadStatus === 'failed'
+                      ? '#D85A30'
+                      : boardDownloadStatus === 'done'
+                        ? '#5A8C6A'
+                        : '#C4956A',
+                  padding: '4px 10px',
+                  fontSize: 10,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  flexShrink: 0,
+                }}
+              >
+                {boardDownloadStatus === 'done'
+                  ? 'Downloaded'
+                  : boardDownloadStatus === 'failed'
+                    ? 'Failed'
+                    : 'Download .md'}
+              </button>
+            </>
           ) : null}
           <div style={{ position: 'relative', flex: '1 1 160px', maxWidth: 280 }}>
             <input

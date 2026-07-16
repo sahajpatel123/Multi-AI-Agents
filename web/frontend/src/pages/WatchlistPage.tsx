@@ -11,6 +11,7 @@ import {
 } from '../api';
 import { useTier } from '../context/TierContext';
 import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { prefersReducedMotion } from '../lib/motion';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
@@ -76,9 +77,11 @@ export function WatchlistPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<WatchlistStatusFilter>('all');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const errorRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const copyStatusTimerRef = useRef<number | null>(null);
+  const downloadStatusTimerRef = useRef<number | null>(null);
   const reducedMotion = prefersReducedMotion();
 
   const load = useCallback(async () => {
@@ -196,6 +199,9 @@ export function WatchlistPage() {
       if (copyStatusTimerRef.current != null) {
         window.clearTimeout(copyStatusTimerRef.current);
       }
+      if (downloadStatusTimerRef.current != null) {
+        window.clearTimeout(downloadStatusTimerRef.current);
+      }
     };
   }, []);
 
@@ -210,12 +216,23 @@ export function WatchlistPage() {
     }, status === 'copied' ? 2200 : 3200);
   };
 
-  const copyWatchlist = async () => {
+  const flashDownloadStatus = (status: 'done' | 'failed') => {
+    if (downloadStatusTimerRef.current != null) {
+      window.clearTimeout(downloadStatusTimerRef.current);
+    }
+    setDownloadStatus(status);
+    downloadStatusTimerRef.current = window.setTimeout(() => {
+      setDownloadStatus('idle');
+      downloadStatusTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
+  const buildWatchlistMarkdown = () => {
     const filterBits: string[] = [];
     if (statusFilter !== 'all') filterBits.push(`status: ${statusFilter}`);
     const q = searchQuery.trim();
     if (q) filterBits.push(`search: “${q}”`);
-    const markdown = formatWatchlistExport({
+    return formatWatchlistExport({
       items: filteredItems.map((item) => ({
         question: item.question,
         intervalHours: item.interval_hours,
@@ -232,12 +249,27 @@ export function WatchlistPage() {
       activeCap,
       filterNote: filterBits.length > 0 ? filterBits.join(' · ') : undefined,
     });
+  };
+
+  const copyWatchlist = async () => {
+    const markdown = buildWatchlistMarkdown();
     const ok = await copyToClipboard(markdown);
     if (ok) {
       flashCopyStatus('copied');
     } else {
       flashCopyStatus('failed');
       setError('Could not copy watchlist — try again or copy from a notes app after export.');
+    }
+  };
+
+  const downloadWatchlist = () => {
+    const markdown = buildWatchlistMarkdown();
+    const ok = downloadMarkdownFile(markdown, 'agent-watchlist');
+    if (ok) {
+      flashDownloadStatus('done');
+    } else {
+      flashDownloadStatus('failed');
+      setError('Could not download watchlist — try Copy instead.');
     }
   };
 
@@ -316,38 +348,74 @@ export function WatchlistPage() {
           <span style={{ fontSize: 12, color: '#8C7355' }}>Tasks that research themselves.</span>
         </div>
         {bodyMode === 'list' && items.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => void copyWatchlist()}
-            title="Copy current view as markdown"
-            aria-label={
-              copyStatus === 'copied'
-                ? 'Watchlist copied'
-                : copyStatus === 'failed'
-                  ? 'Copy failed'
-                  : 'Copy watchlist as markdown'
-            }
-            style={{
-              flexShrink: 0,
-              background: 'none',
-              border: '0.5px solid #D4C4B0',
-              borderRadius: 8,
-              padding: '6px 12px',
-              fontSize: 11,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              color:
-                copyStatus === 'failed'
-                  ? '#D85A30'
-                  : copyStatus === 'copied'
-                    ? '#5A8C6A'
-                    : '#8C7355',
-              cursor: 'pointer',
-              fontFamily: 'Georgia, serif',
-            }}
-          >
-            {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => void copyWatchlist()}
+              title="Copy current view as markdown"
+              aria-label={
+                copyStatus === 'copied'
+                  ? 'Watchlist copied'
+                  : copyStatus === 'failed'
+                    ? 'Copy failed'
+                    : 'Copy watchlist as markdown'
+              }
+              style={{
+                background: 'none',
+                border: '0.5px solid #D4C4B0',
+                borderRadius: 8,
+                padding: '6px 12px',
+                fontSize: 11,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color:
+                  copyStatus === 'failed'
+                    ? '#D85A30'
+                    : copyStatus === 'copied'
+                      ? '#5A8C6A'
+                      : '#8C7355',
+                cursor: 'pointer',
+                fontFamily: 'Georgia, serif',
+              }}
+            >
+              {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy'}
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadWatchlist()}
+              title="Download current view as markdown"
+              aria-label={
+                downloadStatus === 'done'
+                  ? 'Watchlist downloaded'
+                  : downloadStatus === 'failed'
+                    ? 'Download failed'
+                    : 'Download watchlist as markdown'
+              }
+              style={{
+                background: 'none',
+                border: '0.5px solid #D4C4B0',
+                borderRadius: 8,
+                padding: '6px 12px',
+                fontSize: 11,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color:
+                  downloadStatus === 'failed'
+                    ? '#D85A30'
+                    : downloadStatus === 'done'
+                      ? '#5A8C6A'
+                      : '#8C7355',
+                cursor: 'pointer',
+                fontFamily: 'Georgia, serif',
+              }}
+            >
+              {downloadStatus === 'done'
+                ? 'Downloaded'
+                : downloadStatus === 'failed'
+                  ? 'Failed'
+                  : 'Download .md'}
+            </button>
+          </div>
         ) : null}
       </header>
 

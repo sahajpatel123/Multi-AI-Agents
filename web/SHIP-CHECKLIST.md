@@ -122,6 +122,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Download .md**: Arena four-mind comparison and Agent answers can download markdown files (not only clipboard).
 - **Answer evolution export**: Agent temporal evolution panel supports copy + download markdown (score, shifts, related runs).
 - **Answer evolution timeline**: related research runs listed with snippets/scores; open prior runs from the panel.
+- **Room / Watchlist download .md**: synthesis, research board, and watchlist views can save markdown files (not only clipboard).
 
 ## Required production environment
 
