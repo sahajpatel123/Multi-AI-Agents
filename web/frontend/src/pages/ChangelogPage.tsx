@@ -100,6 +100,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Agent recent research chips: tap × to hide (mobile-friendly)',
       '[IMPROVED] Cross-pollinate banner shows research score and dedicated status copy',
       '[NEW] Room Perspective Drift — diversity score, viewpoint clusters, and sharpest divergences',
+      '[IMPROVED] Perspective comparison: real mind names, Escape, copy markdown',
     ],
   },
   {

@@ -2046,7 +2046,20 @@ function App() {
       {/* Perspective Comparison overlay */}
       {showPerspectiveComparison && response && (
         <PerspectiveComparison
-          responses={response.all_responses}
+          question={response.prompt}
+          responses={response.all_responses.map((scored) => {
+            const persona =
+              getPersonaForAgentId(scored.response.agent_id) || AGENTS[scored.response.agent_id];
+            return {
+              agentId: scored.response.agent_id,
+              name: persona?.name || scored.response.agent_id,
+              color: persona?.color,
+              oneLiner: scored.response.one_liner || scored.response.verdict,
+              score: scored.score,
+              confidence: scored.response.confidence,
+              isWinner: scored.is_winner,
+            };
+          })}
           onClose={() => setShowPerspectiveComparison(false)}
         />
       )}

@@ -114,6 +114,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Back to top**: floating control after deep scroll; reduced-motion safe; focuses #main-content.
 - **Agent recent chips**: visible hide (×) + Delete key; list semantics (Arena recent-chip parity).
 - **Cross-pollinate banner**: dedicated status chip with optional IQ score; clears when Arena finishes.
+- **Perspective comparison**: persona names/colors, Escape + dialog a11y, copy markdown, honest confidence/score labels.
 
 ## Required production environment
 
