@@ -48,6 +48,29 @@ title = "Multi-AI-Agents gitleaks config"
     '''sk-ol-[*]+[a-f0-9]{4}''',  # OpenAI key shape from earlier captured payload
   ]
 
+# CI workflow ENCRYPTION_KEY — base64-shaped but a fixture (Fernet keys for
+# tests need to be deterministic). Allowlisted by exact value rather than
+# pattern so a real secret here still trips generic-api-key.
+[[allowlists]]
+  description = "CI workflow ENCRYPTION_KEY fixture"
+  regexes = [
+    '''ENCRYPTION_KEY:\s*yFosmwgHKj-5dIFtmC5tl6yEWawwqRqZwE749ltw5Mc=''',
+  ]
+
+# Frontend localStorage key names — short high-entropy strings that match
+# generic-api-key by accident. Path-scoped to avoid masking real secrets
+# elsewhere.
+[[allowlists]]
+  description = "Frontend localStorage key name literals"
+  paths = [
+    '''(^|/)web/frontend/src/lib/recentPrompts\.ts$''',
+    '''(^|/)web/frontend/src/lib/downloadTextFile\.ts$''',
+  ]
+  regexes = [
+    '''STORAGE_KEY\s*=\s*['"][a-z_0-9]+['"]''',
+    '''const STORAGE_KEY''',
+  ]
+
 # UI placeholder for Slack bot token entry, harmless literal.
 [[allowlists]]
   description = "Frontend integration-services UI placeholders"
