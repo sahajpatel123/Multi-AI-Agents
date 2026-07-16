@@ -1025,7 +1025,15 @@ export function Sidebar({
                               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <AgentDot agentId={turn.winner_id} size={5} />
                                 <span style={{ fontSize: '11px', color: '#6B6460', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{winner.name}</span>
-                                <span style={{ fontSize: 11, color: '#A89070', marginLeft: 'auto', flexShrink: 0 }}>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    color: '#A89070',
+                                    marginLeft: 'auto',
+                                    flexShrink: 0,
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
                                   {formatRelativePast(turn.timestamp, {
                                     localeAfterDays: 7,
                                     now: nowMs,
