@@ -33,7 +33,15 @@ async def get_current_user(
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    # The subject is expected to be a numeric user id. A non-numeric value (a
+    # malformed, legacy, or forged token) must fail authentication cleanly (401)
+    # rather than raising ValueError from int() and surfacing as a 500.
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    user = db.query(User).filter(User.id == uid).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
