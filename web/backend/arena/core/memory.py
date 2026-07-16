@@ -112,10 +112,14 @@ def _summarize_stance_text(text: str, limit: int = 20) -> str:
 
 
 def _parse_json_like(payload: str) -> dict[str, Any]:
+    """Parse LLM response as JSON only. Never use ast.literal_eval() on untrusted input."""
     try:
         return json.loads(payload)
-    except json.JSONDecodeError:
-        return ast.literal_eval(payload)
+    except json.JSONDecodeError as e:
+        # LLM responses must be valid JSON. Do not fall back to ast.literal_eval()
+        # which could execute arbitrary code.
+        logger.warning("LLM returned invalid JSON (expected structured response): %s...", payload[:100])
+        return {}
 
 
 def _coerce_datetime(value: Any) -> datetime:

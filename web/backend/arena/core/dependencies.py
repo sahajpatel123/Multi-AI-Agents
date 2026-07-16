@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from arena.core.auth import decode_token, orm_user_to_response
+from arena.core.token_blacklist import token_blacklist
 from arena.database import get_db
 from arena.db_models import User
 from arena.models.schemas import UserResponse
@@ -20,6 +21,11 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     token = auth_header[7:]
+
+    # Check token blacklist for revoked JWTs
+    if token_blacklist.is_blacklisted(token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
+
     payload = decode_token(token)
     if not payload:
         raise HTTPException(

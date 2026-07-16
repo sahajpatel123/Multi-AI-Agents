@@ -20,6 +20,7 @@ from arena.core.auth import (
     get_user_by_email,
     orm_user_to_response,
 )
+from arena.core.token_blacklist import token_blacklist
 from arena.core.dependencies import get_current_user_required_orm
 from arena.core.feedback_calibrator import get_answer_feedback_distribution
 from arena.core.input_validation import sanitize_html
@@ -163,7 +164,14 @@ async def login(
 
 
 @router.post("/logout")
-async def logout() -> JSONResponse:
+async def logout(request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user_required_orm)) -> JSONResponse:
+    """Revoke the access token used for this request. JWT will be rejected on subsequent requests."""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        if token:
+            token_blacklist.add(token)
+            logger.info("Token blacklisted for user %d", user.id)
     return JSONResponse({"success": True})
 
 
