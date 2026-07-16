@@ -13,6 +13,7 @@ import {
   applyDocumentTitle,
   titleForRoom,
 } from '../lib/documentTitle';
+import { formatRoomBoardExport, plainAnswerExcerpt } from '../lib/roomBoardExport';
 import { formatRoomSynthesisExport } from '../lib/roomSynthesisExport';
 import {
   buildRoomInviteShareData,
@@ -100,9 +101,11 @@ export function RoomPage() {
   const [boardQuery, setBoardQuery] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [boardCopyStatus, setBoardCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const boardSearchRef = useRef<HTMLInputElement | null>(null);
   const pickerSearchRef = useRef<HTMLInputElement | null>(null);
   const copyStatusTimerRef = useRef<number | null>(null);
+  const boardCopyTimerRef = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
     if (!slug) return;
@@ -329,10 +332,24 @@ export function RoomPage() {
     }, status === 'copied' ? 2200 : 3200);
   };
 
+  const flashBoardCopyStatus = (status: 'copied' | 'failed') => {
+    if (boardCopyTimerRef.current != null) {
+      window.clearTimeout(boardCopyTimerRef.current);
+    }
+    setBoardCopyStatus(status);
+    boardCopyTimerRef.current = window.setTimeout(() => {
+      setBoardCopyStatus('idle');
+      boardCopyTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
   useEffect(() => {
     return () => {
       if (copyStatusTimerRef.current != null) {
         window.clearTimeout(copyStatusTimerRef.current);
+      }
+      if (boardCopyTimerRef.current != null) {
+        window.clearTimeout(boardCopyTimerRef.current);
       }
     };
   }, []);
@@ -365,6 +382,35 @@ export function RoomPage() {
     } else {
       flashCopyStatus('failed');
       setActionError('Could not copy synthesis — select the text and copy manually.');
+      window.setTimeout(() => setActionError(null), 3200);
+    }
+  };
+
+  const copyBoard = async () => {
+    if (!room) return;
+    const q = boardQuery.trim();
+    const markdown = formatRoomBoardExport({
+      roomName: room.name || 'Research room',
+      shareUrl: room.share_url || `${window.location.origin}/room/${slug}`,
+      memberCount: members.length,
+      totalTaskCount: tasks.length,
+      filterNote: q ? `search “${q}”` : undefined,
+      tasks: filteredBoardTasks.map((t: any) => ({
+        title: getTaskTitle(t),
+        author: memberNameById[t.user_id] || undefined,
+        score: t.final_score,
+        createdAt: t.created_at,
+        excerpt: plainAnswerExcerpt(t.final_answer),
+        question: t.question || t.task_text || undefined,
+        taskId: t.task_id,
+      })),
+    });
+    const ok = await copyToClipboard(markdown);
+    if (ok) {
+      flashBoardCopyStatus('copied');
+    } else {
+      flashBoardCopyStatus('failed');
+      setActionError('Could not copy board — select the text and copy manually.');
       window.setTimeout(() => setActionError(null), 3200);
     }
   };
@@ -768,55 +814,115 @@ export function RoomPage() {
             {boardQuery.trim() ? ` / ${tasks.length}` : ''}
           </span>
         </div>
-        <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 280 }}>
-          <input
-            ref={boardSearchRef}
-            type="search"
-            value={boardQuery}
-            onChange={(e) => setBoardQuery(e.target.value)}
-            placeholder="Search tasks…"
-            aria-label="Search room tasks"
-            autoComplete="off"
-            style={{
-              width: '100%',
-              boxSizing: 'border-box',
-              fontSize: 12,
-              fontFamily: 'Georgia, serif',
-              color: '#2C1810',
-              background: '#FAF7F2',
-              border: '0.5px solid #E0D5C5',
-              borderRadius: 8,
-              padding: '7px 28px 7px 10px',
-              outline: 'none',
-            }}
-          />
-          {boardQuery ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 220px', justifyContent: 'flex-end' }}>
+          {tasks.length > 0 ? (
             <button
               type="button"
-              aria-label="Clear task search"
-              onClick={() => {
-                setBoardQuery('');
-                boardSearchRef.current?.focus();
-              }}
+              title="Copy board as markdown"
+              aria-label={
+                boardCopyStatus === 'copied'
+                  ? 'Board copied'
+                  : boardCopyStatus === 'failed'
+                    ? 'Copy failed'
+                    : 'Copy board as markdown'
+              }
+              onClick={() => void copyBoard()}
               style={{
-                position: 'absolute',
-                right: 6,
-                top: '50%',
-                transform: 'translateY(-50%)',
                 background: 'none',
-                border: 'none',
+                border: '0.5px solid #D4C4B0',
+                borderRadius: 6,
                 cursor: 'pointer',
-                fontSize: 14,
-                color: '#A89070',
-                lineHeight: 1,
-                padding: 4,
+                color:
+                  boardCopyStatus === 'failed'
+                    ? '#D85A30'
+                    : boardCopyStatus === 'copied'
+                      ? '#5A8C6A'
+                      : '#C4956A',
+                padding: '4px 10px',
+                fontSize: 10,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                flexShrink: 0,
               }}
             >
-              ×
+              {boardCopyStatus === 'copied'
+                ? 'Copied'
+                : boardCopyStatus === 'failed'
+                  ? 'Failed'
+                  : 'Copy board'}
             </button>
           ) : null}
+          <div style={{ position: 'relative', flex: '1 1 160px', maxWidth: 280 }}>
+            <input
+              ref={boardSearchRef}
+              type="search"
+              value={boardQuery}
+              onChange={(e) => setBoardQuery(e.target.value)}
+              placeholder="Search tasks…"
+              aria-label="Search room tasks"
+              autoComplete="off"
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                fontSize: 12,
+                fontFamily: 'Georgia, serif',
+                color: '#2C1810',
+                background: '#FAF7F2',
+                border: '0.5px solid #E0D5C5',
+                borderRadius: 8,
+                padding: '7px 28px 7px 10px',
+                outline: 'none',
+              }}
+            />
+            {boardQuery ? (
+              <button
+                type="button"
+                aria-label="Clear task search"
+                onClick={() => {
+                  setBoardQuery('');
+                  boardSearchRef.current?.focus();
+                }}
+                style={{
+                  position: 'absolute',
+                  right: 6,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  color: '#A89070',
+                  lineHeight: 1,
+                  padding: 4,
+                }}
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
+      {boardCopyStatus !== 'idle' ? (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'absolute',
+            width: 1,
+            height: 1,
+            padding: 0,
+            margin: -1,
+            overflow: 'hidden',
+            clip: 'rect(0, 0, 0, 0)',
+            whiteSpace: 'nowrap',
+            border: 0,
+          }}
+        >
+          {boardCopyStatus === 'copied'
+            ? 'Research board copied to clipboard'
+            : 'Could not copy research board'}
+        </div>
+      ) : null}
       {filteredBoardTasks.length === 0 ? (
         <div
           style={{
