@@ -1348,50 +1348,69 @@ export function WatchlistPage() {
                                     gap: 6,
                                   }}
                                 >
-                                  {data.items.map((run) => (
-                                    <li key={run.task_id}>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          navigate(
-                                            `/agent?task_id=${encodeURIComponent(run.task_id)}`,
-                                          )
-                                        }
-                                        style={{
-                                          width: '100%',
-                                          textAlign: 'left',
-                                          background: 'transparent',
-                                          border: '0.5px solid #E0D5C5',
-                                          borderRadius: 8,
-                                          padding: '8px 10px',
-                                          cursor: 'pointer',
-                                          fontFamily: 'Georgia, serif',
-                                        }}
-                                      >
-                                        <div
+                                  {data.items.map((run) => {
+                                    const score = run.final_score;
+                                    const tone =
+                                      score == null
+                                        ? { bg: 'rgba(168,144,112,0.18)', fg: '#6B6460' }
+                                        : score >= 80
+                                          ? { bg: 'rgba(138,168,153,0.18)', fg: '#3F6B4A' }
+                                          : score >= 60
+                                            ? { bg: 'rgba(196,149,106,0.18)', fg: '#8C5A2C' }
+                                            : { bg: 'rgba(217,83,79,0.15)', fg: '#9C2F2A' };
+                                    return (
+                                      <li key={run.task_id}>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            navigate(
+                                              `/agent?task_id=${encodeURIComponent(run.task_id)}`,
+                                            )
+                                          }
                                           style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            gap: 8,
-                                            alignItems: 'baseline',
+                                            width: '100%',
+                                            textAlign: 'left',
+                                            background: 'transparent',
+                                            border: '0.5px solid #E0D5C5',
+                                            borderRadius: 8,
+                                            padding: '8px 10px',
+                                            cursor: 'pointer',
+                                            fontFamily: 'Georgia, serif',
                                           }}
                                         >
-                                          <span
+                                          <div
                                             style={{
-                                              fontSize: 12,
-                                              color: '#2C1810',
-                                              fontWeight: 500,
-                                              overflow: 'hidden',
-                                              textOverflow: 'ellipsis',
-                                              whiteSpace: 'nowrap',
+                                              display: 'flex',
+                                              justifyContent: 'space-between',
+                                              gap: 8,
+                                              alignItems: 'baseline',
                                             }}
                                           >
-                                            {run.title?.trim() || 'Research run'}
-                                          </span>
-                                          <span style={{ fontSize: 11, color: '#C4956A', flexShrink: 0 }}>
-                                            {run.final_score != null ? `${run.final_score}/100` : '—'}
-                                          </span>
-                                        </div>
+                                            <span
+                                              style={{
+                                                fontSize: 12,
+                                                color: '#2C1810',
+                                                fontWeight: 500,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                              }}
+                                            >
+                                              {run.title?.trim() || 'Research run'}
+                                            </span>
+                                            <span
+                                              style={{
+                                                fontSize: 11,
+                                                borderRadius: 999,
+                                                padding: '1px 7px',
+                                                background: tone.bg,
+                                                color: tone.fg,
+                                                flexShrink: 0,
+                                              }}
+                                            >
+                                              {score != null ? `${score}/100` : '—'}
+                                            </span>
+                                          </div>
                                         <div
                                           style={{
                                             fontSize: 11,
@@ -1406,7 +1425,8 @@ export function WatchlistPage() {
                                         </div>
                                       </button>
                                     </li>
-                                  ))}
+                                    );
+                                  })}
                                 </ul>
                               )}
                             </div>
