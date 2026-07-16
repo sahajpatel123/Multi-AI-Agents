@@ -2,7 +2,7 @@
 
 from collections import Counter, defaultdict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from arena.core.dependencies import get_current_user_optional, get_current_user_
 from arena.core.input_validation import sanitize_model_optional_text, sanitize_model_text
 from arena.core.model_router import get_all_routes_summary
 from arena.core.observability import log_ux_event
+from arena.core.rate_limits import enforce_ip_rate_limit
 from arena.database import get_db
 from arena.db_models import PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UXEvent, UserPreference
 from arena.models.schemas import UserResponse
@@ -79,10 +80,20 @@ class UXEventRequest(BaseModel):
 
 @router.post("/analytics/event")
 async def track_event(
+    request: Request,
     body: UXEventRequest,
     db: Session = Depends(get_db),
     user: UserResponse | None = Depends(get_current_user_optional),
 ) -> dict:
+    # Anonymous-writable surface — bound write volume so a single IP cannot
+    # fill the UXEvent table (cost / disk amplification).
+    enforce_ip_rate_limit(
+        request,
+        scope="analytics_event",
+        limit=120,
+        window_seconds=60,
+        message="Too many analytics events from this IP. Please slow down.",
+    )
     if body.event_type not in VALID_EVENT_TYPES:
         raise HTTPException(status_code=422, detail={"error": "validation_error", "message": "Invalid event_type"})
     try:

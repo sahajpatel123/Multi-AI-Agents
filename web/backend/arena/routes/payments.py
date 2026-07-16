@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -15,6 +13,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
+from arena.core.hmac_verify import hmac_sha256_hex_equal
 from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.tier_config import get_tier_str
 from arena.core.dependencies import get_current_user_required_orm
@@ -565,12 +564,11 @@ async def verify_payment(
         )
 
     message = f"{body.razorpay_payment_id}|{body.razorpay_subscription_id}"
-    expected = hmac.new(
-        settings.razorpay_key_secret.encode(),
-        message.encode(),
-        hashlib.sha256,
-    ).hexdigest()
-    if not hmac.compare_digest(expected, body.razorpay_signature):
+    if not hmac_sha256_hex_equal(
+        settings.razorpay_key_secret,
+        message,
+        body.razorpay_signature,
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid signature",
@@ -726,14 +724,7 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                 )
             return JSONResponse(status_code=200, content={"status": "ok"})
 
-        expected_signature = hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
-        # Constant-time compare. Reject empty / wrong-length headers up front
-        # so compare_digest never raises ValueError (length mismatch) as a 500.
-        if (
-            not sig_header
-            or len(sig_header) != len(expected_signature)
-            or not hmac.compare_digest(expected_signature, sig_header)
-        ):
+        if not hmac_sha256_hex_equal(secret, raw_body, sig_header):
             logger.warning("Invalid Razorpay webhook signature")
             raise HTTPException(status_code=400, detail="Invalid signature")
 

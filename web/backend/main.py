@@ -118,21 +118,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # in-browser image handling. 'unsafe-inline' on style-src keeps
         # Tailwind's runtime-injected styles working without a nonce
         # pipeline; revisit if/when migrating to a nonce-based CSP.
+        # API responses only — no need for 'unsafe-eval' (that would only
+        # matter if this origin served a browser app shell). Keep style/script
+        # inline for any rare HTML error pages; object-src stays none.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "font-src 'self' https://fonts.gstatic.com data:; "
-            "img-src 'self' data: blob: https:; "
-            "connect-src 'self' https://api.anthropic.com https://api.x.ai "
-            "https://api.openai.com https://api.deepseek.com "
-            "https://*.razorpay.com https://checkout.razorpay.com "
-            "wss: ws:; "
-            "frame-src https://*.razorpay.com https://checkout.razorpay.com https://api.razorpay.com; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
             "object-src 'none'; "
             "base-uri 'self'; "
             "form-action 'self'"
         )
+        # Defense-in-depth for any HTML ever served from the API origin.
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-site"
         if self.is_production:
             response.headers["Strict-Transport-Security"] = (
                 "max-age=31536000; includeSubDomains"
@@ -257,12 +259,20 @@ def create_app() -> FastAPI:
         logger.error("[SECURITY ERROR] No allowed_origins configured")
         raise ValueError("At least one origin must be in ALLOWED_ORIGINS")
 
+    # Explicit method/header allow-lists — never "*" in production CORS.
+    # Webhooks are server-to-server and do not rely on browser CORS.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
         allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "Accept",
+            "Accept-Language",
+            "X-Requested-With",
+        ],
         max_age=3600,
     )
     app.add_middleware(GlobalRateLimitMiddleware)
