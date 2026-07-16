@@ -73,6 +73,8 @@ export type PerspectiveRowInput = {
   name: string;
   color?: string;
   oneLiner?: string;
+  /** Full take/verdict when available (preferred for keywords + export). */
+  fullTake?: string;
   score?: number | null;
   confidence?: number | null;
   isWinner?: boolean;
@@ -83,8 +85,11 @@ export type PerspectiveRow = {
   name: string;
   color: string;
   oneLiner: string;
+  fullTake: string;
+  /** True when full take is meaningfully longer than the one-liner teaser. */
+  canExpand: boolean;
   keywords: string[];
-  /** Terms that appear only in this mind's one-liner. */
+  /** Terms that appear only in this mind's take. */
   distinctive: string[];
   scoreLabel: string | null;
   confidenceLabel: string | null;
@@ -111,6 +116,15 @@ export function sharedPerspectiveKeywords(rows: PerspectiveRow[]): string[] {
 export function buildPerspectiveRows(inputs: PerspectiveRowInput[]): PerspectiveRow[] {
   const base = (inputs || []).map((r) => {
     const oneLiner = (r.oneLiner || '').trim();
+    const fullRaw = (r.fullTake || '').trim();
+    const fullTake = fullRaw || oneLiner;
+    const canExpand =
+      Boolean(fullTake) &&
+      ((oneLiner && fullTake !== oneLiner && fullTake.length >= oneLiner.length + 40) ||
+        (!oneLiner && fullTake.length > 180) ||
+        (oneLiner === fullTake && fullTake.length > 220));
+    // Prefer full take for keyword analysis so distinctive terms aren't limited to the teaser.
+    const keywordSource = fullTake || oneLiner;
     const score =
       typeof r.score === 'number' && Number.isFinite(r.score) ? Math.round(r.score) : null;
     return {
@@ -118,7 +132,9 @@ export function buildPerspectiveRows(inputs: PerspectiveRowInput[]): Perspective
       name: (r.name || r.agentId || 'Mind').trim() || 'Mind',
       color: (r.color || '#C4956A').trim() || '#C4956A',
       oneLiner,
-      keywords: extractPerspectiveKeywords(oneLiner, 8),
+      fullTake,
+      canExpand,
+      keywords: extractPerspectiveKeywords(keywordSource, 8),
       distinctive: [] as string[],
       scoreLabel: score != null ? String(score) : null,
       confidenceLabel: formatConfidenceScore(r.confidence ?? null),
@@ -169,8 +185,13 @@ export function formatPerspectiveComparisonMarkdown(opts: {
       const badge = badges.length ? ` · ${badges.join(' · ')}` : '';
       lines.push(`## ${r.name}${badge}`);
       lines.push('');
-      if (r.oneLiner) {
-        lines.push(`> ${r.oneLiner}`);
+      const take = (r.fullTake || r.oneLiner || '').trim();
+      if (take) {
+        if (r.fullTake && r.fullTake !== r.oneLiner && r.fullTake.includes('\n')) {
+          lines.push(r.fullTake);
+        } else {
+          lines.push(`> ${take}`);
+        }
         lines.push('');
       }
       if (r.distinctive.length) {

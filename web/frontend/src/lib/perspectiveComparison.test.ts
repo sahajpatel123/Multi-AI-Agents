@@ -74,4 +74,20 @@ describe('perspectiveComparison', () => {
     expect(md).toContain('winner');
     expect(md).toContain('Distinctive:');
   });
+
+  it('marks canExpand and exports multi-line full takes', () => {
+    const rows = buildPerspectiveRows([
+      {
+        agentId: 'a1',
+        name: 'Analyst',
+        oneLiner: 'Not yet.',
+        fullTake:
+          'Not yet.\n\nStage a canary rollout with a kill switch and clear success metrics before full launch.',
+      },
+    ]);
+    expect(rows[0].canExpand).toBe(true);
+    expect(rows[0].fullTake).toContain('canary');
+    const md = formatPerspectiveComparisonMarkdown({ rows });
+    expect(md).toContain('canary rollout');
+  });
 });

@@ -176,6 +176,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Room board: Show full answer expands task results as markdown in place',
       '[IMPROVED] Arena cards: Discuss and Challenge actions on every mind (not only the prompt bar)',
       '[IMPROVED] Session Leaderboard: expand full winner takes; export prefers full verdict',
+      '[IMPROVED] Perspective Comparison: expand full takes; keywords and export use full verdicts',
     ],
   },
   {

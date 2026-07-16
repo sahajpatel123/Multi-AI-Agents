@@ -186,6 +186,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Room board full answer**: long task answers expand in place as markdown (Show full answer); Open in Agent remains available.
 - **Arena card Discuss/Challenge**: every completed mind card exposes Discuss (1-on-1) and Challenge (debate) actions that honor tier gates.
 - **Leaderboard full winner takes**: session prompts expand full winner verdict as markdown; copy/download export prefers full take over one-liner.
+- **Perspective comparison full takes**: each mind can expand full verdict as markdown; keyword analysis + export prefer full take over one-liner.
 
 ## Required production environment
 

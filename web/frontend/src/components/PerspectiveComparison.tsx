@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AgentAnswerMarkdown } from './AgentAnswerMarkdown';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import {
@@ -54,11 +55,16 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [expandedAgentId, setExpandedAgentId] = useState<string | null>(null);
   const copyTimerRef = useRef<number | null>(null);
   const downloadTimerRef = useRef<number | null>(null);
 
   const rows = useMemo(() => buildPerspectiveRows(responses), [responses]);
   const shared = useMemo(() => sharedPerspectiveKeywords(rows), [rows]);
+
+  useEffect(() => {
+    setExpandedAgentId(null);
+  }, [responses]);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -212,12 +218,17 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
         ) : null}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {rows.map((t) => (
+          {rows.map((t) => {
+            const isExpanded = expandedAgentId === t.agentId;
+            const showFull = isExpanded && t.canExpand && Boolean(t.fullTake);
+            return (
             <div
               key={t.agentId}
               style={{
                 background: '#FFFFFF',
-                border: t.isWinner ? '0.5px solid rgba(196,149,106,0.55)' : '0.5px solid #E0D8D0',
+                border: t.isWinner || isExpanded
+                  ? '0.5px solid rgba(196,149,106,0.55)'
+                  : '0.5px solid #E0D8D0',
                 borderRadius: 10,
                 padding: '12px 14px',
               }}
@@ -254,7 +265,11 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
                     .join(' · ') || '—'}
                 </span>
               </div>
-              {t.oneLiner ? (
+              {showFull ? (
+                <div style={{ marginBottom: 8 }}>
+                  <AgentAnswerMarkdown markdown={t.fullTake} question={question} />
+                </div>
+              ) : t.oneLiner || t.fullTake ? (
                 <p
                   style={{
                     margin: '0 0 8px',
@@ -264,8 +279,29 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
                     fontStyle: 'italic',
                   }}
                 >
-                  “{t.oneLiner}”
+                  “{t.oneLiner || t.fullTake}”
                 </p>
+              ) : null}
+              {t.canExpand ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedAgentId((id) => (id === t.agentId ? null : t.agentId))
+                  }
+                  aria-expanded={isExpanded}
+                  style={{
+                    margin: '0 0 8px',
+                    padding: 0,
+                    border: 'none',
+                    background: 'none',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    color: '#C4956A',
+                    fontFamily: 'Georgia, serif',
+                  }}
+                >
+                  {isExpanded ? 'Show less' : 'Show full take'}
+                </button>
               ) : null}
               <div style={{ fontSize: 12, color: '#4A3728' }}>
                 {t.distinctive.length > 0 ? (
@@ -290,7 +326,8 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
