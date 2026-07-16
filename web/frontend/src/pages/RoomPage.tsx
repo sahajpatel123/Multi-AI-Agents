@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { addRoomTask, getAgentHistory, getRoom, getRoomSynthesis, joinRoom, removeRoomTask } from '../api';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
+import { PerspectiveDriftPanel } from '../components/PerspectiveDriftPanel';
 import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getUserColor, getUserInitials } from '../utils/roomUtils';
@@ -1348,8 +1349,18 @@ export function RoomPage() {
           }}
         >
           {isMobile && mobileTab === 'members' ? <div style={{ marginBottom: 16 }}>{sidebarInner}</div> : null}
-          {isMobile && mobileTab === 'synthesis' ? synthesisInner : null}
-          {!isMobile ? synthesisInner : null}
+          {isMobile && mobileTab === 'synthesis' ? (
+            <>
+              {synthesisInner}
+              {slug ? <PerspectiveDriftPanel slug={slug} taskCount={tasks.length} /> : null}
+            </>
+          ) : null}
+          {!isMobile ? (
+            <>
+              {synthesisInner}
+              {slug ? <PerspectiveDriftPanel slug={slug} taskCount={tasks.length} /> : null}
+            </>
+          ) : null}
           {isMobile && mobileTab === 'tasks' ? tasksGrid : null}
           {!isMobile ? tasksGrid : null}
         </main>

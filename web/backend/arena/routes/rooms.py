@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import secrets
@@ -524,3 +525,255 @@ async def delete_room(
     db.add(room)
     db.commit()
     return {"success": True}
+
+
+def _extract_answer_snippet(raw: str | None, *, limit: int = 500) -> str:
+    """Pull a readable snippet from free text or structured Agent final_answer JSON."""
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    if text.startswith("{") or text.startswith("["):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                if parsed.get("one_liner"):
+                    text = str(parsed["one_liner"])
+                elif isinstance(parsed.get("sentences"), list):
+                    text = " ".join(
+                        str(s.get("text") or s) if isinstance(s, dict) else str(s)
+                        for s in parsed["sentences"]
+                    )
+                elif parsed.get("final_answer"):
+                    text = str(parsed["final_answer"])
+                elif parsed.get("text"):
+                    text = str(parsed["text"])
+        except Exception:
+            pass
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    return cleaned[:limit]
+
+
+def _tokenize_for_drift(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]{3,}", (text or "").lower()))
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    if not a and not b:
+        return 1.0
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def _build_perspective_drift(tasks: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    Token-overlap drift analysis across room research answers.
+
+    Higher drift_score = more divergent viewpoints (0–100).
+    """
+    if len(tasks) < 2:
+        return {
+            "drift_score": 0,
+            "label": "insufficient",
+            "perspective_clusters": [],
+            "divergent_pairs": [],
+            "mean_similarity": None,
+        }
+
+    tokens = [_tokenize_for_drift(t.get("answer") or "") for t in tasks]
+    n = len(tasks)
+    pairs: list[tuple[float, int, int]] = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            pairs.append((_jaccard(tokens[i], tokens[j]), i, j))
+
+    mean_sim = sum(s for s, _, _ in pairs) / len(pairs) if pairs else 1.0
+    # Invert similarity → drift; floor uniqueness of non-empty answers.
+    non_empty = [t for t in tasks if (t.get("answer") or "").strip()]
+    unique_ratio = (
+        len({(t.get("answer") or "").strip().lower() for t in non_empty}) / len(non_empty)
+        if non_empty
+        else 0.0
+    )
+    drift_score = int(round(max(0.0, min(100.0, (1.0 - mean_sim) * 70.0 + unique_ratio * 30.0))))
+
+    if drift_score >= 70:
+        label = "high divergence"
+    elif drift_score >= 40:
+        label = "healthy spread"
+    elif drift_score >= 15:
+        label = "converging"
+    else:
+        label = "near consensus"
+
+    # Greedy clusters: join tasks when similarity ≥ 0.35
+    parent = list(range(n))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    for sim, i, j in pairs:
+        if sim >= 0.35:
+            union(i, j)
+
+    groups: dict[int, list[int]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+
+    clusters: list[dict[str, Any]] = []
+    for idxs in sorted(groups.values(), key=lambda g: (-len(g), g[0])):
+        members = [tasks[i] for i in idxs]
+        # Shared vocabulary as a rough theme hint
+        shared: set[str] | None = None
+        for i in idxs:
+            tok = tokens[i]
+            shared = set(tok) if shared is None else (shared & tok)
+        theme_words = sorted(shared or [], key=len, reverse=True)[:4]
+        theme = " · ".join(theme_words) if theme_words else "mixed viewpoints"
+        clusters.append(
+            {
+                "size": len(members),
+                "theme": theme,
+                "members": [
+                    {
+                        "task_id": m["task_id"],
+                        "user": m["user"],
+                        "question": (m.get("question") or "")[:120],
+                        "score": m.get("score") or 0,
+                    }
+                    for m in members
+                ],
+            }
+        )
+
+    divergent = sorted(pairs, key=lambda p: p[0])[:3]
+    divergent_pairs = [
+        {
+            "similarity": round(sim, 3),
+            "task_a": {
+                "task_id": tasks[i]["task_id"],
+                "user": tasks[i]["user"],
+                "snippet": (tasks[i].get("answer") or "")[:160],
+            },
+            "task_b": {
+                "task_id": tasks[j]["task_id"],
+                "user": tasks[j]["user"],
+                "snippet": (tasks[j].get("answer") or "")[:160],
+            },
+        }
+        for sim, i, j in divergent
+        if sim < 0.5
+    ]
+
+    return {
+        "drift_score": drift_score,
+        "label": label,
+        "perspective_clusters": clusters,
+        "divergent_pairs": divergent_pairs,
+        "mean_similarity": round(mean_sim, 3),
+    }
+
+
+@router.get("/{slug}/perspective-drift")
+async def get_perspective_drift(
+    slug: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_required_orm),
+) -> dict[str, Any]:
+    """
+    Analyze how research perspectives have drifted across room tasks.
+
+    Returns:
+    - drift_score / label
+    - perspective_clusters (similar answer groups)
+    - divergent_pairs (most dissimilar task pairs)
+    """
+    room = db.query(Room).filter(Room.slug == slug, Room.is_active.is_(True)).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    is_member = (
+        db.query(RoomMember)
+        .filter(RoomMember.room_id == room.id, RoomMember.user_id == user.id)
+        .first()
+    )
+    if not is_member and room.creator_id != user.id:
+        raise HTTPException(status_code=403, detail="Only room members can view perspective drift")
+
+    rts = (
+        db.query(RoomTask, AgentTask, User)
+        .join(AgentTask, AgentTask.task_id == RoomTask.task_id)
+        .join(User, User.id == AgentTask.user_id)
+        .filter(RoomTask.room_id == room.id)
+        .order_by(RoomTask.added_at.desc())
+        .all()
+    )
+
+    if len(rts) < 2:
+        return {
+            "task_count": len(rts),
+            "tasks": [],
+            "drift_score": 0,
+            "label": "insufficient",
+            "perspective_clusters": [],
+            "divergent_pairs": [],
+            "mean_similarity": None,
+            "message": "Need at least 2 tasks for drift analysis",
+        }
+
+    tasks_data: list[dict[str, Any]] = []
+    for _rt, at, u in rts:
+        topics = ""
+        if at.topics:
+            try:
+                parsed_topics = json.loads(at.topics) if isinstance(at.topics, str) else at.topics
+                if isinstance(parsed_topics, list):
+                    topics = ", ".join(str(t) for t in parsed_topics[:6])
+                else:
+                    topics = str(parsed_topics)[:200]
+            except Exception:
+                topics = str(at.topics)[:200]
+
+        answer = _extract_answer_snippet(at.final_answer)
+        # Prefer conclusions/topics when the answer body is thin
+        if len(answer) < 40 and at.key_conclusions:
+            try:
+                kc = (
+                    json.loads(at.key_conclusions)
+                    if isinstance(at.key_conclusions, str)
+                    else at.key_conclusions
+                )
+                if isinstance(kc, list):
+                    answer = "; ".join(str(x) for x in kc[:4])[:500]
+                else:
+                    answer = str(kc)[:500]
+            except Exception:
+                answer = str(at.key_conclusions)[:500]
+
+        display_name = (u.name or "").strip() or (u.email.split("@")[0] if u.email else "member")
+        tasks_data.append(
+            {
+                "task_id": at.task_id,
+                "question": at.task_text or "",
+                "answer": answer,
+                "score": at.final_score or 0,
+                "user": display_name,
+                "topics": topics,
+                "created_at": at.created_at.isoformat() if at.created_at else None,
+            }
+        )
+
+    analysis = _build_perspective_drift(tasks_data)
+    return {
+        "task_count": len(tasks_data),
+        "tasks": tasks_data,
+        **analysis,
+    }

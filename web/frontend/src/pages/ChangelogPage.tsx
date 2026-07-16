@@ -99,6 +99,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Back to top floating control on long pages (Agent answers, changelog, marketing)',
       '[IMPROVED] Agent recent research chips: tap × to hide (mobile-friendly)',
       '[IMPROVED] Cross-pollinate banner shows research score and dedicated status copy',
+      '[NEW] Room Perspective Drift — diversity score, viewpoint clusters, and sharpest divergences',
     ],
   },
   {

@@ -1452,6 +1452,67 @@ export async function crossPollinateAgentAnswer(
 }
 
 // ──────────────────────────────────────────────────────────────
+// Room Perspective Drift Analysis
+// ──────────────────────────────────────────────────────────────
+
+export type PerspectiveDriftTask = {
+  task_id: string;
+  question: string;
+  answer: string;
+  score: number;
+  user: string;
+  topics?: string;
+  created_at: string | null;
+};
+
+export type PerspectiveDriftClusterMember = {
+  task_id: string;
+  user: string;
+  question: string;
+  score: number;
+};
+
+export type PerspectiveDriftCluster = {
+  size: number;
+  theme: string;
+  members: PerspectiveDriftClusterMember[];
+};
+
+export type PerspectiveDriftPairSide = {
+  task_id: string;
+  user: string;
+  snippet: string;
+};
+
+export type PerspectiveDriftPair = {
+  similarity: number;
+  task_a: PerspectiveDriftPairSide;
+  task_b: PerspectiveDriftPairSide;
+};
+
+export type PerspectiveDriftResponse = {
+  task_count: number;
+  tasks: PerspectiveDriftTask[];
+  drift_score: number;
+  label: string;
+  perspective_clusters: PerspectiveDriftCluster[];
+  divergent_pairs: PerspectiveDriftPair[];
+  mean_similarity: number | null;
+  message?: string;
+};
+
+export async function getRoomPerspectiveDrift(slug: string): Promise<PerspectiveDriftResponse> {
+  const response = await apiFetch(`/api/rooms/${slug}/perspective-drift`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(err?.detail || 'Failed to get perspective drift', response.status, err);
+  }
+  const data = await parseJsonSafely<PerspectiveDriftResponse>(response);
+  if (!data) throw new Error('Empty drift response');
+  return data;
+}
+
+// ──────────────────────────────────────────────────────────────
 // Payments (Razorpay subscriptions)
 // ──────────────────────────────────────────────────────────────
 
