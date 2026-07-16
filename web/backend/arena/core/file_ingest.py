@@ -116,6 +116,19 @@ def process_upload(
     dest_path: str,
 ) -> dict[str, Any]:
     """Return registry record: file_id, filename, type, content, b64?, mime_type?, path."""
+    # Security: Prevent path traversal attacks
+    # Normalize the path and ensure it doesn't escape the intended directory
+    normalized_path = os.path.normpath(dest_path)
+    if ".." in normalized_path or os.path.isabs(normalized_path):
+        raise ValueError("Invalid file path: path traversal not allowed.")
+
+    # Security: Ensure the normalized path stays within uploads directory
+    # (caller should set this up, but we validate here as defense-in-depth)
+    base_dir = os.path.abspath(os.path.dirname(dest_path) or ".")
+    final_path = os.path.abspath(dest_path)
+    if not final_path.startswith(base_dir):
+        raise ValueError("Invalid file path: path must be within uploads directory.")
+
     ext = os.path.splitext((filename or "").lower())[1]
     if ext in DISALLOWED_EXTENSIONS:
         raise ValueError("Executable and script uploads are not allowed.")

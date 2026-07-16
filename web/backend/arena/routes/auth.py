@@ -45,12 +45,34 @@ logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
 
 _COMMON_PASSWORDS = {
+    # Top 20 most common passwords plus variations
     "password",
     "12345678",
     "password1",
     "qwerty123",
     "letmein1",
     "welcome1",
+    "123456789",
+    "password123",
+    "admin",
+    "admin123",
+    "letmein",
+    "welcome",
+    "monkey",
+    "dragon",
+    "master",
+    "login",
+    "abc123",
+    "iloveyou",
+    "princess",
+    "football",
+    "trustno1",
+    "sunshine",
+    "ashley",
+    "bailey",
+    "passw0rd",
+    "shadow",
+    "123123",
 }
 
 _EXPERTISE_LEVELS = {"none", "curious", "practitioner", "expert", "researcher"}

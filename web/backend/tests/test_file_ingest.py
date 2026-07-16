@@ -13,6 +13,33 @@ def _png_bytes(width: int, height: int) -> bytes:
     return buf.getvalue()
 
 
+def test_process_upload_rejects_path_traversal():
+    """Path traversal attempts must be rejected with clear ValueError."""
+    from arena.core.file_ingest import process_upload
+
+    # Attempt to escape the uploads directory via path traversal
+    with pytest.raises(ValueError, match="path traversal|Invalid file path"):
+        process_upload(
+            filename="test.txt",
+            content_type="text/plain",
+            data=b"hello world",
+            dest_path="../../../etc/passwd",
+        )
+
+
+def test_process_upload_rejects_absolute_path():
+    """Absolute paths must be rejected to prevent unauthorized file access."""
+    from arena.core.file_ingest import process_upload
+
+    with pytest.raises(ValueError, match="Invalid file path"):
+        process_upload(
+            filename="test.txt",
+            content_type="text/plain",
+            data=b"hello world",
+            dest_path="/etc/passwd",
+        )
+
+
 def test_image_b64_and_mime_accepts_small_image():
     from arena.core.file_ingest import image_b64_and_mime
 
