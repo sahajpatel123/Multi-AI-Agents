@@ -1423,10 +1423,12 @@ export async function verifyArenaAnswerInAgent(
 // Cross-Pollination (Agent → Arena bridge)
 // ──────────────────────────────────────────────────────────────
 
-type CrossPollinateResponse = {
+export type CrossPollinateResponse = {
   status: string;
   session_id: string;
+  original_task_id: string;
   prompt: string;
+  intel_score?: number | null;
 };
 
 export async function crossPollinateAgentAnswer(
@@ -1445,7 +1447,7 @@ export async function crossPollinateAgentAnswer(
   if (!response.ok) {
     throw new ApiError(agentDetailMessage(data, 'Cross-pollination failed'), response.status, data);
   }
-  if (!data?.status) throw new Error('Empty cross-pollination response');
+  if (!data?.original_task_id) throw new Error('Empty cross-pollination response');
   return data;
 }
 

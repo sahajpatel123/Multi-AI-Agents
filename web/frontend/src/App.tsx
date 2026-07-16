@@ -12,6 +12,7 @@ import { UserMenu } from './components/UserMenu';
 import { AgentDot } from './components/AgentDot';
 import { CollapsiblePrompt } from './components/CollapsiblePrompt';
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
+import { CrossPollinateBanner } from './components/CrossPollinateBanner';
 import {
   streamPrompt,
   streamDiscuss,
@@ -1424,47 +1425,10 @@ function App() {
               )}
 
               {crossPollinateSourceTaskId && phase === 'idle' && (
-                <div
-                  role="status"
-                  aria-live="polite"
-                  style={{
-                    background: 'rgba(114, 137, 190, 0.08)',
-                    borderRadius: 12,
-                    padding: '10px 14px',
-                    marginBottom: '1rem',
-                    maxWidth: 600,
-                    marginLeft: 'auto',
-                    marginRight: 'auto',
-                    fontSize: 13,
-                    color: '#7289BE',
-                    textAlign: 'center',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                  }}
-                >
-                  <span style={{ flex: 1, minWidth: 0, lineHeight: 1.45 }}>
-                    Cross-pollinating Agent answer — gathering perspectives from 4 minds
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Dismiss cross-pollination notice"
-                    onClick={() => setCrossPollinateSourceTaskId(null)}
-                    style={{
-                      flexShrink: 0,
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: 16,
-                      color: '#A89070',
-                      lineHeight: 1,
-                      padding: 0,
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
+                <CrossPollinateBanner
+                  sourceTaskId={crossPollinateSourceTaskId}
+                  onDismiss={() => setCrossPollinateSourceTaskId(null)}
+                />
               )}
 
               {/* Agent Cards - Always Visible in 2x2 Grid */}
