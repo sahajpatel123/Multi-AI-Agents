@@ -7,6 +7,7 @@ import {
   DebateReaction,
   AGENTS,
 } from '../types';
+import { AgentAnswerMarkdown } from './AgentAnswerMarkdown';
 import { AgentDot } from './AgentDot';
 import { usePanel } from '../context/PanelContext';
 import {
@@ -441,22 +442,22 @@ export function DebateMode({
             </span>
           </div>
           {content ? (
-            <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-              {content}
+            <div>
+              <AgentAnswerMarkdown markdown={content} question={originalPrompt} />
               {isStreaming && !isDone ? (
                 <span
                   style={{
                     display: 'inline-block',
                     width: '2px',
                     height: '16px',
-                    marginLeft: '3px',
+                    marginTop: 4,
                     background: 'rgba(107,100,96,0.45)',
                     animation: reducedMotion ? 'none' : 'breathe 1.2s ease-in-out infinite',
                     verticalAlign: 'text-bottom',
                   }}
                 />
               ) : null}
-            </p>
+            </div>
           ) : (
             <div
               style={{ fontSize: '20px', letterSpacing: '4px', color: agent.color }}
@@ -557,9 +558,10 @@ export function DebateMode({
           </span>
         </div>
         <div style={{ height: '0.5px', background: '#F0EBE3', margin: '14px 0' }} />
-        <p style={{ fontSize: '15px', color: '#1A1714', lineHeight: 1.8, fontWeight: 400 }}>
-          {challengedAgent.response.verdict}
-        </p>
+        <AgentAnswerMarkdown
+          markdown={challengedAgent.response.verdict || challengedAgent.response.one_liner || ''}
+          question={originalPrompt}
+        />
         <div
           style={{
             marginTop: '14px',

@@ -6,6 +6,7 @@ import {
   DiscussChatMessage,
   AGENTS,
 } from '../types';
+import { AgentAnswerMarkdown } from './AgentAnswerMarkdown';
 import { AgentDot } from './AgentDot';
 import { usePanel } from '../context/PanelContext';
 import {
@@ -535,19 +536,20 @@ export function DiscussMode({
           {/* Agent's original verdict as first message */}
           {currentHistory.length === 0 && !isStreaming && (
             <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-              <div style={{ maxWidth: '80%', background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
+              <div style={{ maxWidth: '92%', background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                   <AgentDot agentId={activeAgent.response.agent_id} size={5} />
                   <span style={{ fontSize: '11px', fontWeight: 500, color: agentConfig.color }}>
                     {agentConfig.name}
                   </span>
+                  <span style={{ fontSize: '11px', color: '#6B6460', fontStyle: 'italic', marginLeft: 4 }}>
+                    Original take
+                  </span>
                 </div>
-                <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7' }}>
-                  {activeAgent.response.verdict}
-                </p>
-                <p style={{ fontSize: '11px', color: '#6B6460', marginTop: '8px', fontStyle: 'italic' }}>
-                  Original verdict
-                </p>
+                <AgentAnswerMarkdown
+                  markdown={activeAgent.response.verdict || activeAgent.response.one_liner || ''}
+                  question={originalPrompt}
+                />
               </div>
             </div>
           )}
@@ -560,19 +562,22 @@ export function DiscussMode({
             >
               {msg.role === 'user' ? (
                 <div style={{ maxWidth: '80%', background: '#1A1714', borderRadius: '12px', padding: '12px 14px' }}>
-                  <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: '1.7' }}>{msg.content}</p>
+                  <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: '1.7', whiteSpace: 'pre-wrap', margin: 0 }}>{msg.content}</p>
                 </div>
               ) : (
-                <div style={{ maxWidth: '80%', background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
+                <div style={{ maxWidth: '92%', background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                     <AgentDot agentId={activeAgent.response.agent_id} size={5} />
                     <span style={{ fontSize: '11px', fontWeight: 500, color: agentConfig.color }}>
                       {agentConfig.name}
                     </span>
+                    {i === 0 ? (
+                      <span style={{ fontSize: '11px', color: '#6B6460', fontStyle: 'italic', marginLeft: 4 }}>
+                        Original take
+                      </span>
+                    ) : null}
                   </div>
-                  <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
-                    {msg.content}
-                  </p>
+                  <AgentAnswerMarkdown markdown={msg.content} question={originalPrompt} />
                 </div>
               )}
             </div>
@@ -581,27 +586,25 @@ export function DiscussMode({
           {/* Streaming agent response */}
           {isStreaming && streamingText && (
             <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-              <div style={{ maxWidth: '80%', background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
+              <div style={{ maxWidth: '92%', background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                   <AgentDot agentId={activeAgent.response.agent_id} size={5} />
                   <span style={{ fontSize: '11px', fontWeight: 500, color: agentConfig.color }}>
                     {agentConfig.name}
                   </span>
                 </div>
-                <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
-                  {streamingText}
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: '2px',
-                      height: '16px',
-                      marginLeft: '2px',
-                      background: 'rgba(107,100,96,0.5)',
-                      animation: reducedMotion ? 'none' : 'breathe 1.2s ease-in-out infinite',
-                      verticalAlign: 'text-bottom',
-                    }}
-                  />
-                </p>
+                <AgentAnswerMarkdown markdown={streamingText} />
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '2px',
+                    height: '16px',
+                    marginTop: 4,
+                    background: 'rgba(107,100,96,0.5)',
+                    animation: reducedMotion ? 'none' : 'breathe 1.2s ease-in-out infinite',
+                    verticalAlign: 'text-bottom',
+                  }}
+                />
               </div>
             </div>
           )}

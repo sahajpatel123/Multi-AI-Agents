@@ -164,6 +164,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Search highlight in Personas swap dialog, library quotes, and Room add-task picker',
       '[IMPROVED] Discuss: Jump to latest when you scroll up; streaming no longer yanks the viewport',
       '[IMPROVED] Arena focused mind: full take as markdown + Jump to latest when you scroll up',
+      '[IMPROVED] Discuss and Debate: agent takes render as markdown with reading time + outline',
     ],
   },
   {

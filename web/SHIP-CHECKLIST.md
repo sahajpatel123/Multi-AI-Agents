@@ -170,6 +170,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Search highlight dialogs**: Personas swap + library quotes/descriptions; Room add-task history picker.
 - **Discuss jump-to-latest**: when the user scrolls up in a 1-on-1 thread, auto-scroll pauses and a “Jump to latest” chip appears; send still pins to the live end.
 - **Arena focused mind**: original + reply takes render as markdown (reading time / outline when useful); Jump to latest when scrolled up during focused chat.
+- **Discuss/Debate markdown takes**: agent messages, original verdict, and debate reactions use AgentAnswerMarkdown (reading chrome + section jump when multi-heading).
 
 ## Required production environment
 
