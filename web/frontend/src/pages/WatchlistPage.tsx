@@ -26,6 +26,13 @@ import {
   watchlistSortLabel,
   type WatchlistSort,
 } from '../lib/watchlistSort';
+import {
+  AGENT_HISTORY_SCORE_OPTIONS,
+  agentHistoryScoreFilterUseful,
+  agentHistoryScoreLabel,
+  filterAgentHistoryByScore,
+  type AgentHistoryScoreFilter,
+} from '../lib/agentHistoryScoreFilter';
 import { watchlistBodyMode } from '../lib/watchlistView';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
@@ -82,6 +89,7 @@ export function WatchlistPage() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<WatchlistStatusFilter>('all');
+  const [scoreFilter, setScoreFilter] = useState<AgentHistoryScoreFilter>('all');
   const [listSort, setListSort] = useState<WatchlistSort>('next_soon');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -195,7 +203,14 @@ export function WatchlistPage() {
         : items.filter((item) =>
             statusFilter === 'active' ? item.is_active : !item.is_active,
           );
-    const searched = filterBySearchQuery(byStatus, searchQuery, (item) => [
+    const byScore = filterAgentHistoryByScore(
+      byStatus.map((item) => ({
+        ...item,
+        score: item.latest_task?.final_score ?? null,
+      })),
+      scoreFilter,
+    );
+    const searched = filterBySearchQuery(byScore, searchQuery, (item) => [
       item.question,
       item.latest_task?.title,
     ]);
@@ -210,7 +225,15 @@ export function WatchlistPage() {
       })),
       listSort,
     );
-  }, [items, searchQuery, statusFilter, listSort]);
+  }, [items, searchQuery, statusFilter, listSort, scoreFilter]);
+
+  const scoreFilterUseful = useMemo(
+    () =>
+      agentHistoryScoreFilterUseful(
+        items.map((item) => ({ score: item.latest_task?.final_score ?? null })),
+      ),
+    [items],
+  );
 
   useEffect(() => {
     return () => {
@@ -248,6 +271,9 @@ export function WatchlistPage() {
   const buildWatchlistMarkdown = () => {
     const filterBits: string[] = [];
     if (statusFilter !== 'all') filterBits.push(`status: ${statusFilter}`);
+    if (scoreFilter !== 'all') {
+      filterBits.push(`score: ${agentHistoryScoreLabel(scoreFilter)}`);
+    }
     const q = searchQuery.trim();
     if (q) filterBits.push(`search: “${q}”`);
     if (listSort !== 'next_soon') filterBits.push(`sort: ${watchlistSortLabel(listSort)}`);
@@ -612,10 +638,43 @@ export function WatchlistPage() {
                   </select>
                   <span style={{ fontSize: 11, color: '#A89070' }}>
                     {filteredItems.length}
-                    {searchQuery.trim() || statusFilter !== 'all' ? ` / ${items.length}` : ''}
+                    {searchQuery.trim() || statusFilter !== 'all' || scoreFilter !== 'all'
+                      ? ` / ${items.length}`
+                      : ''}
                   </span>
                 </div>
               </div>
+              {scoreFilterUseful ? (
+                <div
+                  role="group"
+                  aria-label="Filter by latest score"
+                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}
+                >
+                  {AGENT_HISTORY_SCORE_OPTIONS.map((opt) => {
+                    const selected = scoreFilter === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setScoreFilter(opt.value)}
+                        aria-pressed={selected}
+                        style={{
+                          padding: '3px 10px',
+                          borderRadius: 999,
+                          border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                          background: selected ? '#F0E6DA' : 'transparent',
+                          color: selected ? '#4A3728' : '#8C7355',
+                          fontSize: 11,
+                          fontFamily: 'Georgia, serif',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               <div style={{ position: 'relative' }}>
                 <input
                   ref={searchRef}
@@ -676,10 +735,16 @@ export function WatchlistPage() {
                 </p>
                 <p style={{ fontSize: 13, color: '#8C7355', marginTop: 8, maxWidth: 320, lineHeight: 1.6 }}>
                   {searchQuery.trim()
-                    ? `Nothing matches “${searchQuery.trim()}”${statusFilter !== 'all' ? ` in ${statusFilter} watches` : ''}.`
-                    : statusFilter === 'active'
-                      ? 'No active watches right now — resume a paused one or start a new research task.'
-                      : 'No paused watches.'}
+                    ? `Nothing matches “${searchQuery.trim()}”${statusFilter !== 'all' ? ` in ${statusFilter} watches` : ''}${
+                        scoreFilter !== 'all' ? ` · ${agentHistoryScoreLabel(scoreFilter)}` : ''
+                      }.`
+                    : scoreFilter !== 'all'
+                      ? `No watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
+                      : statusFilter === 'active'
+                        ? 'No active watches right now — resume a paused one or start a new research task.'
+                        : statusFilter === 'paused'
+                          ? 'No paused watches.'
+                          : 'No matches.'}
                 </p>
                 <button
                   type="button"
@@ -688,6 +753,7 @@ export function WatchlistPage() {
                   onClick={() => {
                     setSearchQuery('');
                     setStatusFilter('all');
+                    setScoreFilter('all');
                     setListSort('next_soon');
                     searchRef.current?.focus();
                   }}
