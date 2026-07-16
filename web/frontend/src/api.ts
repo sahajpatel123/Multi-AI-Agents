@@ -1523,6 +1523,13 @@ export type TemporalEvolutionShift = {
   lost_terms: string[];
 };
 
+export type TemporalEvolutionTimelineItem = {
+  task_id: string;
+  created_at?: string | null;
+  snippet?: string | null;
+  score?: number | null;
+};
+
 export type TemporalEvolution = {
   evolution_score: number;
   trend_label: string;
@@ -1531,6 +1538,8 @@ export type TemporalEvolution = {
   task_sequence?: string[];
   related_count?: number;
   message?: string;
+  /** Chronological related runs with readable answer snippets. */
+  timeline?: TemporalEvolutionTimelineItem[];
 };
 
 export type TemporalEvolutionResponse = {

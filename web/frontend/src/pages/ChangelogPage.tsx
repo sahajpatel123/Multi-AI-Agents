@@ -111,6 +111,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Agent Leaderboard shows session prompts with winners and copies the full transcript',
       '[NEW] Agent Answer Evolution — track how related research runs shift over time (gained/faded terms)',
       '[IMPROVED] Answer Evolution: copy / download analysis as markdown; dismissible errors',
+      '[IMPROVED] Answer Evolution: related-run timeline with snippets and open-prior-run links',
     ],
   },
   {

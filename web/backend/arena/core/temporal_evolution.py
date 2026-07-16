@@ -104,6 +104,19 @@ def analyze_temporal_evolution(
 
     Each task: {task_id, question?, one_liner?, final_answer?, created_at}
     """
+    def _timeline_entry(t: dict[str, Any]) -> dict[str, Any]:
+        snippet = (
+            (t.get("one_liner") or "").strip()
+            or extract_answer_snippet(t.get("final_answer"), limit=180)
+            or ""
+        )
+        return {
+            "task_id": t.get("task_id") or "",
+            "created_at": t.get("created_at"),
+            "snippet": snippet[:180],
+            "score": t.get("score"),
+        }
+
     if len(tasks) < 2:
         return {
             "evolution_score": 0,
@@ -111,6 +124,7 @@ def analyze_temporal_evolution(
             "key_shifts": [],
             "stability": 0,
             "task_sequence": [t.get("task_id", "") for t in tasks if t.get("task_id")],
+            "timeline": [_timeline_entry(t) for t in tasks if t.get("task_id")],
             "message": "Need at least two related research runs to track evolution",
         }
 
@@ -126,6 +140,7 @@ def analyze_temporal_evolution(
             "key_shifts": [],
             "stability": 0,
             "task_sequence": [],
+            "timeline": [_timeline_entry(t) for t in tasks if t.get("task_id")],
             "message": "Need at least two dated research runs to track evolution",
         }
 
@@ -176,4 +191,5 @@ def analyze_temporal_evolution(
         "stability": stability,
         "task_sequence": [t.get("task_id", "") for t in sorted_tasks],
         "related_count": len(sorted_tasks),
+        "timeline": [_timeline_entry(t) for t in sorted_tasks],
     }

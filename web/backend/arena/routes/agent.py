@@ -2129,6 +2129,7 @@ async def get_temporal_evolution(
             "one_liner": extract_answer_snippet(t.final_answer, limit=240),
             "final_answer": t.final_answer,
             "created_at": t.created_at.isoformat() if t.created_at else None,
+            "score": t.final_score if getattr(t, "final_score", None) is not None else None,
         }
         for t in similar_tasks
     ]

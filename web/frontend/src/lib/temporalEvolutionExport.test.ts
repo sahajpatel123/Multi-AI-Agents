@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { formatTemporalEvolutionExport } from './temporalEvolutionExport';
 
 describe('formatTemporalEvolutionExport', () => {
-  it('formats score, stability, and key shifts', () => {
+  it('formats score, stability, timeline, and key shifts', () => {
     const md = formatTemporalEvolutionExport({
       question: 'How is carbon pricing evolving?',
       taskId: 'abc-12345-full',
@@ -10,6 +10,21 @@ describe('formatTemporalEvolutionExport', () => {
       trendLabel: 'Moderate shift',
       stability: 58,
       relatedCount: 4,
+      timeline: [
+        {
+          task_id: 'task-aaaa',
+          created_at: '2026-01-01T00:00:00Z',
+          snippet: 'Tax first.',
+          score: 70,
+        },
+        {
+          task_id: 'abc-12345-full',
+          created_at: '2026-02-01T00:00:00Z',
+          snippet: 'Subsidy plus ETS.',
+          score: 82,
+          isCurrent: true,
+        },
+      ],
       shifts: [
         {
           from_task: 'task-aaaa',
@@ -24,6 +39,9 @@ describe('formatTemporalEvolutionExport', () => {
     expect(md).toContain('**Evolution:** 42/100 · Moderate shift');
     expect(md).toContain('**Stability:** 58/100');
     expect(md).toContain('**Related runs:** 4');
+    expect(md).toContain('## Related runs');
+    expect(md).toContain('current');
+    expect(md).toContain('Tax first.');
     expect(md).toContain('## Key shifts between runs');
     expect(md).toContain('**Gained:** subsidy, ETS');
     expect(md).toContain('**Faded:** voluntary');

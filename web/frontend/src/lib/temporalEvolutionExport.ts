@@ -7,6 +7,21 @@ export type EvolutionExportShift = {
   lost_terms?: string[];
 };
 
+export type EvolutionExportTimelineItem = {
+  task_id?: string | null;
+  created_at?: string | null;
+  snippet?: string | null;
+  score?: number | null;
+  isCurrent?: boolean;
+};
+
+function formatWhen(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
 export function formatTemporalEvolutionExport(opts: {
   question?: string | null;
   taskId?: string | null;
@@ -16,6 +31,7 @@ export function formatTemporalEvolutionExport(opts: {
   relatedCount?: number | null;
   message?: string | null;
   shifts?: EvolutionExportShift[];
+  timeline?: EvolutionExportTimelineItem[];
 }): string {
   const lines: string[] = ['# Arena Agent · Answer evolution', ''];
 
@@ -51,6 +67,34 @@ export function formatTemporalEvolutionExport(opts: {
     lines.push('');
   }
 
+  const timeline = opts.timeline || [];
+  if (timeline.length > 0) {
+    lines.push('## Related runs');
+    lines.push('');
+    timeline.forEach((item, i) => {
+      const parts: string[] = [];
+      const when = formatWhen(item.created_at);
+      if (when) parts.push(when);
+      if (typeof item.score === 'number' && Number.isFinite(item.score)) {
+        parts.push(`${Math.round(item.score)}/100`);
+      }
+      if (item.isCurrent) parts.push('current');
+      const head = parts.length > 0 ? parts.join(' · ') : `Run ${i + 1}`;
+      lines.push(`### ${i + 1}. ${head}`);
+      lines.push('');
+      const snippet = (item.snippet || '').trim();
+      if (snippet) {
+        lines.push(`> ${snippet}`);
+        lines.push('');
+      }
+      const tid = (item.task_id || '').trim();
+      if (tid) {
+        lines.push(`- _Task \`${tid}\`_`);
+        lines.push('');
+      }
+    });
+  }
+
   const shifts = opts.shifts || [];
   if (shifts.length > 0) {
     lines.push('## Key shifts between runs');
@@ -77,7 +121,7 @@ export function formatTemporalEvolutionExport(opts: {
       }
       lines.push('');
     });
-  } else if (!msg) {
+  } else if (!msg && timeline.length === 0) {
     lines.push('_Related runs stay close in vocabulary — little drift detected yet._');
     lines.push('');
   }

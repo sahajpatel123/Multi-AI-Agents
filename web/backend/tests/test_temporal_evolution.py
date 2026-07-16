@@ -27,9 +27,13 @@ def test_analyze_temporal_evolution_detects_shift():
     assert result["trend_label"] in {"evolving", "moderate shift", "stable", "converging"}
     assert result["related_count"] == 2
     assert len(result["key_shifts"]) >= 1
+    assert len(result["timeline"]) == 2
+    assert result["timeline"][0]["task_id"] == "1"
+    assert "crash" in result["timeline"][0]["snippet"].lower() or "leverage" in result["timeline"][0]["snippet"].lower()
 
 
 def test_analyze_temporal_evolution_insufficient():
     result = analyze_temporal_evolution([{"task_id": "1", "one_liner": "alone", "created_at": "2026-01-01"}])
     assert result["trend_label"] == "insufficient"
     assert result["evolution_score"] == 0
+    assert len(result["timeline"]) == 1

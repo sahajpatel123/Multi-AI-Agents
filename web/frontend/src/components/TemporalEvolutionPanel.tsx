@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   getTemporalEvolution,
   type TemporalEvolutionResponse,
@@ -7,6 +8,13 @@ import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { motionDuration } from '../lib/motion';
 import { formatTemporalEvolutionExport } from '../lib/temporalEvolutionExport';
+
+function formatRunDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
 function scoreColor(score: number): string {
   if (score >= 60) return '#D85A30';
@@ -23,6 +31,7 @@ type Props = {
 
 /** Collapsible panel: how related Agent research runs have shifted over time. */
 export function TemporalEvolutionPanel({ taskId, question }: Props) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +74,7 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
   const score = evo?.evolution_score;
   const accent = typeof score === 'number' ? scoreColor(score) : '#C4956A';
   const related = data?.related_count ?? evo?.related_count ?? 0;
+  const timeline = evo?.timeline ?? [];
 
   const buildMarkdown = () => {
     if (!evo) return '';
@@ -77,6 +87,10 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
       relatedCount: related,
       message: evo.message,
       shifts: evo.key_shifts,
+      timeline: timeline.map((item) => ({
+        ...item,
+        isCurrent: item.task_id === taskId,
+      })),
     });
   };
 
@@ -388,8 +402,105 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
                 <div style={{ fontSize: 13, color: '#A89070', fontStyle: 'italic' }}>{evo.message}</div>
               ) : null}
 
+              {timeline.length > 0 ? (
+                <div style={{ marginTop: 10 }}>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      color: '#A89070',
+                      marginBottom: 6,
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    Related runs
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {timeline.map((item, i) => {
+                      const isCurrent = item.task_id === taskId;
+                      const when = formatRunDate(item.created_at);
+                      const snippet = (item.snippet || '').trim();
+                      const runScore =
+                        typeof item.score === 'number' && Number.isFinite(item.score)
+                          ? Math.round(item.score)
+                          : null;
+                      return (
+                        <button
+                          key={item.task_id || `run-${i}`}
+                          type="button"
+                          onClick={() => {
+                            if (!item.task_id || isCurrent) return;
+                            navigate(`/agent?task_id=${encodeURIComponent(item.task_id)}`);
+                          }}
+                          disabled={!item.task_id}
+                          title={
+                            isCurrent
+                              ? 'Current research run'
+                              : item.task_id
+                                ? 'Open this research run'
+                                : undefined
+                          }
+                          style={{
+                            textAlign: 'left',
+                            background: isCurrent ? '#F5EDE3' : '#FAF7F2',
+                            border: isCurrent ? '0.5px solid #C4956A' : '0.5px solid #E0D5C5',
+                            borderRadius: 8,
+                            padding: '10px 12px',
+                            cursor: isCurrent || !item.task_id ? 'default' : 'pointer',
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              marginBottom: snippet ? 6 : 0,
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 10,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.04em',
+                                color: isCurrent ? '#C4956A' : '#A89070',
+                              }}
+                            >
+                              {when || `Run ${i + 1}`}
+                              {isCurrent ? ' · current' : ''}
+                            </span>
+                            {runScore != null ? (
+                              <span style={{ fontSize: 10, color: '#8B7355', marginLeft: 'auto' }}>
+                                {runScore}/100
+                              </span>
+                            ) : null}
+                          </div>
+                          {snippet ? (
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: '#2C1810',
+                                lineHeight: 1.45,
+                                fontFamily: 'Georgia, serif',
+                              }}
+                            >
+                              {snippet}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 12, color: '#A89070', fontStyle: 'italic' }}>
+                              No answer snippet available
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
               {evo.key_shifts.length > 0 ? (
-                <div style={{ marginTop: 8 }}>
+                <div style={{ marginTop: 14 }}>
                   <div
                     style={{
                       fontSize: 10,
@@ -436,7 +547,7 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
                     </div>
                   ))}
                 </div>
-              ) : !evo.message ? (
+              ) : !evo.message && timeline.length === 0 ? (
                 <div style={{ fontSize: 13, color: '#A89070', fontStyle: 'italic' }}>
                   Related runs stay close in vocabulary — little drift detected yet.
                 </div>
