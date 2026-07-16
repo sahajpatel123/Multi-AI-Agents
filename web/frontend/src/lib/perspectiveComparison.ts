@@ -84,13 +84,32 @@ export type PerspectiveRow = {
   color: string;
   oneLiner: string;
   keywords: string[];
+  /** Terms that appear only in this mind's one-liner. */
+  distinctive: string[];
   scoreLabel: string | null;
   confidenceLabel: string | null;
   isWinner: boolean;
 };
 
+/** Keywords that appear in two or more minds' one-liners. */
+export function sharedPerspectiveKeywords(rows: PerspectiveRow[]): string[] {
+  const counts = new Map<string, number>();
+  for (const r of rows || []) {
+    const seen = new Set<string>();
+    for (const k of r.keywords || []) {
+      if (seen.has(k)) continue;
+      seen.add(k);
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .filter(([, n]) => n >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([k]) => k);
+}
+
 export function buildPerspectiveRows(inputs: PerspectiveRowInput[]): PerspectiveRow[] {
-  return (inputs || []).map((r) => {
+  const base = (inputs || []).map((r) => {
     const oneLiner = (r.oneLiner || '').trim();
     const score =
       typeof r.score === 'number' && Number.isFinite(r.score) ? Math.round(r.score) : null;
@@ -99,12 +118,28 @@ export function buildPerspectiveRows(inputs: PerspectiveRowInput[]): Perspective
       name: (r.name || r.agentId || 'Mind').trim() || 'Mind',
       color: (r.color || '#C4956A').trim() || '#C4956A',
       oneLiner,
-      keywords: extractPerspectiveKeywords(oneLiner),
+      keywords: extractPerspectiveKeywords(oneLiner, 8),
+      distinctive: [] as string[],
       scoreLabel: score != null ? String(score) : null,
       confidenceLabel: formatConfidenceScore(r.confidence ?? null),
       isWinner: Boolean(r.isWinner),
     };
   });
+
+  const presence = new Map<string, number>();
+  for (const r of base) {
+    const seen = new Set<string>();
+    for (const k of r.keywords) {
+      if (seen.has(k)) continue;
+      seen.add(k);
+      presence.set(k, (presence.get(k) || 0) + 1);
+    }
+  }
+
+  return base.map((r) => ({
+    ...r,
+    distinctive: r.keywords.filter((k) => (presence.get(k) || 0) === 1).slice(0, 5),
+  }));
 }
 
 export function formatPerspectiveComparisonMarkdown(opts: {
@@ -118,6 +153,11 @@ export function formatPerspectiveComparisonMarkdown(opts: {
     lines.push('');
   }
   const rows = opts.rows || [];
+  const shared = sharedPerspectiveKeywords(rows);
+  if (shared.length) {
+    lines.push(`**Shared terms:** ${shared.join(', ')}`);
+    lines.push('');
+  }
   if (rows.length === 0) {
     lines.push('_No perspectives available._');
   } else {
@@ -133,7 +173,10 @@ export function formatPerspectiveComparisonMarkdown(opts: {
         lines.push(`> ${r.oneLiner}`);
         lines.push('');
       }
-      if (r.keywords.length) {
+      if (r.distinctive.length) {
+        lines.push(`Distinctive: ${r.distinctive.join(', ')}`);
+        lines.push('');
+      } else if (r.keywords.length) {
         lines.push(`Keywords: ${r.keywords.join(', ')}`);
         lines.push('');
       }

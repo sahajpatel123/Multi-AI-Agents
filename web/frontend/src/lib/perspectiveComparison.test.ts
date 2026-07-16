@@ -4,6 +4,7 @@ import {
   extractPerspectiveKeywords,
   formatConfidenceScore,
   formatPerspectiveComparisonMarkdown,
+  sharedPerspectiveKeywords,
 } from './perspectiveComparison';
 
 describe('perspectiveComparison', () => {
@@ -22,6 +23,29 @@ describe('perspectiveComparison', () => {
     expect(formatConfidenceScore(null)).toBeNull();
   });
 
+  it('marks distinctive vs shared keywords across minds', () => {
+    const rows = buildPerspectiveRows([
+      {
+        agentId: 'a1',
+        name: 'Analyst',
+        oneLiner: 'Cash runway liquidity stress before expanding markets.',
+      },
+      {
+        agentId: 'a2',
+        name: 'Optimist',
+        oneLiner: 'Expanding markets reward bold liquidity bets on growth.',
+      },
+    ]);
+    expect(sharedPerspectiveKeywords(rows)).toEqual(
+      expect.arrayContaining(['markets', 'liquidity']),
+    );
+    const analyst = rows.find((r) => r.agentId === 'a1')!;
+    const optimist = rows.find((r) => r.agentId === 'a2')!;
+    expect(analyst.distinctive).toEqual(expect.arrayContaining(['runway', 'stress']));
+    expect(optimist.distinctive).toEqual(expect.arrayContaining(['reward', 'growth']));
+    expect(analyst.distinctive).not.toContain('markets');
+  });
+
   it('builds rows and markdown export', () => {
     const rows = buildPerspectiveRows([
       {
@@ -38,6 +62,7 @@ describe('perspectiveComparison', () => {
     expect(rows[0].scoreLabel).toBe('91');
     expect(rows[0].confidenceLabel).toBe('80');
     expect(rows[0].keywords.length).toBeGreaterThan(0);
+    expect(rows[0].distinctive.length).toBeGreaterThan(0);
 
     const md = formatPerspectiveComparisonMarkdown({
       question: 'Should we expand?',
@@ -47,5 +72,6 @@ describe('perspectiveComparison', () => {
     expect(md).toContain('Should we expand?');
     expect(md).toContain('The Analyst');
     expect(md).toContain('winner');
+    expect(md).toContain('Distinctive:');
   });
 });

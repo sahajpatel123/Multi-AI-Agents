@@ -3,6 +3,7 @@ import { copyToClipboard } from '../lib/clipboard';
 import {
   buildPerspectiveRows,
   formatPerspectiveComparisonMarkdown,
+  sharedPerspectiveKeywords,
   type PerspectiveRowInput,
 } from '../lib/perspectiveComparison';
 import { motionDuration } from '../lib/motion';
@@ -13,6 +14,38 @@ export type PerspectiveComparisonProps = {
   onClose: () => void;
 };
 
+function KeywordChips({
+  words,
+  muted,
+}: {
+  words: string[];
+  muted?: boolean;
+}) {
+  if (words.length === 0) return null;
+  return (
+    <>
+      {words.map((k) => (
+        <span
+          key={k}
+          style={{
+            display: 'inline-block',
+            background: muted ? '#F5F0E8' : 'rgba(196,149,106,0.14)',
+            border: muted ? '0.5px solid transparent' : '0.5px solid rgba(196,149,106,0.35)',
+            borderRadius: 4,
+            padding: '2px 6px',
+            marginRight: 4,
+            marginBottom: 4,
+            fontSize: 11,
+            color: muted ? '#8A7355' : '#6B4E32',
+          }}
+        >
+          {k}
+        </span>
+      ))}
+    </>
+  );
+}
+
 /**
  * Modal: thematic differences across Arena minds (keywords + scores).
  */
@@ -22,6 +55,7 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
   const copyTimerRef = useRef<number | null>(null);
 
   const rows = useMemo(() => buildPerspectiveRows(responses), [responses]);
+  const shared = useMemo(() => sharedPerspectiveKeywords(rows), [rows]);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -134,6 +168,32 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
           </p>
         ) : null}
 
+        {shared.length > 0 ? (
+          <div
+            style={{
+              background: '#F5F0E8',
+              borderRadius: 8,
+              padding: '10px 12px',
+              marginBottom: 14,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                color: '#A89070',
+                marginBottom: 6,
+              }}
+            >
+              Shared across minds
+            </div>
+            <div>
+              <KeywordChips words={shared} muted />
+            </div>
+          </div>
+        ) : null}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {rows.map((t) => (
             <div
@@ -191,24 +251,23 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
                 </p>
               ) : null}
               <div style={{ fontSize: 12, color: '#4A3728' }}>
-                {t.keywords.length > 0 ? (
-                  t.keywords.map((k) => (
-                    <span
-                      key={k}
+                {t.distinctive.length > 0 ? (
+                  <>
+                    <div
                       style={{
-                        display: 'inline-block',
-                        background: '#F5F0E8',
-                        borderRadius: 4,
-                        padding: '2px 6px',
-                        marginRight: 4,
+                        fontSize: 10,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        color: '#A89070',
                         marginBottom: 4,
-                        fontSize: 11,
-                        color: '#8A7355',
                       }}
                     >
-                      {k}
-                    </span>
-                  ))
+                      Distinctive
+                    </div>
+                    <KeywordChips words={t.distinctive} />
+                  </>
+                ) : t.keywords.length > 0 ? (
+                  <KeywordChips words={t.keywords} muted />
                 ) : (
                   <span style={{ color: '#A89070', fontStyle: 'italic' }}>No key terms</span>
                 )}
