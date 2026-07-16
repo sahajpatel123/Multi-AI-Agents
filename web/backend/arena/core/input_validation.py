@@ -28,10 +28,8 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 
-HTML_TAG_RE = re.compile(r"<[^>]+>")
-# Stricter variant: catches anything containing a `<` or `>`. Used for
-# the "reject" path where we don't want to miss any HTML-tag-shaped
-# variation, including ones the lax regex would let slip.
+# Reject any text containing `<` or `>` — stricter than tag-shaped
+# patterns so encoding variants and half-tags cannot slip through.
 HTML_CHAR_RE = re.compile(r"[<>]")
 NULL_BYTE = "\x00"
 
@@ -66,18 +64,24 @@ def sanitize_text(text: object, max_length: int = 2000, field_name: str = "input
 
 
 def strip_html(text: object) -> str:
-    """DEPRECATED silent strip. Use `reject_html_chars()` for new code
-    or opt into HTML rendering at the call site. Kept for backwards
-    compatibility for any caller that genuinely wants the silent-strip
-    behavior (logs a WARNING).
+    """REMOVED. Silent HTML stripping is a fail-open anti-pattern.
+
+    iter-16 migrated every caller to `sanitize_html` / `sanitize_model_html`
+    which REJECT markup. The legacy strip helper is now a hard error so
+    any future code that reaches for it gets a loud failure instead of
+    silently changing the user's input.
+
+    If you genuinely need to render user HTML, escape at the render site
+    using a standard HTML-escape helper (e.g. `html.escape`). Do NOT
+    silently strip characters out of stored data.
     """
-    s = _require_string(text, "input")
-    import logging
-    logging.getLogger(__name__).warning(
-        "input_validation.strip_html used — silent strip is a fail-open "
-        "anti-pattern; migrate to reject_html_chars or html escaping."
+    raise NotImplementedError(
+        "input_validation.strip_html was removed in iter-17: silent "
+        "HTML stripping is a fail-open anti-pattern that destroyed user "
+        "intent and mismatched stored vs. submitted values. Use "
+        "sanitize_html / sanitize_model_html (reject) or html.escape "
+        "at the render site."
     )
-    return HTML_TAG_RE.sub("", s)
 
 
 def _assert_no_html_chars(text: str, field_name: str, raise_with) -> None:
@@ -115,11 +119,11 @@ def sanitize_html(text: object, max_length: int = 100, field_name: str = "input"
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"{field_name} exceeds maximum length of {max_length} characters",
         )
-    if HTML_CHAR_RE.search(text):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} must not contain HTML markup (< or >)",
-        )
+
+    def _raise_http(msg: str) -> None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+    _assert_no_html_chars(text, field_name, _raise_http)
     return text
 
 
@@ -128,10 +132,19 @@ def sanitize_optional_text(
     *,
     max_length: int,
     field_name: str,
-    strip_tags: bool = False,  # legacy no-op: kept for backwards-compat signature
+    strip_tags: bool = False,
 ) -> Optional[str]:
+    """Optional free-text sanitizer.
+
+    ``strip_tags`` is a historical name. When True it no longer silently
+    strips markup — it routes through ``sanitize_html`` which REJECTS
+    ``<`` / ``>``. Callers that pass ``strip_tags=True`` therefore get
+    fail-closed behavior instead of a no-op that looked like protection.
+    """
     if text is None:
         return None
+    if strip_tags:
+        return sanitize_html(text, max_length=max_length, field_name=field_name)
     return sanitize_text(text, max_length=max_length, field_name=field_name)
 
 
@@ -163,10 +176,11 @@ def sanitize_model_html(value: object, *, max_length: int, field_name: str) -> s
     if not isinstance(value, str):
         raise ValueError(f"{field_name} must be a string")
     cleaned = value.strip()
-    if HTML_CHAR_RE.search(cleaned):
-        raise ValueError(
-            f"{field_name} must not contain HTML markup (< or >)"
-        )
+
+    def _raise_value(msg: str) -> None:
+        raise ValueError(msg)
+
+    _assert_no_html_chars(cleaned, field_name, _raise_value)
     return sanitize_model_text(cleaned, max_length=max_length, field_name=field_name)
 
 

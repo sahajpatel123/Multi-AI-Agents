@@ -16,9 +16,9 @@ This test pins the corrected behavior: every sanitize_html variant
 REJECTS input containing `<` or `>` rather than transmuting it. If a
 future refactor reintroduces silent stripping, this test fails.
 
-The legacy strip_html() is preserved for backwards compat with a
-WARNING-on-use, but it is explicitly NOT what's exported to fresh
-callers — see input_validation.py docstring.
+strip_html() was the silent-strip helper; after all callers migrated
+to reject helpers it now raises NotImplementedError so new call sites
+cannot reintroduce fail-open stripping.
 """
 
 import pytest
@@ -139,37 +139,25 @@ class TestSanitizeModelHtmlRejects:
         assert out == "Jane Doe"
 
 
-class TestStripHtmlDeprecated:
-    """strip_html() is preserved for backwards compat but logs a warning
-    on use. New code should reach for sanitize_html / sanitize_model_html
-    which reject.
-
-    These tests pin the legacy function's behavior so it doesn't
-    silently change semantics during unrelated refactors.
+class TestStripHtmlRemoved:
+    """strip_html() was the fail-open silent-strip helper. After iter-16
+    migrated every caller to the reject path, iter-17 made strip_html
+    raise NotImplementedError so any future caller explodes loudly
+    instead of silently changing user input.
     """
 
-    def test_still_silently_strips_with_warning(self):
-        # Direct log-handler capture — pytest's caplog is shadowed by
-        # other tests that touch the same logger in this run.
-        import logging as _logging
-        records = []
+    def test_strip_html_raises_with_explanatory_message(self):
+        with pytest.raises(NotImplementedError, match="fail-open anti-pattern"):
+            input_validation.strip_html("<b>hello</b>")
 
-        class _Capture(_logging.Handler):
-            def emit(self, record):  # pragma: no cover - trivial
-                records.append(record)
-
-        logger = _logging.getLogger("arena.core.input_validation")
-        handler = _Capture(_logging.WARNING)
-        logger.addHandler(handler)
-        try:
-            out = input_validation.strip_html("<b>hello</b> world")
-        finally:
-            logger.removeHandler(handler)
-        assert out == "hello world"
-        assert any(
-            "silent strip is a fail-open anti-pattern" in rec.getMessage()
-            for rec in records
-        ), f"expected strip_html WARNING; got: {[r.getMessage() for r in records]}"
+    def test_strip_html_message_directs_caller_to_replacement(self):
+        # The error message must point callers at the actual replacement
+        # so they don't have to grep for it.
+        with pytest.raises(NotImplementedError) as ei:
+            input_validation.strip_html("anything")
+        msg = str(ei.value)
+        assert "sanitize_html" in msg
+        assert "html.escape" in msg
 
 
 class TestOptionalHelpers:
@@ -186,6 +174,27 @@ class TestOptionalHelpers:
             "hi", max_length=10, field_name="x"
         )
         assert out == "hi"
+
+    def test_optional_text_strip_tags_true_rejects_html(self):
+        # Historical name "strip_tags" must NOT silently strip — reject.
+        with pytest.raises(HTTPException) as ei:
+            input_validation.sanitize_optional_text(
+                "hi <b>x</b>",
+                max_length=50,
+                field_name="note",
+                strip_tags=True,
+            )
+        assert ei.value.status_code == 400
+        assert "HTML markup" in str(ei.value.detail)
+
+    def test_optional_text_strip_tags_true_allows_plain(self):
+        out = input_validation.sanitize_optional_text(
+            "plain note",
+            max_length=50,
+            field_name="note",
+            strip_tags=True,
+        )
+        assert out == "plain note"
 
     def test_model_optional_html_none_passes_through(self):
         assert (
