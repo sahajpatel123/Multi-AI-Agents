@@ -164,6 +164,11 @@ import {
 } from '../lib/agentRoomsMembershipFilter';
 import { formatAgentRoomsExport } from '../lib/agentRoomsExport';
 import {
+  formatAgentRoomMetaLine,
+  roomActivityTitle,
+  roomInviteUrl,
+} from '../lib/agentRoomsRow';
+import {
   AGENT_ROOMS_SORT_OPTIONS,
   agentRoomsSortLabel,
   sortAgentRooms,
@@ -819,8 +824,10 @@ export function AgentPage() {
   const historyDownloadTimerRef = useRef<number | null>(null);
   const [roomsCopyStatus, setRoomsCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [roomsDownloadStatus, setRoomsDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [roomLinkCopyStatus, setRoomLinkCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const roomsCopyTimerRef = useRef<number | null>(null);
   const roomsDownloadTimerRef = useRef<number | null>(null);
+  const roomLinkCopyTimerRef = useRef<number | null>(null);
   const [dismissedChipIds, setDismissedChipIds] = useState<Set<string>>(
     () => loadDismissedAgentChipIds(),
   );
@@ -2263,6 +2270,26 @@ export function AgentPage() {
     roomsCopyTimerRef.current = window.setTimeout(() => {
       setRoomsCopyStatus('idle');
       roomsCopyTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const copyRoomInviteLink = async (slug: string | null | undefined) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const url = roomInviteUrl(slug, origin);
+    if (!url) {
+      setToastMessage('No invite link for this room.');
+      return;
+    }
+    const ok = await copyToClipboard(url);
+    if (roomLinkCopyTimerRef.current != null) {
+      window.clearTimeout(roomLinkCopyTimerRef.current);
+    }
+    setRoomLinkCopyStatus(ok ? 'copied' : 'failed');
+    setToastMessage(ok ? 'Room invite link copied.' : 'Could not copy invite link — try again.');
+    const hold = motionDuration(ok ? 2000 : 2800);
+    roomLinkCopyTimerRef.current = window.setTimeout(() => {
+      setRoomLinkCopyStatus('idle');
+      roomLinkCopyTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -3795,25 +3822,31 @@ export function AgentPage() {
                           synthesisUpdatedAt: r.synthesisUpdatedAt || r.synthesis_updated_at,
                           lastSeenAt: r.lastSeenAt || r.last_seen_at,
                         });
+                        const metaLine = formatAgentRoomMetaLine(
+                          {
+                            memberCount: r.memberCount ?? r.member_count,
+                            taskCount: r.taskCount ?? r.task_count,
+                            activityAt: r.activityAt,
+                            synthesisUpdatedAt: r.synthesisUpdatedAt || r.synthesis_updated_at,
+                            lastSeenAt: r.lastSeenAt || r.last_seen_at,
+                            createdAt: r.createdAt || r.created_at,
+                          },
+                          { nowMs, needsAttention: hasUnread },
+                        );
+                        const activityTitle = roomActivityTitle({
+                          activityAt: r.activityAt,
+                          synthesisUpdatedAt: r.synthesisUpdatedAt || r.synthesis_updated_at,
+                          lastSeenAt: r.lastSeenAt || r.last_seen_at,
+                          createdAt: r.createdAt || r.created_at,
+                        });
                         return (
-                          <button
+                          <div
                             key={r.id}
-                            type="button"
-                            onClick={() => {
-                              navigate(`/room/${encodeURIComponent(r.slug)}`);
-                              if (isMobile) setSidebarOpen(false);
-                            }}
                             style={{
-                              textAlign: 'left',
-                              background: 'transparent',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: '6px 8px',
-                              borderRadius: 6,
                               display: 'flex',
                               alignItems: 'flex-start',
-                              justifyContent: 'space-between',
-                              gap: 6,
+                              gap: 4,
+                              borderRadius: 6,
                             }}
                             onMouseEnter={(e) => {
                               e.currentTarget.style.background = '#F5EFE6';
@@ -3822,38 +3855,95 @@ export function AgentPage() {
                               e.currentTarget.style.background = 'transparent';
                             }}
                           >
-                            <div style={{ minWidth: 0 }}>
-                              <div
-                                title={rName}
-                                style={{
-                                  fontSize: 13,
-                                  color: '#2C1810',
-                                  fontWeight: 400,
-                                  lineHeight: 1.3,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                <HighlightQuery text={rName} query={roomsSearchQuery} />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigate(`/room/${encodeURIComponent(r.slug)}`);
+                                if (isMobile) setSidebarOpen(false);
+                              }}
+                              style={{
+                                textAlign: 'left',
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: '6px 4px 6px 8px',
+                                borderRadius: 6,
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                justifyContent: 'space-between',
+                                gap: 6,
+                                flex: 1,
+                                minWidth: 0,
+                              }}
+                            >
+                              <div style={{ minWidth: 0 }}>
+                                <div
+                                  title={rName}
+                                  style={{
+                                    fontSize: 13,
+                                    color: '#2C1810',
+                                    fontWeight: 400,
+                                    lineHeight: 1.3,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  <HighlightQuery text={rName} query={roomsSearchQuery} />
+                                </div>
+                                <div
+                                  style={{ fontSize: 10, color: '#A89070', marginTop: 1 }}
+                                  title={activityTitle || undefined}
+                                >
+                                  {metaLine ||
+                                    `${r.member_count ?? 0} members · ${r.task_count ?? 0} tasks`}
+                                </div>
                               </div>
-                              <div style={{ fontSize: 10, color: '#A89070', marginTop: 1 }}>
-                                {r.member_count ?? 0} members · {r.task_count ?? 0} tasks
-                              </div>
-                            </div>
-                            {hasUnread ? (
-                              <span
-                                style={{
-                                  width: 6,
-                                  height: 6,
-                                  borderRadius: '50%',
-                                  background: '#C4956A',
-                                  flexShrink: 0,
-                                  marginTop: 5,
-                                }}
-                              />
-                            ) : null}
-                          </button>
+                              {hasUnread ? (
+                                <span
+                                  title="New synthesis since your last visit"
+                                  aria-label="New synthesis"
+                                  style={{
+                                    width: 6,
+                                    height: 6,
+                                    borderRadius: '50%',
+                                    background: '#C4956A',
+                                    flexShrink: 0,
+                                    marginTop: 5,
+                                  }}
+                                />
+                              ) : null}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void copyRoomInviteLink(r.slug);
+                              }}
+                              title="Copy room invite link"
+                              aria-label={`Copy invite link for ${rName}`}
+                              style={{
+                                flexShrink: 0,
+                                marginTop: 4,
+                                marginRight: 4,
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: 11,
+                                color:
+                                  roomLinkCopyStatus === 'failed'
+                                    ? '#D85A30'
+                                    : roomLinkCopyStatus === 'copied'
+                                      ? '#5A8C6A'
+                                      : '#C4956A',
+                                fontFamily: 'Georgia, serif',
+                                padding: '4px 6px',
+                                borderRadius: 6,
+                              }}
+                            >
+                              Link
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
