@@ -132,13 +132,7 @@ jobs:
           cache-dependency-path: web/frontend/package-lock.json
 
       - name: Install dependencies
-        # --legacy-peer-deps: vitest 4.1.10 declares peer dep `vite ^6 || ^7 || ^8`,
-        # but vite is pinned at ^5.4.14 (a full vite 6/7/8 upgrade is a breaking
-        # change being tracked separately). npm ci refuses strict-peer-deps
-        # resolution against the lockfile; legacy-peer-deps forces install
-        # using the existing resolved graph (vitest 4 + esbuild 0.21.5 via
-        # vite 5). Once vite moves to 6+, drop this flag.
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: Security audit (npm audit)
         run: |
@@ -236,8 +230,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: web/frontend
-        # See ci.yml:135 — vitest 4 / vite 5 peer-dep mismatch requires legacy-peer-deps.
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: Install Playwright
         run: npm install --no-save @playwright/test && npx playwright install --with-deps chromium
