@@ -54,7 +54,7 @@ title = "Multi-AI-Agents gitleaks config"
 [[allowlists]]
   description = "CI workflow ENCRYPTION_KEY fixture"
   regexes = [
-    '''ENCRYPTION_KEY:\s*yFosmwgHKj-5dIFtmC5tl6yEWawwqRqZwE749ltw5Mc=''',
+    '''yFosmwgHKj-5dIFtmC5tl6yEWawwqRqZwE749ltw5Mc=''',
   ]
 
 # Frontend localStorage key names — short high-entropy strings that match
@@ -67,8 +67,7 @@ title = "Multi-AI-Agents gitleaks config"
     '''(^|/)web/frontend/src/lib/downloadTextFile\.ts$''',
   ]
   regexes = [
-    '''STORAGE_KEY\s*=\s*['"][a-z_0-9]+['"]''',
-    '''const STORAGE_KEY''',
+    '''arena_recent_prompts_v1''',
   ]
 
 # UI placeholder for Slack bot token entry, harmless literal.
