@@ -41,6 +41,13 @@ import {
   type SidebarSavedSort,
 } from '../lib/sidebarListSort';
 import {
+  SIDEBAR_SAVED_MIND_ALL,
+  collectSavedMindFilterOptions,
+  filterSavedByMind,
+  sidebarSavedMindFilterLabel,
+  type SidebarSavedMindFilter,
+} from '../lib/sidebarSavedMindFilter';
+import {
   SIDEBAR_TURN_TITLE_MAX,
   loadSidebarTurnTitles,
   saveSidebarTurnTitle,
@@ -99,6 +106,8 @@ export function Sidebar({
   const [savedSearchQuery, setSavedSearchQuery] = useState('');
   const [recentsSort, setRecentsSort] = useState<SidebarRecentsSort>('newest');
   const [savedSort, setSavedSort] = useState<SidebarSavedSort>('newest');
+  const [savedMindFilter, setSavedMindFilter] =
+    useState<SidebarSavedMindFilter>(SIDEBAR_SAVED_MIND_ALL);
   const [copiedSavedId, setCopiedSavedId] = useState<string | number | null>(null);
   const [copySavedFailed, setCopySavedFailed] = useState(false);
   const [copyAllSavedStatus, setCopyAllSavedStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -149,8 +158,14 @@ export function Sidebar({
   }, [activeFilter, reversedTurns, searchQuery, customTitles, recentsSort, winnerNameByAgentId]);
 
   const reversedSaved = useMemo(() => [...savedItems].reverse(), [savedItems]);
+  const savedMindOptions = useMemo(
+    () =>
+      collectSavedMindFilterOptions(reversedSaved, (agentId) => AGENTS[agentId]?.name),
+    [reversedSaved],
+  );
   const filteredSaved = useMemo(() => {
-    const searched = filterBySearchQuery(reversedSaved, savedSearchQuery, (item) => [
+    const byMind = filterSavedByMind(reversedSaved, savedMindFilter);
+    const searched = filterBySearchQuery(byMind, savedSearchQuery, (item) => [
       item.one_liner,
       item.prompt,
       item.verdict,
@@ -164,7 +179,15 @@ export function Sidebar({
       })),
       savedSort,
     );
-  }, [reversedSaved, savedSearchQuery, savedSort]);
+  }, [reversedSaved, savedSearchQuery, savedSort, savedMindFilter]);
+
+  // Drop mind filter when that mind no longer has any saved takes.
+  useEffect(() => {
+    if (savedMindFilter === SIDEBAR_SAVED_MIND_ALL) return;
+    if (!savedMindOptions.some((o) => o.value === savedMindFilter)) {
+      setSavedMindFilter(SIDEBAR_SAVED_MIND_ALL);
+    }
+  }, [savedMindFilter, savedMindOptions]);
 
   useEffect(() => {
     if (copiedSavedId == null && !copySavedFailed) return;
@@ -226,6 +249,11 @@ export function Sidebar({
   const buildSavedTakesMarkdown = () => {
     const q = savedSearchQuery.trim();
     const filterBits: string[] = [];
+    if (savedMindFilter !== SIDEBAR_SAVED_MIND_ALL) {
+      filterBits.push(
+        `mind: ${sidebarSavedMindFilterLabel(savedMindFilter, savedMindOptions)}`,
+      );
+    }
     if (q) filterBits.push(`search “${q}”`);
     if (savedSort !== 'newest') filterBits.push(`sort: ${sidebarSavedSortLabel(savedSort)}`);
     return formatSavedTakesListExport({
@@ -966,7 +994,9 @@ export function Sidebar({
                     </p>
                     <span style={{ fontSize: 10, color: '#A89070' }}>
                       {filteredSaved.length}
-                      {savedSearchQuery.trim() ? ` / ${savedItems.length}` : ''}
+                      {savedSearchQuery.trim() || savedMindFilter !== SIDEBAR_SAVED_MIND_ALL
+                        ? ` / ${savedItems.length}`
+                        : ''}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
@@ -1070,6 +1100,47 @@ export function Sidebar({
                   </div>
                 ) : null}
                 <div style={{ marginBottom: 8 }}>
+                  {savedMindOptions.length > 2 ? (
+                    <div
+                      role="group"
+                      aria-label="Filter saved takes by mind"
+                      style={{
+                        display: 'flex',
+                        gap: 6,
+                        marginBottom: 8,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {savedMindOptions.map((opt) => {
+                        const selected = savedMindFilter === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setSavedMindFilter(opt.value)}
+                            aria-pressed={selected}
+                            style={{
+                              background: selected ? '#F0E6DA' : 'transparent',
+                              border: selected
+                                ? '0.5px solid #C4956A'
+                                : '0.5px solid #E0D8D0',
+                              borderRadius: 999,
+                              padding: '3px 9px',
+                              fontSize: 10,
+                              letterSpacing: '0.03em',
+                              color: selected ? '#4A3728' : '#A89070',
+                              cursor: 'pointer',
+                              fontFamily: 'Georgia, serif',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                   <select
                     value={savedSort}
                     onChange={(e) => setSavedSort(e.target.value as SidebarSavedSort)}
@@ -1147,12 +1218,21 @@ export function Sidebar({
                   {filteredSaved.length === 0 ? (
                     <div style={{ padding: '0.75rem 0.25rem', textAlign: 'center' }}>
                       <p style={{ fontSize: 12, color: '#6B6460', margin: '0 0 6px' }}>
-                        No saved takes match “{savedSearchQuery.trim()}”
+                        {savedSearchQuery.trim()
+                          ? `No saved takes match “${savedSearchQuery.trim()}”${
+                              savedMindFilter !== SIDEBAR_SAVED_MIND_ALL
+                                ? ` from ${sidebarSavedMindFilterLabel(savedMindFilter, savedMindOptions)}`
+                                : ''
+                            }`
+                          : savedMindFilter !== SIDEBAR_SAVED_MIND_ALL
+                            ? `No saved takes from ${sidebarSavedMindFilterLabel(savedMindFilter, savedMindOptions)}`
+                            : 'No saved takes in this view'}
                       </p>
                       <button
                         type="button"
                         onClick={() => {
                           setSavedSearchQuery('');
+                          setSavedMindFilter(SIDEBAR_SAVED_MIND_ALL);
                           savedSearchInputRef.current?.focus();
                         }}
                         style={{
@@ -1165,7 +1245,9 @@ export function Sidebar({
                           textDecoration: 'underline',
                         }}
                       >
-                        Clear search
+                        {savedMindFilter !== SIDEBAR_SAVED_MIND_ALL && !savedSearchQuery.trim()
+                          ? 'Show all minds'
+                          : 'Clear filters'}
                       </button>
                     </div>
                   ) : (

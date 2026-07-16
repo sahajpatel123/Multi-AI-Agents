@@ -132,6 +132,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Personas library: sort by name, on-panel first, or unlocked first',
       '[NEW] Personas library: copy / download filtered view as .md',
       '[NEW] Personas swap dialog: sort by name, on-panel, or unlocked',
+      '[NEW] Sidebar Saved takes: filter by mind when you have multiple',
     ],
   },
   {
