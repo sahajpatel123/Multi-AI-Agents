@@ -13,6 +13,7 @@ import { AgentDot } from './components/AgentDot';
 import { CollapsiblePrompt } from './components/CollapsiblePrompt';
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
 import { CrossPollinateBanner } from './components/CrossPollinateBanner';
+import { PerspectiveComparison } from './components/PerspectiveComparison';
 import {
   streamPrompt,
   streamDiscuss,
@@ -118,6 +119,7 @@ function App() {
   const [verifyingWinnerAgentId, setVerifyingWinnerAgentId] = useState<string | null>(null);
   const [crossPollinateSourceTaskId, setCrossPollinateSourceTaskId] = useState<string | null>(null);
   const [crossPollinateIntelScore, setCrossPollinateIntelScore] = useState<number | null>(null);
+  const [showPerspectiveComparison, setShowPerspectiveComparison] = useState(false);
 
   useEffect(() => {
     const st = location.state as {
@@ -1298,6 +1300,17 @@ function App() {
                   {exportCopied ? 'Copied comparison' : 'Copy all takes'}
                 </button>
               ) : null}
+              {isDone && response && response.all_responses.length >= 2 ? (
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--ghost arena-btn--sm"
+                  onClick={() => setShowPerspectiveComparison(true)}
+                  title="Compare perspectives across answers"
+                  style={{ fontSize: 12 }}
+                >
+                  Compare perspectives
+                </button>
+              ) : null}
               <UserMenu
                 user={user}
                 isLoading={authLoading}
@@ -2028,6 +2041,14 @@ function App() {
         >
           {saveSyncMessage}
         </div>
+      )}
+
+      {/* Perspective Comparison overlay */}
+      {showPerspectiveComparison && response && (
+        <PerspectiveComparison
+          responses={response.all_responses}
+          onClose={() => setShowPerspectiveComparison(false)}
+        />
       )}
 
       {/* Auth modal */}
