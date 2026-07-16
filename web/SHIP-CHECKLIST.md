@@ -139,6 +139,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Personas swap sort**: Slot-swap dialog sorts by catalog order, name, on-panel first, or unlocked first (works with search).
 - **Personas library availability filter**: All / On panel / Unlocked / Locked chips filter the full library (export notes filter).
 - **Sidebar Saved mind filter**: filter bookmarked takes by mind when multiple minds appear (export notes filter).
+- **Personas swap availability filter**: All / On panel / Unlocked / Locked chips in the slot-swap dialog (works with search + sort).
 
 ## Required production environment
 

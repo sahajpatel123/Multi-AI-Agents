@@ -78,6 +78,8 @@ export function PersonasPage() {
     useState<PersonasLibraryAvailability>('all');
   const [swapQuery, setSwapQuery] = useState('');
   const [swapSort, setSwapSort] = useState<PersonasLibrarySort>('default');
+  const [swapAvailability, setSwapAvailability] =
+    useState<PersonasLibraryAvailability>('all');
   const libraryRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const librarySearchRef = useRef<HTMLInputElement | null>(null);
   const swapSearchRef = useRef<HTMLInputElement | null>(null);
@@ -96,6 +98,7 @@ export function PersonasPage() {
     setModalVisible(false);
     setSwapQuery('');
     setSwapSort('default');
+    setSwapAvailability('all');
     const delay = motionDuration(220);
     window.setTimeout(() => setActiveSlot(null), delay > 0 ? delay : 0);
   }, []);
@@ -105,6 +108,7 @@ export function PersonasPage() {
       setModalVisible(false);
       setSwapQuery('');
       setSwapSort('default');
+      setSwapAvailability('all');
       return;
     }
 
@@ -282,21 +286,23 @@ export function PersonasPage() {
   }, [activePersona, personas]);
 
   const filteredSwapOptions = useMemo(() => {
-    const searched = filterBySearchQuery(modalOptions, swapQuery, (persona) => [
+    const annotated = modalOptions.map((persona) => ({
+      ...persona,
+      onPanel: unlockedSlotMap[persona.id] != null,
+      unlocked: canUsePersona(persona.id),
+    }));
+    const byAvailability = filterPersonasLibraryByAvailability(
+      annotated,
+      swapAvailability,
+    );
+    const searched = filterBySearchQuery(byAvailability, swapQuery, (persona) => [
       persona.name,
       persona.quote,
       persona.description,
       persona.id,
     ]);
-    return sortPersonasLibrary(
-      searched.map((persona) => ({
-        ...persona,
-        onPanel: unlockedSlotMap[persona.id] != null,
-        unlocked: canUsePersona(persona.id),
-      })),
-      swapSort,
-    );
-  }, [modalOptions, swapQuery, swapSort, unlockedSlotMap, canUsePersona]);
+    return sortPersonasLibrary(searched, swapSort);
+  }, [modalOptions, swapQuery, swapSort, swapAvailability, unlockedSlotMap, canUsePersona]);
 
   const filteredLibrary = useMemo(() => {
     const annotated = personas.map((persona) => ({
@@ -1253,11 +1259,52 @@ export function PersonasPage() {
               ) : null}
             </div>
 
+            {modalOptions.length > 0 ? (
+              <div
+                role="group"
+                aria-label="Filter swap candidates by availability"
+                style={{
+                  display: 'flex',
+                  gap: 6,
+                  flexWrap: 'wrap',
+                  marginBottom: 12,
+                  alignItems: 'center',
+                }}
+              >
+                {PERSONAS_LIBRARY_AVAILABILITY_OPTIONS.map((opt) => {
+                  const selected = swapAvailability === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setSwapAvailability(opt.value)}
+                      aria-pressed={selected}
+                      style={{
+                        padding: '4px 11px',
+                        borderRadius: 999,
+                        border: selected ? 'none' : '0.5px solid #E0D8D0',
+                        background: selected ? '#C4956A' : 'transparent',
+                        color: selected ? '#FAF7F4' : '#6B6460',
+                        fontSize: 11,
+                        fontFamily: 'Georgia, serif',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
             <p style={{ ...eyebrowStyle, marginBottom: '.8rem' }}>
               Available to swap
-              {swapQuery.trim() || swapSort !== 'default'
+              {swapQuery.trim() || swapSort !== 'default' || swapAvailability !== 'all'
                 ? ` · ${filteredSwapOptions.length} / ${modalOptions.length}`
                 : ` · ${modalOptions.length}`}
+              {swapAvailability !== 'all'
+                ? ` · ${personasLibraryAvailabilityLabel(swapAvailability)}`
+                : ''}
               {swapSort !== 'default'
                 ? ` · ${PERSONAS_LIBRARY_SORT_OPTIONS.find((o) => o.value === swapSort)?.label}`
                 : ''}
@@ -1265,7 +1312,19 @@ export function PersonasPage() {
             {filteredSwapOptions.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '1.5rem 0.5rem' }}>
                 <p style={{ margin: 0, fontSize: 14, color: '#1A1714', fontWeight: 500 }}>
-                  No minds match “{swapQuery.trim()}”
+                  {swapQuery.trim()
+                    ? `No minds match “${swapQuery.trim()}”${
+                        swapAvailability !== 'all'
+                          ? ` in ${personasLibraryAvailabilityLabel(swapAvailability).toLowerCase()}`
+                          : ''
+                      }`
+                    : swapAvailability === 'on_panel'
+                      ? 'No other panel minds to swap with.'
+                      : swapAvailability === 'unlocked'
+                        ? 'No unlocked minds available for this slot.'
+                        : swapAvailability === 'locked'
+                          ? 'No locked minds in this view.'
+                          : 'No minds available to swap.'}
                 </p>
                 <button
                   type="button"
@@ -1273,10 +1332,13 @@ export function PersonasPage() {
                   style={{ marginTop: 12 }}
                   onClick={() => {
                     setSwapQuery('');
+                    setSwapAvailability('all');
                     swapSearchRef.current?.focus();
                   }}
                 >
-                  Clear search
+                  {swapAvailability !== 'all' && !swapQuery.trim()
+                    ? 'Show all minds'
+                    : 'Clear filters'}
                 </button>
               </div>
             ) : (
