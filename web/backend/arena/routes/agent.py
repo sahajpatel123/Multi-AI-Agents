@@ -2081,22 +2081,35 @@ async def get_temporal_evolution(
     user: UserResponse = Depends(get_current_user_required),
 ):
     """
-    Get how this task's answer has evolved over time.
-    Finds similar questions and tracks answer changes.
+    How this task's answer evolved vs related research runs (similar question prefix).
     """
     _ensure_agent_access(user, db)
 
-    # Get this task
+    from arena.core.temporal_evolution import analyze_temporal_evolution, extract_answer_snippet
+
+    tid = (task_id or "").strip()
     task = (
         db.query(AgentTaskRow)
-        .filter(AgentTaskRow.task_id == task_id.strip(), AgentTaskRow.user_id == user.id)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
         .first()
     )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # Find user's similar tasks (simple: same first 30 chars of question)
-    question_prefix = (task.task_text or "")[:30]
+    question_prefix = (task.task_text or "").strip()[:30]
+    if len(question_prefix) < 8:
+        evolution = analyze_temporal_evolution([])
+        return JSONResponse(
+            content={
+                "task_id": tid,
+                "related_count": 1,
+                "evolution": {
+                    **evolution,
+                    "message": "Question too short to match related research runs",
+                },
+            }
+        )
+
     similar_tasks = (
         db.query(AgentTaskRow)
         .filter(
@@ -2105,15 +2118,15 @@ async def get_temporal_evolution(
             AgentTaskRow.final_answer.is_not(None),
         )
         .order_by(AgentTaskRow.created_at.asc())
+        .limit(40)
         .all()
     )
 
-    from arena.core.temporal_evolution import analyze_temporal_evolution
     tasks_data = [
         {
             "task_id": t.task_id,
             "question": t.task_text or "",
-            "one_liner": (t.final_answer or "")[:200],
+            "one_liner": extract_answer_snippet(t.final_answer, limit=240),
             "final_answer": t.final_answer,
             "created_at": t.created_at.isoformat() if t.created_at else None,
         }
@@ -2121,8 +2134,10 @@ async def get_temporal_evolution(
     ]
 
     evolution = analyze_temporal_evolution(tasks_data)
-
-    return JSONResponse(content={
-        "task_id": task_id,
-        "evolution": evolution,
-    })
+    return JSONResponse(
+        content={
+            "task_id": tid,
+            "related_count": len(tasks_data),
+            "evolution": evolution,
+        }
+    )

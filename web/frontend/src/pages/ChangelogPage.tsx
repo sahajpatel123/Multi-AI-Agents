@@ -109,6 +109,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Perspective comparison highlights shared terms and each mind’s distinctive keywords',
       '[IMPROVED] Escape returns to Arena from Discuss, Debate, and Leaderboard (modals still take Esc first)',
       '[IMPROVED] Agent Leaderboard shows session prompts with winners and copies the full transcript',
+      '[NEW] Agent Answer Evolution — track how related research runs shift over time (gained/faded terms)',
     ],
   },
   {

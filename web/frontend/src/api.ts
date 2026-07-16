@@ -1528,16 +1528,19 @@ export type TemporalEvolution = {
   trend_label: string;
   key_shifts: TemporalEvolutionShift[];
   stability: number;
-  task_sequence: string[];
+  task_sequence?: string[];
+  related_count?: number;
+  message?: string;
 };
 
 export type TemporalEvolutionResponse = {
   task_id: string;
+  related_count?: number;
   evolution: TemporalEvolution;
 };
 
 export async function getTemporalEvolution(taskId: string): Promise<TemporalEvolutionResponse> {
-  const response = await apiFetch(`/api/agent/history/${taskId}/evolution`);
+  const response = await apiFetch(`/api/agent/history/${encodeURIComponent(taskId)}/evolution`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
     throw new ApiError(err?.detail || 'Failed to get temporal evolution', response.status, err);

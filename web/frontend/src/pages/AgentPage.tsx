@@ -51,6 +51,7 @@ import {
 } from '../api';
 import { ConduraInstallCTA } from '../components/ConduraInstallCTA';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
+import { TemporalEvolutionPanel } from '../components/TemporalEvolutionPanel';
 import { buildHandoffPayload } from '../lib/conduraHandoff';
 import { dispatchHandoff, pairDevice, ConduraClientError } from '../lib/conduraClient';
 import { getOrCreateSigningKey, rotateSigningKey } from '../lib/conduraHandoffCrypto';
@@ -6737,6 +6738,9 @@ export function AgentPage() {
                         <div style={{ marginBottom: 16 }} />
                       )}
                     </>
+                  ) : null}
+                  {result?.status === 'complete' && result?.task_id ? (
+                    <TemporalEvolutionPanel taskId={String(result.task_id)} />
                   ) : null}
                   {showSourceIntegrityBar ? (
                     <>
