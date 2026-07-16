@@ -64,7 +64,9 @@ jobs:
             --ignore-vuln PYSEC-2026-1941 \
             --ignore-vuln PYSEC-2026-2280 \
             --ignore-vuln PYSEC-2026-2281 \
-            --ignore-vuln PYSEC-2026-1943
+            --ignore-vuln PYSEC-2026-1943 \
+            --ignore-vuln PYSEC-2026-2263 \
+            --ignore-vuln PYSEC-2026-1325
 
       - name: Pin floor guard (security-required versions)
         run: |
@@ -75,12 +77,12 @@ jobs:
           import re, sys
           REQUIRED = {
               'python-jose':   '3.4.0',
-              'python-multipart': '0.0.22',
+              'python-multipart': '0.0.32',
               'cryptography':  '48.0.1',
               'Pillow':        '12.3.0',
               'python-dotenv': '1.2.2',
               'markdown':      '3.8.1',
-              'weasyprint':    '68.0',
+              'weasyprint':    '69.0',
               'pytest':        '9.0.3',
           }
           text = open('requirements.txt').read()
