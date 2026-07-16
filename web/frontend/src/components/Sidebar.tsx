@@ -62,6 +62,13 @@ import {
   type AgentHistoryScoreFilter,
 } from '../lib/agentHistoryScoreFilter';
 import {
+  AGENT_HISTORY_RECENCY_OPTIONS,
+  agentHistoryRecencyFilterUseful,
+  agentHistoryRecencyLabel,
+  filterAgentHistoryByRecency,
+  type AgentHistoryRecencyFilter,
+} from '../lib/agentHistoryRecencyFilter';
+import {
   SIDEBAR_TURN_TITLE_MAX,
   loadSidebarTurnTitles,
   saveSidebarTurnTitle,
@@ -124,6 +131,8 @@ export function Sidebar({
     useState<SidebarSavedMindFilter>(SIDEBAR_SAVED_MIND_ALL);
   const [savedScoreFilter, setSavedScoreFilter] =
     useState<AgentHistoryScoreFilter>('all');
+  const [savedRecencyFilter, setSavedRecencyFilter] =
+    useState<AgentHistoryRecencyFilter>('all');
   const [recentsWinnerFilter, setRecentsWinnerFilter] =
     useState<SidebarRecentsWinnerFilter>(SIDEBAR_RECENTS_WINNER_ALL);
   const [copiedSavedId, setCopiedSavedId] = useState<string | number | null>(null);
@@ -204,7 +213,14 @@ export function Sidebar({
   const filteredSaved = useMemo(() => {
     const byMind = filterSavedByMind(reversedSaved, savedMindFilter);
     const byScore = filterAgentHistoryByScore(byMind, savedScoreFilter);
-    const searched = filterBySearchQuery(byScore, savedSearchQuery, (item) => [
+    const byRecency = filterAgentHistoryByRecency(
+      byScore.map((item) => ({
+        ...item,
+        created_at: item.timestamp,
+      })),
+      savedRecencyFilter,
+    );
+    const searched = filterBySearchQuery(byRecency, savedSearchQuery, (item) => [
       item.one_liner,
       item.prompt,
       item.verdict,
@@ -218,10 +234,25 @@ export function Sidebar({
       })),
       savedSort,
     );
-  }, [reversedSaved, savedSearchQuery, savedSort, savedMindFilter, savedScoreFilter]);
+  }, [
+    reversedSaved,
+    savedSearchQuery,
+    savedSort,
+    savedMindFilter,
+    savedScoreFilter,
+    savedRecencyFilter,
+  ]);
 
   const savedScoreFilterUseful = useMemo(
     () => agentHistoryScoreFilterUseful(reversedSaved),
+    [reversedSaved],
+  );
+
+  const savedRecencyFilterUseful = useMemo(
+    () =>
+      agentHistoryRecencyFilterUseful(
+        reversedSaved.map((item) => ({ created_at: item.timestamp })),
+      ),
     [reversedSaved],
   );
 
@@ -308,6 +339,9 @@ export function Sidebar({
     }
     if (savedScoreFilter !== 'all') {
       filterBits.push(`score: ${agentHistoryScoreLabel(savedScoreFilter)}`);
+    }
+    if (savedRecencyFilter !== 'all') {
+      filterBits.push(`recency: ${agentHistoryRecencyLabel(savedRecencyFilter)}`);
     }
     if (q) filterBits.push(`search “${q}”`);
     if (savedSort !== 'newest') filterBits.push(`sort: ${sidebarSavedSortLabel(savedSort)}`);
@@ -1110,7 +1144,8 @@ export function Sidebar({
                       {filteredSaved.length}
                       {savedSearchQuery.trim() ||
                       savedMindFilter !== SIDEBAR_SAVED_MIND_ALL ||
-                      savedScoreFilter !== 'all'
+                      savedScoreFilter !== 'all' ||
+                      savedRecencyFilter !== 'all'
                         ? ` / ${savedItems.length}`
                         : ''}
                     </span>
@@ -1298,6 +1333,47 @@ export function Sidebar({
                       })}
                     </div>
                   ) : null}
+                  {savedRecencyFilterUseful ? (
+                    <div
+                      role="group"
+                      aria-label="Filter saved takes by recency"
+                      style={{
+                        display: 'flex',
+                        gap: 6,
+                        marginBottom: 8,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {AGENT_HISTORY_RECENCY_OPTIONS.map((opt) => {
+                        const selected = savedRecencyFilter === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setSavedRecencyFilter(opt.value)}
+                            aria-pressed={selected}
+                            style={{
+                              background: selected ? '#F0E6DA' : 'transparent',
+                              border: selected
+                                ? '0.5px solid #C4956A'
+                                : '0.5px solid #E0D8D0',
+                              borderRadius: 999,
+                              padding: '3px 9px',
+                              fontSize: 10,
+                              letterSpacing: '0.03em',
+                              color: selected ? '#4A3728' : '#A89070',
+                              cursor: 'pointer',
+                              fontFamily: 'Georgia, serif',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                   <select
                     value={savedSort}
                     onChange={(e) => setSavedSort(e.target.value as SidebarSavedSort)}
@@ -1384,13 +1460,21 @@ export function Sidebar({
                               savedScoreFilter !== 'all'
                                 ? ` · ${agentHistoryScoreLabel(savedScoreFilter)}`
                                 : ''
+                            }${
+                              savedRecencyFilter !== 'all'
+                                ? ` · ${agentHistoryRecencyLabel(savedRecencyFilter)}`
+                                : ''
                             }`
-                          : savedScoreFilter !== 'all' &&
-                              savedMindFilter === SIDEBAR_SAVED_MIND_ALL
-                            ? `No saved takes with score ${agentHistoryScoreLabel(savedScoreFilter)}`
-                            : savedMindFilter !== SIDEBAR_SAVED_MIND_ALL
-                              ? `No saved takes from ${sidebarSavedMindFilterLabel(savedMindFilter, savedMindOptions)}`
-                              : 'No saved takes in this view'}
+                          : savedRecencyFilter !== 'all' &&
+                              savedMindFilter === SIDEBAR_SAVED_MIND_ALL &&
+                              savedScoreFilter === 'all'
+                            ? `No saved takes from ${agentHistoryRecencyLabel(savedRecencyFilter).toLowerCase()}`
+                            : savedScoreFilter !== 'all' &&
+                                savedMindFilter === SIDEBAR_SAVED_MIND_ALL
+                              ? `No saved takes with score ${agentHistoryScoreLabel(savedScoreFilter)}`
+                              : savedMindFilter !== SIDEBAR_SAVED_MIND_ALL
+                                ? `No saved takes from ${sidebarSavedMindFilterLabel(savedMindFilter, savedMindOptions)}`
+                                : 'No saved takes in this view'}
                       </p>
                       <button
                         type="button"
@@ -1398,6 +1482,7 @@ export function Sidebar({
                           setSavedSearchQuery('');
                           setSavedMindFilter(SIDEBAR_SAVED_MIND_ALL);
                           setSavedScoreFilter('all');
+                          setSavedRecencyFilter('all');
                           savedSearchInputRef.current?.focus();
                         }}
                         style={{
@@ -1411,7 +1496,8 @@ export function Sidebar({
                         }}
                       >
                         {(savedMindFilter !== SIDEBAR_SAVED_MIND_ALL ||
-                          savedScoreFilter !== 'all') &&
+                          savedScoreFilter !== 'all' ||
+                          savedRecencyFilter !== 'all') &&
                         !savedSearchQuery.trim()
                           ? 'Show all saved'
                           : 'Clear filters'}

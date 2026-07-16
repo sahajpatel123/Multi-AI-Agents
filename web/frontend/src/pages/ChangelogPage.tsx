@@ -153,6 +153,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Agent answers: copy section outline; answer export includes reading time + TOC',
       '[NEW] Agent research history: filter by recency (24h / 7d / 30d / Older)',
       '[NEW] Room research board: filter by recency (24h / 7d / 30d / Older)',
+      '[NEW] Sidebar Saved takes: filter by recency (24h / 7d / 30d / Older)',
     ],
   },
   {
