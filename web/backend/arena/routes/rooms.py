@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from arena.config import get_settings
 from arena.core.dependencies import get_current_user_optional_orm, get_current_user_required_orm
 from arena.core.input_validation import sanitize_html, sanitize_model_html, sanitize_model_text
+from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.room_synthesiser import synthesise_room
 from arena.database import SessionLocal, get_db
 from arena.db_models import AgentTask, Room, RoomMember, RoomTask, User
@@ -291,6 +292,14 @@ async def get_room(
     db: Session = Depends(get_db),
     current: Optional[User] = Depends(get_current_user_optional_orm),
 ) -> dict[str, Any]:
+    """Shareable room board payload.
+
+    Viewing must NEVER auto-join the caller. Auto-join on GET let any
+    authenticated user who merely fetched the slug (or any bot looping
+    slugs) consume a membership slot up to MAX_ROOM_MEMBERS without an
+    intentional POST /join. Membership is explicit via join_room; the
+    frontend already calls that after load.
+    """
     room = db.query(Room).filter(Room.slug == slug).first()
     if not room or not room.is_active:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -301,27 +310,8 @@ async def get_room(
             .filter(RoomMember.room_id == room.id, RoomMember.user_id == current.id)
             .first()
         )
-        if not rm:
-            n = (
-                db.query(func.count(RoomMember.id))
-                .filter(RoomMember.room_id == room.id)
-                .scalar()
-                or 0
-            )
-            if int(n) < MAX_ROOM_MEMBERS:
-                now = datetime.utcnow()
-                db.add(
-                    RoomMember(
-                        room_id=room.id,
-                        user_id=current.id,
-                        joined_at=now,
-                        last_seen_at=now,
-                    )
-                )
-                db.commit()
-            else:
-                pass
-        else:
+        if rm:
+            # Presence heartbeat for existing members only.
             rm.last_seen_at = datetime.utcnow()
             db.add(rm)
             db.commit()
@@ -397,6 +387,16 @@ async def join_room(
         db.add(existing)
         db.commit()
     else:
+        # Cap new memberships per user so one account cannot spray-join
+        # every room (slot exhaustion / presence spam). Re-joins of an
+        # existing membership above skip this limit.
+        enforce_user_rate_limit(
+            user.id,
+            scope="room_join_new",
+            limit=30,
+            window_seconds=3600,
+            message="Too many room joins. Please try again later.",
+        )
         n = (
             db.query(func.count(RoomMember.id)).filter(RoomMember.room_id == room.id).scalar() or 0
         )
