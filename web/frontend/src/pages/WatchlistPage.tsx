@@ -16,7 +16,11 @@ import { useTier } from '../context/TierContext';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { prefersReducedMotion } from '../lib/motion';
-import { formatWatchlistHistoryStats } from '../lib/watchlistHistory';
+import {
+  formatWatchlistHistoryExport,
+  formatWatchlistHistoryStats,
+  watchlistScoreTrend,
+} from '../lib/watchlistHistory';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import {
@@ -142,6 +146,10 @@ export function WatchlistPage() {
       | { status: 'ready'; data: AgentWatchlistHistoryResponse }
     >
   >({});
+  const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const historyCopyTimerRef = useRef<number | null>(null);
+  const historyDownloadTimerRef = useRef<number | null>(null);
   const historyCacheRef = useRef(historyCache);
   historyCacheRef.current = historyCache;
   const errorRef = useRef<HTMLDivElement>(null);
@@ -384,6 +392,12 @@ export function WatchlistPage() {
       if (downloadStatusTimerRef.current != null) {
         window.clearTimeout(downloadStatusTimerRef.current);
       }
+      if (historyCopyTimerRef.current != null) {
+        window.clearTimeout(historyCopyTimerRef.current);
+      }
+      if (historyDownloadTimerRef.current != null) {
+        window.clearTimeout(historyDownloadTimerRef.current);
+      }
     };
   }, []);
 
@@ -407,6 +421,50 @@ export function WatchlistPage() {
       setDownloadStatus('idle');
       downloadStatusTimerRef.current = null;
     }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashHistoryCopyStatus = (status: 'copied' | 'failed') => {
+    if (historyCopyTimerRef.current != null) {
+      window.clearTimeout(historyCopyTimerRef.current);
+    }
+    setHistoryCopyStatus(status);
+    historyCopyTimerRef.current = window.setTimeout(() => {
+      setHistoryCopyStatus('idle');
+      historyCopyTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
+  const flashHistoryDownloadStatus = (status: 'done' | 'failed') => {
+    if (historyDownloadTimerRef.current != null) {
+      window.clearTimeout(historyDownloadTimerRef.current);
+    }
+    setHistoryDownloadStatus(status);
+    historyDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryDownloadStatus('idle');
+      historyDownloadTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
+  const exportOpenWatchHistory = async (mode: 'copy' | 'download', question: string, itemId: string) => {
+    const hist = historyCacheRef.current[itemId];
+    if (!hist || hist.status !== 'ready') return;
+    const trend = watchlistScoreTrend(hist.data.items);
+    const md = formatWatchlistHistoryExport({
+      question,
+      stats: hist.data.stats,
+      items: hist.data.items,
+      trend,
+    });
+    if (mode === 'copy') {
+      const ok = await copyToClipboard(md);
+      flashHistoryCopyStatus(ok ? 'copied' : 'failed');
+      if (!ok) setError('Could not copy run history — try Download instead.');
+      return;
+    }
+    const stem = `watch-history-${question.slice(0, 40) || itemId}`;
+    const ok = downloadMarkdownFile(md, stem);
+    flashHistoryDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) setError('Could not download run history — try Copy instead.');
   };
 
   const buildWatchlistMarkdown = () => {
@@ -1319,20 +1377,110 @@ export function WatchlistPage() {
                           }
                           const { data } = hist;
                           const statsLabel = formatWatchlistHistoryStats(data.stats);
+                          const trend = watchlistScoreTrend(data.items);
+                          const trendColor =
+                            !trend
+                              ? '#8C7355'
+                              : trend.delta > 0
+                                ? '#3F6B4A'
+                                : trend.delta < 0
+                                  ? '#9C2F2A'
+                                  : '#8C7355';
                           return (
                             <div>
-                              {statsLabel ? (
-                                <p
-                                  style={{
-                                    margin: '0 0 8px',
-                                    fontSize: 11,
-                                    color: '#8C7355',
-                                    letterSpacing: '0.02em',
-                                  }}
-                                >
-                                  {statsLabel}
-                                </p>
-                              ) : null}
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexWrap: 'wrap',
+                                  gap: 8,
+                                  alignItems: 'center',
+                                  marginBottom: 8,
+                                  justifyContent: 'space-between',
+                                }}
+                              >
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                                  {statsLabel ? (
+                                    <span
+                                      style={{
+                                        fontSize: 11,
+                                        color: '#8C7355',
+                                        letterSpacing: '0.02em',
+                                      }}
+                                    >
+                                      {statsLabel}
+                                    </span>
+                                  ) : null}
+                                  {trend ? (
+                                    <span
+                                      title={`Latest ${trend.latest} vs prior ${trend.previous}`}
+                                      style={{
+                                        fontSize: 11,
+                                        fontWeight: 500,
+                                        color: trendColor,
+                                        fontFamily: 'Georgia, serif',
+                                      }}
+                                    >
+                                      {trend.label}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {data.items.length > 0 ? (
+                                  <div style={{ display: 'flex', gap: 8 }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => void exportOpenWatchHistory('copy', item.question, item.id)}
+                                      style={{
+                                        background: 'none',
+                                        border: '0.5px solid #D4C4B0',
+                                        borderRadius: 999,
+                                        padding: '2px 10px',
+                                        fontSize: 11,
+                                        color:
+                                          historyCopyStatus === 'failed'
+                                            ? '#993C1D'
+                                            : historyCopyStatus === 'copied'
+                                              ? '#3F6B4A'
+                                              : '#8C7355',
+                                        cursor: 'pointer',
+                                        fontFamily: 'Georgia, serif',
+                                      }}
+                                    >
+                                      {historyCopyStatus === 'copied'
+                                        ? 'Copied'
+                                        : historyCopyStatus === 'failed'
+                                          ? 'Copy failed'
+                                          : 'Copy history'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void exportOpenWatchHistory('download', item.question, item.id)
+                                      }
+                                      style={{
+                                        background: 'none',
+                                        border: '0.5px solid #D4C4B0',
+                                        borderRadius: 999,
+                                        padding: '2px 10px',
+                                        fontSize: 11,
+                                        color:
+                                          historyDownloadStatus === 'failed'
+                                            ? '#993C1D'
+                                            : historyDownloadStatus === 'done'
+                                              ? '#3F6B4A'
+                                              : '#8C7355',
+                                        cursor: 'pointer',
+                                        fontFamily: 'Georgia, serif',
+                                      }}
+                                    >
+                                      {historyDownloadStatus === 'done'
+                                        ? 'Downloaded'
+                                        : historyDownloadStatus === 'failed'
+                                          ? 'Failed'
+                                          : 'Download .md'}
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
                               {data.items.length === 0 ? (
                                 <p style={{ margin: 0, fontSize: 12, color: '#A89070' }}>
                                   No runs recorded yet.

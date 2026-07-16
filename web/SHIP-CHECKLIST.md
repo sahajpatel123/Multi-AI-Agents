@@ -182,6 +182,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **About copy refresh**: `/about` “What ships today” names Watchlist, Saved takes, Rooms, and calibration alongside the original panel/debate/Agent surfaces.
 - **Arena card full take**: when the verdict is longer than the one-liner, “Show full take” expands markdown in-card (key assumption when present).
 - **Watchlist run history**: per-item expandable history (newest-first) with avg/min/max score stats and deep-link to each prior Agent run.
+- **Watchlist history export + trend**: expanded history shows ↑/↓ vs prior scored run; Copy history / Download .md export the full run list.
 
 ## Required production environment
 
