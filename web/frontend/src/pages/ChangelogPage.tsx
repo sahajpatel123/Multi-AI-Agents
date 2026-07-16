@@ -121,6 +121,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Perspective Comparison, Personas panel, and Share landing: download as .md',
       '[NEW] Agent research history: sort by date, score, title, or live-first',
       '[NEW] Room board: filter tasks by member (sidebar + chips)',
+      '[NEW] Arena sidebar Recents and Saved: sort by date, title/winner, score, or mind',
     ],
   },
   {

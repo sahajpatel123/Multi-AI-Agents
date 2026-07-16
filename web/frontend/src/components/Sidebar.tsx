@@ -30,6 +30,16 @@ import { formatArenaRecentsExport } from '../lib/arenaRecentsExport';
 import { formatSavedTakeExport, formatSavedTakesListExport } from '../lib/savedTakeExport';
 import { motionDuration } from '../lib/motion';
 import {
+  SIDEBAR_RECENTS_SORT_OPTIONS,
+  SIDEBAR_SAVED_SORT_OPTIONS,
+  sidebarRecentsSortLabel,
+  sidebarSavedSortLabel,
+  sortSidebarRecents,
+  sortSidebarSaved,
+  type SidebarRecentsSort,
+  type SidebarSavedSort,
+} from '../lib/sidebarListSort';
+import {
   SIDEBAR_TURN_TITLE_MAX,
   loadSidebarTurnTitles,
   saveSidebarTurnTitle,
@@ -81,11 +91,13 @@ export function Sidebar({
   const navigate = useNavigate();
   const { user } = useAuth();
   const { openModal } = useProfileModal();
-  const { isDefaultPanel, resetPanel } = usePanel();
+  const { isDefaultPanel, resetPanel, panel } = usePanel();
   const { messagesRemaining, dailyLimit, tier, isFree } = useTier();
   const [activeFilter, setActiveFilter] = useState<FilterValue>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [savedSearchQuery, setSavedSearchQuery] = useState('');
+  const [recentsSort, setRecentsSort] = useState<SidebarRecentsSort>('newest');
+  const [savedSort, setSavedSort] = useState<SidebarSavedSort>('newest');
   const [copiedSavedId, setCopiedSavedId] = useState<string | number | null>(null);
   const [copySavedFailed, setCopySavedFailed] = useState(false);
   const [copyAllSavedStatus, setCopyAllSavedStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -106,6 +118,15 @@ export function Sidebar({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const savedSearchInputRef = useRef<HTMLInputElement>(null);
 
+  const winnerNameByAgentId = useMemo(() => {
+    const map: Record<string, string> = {};
+    const slotIds = ['agent_1', 'agent_2', 'agent_3', 'agent_4'] as const;
+    slotIds.forEach((id, i) => {
+      map[id] = panel[i]?.name || AGENTS[id]?.name || id;
+    });
+    return map;
+  }, [panel]);
+
   const reversedTurns = useMemo(
     () => [...turns].reverse().filter((turn) => !deletedTurnIds.has(turn.turn_id)),
     [turns, deletedTurnIds],
@@ -118,22 +139,29 @@ export function Sidebar({
     const withTitles = byCategory.map((turn) => ({
       ...turn,
       title: customTitles[turn.turn_id],
+      winnerName: winnerNameByAgentId[turn.winner_id] || AGENTS[turn.winner_id]?.name || turn.winner_id,
     }));
-    return filterTurnsBySearchQuery(withTitles, searchQuery);
-  }, [activeFilter, reversedTurns, searchQuery, customTitles]);
+    const searched = filterTurnsBySearchQuery(withTitles, searchQuery);
+    return sortSidebarRecents(searched, recentsSort);
+  }, [activeFilter, reversedTurns, searchQuery, customTitles, recentsSort, winnerNameByAgentId]);
 
   const reversedSaved = useMemo(() => [...savedItems].reverse(), [savedItems]);
-  const filteredSaved = useMemo(
-    () =>
-      filterBySearchQuery(reversedSaved, savedSearchQuery, (item) => [
-        item.one_liner,
-        item.prompt,
-        item.verdict,
-        item.persona_name,
-        AGENTS[item.agent_id]?.name,
-      ]),
-    [reversedSaved, savedSearchQuery],
-  );
+  const filteredSaved = useMemo(() => {
+    const searched = filterBySearchQuery(reversedSaved, savedSearchQuery, (item) => [
+      item.one_liner,
+      item.prompt,
+      item.verdict,
+      item.persona_name,
+      AGENTS[item.agent_id]?.name,
+    ]);
+    return sortSidebarSaved(
+      searched.map((item) => ({
+        ...item,
+        mindName: item.persona_name || AGENTS[item.agent_id]?.name || item.agent_id,
+      })),
+      savedSort,
+    );
+  }, [reversedSaved, savedSearchQuery, savedSort]);
 
   useEffect(() => {
     if (copiedSavedId == null && !copySavedFailed) return;
@@ -180,9 +208,12 @@ export function Sidebar({
 
   const handleCopyAllSaved = async () => {
     const q = savedSearchQuery.trim();
+    const filterBits: string[] = [];
+    if (q) filterBits.push(`search “${q}”`);
+    if (savedSort !== 'newest') filterBits.push(`sort: ${sidebarSavedSortLabel(savedSort)}`);
     const md = formatSavedTakesListExport({
       totalCount: savedItems.length,
-      filterNote: q ? `search “${q}”` : undefined,
+      filterNote: filterBits.length ? filterBits.join(' · ') : undefined,
       items: filteredSaved.map((item) => {
         const agent = AGENTS[item.agent_id];
         return {
@@ -213,6 +244,7 @@ export function Sidebar({
     }
     const q = searchQuery.trim();
     if (q) parts.push(`search “${q}”`);
+    if (recentsSort !== 'newest') parts.push(`sort: ${sidebarRecentsSortLabel(recentsSort)}`);
     const md = formatArenaRecentsExport({
       totalCount: reversedTurns.length,
       filterNote: parts.length > 0 ? parts.join(' · ') : undefined,
@@ -220,7 +252,8 @@ export function Sidebar({
         title: customTitles[turn.turn_id] || undefined,
         prompt: turn.prompt,
         category: turn.prompt_category,
-        winnerName: AGENTS[turn.winner_id]?.name || turn.winner_id || undefined,
+        winnerName:
+          turn.winnerName || AGENTS[turn.winner_id]?.name || turn.winner_id || undefined,
         timestamp: turn.timestamp,
         turnId: turn.turn_id,
       })),
@@ -494,7 +527,33 @@ export function Sidebar({
             })}
           </div>
           {reversedTurns.length > 0 ? (
-            <div style={{ marginBottom: 10, position: 'relative' }}>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ marginBottom: 8 }}>
+                <select
+                  value={recentsSort}
+                  onChange={(e) => setRecentsSort(e.target.value as SidebarRecentsSort)}
+                  aria-label="Sort recents"
+                  title="Sort recents"
+                  style={{
+                    width: '100%',
+                    fontSize: 11,
+                    fontFamily: 'Georgia, serif',
+                    color: '#4A3728',
+                    background: '#FAF7F4',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 6,
+                    padding: '5px 8px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {SIDEBAR_RECENTS_SORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ position: 'relative' }}>
               <input
                 id="sidebar-recents-search"
                 ref={searchInputRef}
@@ -548,6 +607,7 @@ export function Sidebar({
                   ×
                 </button>
               ) : null}
+              </div>
             </div>
           ) : null}
 
@@ -886,7 +946,32 @@ export function Sidebar({
                       : 'Could not copy saved takes'}
                   </div>
                 ) : null}
-                <div style={{ marginBottom: 8, position: 'relative' }}>
+                <div style={{ marginBottom: 8 }}>
+                  <select
+                    value={savedSort}
+                    onChange={(e) => setSavedSort(e.target.value as SidebarSavedSort)}
+                    aria-label="Sort saved takes"
+                    title="Sort saved takes"
+                    style={{
+                      width: '100%',
+                      fontSize: 11,
+                      fontFamily: 'Georgia, serif',
+                      color: '#4A3728',
+                      background: '#FAF7F4',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      padding: '5px 8px',
+                      cursor: 'pointer',
+                      marginBottom: 8,
+                    }}
+                  >
+                    {SIDEBAR_SAVED_SORT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ position: 'relative' }}>
                   <input
                     ref={savedSearchInputRef}
                     type="search"
@@ -933,6 +1018,7 @@ export function Sidebar({
                       ×
                     </button>
                   ) : null}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {filteredSaved.length === 0 ? (
