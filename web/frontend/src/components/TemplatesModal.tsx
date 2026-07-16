@@ -14,6 +14,13 @@ import {
   templatesSortLabel,
   type TemplatesSort,
 } from '../lib/templatesSort';
+import {
+  TEMPLATES_AVAILABILITY_OPTIONS,
+  filterTemplatesByAvailability,
+  templatesAvailabilityFilterUseful,
+  templatesAvailabilityLabel,
+  type TemplatesAvailability,
+} from '../lib/templatesAvailabilityFilter';
 
 const TAB_ORDER = [
   'All',
@@ -55,6 +62,8 @@ export function TemplatesModal({
   const [activeTab, setActiveTab] = useState<TabId>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [templatesSort, setTemplatesSort] = useState<TemplatesSort>('default');
+  const [availabilityFilter, setAvailabilityFilter] =
+    useState<TemplatesAvailability>('all');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -78,7 +87,8 @@ export function TemplatesModal({
   }, [activeTab, categories, flatTemplates]);
 
   const visibleTemplates = useMemo(() => {
-    const searched = filterBySearchQuery(tabTemplates, searchQuery, (t) => [
+    const byAvailability = filterTemplatesByAvailability(tabTemplates, availabilityFilter);
+    const searched = filterBySearchQuery(byAvailability, searchQuery, (t) => [
       t.title,
       t.description,
       t.category,
@@ -87,7 +97,12 @@ export function TemplatesModal({
       t.id,
     ]);
     return sortTemplates(searched, templatesSort);
-  }, [tabTemplates, searchQuery, templatesSort]);
+  }, [tabTemplates, searchQuery, templatesSort, availabilityFilter]);
+
+  const showAvailabilityFilter = useMemo(
+    () => templatesAvailabilityFilterUseful(flatTemplates),
+    [flatTemplates],
+  );
 
   const catalogMode = templatesListBodyMode({
     loading,
@@ -100,6 +115,7 @@ export function TemplatesModal({
       setActiveTab('All');
       setSearchQuery('');
       setTemplatesSort('default');
+      setAvailabilityFilter('all');
       setCopyStatus('idle');
       setDownloadStatus('idle');
     }
@@ -124,6 +140,9 @@ export function TemplatesModal({
   const buildTemplatesMarkdown = useCallback(() => {
     const bits: string[] = [];
     if (activeTab !== 'All') bits.push(`category ${activeTab}`);
+    if (availabilityFilter !== 'all') {
+      bits.push(`availability: ${templatesAvailabilityLabel(availabilityFilter)}`);
+    }
     const q = searchQuery.trim();
     if (q) bits.push(`search “${q}”`);
     if (templatesSort !== 'default') bits.push(`sort: ${templatesSortLabel(templatesSort)}`);
@@ -143,7 +162,7 @@ export function TemplatesModal({
         disabledReason: t.disabled_reason,
       })),
     });
-  }, [activeTab, searchQuery, templatesSort, flatTemplates.length, visibleTemplates]);
+  }, [activeTab, searchQuery, templatesSort, availabilityFilter, flatTemplates.length, visibleTemplates]);
 
   const handleCopyTemplates = useCallback(() => {
     const md = buildTemplatesMarkdown();
@@ -475,12 +494,59 @@ export function TemplatesModal({
               </select>
             ) : null}
           </div>
-          {(searchQuery.trim() || activeTab !== 'All' || templatesSort !== 'default') && (
+          {showAvailabilityFilter ? (
+            <div
+              role="group"
+              aria-label="Filter templates by availability"
+              style={{
+                display: 'flex',
+                gap: 6,
+                marginTop: 10,
+                flexWrap: 'wrap',
+                alignItems: 'center',
+              }}
+            >
+              {TEMPLATES_AVAILABILITY_OPTIONS.map((opt) => {
+                const selected = availabilityFilter === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setAvailabilityFilter(opt.value)}
+                    aria-pressed={selected}
+                    style={{
+                      background: selected ? '#F0E6DA' : 'transparent',
+                      border: selected
+                        ? '0.5px solid #C4956A'
+                        : '0.5px solid #E0D5C5',
+                      borderRadius: 999,
+                      padding: '3px 9px',
+                      fontSize: 10,
+                      letterSpacing: '0.03em',
+                      color: selected ? '#4A3728' : '#A89070',
+                      cursor: 'pointer',
+                      fontFamily: 'Georgia, serif',
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          {(searchQuery.trim() ||
+            activeTab !== 'All' ||
+            templatesSort !== 'default' ||
+            availabilityFilter !== 'all') && (
             <p style={{ margin: '8px 0 0', fontSize: 11, color: '#A89070' }}>
               {visibleTemplates.length} match
               {visibleTemplates.length === 1 ? '' : 'es'}
               {activeTab !== 'All' ? ` in ${activeTab}` : ''}
               {searchQuery.trim() ? ` for “${searchQuery.trim()}”` : ''}
+              {availabilityFilter !== 'all'
+                ? ` · ${templatesAvailabilityLabel(availabilityFilter)}`
+                : ''}
               {templatesSort !== 'default'
                 ? ` · ${TEMPLATES_SORT_OPTIONS.find((o) => o.value === templatesSort)?.label}`
                 : ''}
@@ -561,8 +627,14 @@ export function TemplatesModal({
               <p style={{ margin: '8px 0 0', fontSize: 13, color: '#8C7355', lineHeight: 1.55 }}>
                 {catalogMode === 'empty'
                   ? 'Templates will show up here when available. You can still write a custom research question.'
-                  : searchQuery.trim()
-                    ? `Nothing found for “${searchQuery.trim()}”${activeTab !== 'All' ? ` in ${activeTab}` : ''}.`
+                  : searchQuery.trim() || availabilityFilter !== 'all'
+                    ? `Nothing found${
+                        searchQuery.trim() ? ` for “${searchQuery.trim()}”` : ''
+                      }${activeTab !== 'All' ? ` in ${activeTab}` : ''}${
+                        availabilityFilter !== 'all'
+                          ? ` · ${templatesAvailabilityLabel(availabilityFilter)}`
+                          : ''
+                      }.`
                     : `No templates in ${activeTab} yet.`}
               </p>
               {catalogMode === 'list' ? (
@@ -573,6 +645,7 @@ export function TemplatesModal({
                   onClick={() => {
                     setSearchQuery('');
                     setActiveTab('All');
+                    setAvailabilityFilter('all');
                     searchRef.current?.focus();
                   }}
                 >

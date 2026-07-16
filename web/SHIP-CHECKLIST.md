@@ -141,6 +141,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Sidebar Saved mind filter**: filter bookmarked takes by mind when multiple minds appear (export notes filter).
 - **Personas swap availability filter**: All / On panel / Unlocked / Locked chips in the slot-swap dialog (works with search + sort).
 - **Sidebar Recents winner filter**: filter Arena turns by winning mind when multiple winners appear (export notes filter).
+- **Templates availability filter**: All / Ready / Unavailable chips hide Condura-gated templates when browsing the catalog (export notes filter).
 
 ## Required production environment
 

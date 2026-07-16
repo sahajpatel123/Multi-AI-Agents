@@ -135,6 +135,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Sidebar Saved takes: filter by mind when you have multiple',
       '[NEW] Personas swap dialog: filter by On panel / Unlocked / Locked',
       '[NEW] Arena Recents: filter by winning mind',
+      '[NEW] Agent task templates: filter Ready vs Unavailable',
     ],
   },
   {
