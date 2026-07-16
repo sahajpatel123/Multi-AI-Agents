@@ -3,6 +3,14 @@
  * (parity with Arena / Discuss / Debate export helpers).
  */
 
+import {
+  agentAnswerOutlineUseful,
+  estimateReadingMinutes,
+  extractAgentAnswerHeadings,
+  formatAgentAnswerOutlineMarkdown,
+  formatAgentAnswerReadingLabel,
+} from './agentAnswerOutline';
+
 export function formatAgentAnswerExport(opts: {
   question: string;
   answer: string;
@@ -10,16 +18,23 @@ export function formatAgentAnswerExport(opts: {
 }): string {
   const question = (opts.question || '').trim() || '(no question)';
   const answer = (opts.answer || '').trim() || '_(empty answer)_';
+  const headings = extractAgentAnswerHeadings(answer);
+  const reading = formatAgentAnswerReadingLabel(estimateReadingMinutes(answer));
   const lines: string[] = [
     '# Arena Agent',
     '',
     `**Question:** ${question}`,
     '',
-    '## Answer',
-    '',
-    answer,
-    '',
   ];
+  if (reading) {
+    lines.push(`_${reading}_`);
+    lines.push('');
+  }
+  if (agentAnswerOutlineUseful(headings)) {
+    lines.push(formatAgentAnswerOutlineMarkdown(headings).trimEnd());
+    lines.push('');
+  }
+  lines.push('## Answer', '', answer, '');
   const taskId = (opts.taskId || '').trim();
   if (taskId) {
     lines.push(`_Task \`${taskId}\`_`);

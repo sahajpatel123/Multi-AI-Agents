@@ -4,6 +4,7 @@ import {
   countMarkdownWords,
   estimateReadingMinutes,
   extractAgentAnswerHeadings,
+  formatAgentAnswerOutlineMarkdown,
   formatAgentAnswerReadingLabel,
 } from './agentAnswerOutline';
 
@@ -79,5 +80,23 @@ describe('reading meta', () => {
     expect(formatAgentAnswerReadingLabel({ words: 820, minutes: 4 })).toBe(
       '≈ 4 min read · 820 words',
     );
+  });
+});
+
+describe('formatAgentAnswerOutlineMarkdown', () => {
+  it('returns empty for no headings', () => {
+    expect(formatAgentAnswerOutlineMarkdown([])).toBe('');
+  });
+
+  it('indents by heading level', () => {
+    const md = formatAgentAnswerOutlineMarkdown([
+      { id: 'a', level: 1, text: 'Intro' },
+      { id: 'b', level: 2, text: 'Findings' },
+      { id: 'c', level: 3, text: 'Caveats' },
+    ]);
+    expect(md).toContain('## On this page');
+    expect(md).toContain('- Intro');
+    expect(md).toContain('  - Findings');
+    expect(md).toContain('    - Caveats');
   });
 });

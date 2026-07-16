@@ -20,4 +20,16 @@ describe('formatAgentAnswerExport', () => {
     expect(md).toContain('(no question)');
     expect(md).toContain('empty answer');
   });
+
+  it('includes reading time and outline for multi-section answers', () => {
+    const md = formatAgentAnswerExport({
+      question: 'Q',
+      answer: '# Intro\n\nWords here.\n\n## Findings\n\nMore detail about the research answer.',
+    });
+    expect(md).toMatch(/min read/);
+    expect(md).toContain('## On this page');
+    expect(md).toContain('- Intro');
+    expect(md).toContain('  - Findings');
+    expect(md).toContain('## Answer');
+  });
 });

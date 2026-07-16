@@ -150,6 +150,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Agent research history: filter by confidence band',
       '[NEW] Agent Watchlist: filter by expertise level',
       '[NEW] Agent answers: reading time + jump-to-section outline for long research',
+      '[IMPROVED] Agent answers: copy section outline; answer export includes reading time + TOC',
     ],
   },
   {

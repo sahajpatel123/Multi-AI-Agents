@@ -2,14 +2,16 @@ import { isValidElement, useEffect, useMemo, useRef, useState, type CSSPropertie
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
+import { copyToClipboard } from '../lib/clipboard';
 import {
   agentAnswerOutlineUseful,
   estimateReadingMinutes,
   extractAgentAnswerHeadings,
+  formatAgentAnswerOutlineMarkdown,
   formatAgentAnswerReadingLabel,
   type AgentAnswerHeading,
 } from '../lib/agentAnswerOutline';
-import { scrollBehavior } from '../lib/motion';
+import { motionDuration, scrollBehavior } from '../lib/motion';
 
 function useNarrow768(): boolean {
   const [narrow, setNarrow] = useState(false);
@@ -66,6 +68,8 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
   const headingCursorRef = useRef(0);
   const q = (question || '').trim();
   const [outlineOpen, setOutlineOpen] = useState(true);
+  const [outlineCopyStatus, setOutlineCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const outlineCopyTimerRef = useRef<number | null>(null);
 
   const headings = useMemo(() => extractAgentAnswerHeadings(markdown || ''), [markdown]);
   const readingMeta = useMemo(() => estimateReadingMinutes(markdown || ''), [markdown]);
@@ -80,7 +84,31 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
   // Long answers default outline open; short multi-section stay open too (scannable).
   useEffect(() => {
     setOutlineOpen(true);
+    setOutlineCopyStatus('idle');
   }, [markdown]);
+
+  useEffect(() => {
+    return () => {
+      if (outlineCopyTimerRef.current != null) {
+        window.clearTimeout(outlineCopyTimerRef.current);
+      }
+    };
+  }, []);
+
+  const copyOutline = async () => {
+    const md = formatAgentAnswerOutlineMarkdown(headings);
+    if (!md) return;
+    const ok = await copyToClipboard(md);
+    if (outlineCopyTimerRef.current != null) {
+      window.clearTimeout(outlineCopyTimerRef.current);
+    }
+    setOutlineCopyStatus(ok ? 'copied' : 'failed');
+    const hold = motionDuration(ok ? 1800 : 2800);
+    outlineCopyTimerRef.current = window.setTimeout(() => {
+      setOutlineCopyStatus('idle');
+      outlineCopyTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
 
   const fs = {
     h1: narrow ? 18 : 20,
@@ -395,37 +423,84 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
           ) : null}
           {showOutline ? (
             <div style={{ marginTop: readingLabel ? 8 : 0 }}>
-              <button
-                type="button"
-                onClick={() => setOutlineOpen((o) => !o)}
-                aria-expanded={outlineOpen}
+              <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  width: '100%',
                   gap: 8,
-                  padding: 0,
-                  border: 'none',
-                  background: 'none',
-                  cursor: 'pointer',
-                  fontFamily: 'Georgia, serif',
-                  fontSize: 12,
-                  color: '#4A3728',
-                  fontWeight: 500,
                 }}
               >
-                <span>
-                  On this page
-                  <span style={{ color: '#A89070', fontWeight: 400 }}>
-                    {' '}
-                    · {headings.length} sections
+                <button
+                  type="button"
+                  onClick={() => setOutlineOpen((o) => !o)}
+                  aria-expanded={outlineOpen}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flex: 1,
+                    minWidth: 0,
+                    gap: 8,
+                    padding: 0,
+                    border: 'none',
+                    background: 'none',
+                    cursor: 'pointer',
+                    fontFamily: 'Georgia, serif',
+                    fontSize: 12,
+                    color: '#4A3728',
+                    fontWeight: 500,
+                  }}
+                >
+                  <span>
+                    On this page
+                    <span style={{ color: '#A89070', fontWeight: 400 }}>
+                      {' '}
+                      · {headings.length} sections
+                    </span>
                   </span>
-                </span>
-                <span style={{ color: '#A89070', fontSize: 11 }} aria-hidden>
-                  {outlineOpen ? '▴' : '▾'}
-                </span>
-              </button>
+                  <span style={{ color: '#A89070', fontSize: 11 }} aria-hidden>
+                    {outlineOpen ? '▴' : '▾'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyOutline()}
+                  title="Copy section outline as markdown"
+                  aria-label={
+                    outlineCopyStatus === 'copied'
+                      ? 'Outline copied'
+                      : outlineCopyStatus === 'failed'
+                        ? 'Copy failed'
+                        : 'Copy section outline as markdown'
+                  }
+                  style={{
+                    flexShrink: 0,
+                    background: 'none',
+                    border: '0.5px solid #E0D5C5',
+                    borderRadius: 6,
+                    padding: '2px 7px',
+                    fontSize: 10,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    color:
+                      outlineCopyStatus === 'failed'
+                        ? '#D85A30'
+                        : outlineCopyStatus === 'copied'
+                          ? '#5A8C6A'
+                          : '#A89070',
+                    cursor: 'pointer',
+                    fontFamily: 'Georgia, serif',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {outlineCopyStatus === 'copied'
+                    ? 'Copied'
+                    : outlineCopyStatus === 'failed'
+                      ? 'Failed'
+                      : 'Copy'}
+                </button>
+              </div>
               {outlineOpen ? (
                 <nav aria-label="Answer sections" style={{ marginTop: 8 }}>
                   <ol

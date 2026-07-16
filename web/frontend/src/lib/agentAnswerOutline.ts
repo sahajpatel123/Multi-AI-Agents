@@ -82,3 +82,23 @@ export function formatAgentAnswerReadingLabel(meta: AgentAnswerReadingMeta): str
   const minLabel = meta.minutes === 1 ? '1 min read' : `${meta.minutes} min read`;
   return `≈ ${minLabel} · ${meta.words.toLocaleString('en-US')} words`;
 }
+
+/**
+ * Markdown table of contents from outline headings.
+ * Indent nested levels with two spaces per depth step.
+ */
+export function formatAgentAnswerOutlineMarkdown(
+  headings: AgentAnswerHeading[],
+  opts?: { title?: string },
+): string {
+  const list = headings || [];
+  if (list.length === 0) return '';
+  const title = (opts?.title || 'On this page').trim() || 'On this page';
+  const lines: string[] = [`## ${title}`, ''];
+  for (const h of list) {
+    const indent = '  '.repeat(Math.max(0, h.level - 1));
+    lines.push(`${indent}- ${h.text}`);
+  }
+  lines.push('');
+  return lines.join('\n');
+}
