@@ -1380,16 +1380,24 @@ export function Sidebar({
                               savedMindFilter !== SIDEBAR_SAVED_MIND_ALL
                                 ? ` from ${sidebarSavedMindFilterLabel(savedMindFilter, savedMindOptions)}`
                                 : ''
+                            }${
+                              savedScoreFilter !== 'all'
+                                ? ` · ${agentHistoryScoreLabel(savedScoreFilter)}`
+                                : ''
                             }`
-                          : savedMindFilter !== SIDEBAR_SAVED_MIND_ALL
-                            ? `No saved takes from ${sidebarSavedMindFilterLabel(savedMindFilter, savedMindOptions)}`
-                            : 'No saved takes in this view'}
+                          : savedScoreFilter !== 'all' &&
+                              savedMindFilter === SIDEBAR_SAVED_MIND_ALL
+                            ? `No saved takes with score ${agentHistoryScoreLabel(savedScoreFilter)}`
+                            : savedMindFilter !== SIDEBAR_SAVED_MIND_ALL
+                              ? `No saved takes from ${sidebarSavedMindFilterLabel(savedMindFilter, savedMindOptions)}`
+                              : 'No saved takes in this view'}
                       </p>
                       <button
                         type="button"
                         onClick={() => {
                           setSavedSearchQuery('');
                           setSavedMindFilter(SIDEBAR_SAVED_MIND_ALL);
+                          setSavedScoreFilter('all');
                           savedSearchInputRef.current?.focus();
                         }}
                         style={{
@@ -1402,8 +1410,10 @@ export function Sidebar({
                           textDecoration: 'underline',
                         }}
                       >
-                        {savedMindFilter !== SIDEBAR_SAVED_MIND_ALL && !savedSearchQuery.trim()
-                          ? 'Show all minds'
+                        {(savedMindFilter !== SIDEBAR_SAVED_MIND_ALL ||
+                          savedScoreFilter !== 'all') &&
+                        !savedSearchQuery.trim()
+                          ? 'Show all saved'
                           : 'Clear filters'}
                       </button>
                     </div>
