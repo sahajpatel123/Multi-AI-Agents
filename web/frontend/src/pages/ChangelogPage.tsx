@@ -139,6 +139,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Agent Rooms list: filter by New synthesis vs Caught up',
       '[NEW] Agent research history: filter by score band (75+ / 60–74 / below 60)',
       '[NEW] Agent Watchlist: filter by latest score band',
+      '[NEW] Room research board: filter by score band',
     ],
   },
   {

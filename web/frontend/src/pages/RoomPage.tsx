@@ -21,6 +21,13 @@ import {
   sortRoomBoardTasks,
   type RoomBoardSort,
 } from '../lib/roomBoardSort';
+import {
+  AGENT_HISTORY_SCORE_OPTIONS,
+  agentHistoryScoreFilterUseful,
+  agentHistoryScoreLabel,
+  filterAgentHistoryByScore,
+  type AgentHistoryScoreFilter,
+} from '../lib/agentHistoryScoreFilter';
 import { formatRoomSynthesisExport } from '../lib/roomSynthesisExport';
 import {
   buildRoomInviteShareData,
@@ -108,6 +115,8 @@ export function RoomPage() {
   const [boardQuery, setBoardQuery] = useState('');
   const [boardSort, setBoardSort] = useState<RoomBoardSort>('newest');
   const [boardMemberFilter, setBoardMemberFilter] = useState<string>('all');
+  const [boardScoreFilter, setBoardScoreFilter] =
+    useState<AgentHistoryScoreFilter>('all');
   const [pickerQuery, setPickerQuery] = useState('');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [synthDownloadStatus, setSynthDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -265,7 +274,14 @@ export function RoomPage() {
       boardMemberFilter === 'all'
         ? tasks
         : tasks.filter((t: any) => t.user_id === boardMemberFilter);
-    const filtered = filterBySearchQuery(byMember, boardQuery, (t) => [
+    const byScore = filterAgentHistoryByScore(
+      byMember.map((t: any) => ({
+        ...t,
+        score: t.final_score ?? null,
+      })),
+      boardScoreFilter,
+    );
+    const filtered = filterBySearchQuery(byScore, boardQuery, (t) => [
       getTaskTitle(t),
       t.question,
       t.task_text,
@@ -283,7 +299,15 @@ export function RoomPage() {
       })),
       boardSort,
     );
-  }, [tasks, boardQuery, memberNameById, boardSort, boardMemberFilter]);
+  }, [tasks, boardQuery, memberNameById, boardSort, boardMemberFilter, boardScoreFilter]);
+
+  const boardScoreFilterUseful = useMemo(
+    () =>
+      agentHistoryScoreFilterUseful(
+        tasks.map((t: any) => ({ score: t.final_score ?? null })),
+      ),
+    [tasks],
+  );
 
   const filteredHistoryTasks = useMemo(
     () =>
@@ -452,6 +476,9 @@ export function RoomPage() {
     if (boardMemberFilter !== 'all') {
       const name = memberNameById[boardMemberFilter] || 'Member';
       bits.push(`member: ${name}`);
+    }
+    if (boardScoreFilter !== 'all') {
+      bits.push(`score: ${agentHistoryScoreLabel(boardScoreFilter)}`);
     }
     if (boardSort !== 'newest') bits.push(`sort: ${roomBoardSortLabel(boardSort)}`);
     return formatRoomBoardExport({
@@ -1010,9 +1037,14 @@ export function RoomPage() {
           Research board
           <span style={{ marginLeft: 8, color: '#A89070', letterSpacing: 0, textTransform: 'none', fontSize: 11 }}>
             {filteredBoardTasks.length}
-            {boardQuery.trim() || boardMemberFilter !== 'all' ? ` / ${tasks.length}` : ''}
+            {boardQuery.trim() || boardMemberFilter !== 'all' || boardScoreFilter !== 'all'
+              ? ` / ${tasks.length}`
+              : ''}
             {boardMemberFilter !== 'all'
               ? ` · ${memberNameById[boardMemberFilter] || 'Member'}`
+              : ''}
+            {boardScoreFilter !== 'all'
+              ? ` · ${agentHistoryScoreLabel(boardScoreFilter)}`
               : ''}
           </span>
         </div>
@@ -1278,16 +1310,23 @@ export function RoomPage() {
                   boardMemberFilter !== 'all'
                     ? ` from ${memberNameById[boardMemberFilter] || 'this member'}`
                     : ''
+                }${
+                  boardScoreFilter !== 'all'
+                    ? ` · ${agentHistoryScoreLabel(boardScoreFilter)}`
+                    : ''
                 }`
-              : boardMemberFilter !== 'all'
-                ? `${memberNameById[boardMemberFilter] || 'This member'} has no tasks on the board yet`
-                : 'No tasks on the board'}
+              : boardScoreFilter !== 'all' && boardMemberFilter === 'all'
+                ? `No tasks with score ${agentHistoryScoreLabel(boardScoreFilter)}`
+                : boardMemberFilter !== 'all'
+                  ? `${memberNameById[boardMemberFilter] || 'This member'} has no tasks on the board yet`
+                  : 'No tasks on the board'}
           </p>
           <button
             type="button"
             onClick={() => {
               setBoardQuery('');
               setBoardMemberFilter('all');
+              setBoardScoreFilter('all');
               boardSearchRef.current?.focus();
             }}
             style={{
@@ -1300,8 +1339,8 @@ export function RoomPage() {
               textDecoration: 'underline',
             }}
           >
-            {boardMemberFilter !== 'all' && !boardQuery.trim()
-              ? 'Show all members'
+            {(boardMemberFilter !== 'all' || boardScoreFilter !== 'all') && !boardQuery.trim()
+              ? 'Show all tasks'
               : 'Clear filters'}
           </button>
         </div>
