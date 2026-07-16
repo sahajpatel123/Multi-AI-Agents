@@ -50,7 +50,9 @@ title = "Multi-AI-Agents gitleaks config"
 
 # Frontend localStorage key names — short high-entropy strings that match
 # generic-api-key by accident. Path-scoped to avoid masking real secrets
-# elsewhere.
+# elsewhere. Regex matches both bare value and quoted form because
+# gitleaks' generic-api-key captures the secret substring including any
+# surrounding quotes.
 [[allowlists]]
   description = "Frontend localStorage key name literals"
   paths = [
@@ -58,7 +60,7 @@ title = "Multi-AI-Agents gitleaks config"
     '''(^|/)web/frontend/src/lib/downloadTextFile\.ts$''',
   ]
   regexes = [
-    '''arena_recent_prompts_v1''',
+    '''['"]?arena_recent_prompts_v1['"]?''',
   ]
 
 # UI placeholder for Slack bot token entry, harmless literal.
