@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import urlparse
 import httpx
 
 from arena.core.token_crypto import try_decrypt_token
@@ -11,6 +12,49 @@ from arena.core.token_crypto import try_decrypt_token
 logger = logging.getLogger(__name__)
 
 NOTION_VERSION = "2022-06-28"
+
+# ── Outbound URL allowlist (defense-in-depth vs SSRF) ─────────────────────
+# Today every search_*() function below hardcodes its target URL, so the
+# allowlist is redundant in the happy path. It exists so that:
+#   1. A developer who pastes a wrong vendor URL fails CI / breaks at startup
+#      instead of silently proxying tokens to an attacker-controlled host.
+#   2. Any future "make the vendor URL configurable" refactor inherits a
+#      host allowlist the new code path MUST consult, so the SSRF surface
+#      cannot widen by accident.
+#
+# Subdomains are NOT trusted automatically — they must be listed explicitly.
+# e.g. api.github.com is allowed, evil.github.com is not (different owner).
+SERVICE_URL_ALLOWLIST: dict[str, frozenset[str]] = {
+    "notion":      frozenset({"api.notion.com"}),
+    "github":      frozenset({"api.github.com", "github.com"}),
+    "google_drive": frozenset({"www.googleapis.com"}),
+}
+
+
+def _assert_safe_service_url(service: str, full_url: str) -> None:
+    """Raise ValueError if `full_url`'s hostname is not on `service`'s allowlist.
+
+    The error halts the request before any token leaves the process. We do
+    NOT silently fall back to an alternative URL — that would mask the bug.
+    """
+    allowed_hosts = SERVICE_URL_ALLOWLIST.get(service)
+    if allowed_hosts is None:
+        raise ValueError(
+            f"mcp_runtime: no URL allowlist configured for service={service!r}; "
+            "refusing to send request (add the host to SERVICE_URL_ALLOWLIST "
+            "if this service is real)."
+        )
+    parsed = urlparse(full_url)
+    host = (parsed.hostname or "").lower()
+    if not host:
+        raise ValueError(
+            f"mcp_runtime: refusing to send request with no host component: {full_url!r}"
+        )
+    if host not in allowed_hosts:
+        raise ValueError(
+            f"mcp_runtime: outbound host {host!r} not in {service!r} allowlist "
+            f"({sorted(allowed_hosts)}); refusing to send token to it"
+        )
 
 
 def _unified_item(title: str, excerpt: str, source: str, url: str) -> dict[str, str]:
@@ -25,6 +69,7 @@ def _unified_item(title: str, excerpt: str, source: str, url: str) -> dict[str, 
 async def search_notion(token: str, query: str) -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     q = (query or "").strip()[:500]
+    _assert_safe_service_url("notion", "https://api.notion.com/v1/search")
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.post(
             "https://api.notion.com/v1/search",
@@ -62,6 +107,7 @@ async def search_github_code(token: str, query: str, github_login: str | None) -
     out: list[dict[str, str]] = []
     q = (query or "").strip()[:256]
     user_q = f"{q} user:{github_login}" if github_login else q
+    _assert_safe_service_url("github", "https://api.github.com/search/code")
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.get(
             "https://api.github.com/search/code",
@@ -93,6 +139,7 @@ async def search_google_drive(token: str, query: str) -> list[dict[str, str]]:
     escaped = q.replace("\\", "\\\\").replace("'", "\\'")
     fq = f"fullText contains '{escaped}'"
     url = "https://www.googleapis.com/drive/v3/files"
+    _assert_safe_service_url("google_drive", url)
     params = {
         "q": fq,
         "pageSize": 5,
