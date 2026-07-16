@@ -187,13 +187,39 @@ async def login(
 
 @router.post("/logout")
 async def logout(request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user_required_orm)) -> JSONResponse:
-    """Revoke the access token used for this request. JWT will be rejected on subsequent requests."""
+    """Revoke ALL tokens for this session: the access token used for the
+    logout request AND any refresh token the client forwards (in body or
+    Authorization header). Without blacklisting the refresh token too, a
+    logged-out session can be silently re-minted via /api/auth/refresh.
+    """
     auth_header = request.headers.get("Authorization", "")
+    access_token = ""
     if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-        if token:
-            token_blacklist.add(token)
-            logger.info("Token blacklisted for user %d", user.id)
+        access_token = auth_header[7:]
+
+    # Pull the refresh token from body OR header. Body wins if both arrive.
+    refresh_token = ""
+    try:
+        body = await request.json()
+        if isinstance(body, dict):
+            refresh_token = (body.get("refresh_token") or "").strip()
+    except Exception:
+        pass
+    if not refresh_token and auth_header.startswith("Bearer "):
+        # Header-fallback: also accept a refresh token here so a client that
+        # only ever sets one Authorization header can still log out cleanly.
+        refresh_token = auth_header[7:].strip()
+
+    if access_token:
+        token_blacklist.add(access_token)
+    if refresh_token and refresh_token != access_token:
+        token_blacklist.add(refresh_token)
+    logger.info(
+        "Logout user=%d access_revoked=%s refresh_revoked=%s",
+        user.id,
+        bool(access_token),
+        bool(refresh_token and refresh_token != access_token),
+    )
     return JSONResponse({"success": True})
 
 
@@ -217,6 +243,14 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
+        )
+
+    # Honor the blacklist: a logout that revoked the refresh token must
+    # actually end the session, not just gate the access token.
+    if token_blacklist.is_blacklisted(refresh_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
         )
 
     payload = decode_token(refresh_token)
@@ -254,32 +288,13 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(request: Request, db: Session = Depends(get_db)) -> UserResponse:
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    token = auth_header[7:]
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-    if payload.get("type") != "access":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
-    user_id = payload.get("sub") or str(payload.get("user_id", ""))
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
-    user = db.query(User).filter(User.id == int(user_id)).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-
+async def me(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    # Routed through get_current_user_required_orm so the blacklist check
+    # at dependencies.py:26 is enforced — without this the endpoint had a
+    # side-channel that accepted logged-out tokens.
     return orm_user_to_response(user, db)
 
 
