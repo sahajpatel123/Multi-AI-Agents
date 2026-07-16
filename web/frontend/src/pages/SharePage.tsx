@@ -7,6 +7,7 @@ import { PERSONAS } from '../data/personas';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import {
   applyAbsoluteDocumentTitle,
   applyDocumentTitle,
@@ -70,6 +71,7 @@ export function SharePage() {
   const [copied, setCopied] = useState<'take' | 'link' | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
 
   const agentId = sanitizeParam(params.get('agent'), 64);
   const prompt = sanitizeParam(params.get('prompt'));
@@ -151,6 +153,26 @@ export function SharePage() {
     const result = await invokeNativeShare(data);
     if (result === 'failed' || result === 'unavailable') {
       setCopyError('Could not open system share. Try Copy link instead.');
+    }
+  };
+
+  const handleDownloadTake = () => {
+    setCopyError(null);
+    const text = buildShareTakeClipboardText({
+      agentName: agent.name,
+      prompt,
+      response: response || agent.oneLiner,
+      shareUrl: pageUrl || undefined,
+    });
+    const stem = `arena-share-${(agent.name || 'take').slice(0, 40)}`;
+    const ok = downloadMarkdownFile(`${text}\n`, stem);
+    if (ok) {
+      setDownloadStatus('done');
+      window.setTimeout(() => setDownloadStatus('idle'), 2000);
+    } else {
+      setDownloadStatus('failed');
+      setCopyError('Could not download — try Copy take instead.');
+      window.setTimeout(() => setDownloadStatus('idle'), 2800);
     }
   };
 
@@ -334,6 +356,17 @@ export function SharePage() {
                   }}
                 >
                   {copied === 'take' ? 'Copied take' : 'Copy take'}
+                </button>
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--secondary arena-btn--sm"
+                  onClick={handleDownloadTake}
+                >
+                  {downloadStatus === 'done'
+                    ? 'Downloaded'
+                    : downloadStatus === 'failed'
+                      ? 'Download failed'
+                      : 'Download .md'}
                 </button>
                 <button
                   type="button"

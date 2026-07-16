@@ -8,6 +8,7 @@ import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { type Persona } from '../data/personas';
 import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { formatPanelExport } from '../lib/panelExport';
 import {
@@ -49,7 +50,9 @@ export function PersonasPage() {
   const [savingPanel, setSavingPanel] = useState(false);
   const [pendingReset, setPendingReset] = useState(false);
   const [panelCopyStatus, setPanelCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [panelDownloadStatus, setPanelDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const panelCopyTimerRef = useRef<number | null>(null);
+  const panelDownloadTimerRef = useRef<number | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [revealedLibraryIds, setRevealedLibraryIds] = useState<Record<string, boolean>>({});
   const [libraryQuery, setLibraryQuery] = useState('');
@@ -179,11 +182,14 @@ export function PersonasPage() {
       if (panelCopyTimerRef.current != null) {
         window.clearTimeout(panelCopyTimerRef.current);
       }
+      if (panelDownloadTimerRef.current != null) {
+        window.clearTimeout(panelDownloadTimerRef.current);
+      }
     };
   }, []);
 
-  const copyPanelMarkdown = async () => {
-    const markdown = formatPanelExport({
+  const buildPanelMarkdown = () =>
+    formatPanelExport({
       isDefault: isDefaultPanel,
       minds: panel.map((p) => ({
         id: p.id,
@@ -192,7 +198,9 @@ export function PersonasPage() {
         description: p.description,
       })),
     });
-    const ok = await copyToClipboard(markdown);
+
+  const copyPanelMarkdown = async () => {
+    const ok = await copyToClipboard(buildPanelMarkdown());
     if (panelCopyTimerRef.current != null) {
       window.clearTimeout(panelCopyTimerRef.current);
     }
@@ -208,6 +216,25 @@ export function PersonasPage() {
     panelCopyTimerRef.current = window.setTimeout(() => {
       setPanelCopyStatus('idle');
       panelCopyTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadPanelMarkdown = () => {
+    const ok = downloadMarkdownFile(buildPanelMarkdown(), 'arena-personas-panel');
+    if (panelDownloadTimerRef.current != null) {
+      window.clearTimeout(panelDownloadTimerRef.current);
+    }
+    setPanelDownloadStatus(ok ? 'done' : 'failed');
+    setToast({
+      message: ok ? 'Panel downloaded as markdown' : 'Could not download panel — try Copy instead',
+      color: ok ? '#1A1714' : '#E57373',
+      iconColor: ok ? '#C4956A' : '#FAF7F4',
+      kind: ok ? 'success' : 'error',
+    });
+    const hold = motionDuration(ok ? 2200 : 3000);
+    panelDownloadTimerRef.current = window.setTimeout(() => {
+      setPanelDownloadStatus('idle');
+      panelDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -492,6 +519,39 @@ export function PersonasPage() {
                   : panelCopyStatus === 'failed'
                     ? 'Copy failed'
                     : 'Copy panel'}
+              </button>
+              <button
+                type="button"
+                onClick={downloadPanelMarkdown}
+                title="Download this panel as markdown"
+                aria-label={
+                  panelDownloadStatus === 'done'
+                    ? 'Panel downloaded'
+                    : panelDownloadStatus === 'failed'
+                      ? 'Download failed'
+                      : 'Download panel as markdown'
+                }
+                style={{
+                  background: 'none',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: 999,
+                  padding: '9px 16px',
+                  fontSize: 12,
+                  color:
+                    panelDownloadStatus === 'failed'
+                      ? '#D85A30'
+                      : panelDownloadStatus === 'done'
+                        ? '#5A8C6A'
+                        : '#6B6460',
+                  cursor: 'pointer',
+                  fontFamily: 'Georgia, serif',
+                }}
+              >
+                {panelDownloadStatus === 'done'
+                  ? 'Downloaded'
+                  : panelDownloadStatus === 'failed'
+                    ? 'Download failed'
+                    : 'Download .md'}
               </button>
             </div>
             {!isDefaultPanel && (

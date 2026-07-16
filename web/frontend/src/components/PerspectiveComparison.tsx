@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import {
   buildPerspectiveRows,
   formatPerspectiveComparisonMarkdown,
@@ -52,7 +53,9 @@ function KeywordChips({
 export function PerspectiveComparison({ responses, question, onClose }: PerspectiveComparisonProps) {
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const copyTimerRef = useRef<number | null>(null);
+  const downloadTimerRef = useRef<number | null>(null);
 
   const rows = useMemo(() => buildPerspectiveRows(responses), [responses]);
   const shared = useMemo(() => sharedPerspectiveKeywords(rows), [rows]);
@@ -73,20 +76,34 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
       window.clearTimeout(focusId);
       window.removeEventListener('keydown', onKey);
       if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
+      if (downloadTimerRef.current != null) window.clearTimeout(downloadTimerRef.current);
     };
   }, [onClose]);
 
   if (rows.length === 0) return null;
 
+  const buildMarkdown = () => formatPerspectiveComparisonMarkdown({ question, rows });
+
   const copyMarkdown = async () => {
-    const md = formatPerspectiveComparisonMarkdown({ question, rows });
-    const ok = await copyToClipboard(md);
+    const ok = await copyToClipboard(buildMarkdown());
     if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
     setCopyStatus(ok ? 'copied' : 'failed');
     const hold = motionDuration(ok ? 2000 : 2800);
     copyTimerRef.current = window.setTimeout(() => {
       setCopyStatus('idle');
       copyTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadMarkdown = () => {
+    const stem = `perspective-comparison-${(question || 'arena').slice(0, 40)}`;
+    const ok = downloadMarkdownFile(buildMarkdown(), stem);
+    if (downloadTimerRef.current != null) window.clearTimeout(downloadTimerRef.current);
+    setDownloadStatus(ok ? 'done' : 'failed');
+    const hold = motionDuration(ok ? 2000 : 2800);
+    downloadTimerRef.current = window.setTimeout(() => {
+      setDownloadStatus('idle');
+      downloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -276,7 +293,7 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
           ))}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={() => void copyMarkdown()}
@@ -293,6 +310,31 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
             }}
           >
             {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy markdown'}
+          </button>
+          <button
+            type="button"
+            onClick={downloadMarkdown}
+            style={{
+              background: 'none',
+              border: '0.5px solid #E0D8D0',
+              borderRadius: 999,
+              padding: '7px 14px',
+              fontSize: 12,
+              color:
+                downloadStatus === 'failed'
+                  ? '#D85A30'
+                  : downloadStatus === 'done'
+                    ? '#5A8C6A'
+                    : '#6B6460',
+              cursor: 'pointer',
+              fontFamily: 'Georgia, serif',
+            }}
+          >
+            {downloadStatus === 'done'
+              ? 'Downloaded'
+              : downloadStatus === 'failed'
+                ? 'Download failed'
+                : 'Download .md'}
           </button>
           <button
             type="button"
