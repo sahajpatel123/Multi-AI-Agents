@@ -166,6 +166,8 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Arena focused mind: full take as markdown + Jump to latest when you scroll up',
       '[IMPROVED] Discuss and Debate: agent takes render as markdown with reading time + outline',
       '[IMPROVED] Room group synthesis renders as markdown with reading time + section outline',
+      '[IMPROVED] Markdown downloads include today’s date so re-exports do not overwrite each other',
+      '[IMPROVED] Pricing FAQ: Agent Mode, Watchlist vs Saved, and calibration explained',
     ],
   },
   {

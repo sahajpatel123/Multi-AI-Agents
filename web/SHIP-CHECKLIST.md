@@ -172,6 +172,8 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Arena focused mind**: original + reply takes render as markdown (reading time / outline when useful); Jump to latest when scrolled up during focused chat.
 - **Discuss/Debate markdown takes**: agent messages, original verdict, and debate reactions use AgentAnswerMarkdown (reading chrome + section jump when multi-heading).
 - **Room synthesis markdown**: group synthesis body uses AgentAnswerMarkdown (reading time + outline when multi-section).
+- **Dated downloads**: `.md` exports append `yyyy-mm-dd` to the filename by default (stable stems still available via `{ dated: false }`).
+- **Pricing FAQ depth**: Agent Mode pipeline, Watchlist vs Saved, and calibration confidence explained for buyers.
 
 ## Required production environment
 
