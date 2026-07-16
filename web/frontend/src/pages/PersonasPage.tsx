@@ -20,6 +20,11 @@ import {
   type PanelSaveToastKind,
 } from '../lib/panelSave';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
+import {
+  PERSONAS_LIBRARY_SORT_OPTIONS,
+  sortPersonasLibrary,
+  type PersonasLibrarySort,
+} from '../lib/personasLibrarySort';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import track from '../utils/track';
 
@@ -56,6 +61,7 @@ export function PersonasPage() {
   const [modalVisible, setModalVisible] = useState(false);
   const [revealedLibraryIds, setRevealedLibraryIds] = useState<Record<string, boolean>>({});
   const [libraryQuery, setLibraryQuery] = useState('');
+  const [librarySort, setLibrarySort] = useState<PersonasLibrarySort>('default');
   const [swapQuery, setSwapQuery] = useState('');
   const libraryRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const librarySearchRef = useRef<HTMLInputElement | null>(null);
@@ -263,16 +269,22 @@ export function PersonasPage() {
     [modalOptions, swapQuery],
   );
 
-  const filteredLibrary = useMemo(
-    () =>
-      filterBySearchQuery(personas, libraryQuery, (persona) => [
-        persona.name,
-        persona.quote,
-        persona.description,
-        persona.id,
-      ]),
-    [personas, libraryQuery],
-  );
+  const filteredLibrary = useMemo(() => {
+    const searched = filterBySearchQuery(personas, libraryQuery, (persona) => [
+      persona.name,
+      persona.quote,
+      persona.description,
+      persona.id,
+    ]);
+    return sortPersonasLibrary(
+      searched.map((persona) => ({
+        ...persona,
+        onPanel: unlockedSlotMap[persona.id] != null,
+        unlocked: canUsePersona(persona.id),
+      })),
+      librarySort,
+    );
+  }, [personas, libraryQuery, librarySort, unlockedSlotMap, canUsePersona]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -300,7 +312,7 @@ export function PersonasPage() {
     });
 
     return () => observer.disconnect();
-  }, [filteredLibrary.length, libraryQuery]);
+  }, [filteredLibrary.length, libraryQuery, librarySort]);
 
   const handleSwap = (slotIndex: SlotIndex, persona: Persona) => {
     if (!canUsePersona(persona.id)) {
@@ -601,52 +613,89 @@ export function PersonasPage() {
               Full library · {filteredLibrary.length}
               {libraryQuery.trim() ? ` / ${personas.length}` : ' personas'}
             </p>
-            <div style={{ position: 'relative', minWidth: 200, flex: '1 1 220px', maxWidth: 320 }}>
-              <input
-                ref={librarySearchRef}
-                type="search"
-                value={libraryQuery}
-                onChange={(e) => setLibraryQuery(e.target.value)}
-                placeholder="Search minds…"
-                aria-label="Search persona library"
-                autoComplete="off"
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  fontSize: 13,
-                  fontFamily: 'Georgia, serif',
-                  color: '#1A1714',
-                  background: '#FAF7F4',
-                  border: '0.5px solid #E0D8D0',
-                  borderRadius: 10,
-                  padding: '9px 32px 9px 12px',
-                  outline: 'none',
-                }}
-              />
-              {libraryQuery ? (
-                <button
-                  type="button"
-                  aria-label="Clear persona search"
-                  onClick={() => {
-                    setLibraryQuery('');
-                    librarySearchRef.current?.focus();
-                  }}
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                flex: '1 1 280px',
+                maxWidth: 420,
+                minWidth: 200,
+              }}
+            >
+              <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                <input
+                  ref={librarySearchRef}
+                  type="search"
+                  value={libraryQuery}
+                  onChange={(e) => setLibraryQuery(e.target.value)}
+                  placeholder="Search minds…"
+                  aria-label="Search persona library"
+                  autoComplete="off"
                   style={{
-                    position: 'absolute',
-                    right: 8,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: 13,
+                    fontFamily: 'Georgia, serif',
+                    color: '#1A1714',
+                    background: '#FAF7F4',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 10,
+                    padding: '9px 32px 9px 12px',
+                    outline: 'none',
+                  }}
+                />
+                {libraryQuery ? (
+                  <button
+                    type="button"
+                    aria-label="Clear persona search"
+                    onClick={() => {
+                      setLibraryQuery('');
+                      librarySearchRef.current?.focus();
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: 8,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      color: '#A89070',
+                      lineHeight: 1,
+                      padding: 4,
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+              {personas.length > 1 ? (
+                <select
+                  value={librarySort}
+                  onChange={(e) => setLibrarySort(e.target.value as PersonasLibrarySort)}
+                  aria-label="Sort persona library"
+                  title="Sort persona library"
+                  style={{
+                    fontSize: 12,
+                    fontFamily: 'Georgia, serif',
+                    color: '#4A3728',
+                    background: '#FAF7F4',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 10,
+                    padding: '9px 10px',
                     cursor: 'pointer',
-                    fontSize: 16,
-                    color: '#A89070',
-                    lineHeight: 1,
-                    padding: 4,
+                    flex: '0 0 auto',
+                    maxWidth: 150,
                   }}
                 >
-                  ×
-                </button>
+                  {PERSONAS_LIBRARY_SORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               ) : null}
             </div>
           </div>
