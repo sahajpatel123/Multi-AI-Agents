@@ -98,6 +98,13 @@ import {
   type AgentHistoryStatusFilter,
 } from '../lib/agentHistoryStatusFilter';
 import {
+  AGENT_HISTORY_CONFIDENCE_OPTIONS,
+  agentHistoryConfidenceFilterUseful,
+  agentHistoryConfidenceLabel,
+  filterAgentHistoryByConfidence,
+  type AgentHistoryConfidenceFilter,
+} from '../lib/agentHistoryConfidenceFilter';
+import {
   AGENT_HISTORY_SCORE_OPTIONS,
   agentHistoryScoreFilterUseful,
   agentHistoryScoreLabel,
@@ -795,6 +802,8 @@ export function AgentPage() {
     useState<AgentHistoryStatusFilter>('all');
   const [historyScoreFilter, setHistoryScoreFilter] =
     useState<AgentHistoryScoreFilter>('all');
+  const [historyConfidenceFilter, setHistoryConfidenceFilter] =
+    useState<AgentHistoryConfidenceFilter>('all');
   const [historyTopicFilter, setHistoryTopicFilter] =
     useState<AgentHistoryTopicFilter>(AGENT_HISTORY_TOPIC_ALL);
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -2007,7 +2016,8 @@ export function AgentPage() {
       historyStatusFilter,
     );
     const byScore = filterAgentHistoryByScore(byStatus, historyScoreFilter);
-    const byTopic = filterAgentHistoryByTopic(byScore, historyTopicFilter);
+    const byConfidence = filterAgentHistoryByConfidence(byScore, historyConfidenceFilter);
+    const byTopic = filterAgentHistoryByTopic(byConfidence, historyTopicFilter);
     const searched = filterBySearchQuery(byTopic, historySearchQuery, (item) => [
       item.title,
       item.task_text,
@@ -2032,11 +2042,17 @@ export function AgentPage() {
     historySort,
     historyStatusFilter,
     historyScoreFilter,
+    historyConfidenceFilter,
     historyTopicFilter,
   ]);
 
   const historyScoreFilterUseful = useMemo(
     () => agentHistoryScoreFilterUseful(taskHistory),
+    [taskHistory],
+  );
+
+  const historyConfidenceFilterUseful = useMemo(
+    () => agentHistoryConfidenceFilterUseful(taskHistory),
     [taskHistory],
   );
 
@@ -2215,6 +2231,9 @@ export function AgentPage() {
     }
     if (historyScoreFilter !== 'all') {
       filterBits.push(`score: ${agentHistoryScoreLabel(historyScoreFilter)}`);
+    }
+    if (historyConfidenceFilter !== 'all') {
+      filterBits.push(`confidence: ${agentHistoryConfidenceLabel(historyConfidenceFilter)}`);
     }
     if (historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL) {
       filterBits.push(
@@ -3773,6 +3792,7 @@ export function AgentPage() {
                     {historySearchQuery.trim() ||
                     historyStatusFilter !== 'all' ||
                     historyScoreFilter !== 'all' ||
+                    historyConfidenceFilter !== 'all' ||
                     historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL
                       ? ` / ${taskHistory.length}`
                       : ''}
@@ -3908,6 +3928,43 @@ export function AgentPage() {
                           key={opt.value}
                           type="button"
                           onClick={() => setHistoryScoreFilter(opt.value)}
+                          aria-pressed={selected}
+                          style={{
+                            padding: '3px 10px',
+                            borderRadius: 999,
+                            border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                            background: selected ? '#F0E6DA' : 'transparent',
+                            color: selected ? '#4A3728' : '#8C7355',
+                            fontSize: 11,
+                            fontFamily: 'Georgia, serif',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                {historyConfidenceFilterUseful ? (
+                  <div
+                    role="group"
+                    aria-label="Filter history by confidence"
+                    style={{
+                      display: 'flex',
+                      gap: 6,
+                      marginBottom: 8,
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {AGENT_HISTORY_CONFIDENCE_OPTIONS.map((opt) => {
+                      const selected = historyConfidenceFilter === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setHistoryConfidenceFilter(opt.value)}
                           aria-pressed={selected}
                           style={{
                             padding: '3px 10px',
@@ -4085,21 +4142,31 @@ export function AgentPage() {
                         ? ` · ${agentHistoryScoreLabel(historyScoreFilter)}`
                         : ''
                     }${
+                      historyConfidenceFilter !== 'all'
+                        ? ` · ${agentHistoryConfidenceLabel(historyConfidenceFilter)}`
+                        : ''
+                    }${
                       historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL
                         ? ` · ${agentHistoryTopicLabel(historyTopicFilter, historyTopicOptions)}`
                         : ''
                     }`
                   : historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL &&
                       historyStatusFilter === 'all' &&
-                      historyScoreFilter === 'all'
+                      historyScoreFilter === 'all' &&
+                      historyConfidenceFilter === 'all'
                     ? `No tasks tagged ${agentHistoryTopicLabel(historyTopicFilter, historyTopicOptions)}.`
-                    : historyScoreFilter !== 'all' && historyStatusFilter === 'all'
-                      ? `No tasks with score ${agentHistoryScoreLabel(historyScoreFilter)}.`
-                      : historyStatusFilter === 'live'
-                        ? 'No live weekly-update tasks yet.'
-                        : historyStatusFilter === 'completed'
-                          ? 'No one-off research tasks in this view.'
-                          : 'No matching history.'}
+                    : historyConfidenceFilter !== 'all' &&
+                        historyStatusFilter === 'all' &&
+                        historyScoreFilter === 'all' &&
+                        historyTopicFilter === AGENT_HISTORY_TOPIC_ALL
+                      ? `No tasks with confidence ${agentHistoryConfidenceLabel(historyConfidenceFilter)}.`
+                      : historyScoreFilter !== 'all' && historyStatusFilter === 'all'
+                        ? `No tasks with score ${agentHistoryScoreLabel(historyScoreFilter)}.`
+                        : historyStatusFilter === 'live'
+                          ? 'No live weekly-update tasks yet.'
+                          : historyStatusFilter === 'completed'
+                            ? 'No one-off research tasks in this view.'
+                            : 'No matching history.'}
                 <br />
                 <button
                   type="button"
@@ -4107,6 +4174,7 @@ export function AgentPage() {
                     setHistorySearchQuery('');
                     setHistoryStatusFilter('all');
                     setHistoryScoreFilter('all');
+                    setHistoryConfidenceFilter('all');
                     setHistoryTopicFilter(AGENT_HISTORY_TOPIC_ALL);
                     historySearchRef.current?.focus();
                   }}
@@ -4123,6 +4191,7 @@ export function AgentPage() {
                 >
                   {(historyStatusFilter !== 'all' ||
                     historyScoreFilter !== 'all' ||
+                    historyConfidenceFilter !== 'all' ||
                     historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL) &&
                   !historySearchQuery.trim()
                     ? 'Show all history'
