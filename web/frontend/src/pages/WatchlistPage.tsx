@@ -33,6 +33,13 @@ import {
   filterAgentHistoryByScore,
   type AgentHistoryScoreFilter,
 } from '../lib/agentHistoryScoreFilter';
+import {
+  WATCHLIST_CADENCE_OPTIONS,
+  filterWatchlistByCadence,
+  watchlistCadenceFilterUseful,
+  watchlistCadenceLabel,
+  type WatchlistCadenceFilter,
+} from '../lib/watchlistCadenceFilter';
 import { watchlistBodyMode } from '../lib/watchlistView';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
@@ -90,6 +97,7 @@ export function WatchlistPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<WatchlistStatusFilter>('all');
   const [scoreFilter, setScoreFilter] = useState<AgentHistoryScoreFilter>('all');
+  const [cadenceFilter, setCadenceFilter] = useState<WatchlistCadenceFilter>('all');
   const [listSort, setListSort] = useState<WatchlistSort>('next_soon');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -203,8 +211,9 @@ export function WatchlistPage() {
         : items.filter((item) =>
             statusFilter === 'active' ? item.is_active : !item.is_active,
           );
+    const byCadence = filterWatchlistByCadence(byStatus, cadenceFilter);
     const byScore = filterAgentHistoryByScore(
-      byStatus.map((item) => ({
+      byCadence.map((item) => ({
         ...item,
         score: item.latest_task?.final_score ?? null,
       })),
@@ -225,13 +234,18 @@ export function WatchlistPage() {
       })),
       listSort,
     );
-  }, [items, searchQuery, statusFilter, listSort, scoreFilter]);
+  }, [items, searchQuery, statusFilter, listSort, scoreFilter, cadenceFilter]);
 
   const scoreFilterUseful = useMemo(
     () =>
       agentHistoryScoreFilterUseful(
         items.map((item) => ({ score: item.latest_task?.final_score ?? null })),
       ),
+    [items],
+  );
+
+  const cadenceFilterUseful = useMemo(
+    () => watchlistCadenceFilterUseful(items),
     [items],
   );
 
@@ -271,6 +285,9 @@ export function WatchlistPage() {
   const buildWatchlistMarkdown = () => {
     const filterBits: string[] = [];
     if (statusFilter !== 'all') filterBits.push(`status: ${statusFilter}`);
+    if (cadenceFilter !== 'all') {
+      filterBits.push(`cadence: ${watchlistCadenceLabel(cadenceFilter)}`);
+    }
     if (scoreFilter !== 'all') {
       filterBits.push(`score: ${agentHistoryScoreLabel(scoreFilter)}`);
     }
@@ -638,17 +655,51 @@ export function WatchlistPage() {
                   </select>
                   <span style={{ fontSize: 11, color: '#A89070' }}>
                     {filteredItems.length}
-                    {searchQuery.trim() || statusFilter !== 'all' || scoreFilter !== 'all'
+                    {searchQuery.trim() ||
+                    statusFilter !== 'all' ||
+                    scoreFilter !== 'all' ||
+                    cadenceFilter !== 'all'
                       ? ` / ${items.length}`
                       : ''}
                   </span>
                 </div>
               </div>
+              {cadenceFilterUseful ? (
+                <div
+                  role="group"
+                  aria-label="Filter by re-check cadence"
+                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
+                >
+                  {WATCHLIST_CADENCE_OPTIONS.map((opt) => {
+                    const selected = cadenceFilter === opt.value;
+                    return (
+                      <button
+                        key={String(opt.value)}
+                        type="button"
+                        onClick={() => setCadenceFilter(opt.value)}
+                        aria-pressed={selected}
+                        style={{
+                          padding: '4px 12px',
+                          borderRadius: 999,
+                          border: selected ? 'none' : '0.5px solid #D4C4B0',
+                          background: selected ? '#C4956A' : 'transparent',
+                          color: selected ? '#FAF7F2' : '#8C7355',
+                          fontSize: 12,
+                          fontFamily: 'Georgia, serif',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               {scoreFilterUseful ? (
                 <div
                   role="group"
                   aria-label="Filter by latest score"
-                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}
+                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
                 >
                   {AGENT_HISTORY_SCORE_OPTIONS.map((opt) => {
                     const selected = scoreFilter === opt.value;
@@ -736,15 +787,21 @@ export function WatchlistPage() {
                 <p style={{ fontSize: 13, color: '#8C7355', marginTop: 8, maxWidth: 320, lineHeight: 1.6 }}>
                   {searchQuery.trim()
                     ? `Nothing matches “${searchQuery.trim()}”${statusFilter !== 'all' ? ` in ${statusFilter} watches` : ''}${
-                        scoreFilter !== 'all' ? ` · ${agentHistoryScoreLabel(scoreFilter)}` : ''
-                      }.`
-                    : scoreFilter !== 'all'
-                      ? `No watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
-                      : statusFilter === 'active'
-                        ? 'No active watches right now — resume a paused one or start a new research task.'
-                        : statusFilter === 'paused'
-                          ? 'No paused watches.'
-                          : 'No matches.'}
+                        cadenceFilter !== 'all' ? ` · ${watchlistCadenceLabel(cadenceFilter)}` : ''
+                      }${scoreFilter !== 'all' ? ` · ${agentHistoryScoreLabel(scoreFilter)}` : ''}.`
+                    : cadenceFilter !== 'all' && scoreFilter !== 'all'
+                      ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
+                      : cadenceFilter !== 'all'
+                        ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches${
+                            statusFilter !== 'all' ? ` that are ${statusFilter}` : ''
+                          }.`
+                        : scoreFilter !== 'all'
+                          ? `No watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
+                          : statusFilter === 'active'
+                            ? 'No active watches right now — resume a paused one or start a new research task.'
+                            : statusFilter === 'paused'
+                              ? 'No paused watches.'
+                              : 'No matches.'}
                 </p>
                 <button
                   type="button"
@@ -754,6 +811,7 @@ export function WatchlistPage() {
                     setSearchQuery('');
                     setStatusFilter('all');
                     setScoreFilter('all');
+                    setCadenceFilter('all');
                     setListSort('next_soon');
                     searchRef.current?.focus();
                   }}

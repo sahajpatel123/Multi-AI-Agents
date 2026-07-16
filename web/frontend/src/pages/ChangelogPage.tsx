@@ -141,6 +141,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Agent Watchlist: filter by latest score band',
       '[NEW] Room research board: filter by score band',
       '[NEW] Sidebar Saved takes: filter by score band',
+      '[NEW] Agent Watchlist: filter by re-check cadence (Daily / 3-day / Weekly)',
     ],
   },
   {

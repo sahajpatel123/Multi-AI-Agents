@@ -145,6 +145,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent rooms activity filter**: All / New synthesis / Caught up chips filter rooms with unread group synthesis (export notes filter).
 - **Agent history score filter**: All scores / 75+ / 60–74 / Below 60 / No score chips (export notes filter).
 - **Watchlist score filter**: same score bands filter watches by latest run score (export notes filter).
+- **Watchlist cadence filter**: chips for Daily / Every 3 days / Weekly when the list has mixed cadences (export notes filter; Clear resets cadence).
 - **Room board score filter**: All scores / 75+ / 60–74 / Below 60 / No score chips on the research board (export notes filter).
 - **Sidebar Saved score filter**: same score bands filter bookmarked takes (works with mind filter; export notes filter).
 
