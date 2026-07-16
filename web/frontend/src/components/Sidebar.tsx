@@ -48,6 +48,13 @@ import {
   type SidebarSavedMindFilter,
 } from '../lib/sidebarSavedMindFilter';
 import {
+  SIDEBAR_RECENTS_WINNER_ALL,
+  collectRecentsWinnerFilterOptions,
+  filterRecentsByWinner,
+  sidebarRecentsWinnerFilterLabel,
+  type SidebarRecentsWinnerFilter,
+} from '../lib/sidebarRecentsWinnerFilter';
+import {
   SIDEBAR_TURN_TITLE_MAX,
   loadSidebarTurnTitles,
   saveSidebarTurnTitle,
@@ -108,6 +115,8 @@ export function Sidebar({
   const [savedSort, setSavedSort] = useState<SidebarSavedSort>('newest');
   const [savedMindFilter, setSavedMindFilter] =
     useState<SidebarSavedMindFilter>(SIDEBAR_SAVED_MIND_ALL);
+  const [recentsWinnerFilter, setRecentsWinnerFilter] =
+    useState<SidebarRecentsWinnerFilter>(SIDEBAR_RECENTS_WINNER_ALL);
   const [copiedSavedId, setCopiedSavedId] = useState<string | number | null>(null);
   const [copySavedFailed, setCopySavedFailed] = useState(false);
   const [copyAllSavedStatus, setCopyAllSavedStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -153,9 +162,29 @@ export function Sidebar({
       title: customTitles[turn.turn_id],
       winnerName: winnerNameByAgentId[turn.winner_id] || AGENTS[turn.winner_id]?.name || turn.winner_id,
     }));
-    const searched = filterTurnsBySearchQuery(withTitles, searchQuery);
+    const byWinner = filterRecentsByWinner(withTitles, recentsWinnerFilter);
+    const searched = filterTurnsBySearchQuery(byWinner, searchQuery);
     return sortSidebarRecents(searched, recentsSort);
-  }, [activeFilter, reversedTurns, searchQuery, customTitles, recentsSort, winnerNameByAgentId]);
+  }, [
+    activeFilter,
+    reversedTurns,
+    searchQuery,
+    customTitles,
+    recentsSort,
+    winnerNameByAgentId,
+    recentsWinnerFilter,
+  ]);
+
+  const recentsWinnerOptions = useMemo(() => {
+    const withNames = reversedTurns.map((turn) => ({
+      ...turn,
+      winnerName: winnerNameByAgentId[turn.winner_id] || AGENTS[turn.winner_id]?.name || turn.winner_id,
+    }));
+    return collectRecentsWinnerFilterOptions(
+      withNames,
+      (winnerId) => winnerNameByAgentId[winnerId] || AGENTS[winnerId]?.name,
+    );
+  }, [reversedTurns, winnerNameByAgentId]);
 
   const reversedSaved = useMemo(() => [...savedItems].reverse(), [savedItems]);
   const savedMindOptions = useMemo(
@@ -188,6 +217,14 @@ export function Sidebar({
       setSavedMindFilter(SIDEBAR_SAVED_MIND_ALL);
     }
   }, [savedMindFilter, savedMindOptions]);
+
+  // Drop winner filter when that winner no longer appears in recents.
+  useEffect(() => {
+    if (recentsWinnerFilter === SIDEBAR_RECENTS_WINNER_ALL) return;
+    if (!recentsWinnerOptions.some((o) => o.value === recentsWinnerFilter)) {
+      setRecentsWinnerFilter(SIDEBAR_RECENTS_WINNER_ALL);
+    }
+  }, [recentsWinnerFilter, recentsWinnerOptions]);
 
   useEffect(() => {
     if (copiedSavedId == null && !copySavedFailed) return;
@@ -297,6 +334,11 @@ export function Sidebar({
     const parts: string[] = [];
     if (activeFilter !== 'all') {
       parts.push(`category ${activeFilter.charAt(0).toUpperCase()}${activeFilter.slice(1)}`);
+    }
+    if (recentsWinnerFilter !== SIDEBAR_RECENTS_WINNER_ALL) {
+      parts.push(
+        `winner: ${sidebarRecentsWinnerFilterLabel(recentsWinnerFilter, recentsWinnerOptions)}`,
+      );
     }
     const q = searchQuery.trim();
     if (q) parts.push(`search “${q}”`);
@@ -498,7 +540,11 @@ export function Sidebar({
               {reversedTurns.length > 0 ? (
                 <span style={{ fontSize: 10, color: '#A89070' }}>
                   {filteredTurns.length}
-                  {searchQuery.trim() || activeFilter !== 'all' ? ` / ${reversedTurns.length}` : ''}
+                  {searchQuery.trim() ||
+                  activeFilter !== 'all' ||
+                  recentsWinnerFilter !== SIDEBAR_RECENTS_WINNER_ALL
+                    ? ` / ${reversedTurns.length}`
+                    : ''}
                 </span>
               ) : null}
             </div>
@@ -637,6 +683,47 @@ export function Sidebar({
           </div>
           {reversedTurns.length > 0 ? (
             <div style={{ marginBottom: 10 }}>
+              {recentsWinnerOptions.length > 2 ? (
+                <div
+                  role="group"
+                  aria-label="Filter recents by winner"
+                  style={{
+                    display: 'flex',
+                    gap: 6,
+                    marginBottom: 8,
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                  }}
+                >
+                  {recentsWinnerOptions.map((opt) => {
+                    const selected = recentsWinnerFilter === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setRecentsWinnerFilter(opt.value)}
+                        aria-pressed={selected}
+                        style={{
+                          background: selected ? '#F0E6DA' : 'transparent',
+                          border: selected
+                            ? '0.5px solid #C4956A'
+                            : '0.5px solid #E0D8D0',
+                          borderRadius: 999,
+                          padding: '3px 9px',
+                          fontSize: 10,
+                          letterSpacing: '0.03em',
+                          color: selected ? '#4A3728' : '#A89070',
+                          cursor: 'pointer',
+                          fontFamily: 'Georgia, serif',
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               <div style={{ marginBottom: 8 }}>
                 <select
                   value={recentsSort}
@@ -936,15 +1023,22 @@ export function Sidebar({
                   Your history will appear here.
                 </p>
               </div>
-            ) : searchQuery.trim() ? (
+            ) : searchQuery.trim() || recentsWinnerFilter !== SIDEBAR_RECENTS_WINNER_ALL ? (
               <div style={{ padding: '1.5rem 0.5rem', textAlign: 'center' }}>
                 <p style={{ fontSize: '13px', color: '#6B6460', margin: '0 0 8px' }}>
-                  No recents match “{searchQuery.trim()}”
+                  {searchQuery.trim()
+                    ? `No recents match “${searchQuery.trim()}”${
+                        recentsWinnerFilter !== SIDEBAR_RECENTS_WINNER_ALL
+                          ? ` from ${sidebarRecentsWinnerFilterLabel(recentsWinnerFilter, recentsWinnerOptions)}`
+                          : ''
+                      }`
+                    : `No recents from ${sidebarRecentsWinnerFilterLabel(recentsWinnerFilter, recentsWinnerOptions)}`}
                 </p>
                 <button
                   type="button"
                   onClick={() => {
                     setSearchQuery('');
+                    setRecentsWinnerFilter(SIDEBAR_RECENTS_WINNER_ALL);
                     searchInputRef.current?.focus();
                   }}
                   style={{
@@ -957,7 +1051,9 @@ export function Sidebar({
                     textDecoration: 'underline',
                   }}
                 >
-                  Clear search
+                  {recentsWinnerFilter !== SIDEBAR_RECENTS_WINNER_ALL && !searchQuery.trim()
+                    ? 'Clear winner filter'
+                    : 'Clear filters'}
                 </button>
               </div>
             ) : (
