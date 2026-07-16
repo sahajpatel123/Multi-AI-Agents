@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import threading
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -31,6 +32,100 @@ from sqlalchemy.orm import Session
 from arena.db_models import RevokedToken
 
 logger = logging.getLogger(__name__)
+
+
+# Interval at which the periodic background sweeper wakes up. One hour
+# is short enough that the table doesn't grow large between deploys,
+# long enough that the per-worker DB load is negligible.
+_DEFAULT_PURGE_INTERVAL_SECONDS = 3600
+
+# Background-sweep handle + guard so create_app() can be called more
+# than once (e.g. in pytest) without spawning parallel sweepers.
+_periodic_thread: Optional[threading.Thread] = None
+_periodic_stop: Optional[threading.Event] = None
+_periodic_lock = threading.Lock()
+
+
+def _purge_loop(stop_event: threading.Event, interval_seconds: int) -> None:
+    """Daemon thread body: sleep `interval_seconds` between sweeps, exit
+    cleanly when stop_event is set. Best-effort — DB errors are logged
+    and the next tick still runs.
+    """
+    while not stop_event.is_set():
+        # Sleep in small slices so a stop signal at app shutdown is honored
+        # within a second or two instead of having to wait the full interval.
+        if stop_event.wait(timeout=interval_seconds):
+            return  # stop requested during sleep
+        try:
+            # Lazy import — avoid pulling SQLAlchemy / SessionLocal at module
+            # import time, which would break any script that just wants the
+            # hashing helpers.
+            from arena.database import SessionLocal
+            s = SessionLocal()
+            try:
+                n = purge_expired(s)
+                if n:
+                    logger.info(
+                        "Periodic revoked_tokens purge cleared %s row(s)",
+                        n,
+                    )
+            finally:
+                s.close()
+        except Exception as _exc:  # pragma: no cover - hard to trigger
+            logger.warning(
+                "Periodic revoked_tokens purge failed: %s", _exc,
+            )
+
+
+def start_periodic_purge(interval_seconds: int = _DEFAULT_PURGE_INTERVAL_SECONDS) -> bool:
+    """Start the background sweeper if it isn't already running.
+
+    Idempotent: calling this more than once is a no-op. Returns True
+    if a new thread was spawned this call, False if one was already
+    alive (or the interval was non-positive, in which case the function
+    does nothing).
+
+    The thread is a daemon so it dies with the process — no shutdown
+    ceremony needed on Render restarts.
+    """
+    if interval_seconds <= 0:
+        return False
+    global _periodic_thread, _periodic_stop
+    with _periodic_lock:
+        if _periodic_thread is not None and _periodic_thread.is_alive():
+            return False
+        stop = threading.Event()
+        t = threading.Thread(
+            target=_purge_loop,
+            args=(stop, interval_seconds),
+            name="revoked_tokens-purge",
+            daemon=True,
+        )
+        t.start()
+        _periodic_thread = t
+        _periodic_stop = stop
+        logger.info(
+            "Started periodic revoked_tokens purge (every %s seconds)", interval_seconds,
+        )
+        return True
+
+
+def stop_periodic_purge(timeout_seconds: float = 2.0) -> bool:
+    """Signal the background sweeper to stop and wait briefly for it
+    to exit. Returns True if the thread was running and stopped, False
+    otherwise. Useful in tests; production relies on process exit + daemon.
+    """
+    global _periodic_thread, _periodic_stop
+    with _periodic_lock:
+        thread = _periodic_thread
+        stop = _periodic_stop
+        _periodic_thread = None
+        _periodic_stop = None
+    if thread is None or stop is None:
+        return False
+    stop.set()
+    thread.join(timeout=timeout_seconds)
+    return not thread.is_alive()
 
 
 def _hash_token(token: str) -> str:

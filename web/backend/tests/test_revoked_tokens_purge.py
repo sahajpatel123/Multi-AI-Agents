@@ -140,3 +140,76 @@ class TestStartupPurge:
             assert is_blacklisted("deadbeef-purge-test", s) is True
         finally:
             s.close()
+
+
+class TestPeriodicPurge:
+    """Background sweeper: handle the steady-state case startup misses.
+
+    Startup purge (TestStartupPurge above) sweeps once at boot. Between
+    deploys, dead tokens still accumulate. The periodic sweeper thread
+    re-runs purge_expired every interval_seconds. These tests pin the
+    contract end-to-end with a tiny interval so the test completes fast.
+    """
+
+    def test_start_periodic_purge_runs_concurrently(self, isolated_db, monkeypatch):
+        # Use a tiny interval so the sweeper fires within the test.
+        from arena.core import token_blacklist as tbl
+
+        # Make sure no prior thread is alive (test isolation).
+        tbl.stop_periodic_purge(timeout_seconds=2.0)
+
+        from datetime import timedelta
+
+        from arena.db_models import RevokedToken
+
+        SessionLocal = isolated_db
+        s = SessionLocal()
+        try:
+            s.add(RevokedToken(
+                token_hash="z" * 64,
+                expires_at=_utcnow_naive() - timedelta(days=1),
+                reason="test-periodic-seed",
+            ))
+            s.commit()
+        finally:
+            s.close()
+
+        # Spawn the thread with a 0.5s interval — well under any test timeout.
+        spawned = tbl.start_periodic_purge(interval_seconds=1)
+        assert spawned is True
+        try:
+            # Give the sweeper 2 seconds to fire at least once.
+            import time as _time
+            deadline = _time.monotonic() + 2.0
+            while _time.monotonic() < deadline:
+                s = SessionLocal()
+                try:
+                    surviving = (
+                        s.query(RevokedToken)
+                        .filter(RevokedToken.token_hash == "z" * 64)
+                        .first()
+                    )
+                finally:
+                    s.close()
+                if surviving is None:
+                    break
+                _time.sleep(0.05)
+            assert surviving is None, (
+                "periodic sweeper thread did not remove the stale row "
+                "within 2 seconds of start"
+            )
+        finally:
+            tbl.stop_periodic_purge(timeout_seconds=2.0)
+
+    def test_start_periodic_purge_is_idempotent(self, isolated_db):
+        from arena.core import token_blacklist as tbl
+
+        tbl.stop_periodic_purge(timeout_seconds=2.0)
+        try:
+            a = tbl.start_periodic_purge(interval_seconds=3600)
+            b = tbl.start_periodic_purge(interval_seconds=3600)
+            c = tbl.start_periodic_purge(interval_seconds=3600)
+            assert a is True, "first call must spawn"
+            assert b is False and c is False, "subsequent calls must no-op"
+        finally:
+            tbl.stop_periodic_purge(timeout_seconds=2.0)

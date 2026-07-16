@@ -194,6 +194,16 @@ def create_app() -> FastAPI:
     except Exception as _exc:
         logger.warning("Startup purge of revoked_tokens failed: %s", _exc)
 
+    # Steady-state sweep: reaper thread that calls purge_expired every
+    # hour so dead rows between deploys still get cleaned. Daemon thread
+    # — exits with the process, so no shutdown ceremony on Render restart.
+    # Best-effort: a thread startup hiccup is non-fatal.
+    try:
+        from arena.core.token_blacklist import start_periodic_purge
+        start_periodic_purge()  # default 1h
+    except Exception as _exc:
+        logger.warning("Start of periodic revoked_tokens purge failed: %s", _exc)
+
     app = FastAPI(
         title="Arena",
         description="Multi-AI Agent Chatroom API",
