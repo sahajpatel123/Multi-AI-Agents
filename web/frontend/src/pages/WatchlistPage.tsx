@@ -57,6 +57,14 @@ import {
   watchlistExpertiseLabel,
   type WatchlistExpertiseFilter,
 } from '../lib/watchlistExpertiseFilter';
+import {
+  WATCHLIST_DOMAIN_ALL,
+  collectWatchlistDomainOptions,
+  filterWatchlistByDomain,
+  watchlistDomainFilterUseful,
+  watchlistDomainLabel,
+  type WatchlistDomainFilter,
+} from '../lib/watchlistDomainFilter';
 import { watchlistBodyMode } from '../lib/watchlistView';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
@@ -118,6 +126,7 @@ export function WatchlistPage() {
   const [urgencyFilter, setUrgencyFilter] = useState<WatchlistUrgencyFilter>('all');
   const [expertiseFilter, setExpertiseFilter] =
     useState<WatchlistExpertiseFilter>(WATCHLIST_EXPERTISE_ALL);
+  const [domainFilter, setDomainFilter] = useState<WatchlistDomainFilter>(WATCHLIST_DOMAIN_ALL);
   const [listSort, setListSort] = useState<WatchlistSort>('next_soon');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -234,8 +243,9 @@ export function WatchlistPage() {
     const byCadence = filterWatchlistByCadence(byStatus, cadenceFilter);
     const byUrgency = filterWatchlistByUrgency(byCadence, urgencyFilter);
     const byExpertise = filterWatchlistByExpertise(byUrgency, expertiseFilter);
+    const byDomain = filterWatchlistByDomain(byExpertise, domainFilter);
     const byScore = filterAgentHistoryByScore(
-      byExpertise.map((item) => ({
+      byDomain.map((item) => ({
         ...item,
         score: item.latest_task?.final_score ?? null,
       })),
@@ -267,6 +277,7 @@ export function WatchlistPage() {
     cadenceFilter,
     urgencyFilter,
     expertiseFilter,
+    domainFilter,
   ]);
 
   const scoreFilterUseful = useMemo(
@@ -297,6 +308,10 @@ export function WatchlistPage() {
     [items],
   );
 
+  const domainOptions = useMemo(() => collectWatchlistDomainOptions(items), [items]);
+
+  const domainFilterUseful = useMemo(() => watchlistDomainFilterUseful(items), [items]);
+
   // Drop expertise filter when that level no longer appears.
   useEffect(() => {
     if (expertiseFilter === WATCHLIST_EXPERTISE_ALL) return;
@@ -304,6 +319,14 @@ export function WatchlistPage() {
       setExpertiseFilter(WATCHLIST_EXPERTISE_ALL);
     }
   }, [expertiseFilter, expertiseOptions]);
+
+  // Drop domain filter when that domain no longer appears.
+  useEffect(() => {
+    if (domainFilter === WATCHLIST_DOMAIN_ALL) return;
+    if (!domainOptions.some((o) => o.value === domainFilter)) {
+      setDomainFilter(WATCHLIST_DOMAIN_ALL);
+    }
+  }, [domainFilter, domainOptions]);
 
   useEffect(() => {
     return () => {
@@ -354,6 +377,9 @@ export function WatchlistPage() {
       filterBits.push(
         `expertise: ${watchlistExpertiseLabel(expertiseFilter, expertiseOptions)}`,
       );
+    }
+    if (domainFilter !== WATCHLIST_DOMAIN_ALL) {
+      filterBits.push(`domain: ${watchlistDomainLabel(domainFilter, domainOptions)}`);
     }
     const q = searchQuery.trim();
     if (q) filterBits.push(`search: “${q}”`);
@@ -724,7 +750,8 @@ export function WatchlistPage() {
                     scoreFilter !== 'all' ||
                     cadenceFilter !== 'all' ||
                     urgencyFilter !== 'all' ||
-                    expertiseFilter !== WATCHLIST_EXPERTISE_ALL
+                    expertiseFilter !== WATCHLIST_EXPERTISE_ALL ||
+                    domainFilter !== WATCHLIST_DOMAIN_ALL
                       ? ` / ${items.length}`
                       : ''}
                   </span>
@@ -858,6 +885,37 @@ export function WatchlistPage() {
                   })}
                 </div>
               ) : null}
+              {domainFilterUseful ? (
+                <div
+                  role="group"
+                  aria-label="Filter by expertise domain"
+                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
+                >
+                  {domainOptions.map((opt) => {
+                    const selected = domainFilter === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setDomainFilter(opt.value)}
+                        aria-pressed={selected}
+                        style={{
+                          padding: '3px 10px',
+                          borderRadius: 999,
+                          border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                          background: selected ? '#F0E6DA' : 'transparent',
+                          color: selected ? '#4A3728' : '#8C7355',
+                          fontSize: 11,
+                          fontFamily: 'Georgia, serif',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               <div style={{ position: 'relative' }}>
                 <input
                   ref={searchRef}
@@ -926,6 +984,10 @@ export function WatchlistPage() {
                         expertiseFilter !== WATCHLIST_EXPERTISE_ALL
                           ? ` · ${watchlistExpertiseLabel(expertiseFilter, expertiseOptions)}`
                           : ''
+                      }${
+                        domainFilter !== WATCHLIST_DOMAIN_ALL
+                          ? ` · ${watchlistDomainLabel(domainFilter, domainOptions)}`
+                          : ''
                       }.`
                     : urgencyFilter === 'overdue'
                       ? 'Nothing is overdue right now — you’re caught up on re-checks.'
@@ -933,25 +995,33 @@ export function WatchlistPage() {
                         ? 'Nothing due in the next 24 hours.'
                         : urgencyFilter === 'later'
                           ? 'No active watches scheduled further out.'
-                          : expertiseFilter !== WATCHLIST_EXPERTISE_ALL &&
+                          : domainFilter !== WATCHLIST_DOMAIN_ALL &&
+                              expertiseFilter === WATCHLIST_EXPERTISE_ALL &&
                               cadenceFilter === 'all' &&
                               scoreFilter === 'all' &&
                               urgencyFilter === 'all' &&
                               statusFilter === 'all'
-                            ? `No ${watchlistExpertiseLabel(expertiseFilter, expertiseOptions).toLowerCase()} watches.`
-                            : cadenceFilter !== 'all' && scoreFilter !== 'all'
-                              ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
-                              : cadenceFilter !== 'all'
-                                ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches${
-                                    statusFilter !== 'all' ? ` that are ${statusFilter}` : ''
-                                  }.`
-                                : scoreFilter !== 'all'
-                                  ? `No watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
-                                  : statusFilter === 'active'
-                                    ? 'No active watches right now — resume a paused one or start a new research task.'
-                                    : statusFilter === 'paused'
-                                      ? 'No paused watches.'
-                                      : 'No matches.'}
+                            ? `No watches in ${watchlistDomainLabel(domainFilter, domainOptions)}.`
+                            : expertiseFilter !== WATCHLIST_EXPERTISE_ALL &&
+                                cadenceFilter === 'all' &&
+                                scoreFilter === 'all' &&
+                                urgencyFilter === 'all' &&
+                                statusFilter === 'all' &&
+                                domainFilter === WATCHLIST_DOMAIN_ALL
+                              ? `No ${watchlistExpertiseLabel(expertiseFilter, expertiseOptions).toLowerCase()} watches.`
+                              : cadenceFilter !== 'all' && scoreFilter !== 'all'
+                                ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
+                                : cadenceFilter !== 'all'
+                                  ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches${
+                                      statusFilter !== 'all' ? ` that are ${statusFilter}` : ''
+                                    }.`
+                                  : scoreFilter !== 'all'
+                                    ? `No watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
+                                    : statusFilter === 'active'
+                                      ? 'No active watches right now — resume a paused one or start a new research task.'
+                                      : statusFilter === 'paused'
+                                        ? 'No paused watches.'
+                                        : 'No matches.'}
                 </p>
                 <button
                   type="button"
@@ -964,6 +1034,7 @@ export function WatchlistPage() {
                     setCadenceFilter('all');
                     setUrgencyFilter('all');
                     setExpertiseFilter(WATCHLIST_EXPERTISE_ALL);
+                    setDomainFilter(WATCHLIST_DOMAIN_ALL);
                     setListSort('next_soon');
                     searchRef.current?.focus();
                   }}

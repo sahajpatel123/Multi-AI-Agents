@@ -166,6 +166,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Sidebar Recents recency filter**: same recency bands on Arena turns (export notes filter).
 - **Share take reading UX**: public `/share` renders the take with Agent markdown (headings, lists), reading time + outline when useful; long questions clamp with “Show full question”.
 - **Reading-time threshold**: answer reading chrome only when ≥50 words (avoids noise on short takes).
+- **Watchlist domain filter**: All domains + top expertise domains when mixed (export notes filter).
 
 ## Required production environment
 

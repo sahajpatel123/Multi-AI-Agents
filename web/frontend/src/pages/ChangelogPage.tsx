@@ -160,6 +160,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Sidebar Recents: filter by recency (24h / 7d / 30d / Older)',
       '[IMPROVED] Public /share takes render as markdown with reading time + section outline',
       '[IMPROVED] Reading-time chrome only appears on longer answers (50+ words)',
+      '[NEW] Agent Watchlist: filter by expertise domain',
     ],
   },
   {
