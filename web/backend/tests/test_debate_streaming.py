@@ -85,8 +85,8 @@ class TestDebateStreamingEndpoint:
 
         assert res.status_code == 403
         body = res.json()
-        assert body["error"] == "feature_not_allowed"
-        assert "Plus" in body["message"]
+        assert body["detail"]["error"] == "feature_not_allowed"
+        assert "Plus" in body["detail"]["message"]
 
     @pytest.mark.asyncio
     async def test_stream_debate_invalid_challenged_agent(
@@ -115,7 +115,7 @@ class TestDebateStreamingEndpoint:
     async def test_stream_debate_max_rounds_enforced(
         self, app_client, auth_headers, make_user, stub_anthropic
     ):
-        """Round number > 4 returns 400."""
+        """Round number > 4 is rejected by Pydantic validation."""
         from arena.db_models import UserTier
         user = make_user(email="debate3@test.com", tier=UserTier.PLUS)
         from arena.core.auth import create_access_token
@@ -132,7 +132,10 @@ class TestDebateStreamingEndpoint:
             headers=headers,
         )
 
-        assert res.status_code == 400
+        # DebateRequest enforces le=4 at the schema layer, so Pydantic
+        # returns 422 before the route's redundant guard at debate.py:215
+        # is ever reached.
+        assert res.status_code == 422
 
     @pytest.mark.asyncio
     async def test_stream_debate_unauthenticated_rejected(self, app_client):
