@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MicroLoader from '../components/MicroLoader';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
+import { HighlightQuery } from '../components/HighlightQuery';
 import {
   ApiError,
   deleteAgentWatchlist,
@@ -1024,7 +1025,7 @@ export function WatchlistPage() {
                         marginBottom: 5,
                       }}
                     >
-                      {item.question}
+                      <HighlightQuery text={item.question} query={searchQuery} />
                     </div>
                     <div style={{ fontSize: 12, color: '#8C7355', lineHeight: 1.5 }}>
                       Run {item.run_count} times · Last ran {formatRelativePast(item.last_run_at)} · Next:{' '}

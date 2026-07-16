@@ -3,6 +3,7 @@ import { Ellipsis, Lock, Pencil, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { Button } from '../components/Button';
+import { HighlightQuery } from '../components/HighlightQuery';
 import { Icons } from '../components/Icons';
 import { CalligraphyLoader } from '../components/CalligraphyLoader';
 import MicroLoader from '../components/MicroLoader';
@@ -2848,7 +2849,7 @@ export function AgentPage() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {displayTitle}
+                    <HighlightQuery text={displayTitle} query={historySearchQuery} />
                   </span>
                 </div>
                 <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -3674,7 +3675,6 @@ export function AgentPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {filteredMyRooms.map((r: any) => {
                         const rName = (r.name || 'Room');
-                        const truncated = rName.length > 22 ? rName.slice(0, 22) + '…' : rName;
                         const hasUnread = roomNeedsAttention({
                           synthesisUpdatedAt: r.synthesisUpdatedAt || r.synthesis_updated_at,
                           lastSeenAt: r.lastSeenAt || r.last_seen_at,
@@ -3708,6 +3708,7 @@ export function AgentPage() {
                           >
                             <div style={{ minWidth: 0 }}>
                               <div
+                                title={rName}
                                 style={{
                                   fontSize: 13,
                                   color: '#2C1810',
@@ -3718,7 +3719,7 @@ export function AgentPage() {
                                   whiteSpace: 'nowrap',
                                 }}
                               >
-                                {truncated}
+                                <HighlightQuery text={rName} query={roomsSearchQuery} />
                               </div>
                               <div style={{ fontSize: 10, color: '#A89070', marginTop: 1 }}>
                                 {r.member_count ?? 0} members · {r.task_count ?? 0} tasks

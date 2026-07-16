@@ -130,7 +130,50 @@ jobs:
 
       - name: Security audit (npm audit)
         run: |
-          npm audit --audit-level=critical --omit=dev || echo "Vulnerabilities in dev deps handled by dependabot"
+          # Audit ALL deps (no --omit=dev) at HIGH+ severity. A finding
+          # now FAILS the build — dependabot covers routine bumps, but
+          # upstream-theft and freshly-disclosed React Router / PostCSS
+          # RCE-class bugs need an immediate gate.
+          npm audit --audit-level=high
+
+      - name: Pin floor guard (security-required versions)
+        run: |
+          # Defense-in-depth for packages with a security history in this
+          # repo. A downgrade below the floor fails the build, matching
+          # the backend's pin guard at ci.yml:69.
+          node -e "
+          const fs = require('fs');
+          const REQUIRED = {
+            'react-router-dom': '7.14.2',
+            'postcss':         '8.5.14',
+            'vitest':          '4.1.10',
+          };
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const merged = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+          const failures = [];
+          for (const [name, minVer] of Object.entries(REQUIRED)) {
+            const raw = merged[name];
+            if (raw === undefined) { failures.push('MISSING: ' + name + '>=' + minVer); continue; }
+            // strip leading ^ or ~ to compare on the floor
+            const m = raw.match(/^[\^~]?(\d+(?:\.\d+)+)/);
+            if (!m) { failures.push('UNPARSED: ' + name + ' = ' + raw); continue; }
+            const cur = m[1].split('.').map(Number);
+            const floor = minVer.split('.').map(Number);
+            const pad = (a, n) => a.concat(Array(Math.max(0, n - a.length)).fill(0));
+            for (let i = 0; i < Math.max(cur.length, floor.length); i++) {
+              const c = pad(cur, floor.length)[i];
+              const f = pad(floor, cur.length)[i];
+              if (c > f) break;
+              if (c < f) { failures.push('REGRESSED: ' + name + '@' + m[1] + ' (require >= ' + minVer + ')'); break; }
+            }
+          }
+          if (failures.length) {
+            console.error('Security floor violations:');
+            failures.forEach(f => console.error('  - ' + f));
+            process.exit(1);
+          }
+          console.log('Security floor OK');
+          "
 
       - name: Type check (tsc)
         run: npx tsc --noEmit

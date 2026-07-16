@@ -160,6 +160,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent history recency filter**: All time / Last 24h / Last 7 days / Last 30 days / Older chips (export notes filter).
 - **Room board recency filter**: same recency bands on the research board (export notes filter).
 - **Sidebar Saved recency filter**: same recency bands on bookmarked takes (export notes filter).
+- **Search highlight**: Watchlist questions, Agent history titles, and Rooms names mark matching query terms (Arena gold wash).
 
 ## Required production environment
 
