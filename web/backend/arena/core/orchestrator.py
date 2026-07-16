@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -206,17 +207,18 @@ class Orchestrator:
         Returns tuple of (responses, tools_used).
         Tools are executed first and results injected into agent context.
         """
+        start_time = time.monotonic()
         # Execute tools first (in parallel)
         tool_results = await self.tool_router.execute_tools(prompt)
         if tracker:
             tracker.mark("tool_router_done")
-        
+
         # Format tool context for injection
         tool_context = self.tool_router.format_tool_context(tool_results)
-        
+
         # Get list of successfully used tools
         tools_used = self.tool_router.get_tool_summary(tool_results)
-        
+
         # Get all agents (always 4 agents)
         active_agents = agents or get_all_agents()
 
@@ -241,11 +243,23 @@ class Orchestrator:
             )
             for agent in active_agents
         ]
-        
+
         # Run all tasks concurrently
         responses = await asyncio.gather(*tasks, return_exceptions=False)
         if tracker:
             tracker.mark("agents_done")
+
+        duration_ms = int((time.monotonic() - start_time) * 1000)
+        logger.info(
+            "[ORCHESTRATOR] Parallel agents completed",
+            extra={
+                "agent_count": len(responses),
+                "persona_ids": [get_persona_id_for_agent(r.agent_id, persona_ids) for r in responses],
+                "tools_used": tools_used,
+                "duration_ms": duration_ms,
+                "session_id": session_id,
+            },
+        )
 
         await self._archive_stances(
             prompt=prompt,
@@ -295,21 +309,23 @@ class Orchestrator:
     ) -> AgentResponse:
         """Stream a single agent's response, pushing tokens to a shared queue."""
         full_text = ""
+        start_time = time.monotonic()
+        token_count = 0
         try:
             base_system_prompt = self._prepend_memory_context(agent.system_prompt, memory_context)
             # Inject tool context into system prompt if available
             system_prompt = self._inject_tool_context(base_system_prompt, tool_context)
-            
+
             # Get persona_id for this agent to route API call
             persona_id = get_persona_id_for_agent(agent.agent_id, persona_ids)
-            
+
             # Check if this persona uses Grok (no streaming support for Grok)
             route = get_route_for_persona(persona_id)
             model_type = route["provider"]
-            
+
             # Use provider-aware streaming
             from arena.core.llm_caller import call_llm_streaming
-            
+
             async for text in call_llm_streaming(
                 client=route["client"],
                 provider=route["provider"],
@@ -320,6 +336,7 @@ class Orchestrator:
                 max_tokens=route["max_tokens"],
             ):
                 full_text += text
+                token_count += 1
                 await output_queue.put({
                     "type": "token",
                     "agent_id": agent.agent_id,
@@ -333,9 +350,32 @@ class Orchestrator:
             })
 
             # Parse the completed response
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "[ORCHESTRATOR] Agent streamed",
+                extra={
+                    "agent_id": agent.agent_id,
+                    "persona_id": persona_id,
+                    "provider": model_type,
+                    "duration_ms": duration_ms,
+                    "token_count": token_count,
+                    "response_chars": len(full_text),
+                },
+            )
             return self._parse_agent_response(full_text, agent)
 
         except Exception as e:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.error(
+                "[ORCHESTRATOR] Agent streaming failed",
+                extra={
+                    "agent_id": agent.agent_id,
+                    "persona_id": persona_id,
+                    "provider": model_type,
+                    "duration_ms": duration_ms,
+                    "error": str(e),
+                },
+            )
             await output_queue.put({
                 "type": "agent_error",
                 "agent_id": agent.agent_id,
