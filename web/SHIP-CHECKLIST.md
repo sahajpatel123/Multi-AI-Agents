@@ -111,6 +111,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent Stop**: header control cancels pipeline poll / refine / challenge loops without a stuck busy state.
 - **Cross-pollinate busy**: loading label while opening Arena; Discuss/Debate errors are dismissible.
 - **Agent error recovery**: dismissible alert card + Edit compose; upload errors dismissible; Pricing success/error live regions.
+- **Back to top**: floating control after deep scroll; reduced-motion safe; focuses #main-content.
 
 ## Required production environment
 

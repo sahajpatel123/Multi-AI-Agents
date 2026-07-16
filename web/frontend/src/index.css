@@ -2083,6 +2083,63 @@ canvas {
   outline-offset: 2px;
 }
 
+/* Floating back-to-top — long Agent answers, changelog, marketing */
+.back-to-top-btn {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 0.5px solid #e0d8d0;
+  background: rgba(250, 247, 244, 0.94);
+  color: #2c1810;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(26, 23, 20, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.back-to-top-btn:hover {
+  background: #f0ebe3;
+  border-color: #c4956a;
+  color: #1a1714;
+}
+.back-to-top-btn:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 2px;
+}
+.back-to-top-btn__label {
+  letter-spacing: 0.02em;
+}
+@media (max-width: 480px) {
+  .back-to-top-btn__label {
+    /* Icon-only on very small screens keeps the control compact. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .back-to-top-btn {
+    padding: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .back-to-top-btn {
+    transition: none;
+  }
+}
+
 /* Condura modal surface: subtle rise without claiming success */
 .condura-cta-panel {
   animation: condura-cta-in 280ms var(--ease-out-premium) both;

@@ -10,6 +10,7 @@ import { TierProvider } from './context/TierContext'
 import { ProfileModalProvider } from './context/ProfileModalContext'
 import { ProfileModal } from './components/ProfileModal'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
+import { BackToTopButton } from './components/BackToTopButton'
 import { DocumentTitle } from './components/DocumentTitle'
 import { ScrollToTop } from './components/ScrollToTop'
 import './index.css'
@@ -180,6 +181,7 @@ if (!rootElement) {
                 <ScrollToTop />
                 <ProfileModal />
                 <NetworkStatusBanner />
+                <BackToTopButton />
                 <a href="#main-content" className="skip-to-content">
                   Skip to content
                 </a>

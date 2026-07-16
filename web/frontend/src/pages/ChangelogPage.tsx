@@ -96,6 +96,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Stop control on Agent Mode while research, refine, or challenge is running',
       '[IMPROVED] Cross-pollinate shows busy state; Discuss/Debate errors can be dismissed',
       '[IMPROVED] Agent errors are dismissible recovery cards; Pricing banners use live regions',
+      '[NEW] Back to top floating control on long pages (Agent answers, changelog, marketing)',
     ],
   },
   {
