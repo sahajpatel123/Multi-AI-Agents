@@ -21,6 +21,14 @@ import {
   templatesAvailabilityLabel,
   type TemplatesAvailability,
 } from '../lib/templatesAvailabilityFilter';
+import {
+  TEMPLATES_EXPERTISE_ALL,
+  collectTemplatesExpertiseOptions,
+  filterTemplatesByExpertise,
+  templatesExpertiseFilterUseful,
+  templatesExpertiseLabel,
+  type TemplatesExpertiseFilter,
+} from '../lib/templatesExpertiseFilter';
 
 const TAB_ORDER = [
   'All',
@@ -64,6 +72,8 @@ export function TemplatesModal({
   const [templatesSort, setTemplatesSort] = useState<TemplatesSort>('default');
   const [availabilityFilter, setAvailabilityFilter] =
     useState<TemplatesAvailability>('all');
+  const [expertiseFilter, setExpertiseFilter] =
+    useState<TemplatesExpertiseFilter>(TEMPLATES_EXPERTISE_ALL);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -88,19 +98,31 @@ export function TemplatesModal({
 
   const visibleTemplates = useMemo(() => {
     const byAvailability = filterTemplatesByAvailability(tabTemplates, availabilityFilter);
-    const searched = filterBySearchQuery(byAvailability, searchQuery, (t) => [
+    const byExpertise = filterTemplatesByExpertise(byAvailability, expertiseFilter);
+    const searched = filterBySearchQuery(byExpertise, searchQuery, (t) => [
       t.title,
       t.description,
       t.category,
       t.example,
       t.prompt_template,
       t.id,
+      t.default_expertise,
     ]);
     return sortTemplates(searched, templatesSort);
-  }, [tabTemplates, searchQuery, templatesSort, availabilityFilter]);
+  }, [tabTemplates, searchQuery, templatesSort, availabilityFilter, expertiseFilter]);
 
   const showAvailabilityFilter = useMemo(
     () => templatesAvailabilityFilterUseful(flatTemplates),
+    [flatTemplates],
+  );
+
+  const expertiseOptions = useMemo(
+    () => collectTemplatesExpertiseOptions(flatTemplates),
+    [flatTemplates],
+  );
+
+  const showExpertiseFilter = useMemo(
+    () => templatesExpertiseFilterUseful(flatTemplates),
     [flatTemplates],
   );
 
@@ -116,6 +138,7 @@ export function TemplatesModal({
       setSearchQuery('');
       setTemplatesSort('default');
       setAvailabilityFilter('all');
+      setExpertiseFilter(TEMPLATES_EXPERTISE_ALL);
       setCopyStatus('idle');
       setDownloadStatus('idle');
     }
@@ -143,6 +166,9 @@ export function TemplatesModal({
     if (availabilityFilter !== 'all') {
       bits.push(`availability: ${templatesAvailabilityLabel(availabilityFilter)}`);
     }
+    if (expertiseFilter !== TEMPLATES_EXPERTISE_ALL) {
+      bits.push(`expertise: ${templatesExpertiseLabel(expertiseFilter, expertiseOptions)}`);
+    }
     const q = searchQuery.trim();
     if (q) bits.push(`search “${q}”`);
     if (templatesSort !== 'default') bits.push(`sort: ${templatesSortLabel(templatesSort)}`);
@@ -162,7 +188,7 @@ export function TemplatesModal({
         disabledReason: t.disabled_reason,
       })),
     });
-  }, [activeTab, searchQuery, templatesSort, availabilityFilter, flatTemplates.length, visibleTemplates]);
+  }, [activeTab, searchQuery, templatesSort, availabilityFilter, expertiseFilter, expertiseOptions, flatTemplates.length, visibleTemplates]);
 
   const handleCopyTemplates = useCallback(() => {
     const md = buildTemplatesMarkdown();
@@ -535,10 +561,52 @@ export function TemplatesModal({
               })}
             </div>
           ) : null}
+          {showExpertiseFilter ? (
+            <div
+              role="group"
+              aria-label="Filter templates by expertise"
+              style={{
+                display: 'flex',
+                gap: 6,
+                marginTop: 10,
+                flexWrap: 'wrap',
+                alignItems: 'center',
+              }}
+            >
+              {expertiseOptions.map((opt) => {
+                const selected = expertiseFilter === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setExpertiseFilter(opt.value)}
+                    aria-pressed={selected}
+                    style={{
+                      background: selected ? '#F0E6DA' : 'transparent',
+                      border: selected
+                        ? '0.5px solid #C4956A'
+                        : '0.5px solid #E0D5C5',
+                      borderRadius: 999,
+                      padding: '3px 9px',
+                      fontSize: 10,
+                      letterSpacing: '0.03em',
+                      color: selected ? '#4A3728' : '#A89070',
+                      cursor: 'pointer',
+                      fontFamily: 'Georgia, serif',
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           {(searchQuery.trim() ||
             activeTab !== 'All' ||
             templatesSort !== 'default' ||
-            availabilityFilter !== 'all') && (
+            availabilityFilter !== 'all' ||
+            expertiseFilter !== TEMPLATES_EXPERTISE_ALL) && (
             <p style={{ margin: '8px 0 0', fontSize: 11, color: '#A89070' }}>
               {visibleTemplates.length} match
               {visibleTemplates.length === 1 ? '' : 'es'}
@@ -546,6 +614,9 @@ export function TemplatesModal({
               {searchQuery.trim() ? ` for “${searchQuery.trim()}”` : ''}
               {availabilityFilter !== 'all'
                 ? ` · ${templatesAvailabilityLabel(availabilityFilter)}`
+                : ''}
+              {expertiseFilter !== TEMPLATES_EXPERTISE_ALL
+                ? ` · ${templatesExpertiseLabel(expertiseFilter, expertiseOptions)}`
                 : ''}
               {templatesSort !== 'default'
                 ? ` · ${TEMPLATES_SORT_OPTIONS.find((o) => o.value === templatesSort)?.label}`
@@ -627,12 +698,18 @@ export function TemplatesModal({
               <p style={{ margin: '8px 0 0', fontSize: 13, color: '#8C7355', lineHeight: 1.55 }}>
                 {catalogMode === 'empty'
                   ? 'Templates will show up here when available. You can still write a custom research question.'
-                  : searchQuery.trim() || availabilityFilter !== 'all'
+                  : searchQuery.trim() ||
+                      availabilityFilter !== 'all' ||
+                      expertiseFilter !== TEMPLATES_EXPERTISE_ALL
                     ? `Nothing found${
                         searchQuery.trim() ? ` for “${searchQuery.trim()}”` : ''
                       }${activeTab !== 'All' ? ` in ${activeTab}` : ''}${
                         availabilityFilter !== 'all'
                           ? ` · ${templatesAvailabilityLabel(availabilityFilter)}`
+                          : ''
+                      }${
+                        expertiseFilter !== TEMPLATES_EXPERTISE_ALL
+                          ? ` · ${templatesExpertiseLabel(expertiseFilter, expertiseOptions)}`
                           : ''
                       }.`
                     : `No templates in ${activeTab} yet.`}
@@ -646,6 +723,7 @@ export function TemplatesModal({
                     setSearchQuery('');
                     setActiveTab('All');
                     setAvailabilityFilter('all');
+                    setExpertiseFilter(TEMPLATES_EXPERTISE_ALL);
                     searchRef.current?.focus();
                   }}
                 >

@@ -151,6 +151,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Sidebar Saved score filter**: same score bands filter bookmarked takes (works with mind filter; export notes filter).
 - **Agent rooms occupancy filter**: All rooms / With tasks / Empty chips when the list is mixed (export notes filter).
 - **Agent rooms membership filter**: All sizes / Solo / Shared chips when both exist (export notes filter).
+- **Templates expertise filter**: All levels / Curious / Practitioner / Researcher / Expert chips when mixed (export notes filter).
 
 ## Required production environment
 
