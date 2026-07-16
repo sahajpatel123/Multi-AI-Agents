@@ -107,6 +107,7 @@ export function RoomPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [boardQuery, setBoardQuery] = useState('');
   const [boardSort, setBoardSort] = useState<RoomBoardSort>('newest');
+  const [boardMemberFilter, setBoardMemberFilter] = useState<string>('all');
   const [pickerQuery, setPickerQuery] = useState('');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [synthDownloadStatus, setSynthDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -260,7 +261,11 @@ export function RoomPage() {
   }, [members]);
 
   const filteredBoardTasks = useMemo(() => {
-    const filtered = filterBySearchQuery(tasks, boardQuery, (t) => [
+    const byMember =
+      boardMemberFilter === 'all'
+        ? tasks
+        : tasks.filter((t: any) => t.user_id === boardMemberFilter);
+    const filtered = filterBySearchQuery(byMember, boardQuery, (t) => [
       getTaskTitle(t),
       t.question,
       t.task_text,
@@ -278,7 +283,7 @@ export function RoomPage() {
       })),
       boardSort,
     );
-  }, [tasks, boardQuery, memberNameById, boardSort]);
+  }, [tasks, boardQuery, memberNameById, boardSort, boardMemberFilter]);
 
   const filteredHistoryTasks = useMemo(
     () =>
@@ -297,6 +302,18 @@ export function RoomPage() {
   useEffect(() => {
     setNativeShareAvailable(canUseNativeShare());
   }, []);
+
+  // Drop member filter when leaving the room or the filtered member is gone.
+  useEffect(() => {
+    setBoardMemberFilter('all');
+  }, [slug]);
+
+  useEffect(() => {
+    if (boardMemberFilter === 'all') return;
+    if (!members.some((m: any) => m.user_id === boardMemberFilter)) {
+      setBoardMemberFilter('all');
+    }
+  }, [members, boardMemberFilter]);
 
   const roomInviteUrl = () =>
     room?.share_url || `${window.location.origin}/room/${slug}`;
@@ -432,6 +449,10 @@ export function RoomPage() {
     const bits: string[] = [];
     const q = boardQuery.trim();
     if (q) bits.push(`search “${q}”`);
+    if (boardMemberFilter !== 'all') {
+      const name = memberNameById[boardMemberFilter] || 'Member';
+      bits.push(`member: ${name}`);
+    }
     if (boardSort !== 'newest') bits.push(`sort: ${roomBoardSortLabel(boardSort)}`);
     return formatRoomBoardExport({
       roomName: room.name || 'Research room',
@@ -559,43 +580,92 @@ export function RoomPage() {
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#C4A882', marginBottom: 10 }}>
         Members
       </div>
-      {members.map((m: any) => (
-        <div
-          key={m.user_id}
-          style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}
-        >
-          <div
+      {members.map((m: any) => {
+        const selected = boardMemberFilter === m.user_id;
+        return (
+          <button
+            key={m.user_id}
+            type="button"
+            onClick={() => {
+              setBoardMemberFilter((prev) => (prev === m.user_id ? 'all' : m.user_id));
+              if (isMobile) setMobileTab('tasks');
+            }}
+            aria-pressed={selected}
+            title={
+              selected
+                ? `Show all tasks (currently filtering by ${m.name || 'Member'})`
+                : `Show only ${m.name || 'Member'}'s tasks`
+            }
             style={{
-              width: 30,
-              height: 30,
-              borderRadius: '50%',
-              background: getUserColor(m.user_id),
-              color: '#FAF7F2',
-              fontSize: 11,
-              fontWeight: 600,
               display: 'flex',
+              gap: 8,
               alignItems: 'center',
-              justifyContent: 'center',
+              marginBottom: 10,
+              width: '100%',
+              background: selected ? 'rgba(196,149,106,0.12)' : 'transparent',
+              border: selected ? '0.5px solid #C4956A' : '0.5px solid transparent',
+              borderRadius: 8,
+              padding: '4px 6px',
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontFamily: 'inherit',
             }}
           >
-            {getUserInitials(m.name || '')}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: '#2C1810', fontWeight: 500 }}>{m.name}</div>
-            <div style={{ fontSize: 10, color: '#A89070' }}>{m.task_count ?? 0} tasks</div>
-          </div>
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: onlineActive(m.last_seen_at) ? '#639922' : '#D4C4B0',
-              marginLeft: 'auto',
-              flexShrink: 0,
-            }}
-          />
-        </div>
-      ))}
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: '50%',
+                background: getUserColor(m.user_id),
+                color: '#FAF7F2',
+                fontSize: 11,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              {getUserInitials(m.name || '')}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: '#2C1810', fontWeight: 500 }}>{m.name}</div>
+              <div style={{ fontSize: 10, color: '#A89070' }}>{m.task_count ?? 0} tasks</div>
+            </div>
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: onlineActive(m.last_seen_at) ? '#639922' : '#D4C4B0',
+                marginLeft: 'auto',
+                flexShrink: 0,
+              }}
+            />
+          </button>
+        );
+      })}
+      {boardMemberFilter !== 'all' ? (
+        <button
+          type="button"
+          onClick={() => setBoardMemberFilter('all')}
+          style={{
+            width: '100%',
+            marginBottom: 10,
+            background: 'none',
+            border: 'none',
+            color: '#C4956A',
+            fontSize: 11,
+            cursor: 'pointer',
+            textAlign: 'left',
+            padding: '0 6px',
+            textDecoration: 'underline',
+            fontFamily: 'Georgia, serif',
+          }}
+        >
+          Show all members' tasks
+        </button>
+      ) : null}
       <div style={{ height: 0.5, background: '#EDE4D8', margin: '12px 0' }} />
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#C4A882', marginBottom: 6 }}>
         Room topic
@@ -940,7 +1010,10 @@ export function RoomPage() {
           Research board
           <span style={{ marginLeft: 8, color: '#A89070', letterSpacing: 0, textTransform: 'none', fontSize: 11 }}>
             {filteredBoardTasks.length}
-            {boardQuery.trim() ? ` / ${tasks.length}` : ''}
+            {boardQuery.trim() || boardMemberFilter !== 'all' ? ` / ${tasks.length}` : ''}
+            {boardMemberFilter !== 'all'
+              ? ` · ${memberNameById[boardMemberFilter] || 'Member'}`
+              : ''}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 280px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
@@ -1091,6 +1164,82 @@ export function RoomPage() {
           </div>
         </div>
       </div>
+      {members.length > 1 && tasks.length > 0 ? (
+        <div
+          role="group"
+          aria-label="Filter board by member"
+          style={{
+            display: 'flex',
+            gap: 6,
+            flexWrap: 'wrap',
+            marginBottom: 12,
+            alignItems: 'center',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setBoardMemberFilter('all')}
+            aria-pressed={boardMemberFilter === 'all'}
+            style={{
+              padding: '4px 10px',
+              borderRadius: 999,
+              border: boardMemberFilter === 'all' ? 'none' : '0.5px solid #D4C4B0',
+              background: boardMemberFilter === 'all' ? '#C4956A' : 'transparent',
+              color: boardMemberFilter === 'all' ? '#FAF7F2' : '#8C7355',
+              fontSize: 11,
+              fontFamily: 'Georgia, serif',
+              cursor: 'pointer',
+            }}
+          >
+            All members
+          </button>
+          {members.map((m: any) => {
+            const selected = boardMemberFilter === m.user_id;
+            return (
+              <button
+                key={m.user_id}
+                type="button"
+                onClick={() =>
+                  setBoardMemberFilter((prev) => (prev === m.user_id ? 'all' : m.user_id))
+                }
+                aria-pressed={selected}
+                title={`Show tasks from ${m.name || 'Member'}`}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  border: selected ? 'none' : '0.5px solid #D4C4B0',
+                  background: selected ? getUserColor(m.user_id) : 'transparent',
+                  color: selected ? '#FAF7F2' : '#8C7355',
+                  fontSize: 11,
+                  fontFamily: 'Georgia, serif',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <span
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: '50%',
+                    background: selected ? 'rgba(255,255,255,0.25)' : getUserColor(m.user_id),
+                    color: '#FAF7F2',
+                    fontSize: 8,
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {getUserInitials(m.name || '')}
+                </span>
+                {m.name || 'Member'}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       {boardCopyStatus !== 'idle' ? (
         <div
           role="status"
@@ -1124,12 +1273,21 @@ export function RoomPage() {
           }}
         >
           <p style={{ margin: 0, fontSize: 14, color: '#4A3728', fontWeight: 500 }}>
-            No tasks match “{boardQuery.trim()}”
+            {boardQuery.trim()
+              ? `No tasks match “${boardQuery.trim()}”${
+                  boardMemberFilter !== 'all'
+                    ? ` from ${memberNameById[boardMemberFilter] || 'this member'}`
+                    : ''
+                }`
+              : boardMemberFilter !== 'all'
+                ? `${memberNameById[boardMemberFilter] || 'This member'} has no tasks on the board yet`
+                : 'No tasks on the board'}
           </p>
           <button
             type="button"
             onClick={() => {
               setBoardQuery('');
+              setBoardMemberFilter('all');
               boardSearchRef.current?.focus();
             }}
             style={{
@@ -1142,7 +1300,9 @@ export function RoomPage() {
               textDecoration: 'underline',
             }}
           >
-            Clear search
+            {boardMemberFilter !== 'all' && !boardQuery.trim()
+              ? 'Show all members'
+              : 'Clear filters'}
           </button>
         </div>
       ) : (

@@ -18,6 +18,7 @@ describe('keyboardShortcuts', () => {
       true,
     );
     expect(shortcutsForSurface('room').some((s) => s.action.includes('board'))).toBe(true);
+    expect(shortcutsForSurface('room').some((s) => s.action.includes('filter'))).toBe(true);
     expect(shortcutsForSurface('room').some((s) => s.keys === 'Esc')).toBe(true);
     expect(shortcutsForSurface('watchlist').some((s) => s.action.includes('watchlist search'))).toBe(
       true,

@@ -120,6 +120,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Agent research history: download filtered view as .md',
       '[IMPROVED] Perspective Comparison, Personas panel, and Share landing: download as .md',
       '[NEW] Agent research history: sort by date, score, title, or live-first',
+      '[NEW] Room board: filter tasks by member (sidebar + chips)',
     ],
   },
   {

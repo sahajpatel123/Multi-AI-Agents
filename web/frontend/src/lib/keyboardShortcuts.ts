@@ -44,6 +44,7 @@ const DEBATE: ShortcutHint[] = [
 const ROOM: ShortcutHint[] = [
   { keys: '/', action: 'Focus board or history search' },
   { keys: 'Esc', action: 'Close the add-task picker' },
+  { keys: 'Member', action: 'Click a member to filter their board tasks' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
 
