@@ -120,6 +120,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Saved takes bulk copy**: sidebar “Copy all” exports filtered bookmarks as markdown (mind, question, take, score).
 - **Arena recents copy**: sidebar Recents “Copy” exports filtered turns (title, prompt, winner, category) as markdown.
 - **Download .md**: Arena four-mind comparison and Agent answers can download markdown files (not only clipboard).
+- **Answer evolution export**: Agent temporal evolution panel supports copy + download markdown (score, shifts, related runs).
 
 ## Required production environment
 

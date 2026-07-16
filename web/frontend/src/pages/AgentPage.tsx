@@ -6740,7 +6740,12 @@ export function AgentPage() {
                     </>
                   ) : null}
                   {result?.status === 'complete' && result?.task_id ? (
-                    <TemporalEvolutionPanel taskId={String(result.task_id)} />
+                    <TemporalEvolutionPanel
+                      taskId={String(result.task_id)}
+                      question={
+                        result.original_task || result.task || task || undefined
+                      }
+                    />
                   ) : null}
                   {showSourceIntegrityBar ? (
                     <>
