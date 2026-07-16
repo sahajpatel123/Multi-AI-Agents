@@ -714,7 +714,7 @@ function App() {
           setExpandedAgent(data.winner_agent_id);
           setPhase('done');
           setCrossPollinateSourceTaskId(null);
-    setCrossPollinateIntelScore(null);
+          setCrossPollinateIntelScore(null);
 
           // Save session ID to localStorage
           localStorage.setItem('arena_session_id', data.session_id);
@@ -1443,7 +1443,6 @@ function App() {
                   intelScore={crossPollinateIntelScore}
                   onDismiss={() => {
                     setCrossPollinateSourceTaskId(null);
-    setCrossPollinateIntelScore(null);
                     setCrossPollinateIntelScore(null);
                   }}
                 />

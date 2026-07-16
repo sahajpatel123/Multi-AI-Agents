@@ -113,6 +113,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent error recovery**: dismissible alert card + Edit compose; upload errors dismissible; Pricing success/error live regions.
 - **Back to top**: floating control after deep scroll; reduced-motion safe; focuses #main-content.
 - **Agent recent chips**: visible hide (×) + Delete key; list semantics (Arena recent-chip parity).
+- **Cross-pollinate banner**: dedicated status chip with optional IQ score; clears when Arena finishes.
 
 ## Required production environment
 
