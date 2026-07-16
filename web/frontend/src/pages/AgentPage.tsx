@@ -86,6 +86,12 @@ import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { formatAgentHistoryExport } from '../lib/agentHistoryExport';
 import {
+  AGENT_HISTORY_SORT_OPTIONS,
+  agentHistorySortLabel,
+  sortAgentHistoryItems,
+  type AgentHistorySort,
+} from '../lib/agentHistorySort';
+import {
   AGENT_TASK_TITLE_MAX,
   agentTaskRenameCaughtErrorMessage,
   agentTaskRenameIssueMessage,
@@ -735,6 +741,7 @@ export function AgentPage() {
   const [showAllSourcePills, setShowAllSourcePills] = useState(false);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historySort, setHistorySort] = useState<AgentHistorySort>('newest');
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const [dismissedChipIds, setDismissedChipIds] = useState<Set<string>>(
@@ -1926,15 +1933,25 @@ export function AgentPage() {
 
   const hasRefinementMetadataNote = (result?.refinement_count ?? 0) > 0;
 
-  const filteredTaskHistory = useMemo(
-    () =>
-      filterBySearchQuery(taskHistory, historySearchQuery, (item) => [
-        item.title,
-        item.task_text,
-        agentHistoryDisplayTitle(item),
-      ]),
-    [taskHistory, historySearchQuery],
-  );
+  const filteredTaskHistory = useMemo(() => {
+    const searched = filterBySearchQuery(taskHistory, historySearchQuery, (item) => [
+      item.title,
+      item.task_text,
+      agentHistoryDisplayTitle(item),
+    ]);
+    return sortAgentHistoryItems(
+      searched.map((item) => ({
+        ...item,
+        id: item.task_id,
+        title: item.title,
+        question: item.task_text,
+        score: item.final_score,
+        createdAt: item.created_at,
+        isLive: item.is_live,
+      })),
+      historySort,
+    );
+  }, [taskHistory, historySearchQuery, historySort]);
 
   const roomsBodyMode = roomsListBodyMode({
     loading: myRoomsLoading,
@@ -1969,6 +1986,9 @@ export function AgentPage() {
 
   const copyFilteredHistory = async () => {
     const q = historySearchQuery.trim();
+    const filterBits: string[] = [];
+    if (q) filterBits.push(`search: “${q}”`);
+    if (historySort !== 'newest') filterBits.push(`sort: ${agentHistorySortLabel(historySort)}`);
     const markdown = formatAgentHistoryExport({
       items: filteredTaskHistory.map((item) => ({
         title: item.title,
@@ -1981,7 +2001,7 @@ export function AgentPage() {
         taskId: item.task_id,
       })),
       totalCount: taskHistory.length,
-      filterNote: q ? `search: “${q}”` : undefined,
+      filterNote: filterBits.length ? filterBits.join(' · ') : undefined,
     });
     const ok = await copyToClipboard(markdown);
     if (historyCopyTimerRef.current != null) {
@@ -3277,52 +3297,80 @@ export function AgentPage() {
             </div>
             {taskHistory.length > 0 ? (
               <div style={{ marginBottom: 10, position: 'relative', padding: '0 2px' }}>
-                <input
-                  ref={historySearchRef}
-                  type="search"
-                  value={historySearchQuery}
-                  onChange={(e) => setHistorySearchQuery(e.target.value)}
-                  placeholder="Search history…"
-                  aria-label="Search research history"
-                  autoComplete="off"
-                  style={{
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    fontSize: 12,
-                    fontFamily: 'Georgia, serif',
-                    color: '#2C1810',
-                    background: '#FAF7F4',
-                    border: '0.5px solid #E0D5C5',
-                    borderRadius: 8,
-                    padding: '7px 28px 7px 10px',
-                    outline: 'none',
-                  }}
-                />
-                {historySearchQuery ? (
-                  <button
-                    type="button"
-                    aria-label="Clear history search"
-                    onClick={() => {
-                      setHistorySearchQuery('');
-                      historySearchRef.current?.focus();
-                    }}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                  <select
+                    value={historySort}
+                    onChange={(e) => setHistorySort(e.target.value as AgentHistorySort)}
+                    aria-label="Sort research history"
+                    title="Sort research history"
                     style={{
-                      position: 'absolute',
-                      right: 8,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
+                      fontSize: 11,
+                      fontFamily: 'Georgia, serif',
+                      color: '#4A3728',
+                      background: '#FAF7F4',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '5px 8px',
                       cursor: 'pointer',
-                      fontSize: 14,
-                      color: '#A89070',
-                      lineHeight: 1,
-                      padding: 4,
+                      flexShrink: 0,
+                      maxWidth: '100%',
                     }}
                   >
-                    ×
-                  </button>
-                ) : null}
+                    {AGENT_HISTORY_SORT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    ref={historySearchRef}
+                    type="search"
+                    value={historySearchQuery}
+                    onChange={(e) => setHistorySearchQuery(e.target.value)}
+                    placeholder="Search history…"
+                    aria-label="Search research history"
+                    autoComplete="off"
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      fontSize: 12,
+                      fontFamily: 'Georgia, serif',
+                      color: '#2C1810',
+                      background: '#FAF7F4',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 8,
+                      padding: '7px 28px 7px 10px',
+                      outline: 'none',
+                    }}
+                  />
+                  {historySearchQuery ? (
+                    <button
+                      type="button"
+                      aria-label="Clear history search"
+                      onClick={() => {
+                        setHistorySearchQuery('');
+                        historySearchRef.current?.focus();
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: 8,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        color: '#A89070',
+                        lineHeight: 1,
+                        padding: 4,
+                      }}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
             {historyBodyMode === 'loading' ? (
