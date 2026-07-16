@@ -259,9 +259,13 @@ jobs:
         working-directory: web/backend
         run: |
           nohup python main.py > /tmp/backend.log 2>&1 &
-          # Wait for backend to be ready instead of fixed sleep
+          # Wait for backend to be ready instead of fixed sleep.
+          # /api/health is the public unauthenticated probe (no "ok" string,
+          # just a JSON status field) since ci.yml's earlier /api/health split
+          # moved uptime/version/etc. behind the authenticated /api/health/detailed.
           for i in {1..30}; do
-            if curl -s http://localhost:8000/api/health | grep -q ok; then
+            if curl -s -o /tmp/health.json -w '%{http_code}' http://localhost:8000/api/health | grep -q '^200$' \
+               && grep -q '"status":"healthy"' /tmp/health.json; then
               echo "Backend ready"
               exit 0
             fi
