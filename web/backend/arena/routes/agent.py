@@ -18,6 +18,7 @@ from arena.core.agent_pipeline import (
     run_refinement_pipeline,
 )
 from arena.core.file_ingest import process_upload
+from arena.core.http_headers import content_disposition_attachment
 from arena.core.upload_store import UPLOAD_DIR, ensure_upload_dir, register_upload, resolve_attachments
 from arena.core.dependencies import get_current_user_required
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard
@@ -1200,7 +1201,7 @@ async def export_orchestration_pdf(
     return Response(
         content=blob,
         media_type=mime,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": content_disposition_attachment(filename)},
     )
 
 
@@ -1230,7 +1231,7 @@ async def export_task_pdf(
     return Response(
         content=blob,
         media_type=mime,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": content_disposition_attachment(filename)},
     )
 
 

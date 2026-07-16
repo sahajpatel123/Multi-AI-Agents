@@ -1,5 +1,6 @@
 # Core
-fastapi==0.115.0
+# FastAPI 0.139+ pulls starlette>=1.3.1 (closes PYSEC-2026-161/248/249/1941/1943/2280/2281).
+fastapi==0.139.2
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
 pydantic-settings==2.5.2
@@ -23,8 +24,10 @@ sqlalchemy==2.0.35
 alembic==1.13.3
 psycopg2-binary==2.9.9
 
-# Auth - upgraded for security fixes (python-jose 3.4.0, python-multipart 0.0.32+)
-python-jose[cryptography]==3.4.0
+# Auth - upgraded for security fixes (python-jose 3.5+, python-multipart 0.0.32+)
+python-jose[cryptography]==3.5.0
+# Transitive floor: pyasn1 0.4.x has PYSEC-2026-2263 (fixed in 0.6.3+)
+pyasn1==0.6.4
 bcrypt==4.2.0
 python-multipart==0.0.32
 
