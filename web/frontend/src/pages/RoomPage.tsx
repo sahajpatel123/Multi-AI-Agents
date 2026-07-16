@@ -15,6 +15,12 @@ import {
 } from '../lib/documentTitle';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatRoomBoardExport, plainAnswerExcerpt } from '../lib/roomBoardExport';
+import {
+  ROOM_BOARD_SORT_OPTIONS,
+  roomBoardSortLabel,
+  sortRoomBoardTasks,
+  type RoomBoardSort,
+} from '../lib/roomBoardSort';
 import { formatRoomSynthesisExport } from '../lib/roomSynthesisExport';
 import {
   buildRoomInviteShareData,
@@ -100,6 +106,7 @@ export function RoomPage() {
   const [synthesisRefreshing, setSynthesisRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [boardQuery, setBoardQuery] = useState('');
+  const [boardSort, setBoardSort] = useState<RoomBoardSort>('newest');
   const [pickerQuery, setPickerQuery] = useState('');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [synthDownloadStatus, setSynthDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -252,17 +259,26 @@ export function RoomPage() {
     return map;
   }, [members]);
 
-  const filteredBoardTasks = useMemo(
-    () =>
-      filterBySearchQuery(tasks, boardQuery, (t) => [
-        getTaskTitle(t),
-        t.question,
-        t.task_text,
-        t.final_answer,
-        memberNameById[t.user_id],
-      ]),
-    [tasks, boardQuery, memberNameById],
-  );
+  const filteredBoardTasks = useMemo(() => {
+    const filtered = filterBySearchQuery(tasks, boardQuery, (t) => [
+      getTaskTitle(t),
+      t.question,
+      t.task_text,
+      t.final_answer,
+      memberNameById[t.user_id],
+    ]);
+    return sortRoomBoardTasks(
+      filtered.map((t: any) => ({
+        ...t,
+        id: t.task_id,
+        title: getTaskTitle(t),
+        author: memberNameById[t.user_id] || '',
+        score: t.final_score,
+        createdAt: t.created_at,
+      })),
+      boardSort,
+    );
+  }, [tasks, boardQuery, memberNameById, boardSort]);
 
   const filteredHistoryTasks = useMemo(
     () =>
@@ -413,13 +429,16 @@ export function RoomPage() {
 
   const buildBoardMarkdown = () => {
     if (!room) return '';
+    const bits: string[] = [];
     const q = boardQuery.trim();
+    if (q) bits.push(`search “${q}”`);
+    if (boardSort !== 'newest') bits.push(`sort: ${roomBoardSortLabel(boardSort)}`);
     return formatRoomBoardExport({
       roomName: room.name || 'Research room',
       shareUrl: room.share_url || `${window.location.origin}/room/${slug}`,
       memberCount: members.length,
       totalTaskCount: tasks.length,
-      filterNote: q ? `search “${q}”` : undefined,
+      filterNote: bits.length > 0 ? bits.join(' · ') : undefined,
       tasks: filteredBoardTasks.map((t: any) => ({
         title: getTaskTitle(t),
         author: memberNameById[t.user_id] || undefined,
@@ -924,9 +943,32 @@ export function RoomPage() {
             {boardQuery.trim() ? ` / ${tasks.length}` : ''}
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 220px', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 280px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           {tasks.length > 0 ? (
             <>
+              <select
+                value={boardSort}
+                onChange={(e) => setBoardSort(e.target.value as RoomBoardSort)}
+                aria-label="Sort research board"
+                title="Sort research board"
+                style={{
+                  fontSize: 11,
+                  fontFamily: 'Georgia, serif',
+                  color: '#4A3728',
+                  background: '#FAF7F2',
+                  border: '0.5px solid #D4C4B0',
+                  borderRadius: 6,
+                  padding: '4px 8px',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                {ROOM_BOARD_SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 title="Copy board as markdown"
