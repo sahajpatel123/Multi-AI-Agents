@@ -130,6 +130,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Agent task templates: copy / download filtered catalog as .md',
       '[NEW] Personas library: sort by name, on-panel first, or unlocked first',
       '[NEW] Personas library: copy / download filtered view as .md',
+      '[NEW] Personas swap dialog: sort by name, on-panel, or unlocked',
     ],
   },
   {

@@ -69,6 +69,7 @@ export function PersonasPage() {
   const [libraryQuery, setLibraryQuery] = useState('');
   const [librarySort, setLibrarySort] = useState<PersonasLibrarySort>('default');
   const [swapQuery, setSwapQuery] = useState('');
+  const [swapSort, setSwapSort] = useState<PersonasLibrarySort>('default');
   const libraryRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const librarySearchRef = useRef<HTMLInputElement | null>(null);
   const swapSearchRef = useRef<HTMLInputElement | null>(null);
@@ -86,6 +87,7 @@ export function PersonasPage() {
   const closeModal = useCallback(() => {
     setModalVisible(false);
     setSwapQuery('');
+    setSwapSort('default');
     const delay = motionDuration(220);
     window.setTimeout(() => setActiveSlot(null), delay > 0 ? delay : 0);
   }, []);
@@ -94,6 +96,7 @@ export function PersonasPage() {
     if (activeSlot === null) {
       setModalVisible(false);
       setSwapQuery('');
+      setSwapSort('default');
       return;
     }
 
@@ -270,16 +273,22 @@ export function PersonasPage() {
     return personas.filter((persona) => persona.id !== activePersona.id);
   }, [activePersona, personas]);
 
-  const filteredSwapOptions = useMemo(
-    () =>
-      filterBySearchQuery(modalOptions, swapQuery, (persona) => [
-        persona.name,
-        persona.quote,
-        persona.description,
-        persona.id,
-      ]),
-    [modalOptions, swapQuery],
-  );
+  const filteredSwapOptions = useMemo(() => {
+    const searched = filterBySearchQuery(modalOptions, swapQuery, (persona) => [
+      persona.name,
+      persona.quote,
+      persona.description,
+      persona.id,
+    ]);
+    return sortPersonasLibrary(
+      searched.map((persona) => ({
+        ...persona,
+        onPanel: unlockedSlotMap[persona.id] != null,
+        unlocked: canUsePersona(persona.id),
+      })),
+      swapSort,
+    );
+  }, [modalOptions, swapQuery, swapSort, unlockedSlotMap, canUsePersona]);
 
   const filteredLibrary = useMemo(() => {
     const searched = filterBySearchQuery(personas, libraryQuery, (persona) => [
@@ -1088,60 +1097,98 @@ export function PersonasPage() {
 
             <div style={{ height: '0.5px', background: '#E0D8D0', margin: '1rem 0' }} />
 
-            <div style={{ position: 'relative', marginBottom: 12 }}>
-              <input
-                ref={swapSearchRef}
-                type="search"
-                value={swapQuery}
-                onChange={(e) => setSwapQuery(e.target.value)}
-                placeholder="Search minds to swap…"
-                aria-label="Search minds to swap into this slot"
-                autoComplete="off"
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  fontSize: 13,
-                  fontFamily: 'Georgia, serif',
-                  color: '#1A1714',
-                  background: '#FFFFFF',
-                  border: '0.5px solid #E0D8D0',
-                  borderRadius: 10,
-                  padding: '9px 32px 9px 12px',
-                  outline: 'none',
-                }}
-              />
-              {swapQuery ? (
-                <button
-                  type="button"
-                  aria-label="Clear swap search"
-                  onClick={() => {
-                    setSwapQuery('');
-                    swapSearchRef.current?.focus();
-                  }}
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                <input
+                  ref={swapSearchRef}
+                  type="search"
+                  value={swapQuery}
+                  onChange={(e) => setSwapQuery(e.target.value)}
+                  placeholder="Search minds to swap…"
+                  aria-label="Search minds to swap into this slot"
+                  autoComplete="off"
                   style={{
-                    position: 'absolute',
-                    right: 8,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: 13,
+                    fontFamily: 'Georgia, serif',
+                    color: '#1A1714',
+                    background: '#FFFFFF',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 10,
+                    padding: '9px 32px 9px 12px',
+                    outline: 'none',
+                  }}
+                />
+                {swapQuery ? (
+                  <button
+                    type="button"
+                    aria-label="Clear swap search"
+                    onClick={() => {
+                      setSwapQuery('');
+                      swapSearchRef.current?.focus();
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: 8,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      color: '#A89070',
+                      lineHeight: 1,
+                      padding: 4,
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+              {modalOptions.length > 1 ? (
+                <select
+                  value={swapSort}
+                  onChange={(e) => setSwapSort(e.target.value as PersonasLibrarySort)}
+                  aria-label="Sort minds to swap"
+                  title="Sort minds to swap"
+                  style={{
+                    fontSize: 12,
+                    fontFamily: 'Georgia, serif',
+                    color: '#4A3728',
+                    background: '#FFFFFF',
+                    border: '0.5px solid #E0D8D0',
+                    borderRadius: 10,
+                    padding: '9px 10px',
                     cursor: 'pointer',
-                    fontSize: 16,
-                    color: '#A89070',
-                    lineHeight: 1,
-                    padding: 4,
+                    flex: '0 0 auto',
+                    maxWidth: 150,
                   }}
                 >
-                  ×
-                </button>
+                  {PERSONAS_LIBRARY_SORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               ) : null}
             </div>
 
             <p style={{ ...eyebrowStyle, marginBottom: '.8rem' }}>
               Available to swap
-              {swapQuery.trim()
+              {swapQuery.trim() || swapSort !== 'default'
                 ? ` · ${filteredSwapOptions.length} / ${modalOptions.length}`
                 : ` · ${modalOptions.length}`}
+              {swapSort !== 'default'
+                ? ` · ${PERSONAS_LIBRARY_SORT_OPTIONS.find((o) => o.value === swapSort)?.label}`
+                : ''}
             </p>
             {filteredSwapOptions.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '1.5rem 0.5rem' }}>
