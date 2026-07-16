@@ -17,7 +17,7 @@ def _request_with_token(token: str) -> Request:
 
 
 @pytest.mark.asyncio
-async def test_non_numeric_subject_yields_401_not_500():
+async def test_non_numeric_subject_yields_401_not_500(db_session):
     """A validly-signed token whose `sub` is non-numeric must raise 401, not let
     int() throw a ValueError that surfaces as a 500."""
     from jose import jwt
@@ -34,16 +34,20 @@ async def test_non_numeric_subject_yields_401_not_500():
     )
 
     with pytest.raises(HTTPException) as ei:
-        # db is never reached — the guard rejects before any query.
-        await get_current_user(_request_with_token(token), db=None)
+        # The blacklist lookup runs first (DB-backed as of iter-12 hardening);
+        # it returns False for an unknown token, then the int(user_id) parse
+        # raises 401. Pass a real session — passing None crashes the DB query.
+        await get_current_user(_request_with_token(token), db=db_session)
     assert ei.value.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_missing_bearer_yields_401():
+async def test_missing_bearer_yields_401(db_session):
     from arena.core.dependencies import get_current_user
 
     scope = {"type": "http", "method": "GET", "path": "/", "headers": [], "query_string": b""}
     with pytest.raises(HTTPException) as ei:
-        await get_current_user(Request(scope), db=None)
+        # Blacklist runs before the missing-bearer branch in the new auth
+        # pipeline, so it needs a real DB session.
+        await get_current_user(Request(scope), db=db_session)
     assert ei.value.status_code == 401
