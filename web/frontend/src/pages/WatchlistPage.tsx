@@ -72,40 +72,17 @@ import {
   watchlistDomainLabel,
   type WatchlistDomainFilter,
 } from '../lib/watchlistDomainFilter';
+import { formatRelativeFuture, formatRelativePast } from '../lib/relativeTime';
 import { watchlistBodyMode } from '../lib/watchlistView';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
 
-function formatRelativePast(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const t = d.getTime();
-  if (Number.isNaN(t)) return '—';
-  let sec = Math.round((Date.now() - t) / 1000);
-  if (sec < 0) sec = 0;
-  if (sec < 60) return 'just now';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 48) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  return `${day}d ago`;
+function watchRelativePast(iso: string | null | undefined): string {
+  return formatRelativePast(iso, { fallback: '—', localeAfterDays: 0 });
 }
 
-function formatRelativeFuture(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const t = d.getTime();
-  if (Number.isNaN(t)) return '—';
-  const sec = Math.round((t - Date.now()) / 1000);
-  if (sec < 0) return 'due now';
-  if (sec < 60) return 'in <1m';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `in ${min}m`;
-  const hr = Math.floor(min / 60);
-  if (hr < 48) return `in ${hr}h`;
-  const day = Math.floor(hr / 24);
-  return `in ${day}d`;
+function watchRelativeFuture(iso: string | null | undefined): string {
+  return formatRelativeFuture(iso, { fallback: '—' });
 }
 
 function intervalBadge(hours: number): { num: string; unit: string } {
@@ -1240,8 +1217,8 @@ export function WatchlistPage() {
                       ) : null}
                     </div>
                     <div style={{ fontSize: 12, color: '#8C7355', lineHeight: 1.5 }}>
-                      Run {item.run_count} times · Last ran {formatRelativePast(item.last_run_at)} · Next:{' '}
-                      {item.is_active ? formatRelativeFuture(item.next_run_at) : 'paused'}
+                      Run {item.run_count} times · Last ran {watchRelativePast(item.last_run_at)} · Next:{' '}
+                      {item.is_active ? watchRelativeFuture(item.next_run_at) : 'paused'}
                       {urgency === 'overdue' ? (
                         <span style={{ color: '#B85C38', fontWeight: 500 }}> · Overdue</span>
                       ) : urgency === 'due_soon' ? (
@@ -1566,7 +1543,7 @@ export function WatchlistPage() {
                                             marginTop: 2,
                                           }}
                                         >
-                                          {formatRelativePast(run.created_at)}
+                                          {watchRelativePast(run.created_at)}
                                           {run.user_feedback
                                             ? ` · ${String(run.user_feedback)}`
                                             : ''}

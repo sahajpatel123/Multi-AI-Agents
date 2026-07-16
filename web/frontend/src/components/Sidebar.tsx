@@ -1657,6 +1657,23 @@ export function Sidebar({
                                 query={savedSearchQuery}
                               />
                             </p>
+                            {item.timestamp ? (
+                              <p
+                                style={{
+                                  margin: '3px 0 0',
+                                  fontSize: 10,
+                                  color: '#A89070',
+                                  lineHeight: 1.3,
+                                }}
+                                title={
+                                  item.timestamp
+                                    ? new Date(item.timestamp).toLocaleString()
+                                    : undefined
+                                }
+                              >
+                                {formatRelativePast(item.timestamp, { localeAfterDays: 7 })}
+                              </p>
+                            ) : null}
                           </button>
                           <button
                             type="button"

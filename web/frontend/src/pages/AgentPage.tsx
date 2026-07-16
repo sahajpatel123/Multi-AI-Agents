@@ -65,6 +65,7 @@ import { useBusyDocumentTitle } from '../hooks/useBusyDocumentTitle';
 import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { agentWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForAgentBusy } from '../lib/documentTitle';
+import { formatRelativePast } from '../lib/relativeTime';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { User } from '../types';
 // setRedirectIntent is unused but kept for future use
@@ -450,19 +451,7 @@ const CALIBRATION_LEVEL_TITLES: Record<number, string> = {
 };
 
 function formatRelativeShort(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const t = d.getTime();
-  if (Number.isNaN(t)) return '—';
-  let sec = Math.round((Date.now() - t) / 1000);
-  if (sec < 0) sec = 0;
-  if (sec < 60) return 'just now';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 48) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  return `${day}d ago`;
+  return formatRelativePast(iso, { fallback: '—', localeAfterDays: 0 });
 }
 
 const CAVEAT_CATEGORY_KEYS = new Set([

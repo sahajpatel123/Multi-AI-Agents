@@ -177,6 +177,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Arena cards: Discuss and Challenge actions on every mind (not only the prompt bar)',
       '[IMPROVED] Session Leaderboard: expand full winner takes; export prefers full verdict',
       '[IMPROVED] Perspective Comparison: expand full takes; keywords and export use full verdicts',
+      '[IMPROVED] Shared relative-time helper used on Watchlist, Agent, Profile, and Saved takes',
     ],
   },
   {

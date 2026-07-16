@@ -30,6 +30,7 @@ import { SERVICES } from './integrationServices';
 import MicroLoader from './MicroLoader';
 import { RazorpayCheckout } from './RazorpayCheckout';
 import { ExpertiseSelector } from './ExpertiseSelector';
+import { formatRelativePast } from '../lib/relativeTime';
 import {
   domainForExpertiseLevel,
   normalizeExpertiseLevel,
@@ -61,18 +62,7 @@ function formatInrPaise(paise: number): string {
 }
 
 function formatRelativeConnected(iso: string | null): string {
-  if (!iso) return 'recently';
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return 'recently';
-  const sec = Math.floor((Date.now() - then) / 1000);
-  if (sec < 60) return 'just now';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 48) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 14) return `${day}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return formatRelativePast(iso, { fallback: 'recently', localeAfterDays: 14 });
 }
 
 function TabIconAccount({ active }: { active: boolean }) {
