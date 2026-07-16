@@ -49,6 +49,32 @@ def _reset_settings_cache():
     config.get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiters():
+    """Reset slowapi + InMemoryRateLimiter buckets between tests so
+    tests added in the same run don't trip the per-IP 20/hour limit on
+    /api/auth/refresh. The InMemoryRateLimiter is module-level state in
+    arena.core.rate_limits; slowapi's Limiter keeps its own in-memory
+    storage on the ._storage / ._limiter attributes.
+    """
+    from arena.core import rate_limits
+
+    rate_limits.rate_limiter._events.clear()
+    try:
+        from arena.routes import auth as auth_routes
+
+        for attr in ("_storage", "_limiter", "_rate_storage", "_check_storage"):
+            storage = getattr(auth_routes.limiter, attr, None)
+            if storage is not None and hasattr(storage, "reset"):
+                storage.reset()
+    except Exception:
+        # Don't let fixture teardown mask real test failures; if reset
+        # fails, tests will still run, just with shared state.
+        pass
+    yield
+    rate_limits.rate_limiter._events.clear()
+
+
 @pytest.fixture
 def isolated_db(monkeypatch) -> Iterator:
     """Per-test SQLite engine + tables.
