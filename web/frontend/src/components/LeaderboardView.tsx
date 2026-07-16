@@ -5,6 +5,7 @@ import { AgentDot } from './AgentDot';
 import { usePanel } from '../context/PanelContext';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatLeaderboardExport } from '../lib/leaderboardExport';
 
 interface LeaderboardViewProps {
@@ -29,6 +30,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
   const [showNumbers, setShowNumbers] = useState(false);
   const [visible, setVisible] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
 
   const leaderboard = useMemo(() => {
     const winsByAgent = turns.reduce<Record<string, number>>((acc, turn) => {
@@ -104,6 +106,13 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
     return () => window.clearTimeout(t);
   }, [copyFeedback]);
 
+  useEffect(() => {
+    if (downloadFeedback === 'idle') return;
+    const hold = motionDuration(downloadFeedback === 'done' ? 1600 : 2400);
+    const t = window.setTimeout(() => setDownloadFeedback('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadFeedback]);
+
   // Escape returns to Arena (skip when a modal dialog is open).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -136,8 +145,8 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
     });
   }, [turns, leaderboard]);
 
-  const handleCopy = async () => {
-    const md = formatLeaderboardExport({
+  const buildSessionMarkdown = () =>
+    formatLeaderboardExport({
       totalPrompts,
       rows: leaderboard.map((r) => ({
         name: r.name,
@@ -150,8 +159,15 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
         oneLiner: t.oneLiner,
       })),
     });
-    const ok = await copyToClipboard(md);
+
+  const handleCopy = async () => {
+    const ok = await copyToClipboard(buildSessionMarkdown());
     setCopyFeedback(ok ? 'copied' : 'failed');
+  };
+
+  const handleDownload = () => {
+    const ok = downloadMarkdownFile(buildSessionMarkdown(), 'arena-session-leaderboard');
+    setDownloadFeedback(ok ? 'done' : 'failed');
   };
 
   return (
@@ -206,52 +222,89 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
               Agent Leaderboard
             </h1>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              void handleCopy();
-            }}
-            disabled={!hasData}
-            title={hasData ? 'Copy rankings and session prompts as markdown' : 'Prompt first to build rankings'}
-            aria-label={
-              copyFeedback === 'copied'
-                ? 'Session copied'
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => {
+                void handleCopy();
+              }}
+              disabled={!hasData}
+              title={hasData ? 'Copy rankings and session prompts as markdown' : 'Prompt first to build rankings'}
+              aria-label={
+                copyFeedback === 'copied'
+                  ? 'Session copied'
+                  : copyFeedback === 'failed'
+                    ? 'Copy failed'
+                    : 'Copy rankings and session prompts as markdown'
+              }
+              style={{
+                fontSize: 12,
+                fontFamily: 'Georgia, serif',
+                color:
+                  copyFeedback === 'failed'
+                    ? '#993C1D'
+                    : !hasData
+                      ? '#A89070'
+                      : '#C4956A',
+                background: 'none',
+                border: '0.5px solid #E0D8D0',
+                borderRadius: 999,
+                padding: '5px 12px',
+                cursor: hasData ? 'pointer' : 'not-allowed',
+                opacity: hasData ? 1 : 0.7,
+              }}
+            >
+              {copyFeedback === 'copied'
+                ? 'Copied'
                 : copyFeedback === 'failed'
                   ? 'Copy failed'
-                  : 'Copy rankings and session prompts as markdown'
-            }
-            style={{
-              fontSize: 12,
-              fontFamily: 'Georgia, serif',
-              color:
-                copyFeedback === 'failed'
-                  ? '#993C1D'
-                  : !hasData
-                    ? '#A89070'
-                    : '#C4956A',
-              background: 'none',
-              border: '0.5px solid #E0D8D0',
-              borderRadius: 999,
-              padding: '5px 12px',
-              cursor: hasData ? 'pointer' : 'not-allowed',
-              opacity: hasData ? 1 : 0.7,
-            }}
-          >
-            {copyFeedback === 'copied'
-              ? 'Copied'
-              : copyFeedback === 'failed'
-                ? 'Copy failed'
-                : 'Copy session'}
-          </button>
+                  : 'Copy session'}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={!hasData}
+              title={hasData ? 'Download rankings and session prompts as markdown' : 'Prompt first to build rankings'}
+              aria-label={
+                downloadFeedback === 'done'
+                  ? 'Session downloaded'
+                  : downloadFeedback === 'failed'
+                    ? 'Download failed'
+                    : 'Download rankings and session prompts as markdown'
+              }
+              style={{
+                fontSize: 12,
+                fontFamily: 'Georgia, serif',
+                color:
+                  downloadFeedback === 'failed'
+                    ? '#993C1D'
+                    : !hasData
+                      ? '#A89070'
+                      : '#C4956A',
+                background: 'none',
+                border: '0.5px solid #E0D8D0',
+                borderRadius: 999,
+                padding: '5px 12px',
+                cursor: hasData ? 'pointer' : 'not-allowed',
+                opacity: hasData ? 1 : 0.7,
+              }}
+            >
+              {downloadFeedback === 'done'
+                ? 'Downloaded'
+                : downloadFeedback === 'failed'
+                  ? 'Download failed'
+                  : 'Download .md'}
+            </button>
+          </div>
         </div>
         <p style={{ fontSize: '13px', color: '#9A9088', margin: 0 }}>
           {hasData
             ? `Based on ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'} in this session`
             : 'Win rates will appear once you start prompting'}
         </p>
-        {copyFeedback === 'failed' ? (
+        {copyFeedback === 'failed' || downloadFeedback === 'failed' ? (
           <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: '8px 0 0' }}>
-            Could not copy — try again or select text manually.
+            Could not {copyFeedback === 'failed' ? 'copy' : 'download'} — try again or select text manually.
           </p>
         ) : null}
       </div>

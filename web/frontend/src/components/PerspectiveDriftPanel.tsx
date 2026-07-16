@@ -4,6 +4,7 @@ import {
   type PerspectiveDriftResponse,
 } from '../api';
 import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { motionDuration } from '../lib/motion';
 import { formatPerspectiveDriftExport } from '../lib/perspectiveDriftExport';
 
@@ -48,11 +49,14 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PerspectiveDriftResponse | null>(null);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const copyTimerRef = useRef<number | null>(null);
+  const downloadTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
       if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
+      if (downloadTimerRef.current != null) window.clearTimeout(downloadTimerRef.current);
     };
   }, []);
 
@@ -75,6 +79,48 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
     if (!open) return;
     void load();
   }, [open, load]);
+
+  const buildMarkdown = useCallback(() => {
+    if (!data) return null;
+    return formatPerspectiveDriftExport({
+      roomName: roomName || slug,
+      driftScore: data.drift_score,
+      label: data.label,
+      taskCount: data.task_count,
+      meanSimilarity: data.mean_similarity,
+      message: data.message,
+      clusters: data.perspective_clusters,
+      pairs: data.divergent_pairs,
+    });
+  }, [data, roomName, slug]);
+
+  const handleCopy = () => {
+    const md = buildMarkdown();
+    if (!md) return;
+    void copyToClipboard(md).then((ok) => {
+      if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
+      setCopyStatus(ok ? 'copied' : 'failed');
+      const hold = motionDuration(ok ? 2000 : 2800);
+      copyTimerRef.current = window.setTimeout(() => {
+        setCopyStatus('idle');
+        copyTimerRef.current = null;
+      }, hold > 0 ? hold : 0);
+    });
+  };
+
+  const handleDownload = () => {
+    const md = buildMarkdown();
+    if (!md) return;
+    const stem = `perspective-drift-${(roomName || slug || 'room').slice(0, 40)}`;
+    const ok = downloadMarkdownFile(md, stem);
+    if (downloadTimerRef.current != null) window.clearTimeout(downloadTimerRef.current);
+    setDownloadStatus(ok ? 'done' : 'failed');
+    const hold = motionDuration(ok ? 2000 : 2800);
+    downloadTimerRef.current = window.setTimeout(() => {
+      setDownloadStatus('idle');
+      downloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
 
   if (taskCount < 2) return null;
 
@@ -225,27 +271,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
                   <button
                     type="button"
-                    onClick={() => {
-                      const md = formatPerspectiveDriftExport({
-                        roomName: roomName || slug,
-                        driftScore: data.drift_score,
-                        label: data.label,
-                        taskCount: data.task_count,
-                        meanSimilarity: data.mean_similarity,
-                        message: data.message,
-                        clusters: data.perspective_clusters,
-                        pairs: data.divergent_pairs,
-                      });
-                      void copyToClipboard(md).then((ok) => {
-                        if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
-                        setCopyStatus(ok ? 'copied' : 'failed');
-                        const hold = motionDuration(ok ? 2000 : 2800);
-                        copyTimerRef.current = window.setTimeout(() => {
-                          setCopyStatus('idle');
-                          copyTimerRef.current = null;
-                        }, hold > 0 ? hold : 0);
-                      });
-                    }}
+                    onClick={handleCopy}
                     title="Copy drift analysis as markdown"
                     aria-label={
                       copyStatus === 'copied'
@@ -272,6 +298,40 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                     }}
                   >
                     {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Failed' : 'Copy'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    title="Download drift analysis as markdown"
+                    aria-label={
+                      downloadStatus === 'done'
+                        ? 'Drift analysis downloaded'
+                        : downloadStatus === 'failed'
+                          ? 'Download failed'
+                          : 'Download drift analysis as markdown'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #D4C4B0',
+                      borderRadius: 6,
+                      padding: '4px 10px',
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      color:
+                        downloadStatus === 'failed'
+                          ? '#D85A30'
+                          : downloadStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#C4956A',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {downloadStatus === 'done'
+                      ? 'Downloaded'
+                      : downloadStatus === 'failed'
+                        ? 'Failed'
+                        : 'Download .md'}
                   </button>
                   <button
                     type="button"
