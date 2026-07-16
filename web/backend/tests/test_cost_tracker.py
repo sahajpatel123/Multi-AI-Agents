@@ -230,10 +230,18 @@ class TestGetTodayTokenUsage:
         db = SessionLocal()
         try:
             now = _now_utc()
+            # An "earlier today" timestamp that never slips into yesterday when
+            # the suite runs in the first hour of a UTC day. Previously this was
+            # now - 1h, which fell before UTC midnight for runs between 00:00 and
+            # 00:59, excluding the record and making the assertion flaky (~1h/day).
+            earlier_today = max(
+                now - timedelta(hours=1),
+                now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=1),
+            )
             # Today's records
             db.add_all([
                 UsageRecord(user_id=user.id, request_id="r1", input_tokens=100, output_tokens=50, mode="arena", timestamp=now),
-                UsageRecord(user_id=user.id, request_id="r2", input_tokens=200, output_tokens=100, mode="arena", timestamp=now - timedelta(hours=1)),
+                UsageRecord(user_id=user.id, request_id="r2", input_tokens=200, output_tokens=100, mode="arena", timestamp=earlier_today),
             ])
             # Yesterday's records — should not count
             db.add(UsageRecord(
