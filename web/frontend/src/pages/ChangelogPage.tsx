@@ -173,6 +173,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Arena cards: Show full take expands the verdict as markdown (with key assumption)',
       '[NEW] Agent Watchlist: expand Run history with scores, averages, and open prior runs',
       '[IMPROVED] Watchlist run history: score trend vs prior run + copy/download as markdown',
+      '[IMPROVED] Room board: Show full answer expands task results as markdown in place',
     ],
   },
   {

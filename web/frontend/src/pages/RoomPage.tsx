@@ -16,7 +16,12 @@ import {
   titleForRoom,
 } from '../lib/documentTitle';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
-import { formatRoomBoardExport, plainAnswerExcerpt } from '../lib/roomBoardExport';
+import {
+  formatRoomBoardExport,
+  plainAnswerExcerpt,
+  resolveRoomTaskAnswerBody,
+  roomTaskAnswerExpandable,
+} from '../lib/roomBoardExport';
 import {
   ROOM_BOARD_SORT_OPTIONS,
   roomBoardSortLabel,
@@ -119,6 +124,7 @@ export function RoomPage() {
   const [inviteShareStatus, setInviteShareStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [hoverTask, setHoverTask] = useState<string | null>(null);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [synthesisRefreshing, setSynthesisRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [boardQuery, setBoardQuery] = useState('');
@@ -1484,6 +1490,9 @@ export function RoomPage() {
             const mem = members.find((m: any) => m.user_id === t.user_id);
             const name = mem?.name || 'Member';
             const excerpt = getExcerpt(t);
+            const fullAnswer = resolveRoomTaskAnswerBody(t.final_answer);
+            const canExpand = roomTaskAnswerExpandable(t.final_answer, 140);
+            const isExpanded = expandedTaskId === t.task_id;
             const canRemove = user && (t.user_id === user.id || room?.creator_id === user.id);
             return (
               <div
@@ -1499,7 +1508,10 @@ export function RoomPage() {
                 style={{
                   position: 'relative',
                   background: '#FAF7F2',
-                  border: hoverTask === t.task_id ? '0.5px solid #C4956A' : '0.5px solid #E0D5C5',
+                  border:
+                    isExpanded || hoverTask === t.task_id
+                      ? '0.5px solid #C4956A'
+                      : '0.5px solid #E0D5C5',
                   borderRadius: 10,
                   padding: 14,
                   cursor: 'pointer',
@@ -1564,20 +1576,76 @@ export function RoomPage() {
                 >
                   <HighlightQuery text={getTaskTitle(t)} query={boardQuery} />
                 </div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: '#8C7355',
-                    fontStyle: 'italic',
-                    lineHeight: 1.4,
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {excerpt}
-                </div>
+                {isExpanded && canExpand && fullAnswer ? (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    style={{ marginTop: 2 }}
+                  >
+                    <AgentAnswerMarkdown
+                      markdown={fullAnswer}
+                      question={getTaskTitle(t)}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: '#8C7355',
+                      fontStyle: 'italic',
+                      lineHeight: 1.4,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {excerpt}
+                  </div>
+                )}
+                {canExpand ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedTaskId((id) => (id === t.task_id ? null : t.task_id));
+                    }}
+                    style={{
+                      marginTop: 8,
+                      padding: 0,
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      color: '#C4956A',
+                      fontFamily: 'Georgia, serif',
+                    }}
+                  >
+                    {isExpanded ? 'Show less' : 'Show full answer'}
+                  </button>
+                ) : null}
+                {isExpanded ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/agent?task_id=${encodeURIComponent(t.task_id)}`);
+                    }}
+                    style={{
+                      display: 'block',
+                      marginTop: 6,
+                      padding: 0,
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      color: '#8C7355',
+                      fontFamily: 'Georgia, serif',
+                    }}
+                  >
+                    Open in Agent →
+                  </button>
+                ) : null}
               </div>
             );
           })}

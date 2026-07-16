@@ -18,47 +18,59 @@ function formatWhen(iso: string | null | undefined): string {
 }
 
 /**
- * Collapse answer payloads (plain or JSON-ish Agent output) into a short excerpt.
+ * Resolve the full readable body from a Room task answer payload
+ * (plain markdown or JSON-ish Agent output). Preserves newlines for display.
  */
-export function plainAnswerExcerpt(answer: unknown, maxLen = 280): string {
+export function resolveRoomTaskAnswerBody(answer: unknown): string {
   if (answer == null) return '';
-  let text = '';
   if (typeof answer === 'string') {
     const trimmed = answer.trim();
+    if (!trimmed) return '';
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
       try {
         const parsed = JSON.parse(trimmed) as Record<string, unknown>;
         if (Array.isArray(parsed.sentences)) {
-          text = parsed.sentences
+          return parsed.sentences
             .map((s) =>
               s && typeof s === 'object' && 'text' in s
                 ? String((s as { text?: unknown }).text || '')
                 : '',
             )
             .filter(Boolean)
-            .join(' ');
-        } else if (typeof parsed.text === 'string') {
-          text = parsed.text;
-        } else if (typeof parsed.final_answer === 'string') {
-          text = parsed.final_answer;
-        } else {
-          text = trimmed;
+            .join('\n\n')
+            .trim();
+        }
+        if (typeof parsed.final_answer === 'string' && parsed.final_answer.trim()) {
+          return parsed.final_answer.trim();
+        }
+        if (typeof parsed.text === 'string' && parsed.text.trim()) {
+          return parsed.text.trim();
+        }
+        if (typeof parsed.answer === 'string' && parsed.answer.trim()) {
+          return parsed.answer.trim();
         }
       } catch {
-        text = trimmed;
+        return trimmed;
       }
-    } else {
-      text = trimmed;
     }
-  } else if (typeof answer === 'object') {
+    return trimmed;
+  }
+  if (typeof answer === 'object') {
     try {
-      text = JSON.stringify(answer);
+      return resolveRoomTaskAnswerBody(JSON.stringify(answer));
     } catch {
       return '';
     }
-  } else {
-    text = String(answer);
   }
+  return String(answer).trim();
+}
+
+/**
+ * Collapse answer payloads (plain or JSON-ish Agent output) into a short excerpt.
+ */
+export function plainAnswerExcerpt(answer: unknown, maxLen = 280): string {
+  if (answer == null) return '';
+  let text = resolveRoomTaskAnswerBody(answer);
 
   text = text
     .replace(/#{1,3}\s/g, '')
@@ -71,6 +83,16 @@ export function plainAnswerExcerpt(answer: unknown, maxLen = 280): string {
   if (!text) return '';
   if (text.length <= maxLen) return text;
   return `${text.slice(0, maxLen - 1).trimEnd()}…`;
+}
+
+/** True when the full answer is worth expanding past the board excerpt. */
+export function roomTaskAnswerExpandable(answer: unknown, excerptMax = 140): boolean {
+  const full = resolveRoomTaskAnswerBody(answer);
+  if (!full) return false;
+  const excerpt = plainAnswerExcerpt(answer, excerptMax);
+  if (!excerpt) return full.length > 120;
+  // Expand when body is meaningfully longer than the teaser.
+  return full.length > excerpt.replace(/…$/, '').length + 40 || full.length > 180;
 }
 
 export function formatRoomBoardExport(opts: {

@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { formatRoomBoardExport, plainAnswerExcerpt } from './roomBoardExport';
+import {
+  formatRoomBoardExport,
+  plainAnswerExcerpt,
+  resolveRoomTaskAnswerBody,
+  roomTaskAnswerExpandable,
+} from './roomBoardExport';
+
+describe('resolveRoomTaskAnswerBody', () => {
+  it('returns plain markdown as-is', () => {
+    expect(resolveRoomTaskAnswerBody('## Findings\n\nDetail here.')).toBe(
+      '## Findings\n\nDetail here.',
+    );
+  });
+
+  it('extracts final_answer from JSON payloads', () => {
+    expect(
+      resolveRoomTaskAnswerBody(JSON.stringify({ final_answer: 'Full answer body.' })),
+    ).toBe('Full answer body.');
+  });
+});
 
 describe('plainAnswerExcerpt', () => {
   it('strips markdown noise and truncates', () => {
@@ -15,6 +34,17 @@ describe('plainAnswerExcerpt', () => {
     );
     expect(text).toContain('First claim.');
     expect(text).toContain('Second claim.');
+  });
+});
+
+describe('roomTaskAnswerExpandable', () => {
+  it('is false for short answers', () => {
+    expect(roomTaskAnswerExpandable('Short take.')).toBe(false);
+  });
+
+  it('is true when full body is much longer than the excerpt', () => {
+    const long = 'Word '.repeat(80).trim();
+    expect(roomTaskAnswerExpandable(long, 140)).toBe(true);
   });
 });
 
