@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { AgentDot } from '../components/AgentDot';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
+import { HighlightQuery } from '../components/HighlightQuery';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { type Persona } from '../data/personas';
@@ -1055,7 +1056,9 @@ export function PersonasPage() {
                         flexShrink: 0,
                       }}
                     />
-                    <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>{persona.name}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>
+                      <HighlightQuery text={persona.name} query={libraryQuery} />
+                    </span>
                   </div>
                   <p style={{ fontSize: '12px', color: '#6B6460', fontStyle: 'italic', marginTop: '.4rem', lineHeight: 1.6 }}>
                     {persona.quote}

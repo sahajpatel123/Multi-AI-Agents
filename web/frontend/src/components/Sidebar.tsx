@@ -19,6 +19,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
 import { AgentDot } from './AgentDot';
+import { HighlightQuery } from './HighlightQuery';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { useAuth } from '../hooks/useAuth';
@@ -948,7 +949,7 @@ export function Sidebar({
                               style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                             >
                               <p style={{ fontSize: '13px', color: '#1A1714', fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: '1.35' }}>
-                                {displayTitle}
+                                <HighlightQuery text={displayTitle} query={searchQuery} />
                               </p>
                               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <AgentDot agentId={turn.winner_id} size={5} />
@@ -1548,7 +1549,7 @@ export function Sidebar({
                                   color: '#1A1714',
                                 }}
                               >
-                                {displayName}
+                                <HighlightQuery text={displayName} query={savedSearchQuery} />
                               </span>
                               <Bookmark
                                 style={{
@@ -1572,8 +1573,10 @@ export function Sidebar({
                                 whiteSpace: 'nowrap',
                               }}
                             >
-                              {line.slice(0, 40)}
-                              {line.length > 40 ? '…' : ''}
+                              <HighlightQuery
+                                text={`${line.slice(0, 40)}${line.length > 40 ? '…' : ''}`}
+                                query={savedSearchQuery}
+                              />
                             </p>
                           </button>
                           <button

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentTaskTemplate } from '../api';
 import { ConduraBadge } from './ConduraBadge';
+import { HighlightQuery } from './HighlightQuery';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
@@ -787,9 +788,11 @@ export function TemplatesModal({
                     </span>
                     <ConduraBadge execution={t.execution} compact />
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginTop: 6 }}>{t.title}</div>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginTop: 6 }}>
+                    <HighlightQuery text={t.title} query={searchQuery} />
+                  </div>
                   <div style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', marginTop: 3, lineHeight: 1.4 }}>
-                    {t.description}
+                    <HighlightQuery text={t.description} query={searchQuery} />
                   </div>
                   {t.disabled && t.disabled_reason ? (
                     <div style={{ fontSize: 11, color: '#a89070', marginTop: 6 }}>{t.disabled_reason}</div>

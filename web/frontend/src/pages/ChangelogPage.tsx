@@ -155,6 +155,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Room research board: filter by recency (24h / 7d / 30d / Older)',
       '[NEW] Sidebar Saved takes: filter by recency (24h / 7d / 30d / Older)',
       '[IMPROVED] Search match highlighting on Watchlist, Agent history, and Rooms lists',
+      '[IMPROVED] Search highlight extends to Sidebar Recents/Saved, Room board, Templates, and Personas',
     ],
   },
   {

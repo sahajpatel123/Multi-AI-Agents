@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { addRoomTask, getAgentHistory, getRoom, getRoomSynthesis, joinRoom, removeRoomTask } from '../api';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
+import { HighlightQuery } from '../components/HighlightQuery';
 import { PerspectiveDriftPanel } from '../components/PerspectiveDriftPanel';
 import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -1553,7 +1554,7 @@ export function RoomPage() {
                     overflow: 'hidden',
                   }}
                 >
-                  {getTaskTitle(t)}
+                  <HighlightQuery text={getTaskTitle(t)} query={boardQuery} />
                 </div>
                 <div
                   style={{
