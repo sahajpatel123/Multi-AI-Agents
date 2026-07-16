@@ -83,3 +83,30 @@ export function formatRelativeFuture(
   const day = Math.floor(hr / 24);
   return `in ${day}d`;
 }
+
+/**
+ * Absolute UTC date string for markdown export contexts.
+ * Pass `precision: 'minute'` for `YYYY-MM-DD HH:MM UTC` (default)
+ * or `'day'` for `YYYY-MM-DD`. Returns fallback on null / invalid input.
+ *
+ * Centralizes two near-identical helpers that lived in
+ * agentRoomsExport.ts (minute precision, '—' fallback) and
+ * temporalEvolutionExport.ts (day precision, '' fallback).
+ */
+export function formatIsoWhen(
+  iso: string | null | undefined,
+  options: {
+    fallback?: string;
+    precision?: 'minute' | 'day';
+  } = {},
+): string {
+  const fallback = options.fallback ?? '';
+  if (!iso) return fallback;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return fallback;
+  const precision = options.precision ?? 'minute';
+  if (precision === 'day') {
+    return d.toISOString().slice(0, 10);
+  }
+  return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+}

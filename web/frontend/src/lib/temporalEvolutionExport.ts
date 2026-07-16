@@ -1,5 +1,7 @@
 /** Portable markdown for Agent Answer Evolution analysis. */
 
+import { formatIsoWhen } from './relativeTime';
+
 export type EvolutionExportShift = {
   from_task?: string;
   to_task?: string;
@@ -14,13 +16,6 @@ export type EvolutionExportTimelineItem = {
   score?: number | null;
   isCurrent?: boolean;
 };
-
-function formatWhen(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toISOString().slice(0, 10);
-}
 
 export function formatTemporalEvolutionExport(opts: {
   question?: string | null;
@@ -73,7 +68,7 @@ export function formatTemporalEvolutionExport(opts: {
     lines.push('');
     timeline.forEach((item, i) => {
       const parts: string[] = [];
-      const when = formatWhen(item.created_at);
+      const when = formatIsoWhen(item.created_at, { precision: 'day' });
       if (when) parts.push(when);
       if (typeof item.score === 'number' && Number.isFinite(item.score)) {
         parts.push(`${Math.round(item.score)}/100`);

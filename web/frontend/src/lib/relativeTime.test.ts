@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatRelativeFuture, formatRelativePast } from './relativeTime';
+import {
+  formatIsoWhen,
+  formatRelativeFuture,
+  formatRelativePast,
+} from './relativeTime';
 
 const NOW = new Date('2026-07-16T12:00:00Z').getTime();
 const ago = (sec: number) => new Date(NOW - sec * 1000).toISOString();
@@ -61,5 +65,29 @@ describe('formatRelativeFuture', () => {
     expect(formatRelativeFuture(inFuture(60 * 60), { now: NOW })).toBe('in 1h');
     expect(formatRelativeFuture(inFuture(60 * 60 * 23), { now: NOW })).toBe('in 23h');
     expect(formatRelativeFuture(inFuture(60 * 60 * 24), { now: NOW })).toBe('in 1d');
+  });
+});
+
+describe('formatIsoWhen', () => {
+  it('returns fallback for null', () => {
+    expect(formatIsoWhen(null, { fallback: '—' })).toBe('—');
+  });
+
+  it('returns fallback for invalid iso', () => {
+    expect(formatIsoWhen('not-a-date', { fallback: '?' })).toBe('?');
+  });
+
+  it('formats minute precision (default) as YYYY-MM-DD HH:MM UTC', () => {
+    expect(formatIsoWhen('2026-07-16T12:34:56.000Z')).toBe('2026-07-16 12:34 UTC');
+  });
+
+  it('formats day precision as YYYY-MM-DD', () => {
+    expect(formatIsoWhen('2026-07-16T12:34:56.000Z', { precision: 'day' })).toBe('2026-07-16');
+  });
+
+  it('preserves both fallback styles the old helpers used', () => {
+    // agentRoomsExport used '—'; temporalEvolution used ''.
+    expect(formatIsoWhen('2026-07-16T12:34:56.000Z', { fallback: '—' })).toContain('2026');
+    expect(formatIsoWhen(null, { fallback: '' })).toBe('');
   });
 });

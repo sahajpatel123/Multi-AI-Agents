@@ -1,5 +1,7 @@
 /** Portable markdown for Agent Mode Rooms list. */
 
+import { formatIsoWhen } from './relativeTime';
+
 export type AgentRoomExportItem = {
   name?: string | null;
   slug?: string | null;
@@ -11,13 +13,6 @@ export type AgentRoomExportItem = {
   activityAt?: string | null;
   roomId?: string | null;
 };
-
-function formatWhen(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
-}
 
 function displayName(item: AgentRoomExportItem): string {
   const name = (item.name || '').trim();
@@ -80,8 +75,8 @@ export function formatAgentRoomsExport(opts: {
       if (typeof item.taskCount === 'number' && Number.isFinite(item.taskCount)) {
         meta.push(`${item.taskCount} task${item.taskCount === 1 ? '' : 's'}`);
       }
-      if (item.activityAt) meta.push(`Active ${formatWhen(item.activityAt)}`);
-      else if (item.createdAt) meta.push(`Created ${formatWhen(item.createdAt)}`);
+      if (item.activityAt) meta.push(`Active ${formatIsoWhen(item.activityAt, { fallback: '—' })}`);
+      else if (item.createdAt) meta.push(`Created ${formatIsoWhen(item.createdAt, { fallback: '—' })}`);
       if (meta.length > 0) {
         lines.push(`- ${meta.join(' · ')}`);
       }
