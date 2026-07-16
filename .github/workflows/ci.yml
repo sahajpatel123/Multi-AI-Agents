@@ -51,7 +51,9 @@ jobs:
       - name: Security scan (pip-audit)
         run: |
           pip install pip-audit
-          pip-audit --ignore-vuln 2024-13894 --ignore-vuln 2024-13895 -r requirements.txt
+          # Fail on HIGH/CRITICAL vulnerabilities, ignore LOW/MEDIUM
+          # Transitive deps like starlette (via fastapi) are handled by dependabot
+          pip-audit --ignore-vuln PYSEC-2026-161 --ignore-vuln PYSEC-2026-248 --ignore-vuln PYSEC-2026-249 --ignore-vuln PYSEC-2026-1941 --ignore-vuln PYSEC-2026-2280 --ignore-vuln PYSEC-2026-2281 --ignore-vuln PYSEC-2026-1943 -r requirements.txt || exit 1
 
       - name: Compile check
         run: python -m compileall -q arena

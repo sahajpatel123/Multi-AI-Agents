@@ -23,22 +23,22 @@ sqlalchemy==2.0.35
 alembic==1.13.3
 psycopg2-binary==2.9.9
 
-# Auth
-python-jose[cryptography]==3.3.0
+# Auth - upgraded for security fixes (python-jose 3.4.0, python-multipart 0.0.22+)
+python-jose[cryptography]==3.4.0
 bcrypt==4.2.0
-python-multipart==0.0.12
+python-multipart==0.0.22
 
 # Rate limiting
 slowapi==0.1.9
 
-# Utils
-python-dotenv==1.0.1
-markdown==3.7
+# Utils - updated for security
+python-dotenv==1.2.2
+markdown==3.8.1
 python-dateutil>=2.8.0
 pdfplumber==0.11.4
-Pillow==10.4.0
+Pillow==12.3.0
 python-docx==1.1.2
-cryptography==43.0.1
+cryptography==48.0.1
 python-magic==0.4.27
 
 # Payments
@@ -48,8 +48,8 @@ razorpay==1.4.2
 ddgs==9.0.0
 
 # PDF reports (optional — export falls back to HTML if import fails)
-weasyprint==62.3
+weasyprint==68.0
 
 # Dev
-pytest==8.3.3
+pytest==9.0.3
 pytest-asyncio==0.24.0
