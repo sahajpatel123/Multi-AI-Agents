@@ -1,0 +1,56 @@
+# gitleaks config — secret scan for Multi-AI-Agents.
+#
+# The default ruleset catches sk-ant-*, sk-*, rzp_*, AKIA*, ghp_*, xox[bap]-*,
+# Stripe keys, JWTs, generic-password strings, etc. This file only ADDS
+# allowlists so we don't trip on:
+#   - the documented .env.example template
+#   - Stripe/Razorpay sandbox dummy secrets in CI env blocks and tests
+#   - Slack-token UI placeholders in integration services
+#
+# If a real secret gets committed, it lands in the repo as a tracked file and
+# GITLEAKS_LOCALLY=1 gitleaks detect ... will catch it pre-commit. CI runs the
+# same scan as a hard gate (see .github/workflows/ci.yml).
+
+title = "Multi-AI-Agents gitleaks config"
+
+[extend]
+  useDefault = true
+
+# .env.example — published template, every value is a placeholder like
+# "your-secret-here" or "sk-ant-your-key-here".
+[[allowlists]]
+  description = "Documented env templates (placeholders only)"
+  paths = [
+    '''(^|/)(\.env\.example)$''',
+    '''(^|/)env\.example$''',
+  ]
+
+# CI workflow env blocks use dummies like rzp_test_dummy / dummy_secret /
+# dummy_webhook on purpose so the job has all required vars without leaking.
+[[allowlists]]
+  description = "CI workflow intentional dummy Razorpay secrets"
+  regexes = [
+    '''rzp_test_dummy''',
+    '''RAZORPAY_API_KEY:\s*rzp_test_dummy''',
+    '''RAZORPAY_KEY_SECRET:\s*dummy_secret''',
+    '''RAZORPAY_WEBHOOK_SECRET:\s*dummy_webhook''',
+    '''dummy_webhook''',
+    '''dummy_secret''',
+  ]
+
+# CI conftest sets test stub API keys with obvious prefixes that the upstream
+# validators know to expect (e.g. sk-ant-test-fake-key-*).
+[[allowlists]]
+  description = "Backend test fixtures — stub keys with explicit test- prefix"
+  regexes = [
+    '''sk-ant-test-fake-key[^"\\]*''',
+    '''sk-test-fake-key[^"\\]*''',
+    '''sk-ol-[*]+[a-f0-9]{4}''',  # OpenAI key shape from earlier captured payload
+  ]
+
+# UI placeholder for Slack bot token entry, harmless literal.
+[[allowlists]]
+  description = "Frontend integration-services UI placeholders"
+  paths = [
+    '''(^|/)web/frontend/src/components/integrationServices\.ts$''',
+  ]
