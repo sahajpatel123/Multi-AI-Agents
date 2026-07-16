@@ -97,6 +97,13 @@ import {
   filterAgentHistoryByStatus,
   type AgentHistoryStatusFilter,
 } from '../lib/agentHistoryStatusFilter';
+import {
+  AGENT_ROOMS_ACTIVITY_OPTIONS,
+  agentRoomsActivityLabel,
+  filterAgentRoomsByActivity,
+  roomNeedsAttention,
+  type AgentRoomsActivityFilter,
+} from '../lib/agentRoomsActivityFilter';
 import { formatAgentRoomsExport } from '../lib/agentRoomsExport';
 import {
   AGENT_ROOMS_SORT_OPTIONS,
@@ -845,6 +852,8 @@ export function AgentPage() {
   const [myRoomsLoadFailed, setMyRoomsLoadFailed] = useState(false);
   const [roomsSearchQuery, setRoomsSearchQuery] = useState('');
   const [roomsSort, setRoomsSort] = useState<AgentRoomsSort>('recent');
+  const [roomsActivityFilter, setRoomsActivityFilter] =
+    useState<AgentRoomsActivityFilter>('all');
   const roomsSearchRef = useRef<HTMLInputElement | null>(null);
   const [copyRoomLinkFeedback, setCopyRoomLinkFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [shareRoomInviteStatus, setShareRoomInviteStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
@@ -1992,23 +2001,24 @@ export function AgentPage() {
   });
 
   const filteredMyRooms = useMemo(() => {
-    const searched = filterBySearchQuery(myRooms, roomsSearchQuery, (r) => [
+    const annotated = myRooms.map((r: any) => ({
+      ...r,
+      memberCount: r.member_count,
+      taskCount: r.task_count,
+      createdAt: r.created_at,
+      activityAt: r.synthesis_updated_at || r.last_seen_at || r.created_at,
+      synthesisUpdatedAt: r.synthesis_updated_at,
+      lastSeenAt: r.last_seen_at,
+    }));
+    const byActivity = filterAgentRoomsByActivity(annotated, roomsActivityFilter);
+    const searched = filterBySearchQuery(byActivity, roomsSearchQuery, (r) => [
       r.name,
       r.slug,
       r.topic,
       r.description,
     ]);
-    return sortAgentRooms(
-      searched.map((r: any) => ({
-        ...r,
-        memberCount: r.member_count,
-        taskCount: r.task_count,
-        createdAt: r.created_at,
-        activityAt: r.synthesis_updated_at || r.last_seen_at || r.created_at,
-      })),
-      roomsSort,
-    );
-  }, [myRooms, roomsSearchQuery, roomsSort]);
+    return sortAgentRooms(searched, roomsSort);
+  }, [myRooms, roomsSearchQuery, roomsSort, roomsActivityFilter]);
 
   useEffect(() => {
     return () => {
@@ -2030,6 +2040,9 @@ export function AgentPage() {
   const buildFilteredRoomsMarkdown = () => {
     const q = roomsSearchQuery.trim();
     const filterBits: string[] = [];
+    if (roomsActivityFilter !== 'all') {
+      filterBits.push(`activity: ${agentRoomsActivityLabel(roomsActivityFilter)}`);
+    }
     if (q) filterBits.push(`search: “${q}”`);
     if (roomsSort !== 'recent') filterBits.push(`sort: ${agentRoomsSortLabel(roomsSort)}`);
     return formatAgentRoomsExport({
@@ -3141,7 +3154,9 @@ export function AgentPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 10, color: '#A89070' }}>
                       {filteredMyRooms.length}
-                      {roomsSearchQuery.trim() ? ` / ${myRooms.length}` : ''}
+                      {roomsSearchQuery.trim() || roomsActivityFilter !== 'all'
+                        ? ` / ${myRooms.length}`
+                        : ''}
                     </span>
                     <button
                       type="button"
@@ -3249,6 +3264,44 @@ export function AgentPage() {
               ) : (
                 <>
                   {myRooms.length > 1 ? (
+                    <div
+                      role="group"
+                      aria-label="Filter rooms by synthesis activity"
+                      style={{
+                        display: 'flex',
+                        gap: 6,
+                        marginBottom: 8,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {AGENT_ROOMS_ACTIVITY_OPTIONS.map((opt) => {
+                        const selected = roomsActivityFilter === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setRoomsActivityFilter(opt.value)}
+                            aria-pressed={selected}
+                            style={{
+                              padding: '3px 9px',
+                              borderRadius: 999,
+                              border: selected ? 'none' : '0.5px solid #D4C4B0',
+                              background: selected ? '#C4956A' : 'transparent',
+                              color: selected ? '#FAF7F2' : '#8C7355',
+                              fontSize: 10,
+                              fontFamily: 'Georgia, serif',
+                              cursor: 'pointer',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {myRooms.length > 1 ? (
                     <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
                       <select
                         value={roomsSort}
@@ -3328,11 +3381,22 @@ export function AgentPage() {
                   ) : null}
                   {filteredMyRooms.length === 0 ? (
                     <div style={{ fontSize: 12, color: '#C4B8AE', padding: '4px 2px 8px', lineHeight: 1.45 }}>
-                      No rooms match “{roomsSearchQuery.trim()}”
+                      {roomsSearchQuery.trim()
+                        ? `No rooms match “${roomsSearchQuery.trim()}”${
+                            roomsActivityFilter !== 'all'
+                              ? ` in ${agentRoomsActivityLabel(roomsActivityFilter).toLowerCase()}`
+                              : ''
+                          }`
+                        : roomsActivityFilter === 'needs_attention'
+                          ? 'No rooms with new synthesis right now.'
+                          : roomsActivityFilter === 'caught_up'
+                            ? 'No caught-up rooms in this view.'
+                            : 'No rooms in this view.'}
                       <button
                         type="button"
                         onClick={() => {
                           setRoomsSearchQuery('');
+                          setRoomsActivityFilter('all');
                           roomsSearchRef.current?.focus();
                         }}
                         style={{
@@ -3348,7 +3412,9 @@ export function AgentPage() {
                           textDecoration: 'underline',
                         }}
                       >
-                        Clear search
+                        {roomsActivityFilter !== 'all' && !roomsSearchQuery.trim()
+                          ? 'Show all rooms'
+                          : 'Clear filters'}
                       </button>
                     </div>
                   ) : (
@@ -3356,10 +3422,10 @@ export function AgentPage() {
                       {filteredMyRooms.map((r: any) => {
                         const rName = (r.name || 'Room');
                         const truncated = rName.length > 22 ? rName.slice(0, 22) + '…' : rName;
-                        const hasUnread =
-                          r.synthesis_updated_at &&
-                          r.last_seen_at &&
-                          new Date(r.synthesis_updated_at) > new Date(r.last_seen_at);
+                        const hasUnread = roomNeedsAttention({
+                          synthesisUpdatedAt: r.synthesisUpdatedAt || r.synthesis_updated_at,
+                          lastSeenAt: r.lastSeenAt || r.last_seen_at,
+                        });
                         return (
                           <button
                             key={r.id}

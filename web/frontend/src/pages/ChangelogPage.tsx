@@ -136,6 +136,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Personas swap dialog: filter by On panel / Unlocked / Locked',
       '[NEW] Arena Recents: filter by winning mind',
       '[NEW] Agent task templates: filter Ready vs Unavailable',
+      '[NEW] Agent Rooms list: filter by New synthesis vs Caught up',
     ],
   },
   {
