@@ -188,6 +188,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Leaderboard full winner takes**: session prompts expand full winner verdict as markdown; copy/download export prefers full take over one-liner.
 - **Perspective comparison full takes**: each mind can expand full verdict as markdown; keyword analysis + export prefer full take over one-liner.
 - **Shared relative time**: Watchlist / Agent / Profile / Sidebar Saved use `lib/relativeTime` (Recents parity timestamps on Saved).
+- **Live Watchlist clocks**: relative last/next-run labels re-render every 60s; all markdown export helpers use shared `formatIsoWhen`.
 
 ## Required production environment
 

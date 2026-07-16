@@ -77,14 +77,6 @@ import { watchlistBodyMode } from '../lib/watchlistView';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
 
-function watchRelativePast(iso: string | null | undefined): string {
-  return formatRelativePast(iso, { fallback: '—', localeAfterDays: 0 });
-}
-
-function watchRelativeFuture(iso: string | null | undefined): string {
-  return formatRelativeFuture(iso, { fallback: '—' });
-}
-
 function intervalBadge(hours: number): { num: string; unit: string } {
   if (hours === 168) return { num: '7', unit: 'DAYS' };
   if (hours === 72) return { num: '3', unit: 'DAYS' };
@@ -95,6 +87,8 @@ export function WatchlistPage() {
   const navigate = useNavigate();
   const { canUseFeature } = useTier();
   const canWatchlist = canUseFeature('agent_watchlist');
+  /** Tick every 60s so “in 5m / 2h ago” stay accurate without a full reload. */
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [items, setItems] = useState<AgentWatchlistItem[]>([]);
@@ -134,6 +128,22 @@ export function WatchlistPage() {
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
   const reducedMotion = prefersReducedMotion();
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const watchRelativePast = useCallback(
+    (iso: string | null | undefined) =>
+      formatRelativePast(iso, { fallback: '—', localeAfterDays: 0, now: nowMs }),
+    [nowMs],
+  );
+  const watchRelativeFuture = useCallback(
+    (iso: string | null | undefined) =>
+      formatRelativeFuture(iso, { fallback: '—', now: nowMs }),
+    [nowMs],
+  );
 
   const loadWatchHistory = useCallback(async (itemId: string, force = false) => {
     if (!force) {

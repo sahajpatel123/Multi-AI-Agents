@@ -2,6 +2,8 @@
  * Pure helpers for Agent Watchlist per-item run history.
  */
 
+import { formatIsoWhen } from './relativeTime';
+
 export type WatchlistHistoryStatsLike = {
   count?: number | null;
   scored_count?: number | null;
@@ -80,13 +82,6 @@ export function watchlistScoreTrend(
   return { delta, latest, previous, label };
 }
 
-function formatWhen(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
-}
-
 /** Portable markdown for one watch’s run history (export / copy). */
 export function formatWatchlistHistoryExport(opts: {
   question: string;
@@ -123,7 +118,7 @@ export function formatWatchlistHistoryExport(opts: {
       lines.push(`## ${i + 1}. ${title}`);
       lines.push('');
       lines.push(`- **Score:** ${score}`);
-      lines.push(`- **When:** ${formatWhen(run.created_at)}`);
+      lines.push(`- **When:** ${formatIsoWhen(run.created_at, { fallback: '—' })}`);
       if (run.task_id) lines.push(`- **Task:** \`${run.task_id}\``);
       const fb = (run.user_feedback || '').trim();
       if (fb) lines.push(`- **Feedback:** ${fb}`);

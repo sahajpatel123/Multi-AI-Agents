@@ -1,5 +1,7 @@
 /** Portable markdown for Agent Watchlist. */
 
+import { formatIsoWhen } from './relativeTime';
+
 export type WatchlistExportItem = {
   question: string;
   intervalHours: number;
@@ -19,13 +21,6 @@ function cadenceLabel(hours: number): string {
   if (hours === 24) return 'Daily (24h)';
   if (Number.isFinite(hours) && hours > 0) return `Every ${hours}h`;
   return 'Custom cadence';
-}
-
-function formatWhen(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
 }
 
 export function formatWatchlistExport(opts: {
@@ -68,10 +63,10 @@ export function formatWatchlistExport(opts: {
         lines.push(`- **Runs:** ${Math.max(0, Math.floor(item.runCount))}`);
       }
       if (item.lastRunAt) {
-        lines.push(`- **Last run:** ${formatWhen(item.lastRunAt)}`);
+        lines.push(`- **Last run:** ${formatIsoWhen(item.lastRunAt, { fallback: '—' })}`);
       }
       if (item.nextRunAt && item.isActive) {
-        lines.push(`- **Next run:** ${formatWhen(item.nextRunAt)}`);
+        lines.push(`- **Next run:** ${formatIsoWhen(item.nextRunAt, { fallback: '—' })}`);
       }
       const domain = (item.expertiseDomain || '').trim();
       const level = (item.expertiseLevel || '').trim();

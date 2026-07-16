@@ -1,5 +1,7 @@
 /** Portable markdown for Arena sidebar recents (filtered session turns). */
 
+import { formatIsoWhen } from './relativeTime';
+
 export type ArenaRecentExportItem = {
   title?: string | null;
   prompt?: string | null;
@@ -8,13 +10,6 @@ export type ArenaRecentExportItem = {
   timestamp?: string | null;
   turnId?: string | null;
 };
-
-function formatWhen(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
-}
 
 function displayTitle(item: ArenaRecentExportItem): string {
   const title = (item.title || '').trim();
@@ -84,7 +79,7 @@ export function formatArenaRecentsExport(opts: {
       if (cat) meta.push(cat);
       const winner = (item.winnerName || '').trim();
       if (winner) meta.push(`Winner: ${winner}`);
-      const when = formatWhen(item.timestamp);
+      const when = formatIsoWhen(item.timestamp);
       if (when) meta.push(when);
       if (meta.length > 0) {
         lines.push(`- ${meta.join(' · ')}`);

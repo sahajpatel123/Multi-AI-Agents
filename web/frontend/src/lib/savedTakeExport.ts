@@ -1,5 +1,7 @@
 /** Portable markdown for a bookmarked Arena take. */
 
+import { formatIsoWhen } from './relativeTime';
+
 export type SavedTakeListItem = {
   agentName?: string | null;
   prompt?: string | null;
@@ -45,12 +47,7 @@ export function formatSavedTakeExport(opts: {
   return lines.join('\n').trim() + '\n';
 }
 
-function formatWhen(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
-}
+
 
 /**
  * Bulk export of bookmarked takes (full list or current sidebar filter).
@@ -115,7 +112,7 @@ export function formatSavedTakesListExport(opts: {
       if (typeof item.score === 'number' && Number.isFinite(item.score)) {
         meta.push(`Score ${Math.round(item.score)}`);
       }
-      const when = formatWhen(item.timestamp);
+      const when = formatIsoWhen(item.timestamp);
       if (when) meta.push(when);
       if (meta.length > 0) {
         lines.push(`_${meta.join(' · ')}_`);

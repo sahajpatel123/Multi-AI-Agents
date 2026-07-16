@@ -1,5 +1,7 @@
 /** Portable markdown for a collaborative Room research board. */
 
+import { formatIsoWhen } from './relativeTime';
+
 export type RoomBoardExportTask = {
   title?: string | null;
   author?: string | null;
@@ -9,13 +11,6 @@ export type RoomBoardExportTask = {
   question?: string | null;
   taskId?: string | null;
 };
-
-function formatWhen(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toISOString().slice(0, 10);
-}
 
 /**
  * Resolve the full readable body from a Room task answer payload
@@ -160,7 +155,7 @@ export function formatRoomBoardExport(opts: {
       if (typeof t.score === 'number' && Number.isFinite(t.score)) {
         metaRow.push(`${Math.round(t.score)}/100`);
       }
-      const when = formatWhen(t.createdAt);
+      const when = formatIsoWhen(t.createdAt, { precision: 'day' });
       if (when) metaRow.push(when);
       if (metaRow.length > 0) {
         lines.push(`- ${metaRow.join(' · ')}`);
