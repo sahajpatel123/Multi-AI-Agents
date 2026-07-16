@@ -1272,6 +1272,43 @@ export function RoomPage() {
           })}
         </div>
       ) : null}
+      {boardScoreFilterUseful ? (
+        <div
+          role="group"
+          aria-label="Filter board by score"
+          style={{
+            display: 'flex',
+            gap: 6,
+            flexWrap: 'wrap',
+            marginBottom: 12,
+            alignItems: 'center',
+          }}
+        >
+          {AGENT_HISTORY_SCORE_OPTIONS.map((opt) => {
+            const selected = boardScoreFilter === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setBoardScoreFilter(opt.value)}
+                aria-pressed={selected}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                  background: selected ? '#F0E6DA' : 'transparent',
+                  color: selected ? '#4A3728' : '#8C7355',
+                  fontSize: 11,
+                  fontFamily: 'Georgia, serif',
+                  cursor: 'pointer',
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       {boardCopyStatus !== 'idle' ? (
         <div
           role="status"
