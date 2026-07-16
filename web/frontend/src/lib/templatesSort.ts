@@ -1,9 +1,12 @@
 /** Sort helpers for Agent task templates catalog. */
 
-export type TemplatesSort = 'default' | 'title' | 'category' | 'slots';
+import { orderTemplatesByRecentIds } from './templatesRecent';
+
+export type TemplatesSort = 'default' | 'recent' | 'title' | 'category' | 'slots';
 
 export const TEMPLATES_SORT_OPTIONS: Array<{ value: TemplatesSort; label: string }> = [
   { value: 'default', label: 'Catalog order' },
+  { value: 'recent', label: 'Recently used' },
   { value: 'title', label: 'Title A–Z' },
   { value: 'category', label: 'Category' },
   { value: 'slots', label: 'Most slots' },
@@ -27,12 +30,18 @@ function cmpStr(a: string, b: string): number {
 /**
  * Sort templates for display. Does not mutate the input.
  * `default` preserves the incoming catalog order.
+ * `recent` needs `recentIds` (newest first); without recents falls back to default.
  */
 export function sortTemplates<T extends TemplatesSortable>(
   templates: T[],
   sort: TemplatesSort,
+  recentIds: readonly string[] = [],
 ): T[] {
   if (sort === 'default') return [...(templates || [])];
+  if (sort === 'recent') {
+    if (!recentIds.length) return [...(templates || [])];
+    return orderTemplatesByRecentIds(templates, recentIds);
+  }
 
   const list = [...(templates || [])];
   const tie = (a: T, b: T) =>

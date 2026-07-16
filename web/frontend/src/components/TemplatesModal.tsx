@@ -30,6 +30,13 @@ import {
   templatesExpertiseLabel,
   type TemplatesExpertiseFilter,
 } from '../lib/templatesExpertiseFilter';
+import {
+  clearRecentTemplateIds,
+  loadRecentTemplateIds,
+  pickRecentTemplates,
+  recordRecentTemplateId,
+  templatesRecentUseful,
+} from '../lib/templatesRecent';
 
 const TAB_ORDER = [
   'All',
@@ -77,6 +84,7 @@ export function TemplatesModal({
     useState<TemplatesExpertiseFilter>(TEMPLATES_EXPERTISE_ALL);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [recentIds, setRecentIds] = useState<string[]>(() => loadRecentTemplateIds());
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const copyTimerRef = useRef<number | null>(null);
@@ -109,8 +117,20 @@ export function TemplatesModal({
       t.id,
       t.default_expertise,
     ]);
-    return sortTemplates(searched, templatesSort);
-  }, [tabTemplates, searchQuery, templatesSort, availabilityFilter, expertiseFilter]);
+    return sortTemplates(searched, templatesSort, recentIds);
+  }, [
+    tabTemplates,
+    searchQuery,
+    templatesSort,
+    availabilityFilter,
+    expertiseFilter,
+    recentIds,
+  ]);
+
+  const recentStrip = useMemo(
+    () => pickRecentTemplates(flatTemplates, recentIds, 6),
+    [flatTemplates, recentIds],
+  );
 
   const showAvailabilityFilter = useMemo(
     () => templatesAvailabilityFilterUseful(flatTemplates),
@@ -133,6 +153,27 @@ export function TemplatesModal({
     itemCount: flatTemplates.length,
   });
 
+  const showRecentStrip =
+    catalogMode === 'list' &&
+    templatesRecentUseful(recentIds) &&
+    recentStrip.length > 0 &&
+    !searchQuery.trim() &&
+    activeTab === 'All' &&
+    availabilityFilter === 'all' &&
+    expertiseFilter === TEMPLATES_EXPERTISE_ALL;
+
+  const selectTemplate = useCallback(
+    (t: AgentTaskTemplate) => {
+      if (t.disabled) return;
+      if (t.id) {
+        setRecentIds(recordRecentTemplateId(t.id));
+      }
+      onSelect(t);
+      onClose();
+    },
+    [onSelect, onClose],
+  );
+
   useEffect(() => {
     if (open) {
       setActiveTab('All');
@@ -142,6 +183,7 @@ export function TemplatesModal({
       setExpertiseFilter(TEMPLATES_EXPERTISE_ALL);
       setCopyStatus('idle');
       setDownloadStatus('idle');
+      setRecentIds(loadRecentTemplateIds());
     }
   }, [open]);
 
@@ -665,6 +707,84 @@ export function TemplatesModal({
           ))}
         </div>
         <div style={{ overflowY: 'auto', padding: 16, flex: 1 }}>
+          {showRecentStrip ? (
+            <div
+              style={{ marginBottom: 16 }}
+              aria-label="Recently used templates"
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  marginBottom: 8,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    color: '#A89070',
+                  }}
+                >
+                  Recently used
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRecentIds(clearRecentTemplateIds())}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    color: '#C4956A',
+                    fontFamily: 'Georgia, serif',
+                    textDecoration: 'underline',
+                    padding: 0,
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                }}
+              >
+                {recentStrip.map((t) => (
+                  <button
+                    key={`recent-${t.id}`}
+                    type="button"
+                    disabled={!!t.disabled}
+                    onClick={() => selectTemplate(t)}
+                    title={t.title}
+                    style={{
+                      maxWidth: '100%',
+                      textAlign: 'left',
+                      background: t.disabled ? '#F5F0E8' : '#FAF3EA',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 999,
+                      padding: '6px 12px',
+                      cursor: t.disabled ? 'not-allowed' : 'pointer',
+                      opacity: t.disabled ? 0.65 : 1,
+                      fontSize: 12,
+                      color: '#4A3728',
+                      fontFamily: 'Georgia, serif',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {t.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {catalogMode === 'loading' ? (
             <div style={{ textAlign: 'center', padding: '2.5rem 1rem' }}>
               <p style={{ margin: 0, fontSize: 14, color: '#8C7355' }}>Loading templates…</p>
@@ -745,11 +865,7 @@ export function TemplatesModal({
                   key={t.id}
                   type="button"
                   disabled={!!t.disabled}
-                  onClick={() => {
-                    if (t.disabled) return;
-                    onSelect(t);
-                    onClose();
-                  }}
+                  onClick={() => selectTemplate(t)}
                   style={{
                     textAlign: 'left',
                     background: t.disabled ? '#F5F0E8' : '#FAF7F2',

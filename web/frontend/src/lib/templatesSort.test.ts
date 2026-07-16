@@ -24,8 +24,17 @@ describe('sortTemplates', () => {
     expect(sortTemplates(items, 'slots').map((t) => t.id)).toEqual(['a', 'c', 'b']);
   });
 
+  it('sorts by recent ids newest first', () => {
+    expect(sortTemplates(items, 'recent', ['c', 'a']).map((t) => t.id)).toEqual([
+      'c',
+      'a',
+      'b',
+    ]);
+  });
+
   it('labels sorts', () => {
     expect(templatesSortLabel('title')).toBe('Title A–Z');
     expect(templatesSortLabel('default')).toBe('Catalog order');
+    expect(templatesSortLabel('recent')).toBe('Recently used');
   });
 });
