@@ -26,7 +26,7 @@ import { useProfileModal } from '../context/ProfileModalContext';
 import track from '../utils/track';
 import { filterBySearchQuery, filterTurnsBySearchQuery } from '../lib/sidebarSearch';
 import { copyToClipboard } from '../lib/clipboard';
-import { formatSavedTakeExport } from '../lib/savedTakeExport';
+import { formatSavedTakeExport, formatSavedTakesListExport } from '../lib/savedTakeExport';
 import { motionDuration } from '../lib/motion';
 import {
   SIDEBAR_TURN_TITLE_MAX,
@@ -87,6 +87,7 @@ export function Sidebar({
   const [savedSearchQuery, setSavedSearchQuery] = useState('');
   const [copiedSavedId, setCopiedSavedId] = useState<string | number | null>(null);
   const [copySavedFailed, setCopySavedFailed] = useState(false);
+  const [copyAllSavedStatus, setCopyAllSavedStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
@@ -142,6 +143,13 @@ export function Sidebar({
     return () => window.clearTimeout(t);
   }, [copiedSavedId, copySavedFailed]);
 
+  useEffect(() => {
+    if (copyAllSavedStatus === 'idle') return;
+    const hold = motionDuration(copyAllSavedStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setCopyAllSavedStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [copyAllSavedStatus]);
+
   const handleCopySaved = async (item: SavedResponseItem, displayName: string) => {
     const md = formatSavedTakeExport({
       agentName: displayName,
@@ -157,6 +165,34 @@ export function Sidebar({
       void track('saved_take_copied', undefined, item.agent_id);
     } else {
       setCopiedSavedId(null);
+      setCopySavedFailed(true);
+    }
+  };
+
+  const handleCopyAllSaved = async () => {
+    const q = savedSearchQuery.trim();
+    const md = formatSavedTakesListExport({
+      totalCount: savedItems.length,
+      filterNote: q ? `search “${q}”` : undefined,
+      items: filteredSaved.map((item) => {
+        const agent = AGENTS[item.agent_id];
+        return {
+          agentName: item.persona_name || agent?.name || item.agent_id || 'Mind',
+          prompt: item.prompt,
+          oneLiner: item.one_liner,
+          verdict: item.verdict,
+          score: item.score,
+          timestamp: item.timestamp,
+        };
+      }),
+    });
+    const ok = await copyToClipboard(md);
+    if (ok) {
+      setCopySavedFailed(false);
+      setCopyAllSavedStatus('copied');
+      void track('saved_takes_list_copied');
+    } else {
+      setCopyAllSavedStatus('failed');
       setCopySavedFailed(true);
     }
   };
@@ -680,23 +716,82 @@ export function Sidebar({
                     gap: 8,
                   }}
                 >
-                  <p
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <p
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.12em',
+                        color: '#6B6460',
+                        margin: 0,
+                      }}
+                    >
+                      Saved
+                    </p>
+                    <span style={{ fontSize: 10, color: '#A89070' }}>
+                      {filteredSaved.length}
+                      {savedSearchQuery.trim() ? ` / ${savedItems.length}` : ''}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    title="Copy all saved takes as markdown"
+                    aria-label={
+                      copyAllSavedStatus === 'copied'
+                        ? 'Saved takes copied'
+                        : copyAllSavedStatus === 'failed'
+                          ? 'Copy failed'
+                          : 'Copy all saved takes as markdown'
+                    }
+                    onClick={() => void handleCopyAllSaved()}
                     style={{
-                      fontSize: '10px',
-                      fontWeight: 600,
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color:
+                        copyAllSavedStatus === 'failed'
+                          ? '#D85A30'
+                          : copyAllSavedStatus === 'copied'
+                            ? '#5A8C6A'
+                            : '#C4956A',
+                      padding: '3px 8px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
                       textTransform: 'uppercase',
-                      letterSpacing: '0.12em',
-                      color: '#6B6460',
-                      margin: 0,
+                      flexShrink: 0,
+                      fontFamily: 'Georgia, serif',
                     }}
                   >
-                    Saved
-                  </p>
-                  <span style={{ fontSize: 10, color: '#A89070' }}>
-                    {filteredSaved.length}
-                    {savedSearchQuery.trim() ? ` / ${savedItems.length}` : ''}
-                  </span>
+                    {copyAllSavedStatus === 'copied'
+                      ? 'Copied'
+                      : copyAllSavedStatus === 'failed'
+                        ? 'Failed'
+                        : 'Copy all'}
+                  </button>
                 </div>
+                {copyAllSavedStatus !== 'idle' ? (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    style={{
+                      position: 'absolute',
+                      width: 1,
+                      height: 1,
+                      padding: 0,
+                      margin: -1,
+                      overflow: 'hidden',
+                      clip: 'rect(0, 0, 0, 0)',
+                      whiteSpace: 'nowrap',
+                      border: 0,
+                    }}
+                  >
+                    {copyAllSavedStatus === 'copied'
+                      ? 'Saved takes copied to clipboard'
+                      : 'Could not copy saved takes'}
+                  </div>
+                ) : null}
                 <div style={{ marginBottom: 8, position: 'relative' }}>
                   <input
                     ref={savedSearchInputRef}

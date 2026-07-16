@@ -1,5 +1,14 @@
 /** Portable markdown for a bookmarked Arena take. */
 
+export type SavedTakeListItem = {
+  agentName?: string | null;
+  prompt?: string | null;
+  oneLiner?: string | null;
+  verdict?: string | null;
+  score?: number | null;
+  timestamp?: string | null;
+};
+
 export function formatSavedTakeExport(opts: {
   agentName: string;
   prompt: string;
@@ -33,5 +42,89 @@ export function formatSavedTakeExport(opts: {
   }
   lines.push('---');
   lines.push('_Shared from Arena (saved take)_');
+  return lines.join('\n').trim() + '\n';
+}
+
+function formatWhen(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+}
+
+/**
+ * Bulk export of bookmarked takes (full list or current sidebar filter).
+ */
+export function formatSavedTakesListExport(opts: {
+  items: SavedTakeListItem[];
+  totalCount?: number | null;
+  filterNote?: string | null;
+}): string {
+  const items = opts.items || [];
+  const lines: string[] = ['# Arena · Saved takes', ''];
+
+  const total =
+    typeof opts.totalCount === 'number' && Number.isFinite(opts.totalCount)
+      ? opts.totalCount
+      : null;
+  if (total != null && total > 0) {
+    lines.push(
+      items.length === total
+        ? `**${items.length}** saved take${items.length === 1 ? '' : 's'}`
+        : `**${items.length}** of **${total}** saved takes in this view`,
+    );
+    lines.push('');
+  } else if (items.length > 0) {
+    lines.push(`**${items.length}** saved take${items.length === 1 ? '' : 's'}`);
+    lines.push('');
+  }
+
+  const filterNote = (opts.filterNote || '').trim();
+  if (filterNote) {
+    lines.push(`_Filtered view: ${filterNote}_`);
+    lines.push('');
+  }
+
+  if (items.length === 0) {
+    lines.push(
+      filterNote
+        ? '_No saved takes match this filter._'
+        : '_No saved takes yet._',
+    );
+    lines.push('');
+  } else {
+    items.forEach((item, i) => {
+      const agentName = (item.agentName || 'Arena mind').trim() || 'Arena mind';
+      const prompt = (item.prompt || '').trim() || '(no prompt)';
+      const oneLiner = (item.oneLiner || '').trim();
+      const verdict = (item.verdict || '').trim();
+
+      lines.push(`## ${i + 1}. ${agentName}`);
+      lines.push('');
+      lines.push(`**Question:** ${prompt}`);
+      lines.push('');
+      if (oneLiner) {
+        lines.push(`> ${oneLiner}`);
+        lines.push('');
+      }
+      if (verdict && verdict !== oneLiner) {
+        lines.push(verdict);
+        lines.push('');
+      }
+      const meta: string[] = [];
+      if (typeof item.score === 'number' && Number.isFinite(item.score)) {
+        meta.push(`Score ${Math.round(item.score)}`);
+      }
+      const when = formatWhen(item.timestamp);
+      if (when) meta.push(when);
+      if (meta.length > 0) {
+        lines.push(`_${meta.join(' · ')}_`);
+        lines.push('');
+      }
+    });
+  }
+
+  lines.push('---');
+  lines.push('_Shared from Arena (saved takes)_');
   return lines.join('\n').trim() + '\n';
 }

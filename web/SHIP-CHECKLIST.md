@@ -117,6 +117,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Perspective comparison**: persona names/colors, Escape + dialog a11y, copy markdown, honest confidence/score labels.
 - **Perspective drift copy**: Room drift panel exports score, clusters, and divergences as markdown (room name in title) with clipboard feedback.
 - **Room board copy**: export the research board (or current search filter) as markdown — titles, authors, scores, excerpts.
+- **Saved takes bulk copy**: sidebar “Copy all” exports filtered bookmarks as markdown (mind, question, take, score).
 
 ## Required production environment
 
