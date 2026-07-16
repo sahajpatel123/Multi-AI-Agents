@@ -180,6 +180,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **`/api/agent/feedback/recent`**: profile + future surfaces list the user's latest verdicts newest-first with task title/snippet (cascade-deleted tasks still surface with null title + snippet).
 - **Recent ratings on Profile**: usage tab shows the last N feedback items with verdict chip + title + optional note + relative timestamp; complements the aggregate feedback-accuracy bar.
 - **About copy refresh**: `/about` “What ships today” names Watchlist, Saved takes, Rooms, and calibration alongside the original panel/debate/Agent surfaces.
+- **Arena card full take**: when the verdict is longer than the one-liner, “Show full take” expands markdown in-card (key assumption when present).
 
 ## Required production environment
 

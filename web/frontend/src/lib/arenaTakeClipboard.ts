@@ -49,3 +49,20 @@ export function pickArenaTakeTeaser(opts: {
   if (body.length <= max) return body;
   return `${body.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
 }
+
+/**
+ * True when the card should offer “Show full take” — full body is
+ * meaningfully longer than the one-liner teaser.
+ */
+export function arenaFullTakeExpandable(opts: {
+  verdict?: string | null;
+  oneLiner?: string | null;
+}): boolean {
+  const one = (opts.oneLiner || '').trim();
+  const full = pickArenaTakeBody(opts);
+  if (!full) return false;
+  if (!one) return full.length > 160;
+  if (full === one) return full.length > 220;
+  // Different full text: expand when it adds real substance.
+  return full.length >= one.length + 40 || full.length > 180;
+}

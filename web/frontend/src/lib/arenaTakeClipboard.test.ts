@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  arenaFullTakeExpandable,
   formatArenaTakeClipboard,
   pickArenaTakeBody,
   pickArenaTakeTeaser,
@@ -41,5 +42,21 @@ describe('pickArenaTakeTeaser', () => {
     const long = 'x'.repeat(400);
     expect(pickArenaTakeTeaser({ oneLiner: long, maxLen: 40 }).endsWith('…')).toBe(true);
     expect(pickArenaTakeTeaser({ oneLiner: long, maxLen: 40 }).length).toBeLessThanOrEqual(40);
+  });
+});
+
+describe('arenaFullTakeExpandable', () => {
+  it('is false when verdict matches short one-liner', () => {
+    expect(arenaFullTakeExpandable({ oneLiner: 'Ship it.', verdict: 'Ship it.' })).toBe(false);
+  });
+
+  it('is true when full take adds substance', () => {
+    expect(
+      arenaFullTakeExpandable({
+        oneLiner: 'Ship carefully.',
+        verdict:
+          'Ship carefully with a staged rollout, kill switch, and clear success metrics before full launch.',
+      }),
+    ).toBe(true);
   });
 });

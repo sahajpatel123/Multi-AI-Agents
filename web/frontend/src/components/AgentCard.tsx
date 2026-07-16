@@ -13,8 +13,13 @@ import {
 } from 'lucide-react';
 import { ScoredAgent, AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
+import { AgentAnswerMarkdown } from './AgentAnswerMarkdown';
 import { ShareDropdown } from './ShareDropdown';
-import { pickArenaTakeBody, pickArenaTakeTeaser } from '../lib/arenaTakeClipboard';
+import {
+  arenaFullTakeExpandable,
+  pickArenaTakeBody,
+  pickArenaTakeTeaser,
+} from '../lib/arenaTakeClipboard';
 import track from '../utils/track';
 import {
   agentCardLoadingAnimation,
@@ -146,8 +151,23 @@ export function AgentCard({
   const prevConfidence = useRef(0);
   const [showContradictionBanner, setShowContradictionBanner] = useState(false);
   const [showContradictionTooltip, setShowContradictionTooltip] = useState(false);
+  const [showFullTake, setShowFullTake] = useState(false);
   const contradictionTooltipRef = useRef<HTMLDivElement>(null);
   const reducedMotion = prefersReducedMotion();
+
+  const fullTakeBody = pickArenaTakeBody({
+    oneLiner: response?.one_liner,
+    verdict: response?.verdict,
+  });
+  const canExpandFullTake = arenaFullTakeExpandable({
+    oneLiner: response?.one_liner,
+    verdict: response?.verdict,
+  });
+  const keyAssumption = (response?.key_assumption || '').trim();
+
+  useEffect(() => {
+    setShowFullTake(false);
+  }, [response?.one_liner, response?.verdict, agentId]);
 
   useEffect(() => {
     if (response?.confidence == null) {
@@ -461,9 +481,63 @@ export function AgentCard({
                 </div>
               )}
               
-              <p className="agent-response-text">
-                {response.one_liner}
-              </p>
+              {showFullTake && canExpandFullTake ? (
+                <div>
+                  <div className="agent-response-text" style={{ fontStyle: 'normal' }}>
+                    <AgentAnswerMarkdown markdown={fullTakeBody} question={prompt || undefined} />
+                  </div>
+                  {keyAssumption ? (
+                    <div
+                      style={{
+                        marginTop: 10,
+                        padding: '8px 10px',
+                        background: 'rgba(250,247,244,0.9)',
+                        borderLeft: `2px solid ${resolvedDisplay.color}`,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 10,
+                          letterSpacing: '0.1em',
+                          textTransform: 'uppercase',
+                          color: '#A89070',
+                          marginBottom: 3,
+                        }}
+                      >
+                        Key assumption
+                      </div>
+                      <p style={{ fontSize: 12, color: '#6B6460', lineHeight: 1.55, margin: 0, fontStyle: 'italic' }}>
+                        {keyAssumption}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="agent-response-text">{response.one_liner}</p>
+              )}
+              {canExpandFullTake ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowFullTake((v) => !v);
+                  }}
+                  style={{
+                    marginTop: 8,
+                    padding: 0,
+                    border: 'none',
+                    background: 'none',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    color: '#C4956A',
+                    fontFamily: 'Georgia, serif',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  {showFullTake ? 'Show less' : 'Show full take'}
+                </button>
+              ) : null}
             </div>
           ) : !isStreaming ? (
             <div>
