@@ -99,6 +99,22 @@ interface SidebarProps {
 
 type FilterValue = 'all' | PromptCategory;
 
+function formatSidebarRelative(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const t = d.getTime();
+  if (Number.isNaN(t)) return '';
+  const sec = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (sec < 60) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  return d.toLocaleDateString();
+}
+
 const FILTERS: Array<{ value: FilterValue; label: string; icon: ReactNode }> = [
   { value: 'all', label: 'All', icon: <LayoutGrid className="w-[15px] h-[15px]" /> },
   { value: 'question', label: 'Question', icon: <HelpCircle className="w-[15px] h-[15px]" /> },
@@ -1017,6 +1033,9 @@ export function Sidebar({
                               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <AgentDot agentId={turn.winner_id} size={5} />
                                 <span style={{ fontSize: '11px', color: '#6B6460', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{winner.name}</span>
+                                <span style={{ fontSize: 11, color: '#A89070', marginLeft: 'auto', flexShrink: 0 }}>
+                                  {formatSidebarRelative(turn.timestamp)}
+                                </span>
                               </div>
                             </button>
                           )}
