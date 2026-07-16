@@ -77,10 +77,12 @@ title = "Multi-AI-Agents gitleaks config"
 # These two files contain only fixtures and key-name literals; any real
 # secret committed there would be caught by gitleaks' pre-commit hook or
 # the broader audit suite before reaching this gate.
+# Path regex uses (^|/) prefix to match against CI's absolute working
+# directory (/home/runner/work/Multi-AI-Agents/Multi-AI-Agents/...).
 [[allowlists]]
   description = "Path safety net for ENCRYPTION_KEY + STORAGE_KEY false positives"
   paths = [
-    '''^\.github/workflows/ci\.yml$''',
+    '''(^|/)\.github/workflows/ci\.yml$''',
     '''(^|/)web/frontend/src/lib/recentPrompts\.ts$''',
   ]
 
