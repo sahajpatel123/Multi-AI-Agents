@@ -103,6 +103,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Room Perspective Drift: copy analysis as markdown (clusters + divergences)',
       '[NEW] Room research board: copy board as markdown (honors search filter)',
       '[NEW] Sidebar Saved: copy all bookmarked takes as markdown (honors search)',
+      '[NEW] Sidebar Recents: copy filtered Arena turns as markdown',
       '[IMPROVED] Perspective comparison: real mind names, Escape, copy markdown',
       '[IMPROVED] Perspective comparison highlights shared terms and each mind’s distinctive keywords',
       '[IMPROVED] Escape returns to Arena from Discuss, Debate, and Leaderboard (modals still take Esc first)',

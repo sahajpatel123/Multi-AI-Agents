@@ -118,6 +118,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Perspective drift copy**: Room drift panel exports score, clusters, and divergences as markdown (room name in title) with clipboard feedback.
 - **Room board copy**: export the research board (or current search filter) as markdown — titles, authors, scores, excerpts.
 - **Saved takes bulk copy**: sidebar “Copy all” exports filtered bookmarks as markdown (mind, question, take, score).
+- **Arena recents copy**: sidebar Recents “Copy” exports filtered turns (title, prompt, winner, category) as markdown.
 
 ## Required production environment
 

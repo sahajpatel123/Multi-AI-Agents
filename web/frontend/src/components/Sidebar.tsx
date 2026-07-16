@@ -26,6 +26,7 @@ import { useProfileModal } from '../context/ProfileModalContext';
 import track from '../utils/track';
 import { filterBySearchQuery, filterTurnsBySearchQuery } from '../lib/sidebarSearch';
 import { copyToClipboard } from '../lib/clipboard';
+import { formatArenaRecentsExport } from '../lib/arenaRecentsExport';
 import { formatSavedTakeExport, formatSavedTakesListExport } from '../lib/savedTakeExport';
 import { motionDuration } from '../lib/motion';
 import {
@@ -88,6 +89,7 @@ export function Sidebar({
   const [copiedSavedId, setCopiedSavedId] = useState<string | number | null>(null);
   const [copySavedFailed, setCopySavedFailed] = useState(false);
   const [copyAllSavedStatus, setCopyAllSavedStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [copyRecentsStatus, setCopyRecentsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
@@ -150,6 +152,13 @@ export function Sidebar({
     return () => window.clearTimeout(t);
   }, [copyAllSavedStatus]);
 
+  useEffect(() => {
+    if (copyRecentsStatus === 'idle') return;
+    const hold = motionDuration(copyRecentsStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setCopyRecentsStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [copyRecentsStatus]);
+
   const handleCopySaved = async (item: SavedResponseItem, displayName: string) => {
     const md = formatSavedTakeExport({
       agentName: displayName,
@@ -195,6 +204,30 @@ export function Sidebar({
       setCopyAllSavedStatus('failed');
       setCopySavedFailed(true);
     }
+  };
+
+  const handleCopyRecents = async () => {
+    const parts: string[] = [];
+    if (activeFilter !== 'all') {
+      parts.push(`category ${activeFilter.charAt(0).toUpperCase()}${activeFilter.slice(1)}`);
+    }
+    const q = searchQuery.trim();
+    if (q) parts.push(`search “${q}”`);
+    const md = formatArenaRecentsExport({
+      totalCount: reversedTurns.length,
+      filterNote: parts.length > 0 ? parts.join(' · ') : undefined,
+      items: filteredTurns.map((turn) => ({
+        title: customTitles[turn.turn_id] || undefined,
+        prompt: turn.prompt,
+        category: turn.prompt_category,
+        winnerName: AGENTS[turn.winner_id]?.name || turn.winner_id || undefined,
+        timestamp: turn.timestamp,
+        turnId: turn.turn_id,
+      })),
+    });
+    const ok = await copyToClipboard(md);
+    setCopyRecentsStatus(ok ? 'copied' : 'failed');
+    if (ok) void track('arena_recents_copied');
   };
 
   const usedPercent = dailyLimit > 0
@@ -360,14 +393,75 @@ export function Sidebar({
           </div>
 
           <div style={{ margin: '1.2rem 0 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6B6460', margin: 0 }}>Recents</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6B6460', margin: 0 }}>Recents</p>
+              {reversedTurns.length > 0 ? (
+                <span style={{ fontSize: 10, color: '#A89070' }}>
+                  {filteredTurns.length}
+                  {searchQuery.trim() || activeFilter !== 'all' ? ` / ${reversedTurns.length}` : ''}
+                </span>
+              ) : null}
+            </div>
             {reversedTurns.length > 0 ? (
-              <span style={{ fontSize: 10, color: '#A89070' }}>
-                {filteredTurns.length}
-                {searchQuery.trim() || activeFilter !== 'all' ? ` / ${reversedTurns.length}` : ''}
-              </span>
+              <button
+                type="button"
+                title="Copy recents as markdown"
+                aria-label={
+                  copyRecentsStatus === 'copied'
+                    ? 'Recents copied'
+                    : copyRecentsStatus === 'failed'
+                      ? 'Copy failed'
+                      : 'Copy recents as markdown'
+                }
+                onClick={() => void handleCopyRecents()}
+                style={{
+                  background: 'none',
+                  border: '0.5px solid #E0D8D0',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  color:
+                    copyRecentsStatus === 'failed'
+                      ? '#D85A30'
+                      : copyRecentsStatus === 'copied'
+                        ? '#5A8C6A'
+                        : '#C4956A',
+                  padding: '3px 8px',
+                  fontSize: 10,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  flexShrink: 0,
+                  fontFamily: 'Georgia, serif',
+                }}
+              >
+                {copyRecentsStatus === 'copied'
+                  ? 'Copied'
+                  : copyRecentsStatus === 'failed'
+                    ? 'Failed'
+                    : 'Copy'}
+              </button>
             ) : null}
           </div>
+          {copyRecentsStatus !== 'idle' ? (
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                position: 'absolute',
+                width: 1,
+                height: 1,
+                padding: 0,
+                margin: -1,
+                overflow: 'hidden',
+                clip: 'rect(0, 0, 0, 0)',
+                whiteSpace: 'nowrap',
+                border: 0,
+              }}
+            >
+              {copyRecentsStatus === 'copied'
+                ? 'Arena recents copied to clipboard'
+                : 'Could not copy Arena recents'}
+            </div>
+          ) : null}
           <div className="flex items-center gap-2 mb-2">
             {FILTERS.map((filter) => {
               const isActive = activeFilter === filter.value;
