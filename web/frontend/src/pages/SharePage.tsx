@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { AGENTS } from '../types';
+import { isCollapsiblePrompt } from '../lib/collapsiblePrompt';
 import { PERSONAS } from '../data/personas';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
@@ -72,6 +74,7 @@ export function SharePage() {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [promptExpanded, setPromptExpanded] = useState(false);
 
   const agentId = sanitizeParam(params.get('agent'), 64);
   const prompt = sanitizeParam(params.get('prompt'));
@@ -99,6 +102,10 @@ export function SharePage() {
   useEffect(() => {
     setNativeShareAvailable(canUseNativeShare());
   }, []);
+
+  useEffect(() => {
+    setPromptExpanded(false);
+  }, [prompt]);
 
   useEffect(() => {
     if (!copied) return;
@@ -292,15 +299,42 @@ export function SharePage() {
                       fontStyle: 'italic',
                       lineHeight: 1.65,
                       margin: 0,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      display: !promptExpanded && isCollapsiblePrompt(prompt) ? '-webkit-box' : undefined,
+                      WebkitLineClamp:
+                        !promptExpanded && isCollapsiblePrompt(prompt) ? 4 : undefined,
+                      WebkitBoxOrient:
+                        !promptExpanded && isCollapsiblePrompt(prompt) ? 'vertical' : undefined,
+                      overflow:
+                        !promptExpanded && isCollapsiblePrompt(prompt) ? 'hidden' : undefined,
                     }}
                   >
                     {prompt}
                   </p>
+                  {isCollapsiblePrompt(prompt) ? (
+                    <button
+                      type="button"
+                      onClick={() => setPromptExpanded((v) => !v)}
+                      style={{
+                        marginTop: 6,
+                        padding: 0,
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        color: '#C4956A',
+                        fontFamily: 'Georgia, serif',
+                      }}
+                    >
+                      {promptExpanded ? 'Show less' : 'Show full question'}
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
 
               {response ? (
-                <blockquote
+                <div
                   style={{
                     margin: 0,
                     padding: '14px 16px',
@@ -309,18 +343,8 @@ export function SharePage() {
                     borderRadius: '0 12px 12px 0',
                   }}
                 >
-                  <p
-                    style={{
-                      fontSize: 16,
-                      color: '#1A1714',
-                      lineHeight: 1.7,
-                      margin: 0,
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    {response}
-                  </p>
-                </blockquote>
+                  <AgentAnswerMarkdown markdown={response} question={prompt || undefined} />
+                </div>
               ) : (
                 <p style={{ fontSize: 14, color: '#8C7355', fontStyle: 'italic', margin: 0 }}>
                   {agent.oneLiner}

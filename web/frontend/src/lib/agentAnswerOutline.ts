@@ -76,6 +76,14 @@ export function estimateReadingMinutes(
   return { words, minutes };
 }
 
+/** Minimum words before we surface a reading-time chrome (avoids noise on short takes). */
+export const AGENT_ANSWER_READING_META_MIN_WORDS = 50;
+
+/** True when reading-time chrome is worth showing. */
+export function agentAnswerReadingMetaUseful(meta: AgentAnswerReadingMeta | null | undefined): boolean {
+  return Boolean(meta && meta.words >= AGENT_ANSWER_READING_META_MIN_WORDS);
+}
+
 /** Human label, e.g. "≈ 4 min read · 820 words". Empty when no content. */
 export function formatAgentAnswerReadingLabel(meta: AgentAnswerReadingMeta): string {
   if (!meta || meta.words <= 0) return '';

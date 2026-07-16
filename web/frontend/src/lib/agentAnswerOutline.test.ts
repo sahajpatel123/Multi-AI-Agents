@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   agentAnswerOutlineUseful,
+  agentAnswerReadingMetaUseful,
   countMarkdownWords,
   estimateReadingMinutes,
   extractAgentAnswerHeadings,
@@ -80,6 +81,11 @@ describe('reading meta', () => {
     expect(formatAgentAnswerReadingLabel({ words: 820, minutes: 4 })).toBe(
       '≈ 4 min read · 820 words',
     );
+  });
+
+  it('only treats longer answers as useful for reading chrome', () => {
+    expect(agentAnswerReadingMetaUseful({ words: 12, minutes: 1 })).toBe(false);
+    expect(agentAnswerReadingMetaUseful({ words: 50, minutes: 1 })).toBe(true);
   });
 });
 

@@ -5,6 +5,7 @@ import type { Components } from 'react-markdown';
 import { copyToClipboard } from '../lib/clipboard';
 import {
   agentAnswerOutlineUseful,
+  agentAnswerReadingMetaUseful,
   estimateReadingMinutes,
   extractAgentAnswerHeadings,
   formatAgentAnswerOutlineMarkdown,
@@ -73,7 +74,9 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
 
   const headings = useMemo(() => extractAgentAnswerHeadings(markdown || ''), [markdown]);
   const readingMeta = useMemo(() => estimateReadingMinutes(markdown || ''), [markdown]);
-  const readingLabel = formatAgentAnswerReadingLabel(readingMeta);
+  const readingLabel = agentAnswerReadingMetaUseful(readingMeta)
+    ? formatAgentAnswerReadingLabel(readingMeta)
+    : '';
   const showOutline = agentAnswerOutlineUseful(headings);
 
   useEffect(() => {

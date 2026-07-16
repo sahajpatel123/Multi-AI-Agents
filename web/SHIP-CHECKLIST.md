@@ -164,6 +164,8 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Search highlight coverage**: also Sidebar Recents/Saved, Room board task titles, Templates catalog, and Personas library.
 - **Agent history feedback filter**: All ratings / Accurate / Partial / Inaccurate / Unrated chips (export notes filter).
 - **Sidebar Recents recency filter**: same recency bands on Arena turns (export notes filter).
+- **Share take reading UX**: public `/share` renders the take with Agent markdown (headings, lists), reading time + outline when useful; long questions clamp with “Show full question”.
+- **Reading-time threshold**: answer reading chrome only when ≥50 words (avoids noise on short takes).
 
 ## Required production environment
 

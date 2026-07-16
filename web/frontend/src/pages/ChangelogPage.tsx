@@ -158,6 +158,8 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Search highlight extends to Sidebar Recents/Saved, Room board, Templates, and Personas',
       '[NEW] Agent research history: filter by your feedback (Accurate / Partial / Inaccurate / Unrated)',
       '[NEW] Sidebar Recents: filter by recency (24h / 7d / 30d / Older)',
+      '[IMPROVED] Public /share takes render as markdown with reading time + section outline',
+      '[IMPROVED] Reading-time chrome only appears on longer answers (50+ words)',
     ],
   },
   {
