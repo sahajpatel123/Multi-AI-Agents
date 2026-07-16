@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getRoomPerspectiveDrift,
   type PerspectiveDriftResponse,
 } from '../api';
+import { copyToClipboard } from '../lib/clipboard';
+import { motionDuration } from '../lib/motion';
+import { formatPerspectiveDriftExport } from '../lib/perspectiveDriftExport';
 
 function DriftIcon() {
   return (
@@ -35,14 +38,23 @@ function scoreColor(score: number): string {
 type Props = {
   slug: string;
   taskCount: number;
+  roomName?: string;
 };
 
 /** Room board panel: how much research viewpoints diverge across shared tasks. */
-export function PerspectiveDriftPanel({ slug, taskCount }: Props) {
+export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PerspectiveDriftResponse | null>(null);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const copyTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   const load = useCallback(async () => {
     if (!slug || taskCount < 2) return;
@@ -134,13 +146,22 @@ export function PerspectiveDriftPanel({ slug, taskCount }: Props) {
           ) : null}
 
           {error ? (
-            <div role="alert" style={{ fontSize: 13, color: '#993C1D' }}>
-              {error}
+            <div
+              role="alert"
+              style={{
+                fontSize: 13,
+                color: '#993C1D',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                flexWrap: 'wrap',
+              }}
+            >
+              <span style={{ flex: 1, minWidth: 140 }}>{error}</span>
               <button
                 type="button"
                 onClick={() => void load()}
                 style={{
-                  marginLeft: 10,
                   background: 'none',
                   border: '0.5px solid #D4C4B0',
                   borderRadius: 6,
@@ -152,12 +173,27 @@ export function PerspectiveDriftPanel({ slug, taskCount }: Props) {
               >
                 Retry
               </button>
+              <button
+                type="button"
+                aria-label="Dismiss error"
+                onClick={() => setError(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  color: '#A89070',
+                  padding: 0,
+                }}
+              >
+                ×
+              </button>
             </div>
           ) : null}
 
           {data && !error ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
                 <div
                   style={{
                     fontSize: 28,
@@ -186,29 +222,102 @@ export function PerspectiveDriftPanel({ slug, taskCount }: Props) {
                       : ''}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void load()}
-                  disabled={loading}
-                  title="Refresh drift analysis"
-                  aria-label="Refresh drift analysis"
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const md = formatPerspectiveDriftExport({
+                        roomName: roomName || slug,
+                        driftScore: data.drift_score,
+                        label: data.label,
+                        taskCount: data.task_count,
+                        meanSimilarity: data.mean_similarity,
+                        message: data.message,
+                        clusters: data.perspective_clusters,
+                        pairs: data.divergent_pairs,
+                      });
+                      void copyToClipboard(md).then((ok) => {
+                        if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
+                        setCopyStatus(ok ? 'copied' : 'failed');
+                        const hold = motionDuration(ok ? 2000 : 2800);
+                        copyTimerRef.current = window.setTimeout(() => {
+                          setCopyStatus('idle');
+                          copyTimerRef.current = null;
+                        }, hold > 0 ? hold : 0);
+                      });
+                    }}
+                    title="Copy drift analysis as markdown"
+                    aria-label={
+                      copyStatus === 'copied'
+                        ? 'Drift analysis copied'
+                        : copyStatus === 'failed'
+                          ? 'Copy failed'
+                          : 'Copy drift analysis as markdown'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #D4C4B0',
+                      borderRadius: 6,
+                      padding: '4px 10px',
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      color:
+                        copyStatus === 'failed'
+                          ? '#D85A30'
+                          : copyStatus === 'copied'
+                            ? '#5A8C6A'
+                            : '#C4956A',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Failed' : 'Copy'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void load()}
+                    disabled={loading}
+                    title="Refresh drift analysis"
+                    aria-label="Refresh drift analysis"
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #D4C4B0',
+                      borderRadius: 6,
+                      padding: '4px 10px',
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      color: '#C4956A',
+                      cursor: loading ? 'default' : 'pointer',
+                      opacity: loading ? 0.5 : 1,
+                    }}
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              {copyStatus !== 'idle' ? (
+                <div
+                  role="status"
+                  aria-live="polite"
                   style={{
-                    marginLeft: 'auto',
-                    background: 'none',
-                    border: '0.5px solid #D4C4B0',
-                    borderRadius: 6,
-                    padding: '4px 10px',
-                    fontSize: 10,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                    color: '#C4956A',
-                    cursor: loading ? 'default' : 'pointer',
-                    opacity: loading ? 0.5 : 1,
+                    position: 'absolute',
+                    width: 1,
+                    height: 1,
+                    padding: 0,
+                    margin: -1,
+                    overflow: 'hidden',
+                    clip: 'rect(0, 0, 0, 0)',
+                    whiteSpace: 'nowrap',
+                    border: 0,
                   }}
                 >
-                  Refresh
-                </button>
-              </div>
+                  {copyStatus === 'copied'
+                    ? 'Drift analysis copied to clipboard'
+                    : 'Could not copy drift analysis'}
+                </div>
+              ) : null}
 
               {data.message ? (
                 <div style={{ fontSize: 13, color: '#A89070', fontStyle: 'italic' }}>{data.message}</div>

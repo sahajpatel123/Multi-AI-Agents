@@ -1352,13 +1352,25 @@ export function RoomPage() {
           {isMobile && mobileTab === 'synthesis' ? (
             <>
               {synthesisInner}
-              {slug ? <PerspectiveDriftPanel slug={slug} taskCount={tasks.length} /> : null}
+              {slug ? (
+                <PerspectiveDriftPanel
+                  slug={slug}
+                  taskCount={tasks.length}
+                  roomName={room?.name}
+                />
+              ) : null}
             </>
           ) : null}
           {!isMobile ? (
             <>
               {synthesisInner}
-              {slug ? <PerspectiveDriftPanel slug={slug} taskCount={tasks.length} /> : null}
+              {slug ? (
+                <PerspectiveDriftPanel
+                  slug={slug}
+                  taskCount={tasks.length}
+                  roomName={room?.name}
+                />
+              ) : null}
             </>
           ) : null}
           {isMobile && mobileTab === 'tasks' ? tasksGrid : null}
