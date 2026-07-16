@@ -82,7 +82,8 @@ jobs:
         run: npm ci
 
       - name: Security audit (npm audit)
-        run: npm audit --audit-level=critical --omit=dev || echo "INFO: Moderate vulnerabilities exist in dev deps (vite/esbuild) - non-breaking fixes handled by dependabot"
+        run: |
+          npm audit --audit-level=critical --omit=dev || echo "Vulnerabilities in dev deps handled by dependabot"
 
       - name: Type check (tsc)
         run: npx tsc --noEmit
