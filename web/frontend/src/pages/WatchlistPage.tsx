@@ -1089,14 +1089,49 @@ export function WatchlistPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div
                       style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#2C1810',
-                        lineHeight: 1.4,
+                        display: 'flex',
+                        alignItems: 'baseline',
+                        gap: 8,
+                        flexWrap: 'wrap',
                         marginBottom: 5,
                       }}
                     >
-                      <HighlightQuery text={item.question} query={searchQuery} />
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 500,
+                          color: '#2C1810',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        <HighlightQuery text={item.question} query={searchQuery} />
+                      </span>
+                      {item.latest_task?.final_score != null ? (
+                        <span
+                          title={`Latest run scored ${item.latest_task.final_score}/100`}
+                          aria-label={`Latest score ${item.latest_task.final_score} out of 100`}
+                          style={{
+                            fontSize: 11,
+                            borderRadius: 999,
+                            padding: '1px 7px',
+                            background:
+                              item.latest_task.final_score >= 80
+                                ? 'rgba(138,168,153,0.18)'
+                                : item.latest_task.final_score >= 60
+                                  ? 'rgba(196,149,106,0.18)'
+                                  : 'rgba(229,115,115,0.15)',
+                            color:
+                              item.latest_task.final_score >= 80
+                                ? '#3F6B4A'
+                                : item.latest_task.final_score >= 60
+                                  ? '#8C5A2C'
+                                  : '#9C2F2A',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {item.latest_task.final_score}/100
+                        </span>
+                      ) : null}
                     </div>
                     <div style={{ fontSize: 12, color: '#8C7355', lineHeight: 1.5 }}>
                       Run {item.run_count} times · Last ran {formatRelativePast(item.last_run_at)} · Next:{' '}
