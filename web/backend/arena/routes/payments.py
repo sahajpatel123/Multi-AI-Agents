@@ -402,7 +402,8 @@ async def subscribe_agent_addon(
     plans = _plan_map(settings)
     plan = plans["agent_addon_monthly"]
     addon_plan_id = (plan.get("plan_id") or "").strip()
-    print(f"Addon plan ID from env: '{addon_plan_id}'")
+    # Temporary debug — remove after confirming tier/plan issues in production logs
+    logger.debug("Addon plan ID from env: '%s'", addon_plan_id)
     if not addon_plan_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

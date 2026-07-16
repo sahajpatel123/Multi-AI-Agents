@@ -41,3 +41,16 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Database files (never commit)
+*.db
+*.db-journal
+*.db-wal
+
+# Logs (never commit)
+logs/
+*.log
+
+# Secret keys and sensitive config
+secret_key.txt
+secrets.json
