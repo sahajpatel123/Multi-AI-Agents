@@ -55,3 +55,43 @@ def test_authenticate_existing_user_password_paths():
 
     assert auth.authenticate_user(db, "a@b.com", "correct-horse") is user
     assert auth.authenticate_user(db, "a@b.com", "wrong-password") is None
+
+
+def test_legacy_hash_is_rehashed_on_login(monkeypatch):
+    """If authenticate_user falls through to the legacy verify path, the user's
+    hash should be transparently upgraded so subsequent logins skip the legacy
+    branch entirely.
+    """
+    from arena.core import auth
+    from arena.db_models import User
+    import bcrypt
+
+    # Simulate a "legacy" hash: bcrypt of the raw password (no SHA256 prehash).
+    legacy_plain = "legacy-pass-1234"
+    legacy_hash = bcrypt.hashpw(legacy_plain.encode("utf-8")[:72], bcrypt.gensalt(12)).decode("utf-8")
+
+    user = User(email="legacy@example.com", password_hash=legacy_hash)
+
+    # Stub the DB so commit() doesn't try to flush.
+    class _StubDB(_FakeDB):
+        def __init__(self, user):
+            super().__init__(user=user)
+            self.committed = False
+        def add(self, _u):
+            pass
+        def commit(self):
+            self.committed = True
+
+    db = _StubDB(user)
+    result = auth.authenticate_user(db, "legacy@example.com", legacy_plain)
+
+    assert result is user, "auth must succeed via legacy path with the correct raw password"
+    assert db.committed, "DB commit must fire so the new hash persists"
+    # After commit, the user's hash should be the modern format.
+    assert user.password_hash != legacy_hash, "stale legacy hash must be replaced"
+    matched, used_legacy = auth.verify_password(legacy_plain, user.password_hash)
+    assert matched is True
+    assert used_legacy is False, (
+        "post-migration verify MUST take the modern path; the legacy fallback is "
+        "only a one-shot bridge for pre-prehash hashes."
+    )

@@ -2,12 +2,15 @@
 
 import base64
 import hashlib
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt as _bcrypt
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from arena.config import get_settings
 from arena.core.feedback_calibrator import get_feedback_calibration
@@ -31,20 +34,39 @@ def hash_password(plain: str) -> str:
     return _bcrypt.hashpw(_prehash(plain), _bcrypt.gensalt(rounds=12)).decode("utf-8")
 
 
-def verify_password(plain: str, hashed: str) -> bool:
+def verify_password(plain: str, hashed: str) -> tuple[bool, bool]:
+    """Return (matched, used_legacy_fallback).
+
+    The second flag tells callers when a password was verified via the legacy
+    non-prehashed path (kept for old accounts whose hashes predate the SHA256
+    prehash). On a real-account legacy match the caller MUST rehash to the
+    modern format so the next login skips this fallback entirely.
+
+    Important: we never return True unless bcrypt said so. Both branches go
+    through `_bcrypt.checkpw`; nothing about the request reveals which path
+    won.
+    """
     hashed_bytes = hashed.encode("utf-8") if isinstance(hashed, str) else hashed
 
     try:
         if _bcrypt.checkpw(_prehash(plain), hashed_bytes):
-            return True
+            return True, False
     except Exception:
         pass
 
     try:
         legacy = plain.encode("utf-8")[:72].decode("utf-8", errors="ignore").encode("utf-8")
-        return _bcrypt.checkpw(legacy, hashed_bytes)
+        if _bcrypt.checkpw(legacy, hashed_bytes):
+            logger.warning(
+                "auth.verify_password: legacy path matched for hashed=%s…; "
+                "caller should rehash to modern format",
+                hashed_bytes[:7].decode("utf-8", errors="ignore"),
+            )
+            return True, True
     except Exception:
-        return False
+        pass
+
+    return False, False
 
 
 # Precomputed bcrypt hash of a fixed throwaway value, using the same cost
@@ -163,6 +185,18 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
         # denies attackers a timing side-channel for username enumeration.
         verify_password(password, _DUMMY_PASSWORD_HASH)
         return None
-    if not verify_password(password, user.password_hash):
+    matched, used_legacy = verify_password(password, user.password_hash)
+    if not matched:
         return None
+    if used_legacy:
+        # Silent migration: the user proved knowledge of the password via the
+        # legacy path, so it's safe to upgrade their hash in place. Stops the
+        # legacy fallback from ever needing to fire for this account again.
+        user.password_hash = hash_password(password)
+        db.add(user)
+        db.commit()
+        logger.info(
+            "auth.authenticate_user: rehashed legacy password for user_id=%s",
+            user.id,
+        )
     return user
