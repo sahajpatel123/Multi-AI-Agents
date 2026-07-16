@@ -161,6 +161,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Public /share takes render as markdown with reading time + section outline',
       '[IMPROVED] Reading-time chrome only appears on longer answers (50+ words)',
       '[NEW] Agent Watchlist: filter by expertise domain',
+      '[IMPROVED] Search highlight in Personas swap dialog, library quotes, and Room add-task picker',
     ],
   },
   {

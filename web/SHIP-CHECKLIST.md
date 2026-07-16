@@ -167,6 +167,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Share take reading UX**: public `/share` renders the take with Agent markdown (headings, lists), reading time + outline when useful; long questions clamp with “Show full question”.
 - **Reading-time threshold**: answer reading chrome only when ≥50 words (avoids noise on short takes).
 - **Watchlist domain filter**: All domains + top expertise domains when mixed (export notes filter).
+- **Search highlight dialogs**: Personas swap + library quotes/descriptions; Room add-task history picker.
 
 ## Required production environment
 

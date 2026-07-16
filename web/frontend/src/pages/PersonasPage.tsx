@@ -1061,10 +1061,10 @@ export function PersonasPage() {
                     </span>
                   </div>
                   <p style={{ fontSize: '12px', color: '#6B6460', fontStyle: 'italic', marginTop: '.4rem', lineHeight: 1.6 }}>
-                    {persona.quote}
+                    <HighlightQuery text={persona.quote} query={libraryQuery} />
                   </p>
                   <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.6, marginTop: '.7rem' }}>
-                    {persona.description}
+                    <HighlightQuery text={persona.description} query={libraryQuery} />
                   </p>
                   {isLocked && (
                     <div
@@ -1400,11 +1400,11 @@ export function PersonasPage() {
                           }}
                         />
                         <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>
-                          {persona.name}
+                          <HighlightQuery text={persona.name} query={swapQuery} />
                         </span>
                       </div>
                       <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.5, marginTop: '.4rem' }}>
-                        {persona.description}
+                        <HighlightQuery text={persona.description} query={swapQuery} />
                       </p>
                       <p
                         style={{
@@ -1414,7 +1414,7 @@ export function PersonasPage() {
                           marginTop: '.4rem',
                         }}
                       >
-                        {persona.quote}
+                        <HighlightQuery text={persona.quote} query={swapQuery} />
                       </p>
                       {isLocked && (
                         <div style={{ marginTop: '.6rem', fontSize: '11px', color: '#1A1714' }}>

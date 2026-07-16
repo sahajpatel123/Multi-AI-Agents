@@ -2149,8 +2149,10 @@ export function RoomPage() {
                             e.currentTarget.style.background = 'transparent';
                           }}
                         >
-                          {(ht.task_text || '').slice(0, 80)}
-                          {(ht.task_text || '').length > 80 ? '…' : ''}
+                          <HighlightQuery
+                            text={`${(ht.task_text || '').slice(0, 80)}${(ht.task_text || '').length > 80 ? '…' : ''}`}
+                            query={pickerQuery}
+                          />
                           <span style={{ color: '#C4956A', marginLeft: 8 }}>{ht.final_score != null ? `${ht.final_score}/100` : ''}</span>
                         </button>
                       ))}
