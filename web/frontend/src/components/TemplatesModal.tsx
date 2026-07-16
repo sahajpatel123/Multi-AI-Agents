@@ -5,6 +5,11 @@ import { ConduraBadge } from './ConduraBadge';
 import { prefersReducedMotion } from '../lib/motion';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import { templatesListBodyMode } from '../lib/templatesListView';
+import {
+  TEMPLATES_SORT_OPTIONS,
+  sortTemplates,
+  type TemplatesSort,
+} from '../lib/templatesSort';
 
 const TAB_ORDER = [
   'All',
@@ -45,6 +50,7 @@ export function TemplatesModal({
 }: TemplatesModalProps) {
   const [activeTab, setActiveTab] = useState<TabId>('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [templatesSort, setTemplatesSort] = useState<TemplatesSort>('default');
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const visible = open || closing;
@@ -63,18 +69,17 @@ export function TemplatesModal({
     return categories[activeTab] ?? [];
   }, [activeTab, categories, flatTemplates]);
 
-  const visibleTemplates = useMemo(
-    () =>
-      filterBySearchQuery(tabTemplates, searchQuery, (t) => [
-        t.title,
-        t.description,
-        t.category,
-        t.example,
-        t.prompt_template,
-        t.id,
-      ]),
-    [tabTemplates, searchQuery],
-  );
+  const visibleTemplates = useMemo(() => {
+    const searched = filterBySearchQuery(tabTemplates, searchQuery, (t) => [
+      t.title,
+      t.description,
+      t.category,
+      t.example,
+      t.prompt_template,
+      t.id,
+    ]);
+    return sortTemplates(searched, templatesSort);
+  }, [tabTemplates, searchQuery, templatesSort]);
 
   const catalogMode = templatesListBodyMode({
     loading,
@@ -86,6 +91,7 @@ export function TemplatesModal({
     if (open) {
       setActiveTab('All');
       setSearchQuery('');
+      setTemplatesSort('default');
     }
   }, [open]);
 
@@ -235,60 +241,91 @@ export function TemplatesModal({
         </div>
 
         <div style={{ padding: '12px 16px 0', flexShrink: 0 }}>
-          <div style={{ position: 'relative' }}>
-            <input
-              ref={searchRef}
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search templates…"
-              aria-label="Search task templates"
-              autoComplete="off"
-              style={{
-                width: '100%',
-                boxSizing: 'border-box',
-                fontSize: 13,
-                fontFamily: 'Georgia, serif',
-                color: '#2C1810',
-                background: '#FAF7F2',
-                border: '0.5px solid #E0D5C5',
-                borderRadius: 10,
-                padding: '10px 32px 10px 12px',
-                outline: 'none',
-              }}
-            />
-            {searchQuery ? (
-              <button
-                type="button"
-                aria-label="Clear template search"
-                onClick={() => {
-                  setSearchQuery('');
-                  searchRef.current?.focus();
-                }}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+              <input
+                ref={searchRef}
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search templates…"
+                aria-label="Search task templates"
+                autoComplete="off"
                 style={{
-                  position: 'absolute',
-                  right: 8,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  fontSize: 13,
+                  fontFamily: 'Georgia, serif',
+                  color: '#2C1810',
+                  background: '#FAF7F2',
+                  border: '0.5px solid #E0D5C5',
+                  borderRadius: 10,
+                  padding: '10px 32px 10px 12px',
+                  outline: 'none',
+                }}
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  aria-label="Clear template search"
+                  onClick={() => {
+                    setSearchQuery('');
+                    searchRef.current?.focus();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 16,
+                    color: '#A89070',
+                    lineHeight: 1,
+                    padding: 4,
+                  }}
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+            {flatTemplates.length > 1 ? (
+              <select
+                value={templatesSort}
+                onChange={(e) => setTemplatesSort(e.target.value as TemplatesSort)}
+                aria-label="Sort templates"
+                title="Sort templates"
+                style={{
+                  fontSize: 12,
+                  fontFamily: 'Georgia, serif',
+                  color: '#4A3728',
+                  background: '#FAF7F2',
+                  border: '0.5px solid #E0D5C5',
+                  borderRadius: 10,
+                  padding: '10px 10px',
                   cursor: 'pointer',
-                  fontSize: 16,
-                  color: '#A89070',
-                  lineHeight: 1,
-                  padding: 4,
+                  flex: '0 0 auto',
+                  maxWidth: 148,
                 }}
               >
-                ×
-              </button>
+                {TEMPLATES_SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             ) : null}
           </div>
-          {(searchQuery.trim() || activeTab !== 'All') && (
+          {(searchQuery.trim() || activeTab !== 'All' || templatesSort !== 'default') && (
             <p style={{ margin: '8px 0 0', fontSize: 11, color: '#A89070' }}>
               {visibleTemplates.length} match
               {visibleTemplates.length === 1 ? '' : 'es'}
               {activeTab !== 'All' ? ` in ${activeTab}` : ''}
               {searchQuery.trim() ? ` for “${searchQuery.trim()}”` : ''}
+              {templatesSort !== 'default'
+                ? ` · ${TEMPLATES_SORT_OPTIONS.find((o) => o.value === templatesSort)?.label}`
+                : ''}
             </p>
           )}
         </div>
