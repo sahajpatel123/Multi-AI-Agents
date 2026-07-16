@@ -14,10 +14,12 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from arena.config import get_settings
+from arena.core.dependencies import get_current_user_required
 from arena.core.seed_personas import seed_persona_library
-from arena.core.observability import get_health_data, setup_logging
+from arena.core.observability import get_health_data, get_health_data_detailed, setup_logging
 from arena.core.rate_limits import client_ip, rate_limiter
 from arena.database import SessionLocal, get_db, init_db
+from arena.models.schemas import UserResponse
 from arena.routes.auth import router as auth_router, user_router
 from arena.routes.analytics import router as analytics_router
 from arena.routes.personas import router as personas_router
@@ -314,6 +316,8 @@ def create_app() -> FastAPI:
     # ── Health check ──────────────────────────────────────────
     @app.get("/api/health", tags=["health"])
     async def health_check(db: Session = Depends(get_db)):
+        # Public, unauthenticated. Returns only status + database. Use
+        # /api/health/detailed (authenticated) for operational detail.
         db_ok = False
         try:
             db.execute(text("SELECT 1"))
@@ -321,6 +325,22 @@ def create_app() -> FastAPI:
         except Exception:
             pass
         return get_health_data(db_connected=db_ok)
+
+    @app.get("/api/health/detailed", tags=["health"])
+    async def health_check_detailed(
+        db: Session = Depends(get_db),
+        user: UserResponse = Depends(get_current_user_required),
+    ):
+        # Authenticated. Exposes uptime, app version, and rolling request
+        # count. The CI readiness probe hits the public /api/health, so
+        # this endpoint is operator-only by design.
+        db_ok = False
+        try:
+            db.execute(text("SELECT 1"))
+            db_ok = True
+        except Exception:
+            pass
+        return get_health_data_detailed(db_connected=db_ok)
 
     return app
 

@@ -6,13 +6,24 @@ import pytest
 
 
 def test_get_health_data_healthy_when_db_connected():
-    from arena.core.observability import get_health_data
+    from arena.core.observability import get_health_data, get_health_data_detailed
 
-    body = get_health_data(db_connected=True)
-    assert body["status"] == "healthy"
-    assert body["database"] == "connected"
-    assert "version" in body
-    assert "uptime_seconds" in body
+    # Public helper — used by GET /api/health (unauthenticated). Must
+    # NOT leak version/uptime/total_requests_today.
+    public = get_health_data(db_connected=True)
+    assert public["status"] == "healthy"
+    assert public["database"] == "connected"
+    for sensitive in ("version", "uptime_seconds", "total_requests_today"):
+        assert sensitive not in public, (
+            f"public helper must not expose {sensitive!r}; got {sorted(public.keys())}"
+        )
+
+    # Detailed helper — used by GET /api/health/detailed (authenticated).
+    # Operators need the full panel there.
+    detailed = get_health_data_detailed(db_connected=True)
+    assert "version" in detailed
+    assert "uptime_seconds" in detailed
+    assert "total_requests_today" in detailed
 
 
 def test_get_health_data_degraded_when_db_disconnected():

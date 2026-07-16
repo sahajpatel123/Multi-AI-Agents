@@ -297,18 +297,38 @@ def log_unhandled_exception(request_id: str, user_id: str, exc: Exception) -> No
 # ─────────────────────────────────────────────────
 
 def get_health_data(db_connected: bool) -> dict:
-    """Ship-facing health payload.
+    """Public health payload exposed at GET /api/health.
 
     status is healthy only when the database is reachable; otherwise degraded.
     Callers (load balancers, Render) should treat degraded as not fully ready.
+
+    This is the UNAUTHENTICATED surface — keep it minimal. Operational
+    detail (uptime, internal request counts) is exposed only via
+    get_health_data_detailed(), which the /api/health/detailed endpoint
+    gates behind authentication. The split exists because total_requests_today
+    alone is competitive intelligence, and uptime_seconds + version combined
+    pin the release window in a way that helps an attacker pick the right
+    exploit timing.
+    """
+    return {
+        "status": "healthy" if db_connected else "degraded",
+        "database": "connected" if db_connected else "disconnected",
+    }
+
+
+def get_health_data_detailed(db_connected: bool) -> dict:
+    """Authenticated, operator-facing health payload.
+
+    Same shape as the public one plus uptime, app version, and the rolling
+    request count. Returned only by /api/health/detailed which requires a
+    valid bearer token. NEVER call this from an unauthenticated path.
     """
     from arena.config import get_settings
     settings = get_settings()
     uptime = int(time.time() - _app_start_time)
     return {
-        "status": "healthy" if db_connected else "degraded",
+        **get_health_data(db_connected),
         "version": settings.app_version,
         "uptime_seconds": uptime,
-        "database": "connected" if db_connected else "disconnected",
         "total_requests_today": _requests_today,
     }
