@@ -55,6 +55,13 @@ import {
   type SidebarRecentsWinnerFilter,
 } from '../lib/sidebarRecentsWinnerFilter';
 import {
+  AGENT_HISTORY_SCORE_OPTIONS,
+  agentHistoryScoreFilterUseful,
+  agentHistoryScoreLabel,
+  filterAgentHistoryByScore,
+  type AgentHistoryScoreFilter,
+} from '../lib/agentHistoryScoreFilter';
+import {
   SIDEBAR_TURN_TITLE_MAX,
   loadSidebarTurnTitles,
   saveSidebarTurnTitle,
@@ -115,6 +122,8 @@ export function Sidebar({
   const [savedSort, setSavedSort] = useState<SidebarSavedSort>('newest');
   const [savedMindFilter, setSavedMindFilter] =
     useState<SidebarSavedMindFilter>(SIDEBAR_SAVED_MIND_ALL);
+  const [savedScoreFilter, setSavedScoreFilter] =
+    useState<AgentHistoryScoreFilter>('all');
   const [recentsWinnerFilter, setRecentsWinnerFilter] =
     useState<SidebarRecentsWinnerFilter>(SIDEBAR_RECENTS_WINNER_ALL);
   const [copiedSavedId, setCopiedSavedId] = useState<string | number | null>(null);
@@ -194,7 +203,8 @@ export function Sidebar({
   );
   const filteredSaved = useMemo(() => {
     const byMind = filterSavedByMind(reversedSaved, savedMindFilter);
-    const searched = filterBySearchQuery(byMind, savedSearchQuery, (item) => [
+    const byScore = filterAgentHistoryByScore(byMind, savedScoreFilter);
+    const searched = filterBySearchQuery(byScore, savedSearchQuery, (item) => [
       item.one_liner,
       item.prompt,
       item.verdict,
@@ -208,7 +218,12 @@ export function Sidebar({
       })),
       savedSort,
     );
-  }, [reversedSaved, savedSearchQuery, savedSort, savedMindFilter]);
+  }, [reversedSaved, savedSearchQuery, savedSort, savedMindFilter, savedScoreFilter]);
+
+  const savedScoreFilterUseful = useMemo(
+    () => agentHistoryScoreFilterUseful(reversedSaved),
+    [reversedSaved],
+  );
 
   // Drop mind filter when that mind no longer has any saved takes.
   useEffect(() => {
@@ -290,6 +305,9 @@ export function Sidebar({
       filterBits.push(
         `mind: ${sidebarSavedMindFilterLabel(savedMindFilter, savedMindOptions)}`,
       );
+    }
+    if (savedScoreFilter !== 'all') {
+      filterBits.push(`score: ${agentHistoryScoreLabel(savedScoreFilter)}`);
     }
     if (q) filterBits.push(`search “${q}”`);
     if (savedSort !== 'newest') filterBits.push(`sort: ${sidebarSavedSortLabel(savedSort)}`);
@@ -1090,7 +1108,9 @@ export function Sidebar({
                     </p>
                     <span style={{ fontSize: 10, color: '#A89070' }}>
                       {filteredSaved.length}
-                      {savedSearchQuery.trim() || savedMindFilter !== SIDEBAR_SAVED_MIND_ALL
+                      {savedSearchQuery.trim() ||
+                      savedMindFilter !== SIDEBAR_SAVED_MIND_ALL ||
+                      savedScoreFilter !== 'all'
                         ? ` / ${savedItems.length}`
                         : ''}
                     </span>
@@ -1215,6 +1235,47 @@ export function Sidebar({
                             key={opt.value}
                             type="button"
                             onClick={() => setSavedMindFilter(opt.value)}
+                            aria-pressed={selected}
+                            style={{
+                              background: selected ? '#F0E6DA' : 'transparent',
+                              border: selected
+                                ? '0.5px solid #C4956A'
+                                : '0.5px solid #E0D8D0',
+                              borderRadius: 999,
+                              padding: '3px 9px',
+                              fontSize: 10,
+                              letterSpacing: '0.03em',
+                              color: selected ? '#4A3728' : '#A89070',
+                              cursor: 'pointer',
+                              fontFamily: 'Georgia, serif',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {savedScoreFilterUseful ? (
+                    <div
+                      role="group"
+                      aria-label="Filter saved takes by score"
+                      style={{
+                        display: 'flex',
+                        gap: 6,
+                        marginBottom: 8,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {AGENT_HISTORY_SCORE_OPTIONS.map((opt) => {
+                        const selected = savedScoreFilter === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setSavedScoreFilter(opt.value)}
                             aria-pressed={selected}
                             style={{
                               background: selected ? '#F0E6DA' : 'transparent',

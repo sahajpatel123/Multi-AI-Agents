@@ -146,6 +146,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Agent history score filter**: All scores / 75+ / 60–74 / Below 60 / No score chips (export notes filter).
 - **Watchlist score filter**: same score bands filter watches by latest run score (export notes filter).
 - **Room board score filter**: All scores / 75+ / 60–74 / Below 60 / No score chips on the research board (export notes filter).
+- **Sidebar Saved score filter**: same score bands filter bookmarked takes (works with mind filter; export notes filter).
 
 ## Required production environment
 
