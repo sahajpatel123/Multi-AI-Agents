@@ -125,6 +125,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Agent Rooms list: sort by recent activity, name, members, or tasks',
       '[NEW] Arena Recents and Saved: download filtered list as .md',
       '[NEW] Agent research history: filter by Live weekly vs One-off',
+      '[NEW] Agent Rooms list: copy / download filtered view as .md',
     ],
   },
   {

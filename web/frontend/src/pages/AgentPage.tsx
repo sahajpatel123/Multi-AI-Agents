@@ -97,8 +97,10 @@ import {
   filterAgentHistoryByStatus,
   type AgentHistoryStatusFilter,
 } from '../lib/agentHistoryStatusFilter';
+import { formatAgentRoomsExport } from '../lib/agentRoomsExport';
 import {
   AGENT_ROOMS_SORT_OPTIONS,
+  agentRoomsSortLabel,
   sortAgentRooms,
   type AgentRoomsSort,
 } from '../lib/agentRoomsSort';
@@ -759,6 +761,10 @@ export function AgentPage() {
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
+  const [roomsCopyStatus, setRoomsCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [roomsDownloadStatus, setRoomsDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const roomsCopyTimerRef = useRef<number | null>(null);
+  const roomsDownloadTimerRef = useRef<number | null>(null);
   const [dismissedChipIds, setDismissedChipIds] = useState<Set<string>>(
     () => loadDismissedAgentChipIds(),
   );
@@ -2012,8 +2018,80 @@ export function AgentPage() {
       if (historyDownloadTimerRef.current != null) {
         window.clearTimeout(historyDownloadTimerRef.current);
       }
+      if (roomsCopyTimerRef.current != null) {
+        window.clearTimeout(roomsCopyTimerRef.current);
+      }
+      if (roomsDownloadTimerRef.current != null) {
+        window.clearTimeout(roomsDownloadTimerRef.current);
+      }
     };
   }, []);
+
+  const buildFilteredRoomsMarkdown = () => {
+    const q = roomsSearchQuery.trim();
+    const filterBits: string[] = [];
+    if (q) filterBits.push(`search: “${q}”`);
+    if (roomsSort !== 'recent') filterBits.push(`sort: ${agentRoomsSortLabel(roomsSort)}`);
+    return formatAgentRoomsExport({
+      items: filteredMyRooms.map((r: any) => ({
+        name: r.name,
+        slug: r.slug,
+        topic: r.topic,
+        description: r.description,
+        memberCount:
+          typeof r.memberCount === 'number'
+            ? r.memberCount
+            : typeof r.member_count === 'number'
+              ? r.member_count
+              : null,
+        taskCount:
+          typeof r.taskCount === 'number'
+            ? r.taskCount
+            : typeof r.task_count === 'number'
+              ? r.task_count
+              : null,
+        createdAt: r.createdAt || r.created_at,
+        activityAt: r.activityAt || r.synthesis_updated_at || r.last_seen_at || r.created_at,
+        roomId: r.id,
+      })),
+      totalCount: myRooms.length,
+      filterNote: filterBits.length ? filterBits.join(' · ') : undefined,
+    });
+  };
+
+  const copyFilteredRooms = async () => {
+    const markdown = buildFilteredRoomsMarkdown();
+    const ok = await copyToClipboard(markdown);
+    if (roomsCopyTimerRef.current != null) {
+      window.clearTimeout(roomsCopyTimerRef.current);
+    }
+    setRoomsCopyStatus(ok ? 'copied' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not copy rooms — try again.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    roomsCopyTimerRef.current = window.setTimeout(() => {
+      setRoomsCopyStatus('idle');
+      roomsCopyTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadFilteredRooms = () => {
+    const markdown = buildFilteredRoomsMarkdown();
+    const ok = downloadMarkdownFile(markdown, 'agent-rooms');
+    if (roomsDownloadTimerRef.current != null) {
+      window.clearTimeout(roomsDownloadTimerRef.current);
+    }
+    setRoomsDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download rooms — try Copy instead.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    roomsDownloadTimerRef.current = window.setTimeout(() => {
+      setRoomsDownloadStatus('idle');
+      roomsDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
 
   const buildFilteredHistoryMarkdown = () => {
     const q = historySearchQuery.trim();
@@ -3060,10 +3138,84 @@ export function AgentPage() {
                   Rooms
                 </div>
                 {roomsBodyMode === 'list' ? (
-                  <span style={{ fontSize: 10, color: '#A89070' }}>
-                    {filteredMyRooms.length}
-                    {roomsSearchQuery.trim() ? ` / ${myRooms.length}` : ''}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 10, color: '#A89070' }}>
+                      {filteredMyRooms.length}
+                      {roomsSearchQuery.trim() ? ` / ${myRooms.length}` : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void copyFilteredRooms()}
+                      title="Copy current rooms view as markdown"
+                      aria-label={
+                        roomsCopyStatus === 'copied'
+                          ? 'Rooms copied'
+                          : roomsCopyStatus === 'failed'
+                            ? 'Copy failed'
+                            : 'Copy rooms list as markdown'
+                      }
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 6,
+                        padding: '2px 7px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        color:
+                          roomsCopyStatus === 'failed'
+                            ? '#D85A30'
+                            : roomsCopyStatus === 'copied'
+                              ? '#5A8C6A'
+                              : '#A89070',
+                        cursor: 'pointer',
+                        fontFamily: 'Georgia, serif',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {roomsCopyStatus === 'copied'
+                        ? 'Copied'
+                        : roomsCopyStatus === 'failed'
+                          ? 'Failed'
+                          : 'Copy'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadFilteredRooms()}
+                      title="Download current rooms view as markdown"
+                      aria-label={
+                        roomsDownloadStatus === 'done'
+                          ? 'Rooms downloaded'
+                          : roomsDownloadStatus === 'failed'
+                            ? 'Download failed'
+                            : 'Download rooms list as markdown'
+                      }
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 6,
+                        padding: '2px 7px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        color:
+                          roomsDownloadStatus === 'failed'
+                            ? '#D85A30'
+                            : roomsDownloadStatus === 'done'
+                              ? '#5A8C6A'
+                              : '#A89070',
+                        cursor: 'pointer',
+                        fontFamily: 'Georgia, serif',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {roomsDownloadStatus === 'done'
+                        ? 'Downloaded'
+                        : roomsDownloadStatus === 'failed'
+                          ? 'Failed'
+                          : 'Download'}
+                    </button>
+                  </div>
                 ) : null}
               </div>
               {roomsBodyMode === 'loading' ? (
