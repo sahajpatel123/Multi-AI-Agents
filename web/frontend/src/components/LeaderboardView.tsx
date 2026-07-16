@@ -12,6 +12,14 @@ import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatLeaderboardExport } from '../lib/leaderboardExport';
+import {
+  LEADERBOARD_MIND_ALL,
+  filterLeaderboardTurnsByMind,
+  formatLeaderboardPromptCopy,
+  leaderboardMindFilterLabel,
+  leaderboardMindFilterUseful,
+  type LeaderboardMindFilter,
+} from '../lib/leaderboardMindFilter';
 
 interface LeaderboardViewProps {
   turns: SessionTurn[];
@@ -37,6 +45,8 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
   const [expandedTurnId, setExpandedTurnId] = useState<string | null>(null);
+  const [mindFilter, setMindFilter] = useState<LeaderboardMindFilter>(LEADERBOARD_MIND_ALL);
+  const [rowCopyStatus, setRowCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   const leaderboard = useMemo(() => {
     const winsByAgent = turns.reduce<Record<string, number>>((acc, turn) => {
@@ -157,6 +167,40 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
     });
   }, [turns, leaderboard]);
 
+  const mindFilterUseful = useMemo(
+    () => leaderboardMindFilterUseful(turnSummaries),
+    [turnSummaries],
+  );
+
+  // Drop mind filter if that mind no longer appears in the session.
+  useEffect(() => {
+    if (mindFilter === LEADERBOARD_MIND_ALL) return;
+    if (!turnSummaries.some((t) => t.winnerId === mindFilter)) {
+      setMindFilter(LEADERBOARD_MIND_ALL);
+    }
+  }, [mindFilter, turnSummaries]);
+
+  const filteredTurnSummaries = useMemo(
+    () => filterLeaderboardTurnsByMind(turnSummaries, mindFilter),
+    [turnSummaries, mindFilter],
+  );
+
+  const mindFilterName = useMemo(
+    () =>
+      leaderboardMindFilterLabel(mindFilter, (id) => {
+        const row = leaderboard.find((r) => r.agent_id === id);
+        return row?.name || AGENTS[id]?.name || id;
+      }),
+    [mindFilter, leaderboard],
+  );
+
+  useEffect(() => {
+    if (rowCopyStatus === 'idle') return;
+    const hold = motionDuration(rowCopyStatus === 'copied' ? 1600 : 2400);
+    const t = window.setTimeout(() => setRowCopyStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [rowCopyStatus]);
+
   const buildSessionMarkdown = () =>
     formatLeaderboardExport({
       totalPrompts,
@@ -165,7 +209,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
         wins: r.wins,
         percentage: r.percentage,
       })),
-      turns: turnSummaries.map((t) => ({
+      turns: filteredTurnSummaries.map((t) => ({
         prompt: t.prompt,
         winnerName: t.winnerName,
         oneLiner: t.oneLiner,
@@ -181,6 +225,22 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
   const handleDownload = () => {
     const ok = downloadMarkdownFile(buildSessionMarkdown(), 'arena-session-leaderboard');
     setDownloadFeedback(ok ? 'done' : 'failed');
+  };
+
+  const copyPromptRow = async (t: (typeof turnSummaries)[number]) => {
+    const md = formatLeaderboardPromptCopy({
+      prompt: t.prompt,
+      winnerName: t.winnerName,
+      oneLiner: t.oneLiner,
+      fullTake: t.fullTake,
+    });
+    const ok = await copyToClipboard(md);
+    setRowCopyStatus(ok ? 'copied' : 'failed');
+  };
+
+  const toggleMindFilter = (agentId: string) => {
+    setMindFilter((prev) => (prev === agentId ? LEADERBOARD_MIND_ALL : agentId));
+    setExpandedTurnId(null);
   };
 
   return (
@@ -312,12 +372,27 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
         </div>
         <p style={{ fontSize: '13px', color: '#9A9088', margin: 0 }}>
           {hasData
-            ? `Based on ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'} in this session`
+            ? mindFilter !== LEADERBOARD_MIND_ALL
+              ? `Showing wins by ${mindFilterName} · ${filteredTurnSummaries.length} of ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'}`
+              : `Based on ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'} in this session${
+                  mindFilterUseful ? ' · click a mind to filter prompts' : ''
+                }`
             : 'Win rates will appear once you start prompting'}
         </p>
-        {copyFeedback === 'failed' || downloadFeedback === 'failed' ? (
+        {copyFeedback === 'failed' || downloadFeedback === 'failed' || rowCopyStatus === 'failed' ? (
           <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: '8px 0 0' }}>
-            Could not {copyFeedback === 'failed' ? 'copy' : 'download'} — try again or select text manually.
+            Could not{' '}
+            {copyFeedback === 'failed'
+              ? 'copy session'
+              : downloadFeedback === 'failed'
+                ? 'download'
+                : 'copy prompt'}{' '}
+            — try again or select text manually.
+          </p>
+        ) : null}
+        {rowCopyStatus === 'copied' ? (
+          <p role="status" aria-live="polite" style={{ fontSize: 12, color: '#5A8A5A', margin: '8px 0 0' }}>
+            Prompt copied.
           </p>
         ) : null}
       </div>
@@ -330,22 +405,49 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
             const isFirst = index === 0;
             const width = animatedWidths[row.agent_id] ?? 0;
 
+            const isFiltered = mindFilter === row.agent_id;
             return (
               <div
                 className="agent-row"
                 key={row.agent_id}
+                role={mindFilterUseful ? 'button' : undefined}
+                tabIndex={mindFilterUseful ? 0 : undefined}
+                aria-pressed={mindFilterUseful ? isFiltered : undefined}
+                title={
+                  mindFilterUseful
+                    ? isFiltered
+                      ? `Clear filter · show all prompts`
+                      : `Show prompts won by ${row.name}`
+                    : undefined
+                }
+                onClick={() => {
+                  if (mindFilterUseful) toggleMindFilter(row.agent_id);
+                }}
+                onKeyDown={(e) => {
+                  if (!mindFilterUseful) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleMindFilter(row.agent_id);
+                  }
+                }}
                 style={{
                   padding: '18px 20px',
                   borderRadius: '14px',
-                  background: isFirst ? '#FFFFFF' : 'transparent',
-                  border: isFirst ? '0.5px solid #E0D8D0' : '0.5px solid transparent',
+                  background: isFiltered || isFirst ? '#FFFFFF' : 'transparent',
+                  border: isFiltered
+                    ? '0.5px solid rgba(196,149,106,0.65)'
+                    : isFirst
+                      ? '0.5px solid #E0D8D0'
+                      : '0.5px solid transparent',
                   marginBottom: '8px',
                   opacity: visible ? 1 : 0,
                   transform: visible ? 'translateY(0)' : 'translateY(6px)',
                   transition: prefersReducedMotion()
                     ? 'none'
                     : `opacity 300ms ease ${index * 70}ms, transform 300ms ease ${index * 70}ms, background 150ms ease`,
-                  boxShadow: isFirst ? '0 2px 12px rgba(26,23,20,0.06)' : 'none',
+                  boxShadow:
+                    isFiltered || isFirst ? '0 2px 12px rgba(26,23,20,0.06)' : 'none',
+                  cursor: mindFilterUseful ? 'pointer' : 'default',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
@@ -440,17 +542,81 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
         <div style={{ marginTop: 28 }}>
           <div
             style={{
-              fontSize: 11,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: '#A89070',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
               marginBottom: 12,
+              flexWrap: 'wrap',
             }}
           >
-            Session prompts
+            <div
+              style={{
+                fontSize: 11,
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                color: '#A89070',
+              }}
+            >
+              Session prompts
+              {mindFilter !== LEADERBOARD_MIND_ALL
+                ? ` · ${filteredTurnSummaries.length}/${turnSummaries.length}`
+                : ''}
+            </div>
+            {mindFilter !== LEADERBOARD_MIND_ALL ? (
+              <button
+                type="button"
+                onClick={() => setMindFilter(LEADERBOARD_MIND_ALL)}
+                style={{
+                  fontSize: 12,
+                  fontFamily: 'Georgia, serif',
+                  color: '#C4956A',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: 0,
+                }}
+              >
+                Show all minds
+              </button>
+            ) : null}
           </div>
+          {filteredTurnSummaries.length === 0 ? (
+            <div
+              style={{
+                background: '#FAF7F4',
+                border: '0.5px solid #E8E0D8',
+                borderRadius: 12,
+                padding: '20px 16px',
+                textAlign: 'center',
+                fontSize: 13,
+                color: '#6B6460',
+                fontFamily: 'Georgia, serif',
+              }}
+            >
+              No prompts won by {mindFilterName} in this session.
+              <button
+                type="button"
+                onClick={() => setMindFilter(LEADERBOARD_MIND_ALL)}
+                style={{
+                  display: 'block',
+                  margin: '10px auto 0',
+                  fontSize: 12,
+                  color: '#C4956A',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'Georgia, serif',
+                  textDecoration: 'underline',
+                }}
+              >
+                Show all prompts
+              </button>
+            </div>
+          ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {turnSummaries.map((t, index) => {
+            {filteredTurnSummaries.map((t, index) => {
               const turnKey = t.turnId || `turn-${index}`;
               const isExpanded = expandedTurnId === turnKey;
               const showFull = isExpanded && t.canExpand && Boolean(t.fullTake);
@@ -512,15 +678,39 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                     “{t.oneLiner || t.fullTake}”
                   </p>
                 ) : null}
-                {t.canExpand ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 12,
+                    marginTop: 8,
+                    alignItems: 'center',
+                  }}
+                >
+                  {t.canExpand ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedTurnId((id) => (id === turnKey ? null : turnKey))
+                      }
+                      aria-expanded={isExpanded}
+                      style={{
+                        padding: 0,
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        color: '#C4956A',
+                        fontFamily: 'Georgia, serif',
+                      }}
+                    >
+                      {isExpanded ? 'Show less' : 'Show full take'}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    onClick={() =>
-                      setExpandedTurnId((id) => (id === turnKey ? null : turnKey))
-                    }
-                    aria-expanded={isExpanded}
+                    onClick={() => void copyPromptRow(t)}
                     style={{
-                      marginTop: 8,
                       padding: 0,
                       border: 'none',
                       background: 'none',
@@ -530,13 +720,14 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                       fontFamily: 'Georgia, serif',
                     }}
                   >
-                    {isExpanded ? 'Show less' : 'Show full take'}
+                    Copy prompt
                   </button>
-                ) : null}
+                </div>
               </div>
               );
             })}
           </div>
+          )}
         </div>
       ) : null}
 

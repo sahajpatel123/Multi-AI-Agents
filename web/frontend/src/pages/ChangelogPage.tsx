@@ -12,6 +12,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Arena leaderboard: click a mind to filter session prompts; copy any prompt',
       '[NEW] Room board: Copy question / Copy answer on each task card',
       '[NEW] Room board confidence filter chips + per-card confidence badge',
       '[IMPROVED] Room board live relative timestamps; member online dots tick every 60s',
