@@ -30,12 +30,14 @@ const AGENT: ShortcutHint[] = [
 const DISCUSS: ShortcutHint[] = [
   { keys: '/', action: 'Focus the discuss message box' },
   { keys: 'Enter', action: 'Send message' },
+  { keys: 'Esc', action: 'Back to Arena' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
 
 const DEBATE: ShortcutHint[] = [
   { keys: '/', action: 'Focus debate interjection' },
   { keys: 'Enter', action: 'Send interjection' },
+  { keys: 'Esc', action: 'Back to Arena' },
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
 

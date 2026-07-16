@@ -10,7 +10,13 @@ describe('keyboardShortcuts', () => {
     expect(shortcutsForSurface('arena').some((s) => s.keys === '/')).toBe(true);
     expect(shortcutsForSurface('agent').some((s) => s.action.includes('follow-up'))).toBe(true);
     expect(shortcutsForSurface('discuss').some((s) => s.keys === 'Enter')).toBe(true);
+    expect(shortcutsForSurface('discuss').some((s) => s.keys === 'Esc' && s.action.includes('Arena'))).toBe(
+      true,
+    );
     expect(shortcutsForSurface('debate').some((s) => s.keys === '?')).toBe(true);
+    expect(shortcutsForSurface('debate').some((s) => s.keys === 'Esc' && s.action.includes('Arena'))).toBe(
+      true,
+    );
     expect(shortcutsForSurface('room').some((s) => s.action.includes('board'))).toBe(true);
     expect(shortcutsForSurface('room').some((s) => s.keys === 'Esc')).toBe(true);
     expect(shortcutsForSurface('watchlist').some((s) => s.action.includes('watchlist search'))).toBe(

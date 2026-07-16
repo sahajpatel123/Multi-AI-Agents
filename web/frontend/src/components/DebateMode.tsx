@@ -125,9 +125,16 @@ export function DebateMode({
     };
   }, []);
 
-  // `/` focuses interjection compose when not streaming and not typing elsewhere.
+  // `/` focuses interjection compose; Escape returns to Arena (when no modal is open).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+        e.preventDefault();
+        abortRef.current?.abort();
+        onExit();
+        return;
+      }
       if (!isBareSlashKey(e) || !shouldCaptureSlashFocus(e.target)) return;
       if (phase === 'streaming') return;
       e.preventDefault();
@@ -135,7 +142,7 @@ export function DebateMode({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [phase]);
+  }, [phase, onExit]);
 
   const reducedMotion = prefersReducedMotion();
   const challengedConfig = getAgentDisplay(challengedAgent.response.agent_id);

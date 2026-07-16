@@ -116,9 +116,16 @@ export function DiscussMode({
     inputRef.current?.focus();
   }, [activeAgent.response.agent_id]);
 
-  // `/` focuses discuss compose (Arena / Agent parity) when not typing elsewhere.
+  // `/` focuses discuss compose; Escape returns to Arena (when no modal is open).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+        e.preventDefault();
+        abortRef.current?.abort();
+        onExit();
+        return;
+      }
       if (!isBareSlashKey(e) || !shouldCaptureSlashFocus(e.target)) return;
       if (isStreaming) return;
       e.preventDefault();
@@ -126,7 +133,7 @@ export function DiscussMode({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isStreaming]);
+  }, [isStreaming, onExit]);
 
   useEffect(() => {
     return () => {

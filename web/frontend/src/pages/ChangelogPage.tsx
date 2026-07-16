@@ -103,6 +103,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Room Perspective Drift: copy analysis as markdown (clusters + divergences)',
       '[IMPROVED] Perspective comparison: real mind names, Escape, copy markdown',
       '[IMPROVED] Perspective comparison highlights shared terms and each mind’s distinctive keywords',
+      '[IMPROVED] Escape returns to Arena from Discuss, Debate, and Leaderboard (modals still take Esc first)',
     ],
   },
   {

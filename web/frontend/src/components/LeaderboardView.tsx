@@ -104,6 +104,18 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
     return () => window.clearTimeout(t);
   }, [copyFeedback]);
 
+  // Escape returns to Arena (skip when a modal dialog is open).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      e.preventDefault();
+      onBack();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onBack]);
+
   const handleCopy = async () => {
     const md = formatLeaderboardExport({
       totalPrompts,
