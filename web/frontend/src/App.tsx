@@ -14,6 +14,7 @@ import { CollapsiblePrompt } from './components/CollapsiblePrompt';
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
 import { CrossPollinateBanner } from './components/CrossPollinateBanner';
 import { PerspectiveComparison } from './components/PerspectiveComparison';
+import { AgentAnswerMarkdown } from './components/AgentAnswerMarkdown';
 import {
   streamPrompt,
   streamDiscuss,
@@ -28,6 +29,8 @@ import {
 import { copyToClipboard } from './lib/clipboard';
 import { downloadMarkdownFile } from './lib/downloadTextFile';
 import { formatArenaExport } from './lib/arenaExport';
+import { isScrollNearBottom, shouldAutoScrollChat } from './lib/chatScroll';
+import { scrollBehavior } from './lib/motion';
 import {
   clearRecentPrompts,
   loadRecentPrompts,
@@ -100,6 +103,7 @@ function App() {
   const [focusedChatError, setFocusedChatError] = useState<string | null>(null);
   const [focusedStreamingText, setFocusedStreamingText] = useState('');
   const [isFocusedChatStreaming, setIsFocusedChatStreaming] = useState(false);
+  const [showFocusedJumpLatest, setShowFocusedJumpLatest] = useState(false);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [upgradeModalSubtitle, setUpgradeModalSubtitle] = useState('Debate mode lets you challenge any mind and watch the others react in real time.');
   // Bumped once an Arena submit is confirmed (pipeline passed → streaming),
@@ -200,6 +204,8 @@ function App() {
   const focusedTokenBuffer = useRef('');
   const focusedFlushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const focusedMessagesEndRef = useRef<HTMLDivElement>(null);
+  const focusedMessagesScrollRef = useRef<HTMLDivElement>(null);
+  const focusedStickToBottomRef = useRef(true);
   const currentResponseBarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feedbackTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -880,6 +886,8 @@ function App() {
       (s) => s.response.agent_id === agentId
     )?.response;
     const seedFromResponse = matchedResponse?.verdict || matchedResponse?.one_liner;
+    focusedStickToBottomRef.current = true;
+    setShowFocusedJumpLatest(false);
     setIsSidebarOpen(false);
     setFocusedAgentId(agentId);
     setFocusedCardRect(cardRect ? {
@@ -966,12 +974,42 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [saveSyncMessage]);
 
+  const syncFocusedScrollFlags = useCallback(() => {
+    const el = focusedMessagesScrollRef.current;
+    const near = isScrollNearBottom(el);
+    focusedStickToBottomRef.current = near;
+    setShowFocusedJumpLatest(!near);
+  }, []);
+
+  const scrollFocusedToBottom = useCallback((opts?: { force?: boolean }) => {
+    const force = opts?.force === true;
+    if (!force && !shouldAutoScrollChat({ stickToBottom: focusedStickToBottomRef.current })) {
+      setShowFocusedJumpLatest(true);
+      return;
+    }
+    focusedStickToBottomRef.current = true;
+    setShowFocusedJumpLatest(false);
+    setTimeout(() => {
+      focusedMessagesEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
+      requestAnimationFrame(() => {
+        focusedStickToBottomRef.current = true;
+        setShowFocusedJumpLatest(false);
+      });
+    }, 40);
+  }, []);
+
+  // Follow focused chat stream only while the reader is at the live end.
   useEffect(() => {
     if (!focusedAgentId) return;
-    setTimeout(() => {
-      focusedMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 40);
-  }, [focusedAgentId, focusedHistory.length, focusedStreamingText]);
+    if (
+      !shouldAutoScrollChat({ stickToBottom: focusedStickToBottomRef.current }) &&
+      (focusedHistory.length > 0 || focusedStreamingText)
+    ) {
+      setShowFocusedJumpLatest(true);
+      return;
+    }
+    scrollFocusedToBottom();
+  }, [focusedAgentId, focusedHistory.length, focusedStreamingText, scrollFocusedToBottom]);
 
   useEffect(() => {
     if (!pendingScrollTarget || viewMode !== 'arena' || activeTurnId !== pendingScrollTarget.turnId) return;
@@ -1018,6 +1056,7 @@ function App() {
         { role: 'user', content: trimmed, timestamp: new Date().toISOString() },
       ],
     }));
+    scrollFocusedToBottom({ force: true });
 
     if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
     focusedFlushTimer.current = setInterval(flushFocusedTokens, 50);
@@ -1701,7 +1740,19 @@ function App() {
                     </button>
                   </div>
 
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                  <div
+                    ref={focusedMessagesScrollRef}
+                    onScroll={syncFocusedScrollFlags}
+                    style={{
+                      flex: 1,
+                      overflowY: 'auto',
+                      padding: '1.25rem 1.5rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1rem',
+                    }}
+                  >
                     {focusedHistory.map((msg, idx) => (
                       <div key={idx} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                         {msg.role === 'user' ? (
@@ -1709,14 +1760,22 @@ function App() {
                             <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: '1.75', letterSpacing: '0.01em', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
                           </div>
                         ) : (
-                          <div style={{ maxWidth: '82%', borderRadius: '14px', padding: '16px 20px', border: '0.5px solid #E0D8D0', background: 'rgba(255,255,255,0.55)' }}>
+                          <div style={{ maxWidth: '92%', borderRadius: '14px', padding: '16px 20px', border: '0.5px solid #E0D8D0', background: 'rgba(255,255,255,0.55)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '7px' }}>
                               <AgentDot agentId={focusedAgentId} size={6} color={focusedPersona?.color} />
                               <span style={{ fontSize: '13px', fontWeight: 500, color: focusedAgentConfig.color, letterSpacing: '0.02em' }}>
                                 {focusedAgentConfig.name}
                               </span>
+                              {idx === 0 ? (
+                                <span style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', marginLeft: 4 }}>
+                                  Original take
+                                </span>
+                              ) : null}
                             </div>
-                            <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.75', letterSpacing: '0.01em', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                            <AgentAnswerMarkdown
+                              markdown={msg.content}
+                              question={response?.prompt || currentPrompt || undefined}
+                            />
                           </div>
                         )}
                       </div>
@@ -1724,17 +1783,31 @@ function App() {
 
                     {isFocusedChatStreaming && (
                       <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                        <div style={{ maxWidth: '82%', borderRadius: '14px', padding: '16px 20px', border: '0.5px solid #E0D8D0', background: 'rgba(255,255,255,0.55)' }}>
+                        <div style={{ maxWidth: '92%', borderRadius: '14px', padding: '16px 20px', border: '0.5px solid #E0D8D0', background: 'rgba(255,255,255,0.55)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '7px' }}>
                             <AgentDot agentId={focusedAgentId} size={6} color={focusedPersona?.color} />
                             <span style={{ fontSize: '13px', fontWeight: 500, color: focusedAgentConfig.color, letterSpacing: '0.02em' }}>
                               {focusedAgentConfig.name}
                             </span>
                           </div>
-                          <p style={{ fontSize: '14px', color: '#1A1714', lineHeight: '1.75', letterSpacing: '0.01em', whiteSpace: 'pre-wrap' }}>
-                            {focusedStreamingText}
-                            <span style={{ display: 'inline-block', width: '2px', height: '19px', marginLeft: '2px', background: 'rgba(107,100,96,0.5)', animation: 'breathe 1.2s ease-in-out infinite', verticalAlign: 'text-bottom' }} />
-                          </p>
+                          {focusedStreamingText ? (
+                            <AgentAnswerMarkdown markdown={focusedStreamingText} />
+                          ) : (
+                            <p style={{ fontSize: '14px', color: '#6B6460', fontStyle: 'italic', margin: 0 }}>
+                              Thinking…
+                            </p>
+                          )}
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: '2px',
+                              height: '19px',
+                              marginTop: 4,
+                              background: 'rgba(107,100,96,0.5)',
+                              animation: 'breathe 1.2s ease-in-out infinite',
+                              verticalAlign: 'text-bottom',
+                            }}
+                          />
                         </div>
                       </div>
                     )}
@@ -1746,6 +1819,40 @@ function App() {
                     )}
 
                     <div ref={focusedMessagesEndRef} />
+                  </div>
+                  {showFocusedJumpLatest ? (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        bottom: 12,
+                        display: 'flex',
+                        justifyContent: 'center',
+                        pointerEvents: 'none',
+                        zIndex: 2,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => scrollFocusedToBottom({ force: true })}
+                        style={{
+                          pointerEvents: 'auto',
+                          fontSize: 12,
+                          fontFamily: 'Georgia, serif',
+                          color: '#FAF7F2',
+                          background: '#C4956A',
+                          border: 'none',
+                          borderRadius: 999,
+                          padding: '6px 14px',
+                          cursor: 'pointer',
+                          boxShadow: '0 4px 14px rgba(44,24,16,0.14)',
+                        }}
+                      >
+                        {isFocusedChatStreaming ? 'Jump to latest · streaming' : 'Jump to latest'}
+                      </button>
+                    </div>
+                  ) : null}
                   </div>
                 </div>
               </div>

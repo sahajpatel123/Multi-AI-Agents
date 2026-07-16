@@ -169,6 +169,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Watchlist domain filter**: All domains + top expertise domains when mixed (export notes filter).
 - **Search highlight dialogs**: Personas swap + library quotes/descriptions; Room add-task history picker.
 - **Discuss jump-to-latest**: when the user scrolls up in a 1-on-1 thread, auto-scroll pauses and a “Jump to latest” chip appears; send still pins to the live end.
+- **Arena focused mind**: original + reply takes render as markdown (reading time / outline when useful); Jump to latest when scrolled up during focused chat.
 
 ## Required production environment
 
