@@ -1513,6 +1513,41 @@ export async function getRoomPerspectiveDrift(slug: string): Promise<Perspective
 }
 
 // ──────────────────────────────────────────────────────────────
+// Temporal Evolution
+// ──────────────────────────────────────────────────────────────
+
+export type TemporalEvolutionShift = {
+  from_task: string;
+  to_task: string;
+  gained_terms: string[];
+  lost_terms: string[];
+};
+
+export type TemporalEvolution = {
+  evolution_score: number;
+  trend_label: string;
+  key_shifts: TemporalEvolutionShift[];
+  stability: number;
+  task_sequence: string[];
+};
+
+export type TemporalEvolutionResponse = {
+  task_id: string;
+  evolution: TemporalEvolution;
+};
+
+export async function getTemporalEvolution(taskId: string): Promise<TemporalEvolutionResponse> {
+  const response = await apiFetch(`/api/agent/history/${taskId}/evolution`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(err?.detail || 'Failed to get temporal evolution', response.status, err);
+  }
+  const data = await parseJsonSafely<TemporalEvolutionResponse>(response);
+  if (!data) throw new Error('Empty evolution response');
+  return data;
+}
+
+// ──────────────────────────────────────────────────────────────
 // Payments (Razorpay subscriptions)
 // ──────────────────────────────────────────────────────────────
 

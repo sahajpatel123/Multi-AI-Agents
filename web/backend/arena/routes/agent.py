@@ -2072,3 +2072,57 @@ async def cross_pollinate_agent_answer(
             "intel_score": intel_score,
         }
     )
+
+
+@router.get("/history/{task_id}/evolution")
+async def get_temporal_evolution(
+    task_id: str,
+    db: Session = Depends(get_db),
+    user: UserResponse = Depends(get_current_user_required),
+):
+    """
+    Get how this task's answer has evolved over time.
+    Finds similar questions and tracks answer changes.
+    """
+    _ensure_agent_access(user, db)
+
+    # Get this task
+    task = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == task_id.strip(), AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Find user's similar tasks (simple: same first 30 chars of question)
+    question_prefix = (task.task_text or "")[:30]
+    similar_tasks = (
+        db.query(AgentTaskRow)
+        .filter(
+            AgentTaskRow.user_id == user.id,
+            AgentTaskRow.task_text.startswith(question_prefix),
+            AgentTaskRow.final_answer.is_not(None),
+        )
+        .order_by(AgentTaskRow.created_at.asc())
+        .all()
+    )
+
+    from arena.core.temporal_evolution import analyze_temporal_evolution
+    tasks_data = [
+        {
+            "task_id": t.task_id,
+            "question": t.task_text or "",
+            "one_liner": (t.final_answer or "")[:200],
+            "final_answer": t.final_answer,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+        }
+        for t in similar_tasks
+    ]
+
+    evolution = analyze_temporal_evolution(tasks_data)
+
+    return JSONResponse(content={
+        "task_id": task_id,
+        "evolution": evolution,
+    })
