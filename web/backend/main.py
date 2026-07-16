@@ -175,6 +175,25 @@ def create_app() -> FastAPI:
     setup_logging()
     init_db()
 
+    # Drop dead rows from the JWT blacklist. Lazy cleanup
+    # (token_blacklist.is_blacklisted) only deletes when a stale-token
+    # lookup hits the table, so for tokens that were revoked but never
+    # presented again those rows would sit indefinitely. Render restarts
+    # the process on every deploy, so this runs frequently in production.
+    # Best-effort — any DB hiccup here should not break startup.
+    try:
+        from arena.core.token_blacklist import purge_expired
+        from arena.database import SessionLocal as _SessionLocal
+        _s = _SessionLocal()
+        try:
+            _n = purge_expired(_s)
+            if _n:
+                logger.info("Startup purge cleared %s expired revoked_token row(s)", _n)
+        finally:
+            _s.close()
+    except Exception as _exc:
+        logger.warning("Startup purge of revoked_tokens failed: %s", _exc)
+
     app = FastAPI(
         title="Arena",
         description="Multi-AI Agent Chatroom API",
