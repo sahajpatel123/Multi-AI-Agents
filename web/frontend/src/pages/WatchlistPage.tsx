@@ -48,6 +48,14 @@ import {
   watchlistUrgencyLabel,
   type WatchlistUrgencyFilter,
 } from '../lib/watchlistUrgencyFilter';
+import {
+  WATCHLIST_EXPERTISE_ALL,
+  collectWatchlistExpertiseOptions,
+  filterWatchlistByExpertise,
+  watchlistExpertiseFilterUseful,
+  watchlistExpertiseLabel,
+  type WatchlistExpertiseFilter,
+} from '../lib/watchlistExpertiseFilter';
 import { watchlistBodyMode } from '../lib/watchlistView';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
@@ -107,6 +115,8 @@ export function WatchlistPage() {
   const [scoreFilter, setScoreFilter] = useState<AgentHistoryScoreFilter>('all');
   const [cadenceFilter, setCadenceFilter] = useState<WatchlistCadenceFilter>('all');
   const [urgencyFilter, setUrgencyFilter] = useState<WatchlistUrgencyFilter>('all');
+  const [expertiseFilter, setExpertiseFilter] =
+    useState<WatchlistExpertiseFilter>(WATCHLIST_EXPERTISE_ALL);
   const [listSort, setListSort] = useState<WatchlistSort>('next_soon');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -222,8 +232,9 @@ export function WatchlistPage() {
           );
     const byCadence = filterWatchlistByCadence(byStatus, cadenceFilter);
     const byUrgency = filterWatchlistByUrgency(byCadence, urgencyFilter);
+    const byExpertise = filterWatchlistByExpertise(byUrgency, expertiseFilter);
     const byScore = filterAgentHistoryByScore(
-      byUrgency.map((item) => ({
+      byExpertise.map((item) => ({
         ...item,
         score: item.latest_task?.final_score ?? null,
       })),
@@ -232,6 +243,8 @@ export function WatchlistPage() {
     const searched = filterBySearchQuery(byScore, searchQuery, (item) => [
       item.question,
       item.latest_task?.title,
+      item.expertise_level,
+      item.expertise_domain,
     ]);
     return sortWatchlistItems(
       searched.map((item) => ({
@@ -244,7 +257,16 @@ export function WatchlistPage() {
       })),
       listSort,
     );
-  }, [items, searchQuery, statusFilter, listSort, scoreFilter, cadenceFilter, urgencyFilter]);
+  }, [
+    items,
+    searchQuery,
+    statusFilter,
+    listSort,
+    scoreFilter,
+    cadenceFilter,
+    urgencyFilter,
+    expertiseFilter,
+  ]);
 
   const scoreFilterUseful = useMemo(
     () =>
@@ -263,6 +285,24 @@ export function WatchlistPage() {
     () => watchlistUrgencyFilterUseful(items),
     [items],
   );
+
+  const expertiseOptions = useMemo(
+    () => collectWatchlistExpertiseOptions(items),
+    [items],
+  );
+
+  const expertiseFilterUseful = useMemo(
+    () => watchlistExpertiseFilterUseful(items),
+    [items],
+  );
+
+  // Drop expertise filter when that level no longer appears.
+  useEffect(() => {
+    if (expertiseFilter === WATCHLIST_EXPERTISE_ALL) return;
+    if (!expertiseOptions.some((o) => o.value === expertiseFilter)) {
+      setExpertiseFilter(WATCHLIST_EXPERTISE_ALL);
+    }
+  }, [expertiseFilter, expertiseOptions]);
 
   useEffect(() => {
     return () => {
@@ -308,6 +348,11 @@ export function WatchlistPage() {
     }
     if (scoreFilter !== 'all') {
       filterBits.push(`score: ${agentHistoryScoreLabel(scoreFilter)}`);
+    }
+    if (expertiseFilter !== WATCHLIST_EXPERTISE_ALL) {
+      filterBits.push(
+        `expertise: ${watchlistExpertiseLabel(expertiseFilter, expertiseOptions)}`,
+      );
     }
     const q = searchQuery.trim();
     if (q) filterBits.push(`search: “${q}”`);
@@ -677,7 +722,8 @@ export function WatchlistPage() {
                     statusFilter !== 'all' ||
                     scoreFilter !== 'all' ||
                     cadenceFilter !== 'all' ||
-                    urgencyFilter !== 'all'
+                    urgencyFilter !== 'all' ||
+                    expertiseFilter !== WATCHLIST_EXPERTISE_ALL
                       ? ` / ${items.length}`
                       : ''}
                   </span>
@@ -780,6 +826,37 @@ export function WatchlistPage() {
                   })}
                 </div>
               ) : null}
+              {expertiseFilterUseful ? (
+                <div
+                  role="group"
+                  aria-label="Filter by expertise level"
+                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
+                >
+                  {expertiseOptions.map((opt) => {
+                    const selected = expertiseFilter === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setExpertiseFilter(opt.value)}
+                        aria-pressed={selected}
+                        style={{
+                          padding: '3px 10px',
+                          borderRadius: 999,
+                          border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                          background: selected ? '#F0E6DA' : 'transparent',
+                          color: selected ? '#4A3728' : '#8C7355',
+                          fontSize: 11,
+                          fontFamily: 'Georgia, serif',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               <div style={{ position: 'relative' }}>
                 <input
                   ref={searchRef}
@@ -844,6 +921,10 @@ export function WatchlistPage() {
                         urgencyFilter !== 'all' ? ` · ${watchlistUrgencyLabel(urgencyFilter)}` : ''
                       }${cadenceFilter !== 'all' ? ` · ${watchlistCadenceLabel(cadenceFilter)}` : ''}${
                         scoreFilter !== 'all' ? ` · ${agentHistoryScoreLabel(scoreFilter)}` : ''
+                      }${
+                        expertiseFilter !== WATCHLIST_EXPERTISE_ALL
+                          ? ` · ${watchlistExpertiseLabel(expertiseFilter, expertiseOptions)}`
+                          : ''
                       }.`
                     : urgencyFilter === 'overdue'
                       ? 'Nothing is overdue right now — you’re caught up on re-checks.'
@@ -851,19 +932,25 @@ export function WatchlistPage() {
                         ? 'Nothing due in the next 24 hours.'
                         : urgencyFilter === 'later'
                           ? 'No active watches scheduled further out.'
-                          : cadenceFilter !== 'all' && scoreFilter !== 'all'
-                            ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
-                            : cadenceFilter !== 'all'
-                              ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches${
-                                  statusFilter !== 'all' ? ` that are ${statusFilter}` : ''
-                                }.`
-                              : scoreFilter !== 'all'
-                                ? `No watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
-                                : statusFilter === 'active'
-                                  ? 'No active watches right now — resume a paused one or start a new research task.'
-                                  : statusFilter === 'paused'
-                                    ? 'No paused watches.'
-                                    : 'No matches.'}
+                          : expertiseFilter !== WATCHLIST_EXPERTISE_ALL &&
+                              cadenceFilter === 'all' &&
+                              scoreFilter === 'all' &&
+                              urgencyFilter === 'all' &&
+                              statusFilter === 'all'
+                            ? `No ${watchlistExpertiseLabel(expertiseFilter, expertiseOptions).toLowerCase()} watches.`
+                            : cadenceFilter !== 'all' && scoreFilter !== 'all'
+                              ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
+                              : cadenceFilter !== 'all'
+                                ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches${
+                                    statusFilter !== 'all' ? ` that are ${statusFilter}` : ''
+                                  }.`
+                                : scoreFilter !== 'all'
+                                  ? `No watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
+                                  : statusFilter === 'active'
+                                    ? 'No active watches right now — resume a paused one or start a new research task.'
+                                    : statusFilter === 'paused'
+                                      ? 'No paused watches.'
+                                      : 'No matches.'}
                 </p>
                 <button
                   type="button"
@@ -875,6 +962,7 @@ export function WatchlistPage() {
                     setScoreFilter('all');
                     setCadenceFilter('all');
                     setUrgencyFilter('all');
+                    setExpertiseFilter(WATCHLIST_EXPERTISE_ALL);
                     setListSort('next_soon');
                     searchRef.current?.focus();
                   }}
