@@ -2883,6 +2883,37 @@ export function AgentPage() {
                   >
                     {item.final_score != null ? `${item.final_score}/100` : '—'}
                   </span>
+                  {item.user_feedback ? (
+                    <span
+                      title={`You rated this ${item.user_feedback}`}
+                      aria-label={`Your rating: ${item.user_feedback}`}
+                      style={{
+                        fontSize: 10,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        borderRadius: 999,
+                        padding: '1px 7px',
+                        background:
+                          item.user_feedback === 'accurate'
+                            ? 'rgba(138,168,153,0.18)'
+                            : item.user_feedback === 'partial'
+                              ? 'rgba(196,149,106,0.18)'
+                              : 'rgba(217,83,79,0.15)',
+                        color:
+                          item.user_feedback === 'accurate'
+                            ? '#3F6B4A'
+                            : item.user_feedback === 'partial'
+                              ? '#8C5A2C'
+                              : '#9C2F2A',
+                      }}
+                    >
+                      {item.user_feedback === 'accurate'
+                        ? 'Accurate'
+                        : item.user_feedback === 'partial'
+                          ? 'Partial'
+                          : 'Inaccurate'}
+                    </span>
+                  ) : null}
                   <span style={{ fontSize: 11, color: '#A89070' }}>{formatShortDate(item.created_at)}</span>
                 </div>
               </button>
