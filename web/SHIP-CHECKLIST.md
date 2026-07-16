@@ -162,7 +162,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Sidebar Saved recency filter**: same recency bands on bookmarked takes (export notes filter).
 - **Search highlight**: Watchlist questions, Agent history titles, and Rooms names mark matching query terms (Arena gold wash).
 - **Search highlight coverage**: also Sidebar Recents/Saved, Room board task titles, Templates catalog, and Personas library.
-- **Agent history feedback filter**: All feedback / Helpful / Needs work / Unrated chips (export notes filter).
+- **Agent history feedback filter**: All ratings / Accurate / Partial / Inaccurate / Unrated chips (export notes filter).
 - **Sidebar Recents recency filter**: same recency bands on Arena turns (export notes filter).
 
 ## Required production environment
