@@ -7,9 +7,10 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy import Date, cast, func
 from sqlalchemy.orm import Session
+
+from arena.core.client_ip import get_request_client_ip
 
 from arena.core.auth import (
     authenticate_user,
@@ -63,7 +64,8 @@ from arena.models.schemas import LoginRequest, RegisterRequest, UserProfilePatch
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 user_router = APIRouter(prefix="/api/user", tags=["auth"])
 logger = logging.getLogger(__name__)
-limiter = Limiter(key_func=get_remote_address)
+# Key by spoof-resistant client IP (rightmost XFF in prod; peer in dev).
+limiter = Limiter(key_func=get_request_client_ip)
 
 _COMMON_PASSWORDS = {
     # Top 20 most common passwords plus variations

@@ -31,10 +31,10 @@ class LoginRateLimiter:
 
     @staticmethod
     def get_client_ip(request: Request) -> str:
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
+        # Shared extractor: never trust leftmost X-Forwarded-For (spoofable).
+        from arena.core.client_ip import get_request_client_ip
+
+        return get_request_client_ip(request)
 
     # ── public API ───────────────────────────────────────────
 

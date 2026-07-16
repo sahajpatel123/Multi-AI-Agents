@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from arena.core.client_ip import get_request_client_ip
 from slowapi.errors import RateLimitExceeded
 
 from arena.config import get_settings
@@ -212,7 +212,7 @@ def create_app() -> FastAPI:
     )
 
     # ── Rate limiting ─────────────────────────────────────────
-    limiter = Limiter(key_func=get_remote_address)
+    limiter = Limiter(key_func=get_request_client_ip)
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
