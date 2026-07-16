@@ -40,6 +40,14 @@ import {
   watchlistCadenceLabel,
   type WatchlistCadenceFilter,
 } from '../lib/watchlistCadenceFilter';
+import {
+  WATCHLIST_URGENCY_OPTIONS,
+  filterWatchlistByUrgency,
+  watchlistUrgencyBucket,
+  watchlistUrgencyFilterUseful,
+  watchlistUrgencyLabel,
+  type WatchlistUrgencyFilter,
+} from '../lib/watchlistUrgencyFilter';
 import { watchlistBodyMode } from '../lib/watchlistView';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
@@ -98,6 +106,7 @@ export function WatchlistPage() {
   const [statusFilter, setStatusFilter] = useState<WatchlistStatusFilter>('all');
   const [scoreFilter, setScoreFilter] = useState<AgentHistoryScoreFilter>('all');
   const [cadenceFilter, setCadenceFilter] = useState<WatchlistCadenceFilter>('all');
+  const [urgencyFilter, setUrgencyFilter] = useState<WatchlistUrgencyFilter>('all');
   const [listSort, setListSort] = useState<WatchlistSort>('next_soon');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -212,8 +221,9 @@ export function WatchlistPage() {
             statusFilter === 'active' ? item.is_active : !item.is_active,
           );
     const byCadence = filterWatchlistByCadence(byStatus, cadenceFilter);
+    const byUrgency = filterWatchlistByUrgency(byCadence, urgencyFilter);
     const byScore = filterAgentHistoryByScore(
-      byCadence.map((item) => ({
+      byUrgency.map((item) => ({
         ...item,
         score: item.latest_task?.final_score ?? null,
       })),
@@ -234,7 +244,7 @@ export function WatchlistPage() {
       })),
       listSort,
     );
-  }, [items, searchQuery, statusFilter, listSort, scoreFilter, cadenceFilter]);
+  }, [items, searchQuery, statusFilter, listSort, scoreFilter, cadenceFilter, urgencyFilter]);
 
   const scoreFilterUseful = useMemo(
     () =>
@@ -246,6 +256,11 @@ export function WatchlistPage() {
 
   const cadenceFilterUseful = useMemo(
     () => watchlistCadenceFilterUseful(items),
+    [items],
+  );
+
+  const urgencyFilterUseful = useMemo(
+    () => watchlistUrgencyFilterUseful(items),
     [items],
   );
 
@@ -287,6 +302,9 @@ export function WatchlistPage() {
     if (statusFilter !== 'all') filterBits.push(`status: ${statusFilter}`);
     if (cadenceFilter !== 'all') {
       filterBits.push(`cadence: ${watchlistCadenceLabel(cadenceFilter)}`);
+    }
+    if (urgencyFilter !== 'all') {
+      filterBits.push(`timing: ${watchlistUrgencyLabel(urgencyFilter)}`);
     }
     if (scoreFilter !== 'all') {
       filterBits.push(`score: ${agentHistoryScoreLabel(scoreFilter)}`);
@@ -658,12 +676,48 @@ export function WatchlistPage() {
                     {searchQuery.trim() ||
                     statusFilter !== 'all' ||
                     scoreFilter !== 'all' ||
-                    cadenceFilter !== 'all'
+                    cadenceFilter !== 'all' ||
+                    urgencyFilter !== 'all'
                       ? ` / ${items.length}`
                       : ''}
                   </span>
                 </div>
               </div>
+              {urgencyFilterUseful ? (
+                <div
+                  role="group"
+                  aria-label="Filter by due timing"
+                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
+                >
+                  {WATCHLIST_URGENCY_OPTIONS.map((opt) => {
+                    const selected = urgencyFilter === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setUrgencyFilter(opt.value)}
+                        aria-pressed={selected}
+                        style={{
+                          padding: '4px 12px',
+                          borderRadius: 999,
+                          border: selected ? 'none' : '0.5px solid #D4C4B0',
+                          background: selected
+                            ? opt.value === 'overdue'
+                              ? '#B85C38'
+                              : '#C4956A'
+                            : 'transparent',
+                          color: selected ? '#FAF7F2' : '#8C7355',
+                          fontSize: 12,
+                          fontFamily: 'Georgia, serif',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               {cadenceFilterUseful ? (
                 <div
                   role="group"
@@ -787,21 +841,29 @@ export function WatchlistPage() {
                 <p style={{ fontSize: 13, color: '#8C7355', marginTop: 8, maxWidth: 320, lineHeight: 1.6 }}>
                   {searchQuery.trim()
                     ? `Nothing matches “${searchQuery.trim()}”${statusFilter !== 'all' ? ` in ${statusFilter} watches` : ''}${
-                        cadenceFilter !== 'all' ? ` · ${watchlistCadenceLabel(cadenceFilter)}` : ''
-                      }${scoreFilter !== 'all' ? ` · ${agentHistoryScoreLabel(scoreFilter)}` : ''}.`
-                    : cadenceFilter !== 'all' && scoreFilter !== 'all'
-                      ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
-                      : cadenceFilter !== 'all'
-                        ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches${
-                            statusFilter !== 'all' ? ` that are ${statusFilter}` : ''
-                          }.`
-                        : scoreFilter !== 'all'
-                          ? `No watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
-                          : statusFilter === 'active'
-                            ? 'No active watches right now — resume a paused one or start a new research task.'
-                            : statusFilter === 'paused'
-                              ? 'No paused watches.'
-                              : 'No matches.'}
+                        urgencyFilter !== 'all' ? ` · ${watchlistUrgencyLabel(urgencyFilter)}` : ''
+                      }${cadenceFilter !== 'all' ? ` · ${watchlistCadenceLabel(cadenceFilter)}` : ''}${
+                        scoreFilter !== 'all' ? ` · ${agentHistoryScoreLabel(scoreFilter)}` : ''
+                      }.`
+                    : urgencyFilter === 'overdue'
+                      ? 'Nothing is overdue right now — you’re caught up on re-checks.'
+                      : urgencyFilter === 'due_soon'
+                        ? 'Nothing due in the next 24 hours.'
+                        : urgencyFilter === 'later'
+                          ? 'No active watches scheduled further out.'
+                          : cadenceFilter !== 'all' && scoreFilter !== 'all'
+                            ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
+                            : cadenceFilter !== 'all'
+                              ? `No ${watchlistCadenceLabel(cadenceFilter).toLowerCase()} watches${
+                                  statusFilter !== 'all' ? ` that are ${statusFilter}` : ''
+                                }.`
+                              : scoreFilter !== 'all'
+                                ? `No watches with latest score ${agentHistoryScoreLabel(scoreFilter)}.`
+                                : statusFilter === 'active'
+                                  ? 'No active watches right now — resume a paused one or start a new research task.'
+                                  : statusFilter === 'paused'
+                                    ? 'No paused watches.'
+                                    : 'No matches.'}
                 </p>
                 <button
                   type="button"
@@ -812,6 +874,7 @@ export function WatchlistPage() {
                     setStatusFilter('all');
                     setScoreFilter('all');
                     setCadenceFilter('all');
+                    setUrgencyFilter('all');
                     setListSort('next_soon');
                     searchRef.current?.focus();
                   }}
@@ -822,12 +885,23 @@ export function WatchlistPage() {
             ) : (
             filteredItems.map((item) => {
               const badge = intervalBadge(item.interval_hours);
+              const urgency = watchlistUrgencyBucket(item);
+              const urgencyBorder =
+                urgency === 'overdue'
+                  ? '#B85C38'
+                  : urgency === 'due_soon'
+                    ? '#C4956A'
+                    : '#E0D5C5';
               return (
                 <div
                   key={item.id}
                   style={{
                     background: '#FAF7F2',
-                    border: '0.5px solid #E0D5C5',
+                    border: `0.5px solid ${urgencyBorder}`,
+                    borderLeft:
+                      urgency === 'overdue' || urgency === 'due_soon'
+                        ? `3px solid ${urgencyBorder}`
+                        : `0.5px solid ${urgencyBorder}`,
                     borderRadius: 10,
                     padding: '16px 18px',
                     display: 'flex',
@@ -867,6 +941,11 @@ export function WatchlistPage() {
                     <div style={{ fontSize: 12, color: '#8C7355', lineHeight: 1.5 }}>
                       Run {item.run_count} times · Last ran {formatRelativePast(item.last_run_at)} · Next:{' '}
                       {item.is_active ? formatRelativeFuture(item.next_run_at) : 'paused'}
+                      {urgency === 'overdue' ? (
+                        <span style={{ color: '#B85C38', fontWeight: 500 }}> · Overdue</span>
+                      ) : urgency === 'due_soon' ? (
+                        <span style={{ color: '#A67C52', fontWeight: 500 }}> · Due soon</span>
+                      ) : null}
                     </div>
                     <div
                       role="radiogroup"
