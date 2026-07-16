@@ -157,6 +157,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Watchlist expertise filter**: All levels / Curious / Practitioner / Researcher / Expert chips when mixed (export notes filter).
 - **Agent answer outline**: multi-section answers show reading time (≈ min + word count) and collapsible “On this page” jump links (prefers-reduced-motion scroll).
 - **Agent answer outline copy**: Copy exports the section TOC as markdown; full answer copy/download also includes reading time + TOC when useful.
+- **Agent history recency filter**: All time / Last 24h / Last 7 days / Last 30 days / Older chips (export notes filter).
 
 ## Required production environment
 
