@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Trophy } from 'lucide-react';
 import { AGENTS, type SessionTurn } from '../types';
+import { AgentAnswerMarkdown } from './AgentAnswerMarkdown';
 import { AgentDot } from './AgentDot';
 import { usePanel } from '../context/PanelContext';
+import {
+  arenaFullTakeExpandable,
+  pickArenaTakeBody,
+} from '../lib/arenaTakeClipboard';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
@@ -31,6 +36,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
   const [visible, setVisible] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [expandedTurnId, setExpandedTurnId] = useState<string | null>(null);
 
   const leaderboard = useMemo(() => {
     const winsByAgent = turns.reduce<Record<string, number>>((acc, turn) => {
@@ -134,13 +140,19 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
         AGENTS[winnerId]?.name ||
         winnerId ||
         'Mind';
-      const oneLiner = (t.agent_responses?.[winnerId]?.one_liner || '').trim();
+      const winnerResponse = t.agent_responses?.[winnerId];
+      const oneLiner = (winnerResponse?.one_liner || '').trim();
+      const verdict = (winnerResponse?.verdict || '').trim();
+      const fullTake = pickArenaTakeBody({ oneLiner, verdict });
+      const canExpand = arenaFullTakeExpandable({ oneLiner, verdict });
       return {
         turnId: t.turn_id,
         prompt: (t.prompt || '').trim(),
         winnerId,
         winnerName,
         oneLiner,
+        fullTake,
+        canExpand,
       };
     });
   }, [turns, leaderboard]);
@@ -157,6 +169,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
         prompt: t.prompt,
         winnerName: t.winnerName,
         oneLiner: t.oneLiner,
+        fullTake: t.fullTake,
       })),
     });
 
@@ -437,12 +450,16 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
             Session prompts
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {turnSummaries.map((t, index) => (
+            {turnSummaries.map((t, index) => {
+              const turnKey = t.turnId || `turn-${index}`;
+              const isExpanded = expandedTurnId === turnKey;
+              const showFull = isExpanded && t.canExpand && Boolean(t.fullTake);
+              return (
               <div
-                key={t.turnId || index}
+                key={turnKey}
                 style={{
                   background: '#FFFFFF',
-                  border: '0.5px solid #E8E0D8',
+                  border: isExpanded ? '0.5px solid rgba(196,149,106,0.55)' : '0.5px solid #E8E0D8',
                   borderRadius: 12,
                   padding: '12px 14px',
                 }}
@@ -464,7 +481,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                     alignItems: 'center',
                     gap: 8,
                     flexWrap: 'wrap',
-                    marginBottom: t.oneLiner ? 6 : 0,
+                    marginBottom: t.oneLiner || t.fullTake ? 6 : 0,
                   }}
                 >
                   <span
@@ -480,7 +497,9 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                   <AgentDot agentId={t.winnerId} size={7} />
                   <span style={{ fontSize: 12, color: '#4A3728', fontWeight: 500 }}>{t.winnerName}</span>
                 </div>
-                {t.oneLiner ? (
+                {showFull ? (
+                  <AgentAnswerMarkdown markdown={t.fullTake} question={t.prompt || undefined} />
+                ) : t.oneLiner || t.fullTake ? (
                   <p
                     style={{
                       margin: 0,
@@ -490,11 +509,33 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                       lineHeight: 1.5,
                     }}
                   >
-                    “{t.oneLiner}”
+                    “{t.oneLiner || t.fullTake}”
                   </p>
                 ) : null}
+                {t.canExpand ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedTurnId((id) => (id === turnKey ? null : turnKey))
+                    }
+                    aria-expanded={isExpanded}
+                    style={{
+                      marginTop: 8,
+                      padding: 0,
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      color: '#C4956A',
+                      fontFamily: 'Georgia, serif',
+                    }}
+                  >
+                    {isExpanded ? 'Show less' : 'Show full take'}
+                  </button>
+                ) : null}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : null}

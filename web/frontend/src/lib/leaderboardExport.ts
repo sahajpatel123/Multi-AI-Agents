@@ -10,6 +10,8 @@ export type LeaderboardExportTurn = {
   prompt: string;
   winnerName: string;
   oneLiner?: string;
+  /** Full winner take when available (preferred over one-liner in export). */
+  fullTake?: string;
 };
 
 export function formatLeaderboardExport(opts: {
@@ -53,13 +55,19 @@ export function formatLeaderboardExport(opts: {
     turns.forEach((turn, i) => {
       const prompt = (turn.prompt || '').trim() || '(no prompt)';
       const winner = (turn.winnerName || 'Mind').trim() || 'Mind';
+      const fullTake = (turn.fullTake || '').trim();
       const oneLiner = (turn.oneLiner || '').trim();
+      const take = fullTake || oneLiner;
       lines.push(`### ${i + 1}. ${prompt}`);
       lines.push('');
       lines.push(`**Winner:** ${winner}`);
-      if (oneLiner) {
+      if (take) {
         lines.push('');
-        lines.push(`> ${oneLiner}`);
+        if (fullTake && fullTake !== oneLiner && fullTake.includes('\n')) {
+          lines.push(fullTake);
+        } else {
+          lines.push(`> ${take}`);
+        }
       }
       lines.push('');
     });

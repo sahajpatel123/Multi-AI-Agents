@@ -36,6 +36,23 @@ describe('formatLeaderboardExport', () => {
     expect(md).toContain('Stress-test the runway first.');
   });
 
+  it('prefers full winner take over one-liner in export', () => {
+    const md = formatLeaderboardExport({
+      totalPrompts: 1,
+      rows: [{ name: 'The Analyst', wins: 1, percentage: 100 }],
+      turns: [
+        {
+          prompt: 'Ship today?',
+          winnerName: 'The Analyst',
+          oneLiner: 'Not yet.',
+          fullTake: 'Not yet.\n\nStage a canary and define a kill switch first.',
+        },
+      ],
+    });
+    expect(md).toContain('Stage a canary');
+    expect(md).not.toMatch(/^> Not yet\.$/m);
+  });
+
   it('handles empty sessions honestly', () => {
     const md = formatLeaderboardExport({ totalPrompts: 0, rows: [] });
     expect(md).toContain('No prompts scored');

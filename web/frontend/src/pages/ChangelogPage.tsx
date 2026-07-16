@@ -175,6 +175,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Watchlist run history: score trend vs prior run + copy/download as markdown',
       '[IMPROVED] Room board: Show full answer expands task results as markdown in place',
       '[IMPROVED] Arena cards: Discuss and Challenge actions on every mind (not only the prompt bar)',
+      '[IMPROVED] Session Leaderboard: expand full winner takes; export prefers full verdict',
     ],
   },
   {
