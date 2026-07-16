@@ -252,12 +252,23 @@ jobs:
           exit 1
 
       - name: Run Playwright tests
-        run: npx playwright test
+        # --reporter=line streams concise progress to the GitHub log,
+        # --reporter=json writes machine-readable results/playwright-report.json
+        # so the failure-upload step has structured data to inspect (and so
+        # dependabot/code-review bots can render the failures as a PR comment).
+        run: npx playwright test --reporter=line,json
 
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          # Upload BOTH the HTML report (browse in the Actions UI) and the
+          # raw JSON results + any failure screenshots/traces the runner
+          # captured. Without the JSON, post-mortem on flaky tests requires
+          # re-running locally — the JSON is the source of truth.
           name: playwright-report
-          path: web/frontend/playwright-report
-          retention-days: 7
+          path: |
+            web/frontend/playwright-report
+            web/frontend/test-results
+          retention-days: 14
+          if-no-files-found: warn
