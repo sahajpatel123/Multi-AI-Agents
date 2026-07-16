@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Ellipsis, Lock, Pencil, Trash2, X } from 'lucide-react';
+import { Copy, Ellipsis, Lock, Pencil, RotateCcw, Trash2, X } from 'lucide-react';
 import { AnalyticalCaveatsSection, type StructuredCaveat } from '../components/AgentCaveatGrid';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { Button } from '../components/Button';
@@ -65,7 +65,13 @@ import { useBusyDocumentTitle } from '../hooks/useBusyDocumentTitle';
 import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { agentWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForAgentBusy } from '../lib/documentTitle';
-import { formatRelativePast } from '../lib/relativeTime';
+import {
+  formatHistoryConfidenceBadge,
+  formatHistoryRowRelative,
+  historyItemCopyText,
+  historyItemRerunText,
+  historyRowTimeTitle,
+} from '../lib/agentHistoryRow';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { User } from '../types';
 // setRedirectIntent is unused but kept for future use
@@ -435,13 +441,6 @@ function parseSynthesisFromFinalAnswer(finalAnswer: string | undefined): ParsedS
   }
 }
 
-function formatShortDate(iso: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
 const CALIBRATION_LEVEL_TITLES: Record<number, string> = {
   1: 'Uncertain',
   2: 'Doubtful',
@@ -450,8 +449,8 @@ const CALIBRATION_LEVEL_TITLES: Record<number, string> = {
   5: 'Certain',
 };
 
-function formatRelativeShort(iso: string | null | undefined): string {
-  return formatRelativePast(iso, { fallback: '—', localeAfterDays: 0 });
+function formatRelativeShort(iso: string | null | undefined, nowMs?: number): string {
+  return formatHistoryRowRelative(iso, nowMs);
 }
 
 const CAVEAT_CATEGORY_KEYS = new Set([
@@ -827,6 +826,8 @@ export function AgentPage() {
   );
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoadFailed, setHistoryLoadFailed] = useState(false);
+  /** Ticks every 60s so history / live-update relative clocks stay honest. */
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
   const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -1051,6 +1052,11 @@ export function AgentPage() {
 
   useEffect(() => {
     setNativeShareAvailable(canUseNativeShare());
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -1882,6 +1888,38 @@ export function AgentPage() {
     resetRun();
     if (q) setTask(q);
   };
+
+  /** Seed the compose box from a history row without loading that result. */
+  const rerunFromHistory = useCallback(
+    (item: HistoryTask) => {
+      const q = historyItemRerunText(item);
+      setOpenMenuTaskId(null);
+      setConfirmDeleteTaskId(null);
+      if (!q) {
+        setToastMessage('No question to re-run on this task.');
+        return;
+      }
+      resetRun();
+      setTask(q);
+      setToastMessage('Question ready — press Research when you want.');
+      window.setTimeout(() => idleTaskInputRef.current?.focus(), 0);
+    },
+    // resetRun is stable enough via state setters; intentional omit of full deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const copyHistoryQuestion = useCallback(async (item: HistoryTask) => {
+    setOpenMenuTaskId(null);
+    setConfirmDeleteTaskId(null);
+    const text = historyItemCopyText(item);
+    if (!text) {
+      setToastMessage('Nothing to copy on this task.');
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    setToastMessage(ok ? 'Question copied.' : 'Could not copy — try again.');
+  }, []);
 
   const closeRoomCreate = useCallback(() => {
     if (creatingRoom) return;
@@ -2872,6 +2910,26 @@ export function AgentPage() {
                   >
                     {item.final_score != null ? `${item.final_score}/100` : '—'}
                   </span>
+                  {(() => {
+                    const confBadge = formatHistoryConfidenceBadge(item.final_confidence);
+                    if (!confBadge) return null;
+                    return (
+                      <span
+                        title={`Confidence ${confBadge}`}
+                        aria-label={`Confidence ${confBadge}`}
+                        style={{
+                          fontSize: 10,
+                          letterSpacing: '0.04em',
+                          borderRadius: 999,
+                          padding: '1px 7px',
+                          background: 'rgba(196,149,106,0.12)',
+                          color: '#8C5A2C',
+                        }}
+                      >
+                        {confBadge}
+                      </span>
+                    );
+                  })()}
                   {item.user_feedback ? (
                     <span
                       title={`You rated this ${item.user_feedback}`}
@@ -2903,7 +2961,12 @@ export function AgentPage() {
                           : 'Inaccurate'}
                     </span>
                   ) : null}
-                  <span style={{ fontSize: 11, color: '#A89070' }}>{formatShortDate(item.created_at)}</span>
+                  <span
+                    style={{ fontSize: 11, color: '#A89070' }}
+                    title={historyRowTimeTitle(item.created_at) || undefined}
+                  >
+                    {formatRelativeShort(item.created_at, nowMs)}
+                  </span>
                 </div>
               </button>
             )}
@@ -2947,10 +3010,24 @@ export function AgentPage() {
                   borderRadius: '10px',
                   boxShadow: '0 4px 16px rgba(26,23,20,0.08)',
                   padding: '4px',
-                  minWidth: '140px',
+                  minWidth: '160px',
                   zIndex: 120,
                 }}
               >
+                <AgentSidebarMenuItem
+                  icon={<RotateCcw className="w-[14px] h-[14px]" />}
+                  label="Re-run"
+                  color="#1A1714"
+                  hoverBackground="#F0EBE3"
+                  onClick={() => rerunFromHistory(item)}
+                />
+                <AgentSidebarMenuItem
+                  icon={<Copy className="w-[14px] h-[14px]" />}
+                  label="Copy question"
+                  color="#1A1714"
+                  hoverBackground="#F0EBE3"
+                  onClick={() => void copyHistoryQuestion(item)}
+                />
                 <AgentSidebarMenuItem
                   icon={<Pencil className="w-[14px] h-[14px]" />}
                   label="Rename"
@@ -6852,7 +6929,7 @@ export function AgentPage() {
                         </span>
                         {liveUpdatesList.length > 0 && liveUpdatesList[0]?.found_at ? (
                           <span style={{ fontSize: 11, color: '#5A8C3A', marginTop: 2, display: 'block' }}>
-                            Found {formatRelativeShort(String(liveUpdatesList[0].found_at))}
+                            Found {formatRelativeShort(String(liveUpdatesList[0].found_at), nowMs)}
                           </span>
                         ) : null}
                       </div>
@@ -6896,7 +6973,7 @@ export function AgentPage() {
                           }}
                         >
                           <div style={{ fontSize: 11, color: '#A89070', marginBottom: 6 }}>
-                            {formatRelativeShort(String(u?.found_at ?? ''))}
+                            {formatRelativeShort(String(u?.found_at ?? ''), nowMs)}
                           </div>
                           <div style={{ fontSize: 13, color: '#4A3728', lineHeight: 1.5 }}>
                             {String(u?.summary ?? '')}
@@ -8674,7 +8751,7 @@ export function AgentPage() {
                         Checking for updates every 24h
                       </span>
                       <span style={{ fontSize: 11, color: '#A89070' }}>
-                        Last checked: {formatRelativeShort(result.live_last_checked)}
+                        Last checked: {formatRelativeShort(result.live_last_checked, nowMs)}
                       </span>
                     </div>
                   ) : null}

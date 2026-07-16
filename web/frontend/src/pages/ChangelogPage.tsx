@@ -12,6 +12,9 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Agent history row actions: Re-run research and Copy question from the ⋯ menu',
+      '[IMPROVED] History rows show live relative time + confidence badge (ticks every 60s)',
+      '[IMPROVED] Live-update “found / last checked” clocks stay honest as time passes',
       '[NEW] Condura-aware Agent Mode — on-device work routes to Condura, never faked in the browser',
       '[NEW] Honest 409 local-execution path with install / handoff CTA when Condura is required',
       '[NEW] Sidebar + nav links for Agent Mode and Watchlist (authenticated primary surfaces)',
