@@ -81,6 +81,7 @@ import {
   clampToMax,
 } from '../lib/charBudget';
 import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import { formatAgentHistoryExport } from '../lib/agentHistoryExport';
 import {
@@ -819,6 +820,7 @@ export function AgentPage() {
   const [shareRoomInviteStatus, setShareRoomInviteStatus] = useState<'idle' | 'shared' | 'failed'>('idle');
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [copyAnswerFeedback, setCopyAnswerFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [downloadAnswerFeedback, setDownloadAnswerFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
   const pendingRoomHandledRef = useRef<string | null>(null);
 
   const closeTemplatesModal = useCallback(() => {
@@ -7423,6 +7425,36 @@ export function AgentPage() {
                         : copyAnswerFeedback === 'failed'
                           ? 'Copy failed'
                           : 'Copy'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      icon={Icons.download(14)}
+                      title="Download answer as a markdown file"
+                      onClick={() => {
+                        const question =
+                          result.original_task || result.task || task || '';
+                        const md = formatAgentAnswerExport({
+                          question,
+                          answer: plainAnswerText || result.final_answer || '',
+                          taskId: result.task_id,
+                        });
+                        const stem = `agent-${(question || result.task_id || 'answer').slice(0, 48)}`;
+                        const ok = downloadMarkdownFile(md, stem);
+                        setDownloadAnswerFeedback(ok ? 'done' : 'failed');
+                        const hold = motionDuration(ok ? 2000 : 2800);
+                        window.setTimeout(
+                          () => setDownloadAnswerFeedback('idle'),
+                          hold > 0 ? hold : 0,
+                        );
+                      }}
+                    >
+                      {downloadAnswerFeedback === 'done'
+                        ? 'Downloaded'
+                        : downloadAnswerFeedback === 'failed'
+                          ? 'Download failed'
+                          : 'Download .md'}
                     </Button>
                     <Button type="button" variant="ghost" size="sm" icon={Icons.refresh(14)} onClick={runAgainWithSameQuestion}>
                       Run again

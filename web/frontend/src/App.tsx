@@ -26,6 +26,7 @@ import {
   extractStreamingPreview,
 } from './api';
 import { copyToClipboard } from './lib/clipboard';
+import { downloadMarkdownFile } from './lib/downloadTextFile';
 import { formatArenaExport } from './lib/arenaExport';
 import {
   clearRecentPrompts,
@@ -84,6 +85,7 @@ function App() {
   const { canUseFeature, refreshTier, messagesRemaining, isFree } = useTier();
   const { openModal: openProfileModal } = useProfileModal();
   const [exportCopied, setExportCopied] = useState(false);
+  const [exportDownloaded, setExportDownloaded] = useState(false);
   const [recentPrompts, setRecentPrompts] = useState<RecentPrompt[]>(() => loadRecentPrompts());
   const quotaExhausted = messagesRemaining <= 0;
   const personaIds = panel.map((persona) => persona.id);
@@ -386,13 +388,21 @@ function App() {
     queueFeedbackReset('share', key);
   }, [activeTurnId, copyText, getPersonaForAgentId, getResponseKey, queueFeedbackReset]);
 
-  const handleExportAllTakes = useCallback(async () => {
-    if (!response) return;
-    const md = formatArenaExport(response, (agentId) => {
+  const buildArenaComparisonMarkdown = useCallback(() => {
+    if (!response) return null;
+    return formatArenaExport(response, (agentId) => {
       const persona = getPersonaForAgentId(agentId);
       const fallback = AGENTS[agentId];
-      return { name: persona?.name || fallback?.name || agentId, color: persona?.color || fallback?.color };
+      return {
+        name: persona?.name || fallback?.name || agentId,
+        color: persona?.color || fallback?.color,
+      };
     });
+  }, [getPersonaForAgentId, response]);
+
+  const handleExportAllTakes = useCallback(async () => {
+    const md = buildArenaComparisonMarkdown();
+    if (!md) return;
     const ok = await copyToClipboard(md);
     if (ok) {
       setExportCopied(true);
@@ -401,7 +411,21 @@ function App() {
     } else {
       setError('Could not copy the comparison. Try again or select text manually.');
     }
-  }, [getPersonaForAgentId, response]);
+  }, [buildArenaComparisonMarkdown]);
+
+  const handleDownloadAllTakes = useCallback(() => {
+    const md = buildArenaComparisonMarkdown();
+    if (!md) return;
+    const stem = `arena-${(response?.prompt || 'comparison').slice(0, 48)}`;
+    const ok = downloadMarkdownFile(md, stem);
+    if (ok) {
+      setExportDownloaded(true);
+      window.setTimeout(() => setExportDownloaded(false), 1800);
+      void track('arena_download_all');
+    } else {
+      setError('Could not download the comparison. Try Copy all takes instead.');
+    }
+  }, [buildArenaComparisonMarkdown, response?.prompt]);
 
   const handleLikeResponse = useCallback((scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
@@ -1288,17 +1312,28 @@ function App() {
                 </button>
               ) : null}
               {isDone && response ? (
-                <button
-                  type="button"
-                  className="arena-btn arena-btn--ghost arena-btn--sm"
-                  onClick={() => {
-                    void handleExportAllTakes();
-                  }}
-                  title="Copy all four takes as markdown"
-                  style={{ fontSize: 12 }}
-                >
-                  {exportCopied ? 'Copied comparison' : 'Copy all takes'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      void handleExportAllTakes();
+                    }}
+                    title="Copy all four takes as markdown"
+                    style={{ fontSize: 12 }}
+                  >
+                    {exportCopied ? 'Copied comparison' : 'Copy all takes'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => handleDownloadAllTakes()}
+                    title="Download all four takes as a markdown file"
+                    style={{ fontSize: 12 }}
+                  >
+                    {exportDownloaded ? 'Downloaded' : 'Download .md'}
+                  </button>
+                </>
               ) : null}
               {isDone && response && response.all_responses.length >= 2 ? (
                 <button
