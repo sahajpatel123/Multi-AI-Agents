@@ -162,6 +162,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Reading-time chrome only appears on longer answers (50+ words)',
       '[NEW] Agent Watchlist: filter by expertise domain',
       '[IMPROVED] Search highlight in Personas swap dialog, library quotes, and Room add-task picker',
+      '[IMPROVED] Discuss: Jump to latest when you scroll up; streaming no longer yanks the viewport',
     ],
   },
   {

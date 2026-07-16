@@ -19,6 +19,7 @@ import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { discussWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForArenaBusy } from '../lib/documentTitle';
 import { prefersReducedMotion, scrollBehavior } from '../lib/motion';
+import { isScrollNearBottom, shouldAutoScrollChat } from '../lib/chatScroll';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatDiscussExport } from '../lib/threadExport';
@@ -65,10 +66,14 @@ export function DiscussMode({
   const [error, setError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [showJumpLatest, setShowJumpLatest] = useState(false);
 
   const tokenBuffer = useRef('');
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  /** User is following the live end; auto-scroll stays on until they scroll up. */
+  const stickToBottomRef = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -124,16 +129,52 @@ export function DiscussMode({
     setStreamingText(tokenBuffer.current);
   }, []);
 
-  const scrollToBottom = useCallback(() => {
+  const syncScrollFlags = useCallback(() => {
+    const el = messagesScrollRef.current;
+    const near = isScrollNearBottom(el);
+    stickToBottomRef.current = near;
+    setShowJumpLatest(!near);
+  }, []);
+
+  const scrollToBottom = useCallback((opts?: { force?: boolean }) => {
+    const force = opts?.force === true;
+    if (!force && !shouldAutoScrollChat({ stickToBottom: stickToBottomRef.current })) {
+      setShowJumpLatest(true);
+      return;
+    }
+    stickToBottomRef.current = true;
+    setShowJumpLatest(false);
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
+      // Re-sync after layout so the jump chip hides reliably.
+      requestAnimationFrame(() => {
+        stickToBottomRef.current = true;
+        setShowJumpLatest(false);
+      });
     }, 50);
   }, []);
 
-  // Focus input when agent changes
+  const jumpToLatest = useCallback(() => {
+    scrollToBottom({ force: true });
+  }, [scrollToBottom]);
+
+  // Follow the stream only while the reader is at the live end.
   useEffect(() => {
+    if (!isStreaming && !streamingText) return;
+    if (!shouldAutoScrollChat({ stickToBottom: stickToBottomRef.current })) {
+      setShowJumpLatest(true);
+      return;
+    }
+    scrollToBottom();
+  }, [streamingText, isStreaming, scrollToBottom]);
+
+  // Focus input when agent changes; stick to bottom for the new thread.
+  useEffect(() => {
+    stickToBottomRef.current = true;
+    setShowJumpLatest(false);
     inputRef.current?.focus();
-  }, [activeAgent.response.agent_id]);
+    scrollToBottom({ force: true });
+  }, [activeAgent.response.agent_id, scrollToBottom]);
 
   // `/` focuses discuss compose; Escape returns to Arena (when no modal is open).
   useEffect(() => {
@@ -186,7 +227,7 @@ export function DiscussMode({
       ...prev,
       [activeAgent.response.agent_id]: updatedHistory,
     }));
-    scrollToBottom();
+    scrollToBottom({ force: true });
 
     if (flushTimer.current) clearInterval(flushTimer.current);
     flushTimer.current = setInterval(flushTokens, 50);
@@ -216,7 +257,7 @@ export function DiscussMode({
               [activeAgent.response.agent_id]: data.conversation_history,
             }));
             setIsStreaming(false);
-            scrollToBottom();
+            scrollToBottom({ force: stickToBottomRef.current });
             
             // Refresh user count after successful discuss message
             if (onSuccess) onSuccess();
@@ -477,7 +518,20 @@ export function DiscussMode({
         ) : null}
 
         {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem', paddingRight: '4px', maxHeight: '55vh' }}>
+        <div style={{ position: 'relative', marginBottom: '1rem' }}>
+        <div
+          ref={messagesScrollRef}
+          onScroll={syncScrollFlags}
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem',
+            paddingRight: '4px',
+            maxHeight: '55vh',
+          }}
+        >
           {/* Agent's original verdict as first message */}
           {currentHistory.length === 0 && !isStreaming && (
             <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
@@ -574,6 +628,40 @@ export function DiscussMode({
           )}
 
           <div ref={messagesEndRef} />
+        </div>
+        {showJumpLatest ? (
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 8,
+              display: 'flex',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+              zIndex: 2,
+            }}
+          >
+            <button
+              type="button"
+              onClick={jumpToLatest}
+              style={{
+                pointerEvents: 'auto',
+                fontSize: 12,
+                fontFamily: 'Georgia, serif',
+                color: '#FAF7F2',
+                background: '#C4956A',
+                border: 'none',
+                borderRadius: 999,
+                padding: '6px 14px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(44,24,16,0.14)',
+              }}
+            >
+              {isStreaming ? 'Jump to latest · streaming' : 'Jump to latest'}
+            </button>
+          </div>
+        ) : null}
         </div>
 
         {/* Error */}

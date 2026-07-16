@@ -168,6 +168,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Reading-time threshold**: answer reading chrome only when ≥50 words (avoids noise on short takes).
 - **Watchlist domain filter**: All domains + top expertise domains when mixed (export notes filter).
 - **Search highlight dialogs**: Personas swap + library quotes/descriptions; Room add-task history picker.
+- **Discuss jump-to-latest**: when the user scrolls up in a 1-on-1 thread, auto-scroll pauses and a “Jump to latest” chip appears; send still pins to the live end.
 
 ## Required production environment
 
