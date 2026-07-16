@@ -1222,6 +1222,59 @@ export async function deleteAgentWatchlist(itemId: string): Promise<void> {
   }
 }
 
+export type AgentWatchlistHistoryRun = {
+  task_id: string;
+  title: string | null;
+  final_score: number | null;
+  final_confidence: number | null;
+  user_feedback: string | null;
+  created_at: string | null;
+};
+
+export type AgentWatchlistHistoryStats = {
+  count: number;
+  scored_count: number;
+  avg_score: number | null;
+  min_score: number | null;
+  max_score: number | null;
+};
+
+export type AgentWatchlistHistoryResponse = {
+  items: AgentWatchlistHistoryRun[];
+  stats: AgentWatchlistHistoryStats;
+};
+
+/** Run history for one watch (newest first) + aggregate score stats. */
+export async function getAgentWatchlistHistory(
+  itemId: string,
+  limit = 50,
+): Promise<AgentWatchlistHistoryResponse> {
+  const cap = Math.max(1, Math.min(200, Math.floor(limit)));
+  const response = await apiFetch(
+    `/api/agent/watchlist/${encodeURIComponent(itemId)}/history?limit=${encodeURIComponent(String(cap))}`,
+  );
+  const data = await parseJsonSafely<
+    AgentWatchlistHistoryResponse & {
+      success?: boolean;
+      detail?: string | { message?: string };
+    }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Could not load watch history'), response.status, data);
+  }
+  if (!data) throw new Error('Empty watch history response');
+  return {
+    items: Array.isArray(data.items) ? data.items : [],
+    stats: data.stats || {
+      count: 0,
+      scored_count: 0,
+      avg_score: null,
+      min_score: null,
+      max_score: null,
+    },
+  };
+}
+
 export async function postCalibrationRate(
   taskId: string,
   rating: number,

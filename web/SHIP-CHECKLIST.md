@@ -181,6 +181,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Recent ratings on Profile**: usage tab shows the last N feedback items with verdict chip + title + optional note + relative timestamp; complements the aggregate feedback-accuracy bar.
 - **About copy refresh**: `/about` “What ships today” names Watchlist, Saved takes, Rooms, and calibration alongside the original panel/debate/Agent surfaces.
 - **Arena card full take**: when the verdict is longer than the one-liner, “Show full take” expands markdown in-card (key assumption when present).
+- **Watchlist run history**: per-item expandable history (newest-first) with avg/min/max score stats and deep-link to each prior Agent run.
 
 ## Required production environment
 

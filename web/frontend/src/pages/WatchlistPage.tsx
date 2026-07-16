@@ -7,13 +7,16 @@ import {
   ApiError,
   deleteAgentWatchlist,
   getAgentWatchlist,
+  getAgentWatchlistHistory,
   patchAgentWatchlist,
+  type AgentWatchlistHistoryResponse,
   type AgentWatchlistItem,
 } from '../api';
 import { useTier } from '../context/TierContext';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { prefersReducedMotion } from '../lib/motion';
+import { formatWatchlistHistoryStats } from '../lib/watchlistHistory';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import {
@@ -130,11 +133,54 @@ export function WatchlistPage() {
   const [listSort, setListSort] = useState<WatchlistSort>('next_soon');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [historyCache, setHistoryCache] = useState<
+    Record<
+      string,
+      | { status: 'loading' }
+      | { status: 'error'; message: string }
+      | { status: 'ready'; data: AgentWatchlistHistoryResponse }
+    >
+  >({});
+  const historyCacheRef = useRef(historyCache);
+  historyCacheRef.current = historyCache;
   const errorRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
   const reducedMotion = prefersReducedMotion();
+
+  const loadWatchHistory = useCallback(async (itemId: string, force = false) => {
+    if (!force) {
+      const existing = historyCacheRef.current[itemId];
+      if (existing && (existing.status === 'ready' || existing.status === 'loading')) return;
+    }
+    setHistoryCache((prev) => ({ ...prev, [itemId]: { status: 'loading' } }));
+    try {
+      const data = await getAgentWatchlistHistory(itemId, 30);
+      setHistoryCache((prev) => ({ ...prev, [itemId]: { status: 'ready', data } }));
+    } catch (e) {
+      setHistoryCache((prev) => ({
+        ...prev,
+        [itemId]: {
+          status: 'error',
+          message: e instanceof ApiError ? e.message : 'Could not load run history',
+        },
+      }));
+    }
+  }, []);
+
+  const toggleWatchHistory = useCallback(
+    (itemId: string) => {
+      if (historyOpenId === itemId) {
+        setHistoryOpenId(null);
+        return;
+      }
+      setHistoryOpenId(itemId);
+      void loadWatchHistory(itemId);
+    },
+    [historyOpenId, loadWatchHistory],
+  );
 
   const load = useCallback(async () => {
     if (!canWatchlist) {
@@ -149,6 +195,8 @@ export function WatchlistPage() {
       setActiveCount(data.active_count);
       setActiveCap(data.active_cap);
       setLoadFailed(false);
+      setHistoryCache({});
+      setHistoryOpenId(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not load watchlist');
       setItems([]);
@@ -1176,25 +1224,195 @@ export function WatchlistPage() {
                         );
                       })}
                     </div>
-                    {item.latest_task_id && item.latest_task ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(`/agent?task_id=${encodeURIComponent(item.latest_task!.task_id)}`)
-                        }
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 12,
+                        alignItems: 'center',
+                        marginTop: 8,
+                      }}
+                    >
+                      {item.latest_task_id && item.latest_task ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              `/agent?task_id=${encodeURIComponent(item.latest_task!.task_id)}`,
+                            )
+                          }
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            fontSize: 11,
+                            color: '#C4956A',
+                            cursor: 'pointer',
+                            fontFamily: 'Georgia, serif',
+                          }}
+                        >
+                          Latest result →
+                        </button>
+                      ) : null}
+                      {item.run_count > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleWatchHistory(item.id)}
+                          aria-expanded={historyOpenId === item.id}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            fontSize: 11,
+                            color: '#8C7355',
+                            cursor: 'pointer',
+                            fontFamily: 'Georgia, serif',
+                          }}
+                        >
+                          {historyOpenId === item.id ? 'Hide run history' : 'Run history'}
+                        </button>
+                      ) : null}
+                    </div>
+                    {historyOpenId === item.id ? (
+                      <div
                         style={{
-                          marginTop: 8,
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          fontSize: 11,
-                          color: '#C4956A',
-                          cursor: 'pointer',
-                          fontFamily: 'Georgia, serif',
+                          marginTop: 10,
+                          padding: '10px 12px',
+                          background: '#F7F1E8',
+                          border: '0.5px solid #E0D5C5',
+                          borderRadius: 10,
                         }}
                       >
-                        Latest result →
-                      </button>
+                        {(() => {
+                          const hist = historyCache[item.id];
+                          if (!hist || hist.status === 'loading') {
+                            return (
+                              <p style={{ margin: 0, fontSize: 12, color: '#A89070' }}>
+                                Loading run history…
+                              </p>
+                            );
+                          }
+                          if (hist.status === 'error') {
+                            return (
+                              <div>
+                                <p style={{ margin: 0, fontSize: 12, color: '#993C1D' }}>
+                                  {hist.message}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => void loadWatchHistory(item.id, true)}
+                                  style={{
+                                    marginTop: 6,
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: 0,
+                                    fontSize: 11,
+                                    color: '#C4956A',
+                                    cursor: 'pointer',
+                                    fontFamily: 'Georgia, serif',
+                                  }}
+                                >
+                                  Retry
+                                </button>
+                              </div>
+                            );
+                          }
+                          const { data } = hist;
+                          const statsLabel = formatWatchlistHistoryStats(data.stats);
+                          return (
+                            <div>
+                              {statsLabel ? (
+                                <p
+                                  style={{
+                                    margin: '0 0 8px',
+                                    fontSize: 11,
+                                    color: '#8C7355',
+                                    letterSpacing: '0.02em',
+                                  }}
+                                >
+                                  {statsLabel}
+                                </p>
+                              ) : null}
+                              {data.items.length === 0 ? (
+                                <p style={{ margin: 0, fontSize: 12, color: '#A89070' }}>
+                                  No runs recorded yet.
+                                </p>
+                              ) : (
+                                <ul
+                                  style={{
+                                    listStyle: 'none',
+                                    margin: 0,
+                                    padding: 0,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 6,
+                                  }}
+                                >
+                                  {data.items.map((run) => (
+                                    <li key={run.task_id}>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          navigate(
+                                            `/agent?task_id=${encodeURIComponent(run.task_id)}`,
+                                          )
+                                        }
+                                        style={{
+                                          width: '100%',
+                                          textAlign: 'left',
+                                          background: 'transparent',
+                                          border: '0.5px solid #E0D5C5',
+                                          borderRadius: 8,
+                                          padding: '8px 10px',
+                                          cursor: 'pointer',
+                                          fontFamily: 'Georgia, serif',
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            gap: 8,
+                                            alignItems: 'baseline',
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              fontSize: 12,
+                                              color: '#2C1810',
+                                              fontWeight: 500,
+                                              overflow: 'hidden',
+                                              textOverflow: 'ellipsis',
+                                              whiteSpace: 'nowrap',
+                                            }}
+                                          >
+                                            {run.title?.trim() || 'Research run'}
+                                          </span>
+                                          <span style={{ fontSize: 11, color: '#C4956A', flexShrink: 0 }}>
+                                            {run.final_score != null ? `${run.final_score}/100` : '—'}
+                                          </span>
+                                        </div>
+                                        <div
+                                          style={{
+                                            fontSize: 11,
+                                            color: '#A89070',
+                                            marginTop: 2,
+                                          }}
+                                        >
+                                          {formatRelativePast(run.created_at)}
+                                          {run.user_feedback
+                                            ? ` · ${String(run.user_feedback)}`
+                                            : ''}
+                                        </div>
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     ) : null}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>

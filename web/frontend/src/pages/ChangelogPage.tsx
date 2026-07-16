@@ -171,6 +171,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Arena copy/share uses the full take (not only the one-liner) as markdown',
       '[IMPROVED] Profile recent ratings show relative “Rated …” timestamps',
       '[IMPROVED] Arena cards: Show full take expands the verdict as markdown (with key assumption)',
+      '[NEW] Agent Watchlist: expand Run history with scores, averages, and open prior runs',
     ],
   },
   {
