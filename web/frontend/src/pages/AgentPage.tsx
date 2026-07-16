@@ -3540,22 +3540,33 @@ export function AgentPage() {
                             roomsOccupancyFilter !== 'all'
                               ? ` · ${agentRoomsOccupancyLabel(roomsOccupancyFilter)}`
                               : ''
+                          }${
+                            roomsMembershipFilter !== 'all'
+                              ? ` · ${agentRoomsMembershipLabel(roomsMembershipFilter)}`
+                              : ''
                           }`
-                        : roomsOccupancyFilter !== 'all' && roomsActivityFilter === 'all'
-                          ? roomsOccupancyFilter === 'empty'
-                            ? 'No empty rooms — every room has tasks.'
-                            : 'No rooms with tasks in this view.'
-                          : roomsActivityFilter === 'needs_attention'
-                            ? 'No rooms with new synthesis right now.'
-                            : roomsActivityFilter === 'caught_up'
-                              ? 'No caught-up rooms in this view.'
-                              : 'No rooms in this view.'}
+                        : roomsMembershipFilter !== 'all' &&
+                            roomsActivityFilter === 'all' &&
+                            roomsOccupancyFilter === 'all'
+                          ? roomsMembershipFilter === 'solo'
+                            ? 'No solo rooms in this view.'
+                            : 'No shared rooms in this view.'
+                          : roomsOccupancyFilter !== 'all' && roomsActivityFilter === 'all'
+                            ? roomsOccupancyFilter === 'empty'
+                              ? 'No empty rooms — every room has tasks.'
+                              : 'No rooms with tasks in this view.'
+                            : roomsActivityFilter === 'needs_attention'
+                              ? 'No rooms with new synthesis right now.'
+                              : roomsActivityFilter === 'caught_up'
+                                ? 'No caught-up rooms in this view.'
+                                : 'No rooms in this view.'}
                       <button
                         type="button"
                         onClick={() => {
                           setRoomsSearchQuery('');
                           setRoomsActivityFilter('all');
                           setRoomsOccupancyFilter('all');
+                          setRoomsMembershipFilter('all');
                           roomsSearchRef.current?.focus();
                         }}
                         style={{
@@ -3571,7 +3582,9 @@ export function AgentPage() {
                           textDecoration: 'underline',
                         }}
                       >
-                        {(roomsActivityFilter !== 'all' || roomsOccupancyFilter !== 'all') &&
+                        {(roomsActivityFilter !== 'all' ||
+                          roomsOccupancyFilter !== 'all' ||
+                          roomsMembershipFilter !== 'all') &&
                         !roomsSearchQuery.trim()
                           ? 'Show all rooms'
                           : 'Clear filters'}
