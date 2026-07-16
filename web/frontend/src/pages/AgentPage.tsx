@@ -98,6 +98,13 @@ import {
   type AgentHistoryStatusFilter,
 } from '../lib/agentHistoryStatusFilter';
 import {
+  AGENT_HISTORY_SCORE_OPTIONS,
+  agentHistoryScoreFilterUseful,
+  agentHistoryScoreLabel,
+  filterAgentHistoryByScore,
+  type AgentHistoryScoreFilter,
+} from '../lib/agentHistoryScoreFilter';
+import {
   AGENT_ROOMS_ACTIVITY_OPTIONS,
   agentRoomsActivityLabel,
   filterAgentRoomsByActivity,
@@ -764,6 +771,8 @@ export function AgentPage() {
   const [historySort, setHistorySort] = useState<AgentHistorySort>('newest');
   const [historyStatusFilter, setHistoryStatusFilter] =
     useState<AgentHistoryStatusFilter>('all');
+  const [historyScoreFilter, setHistoryScoreFilter] =
+    useState<AgentHistoryScoreFilter>('all');
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
@@ -1969,7 +1978,8 @@ export function AgentPage() {
       taskHistory.map((item) => ({ ...item, isLive: item.is_live })),
       historyStatusFilter,
     );
-    const searched = filterBySearchQuery(byStatus, historySearchQuery, (item) => [
+    const byScore = filterAgentHistoryByScore(byStatus, historyScoreFilter);
+    const searched = filterBySearchQuery(byScore, historySearchQuery, (item) => [
       item.title,
       item.task_text,
       agentHistoryDisplayTitle(item),
@@ -1986,7 +1996,12 @@ export function AgentPage() {
       })),
       historySort,
     );
-  }, [taskHistory, historySearchQuery, historySort, historyStatusFilter]);
+  }, [taskHistory, historySearchQuery, historySort, historyStatusFilter, historyScoreFilter]);
+
+  const historyScoreFilterUseful = useMemo(
+    () => agentHistoryScoreFilterUseful(taskHistory),
+    [taskHistory],
+  );
 
   const roomsBodyMode = roomsListBodyMode({
     loading: myRoomsLoading,
@@ -2111,6 +2126,9 @@ export function AgentPage() {
     const filterBits: string[] = [];
     if (historyStatusFilter !== 'all') {
       filterBits.push(`status: ${agentHistoryStatusLabel(historyStatusFilter)}`);
+    }
+    if (historyScoreFilter !== 'all') {
+      filterBits.push(`score: ${agentHistoryScoreLabel(historyScoreFilter)}`);
     }
     if (q) filterBits.push(`search: “${q}”`);
     if (historySort !== 'newest') filterBits.push(`sort: ${agentHistorySortLabel(historySort)}`);
@@ -3555,7 +3573,9 @@ export function AgentPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 10, color: '#A89070' }}>
                     {filteredTaskHistory.length}
-                    {historySearchQuery.trim() || historyStatusFilter !== 'all'
+                    {historySearchQuery.trim() ||
+                    historyStatusFilter !== 'all' ||
+                    historyScoreFilter !== 'all'
                       ? ` / ${taskHistory.length}`
                       : ''}
                   </span>
@@ -3671,6 +3691,43 @@ export function AgentPage() {
                     );
                   })}
                 </div>
+                {historyScoreFilterUseful ? (
+                  <div
+                    role="group"
+                    aria-label="Filter history by score"
+                    style={{
+                      display: 'flex',
+                      gap: 6,
+                      marginBottom: 8,
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {AGENT_HISTORY_SCORE_OPTIONS.map((opt) => {
+                      const selected = historyScoreFilter === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setHistoryScoreFilter(opt.value)}
+                          aria-pressed={selected}
+                          style={{
+                            padding: '3px 10px',
+                            borderRadius: 999,
+                            border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                            background: selected ? '#F0E6DA' : 'transparent',
+                            color: selected ? '#4A3728' : '#8C7355',
+                            fontSize: 11,
+                            fontFamily: 'Georgia, serif',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                   <select
                     value={historySort}
@@ -3788,18 +3845,25 @@ export function AgentPage() {
                       historyStatusFilter !== 'all'
                         ? ` in ${agentHistoryStatusLabel(historyStatusFilter).toLowerCase()}`
                         : ''
+                    }${
+                      historyScoreFilter !== 'all'
+                        ? ` · ${agentHistoryScoreLabel(historyScoreFilter)}`
+                        : ''
                     }`
-                  : historyStatusFilter === 'live'
-                    ? 'No live weekly-update tasks yet.'
-                    : historyStatusFilter === 'completed'
-                      ? 'No one-off research tasks in this view.'
-                      : 'No matching history.'}
+                  : historyScoreFilter !== 'all' && historyStatusFilter === 'all'
+                    ? `No tasks with score ${agentHistoryScoreLabel(historyScoreFilter)}.`
+                    : historyStatusFilter === 'live'
+                      ? 'No live weekly-update tasks yet.'
+                      : historyStatusFilter === 'completed'
+                        ? 'No one-off research tasks in this view.'
+                        : 'No matching history.'}
                 <br />
                 <button
                   type="button"
                   onClick={() => {
                     setHistorySearchQuery('');
                     setHistoryStatusFilter('all');
+                    setHistoryScoreFilter('all');
                     historySearchRef.current?.focus();
                   }}
                   style={{
@@ -3813,7 +3877,8 @@ export function AgentPage() {
                     textDecoration: 'underline',
                   }}
                 >
-                  {historyStatusFilter !== 'all' && !historySearchQuery.trim()
+                  {(historyStatusFilter !== 'all' || historyScoreFilter !== 'all') &&
+                  !historySearchQuery.trim()
                     ? 'Show all history'
                     : 'Clear filters'}
                 </button>

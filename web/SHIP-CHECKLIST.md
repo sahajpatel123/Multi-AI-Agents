@@ -143,6 +143,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Sidebar Recents winner filter**: filter Arena turns by winning mind when multiple winners appear (export notes filter).
 - **Templates availability filter**: All / Ready / Unavailable chips hide Condura-gated templates when browsing the catalog (export notes filter).
 - **Agent rooms activity filter**: All / New synthesis / Caught up chips filter rooms with unread group synthesis (export notes filter).
+- **Agent history score filter**: All scores / 75+ / 60–74 / Below 60 / No score chips (export notes filter).
 
 ## Required production environment
 
