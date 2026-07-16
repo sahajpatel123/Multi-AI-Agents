@@ -133,33 +133,75 @@ class TestWebhookHmac:
         assert res.status_code == 400, res.text
 
     @pytest.mark.asyncio
-    async def test_unset_secret_swallows_payload_safely(
+    async def test_unset_secret_swallows_payload_safely_in_dev(
         self, app_client, monkeypatch
     ):
-        # When RAZORPAY_WEBHOOK_SECRET is unset the handler returns 200
-        # WITHOUT processing — this is the design choice to avoid being
-        # hammered by retries while the operator notices the misconfig.
-        # Pin that contract so a future refactor doesn't start
-        # processing unverified events.
+        # Non-production: 200 without processing (avoid retry storms in
+        # local/CI when billing secrets are absent). Never apply events.
         from arena.config import get_settings
         settings = get_settings()
         monkeypatch.setattr(settings, "razorpay_webhook_secret", "", raising=False)
+        monkeypatch.setattr(
+            type(settings),
+            "is_production",
+            property(lambda self: False),
+        )
         calls = []
-        # If the handler tries to run signature verification or apply
-        # events it must call one of these paths. We assert it does NOT.
-        with patch("arena.routes.payments._find_subscription_by_rzp_id", side_effect=lambda *a, **k: calls.append("lookup") or None):
+        with patch(
+            "arena.routes.payments._find_subscription_by_rzp_id",
+            side_effect=lambda *a, **k: calls.append("lookup") or None,
+        ):
             res = await app_client.post(
                 "/api/payments/webhook",
                 content=_body(),
                 headers={"X-Razorpay-Signature": "anything"},
             )
         assert res.status_code == 200, res.text
-        # The lookup MUST not have been reached — processing must be
-        # gated on signature verification succeeding.
         assert calls == [], (
             "webhook with RAZORPAY_WEBHOOK_SECRET unset reached the DB "
             "lookup path; the signature-gate failed to short-circuit."
         )
+
+    @pytest.mark.asyncio
+    async def test_unset_secret_fails_closed_in_production(
+        self, app_client, monkeypatch
+    ):
+        # Production: missing webhook secret is a misconfiguration —
+        # surface 503 instead of a healthy-looking 200.
+        from arena.config import get_settings
+        settings = get_settings()
+        monkeypatch.setattr(settings, "razorpay_webhook_secret", "", raising=False)
+        monkeypatch.setattr(
+            type(settings),
+            "is_production",
+            property(lambda self: True),
+        )
+        calls = []
+        with patch(
+            "arena.routes.payments._find_subscription_by_rzp_id",
+            side_effect=lambda *a, **k: calls.append("lookup") or None,
+        ):
+            res = await app_client.post(
+                "/api/payments/webhook",
+                content=_body(),
+                headers={"X-Razorpay-Signature": "0" * 64},
+            )
+        assert res.status_code == 503, res.text
+        assert calls == []
+
+    @pytest.mark.asyncio
+    async def test_short_signature_rejected_without_500(self, app_client, secret_env):
+        """Wrong-length signatures must 400, never 500 from compare_digest."""
+        body = _body()
+        res = await app_client.post(
+            "/api/payments/webhook",
+            content=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Razorpay-Signature": "tooshort",
+            },
+        )
+        assert res.status_code == 400, res.text
 
 
 class TestVerifyHmac:

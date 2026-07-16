@@ -711,11 +711,29 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
         sig_header = request.headers.get("X-Razorpay-Signature") or ""
         secret = (settings.razorpay_webhook_secret or "").encode()
         if not secret:
-            logger.error("RAZORPAY_WEBHOOK_SECRET not set; ignoring webhook payload processing")
+            # Never process unsigned webhooks. In production fail closed so a
+            # missing secret is a loud misconfiguration (503) instead of a
+            # silent 200 that looks healthy to operators and Razorpay dashboards.
+            # Outside production return 200 so local/CI without billing secrets
+            # is not hammered by retries, while still skipping all side effects.
+            logger.error(
+                "RAZORPAY_WEBHOOK_SECRET not set; refusing webhook processing"
+            )
+            if settings.is_production:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Webhook endpoint is not configured",
+                )
             return JSONResponse(status_code=200, content={"status": "ok"})
 
         expected_signature = hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected_signature, sig_header):
+        # Constant-time compare. Reject empty / wrong-length headers up front
+        # so compare_digest never raises ValueError (length mismatch) as a 500.
+        if (
+            not sig_header
+            or len(sig_header) != len(expected_signature)
+            or not hmac.compare_digest(expected_signature, sig_header)
+        ):
             logger.warning("Invalid Razorpay webhook signature")
             raise HTTPException(status_code=400, detail="Invalid signature")
 

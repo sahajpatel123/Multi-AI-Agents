@@ -339,11 +339,13 @@ def _build_room_payload(db: Session, room: Room) -> dict[str, Any]:
     task_counts = _member_task_counts(db, room.id)
     member_list = []
     for rm, u in members_q:
+        # Never emit member emails on the shareable room payload — the slug
+        # is enough to fetch this object (including unauthenticated GETs),
+        # so including email would leak PII to anyone with the link.
         member_list.append(
             {
                 "user_id": u.id,
                 "name": (u.name or "").strip() or u.email.split("@")[0],
-                "email": u.email,
                 "last_seen_at": rm.last_seen_at.isoformat() if rm.last_seen_at else None,
                 "task_count": task_counts.get(u.id, 0),
             }
@@ -417,7 +419,6 @@ async def join_room(
             {
                 "user_id": u.id,
                 "name": (u.name or "").strip() or u.email.split("@")[0],
-                "email": u.email,
                 "last_seen_at": rm.last_seen_at.isoformat() if rm.last_seen_at else None,
                 "task_count": task_counts.get(u.id, 0),
             }
