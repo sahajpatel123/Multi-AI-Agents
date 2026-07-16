@@ -135,6 +135,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Templates sort**: Task templates modal sorts by catalog order, title, category, or most slots (works with search + category tabs).
 - **Templates copy/download**: Task templates modal exports the filtered/sorted catalog as markdown (prompts + slots).
 - **Personas library sort**: Full library sorts by catalog order, name, on-panel first, or unlocked first (works with search).
+- **Personas library copy/download**: Full library can copy or download the filtered/sorted mind list as markdown.
 
 ## Required production environment
 

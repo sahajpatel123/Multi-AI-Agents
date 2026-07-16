@@ -11,6 +11,7 @@ import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { formatPanelExport } from '../lib/panelExport';
+import { formatPersonasLibraryExport } from '../lib/personasLibraryExport';
 import {
   panelSaveButtonLabel,
   panelSaveCaughtErrorMessage,
@@ -22,6 +23,7 @@ import {
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import {
   PERSONAS_LIBRARY_SORT_OPTIONS,
+  personasLibrarySortLabel,
   sortPersonasLibrary,
   type PersonasLibrarySort,
 } from '../lib/personasLibrarySort';
@@ -58,6 +60,10 @@ export function PersonasPage() {
   const [panelDownloadStatus, setPanelDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const panelCopyTimerRef = useRef<number | null>(null);
   const panelDownloadTimerRef = useRef<number | null>(null);
+  const [libraryCopyStatus, setLibraryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [libraryDownloadStatus, setLibraryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const libraryCopyTimerRef = useRef<number | null>(null);
+  const libraryDownloadTimerRef = useRef<number | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [revealedLibraryIds, setRevealedLibraryIds] = useState<Record<string, boolean>>({});
   const [libraryQuery, setLibraryQuery] = useState('');
@@ -191,6 +197,12 @@ export function PersonasPage() {
       if (panelDownloadTimerRef.current != null) {
         window.clearTimeout(panelDownloadTimerRef.current);
       }
+      if (libraryCopyTimerRef.current != null) {
+        window.clearTimeout(libraryCopyTimerRef.current);
+      }
+      if (libraryDownloadTimerRef.current != null) {
+        window.clearTimeout(libraryDownloadTimerRef.current);
+      }
     };
   }, []);
 
@@ -285,6 +297,68 @@ export function PersonasPage() {
       librarySort,
     );
   }, [personas, libraryQuery, librarySort, unlockedSlotMap, canUsePersona]);
+
+  const buildFilteredLibraryMarkdown = () => {
+    const q = libraryQuery.trim();
+    const filterBits: string[] = [];
+    if (q) filterBits.push(`search: “${q}”`);
+    if (librarySort !== 'default') {
+      filterBits.push(`sort: ${personasLibrarySortLabel(librarySort)}`);
+    }
+    return formatPersonasLibraryExport({
+      items: filteredLibrary.map((persona) => ({
+        name: persona.name,
+        quote: persona.quote,
+        description: persona.description,
+        id: persona.id,
+        onPanel: persona.onPanel,
+        unlocked: persona.unlocked,
+        panelSlot: unlockedSlotMap[persona.id] ?? null,
+      })),
+      totalCount: personas.length,
+      filterNote: filterBits.length ? filterBits.join(' · ') : undefined,
+    });
+  };
+
+  const copyFilteredLibrary = async () => {
+    const ok = await copyToClipboard(buildFilteredLibraryMarkdown());
+    if (libraryCopyTimerRef.current != null) {
+      window.clearTimeout(libraryCopyTimerRef.current);
+    }
+    setLibraryCopyStatus(ok ? 'copied' : 'failed');
+    setToast({
+      message: ok ? 'Library copied as markdown' : 'Could not copy library — try again',
+      color: ok ? '#1A1714' : '#E57373',
+      iconColor: ok ? '#C4956A' : '#FAF7F4',
+      kind: ok ? 'success' : 'error',
+    });
+    const hold = motionDuration(ok ? 2200 : 3000);
+    libraryCopyTimerRef.current = window.setTimeout(() => {
+      setLibraryCopyStatus('idle');
+      libraryCopyTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadFilteredLibrary = () => {
+    const ok = downloadMarkdownFile(buildFilteredLibraryMarkdown(), 'arena-personas-library');
+    if (libraryDownloadTimerRef.current != null) {
+      window.clearTimeout(libraryDownloadTimerRef.current);
+    }
+    setLibraryDownloadStatus(ok ? 'done' : 'failed');
+    setToast({
+      message: ok
+        ? 'Library downloaded as markdown'
+        : 'Could not download library — try Copy instead',
+      color: ok ? '#1A1714' : '#E57373',
+      iconColor: ok ? '#C4956A' : '#FAF7F4',
+      kind: ok ? 'success' : 'error',
+    });
+    const hold = motionDuration(ok ? 2200 : 3000);
+    libraryDownloadTimerRef.current = window.setTimeout(() => {
+      setLibraryDownloadStatus('idle');
+      libraryDownloadTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -609,10 +683,95 @@ export function PersonasPage() {
               flexWrap: 'wrap',
             }}
           >
-            <p style={{ ...eyebrowStyle, margin: 0 }}>
-              Full library · {filteredLibrary.length}
-              {libraryQuery.trim() ? ` / ${personas.length}` : ' personas'}
-            </p>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                flexWrap: 'wrap',
+              }}
+            >
+              <p style={{ ...eyebrowStyle, margin: 0 }}>
+                Full library · {filteredLibrary.length}
+                {libraryQuery.trim() ? ` / ${personas.length}` : ' personas'}
+              </p>
+              {personas.length > 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => void copyFilteredLibrary()}
+                    title="Copy current library view as markdown"
+                    aria-label={
+                      libraryCopyStatus === 'copied'
+                        ? 'Library copied'
+                        : libraryCopyStatus === 'failed'
+                          ? 'Copy failed'
+                          : 'Copy persona library as markdown'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        libraryCopyStatus === 'failed'
+                          ? '#D85A30'
+                          : libraryCopyStatus === 'copied'
+                            ? '#5A8C6A'
+                            : '#A89070',
+                      cursor: 'pointer',
+                      fontFamily: 'Georgia, serif',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {libraryCopyStatus === 'copied'
+                      ? 'Copied'
+                      : libraryCopyStatus === 'failed'
+                        ? 'Failed'
+                        : 'Copy'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadFilteredLibrary()}
+                    title="Download current library view as markdown"
+                    aria-label={
+                      libraryDownloadStatus === 'done'
+                        ? 'Library downloaded'
+                        : libraryDownloadStatus === 'failed'
+                          ? 'Download failed'
+                          : 'Download persona library as markdown'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D8D0',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        libraryDownloadStatus === 'failed'
+                          ? '#D85A30'
+                          : libraryDownloadStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#A89070',
+                      cursor: 'pointer',
+                      fontFamily: 'Georgia, serif',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {libraryDownloadStatus === 'done'
+                      ? 'Downloaded'
+                      : libraryDownloadStatus === 'failed'
+                        ? 'Failed'
+                        : 'Download'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
             <div
               style={{
                 display: 'flex',
