@@ -124,47 +124,46 @@ async def register(
     request: Request,
     db: Session = Depends(get_db),
 ) -> JSONResponse:
+    # HTTPException (400/409/429) must NOT be logged as unexpected server
+    # failures — that filled logs on every weak-password attempt and made
+    # real errors harder to spot (and was a log-volume DoS vector).
     try:
         registration_limiter.check_and_record(request, success=False)
 
-        try:
-            is_valid, error_msg = _validate_password_strength(body.password)
-            if not is_valid:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail={"error": "weak_password", "message": error_msg},
-                )
-
-            if get_user_by_email(db, body.email):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="An account with that email already exists",
-                )
-
-            user = create_user(db, body.email, body.password, body.name)
-            access = create_access_token(user.id, user.email)
-            refresh = create_refresh_token(user.id, user.email)
-            registration_limiter.check_and_record(request, success=True)
-            return JSONResponse(
-                status_code=status.HTTP_201_CREATED,
-                content={
-                    "success": True,
-                    "access_token": access,
-                    "refresh_token": refresh,
-                    "user": user_payload(user, db),
-                },
-            )
-
-        except HTTPException:
-            raise
-        except Exception:
+        is_valid, error_msg = _validate_password_strength(body.password)
+        if not is_valid:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Registration failed",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "weak_password", "message": error_msg},
             )
+
+        if get_user_by_email(db, body.email):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with that email already exists",
+            )
+
+        user = create_user(db, body.email, body.password, body.name)
+        access = create_access_token(user.id, user.email)
+        refresh = create_refresh_token(user.id, user.email)
+        registration_limiter.check_and_record(request, success=True)
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED,
+            content={
+                "success": True,
+                "access_token": access,
+                "refresh_token": refresh,
+                "user": user_payload(user, db),
+            },
+        )
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Registration failed")
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed",
+        )
 
 
 @router.post("/login")
@@ -173,39 +172,37 @@ async def login(
     request: Request,
     db: Session = Depends(get_db),
 ) -> JSONResponse:
+    # Same contract as register: expected client errors (401/429) are not
+    # logged as stack traces. Unexpected failures become a clean 500.
     try:
         login_limiter.check_and_record(request, success=False)
 
-        try:
-            user = authenticate_user(db, body.email, body.password)
-            if not user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid email or password",
-                )
-
-            access = create_access_token(user.id, user.email)
-            refresh = create_refresh_token(user.id, user.email)
-            login_limiter.check_and_record(request, success=True)
-            return JSONResponse(
-                content={
-                    "success": True,
-                    "access_token": access,
-                    "refresh_token": refresh,
-                    "user": user_payload(user, db),
-                },
-            )
-
-        except HTTPException:
-            raise
-        except Exception:
+        user = authenticate_user(db, body.email, body.password)
+        if not user:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Login failed",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
             )
+
+        access = create_access_token(user.id, user.email)
+        refresh = create_refresh_token(user.id, user.email)
+        login_limiter.check_and_record(request, success=True)
+        return JSONResponse(
+            content={
+                "success": True,
+                "access_token": access,
+                "refresh_token": refresh,
+                "user": user_payload(user, db),
+            },
+        )
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Login failed")
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Login failed",
+        )
 
 
 @router.post("/logout")

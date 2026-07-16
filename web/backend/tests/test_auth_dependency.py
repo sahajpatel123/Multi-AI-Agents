@@ -51,3 +51,20 @@ async def test_missing_bearer_yields_401(db_session):
         # pipeline, so it needs a real DB session.
         await get_current_user(Request(scope), db=db_session)
     assert ei.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_empty_bearer_token_yields_401(db_session):
+    """'Bearer ' with only whitespace must not proceed to decode/blacklist."""
+    from arena.core.dependencies import get_current_user
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "headers": [(b"authorization", b"Bearer    ")],
+        "query_string": b"",
+    }
+    with pytest.raises(HTTPException) as ei:
+        await get_current_user(Request(scope), db=db_session)
+    assert ei.value.status_code == 401

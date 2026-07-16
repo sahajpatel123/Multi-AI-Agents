@@ -58,6 +58,13 @@ class TestServiceUrlAllowlist:
                 "notion", "http://127.0.0.1:8500/v1/search"
             )
 
+    def test_http_scheme_rejected_even_on_allowlisted_host(self):
+        # Cleartext must never leave the process with a bearer token.
+        with pytest.raises(ValueError, match="non-HTTPS"):
+            mcp_runtime._assert_safe_service_url(
+                "notion", "http://api.notion.com/v1/search"
+            )
+
     def test_no_host_rejected(self):
         with pytest.raises(ValueError, match="no host component"):
             mcp_runtime._assert_safe_service_url("notion", "")
@@ -65,6 +72,12 @@ class TestServiceUrlAllowlist:
     def test_allowlist_is_frozen(self):
         # Defending against a runtime mutation of the allowlist.
         assert isinstance(mcp_runtime.SERVICE_URL_ALLOWLIST["notion"], frozenset)
+
+    def test_outbound_client_disables_redirects_and_env_proxy(self):
+        client = mcp_runtime._outbound_client()
+        assert client.follow_redirects is False
+        # trust_env=False → no HTTP_PROXY hijack of token-bearing requests
+        assert getattr(client, "trust_env", True) is False
 
     def test_search_functions_cite_their_allowlisted_url(self):
         """Document the URLs the search functions actually fire. Any future

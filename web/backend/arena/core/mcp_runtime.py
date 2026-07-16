@@ -50,11 +50,31 @@ def _assert_safe_service_url(service: str, full_url: str) -> None:
         raise ValueError(
             f"mcp_runtime: refusing to send request with no host component: {full_url!r}"
         )
+    if (parsed.scheme or "").lower() != "https":
+        # Only HTTPS leaves the process — no cleartext or exotic schemes.
+        raise ValueError(
+            f"mcp_runtime: refusing non-HTTPS URL for service={service!r}: {full_url!r}"
+        )
     if host not in allowed_hosts:
         raise ValueError(
             f"mcp_runtime: outbound host {host!r} not in {service!r} allowlist "
             f"({sorted(allowed_hosts)}); refusing to send token to it"
         )
+
+
+def _outbound_client() -> httpx.AsyncClient:
+    """Shared client policy for all MCP vendor calls.
+
+    - follow_redirects=False: an allowlisted host must not 30x us onto
+      an internal network (SSRF via open redirect).
+    - trust_env=False: ignore HTTP(S)_PROXY from the process environment
+      so a compromised env cannot re-route bearer tokens through a proxy.
+    """
+    return httpx.AsyncClient(
+        timeout=30.0,
+        follow_redirects=False,
+        trust_env=False,
+    )
 
 
 def _unified_item(title: str, excerpt: str, source: str, url: str) -> dict[str, str]:
@@ -70,7 +90,7 @@ async def search_notion(token: str, query: str) -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     q = (query or "").strip()[:500]
     _assert_safe_service_url("notion", "https://api.notion.com/v1/search")
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with _outbound_client() as client:
         r = await client.post(
             "https://api.notion.com/v1/search",
             headers={
@@ -108,7 +128,7 @@ async def search_github_code(token: str, query: str, github_login: str | None) -
     q = (query or "").strip()[:256]
     user_q = f"{q} user:{github_login}" if github_login else q
     _assert_safe_service_url("github", "https://api.github.com/search/code")
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with _outbound_client() as client:
         r = await client.get(
             "https://api.github.com/search/code",
             params={"q": user_q, "per_page": 5},
@@ -145,7 +165,7 @@ async def search_google_drive(token: str, query: str) -> list[dict[str, str]]:
         "pageSize": 5,
         "fields": "files(id,name,webViewLink,mimeType)",
     }
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with _outbound_client() as client:
         r = await client.get(
             url,
             params=params,

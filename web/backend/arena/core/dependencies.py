@@ -17,10 +17,14 @@ async def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     auth_header = request.headers.get("Authorization", "")
+    # Accept "Bearer <token>" with optional extra whitespace; reject bare
+    # "Bearer" / empty token so we never hash or decode an empty string.
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    token = auth_header[7:]
+    token = auth_header[7:].strip()
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     # Check token blacklist for revoked JWTs. The DB-backed blacklist
     # is process- and restart-safe (iter-12 hardening): a logout in one
