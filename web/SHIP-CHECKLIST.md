@@ -176,6 +176,10 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Pricing FAQ depth**: Agent Mode pipeline, Watchlist vs Saved, and calibration confidence explained for buyers.
 - **Arena full-take copy**: card Copy pastes full verdict as markdown (question + take); share links/copy use full body (social teasers stay short).
 - **Profile rating timestamps**: recent Agent ratings show relative “Rated …” times with absolute title tooltips.
+- **Persistent token blacklist**: revoked JWTs land in `revoked_tokens` (jti-hashed, alembic-migrated) so restarts and multi-worker deploys share state; in-process cache keeps the hot path O(1), DB persists with TTL cleanup.
+- **`/api/agent/feedback/recent`**: profile + future surfaces list the user's latest verdicts newest-first with task title/snippet (cascade-deleted tasks still surface with null title + snippet).
+- **Recent ratings on Profile**: usage tab shows the last N feedback items with verdict chip + title + optional note + relative timestamp; complements the aggregate feedback-accuracy bar.
+- **About copy refresh**: `/about` “What ships today” names Watchlist, Saved takes, Rooms, and calibration alongside the original panel/debate/Agent surfaces.
 
 ## Required production environment
 
