@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'arena_recent_prompts_v1';
+const STORAGE_KEY = 'arena-recent-prompts-storage-v1';
 const MAX_ITEMS = 8;
 const MAX_LEN = 500;
 
