@@ -2009,26 +2009,34 @@ async def cross_pollinate_agent_answer(
             .first()
         )
 
+    def _intel_total(raw) -> float | int | None:
+        """Best-effort total_score from blackboard dict or DB JSON."""
+        if raw is None:
+            return None
+        data = raw
+        if isinstance(raw, str):
+            try:
+                data = json.loads(raw)
+            except Exception:
+                return None
+        if not isinstance(data, dict):
+            return None
+        score = data.get("total_score")
+        if isinstance(score, (int, float)) and not isinstance(score, bool):
+            return score
+        return None
+
     # If blackboard exists, verify ownership
     if bb:
         _ensure_task_owner(bb, user)
         answer_text = bb.final_answer or ""
         original_task = bb.original_task or bb.task or ""
-        # Extract intelligence score if available
-        intel_score = bb.intelligence_score.get("total_score") if bb.intelligence_score else None
+        intel_score = _intel_total(bb.intelligence_score)
     elif row and (row.final_answer or "").strip():
         _ensure_task_owner(Blackboard(task_id=tid, user_id=user.id), user)
         answer_text = row.final_answer or ""
         original_task = row.task_text or ""
-        # Try to get intelligence score from stored JSON
-        try:
-            if row.intelligence_score:
-                parsed = json.loads(row.intelligence_score)
-                intel_score = parsed.get("total_score") if isinstance(parsed, dict) else None
-            else:
-                intel_score = None
-        except Exception:
-            intel_score = None
+        intel_score = _intel_total(row.intelligence_score)
     else:
         raise HTTPException(status_code=404, detail="Task not found or not complete")
 

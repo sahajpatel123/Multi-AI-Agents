@@ -117,19 +117,30 @@ function App() {
   const [stressFromAgentBanner, setStressFromAgentBanner] = useState(false);
   const [verifyingWinnerAgentId, setVerifyingWinnerAgentId] = useState<string | null>(null);
   const [crossPollinateSourceTaskId, setCrossPollinateSourceTaskId] = useState<string | null>(null);
+  const [crossPollinateIntelScore, setCrossPollinateIntelScore] = useState<number | null>(null);
 
   useEffect(() => {
     const st = location.state as {
       agentStressPrompt?: string;
       fromAgent?: boolean;
       crossPollinateSource?: string;
+      crossPollinateIntelScore?: number | null;
     } | null | undefined;
     const prompt = st?.agentStressPrompt;
     if (typeof prompt === 'string' && prompt.trim()) {
       setPresetPrompt(prompt.trim());
       setPresetPromptNonce((n) => n + 1);
-      if (st?.fromAgent) setStressFromAgentBanner(true);
-      if (st?.crossPollinateSource) setCrossPollinateSourceTaskId(st.crossPollinateSource);
+      if (st?.crossPollinateSource) {
+        setCrossPollinateSourceTaskId(st.crossPollinateSource);
+        const score = st.crossPollinateIntelScore;
+        setCrossPollinateIntelScore(
+          typeof score === 'number' && Number.isFinite(score) ? score : null,
+        );
+        // Prefer the richer cross-pollinate banner over the generic stress notice.
+        setStressFromAgentBanner(false);
+      } else if (st?.fromAgent) {
+        setStressFromAgentBanner(true);
+      }
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, navigate]);
@@ -606,6 +617,7 @@ function App() {
 
     setStressFromAgentBanner(false);
     setCrossPollinateSourceTaskId(null);
+    setCrossPollinateIntelScore(null);
     setHasSubmittedPrompt(true);
     setRecentPrompts(pushRecentPrompt(prompt));
 
@@ -702,6 +714,7 @@ function App() {
           setExpandedAgent(data.winner_agent_id);
           setPhase('done');
           setCrossPollinateSourceTaskId(null);
+    setCrossPollinateIntelScore(null);
 
           // Save session ID to localStorage
           localStorage.setItem('arena_session_id', data.session_id);
@@ -1427,7 +1440,12 @@ function App() {
               {crossPollinateSourceTaskId && phase === 'idle' && (
                 <CrossPollinateBanner
                   sourceTaskId={crossPollinateSourceTaskId}
-                  onDismiss={() => setCrossPollinateSourceTaskId(null)}
+                  intelScore={crossPollinateIntelScore}
+                  onDismiss={() => {
+                    setCrossPollinateSourceTaskId(null);
+    setCrossPollinateIntelScore(null);
+                    setCrossPollinateIntelScore(null);
+                  }}
                 />
               )}
 

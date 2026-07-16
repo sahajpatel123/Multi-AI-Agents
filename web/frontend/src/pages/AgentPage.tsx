@@ -1614,12 +1614,20 @@ export function AgentPage() {
     setError(null);
     setCrossPollinateBusy(true);
     try {
-      await crossPollinateAgentAnswer(taskId, personaIds);
+      const bridge = await crossPollinateAgentAnswer(taskId, personaIds);
+      const clientIntel = result?.intelligence_score?.total_score;
+      const intel =
+        typeof bridge.intel_score === 'number' && Number.isFinite(bridge.intel_score)
+          ? bridge.intel_score
+          : typeof clientIntel === 'number' && Number.isFinite(clientIntel)
+            ? clientIntel
+            : null;
       navigate('/app', {
         state: {
           agentStressPrompt: answerText,
           fromAgent: true,
-          crossPollinateSource: taskId,
+          crossPollinateSource: bridge.original_task_id || taskId,
+          crossPollinateIntelScore: intel,
         },
       });
     } catch (e) {

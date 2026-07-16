@@ -6,13 +6,18 @@ interface CrossPollinateBannerProps {
   intelScore?: number | null;
 }
 
-/** Banner showing that an answer is being cross-pollinated through the Arena */
+/** Banner showing that an Agent answer is being reviewed by the Arena panel. */
 export function CrossPollinateBanner({
   sourceTaskId,
   onDismiss,
   intelScore,
 }: CrossPollinateBannerProps) {
   if (!sourceTaskId) return null;
+
+  const score =
+    typeof intelScore === 'number' && Number.isFinite(intelScore)
+      ? Math.round(intelScore)
+      : null;
 
   return (
     <div
@@ -27,7 +32,7 @@ export function CrossPollinateBanner({
         marginLeft: 'auto',
         marginRight: 'auto',
         fontSize: 13,
-        color: '#7289BE',
+        color: '#5A6B9A',
         textAlign: 'center',
         display: 'flex',
         alignItems: 'center',
@@ -35,11 +40,11 @@ export function CrossPollinateBanner({
         gap: 10,
       }}
     >
-      <ArrowLeftRight size={16} style={{ flexShrink: 0 }} />
+      <ArrowLeftRight size={16} style={{ flexShrink: 0 }} aria-hidden />
       <span style={{ flex: 1, minWidth: 0, lineHeight: 1.45 }}>
-        {intelScore !== null && intelScore !== undefined
-          ? `Cross-pollinating Agent answer (IQ: ${intelScore}/100) — gathering perspectives from 4 minds`
-          : 'Cross-pollinating Agent answer — gathering perspectives from 4 minds'}
+        {score != null
+          ? `Cross-pollinating Agent answer (score ${score}/100) — four minds will review it`
+          : 'Cross-pollinating Agent answer — four minds will review it'}
       </span>
       <button
         type="button"
