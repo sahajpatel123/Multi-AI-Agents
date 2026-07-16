@@ -137,6 +137,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Personas library sort**: Full library sorts by catalog order, name, on-panel first, or unlocked first (works with search).
 - **Personas library copy/download**: Full library can copy or download the filtered/sorted mind list as markdown.
 - **Personas swap sort**: Slot-swap dialog sorts by catalog order, name, on-panel first, or unlocked first (works with search).
+- **Personas library availability filter**: All / On panel / Unlocked / Locked chips filter the full library (export notes filter).
 
 ## Required production environment
 

@@ -22,6 +22,12 @@ import {
 } from '../lib/panelSave';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
 import {
+  PERSONAS_LIBRARY_AVAILABILITY_OPTIONS,
+  filterPersonasLibraryByAvailability,
+  personasLibraryAvailabilityLabel,
+  type PersonasLibraryAvailability,
+} from '../lib/personasLibraryFilter';
+import {
   PERSONAS_LIBRARY_SORT_OPTIONS,
   personasLibrarySortLabel,
   sortPersonasLibrary,
@@ -68,6 +74,8 @@ export function PersonasPage() {
   const [revealedLibraryIds, setRevealedLibraryIds] = useState<Record<string, boolean>>({});
   const [libraryQuery, setLibraryQuery] = useState('');
   const [librarySort, setLibrarySort] = useState<PersonasLibrarySort>('default');
+  const [libraryAvailability, setLibraryAvailability] =
+    useState<PersonasLibraryAvailability>('all');
   const [swapQuery, setSwapQuery] = useState('');
   const [swapSort, setSwapSort] = useState<PersonasLibrarySort>('default');
   const libraryRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -291,25 +299,32 @@ export function PersonasPage() {
   }, [modalOptions, swapQuery, swapSort, unlockedSlotMap, canUsePersona]);
 
   const filteredLibrary = useMemo(() => {
-    const searched = filterBySearchQuery(personas, libraryQuery, (persona) => [
+    const annotated = personas.map((persona) => ({
+      ...persona,
+      onPanel: unlockedSlotMap[persona.id] != null,
+      unlocked: canUsePersona(persona.id),
+    }));
+    const byAvailability = filterPersonasLibraryByAvailability(
+      annotated,
+      libraryAvailability,
+    );
+    const searched = filterBySearchQuery(byAvailability, libraryQuery, (persona) => [
       persona.name,
       persona.quote,
       persona.description,
       persona.id,
     ]);
-    return sortPersonasLibrary(
-      searched.map((persona) => ({
-        ...persona,
-        onPanel: unlockedSlotMap[persona.id] != null,
-        unlocked: canUsePersona(persona.id),
-      })),
-      librarySort,
-    );
-  }, [personas, libraryQuery, librarySort, unlockedSlotMap, canUsePersona]);
+    return sortPersonasLibrary(searched, librarySort);
+  }, [personas, libraryQuery, librarySort, libraryAvailability, unlockedSlotMap, canUsePersona]);
 
   const buildFilteredLibraryMarkdown = () => {
     const q = libraryQuery.trim();
     const filterBits: string[] = [];
+    if (libraryAvailability !== 'all') {
+      filterBits.push(
+        `availability: ${personasLibraryAvailabilityLabel(libraryAvailability)}`,
+      );
+    }
     if (q) filterBits.push(`search: “${q}”`);
     if (librarySort !== 'default') {
       filterBits.push(`sort: ${personasLibrarySortLabel(librarySort)}`);
@@ -395,7 +410,7 @@ export function PersonasPage() {
     });
 
     return () => observer.disconnect();
-  }, [filteredLibrary.length, libraryQuery, librarySort]);
+  }, [filteredLibrary.length, libraryQuery, librarySort, libraryAvailability]);
 
   const handleSwap = (slotIndex: SlotIndex, persona: Persona) => {
     if (!canUsePersona(persona.id)) {
@@ -702,7 +717,9 @@ export function PersonasPage() {
             >
               <p style={{ ...eyebrowStyle, margin: 0 }}>
                 Full library · {filteredLibrary.length}
-                {libraryQuery.trim() ? ` / ${personas.length}` : ' personas'}
+                {libraryQuery.trim() || libraryAvailability !== 'all'
+                  ? ` / ${personas.length}`
+                  : ' personas'}
               </p>
               {personas.length > 0 ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -868,6 +885,44 @@ export function PersonasPage() {
             </div>
           </div>
 
+          {personas.length > 0 ? (
+            <div
+              role="group"
+              aria-label="Filter persona library by availability"
+              style={{
+                display: 'flex',
+                gap: 6,
+                flexWrap: 'wrap',
+                marginBottom: 14,
+                alignItems: 'center',
+              }}
+            >
+              {PERSONAS_LIBRARY_AVAILABILITY_OPTIONS.map((opt) => {
+                const selected = libraryAvailability === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setLibraryAvailability(opt.value)}
+                    aria-pressed={selected}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: 999,
+                      border: selected ? 'none' : '0.5px solid #E0D8D0',
+                      background: selected ? '#C4956A' : 'transparent',
+                      color: selected ? '#FAF7F4' : '#6B6460',
+                      fontSize: 12,
+                      fontFamily: 'Georgia, serif',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
           {filteredLibrary.length === 0 ? (
             <div
               className="arena-empty-state"
@@ -879,10 +934,24 @@ export function PersonasPage() {
               }}
             >
               <p style={{ fontSize: 15, color: '#1A1714', fontWeight: 500, margin: 0 }}>
-                No minds match “{libraryQuery.trim()}”
+                {libraryQuery.trim()
+                  ? `No minds match “${libraryQuery.trim()}”${
+                      libraryAvailability !== 'all'
+                        ? ` in ${personasLibraryAvailabilityLabel(libraryAvailability).toLowerCase()}`
+                        : ''
+                    }`
+                  : libraryAvailability === 'on_panel'
+                    ? 'No minds currently on your panel in this view.'
+                    : libraryAvailability === 'unlocked'
+                      ? 'No unlocked minds match this view.'
+                      : libraryAvailability === 'locked'
+                        ? 'No locked minds — your tier unlocks the full library.'
+                        : 'No minds in this view.'}
               </p>
               <p style={{ fontSize: 13, color: '#6B6460', marginTop: 8, maxWidth: 320, lineHeight: 1.6 }}>
-                Try a name, quote fragment, or trait — for example “analyst” or “what works”.
+                {libraryQuery.trim()
+                  ? 'Try a name, quote fragment, or trait — for example “analyst” or “what works”.'
+                  : 'Clear the availability filter to browse every mind again.'}
               </p>
               <button
                 type="button"
@@ -890,10 +959,13 @@ export function PersonasPage() {
                 style={{ marginTop: 16 }}
                 onClick={() => {
                   setLibraryQuery('');
+                  setLibraryAvailability('all');
                   librarySearchRef.current?.focus();
                 }}
               >
-                Clear search
+                {libraryAvailability !== 'all' && !libraryQuery.trim()
+                  ? 'Show all minds'
+                  : 'Clear filters'}
               </button>
             </div>
           ) : (
