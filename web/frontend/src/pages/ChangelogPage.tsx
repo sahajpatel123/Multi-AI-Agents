@@ -124,6 +124,7 @@ const CHANGELOG_ENTRIES = [
       '[NEW] Arena sidebar Recents and Saved: sort by date, title/winner, score, or mind',
       '[NEW] Agent Rooms list: sort by recent activity, name, members, or tasks',
       '[NEW] Arena Recents and Saved: download filtered list as .md',
+      '[NEW] Agent research history: filter by Live weekly vs One-off',
     ],
   },
   {

@@ -130,6 +130,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Room board member filter**: click a member (sidebar or chips) to show only their tasks; export notes the filter.
 - **Agent rooms sort**: sidebar Rooms list sorts by recent activity, newest, name, members, or tasks (search still applies).
 - **Arena Recents / Saved download .md**: sidebar lists can download filtered/sorted views as markdown files (copy parity).
+- **Agent history status filter**: All / Live / One-off chips filter weekly-update tasks vs one-off research (export notes filter).
 
 ## Required production environment
 
