@@ -116,6 +116,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Room synthesis/board and Watchlist: download current view as .md',
       '[IMPROVED] Discuss thread and Debate transcript: download as .md (copy parity)',
       '[NEW] Room research board: sort by date, score, author, or title',
+      '[NEW] Watchlist: sort by next run, last run, score, runs, or question',
       '[IMPROVED] Perspective Comparison, Personas panel, and Share landing: download as .md',
     ],
   },

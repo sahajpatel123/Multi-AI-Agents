@@ -125,6 +125,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Room / Watchlist download .md**: synthesis, research board, and watchlist views can save markdown files (not only clipboard).
 - **Discuss / Debate download .md**: conversation and multi-round debate transcripts can download as markdown files.
 - **Room board sort**: research board can sort by newest/oldest, score, author, or title (search + export honor sort).
+- **Watchlist sort**: sort watches by next run, last run, score, run count, or question (export honors sort).
 
 ## Required production environment
 

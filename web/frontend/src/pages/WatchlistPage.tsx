@@ -20,6 +20,12 @@ import {
   type WatchlistIntervalHours,
 } from '../lib/watchlistIntervals';
 import { formatWatchlistExport } from '../lib/watchlistExport';
+import {
+  WATCHLIST_SORT_OPTIONS,
+  sortWatchlistItems,
+  watchlistSortLabel,
+  type WatchlistSort,
+} from '../lib/watchlistSort';
 import { watchlistBodyMode } from '../lib/watchlistView';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
@@ -76,6 +82,7 @@ export function WatchlistPage() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<WatchlistStatusFilter>('all');
+  const [listSort, setListSort] = useState<WatchlistSort>('next_soon');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const errorRef = useRef<HTMLDivElement>(null);
@@ -188,11 +195,22 @@ export function WatchlistPage() {
         : items.filter((item) =>
             statusFilter === 'active' ? item.is_active : !item.is_active,
           );
-    return filterBySearchQuery(byStatus, searchQuery, (item) => [
+    const searched = filterBySearchQuery(byStatus, searchQuery, (item) => [
       item.question,
       item.latest_task?.title,
     ]);
-  }, [items, searchQuery, statusFilter]);
+    return sortWatchlistItems(
+      searched.map((item) => ({
+        ...item,
+        isActive: item.is_active,
+        nextRunAt: item.next_run_at,
+        lastRunAt: item.last_run_at,
+        runCount: item.run_count,
+        latestScore: item.latest_task?.final_score ?? null,
+      })),
+      listSort,
+    );
+  }, [items, searchQuery, statusFilter, listSort]);
 
   useEffect(() => {
     return () => {
@@ -232,6 +250,7 @@ export function WatchlistPage() {
     if (statusFilter !== 'all') filterBits.push(`status: ${statusFilter}`);
     const q = searchQuery.trim();
     if (q) filterBits.push(`search: “${q}”`);
+    if (listSort !== 'next_soon') filterBits.push(`sort: ${watchlistSortLabel(listSort)}`);
     return formatWatchlistExport({
       items: filteredItems.map((item) => ({
         question: item.question,
@@ -568,10 +587,34 @@ export function WatchlistPage() {
                     );
                   })}
                 </div>
-                <span style={{ fontSize: 11, color: '#A89070' }}>
-                  {filteredItems.length}
-                  {searchQuery.trim() || statusFilter !== 'all' ? ` / ${items.length}` : ''}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <select
+                    value={listSort}
+                    onChange={(e) => setListSort(e.target.value as WatchlistSort)}
+                    aria-label="Sort watchlist"
+                    title="Sort watchlist"
+                    style={{
+                      fontSize: 12,
+                      fontFamily: 'Georgia, serif',
+                      color: '#4A3728',
+                      background: '#FAF7F2',
+                      border: '0.5px solid #D4C4B0',
+                      borderRadius: 8,
+                      padding: '5px 10px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {WATCHLIST_SORT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span style={{ fontSize: 11, color: '#A89070' }}>
+                    {filteredItems.length}
+                    {searchQuery.trim() || statusFilter !== 'all' ? ` / ${items.length}` : ''}
+                  </span>
+                </div>
               </div>
               <div style={{ position: 'relative' }}>
                 <input
@@ -645,6 +688,7 @@ export function WatchlistPage() {
                   onClick={() => {
                     setSearchQuery('');
                     setStatusFilter('all');
+                    setListSort('next_soon');
                     searchRef.current?.focus();
                   }}
                 >
