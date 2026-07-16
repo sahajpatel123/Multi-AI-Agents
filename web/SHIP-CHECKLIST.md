@@ -126,6 +126,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 - **Discuss / Debate download .md**: conversation and multi-round debate transcripts can download as markdown files.
 - **Room board sort**: research board can sort by newest/oldest, score, author, or title (search + export honor sort).
 - **Watchlist sort**: sort watches by next run, last run, score, run count, or question (export honors sort).
+- **Agent history download .md**: sidebar History can download the filtered/sorted research list as a markdown file.
 
 ## Required production environment
 

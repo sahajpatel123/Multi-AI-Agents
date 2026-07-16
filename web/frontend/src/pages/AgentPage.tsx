@@ -743,7 +743,9 @@ export function AgentPage() {
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [historySort, setHistorySort] = useState<AgentHistorySort>('newest');
   const [historyCopyStatus, setHistoryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
+  const historyDownloadTimerRef = useRef<number | null>(null);
   const [dismissedChipIds, setDismissedChipIds] = useState<Set<string>>(
     () => loadDismissedAgentChipIds(),
   );
@@ -1981,15 +1983,18 @@ export function AgentPage() {
       if (historyCopyTimerRef.current != null) {
         window.clearTimeout(historyCopyTimerRef.current);
       }
+      if (historyDownloadTimerRef.current != null) {
+        window.clearTimeout(historyDownloadTimerRef.current);
+      }
     };
   }, []);
 
-  const copyFilteredHistory = async () => {
+  const buildFilteredHistoryMarkdown = () => {
     const q = historySearchQuery.trim();
     const filterBits: string[] = [];
     if (q) filterBits.push(`search: “${q}”`);
     if (historySort !== 'newest') filterBits.push(`sort: ${agentHistorySortLabel(historySort)}`);
-    const markdown = formatAgentHistoryExport({
+    return formatAgentHistoryExport({
       items: filteredTaskHistory.map((item) => ({
         title: item.title,
         question: item.task_text,
@@ -2003,6 +2008,10 @@ export function AgentPage() {
       totalCount: taskHistory.length,
       filterNote: filterBits.length ? filterBits.join(' · ') : undefined,
     });
+  };
+
+  const copyFilteredHistory = async () => {
+    const markdown = buildFilteredHistoryMarkdown();
     const ok = await copyToClipboard(markdown);
     if (historyCopyTimerRef.current != null) {
       window.clearTimeout(historyCopyTimerRef.current);
@@ -2015,6 +2024,23 @@ export function AgentPage() {
     historyCopyTimerRef.current = window.setTimeout(() => {
       setHistoryCopyStatus('idle');
       historyCopyTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const downloadFilteredHistory = () => {
+    const markdown = buildFilteredHistoryMarkdown();
+    const ok = downloadMarkdownFile(markdown, 'agent-research-history');
+    if (historyDownloadTimerRef.current != null) {
+      window.clearTimeout(historyDownloadTimerRef.current);
+    }
+    setHistoryDownloadStatus(ok ? 'done' : 'failed');
+    if (!ok) {
+      setToastMessage('Could not download history — try Copy instead.');
+    }
+    const hold = motionDuration(ok ? 2000 : 2800);
+    historyDownloadTimerRef.current = window.setTimeout(() => {
+      setHistoryDownloadStatus('idle');
+      historyDownloadTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -3251,7 +3277,7 @@ export function AgentPage() {
                 History
               </div>
               {taskHistory.length > 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 10, color: '#A89070' }}>
                     {filteredTaskHistory.length}
                     {historySearchQuery.trim() ? ` / ${taskHistory.length}` : ''}
@@ -3291,6 +3317,42 @@ export function AgentPage() {
                       : historyCopyStatus === 'failed'
                         ? 'Failed'
                         : 'Copy'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadFilteredHistory()}
+                    title="Download current history view as markdown"
+                    aria-label={
+                      historyDownloadStatus === 'done'
+                        ? 'History downloaded'
+                        : historyDownloadStatus === 'failed'
+                          ? 'Download failed'
+                          : 'Download research history as markdown'
+                    }
+                    style={{
+                      background: 'none',
+                      border: '0.5px solid #E0D5C5',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      fontSize: 10,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color:
+                        historyDownloadStatus === 'failed'
+                          ? '#D85A30'
+                          : historyDownloadStatus === 'done'
+                            ? '#5A8C6A'
+                            : '#A89070',
+                      cursor: 'pointer',
+                      fontFamily: 'Georgia, serif',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {historyDownloadStatus === 'done'
+                      ? 'Downloaded'
+                      : historyDownloadStatus === 'failed'
+                        ? 'Failed'
+                        : 'Download'}
                   </button>
                 </div>
               ) : null}
