@@ -73,6 +73,7 @@ class User(Base):
     scoring_audits = relationship("ScoringAudit", back_populates="user", cascade="all, delete-orphan")
     ux_events = relationship("UXEvent", back_populates="user", cascade="all, delete-orphan")
     agent_tasks = relationship("AgentTask", back_populates="user", cascade="all, delete-orphan")
+    discuss_threads = relationship("DiscussThread", back_populates="user", cascade="all, delete-orphan")
     agent_contradictions = relationship(
         "AgentContradiction",
         back_populates="user",
@@ -753,4 +754,30 @@ class HandoffDraft(Base):
     capability = Column(String(64), nullable=False)
     payload_json = Column(Text, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
+
+
+class DiscussThread(Base):
+    """A 1-on-1 conversation with a single agent.
+
+    The streaming discuss endpoint takes the full conversation in the
+    request, which means a user has nowhere to "come back" to a prior
+    thread — every visit starts from scratch. This table is the durable
+    record: messages are stored as a JSON array of {role, content,
+    timestamp} dicts so we can reconstruct the conversation on read
+    without a child table.
+    """
+
+    __tablename__ = "discuss_threads"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    agent_id = Column(String(20), nullable=False)
+    title = Column(String(255), nullable=True)
+    messages = Column(JSON, default=list, nullable=False)
+    original_prompt = Column(Text, nullable=True)
+    original_verdict = Column(Text, nullable=True)
+    last_message_at = Column(DateTime, default=_now, nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    user = relationship("User", back_populates="discuss_threads")
 

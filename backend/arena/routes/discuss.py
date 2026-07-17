@@ -2,11 +2,14 @@
 
 import json
 import uuid
+from datetime import datetime, timezone
+from typing import Optional
 
 import anthropic
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
@@ -15,8 +18,11 @@ from arena.core.cost_tracker import (
     RateLimitExceeded,
     check_and_increment_user,
 )
+from arena.core.input_validation import sanitize_model_text
+from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
+from arena.db_models import DiscussThread
 from arena.models.schemas import (
     DiscussRequest,
     DiscussResponse,
@@ -347,3 +353,236 @@ async def stream_discuss(
 def _sse_event(event: str, data: dict) -> str:
     """Format a Server-Sent Event."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+# ──────────────────────────────────────────────────────────────
+# Discuss history persistence — list / fetch / delete threads
+# ──────────────────────────────────────────────────────────────
+
+DISCUSS_THREADS_MAX_PER_PAGE = 50
+
+
+def _decode_messages(raw) -> list:
+    """Normalize the messages column across drivers.
+
+    Postgres returns JSON columns as native lists; SQLite (test) returns
+    the raw TEXT. Without this normalization, len() / list() would return
+    the string length / the string itself, and the response shape would
+    differ between environments.
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, TypeError):
+            return []
+    return []
+
+
+def _serialize_thread(row: DiscussThread, *, include_messages: bool) -> dict:
+    """Project a DiscussThread row to its public dict.
+
+    List rows strip the messages array (potentially large JSON) so the
+    list payload stays small; detail responses include the full
+    conversation so a returning user can resume the thread.
+    """
+    messages = _decode_messages(row.messages)
+    base = {
+        "id": row.id,
+        "agent_id": row.agent_id,
+        "title": row.title or "",
+        "last_message_at": row.last_message_at.isoformat() if row.last_message_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "message_count": len(messages),
+    }
+    if include_messages:
+        base["messages"] = messages
+        base["original_prompt"] = row.original_prompt or ""
+        base["original_verdict"] = row.original_verdict or ""
+    return base
+
+
+@router.get("/discuss/threads")
+async def list_discuss_threads(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=DISCUSS_THREADS_MAX_PER_PAGE),
+    agent_id: Optional[str] = Query(
+        None, max_length=20, description="Filter to one agent (e.g. 'claude-sonnet').",
+    ),
+    search: Optional[str] = Query(
+        None, max_length=128, description="Case-insensitive substring match on title.",
+    ),
+) -> dict:
+    """List the caller's 1-on-1 discuss threads.
+
+    Free-tier users see an empty list (the discuss feature itself is
+    Plus-only, so a free user has never had a thread to retrieve). This
+    keeps the silent-gate contract consistent with the other
+    feature-gated endpoints.
+    """
+    tier = normalize_tier(get_tier_str(user))
+    if not has_feature(tier, "discuss"):
+        return {
+            "threads": [],
+            "total": 0,
+            "page": 1,
+            "per_page": per_page,
+            "total_pages": 0,
+            "filters": {"agent_id": None, "search": None},
+        }
+
+    q = db.query(DiscussThread).filter(DiscussThread.user_id == user.id)
+
+    if agent_id:
+        q = q.filter(DiscussThread.agent_id == agent_id)
+
+    if search:
+        # Escape LIKE wildcards so '100%' matches the literal substring.
+        safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        q = q.filter(DiscussThread.title.ilike(f"%{safe}%", escape="\\"))
+
+    total = q.count()
+    rows = (
+        q.order_by(DiscussThread.last_message_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    return {
+        "threads": [_serialize_thread(r, include_messages=False) for r in rows],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+        "filters": {"agent_id": agent_id, "search": search},
+    }
+
+
+@router.get("/discuss/threads/{thread_id}")
+async def get_discuss_thread(
+    thread_id: int,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Full thread body (messages + original_prompt/verdict for context).
+
+    Foreign-or-missing ids return 404 with the same shape (no oracle).
+    """
+    row = (
+        db.query(DiscussThread)
+        .filter(DiscussThread.id == thread_id, DiscussThread.user_id == user.id)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": "Thread not found"},
+        )
+    return _serialize_thread(row, include_messages=True)
+
+
+@router.delete("/discuss/threads/{thread_id}")
+async def delete_discuss_thread(
+    thread_id: int,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Delete one thread. Rate-limited so a UI bug can't mass-delete a
+    user's history. Foreign ids return 404 — no existence oracle."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="discuss_thread_delete",
+        limit=60,
+        window_seconds=3600,
+        message="Too many thread deletes. Limit is 60 per hour.",
+    )
+    row = (
+        db.query(DiscussThread)
+        .filter(DiscussThread.id == thread_id, DiscussThread.user_id == user.id)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": "Thread not found"},
+        )
+    db.delete(row)
+    db.commit()
+    return {"status": "deleted", "id": thread_id}
+
+
+class SaveThreadBody(BaseModel):
+    """Body for POST /discuss/threads — save a conversation. The streaming
+    endpoint keeps the full conversation in the request, so saving is
+    opt-in: the UI fires this when the user clicks 'Save thread'."""
+    agent_id: str = Field(..., min_length=1, max_length=20)
+    title: str = Field("", max_length=255)
+    messages: list[dict] = Field(default_factory=list, max_length=500)
+    original_prompt: str = Field("", max_length=10000)
+    original_verdict: str = Field("", max_length=20000)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v: str) -> str:
+        return sanitize_model_text(v or "", max_length=255, field_name="title")
+
+    @field_validator("messages")
+    @classmethod
+    def validate_messages(cls, v: list[dict]) -> list[dict]:
+        # Cap each message's content so a 100KB blob can't slip in via
+        # a single field. Bounded list length prevents an unbounded
+        # JSON column.
+        out: list[dict] = []
+        for m in v[:500]:
+            if not isinstance(m, dict):
+                continue
+            role = str(m.get("role", ""))[:20]
+            content = str(m.get("content", ""))[:20000]
+            out.append({"role": role, "content": content, "timestamp": m.get("timestamp")})
+        return out
+
+
+@router.post("/discuss/threads")
+async def save_discuss_thread(
+    body: SaveThreadBody,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Persist a 1-on-1 conversation. Used by the UI's 'Save thread'
+    button on the discuss screen — the streaming endpoint keeps the
+    conversation in-process, this is the durable record."""
+    tier = normalize_tier(get_tier_str(user))
+    if not has_feature(tier, "discuss"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "feature_not_allowed", "message": "Discuss requires a Plus or Pro subscription."},
+        )
+    enforce_user_rate_limit(
+        user.id,
+        scope="discuss_thread_save",
+        limit=120,
+        window_seconds=3600,
+        message="Too many thread saves. Limit is 120 per hour.",
+    )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    row = DiscussThread(
+        user_id=user.id,
+        agent_id=body.agent_id.strip(),
+        title=body.title.strip() or None,
+        messages=body.messages,
+        original_prompt=body.original_prompt or None,
+        original_verdict=body.original_verdict or None,
+        last_message_at=now,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"status": "saved", "id": row.id, "thread": _serialize_thread(row, include_messages=True)}
