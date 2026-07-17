@@ -1,8 +1,9 @@
 """Analytics and UX tracking routes."""
 
 from collections import Counter, defaultdict
+from datetime import datetime, time, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -196,6 +197,148 @@ async def analytics_summary(
         "persona_engagement": dict(persona_engagement),
         "avg_winning_score": round(avg_winning_score, 1),
         "drift_rate": round(drift_rate, 2),
+    }
+
+
+@router.get("/analytics/activity")
+async def analytics_activity(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(30, ge=1, le=366, description="Window length in days, ending today (UTC)."),
+) -> dict:
+    """GitHub-style activity timeline with streak metrics.
+
+    Returns one bucket per UTC calendar day for the trailing ``days`` window
+    (inclusive of today), plus aggregate counters split by arena mode and the
+    user's current/longest consecutive-day streak.
+
+    Bounded the same way as :func:`analytics_summary` so this can't be used as
+    a DB-amplification surface: window length is capped, the row scan is
+    restricted to two indexed columns, and the user-scoped rate limit is
+    shared across analytics endpoints.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_activity",
+        limit=60,
+        window_seconds=3600,
+        message="Too many analytics activity requests. Limit is 60 per hour.",
+    )
+
+    # _now() in db_models stores naive UTC, so we anchor the window in UTC
+    # too — using local time here would mis-bucket events near day boundaries
+    # for any user not on UTC.
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    end_day = now_utc.date()
+    start_day = end_day - timedelta(days=days - 1)
+    start_dt = datetime.combine(start_day, time.min)
+    # Exclusive upper bound: anything timestamped after this belongs to
+    # tomorrow's bucket and is correctly excluded from this window.
+    end_dt = datetime.combine(end_day + timedelta(days=1), time.min)
+
+    rows = (
+        db.query(UsageRecord.timestamp, UsageRecord.mode)
+        .filter(
+            UsageRecord.user_id == user.id,
+            UsageRecord.timestamp >= start_dt,
+            UsageRecord.timestamp < end_dt,
+        )
+        .all()
+    )
+
+    # Per-day counters, keyed by ISO date string so the response is
+    # JSON-native without a second normalization pass.
+    daily: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"prompts": 0, "debates": 0, "discusses": 0, "agent_runs": 0}
+    )
+    for ts, mode in rows:
+        bucket = daily[ts.date().isoformat()]
+        if mode == "debate":
+            bucket["debates"] += 1
+        elif mode == "discuss":
+            bucket["discusses"] += 1
+        elif mode == "agent":
+            bucket["agent_runs"] += 1
+        else:
+            # arena and any future modes count as a "prompt" for streak
+            # purposes — a user shouldn't lose their streak because we shipped
+            # a new mode and didn't classify it.
+            bucket["prompts"] += 1
+
+    activity = [
+        {
+            "date": (start_day + timedelta(days=offset)).isoformat(),
+            "prompts": daily[(start_day + timedelta(days=offset)).isoformat()]["prompts"],
+            "debates": daily[(start_day + timedelta(days=offset)).isoformat()]["debates"],
+            "discusses": daily[(start_day + timedelta(days=offset)).isoformat()]["discusses"],
+            "agent_runs": daily[(start_day + timedelta(days=offset)).isoformat()]["agent_runs"],
+        }
+        for offset in range(days)
+    ]
+
+    # "Active day" = at least one of any kind. Counting only arena prompts
+    # would under-report engagement for users who exclusively use agent mode.
+    # Sum only the counter fields — "date" is a string and would crash sum().
+    counter_keys = ("prompts", "debates", "discusses", "agent_runs")
+    active_dates = {
+        (start_day + timedelta(days=offset))
+        for offset in range(days)
+        if sum(activity[offset][k] for k in counter_keys) > 0
+    }
+
+    # Current streak walks backwards from today. If today is empty we still
+    # check whether yesterday started a streak — the user shouldn't see
+    # "0 current streak" simply because they haven't chatted yet today.
+    current_streak = 0
+    cursor = end_day
+    if cursor not in active_dates:
+        cursor -= timedelta(days=1)
+    while cursor in active_dates:
+        current_streak += 1
+        cursor -= timedelta(days=1)
+
+    # Longest streak is the max run within the window. We deliberately don't
+    # query beyond the window — a 366-day maximum prevents a multi-year scan
+    # that would be cheap to abuse via the per-user rate limit.
+    longest_streak = 0
+    run = 0
+    for offset in range(days):
+        day = start_day + timedelta(days=offset)
+        if day in active_dates:
+            run += 1
+            longest_streak = max(longest_streak, run)
+        else:
+            run = 0
+
+    total_prompts = sum(b["prompts"] for b in activity)
+    total_debates = sum(b["debates"] for b in activity)
+    total_discusses = sum(b["discusses"] for b in activity)
+    total_agent_runs = sum(b["agent_runs"] for b in activity)
+
+    busiest_day = None
+    busiest_count = 0
+    for bucket in activity:
+        day_total = sum(bucket[k] for k in counter_keys)
+        if day_total > busiest_count:
+            busiest_count = day_total
+            busiest_day = bucket["date"]
+
+    return {
+        "window_days": days,
+        "start_date": start_day.isoformat(),
+        "end_date": end_day.isoformat(),
+        "activity": activity,
+        "totals": {
+            "prompts": total_prompts,
+            "debates": total_debates,
+            "discusses": total_discusses,
+            "agent_runs": total_agent_runs,
+        },
+        "active_days": len(active_dates),
+        "current_streak": current_streak,
+        "longest_streak": longest_streak,
+        "busiest_day": busiest_day,
+        "busiest_day_count": busiest_count,
     }
 
 
