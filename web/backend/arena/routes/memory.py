@@ -43,16 +43,30 @@ async def save_memory(
     if not session_state or not session_state.get("exchanges"):
         return {"status": "skipped", "reason": "no exchanges"}
 
+    # Ownership guard (in-memory first): session_id is a client-chosen key.
+    # Without this check, any authenticated Plus user who learns another
+    # user's live session_id could compress their exchanges, write a
+    # SessionSummary under their own account, and clear the victim's
+    # short-term memory (IDOR + session wipe).
+    owner = str(session_state.get("user_id") or "").strip()
+    caller = str(user.id)
+    if owner and owner not in ("anonymous", "None") and owner != caller:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "forbidden",
+                "message": "Session does not belong to this user",
+            },
+        )
+
     exchanges = list(session_state["exchanges"])
     stances_saved = 0
     partial_error: str | None = None
 
-    # Ownership guard: session_id is globally unique, so a summary row belonging
-    # to another user must never be reassigned or overwritten. Reject cross-user
-    # writes here — before any compression work or session mutation — so the 403
-    # propagates cleanly instead of being swallowed by the persistence try/except
-    # below (which would otherwise return a misleading 200 and clear the victim's
-    # in-memory session).
+    # Ownership guard (persisted): a summary row belonging to another user
+    # must never be reassigned or overwritten. Reject before compression
+    # / clear so the 403 is not swallowed by the persistence try/except
+    # (which would otherwise return a misleading 200 and wipe the session).
     existing_summary = (
         db.query(SessionSummary)
         .filter(SessionSummary.session_id == body.session_id)

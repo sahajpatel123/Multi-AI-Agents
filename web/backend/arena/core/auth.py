@@ -58,10 +58,11 @@ def verify_password(plain: str, hashed: str) -> tuple[bool, bool]:
     try:
         legacy = plain.encode("utf-8")[:72].decode("utf-8", errors="ignore").encode("utf-8")
         if _bcrypt.checkpw(legacy, hashed_bytes):
+            # Do not log any slice of the hash — even the algorithm prefix
+            # is unnecessary on a hot path and can leak format metadata.
             logger.warning(
-                "auth.verify_password: legacy path matched for hashed=%s…; "
+                "auth.verify_password: legacy path matched; "
                 "caller should rehash to modern format",
-                hashed_bytes[:7].decode("utf-8", errors="ignore"),
             )
             return True, True
     except Exception:
