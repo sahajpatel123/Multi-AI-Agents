@@ -54,6 +54,42 @@ export function formatDiscussExport(opts: {
   return lines.join('\n').trim() + '\n';
 }
 
+/**
+ * Clipboard text for a single Discuss message (user or agent).
+ * Prefer plain content for user notes; agent takes include attribution.
+ */
+export function formatDiscussMessageCopy(opts: {
+  role: 'user' | 'agent';
+  content: string;
+  agentName?: string | null;
+  originalPrompt?: string | null;
+  /** When true, include the original Arena question as context. */
+  includeQuestion?: boolean;
+}): string {
+  const body = (opts.content || '').trim();
+  if (!body) return '';
+  const agentName = (opts.agentName || 'Arena mind').trim() || 'Arena mind';
+  const lines: string[] = [];
+
+  if (opts.includeQuestion) {
+    const q = (opts.originalPrompt || '').trim();
+    if (q) {
+      lines.push(`**Question:** ${q}`);
+      lines.push('');
+    }
+  }
+
+  if (opts.role === 'user') {
+    lines.push(body);
+  } else {
+    lines.push(`**${agentName}:**`);
+    lines.push('');
+    lines.push(body);
+  }
+
+  return lines.join('\n').trim() + '\n';
+}
+
 /** Multi-round Debate colosseum as markdown. */
 export function formatDebateExport(opts: {
   originalPrompt: string;

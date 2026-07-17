@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatDebateExport, formatDiscussExport } from './threadExport';
+import {
+  formatDebateExport,
+  formatDiscussExport,
+  formatDiscussMessageCopy,
+} from './threadExport';
 
 describe('formatDiscussExport', () => {
   it('formats a conversation with attribution', () => {
@@ -25,6 +29,31 @@ describe('formatDiscussExport', () => {
       messages: [],
     });
     expect(md).toContain('No messages yet');
+  });
+});
+
+describe('formatDiscussMessageCopy', () => {
+  it('copies user message as plain text', () => {
+    expect(
+      formatDiscussMessageCopy({ role: 'user', content: '  What about cost?  ' }),
+    ).toBe('What about cost?\n');
+  });
+
+  it('attributes agent takes and can include the question', () => {
+    const md = formatDiscussMessageCopy({
+      role: 'agent',
+      content: 'Ship the smallest honest slice.',
+      agentName: 'The Analyst',
+      originalPrompt: 'Should I ship?',
+      includeQuestion: true,
+    });
+    expect(md).toContain('**Question:** Should I ship?');
+    expect(md).toContain('**The Analyst:**');
+    expect(md).toContain('Ship the smallest honest slice.');
+  });
+
+  it('returns empty for blank content', () => {
+    expect(formatDiscussMessageCopy({ role: 'user', content: '   ' })).toBe('');
   });
 });
 

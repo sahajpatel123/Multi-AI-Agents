@@ -19,11 +19,11 @@ import { useBusyDocumentTitle } from '../hooks/useBusyDocumentTitle';
 import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { discussWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForArenaBusy } from '../lib/documentTitle';
-import { prefersReducedMotion, scrollBehavior } from '../lib/motion';
+import { motionDuration, prefersReducedMotion, scrollBehavior } from '../lib/motion';
 import { isScrollNearBottom, shouldAutoScrollChat } from '../lib/chatScroll';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
-import { formatDiscussExport } from '../lib/threadExport';
+import { formatDiscussExport, formatDiscussMessageCopy } from '../lib/threadExport';
 import { isBareEndKey, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 
 interface DiscussModeProps {
@@ -67,6 +67,9 @@ export function DiscussMode({
   const [error, setError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
+  /** Which message key last copied: 'seed' | `msg-${i}` | null */
+  const [msgCopyKey, setMsgCopyKey] = useState<string | null>(null);
+  const [msgCopyStatus, setMsgCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [showJumpLatest, setShowJumpLatest] = useState(false);
 
   const tokenBuffer = useRef('');
@@ -94,6 +97,22 @@ export function DiscussMode({
     const t = window.setTimeout(() => setDownloadFeedback('idle'), 1600);
     return () => window.clearTimeout(t);
   }, [downloadFeedback]);
+
+  useEffect(() => {
+    if (msgCopyStatus === 'idle') return;
+    const hold = motionDuration(msgCopyStatus === 'copied' ? 1600 : 2400);
+    const t = window.setTimeout(() => {
+      setMsgCopyStatus('idle');
+      setMsgCopyKey(null);
+    }, hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [msgCopyStatus]);
+
+  // Clear per-message copy feedback when switching minds.
+  useEffect(() => {
+    setMsgCopyStatus('idle');
+    setMsgCopyKey(null);
+  }, [activeAgent.response.agent_id]);
 
   const buildThreadMarkdown = () => {
     const seed: DiscussChatMessage[] =
@@ -124,6 +143,76 @@ export function DiscussMode({
     const stem = `discuss-${agentConfig.name || 'thread'}`;
     const ok = downloadMarkdownFile(md, stem);
     setDownloadFeedback(ok ? 'done' : 'failed');
+  };
+
+  const copyMessage = async (
+    key: string,
+    opts: {
+      role: 'user' | 'agent';
+      content: string;
+      includeQuestion?: boolean;
+    },
+  ) => {
+    const text = formatDiscussMessageCopy({
+      role: opts.role,
+      content: opts.content,
+      agentName: agentConfig.name,
+      originalPrompt,
+      includeQuestion: opts.includeQuestion,
+    });
+    if (!text) {
+      setMsgCopyKey(key);
+      setMsgCopyStatus('failed');
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    setMsgCopyKey(key);
+    setMsgCopyStatus(ok ? 'copied' : 'failed');
+  };
+
+  const messageCopyButton = (
+    key: string,
+    opts: { role: 'user' | 'agent'; content: string; includeQuestion?: boolean; dark?: boolean },
+  ) => {
+    const active = msgCopyKey === key;
+    const label =
+      active && msgCopyStatus === 'copied'
+        ? 'Copied'
+        : active && msgCopyStatus === 'failed'
+          ? 'Failed'
+          : 'Copy';
+    return (
+      <button
+        type="button"
+        onClick={() => void copyMessage(key, opts)}
+        title={opts.role === 'user' ? 'Copy your message' : 'Copy this take'}
+        aria-label={
+          opts.role === 'user' ? 'Copy your message' : `Copy ${agentConfig.name}'s take`
+        }
+        style={{
+          marginTop: 8,
+          padding: 0,
+          border: 'none',
+          background: 'none',
+          cursor: 'pointer',
+          fontSize: 11,
+          fontFamily: 'Georgia, serif',
+          color: opts.dark
+            ? active && msgCopyStatus === 'failed'
+              ? '#F5A89A'
+              : active && msgCopyStatus === 'copied'
+                ? '#A8D5B5'
+                : 'rgba(250,247,244,0.72)'
+            : active && msgCopyStatus === 'failed'
+              ? '#993C1D'
+              : active && msgCopyStatus === 'copied'
+                ? '#5A8A5A'
+                : '#C4956A',
+        }}
+      >
+        {label}
+      </button>
+    );
   };
 
   const flushTokens = useCallback(() => {
@@ -515,11 +604,15 @@ export function DiscussMode({
             </button>
           </div>
         </div>
-        {copyFeedback === 'failed' || downloadFeedback === 'failed' ? (
+        {copyFeedback === 'failed' ||
+        downloadFeedback === 'failed' ||
+        msgCopyStatus === 'failed' ? (
           <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: '0 0 8px' }}>
-            {copyFeedback === 'failed'
-              ? 'Could not copy — try again or select text manually.'
-              : 'Could not download — try Copy thread instead.'}
+            {msgCopyStatus === 'failed'
+              ? 'Could not copy that message — try again or select text manually.'
+              : copyFeedback === 'failed'
+                ? 'Could not copy — try again or select text manually.'
+                : 'Could not download — try Copy thread instead.'}
           </p>
         ) : null}
 
@@ -555,6 +648,11 @@ export function DiscussMode({
                   markdown={activeAgent.response.verdict || activeAgent.response.one_liner || ''}
                   question={originalPrompt}
                 />
+                {messageCopyButton('seed', {
+                  role: 'agent',
+                  content: activeAgent.response.verdict || activeAgent.response.one_liner || '',
+                  includeQuestion: true,
+                })}
               </div>
             </div>
           )}
@@ -568,6 +666,11 @@ export function DiscussMode({
               {msg.role === 'user' ? (
                 <div style={{ maxWidth: '80%', background: '#1A1714', borderRadius: '12px', padding: '12px 14px' }}>
                   <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: '1.7', whiteSpace: 'pre-wrap', margin: 0 }}>{msg.content}</p>
+                  {messageCopyButton(`msg-${i}`, {
+                    role: 'user',
+                    content: msg.content,
+                    dark: true,
+                  })}
                 </div>
               ) : (
                 <div style={{ maxWidth: '92%', background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '12px', padding: '12px 14px' }}>
@@ -583,6 +686,11 @@ export function DiscussMode({
                     ) : null}
                   </div>
                   <AgentAnswerMarkdown markdown={msg.content} question={originalPrompt} />
+                  {messageCopyButton(`msg-${i}`, {
+                    role: 'agent',
+                    content: msg.content,
+                    includeQuestion: i === 0,
+                  })}
                 </div>
               )}
             </div>
