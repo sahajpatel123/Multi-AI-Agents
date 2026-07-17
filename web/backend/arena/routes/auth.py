@@ -128,16 +128,19 @@ async def register(
     # failures — that filled logs on every weak-password attempt and made
     # real errors harder to spot (and was a log-volume DoS vector).
     try:
-        registration_limiter.check_and_record(request, success=False)
+        # Lockout check only — do not pre-count this attempt as a failure.
+        registration_limiter.assert_not_locked(request)
 
         is_valid, error_msg = _validate_password_strength(body.password)
         if not is_valid:
+            registration_limiter.record_failure(request)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"error": "weak_password", "message": error_msg},
             )
 
         if get_user_by_email(db, body.email):
+            registration_limiter.record_failure(request)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="An account with that email already exists",
@@ -146,7 +149,18 @@ async def register(
         user = create_user(db, body.email, body.password, body.name)
         access = create_access_token(user.id, user.email)
         refresh = create_refresh_token(user.id, user.email)
-        registration_limiter.check_and_record(request, success=True)
+        # Bound successful account creation per IP (mass-signup spam).
+        # Failure-only lockout above does not limit happy-path creates.
+        from arena.core.rate_limits import enforce_ip_rate_limit
+
+        enforce_ip_rate_limit(
+            request,
+            scope="registration_create",
+            limit=5,
+            window_seconds=3600,
+            message="Too many accounts created from this network. Please try again later.",
+        )
+        registration_limiter.clear(request)
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
             content={
@@ -160,6 +174,11 @@ async def register(
         raise
     except Exception:
         logger.exception("Registration failed")
+        # Unexpected server failure still counts toward abuse window.
+        try:
+            registration_limiter.record_failure(request)
+        except HTTPException:
+            pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed",
@@ -175,10 +194,14 @@ async def login(
     # Same contract as register: expected client errors (401/429) are not
     # logged as stack traces. Unexpected failures become a clean 500.
     try:
-        login_limiter.check_and_record(request, success=False)
+        # Check lockout first — never pre-record a failure before bcrypt runs.
+        # Pre-recording locked out legitimate recovery on the Nth correct
+        # password after (N-1) typos.
+        login_limiter.assert_not_locked(request)
 
         user = authenticate_user(db, body.email, body.password)
         if not user:
+            login_limiter.record_failure(request)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password",
@@ -186,7 +209,7 @@ async def login(
 
         access = create_access_token(user.id, user.email)
         refresh = create_refresh_token(user.id, user.email)
-        login_limiter.check_and_record(request, success=True)
+        login_limiter.clear(request)
         return JSONResponse(
             content={
                 "success": True,

@@ -58,8 +58,11 @@ def _reset_rate_limiters():
     storage on the ._storage / ._limiter attributes.
     """
     from arena.core import rate_limits
+    from arena.core.login_limiter import login_limiter, registration_limiter
 
     rate_limits.rate_limiter._events.clear()
+    login_limiter.reset()
+    registration_limiter.reset()
     try:
         from arena.routes import auth as auth_routes
 
@@ -73,6 +76,8 @@ def _reset_rate_limiters():
         pass
     yield
     rate_limits.rate_limiter._events.clear()
+    login_limiter.reset()
+    registration_limiter.reset()
 
 
 @pytest.fixture
