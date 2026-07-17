@@ -929,7 +929,8 @@ async def upload_agent_attachment(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     record["file_id"] = file_id
-    register_upload(file_id, record)
+    # Bind to the uploader so resolve_attachments cannot be used for IDOR.
+    register_upload(file_id, record, user_id=user.id)
     rtype = record.get("type") or "doc"
     if rtype == "image":
         content_preview = "[Image]"
@@ -1276,7 +1277,11 @@ async def run_agent_task(
     bb.status = AgentStatus.RUNNING
     bb.expertise_level = expertise_level
     bb.expertise_domain = expertise_domain
-    bb.attachments = resolve_attachments(list(body.attachment_ids or [])[:32])
+    # Ownership-scoped: only this user's uploads resolve; foreign file_ids are dropped.
+    bb.attachments = resolve_attachments(
+        list(body.attachment_ids or [])[:32],
+        user_id=user.id,
+    )
     bb.mcp_integration_ids = list(body.mcp_integration_ids or [])[:20]
 
     background_tasks.add_task(
