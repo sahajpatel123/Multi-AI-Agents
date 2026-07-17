@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatArenaRecentsExport } from './arenaRecentsExport';
+import {
+  formatArenaRecentItemCopy,
+  formatArenaRecentPromptCopy,
+  formatArenaRecentsExport,
+} from './arenaRecentsExport';
 
 describe('formatArenaRecentsExport', () => {
   it('formats filtered recents with titles and winners', () => {
@@ -47,5 +51,37 @@ describe('formatArenaRecentsExport', () => {
   it('handles empty recents', () => {
     const md = formatArenaRecentsExport({ items: [] });
     expect(md).toMatch(/No recent Arena turns yet/i);
+  });
+});
+
+describe('formatArenaRecentItemCopy', () => {
+  it('snapshots one recent turn', () => {
+    const md = formatArenaRecentItemCopy({
+      title: 'Ship plan',
+      prompt: 'Should we ship today?',
+      category: 'question',
+      winnerName: 'The Analyst',
+      timestamp: '2026-07-01T12:00:00Z',
+      turnId: 'turn-1',
+    });
+    expect(md).toContain('# Ship plan');
+    expect(md).toContain('**Prompt:** Should we ship today?');
+    expect(md).toContain('Winner: The Analyst');
+    expect(md).toContain('Turn `turn-1`');
+    expect(md).toContain('Shared from Arena recents');
+  });
+
+  it('returns empty when both title and prompt blank', () => {
+    expect(formatArenaRecentItemCopy({ title: '  ', prompt: '' })).toBe('');
+  });
+});
+
+describe('formatArenaRecentPromptCopy', () => {
+  it('returns trimmed prompt with trailing newline', () => {
+    expect(formatArenaRecentPromptCopy('  Ship today?  ')).toBe('Ship today?\n');
+  });
+
+  it('returns empty for blank', () => {
+    expect(formatArenaRecentPromptCopy('   ')).toBe('');
   });
 });

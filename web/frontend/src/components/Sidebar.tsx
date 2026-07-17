@@ -29,7 +29,11 @@ import { filterBySearchQuery, filterTurnsBySearchQuery } from '../lib/sidebarSea
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatRelativePast } from '../lib/relativeTime';
-import { formatArenaRecentsExport } from '../lib/arenaRecentsExport';
+import {
+  formatArenaRecentItemCopy,
+  formatArenaRecentPromptCopy,
+  formatArenaRecentsExport,
+} from '../lib/arenaRecentsExport';
 import { formatSavedTakeExport, formatSavedTakesListExport } from '../lib/savedTakeExport';
 import { motionDuration } from '../lib/motion';
 import {
@@ -147,6 +151,10 @@ export function Sidebar({
   const [downloadAllSavedStatus, setDownloadAllSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [copyRecentsStatus, setCopyRecentsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadRecentsStatus, setDownloadRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  /** Per-recent row copy feedback: turn_id + kind. */
+  const [recentItemCopyId, setRecentItemCopyId] = useState<string | null>(null);
+  const [recentItemCopyKind, setRecentItemCopyKind] = useState<'turn' | 'prompt' | null>(null);
+  const [recentItemCopyStatus, setRecentItemCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [openMenuTurnId, setOpenMenuTurnId] = useState<string | null>(null);
   const [confirmDeleteTurnId, setConfirmDeleteTurnId] = useState<string | null>(null);
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
@@ -337,6 +345,17 @@ export function Sidebar({
     return () => window.clearTimeout(t);
   }, [downloadRecentsStatus]);
 
+  useEffect(() => {
+    if (recentItemCopyStatus === 'idle') return;
+    const hold = motionDuration(recentItemCopyStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => {
+      setRecentItemCopyStatus('idle');
+      setRecentItemCopyId(null);
+      setRecentItemCopyKind(null);
+    }, hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [recentItemCopyStatus]);
+
   const handleCopySaved = async (item: SavedResponseItem, displayName: string) => {
     const md = formatSavedTakeExport({
       agentName: displayName,
@@ -452,6 +471,42 @@ export function Sidebar({
     const ok = downloadMarkdownFile(md, 'arena-recents');
     setDownloadRecentsStatus(ok ? 'done' : 'failed');
     if (ok) void track('arena_recents_downloaded');
+  };
+
+  const handleCopyRecentItem = async (
+    turn: (typeof filteredTurns)[number],
+    kind: 'turn' | 'prompt',
+  ) => {
+    const winnerName =
+      turn.winnerName ||
+      winnerNameByAgentId[turn.winner_id] ||
+      AGENTS[turn.winner_id]?.name ||
+      turn.winner_id;
+    const text =
+      kind === 'prompt'
+        ? formatArenaRecentPromptCopy(turn.prompt)
+        : formatArenaRecentItemCopy({
+            title: customTitles[turn.turn_id] || null,
+            prompt: turn.prompt,
+            category: turn.prompt_category,
+            winnerName,
+            timestamp: turn.timestamp,
+            turnId: turn.turn_id,
+          });
+
+    if (!text) {
+      setRecentItemCopyId(turn.turn_id);
+      setRecentItemCopyKind(kind);
+      setRecentItemCopyStatus('failed');
+      setOpenMenuTurnId(null);
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    setRecentItemCopyId(turn.turn_id);
+    setRecentItemCopyKind(kind);
+    setRecentItemCopyStatus(ok ? 'copied' : 'failed');
+    setOpenMenuTurnId(null);
+    if (ok) void track('recent_turn_copied', undefined, turn.winner_id);
   };
 
   const usedPercent = dailyLimit > 0
@@ -1081,6 +1136,68 @@ export function Sidebar({
                                 zIndex: 120,
                               }}
                             >
+                              <MenuItem
+                                icon={<Copy className="w-[14px] h-[14px]" />}
+                                label={
+                                  recentItemCopyId === turn.turn_id &&
+                                  recentItemCopyKind === 'prompt' &&
+                                  recentItemCopyStatus === 'copied'
+                                    ? 'Copied prompt'
+                                    : recentItemCopyId === turn.turn_id &&
+                                        recentItemCopyKind === 'prompt' &&
+                                        recentItemCopyStatus === 'failed'
+                                      ? 'Copy failed'
+                                      : 'Copy prompt'
+                                }
+                                color={
+                                  recentItemCopyId === turn.turn_id &&
+                                  recentItemCopyKind === 'prompt' &&
+                                  recentItemCopyStatus === 'failed'
+                                    ? '#C0392B'
+                                    : recentItemCopyId === turn.turn_id &&
+                                        recentItemCopyKind === 'prompt' &&
+                                        recentItemCopyStatus === 'copied'
+                                      ? '#3F6B4A'
+                                      : '#1A1714'
+                                }
+                                hoverBackground="#F0EBE3"
+                                onClick={() => void handleCopyRecentItem(turn, 'prompt')}
+                              />
+                              <MenuItem
+                                icon={
+                                  recentItemCopyId === turn.turn_id &&
+                                  recentItemCopyKind === 'turn' &&
+                                  recentItemCopyStatus === 'copied' ? (
+                                    <Check className="w-[14px] h-[14px]" />
+                                  ) : (
+                                    <Copy className="w-[14px] h-[14px]" />
+                                  )
+                                }
+                                label={
+                                  recentItemCopyId === turn.turn_id &&
+                                  recentItemCopyKind === 'turn' &&
+                                  recentItemCopyStatus === 'copied'
+                                    ? 'Copied turn'
+                                    : recentItemCopyId === turn.turn_id &&
+                                        recentItemCopyKind === 'turn' &&
+                                        recentItemCopyStatus === 'failed'
+                                      ? 'Copy failed'
+                                      : 'Copy turn'
+                                }
+                                color={
+                                  recentItemCopyId === turn.turn_id &&
+                                  recentItemCopyKind === 'turn' &&
+                                  recentItemCopyStatus === 'failed'
+                                    ? '#C0392B'
+                                    : recentItemCopyId === turn.turn_id &&
+                                        recentItemCopyKind === 'turn' &&
+                                        recentItemCopyStatus === 'copied'
+                                      ? '#3F6B4A'
+                                      : '#1A1714'
+                                }
+                                hoverBackground="#F0EBE3"
+                                onClick={() => void handleCopyRecentItem(turn, 'turn')}
+                              />
                               <MenuItem
                                 icon={<Pencil className="w-[14px] h-[14px]" />}
                                 label="Rename"

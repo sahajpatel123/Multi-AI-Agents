@@ -96,3 +96,51 @@ export function formatArenaRecentsExport(opts: {
   lines.push('_Shared from Arena recents_');
   return lines.join('\n').trim() + '\n';
 }
+
+/**
+ * Clipboard text for a single Arena recent turn (markdown snapshot).
+ * Prefer full context over bare prompt so notes outside the app stay useful.
+ */
+export function formatArenaRecentItemCopy(item: ArenaRecentExportItem): string {
+  const prompt = (item.prompt || '').trim();
+  const rawTitle = (item.title || '').trim();
+  // Require real content — do not invent "Untitled turn" for empty rows.
+  if (!rawTitle && !prompt) return '';
+  const title = displayTitle(item);
+
+  const lines: string[] = [`# ${title}`, ''];
+
+  if (prompt && prompt !== title) {
+    lines.push(`**Prompt:** ${prompt}`);
+    lines.push('');
+  } else if (prompt) {
+    lines.push(prompt);
+    lines.push('');
+  }
+
+  const meta: string[] = [];
+  const cat = categoryLabel(item.category);
+  if (cat) meta.push(cat);
+  const winner = (item.winnerName || '').trim();
+  if (winner) meta.push(`Winner: ${winner}`);
+  const when = formatIsoWhen(item.timestamp);
+  if (when) meta.push(when);
+  if (meta.length > 0) {
+    lines.push(`- ${meta.join(' · ')}`);
+  }
+  const turnId = (item.turnId || '').trim();
+  if (turnId) {
+    lines.push(`- _Turn \`${turnId}\`_`);
+  }
+
+  lines.push('');
+  lines.push('---');
+  lines.push('_Shared from Arena recents_');
+  return lines.join('\n').trim() + '\n';
+}
+
+/** Bare prompt only — for re-running in compose. */
+export function formatArenaRecentPromptCopy(prompt: string): string {
+  const q = (prompt || '').trim();
+  return q ? `${q}\n` : '';
+}

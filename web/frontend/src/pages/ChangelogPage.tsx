@@ -12,6 +12,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Sidebar Recents: copy any prompt or full turn from the ⋯ menu',
       '[NEW] Watchlist: copy any single watch (markdown snapshot) or just the question',
       '[NEW] Debate: copy any reaction, interjection, or challenged take (not just the full transcript)',
       '[NEW] Discuss: copy any message or take (not just the whole thread)',
