@@ -529,8 +529,8 @@ def main():
 
     except Exception as e:
         print(f"==> Migration failed: {e}", flush=True)
-        print("==> ABORTING — DB not ready.", flush=True)
-        sys.exit(1)
+        print("==> Starting server in DEGRADED mode (DB unreachable).", flush=True)
+        print("==> API endpoints will return 503 until the database is available.", flush=True)
 
     print("==> Starting server...", flush=True)
     sys.stdout.flush()
