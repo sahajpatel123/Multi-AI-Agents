@@ -24,6 +24,14 @@ _WEAK_SECRET_KEYS = {
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+# Render's managed PostgreSQL requires SSL. If the env-provided URL doesn't
+# include sslmode, add it here so every code path (SQLAlchemy, Alembic,
+# migrate_and_start.py) inherits it automatically.
+if DATABASE_URL and "postgresql" in DATABASE_URL and "sslmode" not in DATABASE_URL.lower():
+    if "?" in DATABASE_URL:
+        DATABASE_URL += "&sslmode=require"
+    else:
+        DATABASE_URL += "?sslmode=require"
 
 
 class Settings(BaseSettings):
@@ -110,7 +118,9 @@ class Settings(BaseSettings):
         if value in (None, ""):
             return DATABASE_URL
         if isinstance(value, str) and value.startswith("postgres://"):
-            return value.replace("postgres://", "postgresql://", 1)
+            value = value.replace("postgres://", "postgresql://", 1)
+        if isinstance(value, str) and "postgresql" in value and "sslmode" not in value.lower():
+            value = value + ("&sslmode=require" if "?" in value else "?sslmode=require")
         return value
 
     @field_validator("allowed_origins", mode="before")
