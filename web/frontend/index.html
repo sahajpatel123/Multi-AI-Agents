@@ -24,45 +24,68 @@
     <meta name="twitter:image" content="/og-image.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#0A0E14">
   </head>
   <body>
     <style>
       #initial-loader {
         position: fixed;
         inset: 0;
-        background: #FAF7F4;
+        background: #0A0E14;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 18px;
         z-index: 9999;
-        transition: opacity 300ms ease;
+        transition: opacity 400ms ease;
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
       }
-      #initial-loader.hidden {
-        opacity: 0;
-        pointer-events: none;
+      #initial-loader.hidden { opacity: 0; pointer-events: none; }
+      .loader-brand {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: #E6EDF3;
+        letter-spacing: -0.01em;
+        display: flex; align-items: center; gap: 10px;
       }
-      .loader-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #C4956A;
-        animation: loaderBreathe 1.5s ease-in-out infinite;
+      .loader-brand-dot {
+        width: 9px; height: 9px; border-radius: 50%;
+        background: #7DD3C0;
+        box-shadow: 0 0 12px 1px rgba(125,211,192,0.6);
+        animation: loaderBreathe 1.6s ease-in-out infinite;
       }
+      .loader-bars {
+        display: flex; gap: 4px; align-items: flex-end; height: 18px;
+      }
+      .loader-bars span {
+        width: 3px; background: #7DD3C0; border-radius: 2px;
+        animation: loaderBars 1.2s ease-in-out infinite;
+      }
+      .loader-bars span:nth-child(1){ animation-delay: 0ms; }
+      .loader-bars span:nth-child(2){ animation-delay: 120ms; }
+      .loader-bars span:nth-child(3){ animation-delay: 240ms; }
+      .loader-bars span:nth-child(4){ animation-delay: 360ms; }
       @keyframes loaderBreathe {
-        0%, 100% { 
-          transform: scale(1);
-          opacity: 0.4;
-        }
-        50% { 
-          transform: scale(1.5);
-          opacity: 1;
-        }
+        0%, 100% { transform: scale(1); opacity: 0.5; }
+        50% { transform: scale(1.5); opacity: 1; }
+      }
+      @keyframes loaderBars {
+        0%, 100% { height: 4px; opacity: 0.4; }
+        50% { height: 18px; opacity: 1; }
+      }
+      .loader-caption {
+        font-size: 10px; color: #6B7785; letter-spacing: 0.24em;
+        text-transform: uppercase;
       }
     </style>
 
     <div id="initial-loader">
-      <div class="loader-dot"></div>
+      <div class="loader-brand"><span class="loader-brand-dot"></span>Arena</div>
+      <div class="loader-bars"><span></span><span></span><span></span><span></span></div>
+      <div class="loader-caption">Establishing signal</div>
     </div>
 
     <div id="root"></div>
