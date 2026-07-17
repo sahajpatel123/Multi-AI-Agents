@@ -1,5 +1,6 @@
 import { CSSProperties, useEffect, useRef, useState } from 'react';
 import { AGENTS } from '../types';
+import { prefersReducedMotion } from '../lib/motion';
 
 interface AgentDotProps {
   agentId: string;
@@ -8,6 +9,9 @@ interface AgentDotProps {
   className?: string;
   style?: CSSProperties;
   color?: string;
+  /** When true (or when prefers-reduced-motion is on), skip the
+   *  breathe and flash animations entirely. Useful for static surfaces
+   *  like history lists where a constant-pulse dot would be noise. */
   disableAnimation?: boolean;
 }
 
@@ -37,6 +41,13 @@ export function AgentDot({
   const agent = AGENTS[agentId];
   const [isFlashing, setIsFlashing] = useState(false);
   const previousFlashKey = useRef(flashKey);
+  // Per-instance cache so we don't re-query matchMedia every render —
+  // it's stable for the session and the call is cheap but not free.
+  const reducedMotionRef = useRef<boolean | null>(null);
+  if (reducedMotionRef.current === null) {
+    reducedMotionRef.current = prefersReducedMotion();
+  }
+  const reducedMotion = reducedMotionRef.current;
 
   useEffect(() => {
     if (flashKey === 0 || flashKey === previousFlashKey.current) return;
@@ -58,7 +69,14 @@ export function AgentDot({
 
   if (!agent) return null;
 
-  const animation = isFlashing
+  // disableAnimation is the explicit prop; prefers-reduced-motion is
+  // the implicit OS-level opt-out. Either suppresses animations. We
+  // don't gate the flash on flashKey — a flash with no animation is
+  // just a static dot, which is still a meaningful UX beat.
+  const animate = !disableAnimation && !reducedMotion;
+  const animation = !animate
+    ? 'none'
+    : isFlashing
     ? `${FLASH_ANIMATIONS[agentId]}, ${BREATHE_ANIMATIONS[agentId]}`
     : BREATHE_ANIMATIONS[agentId];
 
@@ -75,7 +93,7 @@ export function AgentDot({
         borderRadius: '999px',
         backgroundColor: color || agent.color,
         transformOrigin: 'center',
-        animation: disableAnimation ? 'none' : animation,
+        animation,
         ...style,
       }}
     />
