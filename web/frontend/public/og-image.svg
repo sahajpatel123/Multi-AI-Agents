@@ -5,7 +5,7 @@
   every platform that accepts SVG OG images (GitHub, Slack, Discord,
   LinkedIn, most others). For platforms that require raster OG images
   (notably Twitter) regenerate via:
-      cd web/backend && python tools/generate_og_image.py
+      cd backend && python tools/generate_og_image.py
   That writes the same composition to og-image.png.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">

@@ -21,7 +21,7 @@ proxies `/api` calls to the backend.
 ### Backend (API)
 
 ```bash
-cd web/backend
+cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -48,3 +48,4 @@ npm run dev
 New web-facing services or packages (e.g. a worker, a gateway, a docs site) live as
 sibling directories under `web/` — not at the repository root — so the root stays
 clean and everything web-scoped is discoverable in one place.
+ce.

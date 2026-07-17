@@ -16,7 +16,7 @@ from typing import Iterator, AsyncIterator
 
 import pytest
 
-# Ensure web/backend is on sys.path so `from arena...` works.
+# Ensure backend is on sys.path so `from arena...` works.
 _BACKEND_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 if _BACKEND_ROOT not in sys.path:
     sys.path.insert(0, _BACKEND_ROOT)
@@ -295,7 +295,7 @@ async def app_client(isolated_db, monkeypatch):
     monkeypatch.setattr(_Settings, "validate_secrets", lambda self: None)
     monkeypatch.setattr(_Settings, "validate_api_keys", lambda self: None)
 
-    # main.py lives at web/backend/main.py, not inside the arena package.
+    # main.py lives at backend/main.py, not inside the arena package.
     from main import create_app
 
     SessionLocal = isolated_db

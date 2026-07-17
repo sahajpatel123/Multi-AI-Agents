@@ -6,7 +6,7 @@ prompt result) embeds this card — text-only links render a blank box
 on Twitter/LinkedIn/Slack and destroy click-through.
 
 Re-generate with:
-    cd web/backend && python tools/generate_og_image.py
+    cd backend && python tools/generate_og_image.py
 
 Writes: web/frontend/public/og-image.png
 """
@@ -141,3 +141,4 @@ def render() -> None:
 
 if __name__ == "__main__":
     render()
+er()

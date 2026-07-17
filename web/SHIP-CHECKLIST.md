@@ -216,14 +216,14 @@ CONDURA_HONEST_REJECTION_ENABLED=true
 
 Kill switch: set to `false` / unset.
 
-Before broad flip, optionally run the migration scan (see `web/backend/docs/HANDOFF.md`).
+Before broad flip, optionally run the migration scan (see `backend/docs/HANDOFF.md`).
 
 ## Verify commands (pre-ship)
 
 ### Backend
 
 ```bash
-cd web/backend
+cd backend
 source .venv/bin/activate   # or: .venv/bin/python
 python -m pytest tests/test_capabilities.py tests/test_agent_capability_gate.py \
   tests/test_production_config.py tests/test_condura_migration.py \
@@ -254,6 +254,6 @@ curl -sS https://<api-host>/api/health
 
 ## Docs
 
-- ADR: `web/backend/docs/adr/0001-condura-integration.md`
-- Integration offer: `web/backend/docs/condura/INTEGRATION.md`
-- State ledger: `web/backend/docs/HANDOFF.md`
+- ADR: `backend/docs/adr/0001-condura-integration.md`
+- Integration offer: `backend/docs/condura/INTEGRATION.md`
+- State ledger: `backend/docs/HANDOFF.md`
