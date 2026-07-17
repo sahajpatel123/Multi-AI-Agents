@@ -145,9 +145,11 @@ async def discuss_with_agent(
 
     session_id = request.session_id or str(uuid.uuid4())
 
-    # Get agent's previous responses from memory
+    # Get agent's previous responses from memory (ownership-scoped)
     memory = get_memory_manager()
-    previous_responses = memory.short_term.get_agent_memory(session_id, request.agent_id)
+    previous_responses = memory.short_term.get_agent_memory(
+        session_id, request.agent_id, user_id=str(user.id)
+    )
     
     # Build context string for previous responses
     if previous_responses:
@@ -246,9 +248,11 @@ async def stream_discuss(
 
     session_id = request.session_id or str(uuid.uuid4())
 
-    # Get agent's previous responses from memory
+    # Get agent's previous responses from memory (ownership-scoped)
     memory = get_memory_manager()
-    previous_responses = memory.short_term.get_agent_memory(session_id, request.agent_id)
+    previous_responses = memory.short_term.get_agent_memory(
+        session_id, request.agent_id, user_id=str(user.id)
+    )
     
     # Build context string for previous responses
     if previous_responses:

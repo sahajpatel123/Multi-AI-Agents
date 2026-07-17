@@ -20,7 +20,7 @@ from arena.core.cost_tracker import (
     record_usage,
 )
 from arena.core.input_pipeline import run_input_pipeline
-from arena.core.memory import get_memory_manager
+from arena.core.memory import SessionOwnershipError, get_memory_manager
 from arena.core.observability import (
     LatencyTracker,
     log_rate_limit_hit,
@@ -242,16 +242,25 @@ async def submit_prompt(
         tracker.mark("response_shaped")
 
         memory = get_memory_manager()
-        memory.add_turn(
-            session_id=session_id,
-            prompt=body.prompt,
-            prompt_category=pipeline_result.classification.category.value,
-            scored_responses=scored_responses,
-            winner_id=winner.response.agent_id,
-            winner_persona_id=get_persona_id_for_agent(winner.response.agent_id, body.persona_ids),
-            persona_ids=body.persona_ids,
-            user_id=str(user.id),
-        )
+        try:
+            memory.add_turn(
+                session_id=session_id,
+                prompt=body.prompt,
+                prompt_category=pipeline_result.classification.category.value,
+                scored_responses=scored_responses,
+                winner_id=winner.response.agent_id,
+                winner_persona_id=get_persona_id_for_agent(winner.response.agent_id, body.persona_ids),
+                persona_ids=body.persona_ids,
+                user_id=str(user.id),
+            )
+        except SessionOwnershipError as exc:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "forbidden",
+                    "message": "Session does not belong to this user",
+                },
+            ) from exc
 
         total_ms = int((time.monotonic() - t_start) * 1000)
         tracker.mark("pipeline_end")
@@ -426,16 +435,26 @@ async def stream_prompt(
             tracker.mark("response_shaped")
 
             memory = get_memory_manager()
-            memory.add_turn(
-                session_id=session_id,
-                prompt=body.prompt,
-                prompt_category=pipeline_result.classification.category.value,
-                scored_responses=scored_responses,
-                winner_id=winner.response.agent_id,
-                winner_persona_id=get_persona_id_for_agent(winner.response.agent_id, body.persona_ids),
-                persona_ids=body.persona_ids,
-                user_id=str(user.id),
-            )
+            try:
+                memory.add_turn(
+                    session_id=session_id,
+                    prompt=body.prompt,
+                    prompt_category=pipeline_result.classification.category.value,
+                    scored_responses=scored_responses,
+                    winner_id=winner.response.agent_id,
+                    winner_persona_id=get_persona_id_for_agent(winner.response.agent_id, body.persona_ids),
+                    persona_ids=body.persona_ids,
+                    user_id=str(user.id),
+                )
+            except SessionOwnershipError as exc:
+                yield _sse_event(
+                    "error",
+                    {
+                        "error": "forbidden",
+                        "message": "Session does not belong to this user",
+                    },
+                )
+                return
 
             yield _sse_event("result", final.model_dump(mode="json"))
 

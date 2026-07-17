@@ -23,6 +23,39 @@ logger = logging.getLogger(__name__)
 
 SHORT_TERM_EXCHANGE_LIMIT = 10
 MEMORY_INJECTION_TOKEN_LIMIT = 400
+
+
+class SessionOwnershipError(PermissionError):
+    """Caller tried to read or write a short-term session owned by someone else.
+
+    session_id is client-chosen. Without this guard, any authenticated user
+    who learns another user's session_id could append turns, overwrite
+    ownership, or inject prior agent memory into their own discuss/debate.
+    """
+
+
+def _is_anonymous_owner(user_id: str | None) -> bool:
+    owner = str(user_id or "").strip()
+    return not owner or owner in ("anonymous", "None", "none")
+
+
+def assert_session_owner(state_or_session_user_id: str | None, caller_user_id: str | None) -> None:
+    """Raise SessionOwnershipError if a bound session is accessed by a different user.
+
+    Anonymous sessions are claimable by the first non-anonymous writer.
+    Anonymous callers may still read/write anonymous sessions.
+    """
+    owner = str(state_or_session_user_id or "").strip()
+    caller = str(caller_user_id or "").strip()
+    if _is_anonymous_owner(owner):
+        return
+    if _is_anonymous_owner(caller):
+        # Owned session must not be readable/writable by anonymous callers.
+        raise SessionOwnershipError("Session does not belong to this user")
+    if owner != caller:
+        raise SessionOwnershipError("Session does not belong to this user")
+
+
 MEMORY_STOP_WORDS = {
     "the",
     "a",
@@ -143,6 +176,8 @@ class ShortTermMemory:
     def _get_or_create_state(self, session_id: str, user_id: str = "anonymous") -> dict[str, Any]:
         state = self._store.get(session_id)
         if state:
+            # Existing session: enforce ownership before any write path continues.
+            assert_session_owner(state.get("user_id"), user_id)
             return state
 
         session_data = SessionData(
@@ -250,18 +285,48 @@ class ShortTermMemory:
 
         current_topics = _extract_topics_from_exchanges(state["exchanges"], limit=4)
         session_data.topics = current_topics
-        state["user_id"] = user_id
-        session_data.user_id = user_id
+
+        # Bind ownership carefully:
+        # - anonymous → authenticated claim is allowed (upgrade)
+        # - never overwrite a real owner's id with another user's id
+        #   (that was the hijack: attacker add_turn claimed the session)
+        if _is_anonymous_owner(state.get("user_id")) and not _is_anonymous_owner(user_id):
+            state["user_id"] = user_id
+            session_data.user_id = user_id
+        elif not _is_anonymous_owner(state.get("user_id")):
+            # Keep the original owner; assert already ran above.
+            session_data.user_id = state["user_id"]
+        else:
+            state["user_id"] = user_id
+            session_data.user_id = user_id
 
         return turn
 
-    def get_agent_memory(self, session_id: str, agent_id: str) -> list[str]:
-        session = self.get_session(session_id)
-        if not session:
-            return []
+    def get_agent_memory(
+        self,
+        session_id: str,
+        agent_id: str,
+        *,
+        user_id: str | None = None,
+    ) -> list[str]:
+        """Return prior agent verdicts for a session.
 
+        When ``user_id`` is provided, fail closed (empty list) if the session
+        is owned by someone else — prevents discuss/debate from injecting
+        another user's prior takes into the model context.
+        """
+        state = self._store.get(session_id)
+        if not state:
+            return []
+        if user_id is not None:
+            try:
+                assert_session_owner(state.get("user_id"), user_id)
+            except SessionOwnershipError:
+                return []
+
+        session_data: SessionData = state["session_data"]
         responses: list[str] = []
-        for turn in session.turns:
+        for turn in session_data.turns:
             if agent_id in turn.agent_responses:
                 responses.append(turn.agent_responses[agent_id].verdict)
         return responses
@@ -518,8 +583,16 @@ class MemoryManager:
     def get_session_state(self, session_id: str) -> dict[str, Any] | None:
         return self.short_term.get_session_state(session_id)
 
-    def get_agent_context(self, session_id: str, agent_id: str) -> MemoryContext:
-        previous_responses = self.short_term.get_agent_memory(session_id, agent_id)
+    def get_agent_context(
+        self,
+        session_id: str,
+        agent_id: str,
+        *,
+        user_id: str | None = None,
+    ) -> MemoryContext:
+        previous_responses = self.short_term.get_agent_memory(
+            session_id, agent_id, user_id=user_id
+        )
         return MemoryContext(
             agent_id=agent_id,
             previous_responses=previous_responses,
