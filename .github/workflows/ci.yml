@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: web/backend
+        working-directory: backend
     env:
       SECRET_KEY: test-secret-key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
       ANTHROPIC_API_KEY: sk-ant-test-fake-key-for-ci
@@ -130,7 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: web/frontend
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v7
 
@@ -139,7 +139,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: web/frontend/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -206,7 +206,7 @@ jobs:
     needs: [backend, frontend]
     defaults:
       run:
-        working-directory: web/frontend
+        working-directory: frontend
     env:
       SECRET_KEY: test-secret-key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
       ANTHROPIC_API_KEY: sk-ant-test-fake-key-for-ci
@@ -236,24 +236,24 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libmagic1
 
       - name: Install backend dependencies
-        working-directory: web/backend
+        working-directory: backend
         run: pip install -r requirements.txt
 
       - name: Generate runtime encryption key
-        working-directory: web/backend
+        working-directory: backend
         run: |
           KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
           echo "ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
 
       - name: Install frontend dependencies
-        working-directory: web/frontend
+        working-directory: frontend
         run: npm ci
 
       - name: Install Playwright
         run: npm install --no-save @playwright/test && npx playwright install --with-deps chromium
 
       - name: Start backend
-        working-directory: web/backend
+        working-directory: backend
         run: |
           nohup python main.py > /tmp/backend.log 2>&1 &
           # Wait for backend to be ready instead of fixed sleep.
@@ -289,7 +289,7 @@ jobs:
           # re-running locally — the JSON is the source of truth.
           name: playwright-report
           path: |
-            web/frontend/playwright-report
-            web/frontend/test-results
+            frontend/playwright-report
+            frontend/test-results
           retention-days: 14
           if-no-files-found: warn
