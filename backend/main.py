@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, InterfaceError, DBAPIError
 from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from arena.core.client_ip import get_request_client_ip
@@ -22,7 +23,7 @@ from arena.core.request_size import (
 from arena.core.seed_personas import seed_persona_library
 from arena.core.observability import get_health_data, get_health_data_detailed, setup_logging
 from arena.core.rate_limits import client_ip, rate_limiter
-from arena.database import SessionLocal, get_db, init_db
+from arena.database import SessionLocal, dispose_engine, get_db, init_db, is_db_connectivity_error
 from arena.models.schemas import UserResponse
 from arena.routes.auth import router as auth_router, user_router
 from arena.routes.analytics import router as analytics_router
@@ -174,9 +175,52 @@ def create_app() -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+    # ── DB connectivity → 503 (not opaque 500) ────────────────
+    # Managed Postgres TLS resets surface as OperationalError. Map them
+    # to 503 so clients/load balancers retry, and dispose the pool so the
+    # next request opens a fresh socket.
+    @app.exception_handler(OperationalError)
+    @app.exception_handler(InterfaceError)
+    async def db_connectivity_exception_handler(request: Request, exc: Exception):
+        dispose_engine()
+        logger.error(
+            "[DB UNAVAILABLE] %s %s — %s",
+            request.method,
+            request.url.path,
+            exc,
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": "database_unavailable",
+                "message": "Database temporarily unavailable. Please try again in a moment.",
+            },
+        )
+
     # ── Global exception handler ──────────────────────────────
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
+        # Connectivity-shaped DBAPIError that wasn't caught by the more
+        # specific OperationalError/InterfaceError handlers.
+        if isinstance(exc, DBAPIError) and (
+            is_db_connectivity_error(exc)
+            or getattr(exc, "connection_invalidated", False)
+        ):
+            dispose_engine()
+            logger.error(
+                "[DB UNAVAILABLE] %s %s — %s",
+                request.method,
+                request.url.path,
+                exc,
+            )
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": "database_unavailable",
+                    "message": "Database temporarily unavailable. Please try again in a moment.",
+                },
+            )
+
         error_detail = traceback.format_exc()
         # Always log full traceback server-side
         logger.error(

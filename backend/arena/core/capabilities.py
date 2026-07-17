@@ -466,3 +466,166 @@ def list_capabilities() -> list[dict[str, Any]]:
             item["stream_heartbeat_seconds"] = cap.stream_heartbeat_seconds
         out.append(item)
     return out
+
+
+# ──────────────────────────────────────────────────────────────
+# Extended documentation for each capability
+# ──────────────────────────────────────────────────────────────
+#
+# These are longer-form descriptions suitable for a developer
+# reference or an in-app "what does this do?" tooltip. The short
+# `description` on the capability itself is the marketing-style
+# one-liner shown in the catalog; the markdown here is the
+# engineer's view.
+
+CAPABILITY_DOCS: dict[str, str] = {
+    "arena.respond": (
+        "**Four-agent panel response.**\n\n"
+        "The canonical Arena path: the user's prompt is dispatched to "
+        "four personas in parallel; each returns a verdict and one_liner; "
+        "the scorer picks a winner; the winner's verdict is rendered. "
+        "Web execution — no Condura required."
+    ),
+    "arena.debate": (
+        "**Debate mode.**\n\n"
+        "After an Arena response, the user can challenge the winning "
+        "verdict. The other three agents then respond to the challenge "
+        "in a single round; the debate history is appended to the "
+        "thread for context on the next prompt."
+    ),
+    "arena.discuss": (
+        "**One-on-one focused chat.**\n\n"
+        "A private conversation with a single agent persona. The agent "
+        "is given the original Arena verdict as context so it stays in "
+        "character. Threaded via /api/discuss/threads for persistence."
+    ),
+    "agent.research": (
+        "**Seven-stage research pipeline.**\n\n"
+        "Planner → Researcher → Steelman → Solver → Critic → Verifier → "
+        "Synthesizer → Judge. Each stage is a discrete LLM call with its "
+        "own prompt; the Judge's verdict is the user-visible answer. "
+        "Output includes intelligence_score, contradictions, and a "
+        "synthesized insight report."
+    ),
+    "agent.orchestrate": (
+        "**Multi-task orchestration.**\n\n"
+        "Decompose a complex task into N sub-tasks via `synthesise_tasks`, "
+        "run each sub-task through the full pipeline, and synthesize the "
+        "sub-task results back into one answer. Sub-tasks are tracked as "
+        "child AgentTask rows on the Orchestration parent."
+    ),
+    "agent.refine": (
+        "**Refinement loop.**\n\n"
+        "Re-run a previously completed task with the user's critique as "
+        "additional context. The pipeline reads the original answer + "
+        "critique and emits a refined answer. Useful for iterative "
+        "research without restating the prompt."
+    ),
+    "agent.feedback": (
+        "**Answer feedback.**\n\n"
+        "User marks a completed answer as correct / partial / wrong, "
+        "optionally with a note. Stored in AnswerFeedback and used by "
+        "the feedback calibrator to weight the calibration score."
+    ),
+    "agent.challenge": (
+        "**Challenge an answer.**\n\n"
+        "Generate a critical follow-up prompt from the original answer; "
+        "the pipeline re-runs against the challenge to surface a "
+        "counter-perspective. Saves the challenger agent_id so the user "
+        "can audit which agent pushed back."
+    ),
+    "agent.rebuttal": (
+        "**Rebuttal generation.**\n\n"
+        "After a challenge, the original answering agent defends its "
+        "verdict against the challenge. The rebuttal is appended to the "
+        "thread history alongside the original and the challenge."
+    ),
+    "watchlist.create": (
+        "**Create server-side watchlist item.**\n\n"
+        "Add a recurring task to the user's watchlist. The pipeline "
+        "runs the task on a schedule and surfaces new results in the "
+        "watchlist UI. Requires a cron expression or interval in the "
+        "request body."
+    ),
+    "watchlist.toggle": (
+        "**Toggle watchlist item.**\n\n"
+        "Pause / resume a watchlist item without deleting it. The "
+        "scheduler skips items where is_active=false."
+    ),
+    "agent.verify_arena_answer": (
+        "**Verify Arena winner answer on web.**\n\n"
+        "Re-runs the Arena winner's verdict through a verifier LLM and "
+        "compares it against the original winner. Reports a confidence "
+        "delta — useful for catching LLM drift over time."
+    ),
+    "linear_ticket": (
+        "**Create a Linear ticket from research.**\n\n"
+        "Spawns a Linear ticket with the agent's research summary as the "
+        "ticket body. Condura method `linear.create_ticket` (must run "
+        "on the user's machine where the Linear API token is configured)."
+    ),
+    "save_report": (
+        "**Save report text to a local path.**\n\n"
+        "Writes the synthesized report to a file on the user's machine. "
+        "Path is sanitized against traversal (`../` rejected). Cap is "
+        "50KB on payload size."
+    ),
+    "agent.run_pipeline": (
+        "**Long-running research loop on device.**\n\n"
+        "Hybrid-delegate capability — the agent runs locally via Condura "
+        "for the duration of the research (could be hours). Streams a "
+        "heartbeat every 10 minutes so the UI knows the agent is still "
+        "alive; estimated_duration_hours is part of the capability spec."
+    ),
+    "agent.long_research": (
+        "**Long-running research loop on device.**\n\n"
+        "Hybrid-delegate capability — the agent runs locally via Condura "
+        "for the duration of the research (could be hours). Streams a "
+        "heartbeat every 10 minutes so the UI knows the agent is still "
+        "alive; estimated_duration_hours is part of the capability spec."
+    ),
+    "app.open_in_linear": (
+        "**Create a Linear ticket from research.**\n\n"
+        "Spawns a Linear ticket with the agent's research summary as the "
+        "ticket body. Condura method app.linear.create_ticket runs on the "
+        "user's machine where the Linear API token is configured."
+    ),
+    "report.save_to_local": (
+        "**Save report text to a local path.**\n\n"
+        "Writes the synthesized report to a file on the user's machine. "
+        "Path is sanitized against traversal (../ rejected). Cap is 50KB "
+        "on payload size to prevent disk-amplification DoS via the "
+        "path. Hybrid-prep — local file context, web payload validation."
+    ),
+    "agent.verify_arena_answer_local": (
+        "**Verify Arena answer using local Condura context.**\n\n"
+        "Hybrid-prep capability — runs locally to gather file system / "
+        "git status / local docs, then submits to the web pipeline. "
+        "Useful when the answer needs context that lives on the user's "
+        "machine but the final synthesis should be web-class."
+    ),
+}
+
+
+def get_capability_doc(capability_id: str) -> dict[str, Any] | None:
+    """Return extended documentation for a single capability, or None
+    if the id is unknown. Includes the short description + the markdown
+    body so the UI can render a unified tooltip without a second
+    roundtrip."""
+    cap = REGISTRY.get(capability_id)
+    if cap is None:
+        return None
+    out: dict[str, Any] = {
+        "id": cap.id,
+        "description": cap.description,
+        "execution": cap.execution.value,
+        "markdown": CAPABILITY_DOCS.get(
+            cap.id, "No extended documentation for this capability yet."
+        ),
+    }
+    if isinstance(cap, ConduraCapability):
+        out["condura_method"] = cap.condura_method
+    if isinstance(cap, (HybridPrepCapability, HybridDelegateCapability)):
+        out["condura_method"] = cap.condura_method
+        out["stream_heartbeat_seconds"] = cap.stream_heartbeat_seconds
+    return out

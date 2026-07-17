@@ -47,6 +47,7 @@ from arena.core.report_generator import (
 from arena.core.templates import get_templates_grouped_by_category
 from arena.core.capabilities import (
     evaluate_capability_gate,
+    get_capability_doc,
     list_capabilities,
 )
 from arena.core.telemetry import record_guard_decision
@@ -971,6 +972,46 @@ async def list_agent_templates() -> dict:
 async def list_agent_capabilities() -> dict:
     """Capability taxonomy for UI badges and Condura handoff."""
     return {"capabilities": list_capabilities()}
+
+
+@router.get("/capabilities/docs")
+async def list_capability_docs() -> dict:
+    """Extended markdown docs for every capability in the registry.
+
+    The /capabilities endpoint returns the short one-liner description;
+    this one returns a longer markdown body suitable for a "what
+    does this do?" tooltip or a developer reference. No auth —
+    capability metadata is public, and a paying customer evaluating
+    the product shouldn't need to log in just to read docs.
+    """
+    from arena.core.capabilities import CAPABILITY_DOCS, REGISTRY
+
+    items = []
+    for cap_id, cap in REGISTRY.items():
+        items.append({
+            "id": cap_id,
+            "description": cap.description,
+            "execution": cap.execution.value,
+            "markdown": CAPABILITY_DOCS.get(
+                cap_id, "No extended documentation for this capability yet."
+            ),
+        })
+    # Stable alphabetical order so the UI doesn't shuffle.
+    items.sort(key=lambda x: x["id"])
+    return {"docs": items, "total": len(items)}
+
+
+@router.get("/capabilities/docs/{capability_id}")
+async def get_capability_doc_endpoint(capability_id: str) -> dict:
+    """Single-capability doc lookup. 404 if the id is unknown so a
+    client can detect a typo without a try/except."""
+    doc = get_capability_doc(capability_id)
+    if doc is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "capability_not_found", "id": capability_id},
+        )
+    return doc
 
 
 @router.get("/tasks/{task_id}/feedback")

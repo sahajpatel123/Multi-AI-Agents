@@ -185,6 +185,7 @@ def test_normalize_postgres_url_adds_ssl_and_timeout():
     assert "sslmode=require" in url
     assert "connect_timeout=10" in url
     assert "gssencmode=disable" in url
+    assert "channel_binding=disable" in url
 
 
 def test_normalize_postgres_url_preserves_existing_params():
@@ -195,8 +196,34 @@ def test_normalize_postgres_url_preserves_existing_params():
     assert "sslmode=require" in url
     assert "application_name=arena" in url
     assert "connect_timeout=10" in url
+    assert "channel_binding=disable" in url
     # No duplicated sslmode
     assert url.count("sslmode=") == 1
+
+
+def test_normalize_postgres_url_upgrades_weak_sslmode():
+    from arena.config import _normalize_postgres_url
+
+    url = _normalize_postgres_url(
+        "postgresql://user:pass@db:5432/arena?sslmode=prefer"
+    )
+    assert "sslmode=require" in url
+    assert "sslmode=prefer" not in url
+
+
+def test_is_db_connectivity_error_detects_ssl_eof():
+    from arena.database import is_db_connectivity_error
+    from sqlalchemy.exc import OperationalError
+
+    exc = OperationalError(
+        "connect",
+        {},
+        Exception(
+            'connection failed: connection to server at "1.2.3.4", port 5432 '
+            "failed: SSL connection has been closed unexpectedly"
+        ),
+    )
+    assert is_db_connectivity_error(exc) is True
 
 
 def test_development_allows_sqlite_without_encryption(monkeypatch):

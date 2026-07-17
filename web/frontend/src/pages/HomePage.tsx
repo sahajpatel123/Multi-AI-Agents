@@ -1004,13 +1004,13 @@ export function HomePage() {
               </div>
 
               <h1 className="hero-h1" style={{ marginBottom: '1.2rem' }}>
-                <span aria-label={line1} style={{ display: 'block', color: '#1A1714', fontSize: '58px', fontWeight: 500, letterSpacing: '-0.035em', lineHeight: 1.0 }}>
+                <span aria-label={line1} style={{ display: 'block', color: '#1A1714', fontSize: '58px', fontWeight: 500, letterSpacing: '-0.035em', lineHeight: 1.05 }}>
                   {springText(line1, 0)}
                 </span>
-                <span aria-label={line2} style={{ display: 'block', WebkitTextStroke: '1.5px #1A1714', color: 'transparent', fontStyle: 'italic', fontSize: '58px', fontWeight: 500, letterSpacing: '-0.035em', lineHeight: 1.0 }}>
+                <span aria-label={line2} style={{ display: 'block', WebkitTextStroke: '1.5px #1A1714', color: 'transparent', fontStyle: 'italic', fontSize: '58px', fontWeight: 500, letterSpacing: '-0.035em', lineHeight: 1.05 }}>
                   {springText(line2, line2StartIndex)}
                 </span>
-                <span aria-label={line3} style={{ display: 'block', color: '#C4956A', fontStyle: 'italic', fontSize: '58px', fontWeight: 500, letterSpacing: '-0.035em', lineHeight: 1.0 }}>
+                <span aria-label={line3} style={{ display: 'block', color: '#C4956A', fontStyle: 'italic', fontSize: '58px', fontWeight: 500, letterSpacing: '-0.035em', lineHeight: 1.05 }}>
                   {springText(line3, line3StartIndex)}
                 </span>
               </h1>
@@ -1366,7 +1366,7 @@ export function HomePage() {
       </section>
 
       {/* Comparison Section */}
-      <section ref={comparisonReveal.ref} style={{ ...comparisonReveal.style, maxWidth: '1080px', margin: '5rem auto 0', padding: '0 24px' }} className={comparisonReveal.className}>
+      <section ref={comparisonReveal.ref} style={{ ...comparisonReveal.style, maxWidth: '1080px', margin: '4rem auto 0', padding: '0 24px' }} className={comparisonReveal.className}>
         <p style={{ fontSize: '12px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '1.2rem' }}>Why Arena beats asking one AI</p>
 
         <div className="compare-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -1441,7 +1441,7 @@ export function HomePage() {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" ref={howItWorksReveal.ref} style={{ ...howItWorksReveal.style, maxWidth: '1080px', margin: '5rem auto 0', padding: '0 24px' }} className={howItWorksReveal.className}>
+      <section id="how-it-works" ref={howItWorksReveal.ref} style={{ ...howItWorksReveal.style, maxWidth: '1080px', margin: '4rem auto 0', padding: '0 24px' }} className={howItWorksReveal.className}>
         <p style={{ fontSize: '12px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '1.2rem' }}>How it works</p>
 
         <div className="how-steps" style={{ display: 'flex', border: '0.5px solid #E0D8D0', borderRadius: '16px', overflow: 'hidden' }}>
@@ -1477,7 +1477,7 @@ export function HomePage() {
       </section>
 
       {/* Persona Library — live product surface (not vaporware) */}
-      <section ref={personaLibraryReveal.ref} style={{ ...personaLibraryReveal.style, maxWidth: '1080px', margin: '5rem auto 0', padding: '0 24px' }} className={personaLibraryReveal.className}>
+      <section ref={personaLibraryReveal.ref} style={{ ...personaLibraryReveal.style, maxWidth: '1080px', margin: '4rem auto 0', padding: '0 24px' }} className={personaLibraryReveal.className}>
         <div className="persona-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#C4956A', marginBottom: '.4rem' }}>Available now</p>
@@ -1551,7 +1551,7 @@ export function HomePage() {
       </section>
 
       {/* The Four Minds */}
-      <section ref={agentMindsReveal.ref} style={{ ...agentMindsReveal.style, maxWidth: '1080px', margin: '5rem auto 0', padding: '0 24px' }} className={agentMindsReveal.className}>
+      <section ref={agentMindsReveal.ref} style={{ ...agentMindsReveal.style, maxWidth: '1080px', margin: '4rem auto 0', padding: '0 24px' }} className={agentMindsReveal.className}>
         <h2 style={{ fontSize: '22px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', marginBottom: '.4rem' }}>Meet the four minds</h2>
         <p style={{ fontSize: '14px', color: '#6B6460', marginBottom: '1.5rem' }}>Active now. Each built with a different temperature and reasoning mandate.</p>
 

@@ -25,8 +25,10 @@ services:
         sync: false
       - key: DEEPSEEK_API_KEY
         sync: false
-      # Prefer the Render Internal Database URL when the DB is on Render
-      # (same region) — external IPs can fail TLS mid-handshake.
+      # Prefer the Render *Internal* Database URL when the DB is on Render
+      # (same region). External/public IPs (e.g. 35.x.x.x) often fail with
+      # "SSL connection has been closed unexpectedly" mid-handshake.
+      # Paste Internal URL from the Postgres dashboard → Connections.
       - key: DATABASE_URL
         sync: false
       # Public HTTPS origin of the SPA, e.g. https://your-app.vercel.app

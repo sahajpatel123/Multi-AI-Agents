@@ -44,7 +44,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "liga" 1, "kern" 1, "calt" 1;
   text-rendering: optimizeLegibility;
-  letter-spacing: 0.002em;
+  letter-spacing: 0.005em;
   overflow-x: hidden;
 }
 
@@ -607,7 +607,7 @@ canvas {
   width: 100%;
   max-width: 1080px;
   margin: 0 auto;
-  padding: 0 32px;
+  padding: 0 24px;
 }
 
 .navbar-row {

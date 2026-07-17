@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from sqlalchemy import Date, cast, func
+from sqlalchemy.exc import OperationalError, InterfaceError
 from sqlalchemy.orm import Session
 
 from arena.core.client_ip import get_request_client_ip
@@ -91,13 +92,32 @@ from arena.core.tier_config import (
     normalize_tier,
     upgrade_target,
 )
-from arena.database import get_db
+from arena.database import dispose_engine, get_db, is_db_connectivity_error
 from arena.db_models import UsageRecord, User
 from arena.models.schemas import LoginRequest, RegisterRequest, UserProfilePatch, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 user_router = APIRouter(prefix="/api/user", tags=["auth"])
 logger = logging.getLogger(__name__)
+
+
+def _raise_if_db_unavailable(exc: BaseException, action: str) -> None:
+    """Map DB connectivity failures to 503 (not opaque 500 'Login failed')."""
+    if not (
+        is_db_connectivity_error(exc)
+        or isinstance(exc, (OperationalError, InterfaceError))
+    ):
+        return
+    dispose_engine()
+    logger.exception("%s failed: database unavailable", action)
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "error": "database_unavailable",
+            "message": "Database temporarily unavailable. Please try again in a moment.",
+        },
+    )
+
 # Key by spoof-resistant client IP (rightmost XFF in prod; peer in dev).
 limiter = Limiter(key_func=get_request_client_ip)
 
@@ -206,7 +226,8 @@ async def register(
         )
     except HTTPException:
         raise
-    except Exception:
+    except Exception as exc:
+        _raise_if_db_unavailable(exc, "Registration")
         logger.exception("Registration failed")
         # Unexpected server failure still counts toward abuse window.
         try:
@@ -226,7 +247,7 @@ async def login(
     db: Session = Depends(get_db),
 ) -> JSONResponse:
     # Same contract as register: expected client errors (401/429) are not
-    # logged as stack traces. Unexpected failures become a clean 500.
+    # logged as stack traces. DB outages become 503; other failures → 500.
     try:
         # Check lockout first — never pre-record a failure before bcrypt runs.
         # Pre-recording locked out legitimate recovery on the Nth correct
@@ -265,7 +286,10 @@ async def login(
         )
     except HTTPException:
         raise
-    except Exception:
+    except Exception as exc:
+        # Root cause of opaque "Login failed" in prod logs: Postgres TLS
+        # handshake / pool death. Surface 503 so clients can retry cleanly.
+        _raise_if_db_unavailable(exc, "Login")
         logger.exception("Login failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

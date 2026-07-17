@@ -30,7 +30,13 @@ _PG_REQUIRED_QUERY_PARAMS = {
     "connect_timeout": "10",
     # Some managed PG hosts abort the handshake when GSSAPI is negotiated first.
     "gssencmode": "disable",
+    # SCRAM channel binding mid-handshake aborts on some managed PG + TLS paths
+    # ("SSL connection has been closed unexpectedly"). Prefer plain TLS.
+    "channel_binding": "disable",
 }
+
+# sslmode values that are too weak for managed Postgres (must upgrade).
+_WEAK_SSLMODES = frozenset({"", "disable", "allow", "prefer"})
 
 
 def _normalize_postgres_url(url: str) -> str:
@@ -54,8 +60,13 @@ def _normalize_postgres_url(url: str) -> str:
         existing = lower_keys.get(key.lower())
         if existing is None:
             query[key] = value
-        # Prefer the required secure value when a weaker/blank one is present.
-        elif key == "sslmode" and not (query.get(existing) or "").strip():
+            continue
+        current = (query.get(existing) or "").strip()
+        if key == "sslmode" and current.lower() in _WEAK_SSLMODES:
+            query[existing] = value
+        elif key in {"gssencmode", "channel_binding"} and not current:
+            query[existing] = value
+        elif key == "connect_timeout" and not current:
             query[existing] = value
 
     return urlunparse(parsed._replace(query=urlencode(query)))
