@@ -3,7 +3,7 @@
 from collections import Counter, defaultdict
 from datetime import datetime, time, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -116,9 +116,42 @@ async def track_event(
 async def analytics_summary(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
+    window_days: int = Query(
+        30,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the heavy scans.",
+    ),
+    topic_limit: int = Query(
+        10,
+        ge=1,
+        le=50,
+        description="Max number of topics returned in topic_distribution.",
+    ),
 ) -> dict:
-    # Full-history aggregation across several tables — bound call volume so a
-    # single account cannot use this as a cheap DB-amplification DoS.
+    """Per-user analytics summary over a configurable window.
+
+    Adds three things over the previous shape:
+
+    - ?window_days=N (default 30, max 365): caps heavy full-history scans
+      so a user with years of activity doesn't trigger a multi-second
+      aggregation on every refresh. The cap also keeps the response
+      payload bounded for the percentile / streak computations below.
+
+    - engagement_rate: ratio of meaningful UX events (deeper_opened,
+      liked, saved, debated) to total prompts. A user with 100 prompts
+      and 5 engagement events has engagement_rate=0.05 — they browse but
+      don't interact. The metric is intentionally a fraction in [0,1]
+      so a dashboard can render it as a percentage without recomputing.
+
+    - current_streak / longest_streak: consecutive days with at least
+      one prompt, computed within the window. The window-cap also
+      bounds the streak computation — a 365-day window can't return a
+      streak longer than 365.
+
+    Bound call volume so a single account cannot use this as a cheap
+    DB-amplification DoS.
+    """
     enforce_user_rate_limit(
         user.id,
         scope="analytics_summary",
@@ -127,12 +160,56 @@ async def analytics_summary(
         message="Too many analytics summary requests. Limit is 60 per hour.",
     )
     user_id = user.id
+
+    # Anchor the window in UTC to match the naive-UTC timestamps written
+    # by db_models._now(); using local time would mis-bucket events near
+    # midnight for any user not on UTC.
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    window_start = now_utc - timedelta(days=window_days - 1)
+    window_start_day = window_start.date()
+
     preference = db.query(UserPreference).filter(UserPreference.user_id == user.id).first()
-    scoring_rows = db.query(ScoringAudit).filter(ScoringAudit.user_id == user.id).all()
-    event_rows = db.query(UXEvent).filter(UXEvent.user_id == user.id).all()
-    summary_rows = db.query(SessionSummary).filter(SessionSummary.user_id == user.id).all()
-    drift_rows = db.query(PersonaDriftLog).filter(PersonaDriftLog.user_id == user.id).all()
-    saved_count = db.query(SavedResponse).filter(SavedResponse.user_id == user.id).count()
+    scoring_rows = (
+        db.query(ScoringAudit)
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= window_start,
+        )
+        .all()
+    )
+    event_rows = (
+        db.query(UXEvent)
+        .filter(
+            UXEvent.user_id == user.id,
+            UXEvent.created_at >= window_start,
+        )
+        .all()
+    )
+    summary_rows = (
+        db.query(SessionSummary)
+        .filter(
+            SessionSummary.user_id == user.id,
+            SessionSummary.compressed_at >= window_start,
+        )
+        .all()
+    )
+    drift_rows = (
+        db.query(PersonaDriftLog)
+        .filter(
+            PersonaDriftLog.user_id == user.id,
+            PersonaDriftLog.created_at >= window_start,
+        )
+        .all()
+    )
+    saved_count = (
+        db.query(func.count(SavedResponse.id))
+        .filter(
+            SavedResponse.user_id == user.id,
+            SavedResponse.saved_at >= window_start,
+        )
+        .scalar()
+        or 0
+    )
 
     persona_wins = Counter(row.winner_persona_id for row in scoring_rows if row.winner_persona_id)
     event_counts = Counter(row.event_type for row in event_rows)
@@ -142,39 +219,49 @@ async def analytics_summary(
             topic_counts[topic] += 1
 
     persona_engagement: dict[str, dict[str, int]] = defaultdict(lambda: {"deeper_opened": 0, "liked": 0, "saved": 0, "debated": 0})
+    meaningful_events = 0
     for row in event_rows:
         if not row.persona_id:
             continue
         if row.event_type == "deeper_opened":
             persona_engagement[row.persona_id]["deeper_opened"] += 1
-        if row.event_type == "response_liked":
+            meaningful_events += 1
+        elif row.event_type == "response_liked":
             persona_engagement[row.persona_id]["liked"] += 1
-        if row.event_type == "response_saved":
+            meaningful_events += 1
+        elif row.event_type == "response_saved":
             persona_engagement[row.persona_id]["saved"] += 1
-        if row.event_type == "debate_started":
+            meaningful_events += 1
+        elif row.event_type == "debate_started":
             persona_engagement[row.persona_id]["debated"] += 1
+            meaningful_events += 1
 
-    # Count from usage_records instead of user_preferences
+    # Count from usage_records filtered by window.
     total_prompts = db.query(func.count(UsageRecord.id)).filter(
-        UsageRecord.user_id == user_id
+        UsageRecord.user_id == user_id,
+        UsageRecord.timestamp >= window_start,
     ).scalar() or 0
 
     total_debates = db.query(func.count(UsageRecord.id)).filter(
         UsageRecord.user_id == user_id,
-        UsageRecord.mode == 'debate'
+        UsageRecord.mode == 'debate',
+        UsageRecord.timestamp >= window_start,
     ).scalar() or 0
 
     total_discusses = db.query(func.count(UsageRecord.id)).filter(
         UsageRecord.user_id == user_id,
-        UsageRecord.mode == 'discuss'
+        UsageRecord.mode == 'discuss',
+        UsageRecord.timestamp >= window_start,
     ).scalar() or 0
 
-    # Calculate avg_session_prompts from usage_records
+    # avg_session_prompts is computed within the window so a single
+    # ancient session doesn't drag the average down forever.
     distinct_sessions = db.query(func.count(func.distinct(UsageRecord.session_id))).filter(
-        UsageRecord.user_id == user_id
+        UsageRecord.user_id == user_id,
+        UsageRecord.timestamp >= window_start,
     ).scalar() or 1
 
-    avg_session_prompts = round(total_prompts / max(distinct_sessions, 1), 1)
+    avg_session_prompts = round(int(total_prompts) / max(int(distinct_sessions), 1), 1)
 
     avg_winning_score = 0.0
     if scoring_rows:
@@ -184,16 +271,73 @@ async def analytics_summary(
     if drift_rows:
         drift_rate = sum(1 for row in drift_rows if row.drift_detected) / len(drift_rows)
 
+    # Engagement rate: meaningful UX events / total prompts. Capped at 1.0
+    # in case a future event-type change breaks the denominator — never
+    # want a UI percentage showing >100%.
+    engagement_rate = (
+        min(1.0, meaningful_events / int(total_prompts)) if int(total_prompts) > 0 else 0.0
+    )
+
+    # Streak math. Active days = days with at least one prompt in the
+    # window. Pull only timestamps (the indexed column) to keep the
+    # scan cheap. .with_entities() ensures we get scalar timestamps,
+    # not Row objects — SQLAlchemy returns Row when there's >1 column
+    # in the query, scalar otherwise.
+    prompt_days = {
+        row[0].date()
+        for row in db.query(UsageRecord.timestamp)
+        .filter(
+            UsageRecord.user_id == user_id,
+            UsageRecord.timestamp >= window_start,
+        )
+        .all()
+        if row[0] is not None
+    }
+
+    # Current streak: walk back from today. If today is empty, give the
+    # user a one-day grace and check yesterday — they shouldn't see a
+    # zero streak just because they haven't chatted yet today.
+    today = now_utc.date()
+    current_streak = 0
+    cursor = today
+    if cursor not in prompt_days:
+        cursor = cursor - timedelta(days=1)
+    while cursor in prompt_days and cursor >= window_start_day:
+        current_streak += 1
+        cursor = cursor - timedelta(days=1)
+
+    # Longest streak: max run within the window only — we deliberately
+    # don't query beyond the window, so a 365-day window can return a
+    # longest streak of at most 365.
+    longest_streak = 0
+    run = 0
+    for offset in range(window_days):
+        day = window_start_day + timedelta(days=offset)
+        if day in prompt_days:
+            run += 1
+            longest_streak = max(longest_streak, run)
+        else:
+            run = 0
+
     return {
+        "window_days": window_days,
+        "window_start": window_start_day.isoformat(),
+        "window_end": now_utc.date().isoformat(),
         "total_prompts": int(total_prompts),
         "total_debates": int(total_debates),
         "total_discusses": int(total_discusses),
-        "total_saved": saved_count,
+        "total_saved": int(saved_count),
         "persona_wins": dict(persona_wins),
         "top_persona_by_wins": persona_wins.most_common(1)[0][0] if persona_wins else None,
         "most_used_event": event_counts.most_common(1)[0][0] if event_counts else None,
-        "avg_session_prompts": round(avg_session_prompts, 1),
-        "topic_distribution": [{"topic": topic, "count": count} for topic, count in topic_counts.most_common(10)],
+        "engagement_rate": round(engagement_rate, 3),
+        "current_streak": current_streak,
+        "longest_streak": longest_streak,
+        "avg_session_prompts": avg_session_prompts,
+        "topic_distribution": [
+            {"topic": topic, "count": count}
+            for topic, count in topic_counts.most_common(topic_limit)
+        ],
         "persona_engagement": dict(persona_engagement),
         "avg_winning_score": round(avg_winning_score, 1),
         "drift_rate": round(drift_rate, 2),
