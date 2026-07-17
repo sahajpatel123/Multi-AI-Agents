@@ -595,6 +595,10 @@ def _ensure_agent_watchlist_access(user: UserResponse) -> None:
 
 WATCHLIST_INTERVALS = frozenset({24, 72, 168})
 WATCHLIST_MAX_ACTIVE = 10
+# Live research threads schedule periodic LLM re-checks. Without a per-user
+# ceiling an authenticated client can mark thousands of historical tasks live
+# and saturate the live_scheduler / provider budget.
+LIVE_MAX_ACTIVE = 10
 
 
 def _watchlist_latest_summary(db: Session, user_id: int, latest_task_id: Optional[str]) -> Optional[dict]:
@@ -1758,6 +1762,13 @@ async def toggle_agent_task_live(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_live_toggle",
+        limit=60,
+        window_seconds=3600,
+        message="Too many live-thread toggles. Limit is 60 per hour.",
+    )
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
@@ -1770,9 +1781,34 @@ async def toggle_agent_task_live(
         task_text=row.task_text or "",
     )
     if body.is_live is not None:
-        row.is_live = bool(body.is_live)
+        want_live = bool(body.is_live)
     else:
-        row.is_live = not bool(row.is_live)
+        want_live = not bool(row.is_live)
+
+    # Cap concurrent live threads before enabling (not when turning off).
+    if want_live and not bool(row.is_live):
+        active_live = (
+            db.query(AgentTaskRow)
+            .filter(
+                AgentTaskRow.user_id == user.id,
+                AgentTaskRow.is_live.is_(True),
+            )
+            .count()
+        )
+        if int(active_live) >= LIVE_MAX_ACTIVE:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "live_limit_reached",
+                    "message": (
+                        f"Live research limit reached ({LIVE_MAX_ACTIVE} active). "
+                        "Turn off another live task first."
+                    ),
+                    "active_cap": LIVE_MAX_ACTIVE,
+                },
+            )
+
+    row.is_live = want_live
     now = _utc_naive()
     if row.is_live:
         row.live_next_check = now + timedelta(hours=24)
