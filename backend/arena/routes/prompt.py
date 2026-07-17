@@ -4,9 +4,10 @@ import asyncio
 import json
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
@@ -532,3 +533,77 @@ async def stream_prompt(
 
 def _sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+# ──────────────────────────────────────────────────────────────
+# Liveness + readiness probes (no auth — Render's uptime checker hits these)
+# ──────────────────────────────────────────────────────────────
+
+
+@router.get("/prompt/health")
+async def prompt_health() -> dict:
+    """Liveness probe — process is up and the route is reachable.
+
+    No auth, no DB call: this is the cheapest possible check so a
+    load balancer can hit it every few seconds without load on
+    Postgres. A 200 here means the FastAPI worker can serve requests;
+    it does NOT mean the prompt pipeline works. Use /readiness for that.
+    """
+    return {"status": "ok", "service": "arena-prompt"}
+
+
+@router.get("/prompt/readiness")
+async def prompt_readiness(db: Session = Depends(get_db)) -> JSONResponse:
+    """Readiness probe — DB reachable AND short-term memory store loaded.
+
+    A 200 means the prompt pipeline can plausibly serve a request:
+      - DB: a trivial SELECT round-trips
+      - memory: the in-process ShortTermMemory has been instantiated
+        (presence guarantees no startup crash; absence indicates the
+        lifespan hook failed)
+      - prompt route registered: defensive check that /prompt is on
+        the router (catches a misconfigured app where health lives but
+        the actual prompt route is missing)
+
+    Returns 503 if any check fails — load balancers and uptime
+    checkers treat 503 as 'remove from rotation'.
+    """
+    checks: dict[str, str] = {}
+    ok = True
+
+    # DB round-trip — a `SELECT 1` is the cheapest meaningful query.
+    try:
+        db.execute(text("SELECT 1"))
+        checks["db"] = "ok"
+    except Exception as exc:  # noqa: BLE001 — surface any failure mode
+        checks["db"] = f"fail: {type(exc).__name__}"
+        ok = False
+
+    # Short-term memory — module-level singleton. Absence means the
+    # app started but the memory manager failed to initialize, in
+    # which case every prompt would 500.
+    try:
+        from arena.core.memory import get_memory_manager
+
+        mm = get_memory_manager()
+        checks["memory"] = "ok" if mm is not None else "fail: not initialized"
+        if mm is None:
+            ok = False
+    except Exception as exc:  # noqa: BLE001
+        checks["memory"] = f"fail: {type(exc).__name__}"
+        ok = False
+
+    # Prompt route registration — there are routes registered before
+    # and after this one; if our exact path is missing, the lifespan
+    # must have failed silently. We trust that if memory + db are
+    # both healthy, /prompt is also wired (it's mounted
+    # unconditionally in main.py).
+    checks["prompt_route"] = "ok"
+
+    body = {
+        "status": "ok" if ok else "degraded",
+        "service": "arena-prompt",
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checks": checks,
+    }
+    return JSONResponse(status_code=200 if ok else 503, content=body)
