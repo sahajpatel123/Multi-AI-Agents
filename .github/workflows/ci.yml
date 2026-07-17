@@ -130,7 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: web/frontend
     steps:
       - uses: actions/checkout@v7
 
@@ -139,7 +139,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: web/frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -206,7 +206,7 @@ jobs:
     needs: [backend, frontend]
     defaults:
       run:
-        working-directory: frontend
+        working-directory: web/frontend
     env:
       SECRET_KEY: test-secret-key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
       ANTHROPIC_API_KEY: sk-ant-test-fake-key-for-ci
@@ -246,7 +246,7 @@ jobs:
           echo "ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
 
       - name: Install frontend dependencies
-        working-directory: frontend
+        working-directory: web/frontend
         run: npm ci
 
       - name: Install Playwright
@@ -289,7 +289,7 @@ jobs:
           # re-running locally — the JSON is the source of truth.
           name: playwright-report
           path: |
-            frontend/playwright-report
-            frontend/test-results
+            web/frontend/playwright-report
+            web/frontend/test-results
           retention-days: 14
           if-no-files-found: warn
