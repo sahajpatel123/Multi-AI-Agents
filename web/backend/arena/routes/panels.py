@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
+from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.tier_config import get_tier_str, normalize_tier, validate_persona_access
 from arena.database import get_db
 from arena.db_models import PersonaLibrary, UserPanel
@@ -59,6 +60,14 @@ async def save_panel(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> dict:
+    # Bound write chatter (save spam / DB churn).
+    enforce_user_rate_limit(
+        user.id,
+        scope="panel_save",
+        limit=60,
+        window_seconds=3600,
+        message="Too many panel saves. Limit is 60 per hour.",
+    )
     values = [body.slot_1, body.slot_2, body.slot_3, body.slot_4]
     if len(set(values)) != 4:
         raise HTTPException(status_code=422, detail={"error": "validation_error", "message": "Panel cannot contain duplicate persona_ids"})
