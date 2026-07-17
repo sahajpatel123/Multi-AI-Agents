@@ -119,3 +119,21 @@ async def test_refine_is_rate_limited(app_client, make_user, monkeypatch):
     assert last is not None
     # Rate limit fires before task lookup.
     assert last.status_code == 429, last.text
+
+
+@pytest.mark.asyncio
+async def test_orchestrate_is_rate_limited(app_client, make_user, monkeypatch):
+    """Orchestration spawns 2–4 full pipelines — must be capped per user.
+
+    Use max_hits=0 so the limit fires before any background pipeline work
+    (avoids spawning real LLM stages in unit tests).
+    """
+    _patch_scope_limit(monkeypatch, "agent_orchestrate", max_hits=0)
+
+    user = make_user(email="orch-rl@test.com", tier=UserTier.PRO)
+    last = await app_client.post(
+        "/api/agent/orchestrate",
+        headers=_headers(user),
+        json={"questions": ["What is A?", "What is B?"]},
+    )
+    assert last.status_code == 429, last.text

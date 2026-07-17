@@ -1049,6 +1049,14 @@ async def start_orchestration(
 ):
     _ensure_agent_access(user, db)
     _ensure_agent_orchestrate_access(user)
+    # Spawns 2–4 full agent pipelines — cost amplification without a cap.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orchestrate",
+        limit=6,
+        window_seconds=3600,
+        message="Too many orchestrations. Limit is 6 per hour.",
+    )
 
     raw_qs = [str(q).strip() for q in body.questions if str(q).strip()]
     _enforce_capability_gate(

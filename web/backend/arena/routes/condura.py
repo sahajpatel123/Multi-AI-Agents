@@ -9,7 +9,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
@@ -35,25 +35,76 @@ def _utc_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+# Free-form JSON blobs (event/draft payloads) must not bloat Postgres.
+# Defense-in-depth beyond the global 10KB request body ceiling.
+_EVENT_PAYLOAD_MAX_KEYS = 40
+_EVENT_PAYLOAD_MAX_CHARS = 4000
+_DRAFT_PAYLOAD_MAX_KEYS = 80
+_DRAFT_PAYLOAD_MAX_CHARS = 50_000
+
+
+def _bound_json_object(
+    value: Any,
+    *,
+    max_keys: int,
+    max_chars: int,
+    field_name: str,
+) -> dict[str, Any]:
+    """Require a JSON object with bounded key count and serialized size."""
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} must be an object")
+    if len(value) > max_keys:
+        raise ValueError(f"{field_name} has too many keys (max {max_keys})")
+    try:
+        serialized = json.dumps(value, default=str)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} is not JSON-serializable") from exc
+    if len(serialized) > max_chars:
+        raise ValueError(f"{field_name} is too large (max {max_chars} chars)")
+    return value
+
+
 class HandoffDispatchBody(BaseModel):
     capability: str = Field(..., min_length=1, max_length=64)
     execution_env: str = Field(..., min_length=1, max_length=32)
-    session_id: Optional[str] = None
-    condura_run_id: Optional[str] = None
+    session_id: Optional[str] = Field(None, max_length=128)
+    condura_run_id: Optional[str] = Field(None, max_length=128)
     summary: Optional[str] = Field(None, max_length=512)
-    retention_class: str = "standard"
-    status: str = DISPATCHED
+    retention_class: str = Field(default="standard", max_length=16)
+    status: str = Field(default=DISPATCHED, max_length=32)
 
 
 class HandoffEventBody(BaseModel):
-    event_id: Optional[str] = None
+    event_id: Optional[str] = Field(None, max_length=128)
     event_kind: str = Field(..., min_length=1, max_length=32)
     payload: Optional[dict[str, Any]] = None
+
+    @field_validator("payload")
+    @classmethod
+    def validate_event_payload(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        if v is None:
+            return None
+        return _bound_json_object(
+            v,
+            max_keys=_EVENT_PAYLOAD_MAX_KEYS,
+            max_chars=_EVENT_PAYLOAD_MAX_CHARS,
+            field_name="payload",
+        )
 
 
 class HandoffDraftBody(BaseModel):
     capability: str = Field(..., min_length=1, max_length=64)
     payload: dict[str, Any]
+
+    @field_validator("payload")
+    @classmethod
+    def validate_draft_payload(cls, v: dict[str, Any]) -> dict[str, Any]:
+        return _bound_json_object(
+            v,
+            max_keys=_DRAFT_PAYLOAD_MAX_KEYS,
+            max_chars=_DRAFT_PAYLOAD_MAX_CHARS,
+            field_name="payload",
+        )
 
 
 class ResolveMigrationBody(BaseModel):
@@ -186,7 +237,7 @@ async def save_handoff_draft(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    # Up to 100KB payload per draft — rate-limit to stop table growth spam.
+    # Payload size is validated on the model; rate-limit stops table spam.
     enforce_user_rate_limit(
         user.id,
         scope="condura_handoff_draft",
@@ -197,7 +248,8 @@ async def save_handoff_draft(
     draft = HandoffDraft(
         user_id=user.id,
         capability=body.capability.strip()[:64],
-        payload_json=json.dumps(body.payload)[:100_000],
+        # Already bounded by HandoffDraftBody validator (max keys + chars).
+        payload_json=json.dumps(body.payload, default=str),
     )
     db.add(draft)
     db.commit()
