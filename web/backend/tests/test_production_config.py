@@ -18,12 +18,13 @@ def test_get_health_data_healthy_when_db_connected():
             f"public helper must not expose {sensitive!r}; got {sorted(public.keys())}"
         )
 
-    # Detailed helper — used by GET /api/health/detailed (authenticated).
+    # Detailed helper — used by GET /api/health/detailed (admin-gated).
     # Operators need the full panel there.
     detailed = get_health_data_detailed(db_connected=True)
     assert "version" in detailed
     assert "uptime_seconds" in detailed
     assert "worker_pid" in detailed
+    assert "legacy_password_hits" in detailed
 
 
 def test_get_health_data_degraded_when_db_disconnected():

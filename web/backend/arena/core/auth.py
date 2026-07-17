@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import logging
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -11,13 +12,20 @@ import bcrypt as _bcrypt
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
-
 from arena.config import get_settings
 from arena.core.feedback_calibrator import get_feedback_calibration
 from arena.core.tier_config import get_tier_str
 from arena.db_models import Subscription, User, UserTier
 from arena.models.schemas import FeedbackCalibrationInfo, UserResponse
+
+logger = logging.getLogger(__name__)
+
+# Counter for legacy-password-fallback matches. Operators watch this via
+# admin-gated /api/health/detailed: when it stays 0 for a full user-active
+# window (~90 days), every legacy hash has been auto-rehashed and the
+# fallback verify branch can be deleted safely.
+_legacy_hit_lock = threading.Lock()
+_legacy_hits: int = 0
 
 _settings = get_settings()
 SECRET_KEY = _settings.secret_key
@@ -60,6 +68,9 @@ def verify_password(plain: str, hashed: str) -> tuple[bool, bool]:
         if _bcrypt.checkpw(legacy, hashed_bytes):
             # Do not log any slice of the hash — even the algorithm prefix
             # is unnecessary on a hot path and can leak format metadata.
+            with _legacy_hit_lock:
+                global _legacy_hits
+                _legacy_hits += 1
             logger.warning(
                 "auth.verify_password: legacy path matched; "
                 "caller should rehash to modern format",
@@ -114,6 +125,18 @@ def create_refresh_token(user_id: int, email: str) -> str:
         "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def legacy_hits() -> int:
+    """How many times the legacy password verify path has matched.
+
+    Operators can grep this number in /api/health/detailed and watch
+    it stay at zero for ~90 days. Once it has been at zero long
+    enough that no real user could still be on a legacy hash, the
+    fallback verify branch can be deleted.
+    """
+    with _legacy_hit_lock:
+        return _legacy_hits
 
 
 def decode_token(token: str) -> Optional[dict]:

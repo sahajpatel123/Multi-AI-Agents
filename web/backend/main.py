@@ -326,9 +326,14 @@ def create_app() -> FastAPI:
         db: Session = Depends(get_db),
         user: UserResponse = Depends(get_current_user_required),
     ):
-        # Authenticated. Exposes uptime, app version, and rolling request
-        # count. The CI readiness probe hits the public /api/health, so
-        # this endpoint is operator-only by design.
+        # Operator-only. Version + uptime pin release windows (exploit
+        # timing). Legacy password hit counters reveal auth migration
+        # state. Any authenticated user previously could read these —
+        # gate to ADMIN_EMAIL (same contract as /api/metrics).
+        # Public probes use /api/health only.
+        from arena.core.admin_gate import require_admin_email
+
+        require_admin_email(getattr(user, "email", None))
         db_ok = False
         try:
             db.execute(text("SELECT 1"))

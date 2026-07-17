@@ -329,6 +329,9 @@ def get_health_data_detailed(db_connected: bool) -> dict:
     """
     import os
     from arena.config import get_settings
+    # Lazy import: avoid import-time coupling between observability and auth.
+    from arena.core.auth import legacy_hits
+
     settings = get_settings()
     uptime = int(time.time() - _app_start_time)
     return {
@@ -336,4 +339,10 @@ def get_health_data_detailed(db_connected: bool) -> dict:
         "version": settings.app_version,
         "uptime_seconds": uptime,
         "worker_pid": os.getpid(),
+        # Operator telemetry (admin-gated route only): how many times the
+        # legacy-password verify path has matched since process start.
+        # Stays nonzero only while pre-SHA256-prehash accounts still log in.
+        # Once this stays 0 for a full user-active window (~90 days), the
+        # fallback branch can be deleted safely.
+        "legacy_password_hits": legacy_hits(),
     }
