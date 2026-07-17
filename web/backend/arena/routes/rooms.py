@@ -285,6 +285,14 @@ async def get_synthesis(
                 status_code=403,
                 detail="Only room members can refresh synthesis",
             )
+        # Expensive LLM re-synthesis — bound per-user force refreshes.
+        enforce_user_rate_limit(
+            current.id,
+            scope="room_synthesis",
+            limit=15,
+            window_seconds=3600,
+            message="Too many room synthesis refreshes. Limit is 15 per hour.",
+        )
         _schedule_synthesis(background_tasks, slug)
     return {
         "synthesis": room.synthesis,
@@ -471,6 +479,15 @@ async def add_task_to_room(
         db.refresh(room)
         return _build_room_payload(db, room)
 
+    # Adding a task re-runs synthesis (LLM). Cap churn that burns quota.
+    enforce_user_rate_limit(
+        user.id,
+        scope="room_synthesis",
+        limit=15,
+        window_seconds=3600,
+        message="Too many room board updates that refresh synthesis. Limit is 15 per hour.",
+    )
+
     db.add(
         RoomTask(
             room_id=room.id,
@@ -508,6 +525,15 @@ async def remove_task_from_room(
 
     if rt.user_id != user.id and room.creator_id != user.id:
         raise HTTPException(status_code=404, detail="Task not in room")
+
+    # Removing a task also re-runs synthesis — share the room_synthesis budget.
+    enforce_user_rate_limit(
+        user.id,
+        scope="room_synthesis",
+        limit=15,
+        window_seconds=3600,
+        message="Too many room board updates that refresh synthesis. Limit is 15 per hour.",
+    )
 
     db.delete(rt)
     db.commit()

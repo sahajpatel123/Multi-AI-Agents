@@ -1540,6 +1540,14 @@ async def create_watchlist_item(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_watchlist_access(user)
+    # Active-cap alone does not stop create/pause churn; bound create rate.
+    enforce_user_rate_limit(
+        user.id,
+        scope="watchlist_create",
+        limit=30,
+        window_seconds=3600,
+        message="Too many watchlist creates. Limit is 30 per hour.",
+    )
     q = sanitize_text(body.question, max_length=2000, field_name="question")
     _enforce_capability_gate(capability_id="watchlist.create", task_text=q)
     if body.interval_hours not in WATCHLIST_INTERVALS:
