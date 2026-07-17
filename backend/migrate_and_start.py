@@ -531,6 +531,12 @@ def main():
         print(f"==> Migration failed: {e}", flush=True)
         print("==> Starting server in DEGRADED mode (DB unreachable).", flush=True)
         print("==> API endpoints will return 503 until the database is available.", flush=True)
+        print(
+            "==> Ops tip: on Render, prefer the Internal Database URL when "
+            "the web service and Postgres share a region. Confirm the DB is "
+            "not suspended and that DATABASE_URL credentials are current.",
+            flush=True,
+        )
 
     print("==> Starting server...", flush=True)
     sys.stdout.flush()

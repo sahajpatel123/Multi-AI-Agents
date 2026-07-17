@@ -202,7 +202,7 @@ Short ops + verify list for production. Condura daemon shipping is **out of band
 | `DATABASE_URL` | `postgresql://…` only (no SQLite) |
 | `ENCRYPTION_KEY` | 44-char Fernet key |
 | `ALLOWED_ORIGINS` | Public HTTPS origin(s); no `*`; not localhost-only |
-| `FRONTEND_PUBLIC_URL` | Public HTTPS frontend URL (not localhost) |
+| `FRONTEND_PUBLIC_URL` | Public HTTPS frontend URL (not localhost). If left as localhost, the first public `https://` origin in `ALLOWED_ORIGINS` is used automatically. |
 | `OPENAI_API_KEY` / `GROK_API_KEY` / `DEEPSEEK_API_KEY` | Optional; personas fall back to Claude |
 | Razorpay keys | Optional until billing is enabled |
 

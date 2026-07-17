@@ -120,6 +120,85 @@ def test_production_accepts_ship_safe_config(monkeypatch):
     s.validate_secrets()  # must not SystemExit
 
 
+def test_production_recovers_frontend_url_from_allowed_origins(monkeypatch):
+    """Deploy crash fix: ALLOWED_ORIGINS set, FRONTEND_PUBLIC_URL left localhost."""
+    from cryptography.fernet import Fernet
+
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)
+    key = Fernet.generate_key().decode()
+    s = _settings(
+        environment="production",
+        secret_key="prod-secret-key-" + "x" * 24,
+        database_url="postgresql://user:pass@db/arena",
+        encryption_key=key,
+        allowed_origins="https://arena.example.com,http://localhost:5173",
+        frontend_public_url="http://localhost:5173",
+    )
+    assert s.frontend_public_url == "https://arena.example.com"
+    s.validate_secrets()  # must not SystemExit
+
+
+def test_production_rejects_http_frontend_url(monkeypatch):
+    from cryptography.fernet import Fernet
+
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)
+    key = Fernet.generate_key().decode()
+    s = _settings(
+        environment="production",
+        secret_key="prod-secret-key-" + "x" * 24,
+        database_url="postgresql://user:pass@db/arena",
+        encryption_key=key,
+        allowed_origins="https://arena.example.com",
+        frontend_public_url="http://arena.example.com",
+    )
+    with pytest.raises(SystemExit):
+        s.validate_secrets()
+
+
+def test_production_rejects_localhost_frontend_without_recoverable_cors(monkeypatch):
+    from cryptography.fernet import Fernet
+
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)
+    key = Fernet.generate_key().decode()
+    # allowed_origins only has localhost → cannot recover FRONTEND_PUBLIC_URL.
+    # CORS validation also fails; either way startup must hard-fail.
+    s = _settings(
+        environment="production",
+        secret_key="prod-secret-key-" + "x" * 24,
+        database_url="postgresql://user:pass@db/arena",
+        encryption_key=key,
+        allowed_origins="http://localhost:5173",
+        frontend_public_url="http://localhost:5173",
+    )
+    with pytest.raises(SystemExit):
+        s.validate_secrets()
+
+
+def test_normalize_postgres_url_adds_ssl_and_timeout():
+    from arena.config import _normalize_postgres_url
+
+    url = _normalize_postgres_url("postgres://user:pass@db:5432/arena")
+    assert url.startswith("postgresql+psycopg://")
+    assert "sslmode=require" in url
+    assert "connect_timeout=10" in url
+    assert "gssencmode=disable" in url
+
+
+def test_normalize_postgres_url_preserves_existing_params():
+    from arena.config import _normalize_postgres_url
+
+    raw = "postgresql://user:pass@db:5432/arena?sslmode=require&application_name=arena"
+    url = _normalize_postgres_url(raw)
+    assert "sslmode=require" in url
+    assert "application_name=arena" in url
+    assert "connect_timeout=10" in url
+    # No duplicated sslmode
+    assert url.count("sslmode=") == 1
+
+
 def test_development_allows_sqlite_without_encryption(monkeypatch):
     monkeypatch.delenv("RENDER", raising=False)
     monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)

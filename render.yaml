@@ -5,7 +5,11 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    # migrate_and_start runs additive schema migrations then execs uvicorn.
+    # Degraded mode is intentional when Postgres is briefly unreachable so
+    # the process still binds $PORT and Render's health probe can succeed.
+    startCommand: python migrate_and_start.py
+    healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -21,10 +25,16 @@ services:
         sync: false
       - key: DEEPSEEK_API_KEY
         sync: false
+      # Prefer the Render Internal Database URL when the DB is on Render
+      # (same region) — external IPs can fail TLS mid-handshake.
       - key: DATABASE_URL
         sync: false
+      # Public HTTPS origin of the SPA, e.g. https://your-app.vercel.app
       - key: ALLOWED_ORIGINS
         sync: false
+      # Public HTTPS frontend URL for share/invite links.
+      # If omitted, the first non-localhost https origin in ALLOWED_ORIGINS
+      # is used automatically in production.
       - key: FRONTEND_PUBLIC_URL
         sync: false
       - key: ADMIN_EMAIL

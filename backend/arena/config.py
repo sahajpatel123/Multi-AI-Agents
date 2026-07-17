@@ -4,9 +4,10 @@ import os
 import sys
 from functools import lru_cache
 from typing import Optional
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from cryptography.fernet import Fernet
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 _WEAK_SECRET_KEYS = {
@@ -21,19 +22,56 @@ _WEAK_SECRET_KEYS = {
     "change-me-in-production-use-a-long-random-string",
 }
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
-elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+psycopg"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
-# Render's managed PostgreSQL requires SSL. If the env-provided URL doesn't
-# include sslmode, add it here so every code path (SQLAlchemy, Alembic,
-# migrate_and_start.py) inherits it automatically.
-if DATABASE_URL and "postgresql" in DATABASE_URL and "sslmode" not in DATABASE_URL.lower():
-    if "?" in DATABASE_URL:
-        DATABASE_URL += "&sslmode=require"
-    else:
-        DATABASE_URL += "?sslmode=require"
+# libpq params applied to every production Postgres URL so SQLAlchemy,
+# Alembic, and migrate_and_start.py share one consistent TLS/timeout path.
+_PG_REQUIRED_QUERY_PARAMS = {
+    "sslmode": "require",
+    # Fail fast instead of hanging the deploy/boot probe.
+    "connect_timeout": "10",
+    # Some managed PG hosts abort the handshake when GSSAPI is negotiated first.
+    "gssencmode": "disable",
+}
+
+
+def _normalize_postgres_url(url: str) -> str:
+    """Rewrite postgres URLs for psycopg 3 and ensure required libpq params."""
+    if not url or not isinstance(url, str):
+        return url or ""
+
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif url.startswith("postgresql://") and not url.startswith("postgresql+psycopg"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+    if "postgresql" not in url:
+        return url
+
+    parsed = urlparse(url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    # Case-insensitive merge so we don't double-append sslmode/SSLMODE variants.
+    lower_keys = {k.lower(): k for k in query}
+    for key, value in _PG_REQUIRED_QUERY_PARAMS.items():
+        existing = lower_keys.get(key.lower())
+        if existing is None:
+            query[key] = value
+        # Prefer the required secure value when a weaker/blank one is present.
+        elif key == "sslmode" and not (query.get(existing) or "").strip():
+            query[existing] = value
+
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
+def _is_local_url(url: str) -> bool:
+    lowered = (url or "").lower()
+    return (
+        not url
+        or "localhost" in lowered
+        or "127.0.0.1" in lowered
+        or "[::1]" in lowered
+    )
+
+
+DATABASE_URL = _normalize_postgres_url(os.getenv("DATABASE_URL", ""))
 
 
 class Settings(BaseSettings):
@@ -120,12 +158,7 @@ class Settings(BaseSettings):
         if value in (None, ""):
             return DATABASE_URL
         if isinstance(value, str):
-            if value.startswith("postgres://"):
-                value = value.replace("postgres://", "postgresql+psycopg://", 1)
-            elif value.startswith("postgresql://") and not value.startswith("postgresql+psycopg"):
-                value = value.replace("postgresql://", "postgresql+psycopg://", 1)
-            if "postgresql" in value and "sslmode" not in value.lower():
-                value = value + ("&sslmode=require" if "?" in value else "?sslmode=require")
+            return _normalize_postgres_url(value)
         return value
 
     @field_validator("allowed_origins", mode="before")
@@ -137,6 +170,46 @@ class Settings(BaseSettings):
             parts = [part.strip().rstrip("/") for part in value.split(",") if part.strip()]
             return ",".join(parts)
         return value
+
+    @field_validator("frontend_public_url", mode="before")
+    @classmethod
+    def normalize_frontend_public_url(cls, value):
+        if value is None:
+            return "http://localhost:5173"
+        if isinstance(value, str):
+            cleaned = value.strip().rstrip("/")
+            return cleaned or "http://localhost:5173"
+        return value
+
+    @model_validator(mode="after")
+    def recover_frontend_public_url_from_cors(self):
+        """In production, recover a missing/localhost FRONTEND_PUBLIC_URL.
+
+        Operators often set ALLOWED_ORIGINS correctly for CORS but forget
+        FRONTEND_PUBLIC_URL (used for room invite / share links). When the
+        CORS allowlist already contains a public HTTPS origin, reuse the first
+        one so the deploy does not hard-crash on a default localhost value.
+        """
+        if not self.is_production:
+            return self
+
+        if not _is_local_url(self.frontend_public_url):
+            return self
+
+        for origin in self.allowed_origins_list:
+            candidate = origin.strip().rstrip("/")
+            if _is_local_url(candidate):
+                continue
+            if not candidate.lower().startswith("https://"):
+                continue
+            print(
+                "[WARNING] FRONTEND_PUBLIC_URL was unset or localhost; "
+                f"using first public ALLOWED_ORIGINS entry: {candidate}"
+            )
+            object.__setattr__(self, "frontend_public_url", candidate)
+            return self
+
+        return self
 
     def validate_secrets(self) -> None:
         """Validate that secrets are set and strong. Call once on startup."""
@@ -244,12 +317,17 @@ class Settings(BaseSettings):
                     "ALLOWED_ORIGINS must include a non-localhost production origin "
                     "(localhost-only CORS is not ship-safe)."
                 )
-            if "localhost" in (self.frontend_public_url or "").lower() or "127.0.0.1" in (
-                self.frontend_public_url or ""
-            ):
+            frontend = (self.frontend_public_url or "").strip()
+            if _is_local_url(frontend):
                 errors.append(
                     "FRONTEND_PUBLIC_URL must be the public HTTPS frontend URL in production "
-                    "(not localhost)."
+                    "(not localhost). Set FRONTEND_PUBLIC_URL=https://your-frontend.example.com "
+                    "or include that origin in ALLOWED_ORIGINS so it can be recovered."
+                )
+            elif not frontend.lower().startswith("https://"):
+                errors.append(
+                    "FRONTEND_PUBLIC_URL must use HTTPS in production "
+                    f"(got {frontend!r})."
                 )
         else:
             # Dev: SQLite fallback is fine; warn if encryption missing (MCP).
