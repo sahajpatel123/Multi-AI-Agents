@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatDebateChallengedCopy,
   formatDebateExport,
+  formatDebateInterjectionCopy,
+  formatDebateReactionCopy,
   formatDiscussExport,
   formatDiscussMessageCopy,
 } from './threadExport';
@@ -81,5 +84,67 @@ describe('formatDebateExport', () => {
     expect(md).toContain('The Analyst');
     expect(md).toContain('Measure first.');
     expect(md).toContain('Shared from Arena Debate');
+  });
+});
+
+describe('formatDebateReactionCopy', () => {
+  it('attributes a reaction with stance and optional context', () => {
+    const md = formatDebateReactionCopy({
+      agentName: 'The Analyst',
+      content: 'Measure first.',
+      stance: 'pushback',
+      originalPrompt: 'Is this fair?',
+      roundNumber: 2,
+      includeQuestion: true,
+    });
+    expect(md).toContain('**Question:** Is this fair?');
+    expect(md).toContain('**Round 2**');
+    expect(md).toContain('**The Analyst** (pushback)');
+    expect(md).toContain('Measure first.');
+  });
+
+  it('returns empty for blank content', () => {
+    expect(formatDebateReactionCopy({ content: '  ' })).toBe('');
+  });
+});
+
+describe('formatDebateInterjectionCopy', () => {
+  it('includes round when provided', () => {
+    expect(formatDebateInterjectionCopy({ content: 'But latency?', roundNumber: 1 })).toContain(
+      'Round 1 — You',
+    );
+    expect(formatDebateInterjectionCopy({ content: 'But latency?', roundNumber: 1 })).toContain(
+      'But latency?',
+    );
+  });
+
+  it('returns plain body without round', () => {
+    expect(formatDebateInterjectionCopy({ content: '  Hello  ' })).toBe('Hello\n');
+  });
+});
+
+describe('formatDebateChallengedCopy', () => {
+  it('formats challenged take with assumption', () => {
+    const md = formatDebateChallengedCopy({
+      agentName: 'The Pragmatist',
+      content: 'Ship the smallest honest slice.',
+      keyAssumption: 'Users want speed over polish.',
+      originalPrompt: 'Should we launch?',
+      includeQuestion: true,
+    });
+    expect(md).toContain('Should we launch?');
+    expect(md).toContain('The Pragmatist');
+    expect(md).toContain('challenged');
+    expect(md).toContain('Ship the smallest honest slice.');
+    expect(md).toContain('Key assumption');
+  });
+
+  it('falls back to one-liner when verdict empty', () => {
+    const md = formatDebateChallengedCopy({
+      agentName: 'Marcus',
+      content: '',
+      oneLiner: 'Ship it.',
+    });
+    expect(md).toContain('Ship it.');
   });
 });

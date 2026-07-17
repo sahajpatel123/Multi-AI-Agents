@@ -12,6 +12,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Debate: copy any reaction, interjection, or challenged take (not just the full transcript)',
       '[NEW] Discuss: copy any message or take (not just the whole thread)',
       '[IMPROVED] Agent rooms list: live activity time, “New synthesis” meta, copy invite link',
       '[NEW] Agent templates: Recently used strip + sort (local memory of last picks)',

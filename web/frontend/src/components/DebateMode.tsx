@@ -27,11 +27,16 @@ import { useBusyDocumentTitle } from '../hooks/useBusyDocumentTitle';
 import { useBusyNavigationGuard } from '../hooks/useBusyNavigationGuard';
 import { debateWorkInFlight } from '../lib/busyNavigationGuard';
 import { titleForArenaBusy } from '../lib/documentTitle';
-import { prefersReducedMotion, scrollBehavior } from '../lib/motion';
+import { motionDuration, prefersReducedMotion, scrollBehavior } from '../lib/motion';
 import { isScrollNearBottom, shouldAutoScrollChat } from '../lib/chatScroll';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
-import { formatDebateExport } from '../lib/threadExport';
+import {
+  formatDebateChallengedCopy,
+  formatDebateExport,
+  formatDebateInterjectionCopy,
+  formatDebateReactionCopy,
+} from '../lib/threadExport';
 import { isBareEndKey, isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 
 interface DebateModeProps {
@@ -108,6 +113,9 @@ export function DebateMode({
   const [followUpUnlocked, setFollowUpUnlocked] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadFeedback, setDownloadFeedback] = useState<'idle' | 'done' | 'failed'>('idle');
+  /** Which debate piece last copied: 'challenged' | `r{n}-you` | `r{n}-{agentId}` */
+  const [pieceCopyKey, setPieceCopyKey] = useState<string | null>(null);
+  const [pieceCopyStatus, setPieceCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const threadEndRef = useRef<HTMLDivElement>(null);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -130,6 +138,16 @@ export function DebateMode({
     const t = window.setTimeout(() => setDownloadFeedback('idle'), 1600);
     return () => window.clearTimeout(t);
   }, [downloadFeedback]);
+
+  useEffect(() => {
+    if (pieceCopyStatus === 'idle') return;
+    const hold = motionDuration(pieceCopyStatus === 'copied' ? 1600 : 2400);
+    const t = window.setTimeout(() => {
+      setPieceCopyStatus('idle');
+      setPieceCopyKey(null);
+    }, hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [pieceCopyStatus]);
 
   useEffect(() => {
     return () => {
@@ -171,6 +189,61 @@ export function DebateMode({
     const stem = `debate-${challengedConfig.name || 'transcript'}`;
     const ok = downloadMarkdownFile(md, stem);
     setDownloadFeedback(ok ? 'done' : 'failed');
+  };
+
+  const copyDebatePiece = async (key: string, text: string) => {
+    if (!text.trim()) {
+      setPieceCopyKey(key);
+      setPieceCopyStatus('failed');
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    setPieceCopyKey(key);
+    setPieceCopyStatus(ok ? 'copied' : 'failed');
+  };
+
+  const pieceCopyButton = (
+    key: string,
+    text: string,
+    opts: { title: string; ariaLabel: string; dark?: boolean },
+  ) => {
+    const active = pieceCopyKey === key;
+    const label =
+      active && pieceCopyStatus === 'copied'
+        ? 'Copied'
+        : active && pieceCopyStatus === 'failed'
+          ? 'Failed'
+          : 'Copy';
+    return (
+      <button
+        type="button"
+        onClick={() => void copyDebatePiece(key, text)}
+        title={opts.title}
+        aria-label={opts.ariaLabel}
+        style={{
+          marginTop: 8,
+          padding: 0,
+          border: 'none',
+          background: 'none',
+          cursor: 'pointer',
+          fontSize: 11,
+          fontFamily: 'Georgia, serif',
+          color: opts.dark
+            ? active && pieceCopyStatus === 'failed'
+              ? '#F5A89A'
+              : active && pieceCopyStatus === 'copied'
+                ? '#A8D5B5'
+                : 'rgba(250,247,244,0.72)'
+            : active && pieceCopyStatus === 'failed'
+              ? '#993C1D'
+              : active && pieceCopyStatus === 'copied'
+                ? '#5A8A5A'
+                : '#C4956A',
+        }}
+      >
+        {label}
+      </button>
+    );
   };
 
   const flushTokens = useCallback(() => {
@@ -376,10 +449,13 @@ export function DebateMode({
     cardType: 'history' | 'current' | 'streaming',
     text?: string,
     isDone?: boolean,
+    roundNumber?: number,
   ) => {
     const agent = getAgentDisplay(reaction.agent_id);
     const content = text ?? reaction.content;
     const isStreaming = cardType === 'streaming';
+    const copyKey = `r${roundNumber ?? 0}-${cardType}-${reaction.agent_id}-${index}`;
+    const canCopy = Boolean((content || '').trim()) && (!isStreaming || isDone);
 
     return (
       <div
@@ -462,6 +538,23 @@ export function DebateMode({
                   }}
                 />
               ) : null}
+              {canCopy
+                ? pieceCopyButton(
+                    copyKey,
+                    formatDebateReactionCopy({
+                      agentName: agent.name,
+                      content,
+                      stance: reaction.stance,
+                      originalPrompt,
+                      roundNumber,
+                      includeQuestion: true,
+                    }),
+                    {
+                      title: `Copy ${agent.name}'s reaction`,
+                      ariaLabel: `Copy ${agent.name}'s debate reaction`,
+                    },
+                  )
+                : null}
             </div>
           ) : (
             <div
@@ -485,6 +578,18 @@ export function DebateMode({
           <div style={{ maxWidth: '420px', background: '#1A1714', borderRadius: '14px', padding: '12px 14px' }}>
             <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: 1.7 }}>{round.userInterjection}</p>
             <p style={{ fontSize: '11px', color: 'rgba(250,247,244,0.5)', marginTop: '4px' }}>You</p>
+            {pieceCopyButton(
+              `r${round.roundNumber}-you`,
+              formatDebateInterjectionCopy({
+                content: round.userInterjection,
+                roundNumber: round.roundNumber,
+              }),
+              {
+                title: 'Copy your interjection',
+                ariaLabel: 'Copy your debate interjection',
+                dark: true,
+              },
+            )}
           </div>
         </div>
       ) : null}
@@ -501,7 +606,16 @@ export function DebateMode({
           }}
         />
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {round.reactions.map((reaction, index) => renderReactionCard(reaction, index, isHistory ? 'history' : 'current'))}
+          {round.reactions.map((reaction, index) =>
+            renderReactionCard(
+              reaction,
+              index,
+              isHistory ? 'history' : 'current',
+              undefined,
+              undefined,
+              round.roundNumber,
+            ),
+          )}
         </div>
       </div>
     </div>
@@ -583,6 +697,21 @@ export function DebateMode({
             {challengedAgent.response.key_assumption}
           </p>
         </div>
+        {pieceCopyButton(
+          'challenged',
+          formatDebateChallengedCopy({
+            agentName: challengedConfig.name,
+            content: challengedAgent.response.verdict || '',
+            oneLiner: challengedAgent.response.one_liner,
+            keyAssumption: challengedAgent.response.key_assumption,
+            originalPrompt,
+            includeQuestion: true,
+          }),
+          {
+            title: `Copy ${challengedConfig.name}'s challenged take`,
+            ariaLabel: `Copy ${challengedConfig.name}'s challenged debate take`,
+          },
+        )}
       </div>
     </div>
   );
@@ -990,7 +1119,14 @@ export function DebateMode({
                       content: '',
                       timestamp: new Date().toISOString(),
                     };
-                    return renderReactionCard(reaction, index, 'streaming', text, isDone);
+                    return renderReactionCard(
+                      reaction,
+                      index,
+                      'streaming',
+                      text,
+                      isDone,
+                      Math.max(currentRound + 1, 1),
+                    );
                   })}
                 </div>
               </div>

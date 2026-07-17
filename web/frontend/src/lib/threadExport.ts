@@ -140,3 +140,96 @@ export function formatDebateExport(opts: {
   lines.push('_Shared from Arena Debate_');
   return lines.join('\n').trim() + '\n';
 }
+
+/**
+ * Clipboard text for a single Debate reaction (one mind's take in a round).
+ * Includes stance when present; optional question + round for context.
+ */
+export function formatDebateReactionCopy(opts: {
+  agentName?: string | null;
+  content: string;
+  stance?: string | null;
+  originalPrompt?: string | null;
+  roundNumber?: number | null;
+  /** When true, include the original Arena question as context. */
+  includeQuestion?: boolean;
+}): string {
+  const body = (opts.content || '').trim();
+  if (!body) return '';
+  const agentName = (opts.agentName || 'Arena mind').trim() || 'Arena mind';
+  const lines: string[] = [];
+
+  if (opts.includeQuestion) {
+    const q = (opts.originalPrompt || '').trim();
+    if (q) {
+      lines.push(`**Question:** ${q}`);
+      lines.push('');
+    }
+  }
+
+  if (opts.roundNumber != null && Number.isFinite(opts.roundNumber)) {
+    lines.push(`**Round ${opts.roundNumber}**`);
+    lines.push('');
+  }
+
+  const stance = (opts.stance || '').trim();
+  const header = stance ? `**${agentName}** (${stance})` : `**${agentName}:**`;
+  lines.push(header);
+  lines.push('');
+  lines.push(body);
+
+  return lines.join('\n').trim() + '\n';
+}
+
+/** Clipboard text for a user's debate interjection (plain, with optional round). */
+export function formatDebateInterjectionCopy(opts: {
+  content: string;
+  roundNumber?: number | null;
+}): string {
+  const body = (opts.content || '').trim();
+  if (!body) return '';
+  if (opts.roundNumber != null && Number.isFinite(opts.roundNumber)) {
+    return `**Round ${opts.roundNumber} — You:**\n\n${body}\n`;
+  }
+  return `${body}\n`;
+}
+
+/**
+ * Clipboard text for the challenged mind's opening take in the colosseum.
+ */
+export function formatDebateChallengedCopy(opts: {
+  agentName?: string | null;
+  content: string;
+  oneLiner?: string | null;
+  keyAssumption?: string | null;
+  originalPrompt?: string | null;
+  includeQuestion?: boolean;
+}): string {
+  const body = (opts.content || '').trim();
+  const oneLiner = (opts.oneLiner || '').trim();
+  const take = body || oneLiner;
+  if (!take) return '';
+
+  const agentName = (opts.agentName || 'Challenged mind').trim() || 'Challenged mind';
+  const lines: string[] = [];
+
+  if (opts.includeQuestion) {
+    const q = (opts.originalPrompt || '').trim();
+    if (q) {
+      lines.push(`**Question:** ${q}`);
+      lines.push('');
+    }
+  }
+
+  lines.push(`**${agentName}** (challenged)`);
+  lines.push('');
+  lines.push(take);
+
+  const assumption = (opts.keyAssumption || '').trim();
+  if (assumption) {
+    lines.push('');
+    lines.push(`**Key assumption:** ${assumption}`);
+  }
+
+  return lines.join('\n').trim() + '\n';
+}
