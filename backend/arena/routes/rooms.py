@@ -10,9 +10,9 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
@@ -223,7 +223,16 @@ async def create_room(
 async def my_rooms(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
 ) -> dict[str, Any]:
+    """List rooms the caller belongs to, newest activity first.
+
+    Was a hard-capped top-5 — fine for a sidebar widget, useless once a
+    user accumulates dozens of rooms. Now paginated with the same
+    envelope shape as the other list endpoints so the UI can render a
+    scrollable list with pagination controls.
+    """
     q = (
         db.query(Room)
         .join(RoomMember, RoomMember.room_id == Room.id)
@@ -232,11 +241,15 @@ async def my_rooms(
             Room.is_active.is_(True),
         )
         .order_by(desc(Room.synthesis_updated_at), desc(Room.created_at))
-        .limit(5)
     )
-    rooms = q.all()
+    total = q.count()
+    rows = (
+        q.offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
     result = []
-    for r in rooms:
+    for r in rows:
         d = _room_to_dict(r, db)
         rm = (
             db.query(RoomMember)
@@ -247,6 +260,133 @@ async def my_rooms(
         result.append(d)
     return {
         "rooms": result,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+    }
+
+
+@router.get("/discover")
+async def discover_rooms(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_required_orm),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(
+        None, max_length=128, description="Case-insensitive substring match on name or slug.",
+    ),
+) -> dict[str, Any]:
+    """Browse active rooms across all users — for the 'Discover' tab
+    that lets a logged-in user find rooms to join.
+
+    Same envelope as the other list endpoints. Search uses LIKE
+    wildcards escaped so '100%' matches the literal substring. Results
+    exclude rooms the caller already belongs to so the discover feed
+    only shows new opportunities.
+    """
+    q = db.query(Room).filter(Room.is_active.is_(True))
+
+    # Exclude rooms the caller already belongs to — "discover" should
+    # be rooms they don't have, not a list that includes their own.
+    joined_ids = {
+        rid for rid, in db.query(RoomMember.room_id).filter(
+            RoomMember.user_id == user.id
+        ).all()
+    }
+    if joined_ids:
+        q = q.filter(~Room.id.in_(joined_ids))
+
+    if search:
+        # Escape LIKE wildcards. Two ilike clauses OR'd — name + slug.
+        safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{safe}%"
+        q = q.filter(
+            or_(
+                Room.name.ilike(pattern, escape="\\"),
+                Room.slug.ilike(pattern, escape="\\"),
+            )
+        )
+
+    total = q.count()
+    rows = (
+        q.order_by(desc(Room.synthesis_updated_at), desc(Room.created_at))
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return {
+        "rooms": [_room_to_dict(r, db) for r in rows],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+        "filters": {"search": search},
+    }
+
+
+@router.get("/{slug}/members")
+async def list_room_members(
+    slug: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_required_orm),
+) -> dict[str, Any]:
+    """List members of a room. Caller must be a member to view the
+    membership — non-members get 404 (same shape as missing room) so
+    private rooms can't be enumerated by slug.
+
+    Returns user_id and role per member; no email/PII to keep the
+    response minimal and avoid leaking contact info via the UI."""
+    room = (
+        db.query(Room)
+        .filter(Room.slug == slug, Room.is_active.is_(True))
+        .first()
+    )
+    if room is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": "Room not found"},
+        )
+
+    # Caller must be a member. 404 (not 403) so non-members can't
+    # enumerate which rooms exist via 403 vs 404.
+    caller_member = (
+        db.query(RoomMember)
+        .filter(RoomMember.room_id == room.id, RoomMember.user_id == user.id)
+        .first()
+    )
+    if caller_member is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": "Room not found"},
+        )
+
+    members = (
+        db.query(RoomMember)
+        .filter(RoomMember.room_id == room.id)
+        .order_by(RoomMember.joined_at.asc())
+        .all()
+    )
+    # Look up display names in one query to avoid N+1.
+    user_ids = [m.user_id for m in members]
+    user_rows = (
+        db.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
+    )
+    name_by_id = {u.id: u.name for u in user_rows}
+
+    return {
+        "room_slug": room.slug,
+        "members": [
+            {
+                "user_id": m.user_id,
+                "name": name_by_id.get(m.user_id, ""),
+                "joined_at": m.joined_at.isoformat() if m.joined_at else None,
+                "last_seen_at": m.last_seen_at.isoformat() if m.last_seen_at else None,
+                "is_creator": m.user_id == room.creator_id,
+            }
+            for m in members
+        ],
+        "total": len(members),
     }
 
 
