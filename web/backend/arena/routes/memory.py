@@ -7,12 +7,14 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
+from arena.core.input_validation import sanitize_model_text
 from arena.core.memory import get_memory_manager
 from arena.core.preferences import infer_preferences_from_session
+from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.stance_archive import save_agent_stance
 from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
@@ -25,8 +27,13 @@ memory_router = APIRouter(tags=["memory"])
 
 
 class MemorySaveRequest(BaseModel):
-    session_id: str
+    session_id: str = Field(..., min_length=1, max_length=64)
     trigger: Literal["session_end", "new_chat", "manual"]
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str) -> str:
+        return sanitize_model_text(v, max_length=64, field_name="session_id")
 
 
 @memory_router.post("/save")
@@ -38,6 +45,15 @@ async def save_memory(
     if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
         return {"status": "skipped", "reason": "Memory requires Plus tier"}
 
+    # Bound save chatter (compression is LLM-backed and cost-bearing).
+    enforce_user_rate_limit(
+        user.id,
+        scope="memory_save",
+        limit=30,
+        window_seconds=3600,
+        message="Too many memory save requests. Limit is 30 per hour.",
+    )
+
     memory = get_memory_manager()
     session_state = memory.get_session_state(body.session_id)
     if not session_state or not session_state.get("exchanges"):
@@ -48,14 +64,16 @@ async def save_memory(
     # user's live session_id could compress their exchanges, write a
     # SessionSummary under their own account, and clear the victim's
     # short-term memory (IDOR + session wipe).
+    # Use 404 (not 403) so foreign session_ids cannot be distinguished
+    # from missing ones.
     owner = str(session_state.get("user_id") or "").strip()
     caller = str(user.id)
     if owner and owner not in ("anonymous", "None") and owner != caller:
         raise HTTPException(
-            status_code=403,
+            status_code=404,
             detail={
-                "error": "forbidden",
-                "message": "Session does not belong to this user",
+                "error": "not_found",
+                "message": "Session not found",
             },
         )
 
@@ -65,8 +83,7 @@ async def save_memory(
 
     # Ownership guard (persisted): a summary row belonging to another user
     # must never be reassigned or overwritten. Reject before compression
-    # / clear so the 403 is not swallowed by the persistence try/except
-    # (which would otherwise return a misleading 200 and wipe the session).
+    # / clear so the error is not swallowed by the persistence try/except.
     existing_summary = (
         db.query(SessionSummary)
         .filter(SessionSummary.session_id == body.session_id)
@@ -74,10 +91,10 @@ async def save_memory(
     )
     if existing_summary is not None and existing_summary.user_id != user.id:
         raise HTTPException(
-            status_code=403,
+            status_code=404,
             detail={
-                "error": "forbidden",
-                "message": "Session does not belong to this user",
+                "error": "not_found",
+                "message": "Session not found",
             },
         )
 

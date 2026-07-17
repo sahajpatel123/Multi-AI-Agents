@@ -30,11 +30,9 @@ async def get_session(
     memory = get_memory_manager()
     session = memory.get_session(session_id)
 
-    if not session:
+    # Uniform 404 for missing *and* foreign sessions so session_id cannot be
+    # enumerated via 403 vs 404 (existence / ownership oracle).
+    if not session or str(session.user_id or "").strip() != str(user.id):
         raise HTTPException(status_code=404, detail="Session not found")
-
-    # Security: Verify session belongs to authenticated user
-    if session.user_id != str(user.id):
-        raise HTTPException(status_code=403, detail="Access denied")
 
     return session

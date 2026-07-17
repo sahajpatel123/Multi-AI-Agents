@@ -331,6 +331,14 @@ async def probe_telemetry(
     user: UserResponse = Depends(get_current_user_required),
 ):
     """Opt-in categorical probe state only (no ports/paths)."""
+    # Cheap counter writes — still bound so a client cannot flood metrics.
+    enforce_user_rate_limit(
+        user.id,
+        scope="condura_probe_telemetry",
+        limit=120,
+        window_seconds=3600,
+        message="Too many Condura probe telemetry events. Please try again later.",
+    )
     record_probe_state(body.kind)
     return JSONResponse(content={"ok": True})
 

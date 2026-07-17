@@ -80,7 +80,8 @@ async def test_save_rejects_other_users_live_session(app_client, make_user):
         headers=_auth(attacker),
         json={"session_id": "victim-sess-1", "trigger": "manual"},
     )
-    assert res.status_code == 403, res.text
+    # 404 (not 403) so foreign session_ids are not distinguishable from missing.
+    assert res.status_code == 404, res.text
 
     # Victim session must still be intact (not cleared on forbidden).
     still = memory.get_session_state("victim-sess-1")
