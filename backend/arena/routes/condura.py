@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
@@ -204,14 +204,29 @@ async def append_handoff_event(
 async def list_handoffs(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
-    limit: int = 50,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
+    capability: Optional[str] = Query(None, max_length=64, description="Filter by capability (e.g. 'delegate_task')."),
+    status: Optional[str] = Query(None, max_length=32, description="Filter by status (e.g. 'dispatched', 'completed')."),
 ):
-    lim = max(1, min(limit, 100))
+    """List the caller's handoff records with optional filters and pagination.
+
+    Returns an envelope {handoffs, total, page, per_page, total_pages,
+    filters} so the UI can render pagination controls and a filter
+    summary without inferring state.
+    """
+    q = db.query(HandoffRecord).filter(HandoffRecord.user_id == user.id)
+
+    if capability:
+        q = q.filter(HandoffRecord.capability == capability)
+    if status:
+        q = q.filter(HandoffRecord.status == status)
+
+    total = q.count()
     rows = (
-        db.query(HandoffRecord)
-        .filter(HandoffRecord.user_id == user.id)
-        .order_by(HandoffRecord.created_at.desc())
-        .limit(lim)
+        q.order_by(HandoffRecord.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
         .all()
     )
     return {
@@ -227,7 +242,63 @@ async def list_handoffs(
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None,
             }
             for r in rows
-        ]
+        ],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+        "filters": {"capability": capability, "status": status},
+    }
+
+
+@router.get("/handoffs/{handoff_id}")
+async def get_handoff(
+    handoff_id: int,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Full handoff detail — the parent row plus every HandoffEvent in
+    chronological order. List endpoints strip event bodies to keep the
+    payload small, so the UI fetches the detail only when needed.
+
+    Foreign-or-missing ids return 404 with the same shape so a caller
+    can't enumerate by status code."""
+    row = (
+        db.query(HandoffRecord)
+        .filter(HandoffRecord.id == handoff_id, HandoffRecord.user_id == user.id)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": "Handoff not found"},
+        )
+
+    events = (
+        db.query(HandoffEvent)
+        .filter(HandoffEvent.handoff_id == handoff_id)
+        .order_by(HandoffEvent.created_at.asc())
+        .all()
+    )
+    return {
+        "id": row.id,
+        "capability": row.capability,
+        "execution_env": row.execution_env,
+        "status": row.status,
+        "condura_run_id": row.condura_run_id,
+        "session_id": row.session_id,
+        "summary": row.summary,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "events": [
+            {
+                "id": e.id,
+                "event_kind": e.event_kind,
+                "payload": _decode_event_payload(e.payload),
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in events
+        ],
     }
 
 
@@ -261,12 +332,24 @@ async def save_handoff_draft(
 async def list_handoff_drafts(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
+    capability: Optional[str] = Query(None, max_length=64, description="Filter by capability."),
 ):
+    """List the caller's saved handoff drafts with optional capability filter.
+
+    Drafts are typically short-lived (the browser saves one and the user
+    either submits or abandons it), so a default 50-row cap is plenty.
+    """
+    q = db.query(HandoffDraft).filter(HandoffDraft.user_id == user.id)
+    if capability:
+        q = q.filter(HandoffDraft.capability == capability)
+
+    total = q.count()
     rows = (
-        db.query(HandoffDraft)
-        .filter(HandoffDraft.user_id == user.id)
-        .order_by(HandoffDraft.created_at.desc())
-        .limit(50)
+        q.order_by(HandoffDraft.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
         .all()
     )
     out = []
@@ -283,7 +366,35 @@ async def list_handoff_drafts(
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
         )
-    return {"drafts": out}
+    return {
+        "drafts": out,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+        "filters": {"capability": capability},
+    }
+
+
+def _decode_event_payload(raw) -> dict | None:
+    """Normalize the event payload across drivers.
+
+    Postgres returns JSON columns as native dicts; SQLite (test) returns
+    TEXT. Without this, the detail endpoint would return a string on
+    SQLite and a dict on Postgres — the response shape would differ
+    between environments.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else None
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return None
 
 
 @router.delete("/handoff-drafts/{draft_id}")
