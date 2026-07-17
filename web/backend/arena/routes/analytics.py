@@ -12,7 +12,7 @@ from arena.core.dependencies import get_current_user_optional, get_current_user_
 from arena.core.input_validation import sanitize_model_optional_text, sanitize_model_text
 from arena.core.model_router import get_all_routes_summary
 from arena.core.observability import log_ux_event
-from arena.core.rate_limits import enforce_ip_rate_limit
+from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.database import get_db
 from arena.db_models import PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UXEvent, UserPreference
 from arena.models.schemas import UserResponse
@@ -116,6 +116,15 @@ async def analytics_summary(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> dict:
+    # Full-history aggregation across several tables — bound call volume so a
+    # single account cannot use this as a cheap DB-amplification DoS.
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_summary",
+        limit=60,
+        window_seconds=3600,
+        message="Too many analytics summary requests. Limit is 60 per hour.",
+    )
     user_id = user.id
     preference = db.query(UserPreference).filter(UserPreference.user_id == user.id).first()
     scoring_rows = db.query(ScoringAudit).filter(ScoringAudit.user_id == user.id).all()

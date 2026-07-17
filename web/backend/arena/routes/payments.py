@@ -430,10 +430,12 @@ async def subscribe_agent_addon(
             }
         )
     except Exception as exc:
+        # Never surface Razorpay / SDK exception text to the client — it can
+        # include plan ids, customer ids, request dumps, or internal errors.
         logger.exception("Addon subscribe error: %s", exc)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create subscription: {exc!s}",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not create add-on subscription. Please try again.",
         ) from exc
 
     sub_id = rzp_sub.get("id")
