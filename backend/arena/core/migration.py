@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -132,6 +133,56 @@ def list_open_flags_for_user(db: Session, user_id: int) -> list[dict[str, Any]]:
         }
         for r in rows
     ]
+
+
+def summarize_flags_for_user(db: Session, user_id: int) -> dict[str, Any]:
+    """Aggregate counts of open migration flags by kind and capability.
+
+    Cheaper than /migration-flags when the UI wants a status badge
+    ("3 flags pending") instead of the full row list. Single query
+    per axis, scoped to the caller's user_id.
+    """
+    from arena.db_models import MigrationFlag
+
+    open_q = db.query(MigrationFlag).filter(
+        MigrationFlag.user_id == user_id,
+        MigrationFlag.resolved_at.is_(None),
+    )
+
+    total_open = open_q.count()
+
+    # Group by kind. SQL GROUP BY on the enum string is portable
+    # across SQLite (test) and Postgres (prod).
+    by_kind_rows = (
+        db.query(MigrationFlag.kind, func.count(MigrationFlag.id))
+        .filter(
+            MigrationFlag.user_id == user_id,
+            MigrationFlag.resolved_at.is_(None),
+        )
+        .group_by(MigrationFlag.kind)
+        .all()
+    )
+    by_kind = {
+        (k.value if hasattr(k, "value") else str(k)): int(c)
+        for k, c in by_kind_rows
+    }
+
+    by_capability_rows = (
+        db.query(MigrationFlag.affected_capability, func.count(MigrationFlag.id))
+        .filter(
+            MigrationFlag.user_id == user_id,
+            MigrationFlag.resolved_at.is_(None),
+        )
+        .group_by(MigrationFlag.affected_capability)
+        .all()
+    )
+    by_capability = {cap: int(c) for cap, c in by_capability_rows}
+
+    return {
+        "total_open": int(total_open),
+        "by_kind": by_kind,
+        "by_capability": by_capability,
+    }
 
 
 def resolve_flag(

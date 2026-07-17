@@ -20,7 +20,7 @@ from arena.core.handoff_status import (
     RUNNING_EVENT_KINDS,
     STREAMING,
 )
-from arena.core.migration import list_open_flags_for_user, resolve_flag
+from arena.core.migration import list_open_flags_for_user, resolve_flag, summarize_flags_for_user
 from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.telemetry import admin_metrics_payload, record_handoff_dispatched, record_probe_state
 from arena.database import get_db
@@ -421,6 +421,26 @@ async def get_migration_flags(
     db: Session = Depends(get_db),
 ):
     return {"flags": list_open_flags_for_user(db, user.id)}
+
+
+@router.get("/migration-flags/summary")
+async def get_migration_flags_summary(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Cheaper sibling of /migration-flags — aggregate counts only.
+
+    Useful for a status badge ('3 flags pending') in the UI header
+    without paying the cost of fetching every row. Returns:
+      - total_open: total open flags for the caller
+      - by_kind: {kind_label: count}
+      - by_capability: {affected_capability: count}
+
+    Open flags only — resolved flags don't show up here. If the user
+    wants the full history (open + resolved) we'd add an
+    include_resolved query param to /migration-flags.
+    """
+    return summarize_flags_for_user(db, user.id)
 
 
 @router.post("/migration-flags/{flag_id}/resolve")
