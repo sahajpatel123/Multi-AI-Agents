@@ -13,7 +13,6 @@ import { NetworkStatusBanner } from './components/NetworkStatusBanner'
 import { BackToTopButton } from './components/BackToTopButton'
 import { DocumentTitle } from './components/DocumentTitle'
 import { ScrollToTop } from './components/ScrollToTop'
-import { SpotlightCursor } from './components/motion/SpotlightCursor'
 import './index.css'
 
 // Lazy-load each page so they're split into separate chunks. The Suspense
@@ -174,8 +173,6 @@ if (!rootElement) {
     <React.StrictMode>
       <ErrorBoundary>
         <BrowserRouter>
-          <div className="telemetry-grid" aria-hidden />
-          <SpotlightCursor />
           <AuthProvider>
             <TierProvider>
               <PanelProvider>

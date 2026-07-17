@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { ButtonSpinner } from './Icons';
 import { motionTransition } from '../lib/motion';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'amber';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
