@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -24,6 +25,54 @@ from arena.models.schemas import UserResponse
 logger = logging.getLogger(__name__)
 
 memory_router = APIRouter(tags=["memory"])
+
+# Cap the list endpoint so a user with thousands of compressed sessions
+# can't pull the whole table in one request. The UI paginates; this is
+# the upper bound per page.
+MAX_SUMMARIES_PER_PAGE = 100
+
+
+def _decode_json_column(value, default):
+    """Postgres returns JSON columns as lists/dicts; SQLite returns strings.
+
+    Memory summaries need a stable shape regardless of driver so the list
+    and detail endpoints can share a serializer.
+    """
+    if value is None:
+        return default
+    if isinstance(value, (list, dict)):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return default
+    return default
+
+
+def _serialize_summary(row: SessionSummary, *, include_body: bool) -> dict:
+    """Project a SessionSummary row to its public dict.
+
+    ``include_body=False`` omits the long-form fields (session_summary text
+    and key_positions_taken) so list responses stay small. Detail requests
+    pass True to get the full row.
+    """
+    base = {
+        "id": row.id,
+        "session_id": row.session_id,
+        "dominant_category": row.dominant_category,
+        "preferred_depth": row.preferred_depth,
+        "trusted_persona": row.trusted_persona,
+        "exchange_count": int(row.exchange_count or 0),
+        "main_topics": _decode_json_column(row.main_topics, []),
+        "compressed_at": row.compressed_at.isoformat() if row.compressed_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+    if include_body:
+        base["session_summary"] = row.session_summary or ""
+        base["key_positions_taken"] = _decode_json_column(row.key_positions_taken, [])
+        base["raw_exchanges_count"] = int(row.raw_exchanges_count or 0)
+    return base
 
 
 class MemorySaveRequest(BaseModel):
@@ -190,3 +239,138 @@ async def save_memory(
         "topics_extracted": list(summary.get("main_topics") or []),
         "stances_saved": stances_saved,
     }
+
+
+# ─── Summary listing & detail ────────────────────────────────────────────────
+
+
+@memory_router.get("/summaries")
+async def list_summaries(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=MAX_SUMMARIES_PER_PAGE),
+    category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
+    persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
+    search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+) -> dict:
+    """Paginated list of the caller's compressed session summaries.
+
+    Returns an envelope so the UI can render pagination controls and a
+    filter summary without inferring state. Long-form fields
+    (session_summary, key_positions_taken) are omitted from list rows —
+    clients fetch the full body via GET /summaries/{id} only when needed.
+    """
+    if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
+        return {
+            "summaries": [],
+            "total": 0,
+            "page": 1,
+            "per_page": per_page,
+            "total_pages": 0,
+            "filters": {"category": None, "persona_id": None, "search": None},
+        }
+
+    q = db.query(SessionSummary).filter(SessionSummary.user_id == user.id)
+
+    if category:
+        q = q.filter(SessionSummary.dominant_category == category)
+
+    if persona_id:
+        # Exact match — persona_id is a closed enum string.
+        q = q.filter(SessionSummary.trusted_persona == persona_id)
+
+    if search:
+        # ILIKE on the long-form text. We could index a tsvector for
+        # production scale, but the column is small enough per-row that
+        # SQLite ILIKE + an n=20 page cap keeps the scan tolerable.
+        safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        q = q.filter(SessionSummary.session_summary.ilike(f"%{safe}%", escape="\\"))
+
+    total = q.count()
+    rows = (
+        q.order_by(SessionSummary.compressed_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    return {
+        "summaries": [_serialize_summary(r, include_body=False) for r in rows],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+        "filters": {
+            "category": category,
+            "persona_id": persona_id,
+            "search": search,
+        },
+    }
+
+
+@memory_router.get("/summaries/{summary_id}")
+async def get_summary(
+    summary_id: int,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Full body of one summary — list endpoint strips the long fields to
+    keep list responses small, so the detail view needs a follow-up call.
+
+    Scope by owner so foreign ids look like missing ones (no 403 oracle).
+    """
+    if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "feature_not_allowed", "message": "Memory requires a Plus tier."},
+        )
+
+    row = (
+        db.query(SessionSummary)
+        .filter(SessionSummary.id == summary_id, SessionSummary.user_id == user.id)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": "Summary not found"},
+        )
+    return _serialize_summary(row, include_body=True)
+
+
+@memory_router.delete("/summaries/{summary_id}")
+async def delete_summary(
+    summary_id: int,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Delete one summary. Foreign ids return 404 (same shape as missing)
+    so a caller can't enumerate ids by status code."""
+    if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "feature_not_allowed", "message": "Memory requires a Plus tier."},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="memory_summary_delete",
+        limit=60,
+        window_seconds=3600,
+        message="Too many summary deletes. Limit is 60 per hour.",
+    )
+
+    row = (
+        db.query(SessionSummary)
+        .filter(SessionSummary.id == summary_id, SessionSummary.user_id == user.id)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": "Summary not found"},
+        )
+    db.delete(row)
+    db.commit()
+    return {"status": "deleted", "id": summary_id}
