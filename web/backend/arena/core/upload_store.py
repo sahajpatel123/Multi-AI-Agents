@@ -1,21 +1,40 @@
 """Ephemeral upload registry for Agent file attachments (single-process /tmp).
 
-Security: every registration is bound to the uploading user's id. Resolve
-paths must pass the caller's user_id and only return records that user owns.
-Without this, any authenticated client that learns another user's file_id
-(UUID in the upload response, logs, or XSS) could attach private PDF/image
-content to their own agent run (attachment IDOR).
+Security:
+1. Ownership — every registration is bound to the uploading user's id.
+   Resolve paths must pass the caller's user_id and only return records
+   that user owns (attachment IDOR).
+2. Resource bounds — without caps an authenticated user can fill process
+   memory (each image stores base64) and /tmp disk by spamming
+   POST /api/agent/upload. We enforce:
+   - per-user max live uploads
+   - global max live uploads
+   - TTL so abandoned attachments expire
+   Best-effort deletion of the sandbox file when a record is evicted.
 """
 
 from __future__ import annotations
 
+import logging
 import os
+import time
+from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = "/tmp/arena_uploads"
 
 # file_id -> full attachment record (includes content, optional b64, user_id)
 _UPLOADS: dict[str, dict[str, Any]] = {}
+
+# Caps — small enough that a single worker cannot be OOM'd by upload spam,
+# large enough for multi-file agent tasks (up to 32 attachment_ids on run).
+MAX_UPLOADS_PER_USER = 32
+MAX_UPLOADS_GLOBAL = 256
+# Attachments are only needed between upload and the subsequent /run;
+# two hours is generous for a user who walks away mid-compose.
+UPLOAD_TTL_SECONDS = 2 * 60 * 60
 
 
 def _normalize_owner(user_id: int | str | None) -> str | None:
@@ -23,6 +42,74 @@ def _normalize_owner(user_id: int | str | None) -> str | None:
         return None
     s = str(user_id).strip()
     return s if s else None
+
+
+def _safe_unlink(path: str | None) -> None:
+    """Best-effort delete of a sandbox file. Never raises to callers."""
+    if not path:
+        return
+    try:
+        p = Path(path)
+        # Only unlink files that still resolve under the upload root.
+        root = Path(UPLOAD_DIR).resolve()
+        resolved = p.expanduser().resolve()
+        try:
+            resolved.relative_to(root)
+        except ValueError:
+            return
+        if resolved.is_file():
+            resolved.unlink()
+    except Exception as exc:  # pragma: no cover - filesystem edge
+        logger.debug("upload_store unlink failed for %s: %s", path, exc)
+
+
+def _evict_file_id(file_id: str) -> None:
+    rec = _UPLOADS.pop(file_id, None)
+    if rec:
+        _safe_unlink(rec.get("path") if isinstance(rec, dict) else None)
+
+
+def purge_expired(now: float | None = None) -> int:
+    """Drop records older than UPLOAD_TTL_SECONDS. Returns count removed."""
+    ts = time.time() if now is None else now
+    cutoff = ts - UPLOAD_TTL_SECONDS
+    expired = [
+        fid
+        for fid, rec in list(_UPLOADS.items())
+        if float(rec.get("created_at") or 0) < cutoff
+    ]
+    for fid in expired:
+        _evict_file_id(fid)
+    return len(expired)
+
+
+def _enforce_user_cap(owner: str) -> None:
+    """If owner already has MAX_UPLOADS_PER_USER, drop their oldest first."""
+    owned = [
+        (fid, float(rec.get("created_at") or 0))
+        for fid, rec in _UPLOADS.items()
+        if _normalize_owner(rec.get("user_id")) == owner
+    ]
+    if len(owned) < MAX_UPLOADS_PER_USER:
+        return
+    owned.sort(key=lambda item: item[1])
+    # Evict enough so there is room for one new registration.
+    overflow = len(owned) - MAX_UPLOADS_PER_USER + 1
+    for fid, _ in owned[:overflow]:
+        _evict_file_id(fid)
+
+
+def _enforce_global_cap() -> None:
+    """If the registry is at the global ceiling, drop the oldest entries."""
+    if len(_UPLOADS) < MAX_UPLOADS_GLOBAL:
+        return
+    ordered = sorted(
+        ((fid, float(rec.get("created_at") or 0)) for fid, rec in _UPLOADS.items()),
+        key=lambda item: item[1],
+    )
+    overflow = len(_UPLOADS) - MAX_UPLOADS_GLOBAL + 1
+    for fid, _ in ordered[:overflow]:
+        _evict_file_id(fid)
 
 
 def register_upload(
@@ -35,13 +122,21 @@ def register_upload(
 
     `user_id` is required. Callers must never register anonymous uploads —
     the agent upload route is auth-gated.
+
+    Also runs TTL purge and enforces per-user / global caps before insert.
     """
     owner = _normalize_owner(user_id)
     if not owner:
         raise ValueError("user_id is required to register an upload")
+
+    purge_expired()
+    _enforce_user_cap(owner)
+    _enforce_global_cap()
+
     stored = dict(record)
     stored["user_id"] = owner
     stored["file_id"] = file_id
+    stored["created_at"] = float(stored.get("created_at") or time.time())
     _UPLOADS[file_id] = stored
 
 
@@ -54,7 +149,9 @@ def get_upload(
 
     When ``user_id`` is provided, only return the record if it belongs to
     that user. When omitted, return the raw record (test/internal use only).
+    Expired records are purged lazily on read.
     """
+    purge_expired()
     rec = _UPLOADS.get(file_id)
     if rec is None:
         return None
@@ -77,6 +174,7 @@ def resolve_attachments(
     missing id) so we do not leak existence of other users' uploads via
     error shape. Caller still gets only what they legitimately uploaded.
     """
+    purge_expired()
     owner = _normalize_owner(user_id)
     if not owner:
         return []
@@ -95,8 +193,13 @@ def resolve_attachments(
     return out
 
 
+def registry_size() -> int:
+    """Current live upload count (tests / diagnostics)."""
+    return len(_UPLOADS)
+
+
 def clear_uploads() -> None:
-    """Drop the in-process registry (tests only)."""
+    """Drop the in-process registry (tests only). Does not touch disk."""
     _UPLOADS.clear()
 
 

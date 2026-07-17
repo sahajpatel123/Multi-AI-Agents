@@ -908,8 +908,20 @@ async def upload_agent_attachment(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Multipart upload: PDF, images, Word docs — ephemeral /tmp + in-memory registry."""
+    """Multipart upload: PDF, images, Word docs — ephemeral /tmp + in-memory registry.
+
+    Rate-limited per user: without this, an authenticated client can fill
+    process memory (base64 images) and /tmp by hammering this endpoint.
+    Registry ownership + TTL/caps live in upload_store.
+    """
     _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_upload",
+        limit=30,
+        window_seconds=3600,
+        message="Too many file uploads. Limit is 30 per hour.",
+    )
     ensure_upload_dir()
     data = await file.read()
     max_bytes = 10 * 1024 * 1024
