@@ -10,6 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from arena.core.agent_pipeline import (
@@ -972,6 +973,82 @@ async def list_agent_templates() -> dict:
 async def list_agent_capabilities() -> dict:
     """Capability taxonomy for UI badges and Condura handoff."""
     return {"capabilities": list_capabilities()}
+
+
+@router.get("/capability-usage")
+async def get_capability_usage(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(30, ge=1, le=365, description="Window length in days, ending today (UTC)."),
+) -> dict:
+    """Per-capability call counts for the caller over a window.
+
+    Backs a 'How often am I using each Agent capability?' widget on
+    the Agent history page. The source of truth is UsageRecord.mode +
+    prompt_category — every Agent pipeline run records one row, so
+    summing the rows by category is a single GROUP BY.
+
+    Web (Arena) calls are reported separately so the UI can show
+    '12 arena, 5 agent' totals without a second roundtrip.
+    """
+    from arena.db_models import UsageRecord
+    from datetime import datetime, timezone, timedelta
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="capability_usage",
+        limit=60,
+        window_seconds=3600,
+        message="Too many capability-usage requests. Limit is 60 per hour.",
+    )
+
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    window_start = now_utc - timedelta(days=days - 1)
+
+    # Single GROUP BY over the relevant columns; cheap because
+    # timestamp is indexed and we already filter by user_id.
+    rows = (
+        db.query(
+            UsageRecord.mode,
+            UsageRecord.prompt_category,
+            func.count(UsageRecord.id),
+        )
+        .filter(
+            UsageRecord.user_id == user.id,
+            UsageRecord.timestamp >= window_start,
+        )
+        .group_by(UsageRecord.mode, UsageRecord.prompt_category)
+        .all()
+    )
+
+    by_mode: dict[str, int] = {"arena": 0, "agent": 0, "debate": 0, "discuss": 0, "other": 0}
+    by_category: dict[str, int] = {}
+    agent_total = 0
+    web_total = 0
+
+    for mode, category, count in rows:
+        count = int(count or 0)
+        bucket = mode if mode in by_mode else "other"
+        by_mode[bucket] = by_mode.get(bucket, 0) + count
+        if mode == "agent":
+            agent_total += count
+        elif mode in ("arena", "debate", "discuss"):
+            web_total += count
+        if category:
+            by_category[category] = by_category.get(category, 0) + count
+
+    return {
+        "window_days": days,
+        "window_start": window_start.date().isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "by_mode": by_mode,
+        "by_category": by_category,
+        "totals": {
+            "agent": agent_total,
+            "web": web_total,
+            "all": agent_total + web_total,
+        },
+    }
 
 
 @router.get("/capabilities/docs")
