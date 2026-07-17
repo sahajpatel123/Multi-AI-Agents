@@ -23,8 +23,12 @@ def _build_engine():
     # Try PostgreSQL first
     if primary_url and "postgresql" in primary_url:
         try:
+            connect_args = {}
+            if "sslmode" not in primary_url.lower():
+                connect_args["sslmode"] = "require"
             engine = create_engine(
                 primary_url,
+                connect_args=connect_args,
                 pool_pre_ping=True,
                 pool_size=5,
                 max_overflow=10,
