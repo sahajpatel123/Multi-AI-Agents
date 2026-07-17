@@ -50,6 +50,7 @@ from arena.core.capabilities import (
     evaluate_capability_gate,
     get_capability_doc,
     list_capabilities,
+    list_capability_examples,
 )
 from arena.core.telemetry import record_guard_decision
 from arena.database import SessionLocal, get_db
@@ -1089,6 +1090,17 @@ async def get_capability_doc_endpoint(capability_id: str) -> dict:
             detail={"error": "capability_not_found", "id": capability_id},
         )
     return doc
+
+
+@router.get("/capabilities/examples")
+async def list_capability_examples_endpoint() -> dict:
+    """Curated 'try one' prompt examples for every capability.
+
+    Powers the Agent page's suggestion chip row — a first-time user
+    clicks a chip instead of staring at an empty textarea. No auth:
+    examples are public marketing copy, not user data.
+    """
+    return {"examples": list_capability_examples()}
 
 
 @router.get("/tasks/{task_id}/feedback")

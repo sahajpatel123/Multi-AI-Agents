@@ -629,3 +629,69 @@ def get_capability_doc(capability_id: str) -> dict[str, Any] | None:
         out["condura_method"] = cap.condura_method
         out["stream_heartbeat_seconds"] = cap.stream_heartbeat_seconds
     return out
+
+
+# Curated prompt examples per capability. The Agent page renders
+# these as 'try one of these' chips so a first-time user has a
+# zero-friction way to see what each pipeline can do. Each list
+# contains 2-3 short prompts the docs team has vetted.
+CAPABILITY_EXAMPLES: dict[str, list[str]] = {
+    "arena.respond": [
+        "Should we ship the new pricing tier before the partner summit?",
+        "Compare a 4-day work week against a 5-day week for a 50-person team.",
+    ],
+    "arena.debate": [
+        "Have the panel debate my answer to 'is agent_mode worth the upgrade?'",
+    ],
+    "arena.discuss": [
+        "Walk me through the tradeoffs of the planned pricing change.",
+    ],
+    "agent.research": [
+        "Research the pros and cons of adopting LangGraph for our agent pipeline.",
+        "Investigate the latest Postgres replication techniques for a SaaS app.",
+    ],
+    "agent.orchestrate": [
+        "Plan and execute a competitive analysis of three AI agent platforms.",
+    ],
+    "agent.refine": [
+        "Take my last answer and tighten the executive summary to under 100 words.",
+    ],
+    "agent.feedback": [],
+    "agent.challenge": [
+        "Generate a critical follow-up to my last agent answer.",
+    ],
+    "agent.rebuttal": [],
+    "watchlist.create": [
+        "Track weekly competitor pricing changes for the next 3 months.",
+    ],
+    "watchlist.toggle": [],
+    "agent.verify_arena_answer": [],
+    "linear_ticket": [
+        "Convert my last research into a Linear ticket with the action items.",
+    ],
+    "save_report": [],
+    "agent.long_research": [
+        "Run a deep-dive on the long-term energy storage market for 4 hours.",
+    ],
+    "agent.verify_arena_answer_local": [
+        "Verify my last arena answer against our local git history.",
+    ],
+    "app.open_in_linear": [],
+    "report.save_to_local": [
+        "Save the full research report to my Downloads folder.",
+    ],
+}
+
+
+def list_capability_examples() -> list[dict[str, Any]]:
+    """Return the curated example prompts for every capability.
+
+    Used by the Agent page's 'try one' chip row. Capabilities with
+    no curated examples (e.g. feedback) return an empty list so the
+    UI can render a placeholder without a special-case."""
+    out: list[dict[str, Any]] = []
+    for cap_id, examples in CAPABILITY_EXAMPLES.items():
+        out.append({"id": cap_id, "examples": list(examples)})
+    # Stable order so the UI doesn't shuffle.
+    out.sort(key=lambda x: x["id"])
+    return out
