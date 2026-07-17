@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import razorpay
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -94,6 +94,35 @@ def _plan_map(settings) -> dict[str, dict[str, Any]]:
             "name": "Agent Mode Add-on",
         },
     }
+
+
+# Static feature highlights per tier — the public pricing page renders
+# this directly, so it lives next to the plan map (single source of truth).
+# Feature names match keys in arena.core.tier_config.TIER_FEATURES so a
+# future expansion stays in sync.
+PLAN_FEATURE_HIGHLIGHTS: dict[str, list[str]] = {
+    "FREE": [
+        "3 Arena messages per day",
+        "6 starter personas",
+    ],
+    "PLUS": [
+        "15 Arena messages per day",
+        "All 16 personas",
+        "Saved responses",
+        "Discuss mode",
+    ],
+    "PRO": [
+        "35 Arena messages per day",
+        "Rolling 5-hour window",
+        "Agent Mode add-on eligible",
+        "Priority rate limits",
+    ],
+    "AGENT_ADDON": [
+        "Persistent Agent Mode",
+        "Cross-session memory",
+        "Watchlists",
+    ],
+}
 
 
 def _ensure_razorpay_customer(
@@ -1011,4 +1040,116 @@ async def cancel_subscription(
             "Subscription cancelled. You will retain access until end of current billing period."
         ),
         "access_until": access_until,
+    }
+
+
+# ──────────────────────────────────────────────────────────────
+# Plans catalog (public, no auth) — drives the pricing page
+# ──────────────────────────────────────────────────────────────
+
+
+@router.get("/plans")
+async def list_plans() -> dict:
+    """Public plans catalog for the pricing page. No auth required —
+    anyone (including logged-out visitors) can see what we sell and at
+    what price. Amounts are in paise (smallest currency unit) so the
+    client formats them; we don't round-trip currency conversion here.
+
+    Two layers of response shape: `plans` (the buyable list) plus a
+    per-tier `feature_highlights` block so the pricing page can render
+    checkmarks without a second roundtrip.
+    """
+    settings = get_settings()
+    plans = _plan_map(settings)
+    items = []
+    for key, p in plans.items():
+        # Skip plans whose Razorpay id isn't configured — surfacing an
+        # unconfigured plan as a 'buy' button would 502 at checkout.
+        if not p.get("plan_id"):
+            continue
+        items.append({
+            "id": key,
+            "plan_id": p["plan_id"],
+            "name": p["name"],
+            "tier": p["tier"],
+            "billing_period": p["billing_period"],
+            "amount": p["amount"],
+            "currency": "INR",
+        })
+    # Stable order by tier then billing period so the pricing page
+    # doesn't shuffle between fetches.
+    items.sort(key=lambda p: (p["tier"], 0 if p["billing_period"] == "monthly" else 1))
+    return {
+        "plans": items,
+        "total": len(items),
+        "currency": "INR",
+        "feature_highlights": PLAN_FEATURE_HIGHLIGHTS,
+    }
+
+
+# ──────────────────────────────────────────────────────────────
+# Subscription history — paginated list of all subscriptions ever
+# ──────────────────────────────────────────────────────────────
+
+
+@router.get("/subscriptions/history")
+async def subscription_history(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_required_orm),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    tier: Optional[str] = Query(None, max_length=16, description="Filter by tier label."),
+    status: Optional[str] = Query(None, max_length=32, description="Filter by Razorpay status."),
+) -> dict:
+    """Paginated history of all subscriptions ever created for the caller.
+
+    Powers a 'Billing history' table on the account page. The single
+    GET /subscription endpoint returns only the current row; this one
+    is the full timeline (renewals, downgrades, cancellations, agent
+    add-on toggles) so a user can answer 'when did I last renew?'.
+    """
+    _enforce_payment_rate_limit(user.id)
+
+    q = db.query(Subscription).filter(Subscription.user_id == user.id)
+
+    if tier:
+        # Exact match — tier is a closed enum string.
+        q = q.filter(Subscription.tier == tier)
+
+    if status:
+        q = q.filter(Subscription.status == status)
+
+    total = q.count()
+    rows = (
+        q.order_by(Subscription.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    items = [
+        {
+            "id": row.id,
+            "tier": row.tier,
+            "plan_name": row.plan_name,
+            "billing_period": row.billing_period,
+            "status": row.status,
+            "amount": row.amount,
+            "currency": row.currency,
+            "payment_count": row.payment_count,
+            "current_start": row.current_start.isoformat() if row.current_start else None,
+            "current_end": row.current_end.isoformat() if row.current_end else None,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        }
+        for row in rows
+    ]
+
+    return {
+        "subscriptions": items,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+        "filters": {"tier": tier, "status": status},
     }
