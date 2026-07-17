@@ -33,6 +33,12 @@ jobs:
       RAZORPAY_WEBHOOK_SECRET: dummy_webhook
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Gitleaks below uses `git log HEAD^..HEAD`; the default
+          # fetch-depth: 1 leaves HEAD^ unresolved so the diff is
+          # empty AND the action then exits non-zero. Fetch 2 commits
+          # (just enough for the parent) to keep the runner cheap.
+          fetch-depth: 2
 
       - name: Set up Python
         uses: actions/setup-python@v6
