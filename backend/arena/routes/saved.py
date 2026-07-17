@@ -6,14 +6,23 @@ Security:
 - Per-user cap + rate limit so authenticated spam cannot fill saved_responses.
 - Delete uses scoped lookup (404 for missing *and* foreign rows) so IDs
   cannot be enumerated via 403 vs 404.
+
+Functionality:
+- GET /saved supports search (prompt + one_liner substring), persona_id
+  filter, score filter (min_score), pagination, and sort modes (newest /
+  oldest / score).
+- DELETE /saved/bulk accepts a JSON list of ids for one-shot cleanup.
 """
 
+from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
-from arena.core.input_validation import sanitize_model_text
+from arena.core.input_validation import sanitize_model_optional_text, sanitize_model_text
 from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
@@ -24,6 +33,21 @@ router = APIRouter(tags=["saved"])
 
 # Hard cap on stored takes per user (UI already treats this as a personal list).
 SAVED_MAX_PER_USER = 200
+
+# Bulk delete cap — even a power user shouldn't be able to wipe their whole
+# library in a single click; 50 is enough for the "select all visible" UI
+# pattern without becoming a footgun.
+SAVED_BULK_DELETE_MAX = 50
+
+
+def _escape_like(value: str) -> str:
+    """Escape SQL LIKE wildcards. % and _ are wildcards; without escaping,
+    a user typing '100%' would match every row."""
+    return (
+        value.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
 
 
 class SavedRequest(BaseModel):
@@ -66,22 +90,86 @@ class SavedRequest(BaseModel):
         return sanitize_model_text(v, max_length=max_len, field_name=info.field_name)
 
 
+class BulkDeleteRequest(BaseModel):
+    """Body schema for DELETE /saved/bulk. IDs not owned by the caller
+    are silently ignored (no existence oracle)."""
+    ids: list[int] = Field(..., min_length=1, max_length=SAVED_BULK_DELETE_MAX)
+
+
 @router.get("/saved")
 async def get_saved(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
-) -> list[dict]:
-    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
-        return []
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=SAVED_MAX_PER_USER),
+    search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on prompt + one_liner."),
+    persona_id: Optional[str] = Query(None, max_length=50, description="Restrict to one persona."),
+    min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score (inclusive)."),
+    sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', or 'score'."),
+) -> dict:
+    """List saved responses with optional search, filter, sort, pagination.
 
+    Returns an envelope {items, total, page, per_page, total_pages, filters}
+    so the UI can render pagination controls and a filter summary without
+    inferring state. Free-tier users still see an empty list (not 403) —
+    don't break the silent-gate contract that the existing /saved endpoint
+    established.
+    """
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        return {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "per_page": per_page,
+            "total_pages": 0,
+            "filters": {"search": None, "persona_id": None, "min_score": None, "sort": "newest"},
+        }
+
+    q = db.query(SavedResponse).filter(SavedResponse.user_id == user.id)
+
+    if search:
+        # Bound via Query(max_length=100) AND sanitize again — defense in
+        # depth so a malformed query string can't sneak a 10KB payload
+        # through to the LIKE scan.
+        safe = sanitize_model_optional_text(search, max_length=100, field_name="search")
+        if safe:
+            pattern = f"%{_escape_like(safe)}%"
+            q = q.filter(
+                or_(
+                    SavedResponse.prompt.ilike(pattern, escape="\\"),
+                    SavedResponse.one_liner.ilike(pattern, escape="\\"),
+                )
+            )
+
+    if persona_id:
+        # Exact match — persona_id is a closed enum string, not free text.
+        q = q.filter(SavedResponse.persona_id == persona_id)
+
+    if min_score is not None:
+        q = q.filter(SavedResponse.score >= min_score)
+
+    # Sort. Unknown values fall back to newest so a stale frontend can't
+    # break the endpoint; 'score' puts nulls last so untested takes don't
+    # sink the top of "show me my best answers".
+    if sort == "oldest":
+        order_clauses = (SavedResponse.saved_at.asc(),)
+    elif sort == "score":
+        order_clauses = (
+            SavedResponse.score.desc().nullslast(),
+            SavedResponse.saved_at.desc(),
+        )
+    else:
+        order_clauses = (SavedResponse.saved_at.desc(),)
+
+    total = q.count()
     rows = (
-        db.query(SavedResponse)
-        .filter(SavedResponse.user_id == user.id)
-        .order_by(SavedResponse.saved_at.desc())
-        .limit(SAVED_MAX_PER_USER)
+        q.order_by(*order_clauses)
+        .offset((page - 1) * per_page)
+        .limit(per_page)
         .all()
     )
-    return [
+
+    items = [
         {
             "id": row.id,
             "session_id": row.session_id,
@@ -98,6 +186,20 @@ async def get_saved(
         }
         for row in rows
     ]
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+        "filters": {
+            "search": search,
+            "persona_id": persona_id,
+            "min_score": min_score,
+            "sort": sort,
+        },
+    }
 
 
 @router.post("/saved")
@@ -171,6 +273,52 @@ async def save_response(
     db.commit()
     db.refresh(row)
     return {"status": "saved", "id": row.id}
+
+
+@router.delete("/saved/bulk")
+async def delete_saved_bulk(
+    body: BulkDeleteRequest,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Bulk delete — for the 'select all visible' cleanup pattern.
+
+    Foreign ids (not owned by the caller) are silently dropped from the
+    delete set. The response reports requested / deleted counts so the UI
+    can show a partial-success message if a stale page referenced ids
+    another user has since claimed.
+    """
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Saved responses require a Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+
+    # Deduplicate within the request — a UI bug that double-fires the same
+    # id shouldn't double-count in the response.
+    unique_ids = list(dict.fromkeys(body.ids))
+    requested = len(unique_ids)
+
+    # Scope by owner so we never delete another user's rows even if a UI
+    # bug hands us foreign ids.
+    deleted = (
+        db.query(SavedResponse)
+        .filter(
+            SavedResponse.id.in_(unique_ids),
+            SavedResponse.user_id == user.id,
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {
+        "status": "deleted",
+        "requested": requested,
+        "deleted": int(deleted or 0),
+    }
 
 
 @router.delete("/saved/{saved_id}")

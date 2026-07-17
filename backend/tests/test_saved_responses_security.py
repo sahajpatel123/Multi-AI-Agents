@@ -54,7 +54,9 @@ async def test_save_and_list_own(app_client, make_user):
 
     listed = await app_client.get("/api/saved", headers=_headers(user))
     assert listed.status_code == 200
-    ids = {row["id"] for row in listed.json()}
+    # Envelope shape — array lives under 'items'.
+    body = listed.json()
+    ids = {row["id"] for row in body["items"]}
     assert sid in ids
 
 
