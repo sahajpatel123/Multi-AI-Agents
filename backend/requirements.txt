@@ -22,7 +22,7 @@ tenacity==8.2.3
 # Database
 sqlalchemy==2.0.35
 alembic==1.13.3
-psycopg2-binary==2.9.10
+psycopg[binary]==3.3.4
 
 # Auth - upgraded for security fixes (python-jose 3.5+, python-multipart 0.0.32+)
 python-jose[cryptography]==3.5.0

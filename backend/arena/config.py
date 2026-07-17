@@ -23,7 +23,9 @@ _WEAK_SECRET_KEYS = {
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+psycopg"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 # Render's managed PostgreSQL requires SSL. If the env-provided URL doesn't
 # include sslmode, add it here so every code path (SQLAlchemy, Alembic,
 # migrate_and_start.py) inherits it automatically.
@@ -117,10 +119,13 @@ class Settings(BaseSettings):
     def normalize_database_url(cls, value):
         if value in (None, ""):
             return DATABASE_URL
-        if isinstance(value, str) and value.startswith("postgres://"):
-            value = value.replace("postgres://", "postgresql://", 1)
-        if isinstance(value, str) and "postgresql" in value and "sslmode" not in value.lower():
-            value = value + ("&sslmode=require" if "?" in value else "?sslmode=require")
+        if isinstance(value, str):
+            if value.startswith("postgres://"):
+                value = value.replace("postgres://", "postgresql+psycopg://", 1)
+            elif value.startswith("postgresql://") and not value.startswith("postgresql+psycopg"):
+                value = value.replace("postgresql://", "postgresql+psycopg://", 1)
+            if "postgresql" in value and "sslmode" not in value.lower():
+                value = value + ("&sslmode=require" if "?" in value else "?sslmode=require")
         return value
 
     @field_validator("allowed_origins", mode="before")
@@ -205,7 +210,7 @@ class Settings(BaseSettings):
         if self.is_production:
             if not self.database_url:
                 errors.append("DATABASE_URL is not set")
-            elif not self.database_url.startswith("postgresql://"):
+            elif not (self.database_url.startswith("postgresql://") or self.database_url.startswith("postgresql+psycopg://")):
                 errors.append(
                     "DATABASE_URL must start with 'postgresql://' for production use. "
                     "SQLite is not allowed in production."
