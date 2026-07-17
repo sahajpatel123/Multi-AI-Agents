@@ -1703,6 +1703,10 @@ async def get_watchlist_item_history(
 async def get_agent_history(
     page: int = Query(1, ge=1),
     per_page: int = Query(200, ge=1, le=200),
+    search: str | None = Query(None, max_length=100, description="Case-insensitive substring match on title or task_text."),
+    feedback: str | None = Query(None, description="Filter by feedback status: 'positive', 'negative', or 'none'."),
+    orchestration_id: str | None = Query(None, description="Restrict to a single orchestration chain."),
+    sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', 'score', or 'confidence'."),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -1717,6 +1721,10 @@ async def get_agent_history(
         page=page,
         per_page=per_page,
         retention_days=retention_days,
+        search=search,
+        feedback=feedback,
+        orchestration_id=orchestration_id,
+        sort=sort,
     )
     return JSONResponse(content=history)
 

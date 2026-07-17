@@ -9,6 +9,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from arena.core.blackboard import Blackboard
@@ -398,7 +399,27 @@ def get_user_task_history(
     page: int = 1,
     per_page: int = 20,
     retention_days: int = 30,
+    search: str | None = None,
+    feedback: str | None = None,
+    orchestration_id: str | None = None,
+    sort: str = "newest",
 ) -> dict[str, Any]:
+    """Paginated agent-task history with optional filters and sort.
+
+    Filters compose with AND semantics so callers can narrow by feedback
+    status AND orchestration chain in one request. Search is case-insensitive
+    substring match across title and task_text — the two fields a user
+    actually types into, so we hit the columns they'd visually scan.
+
+    Sort modes:
+      - ``newest`` (default): created_at desc — what users expect first
+      - ``oldest``: created_at asc — useful for replaying a research session
+      - ``score``: final_score desc nulls last — "show me my best answers"
+      - ``confidence``: final_confidence desc nulls last
+
+    All filters are no-ops when None, so the existing call sites (and any
+    callers that don't yet know about these options) keep working unchanged.
+    """
     offset = (page - 1) * per_page
 
     cutoff = datetime.utcnow() - timedelta(days=max(0, retention_days))
@@ -406,9 +427,67 @@ def get_user_task_history(
         AgentTask.user_id == user_id,
         AgentTask.created_at >= cutoff,
     )
+
+    if search:
+        # ``like`` is portable across SQLite + Postgres without leaning on
+        # ILIKE or full-text extensions. The pattern is short-circuited by
+        # ``_escape_like`` to keep "%" and "_" in user input from acting as
+        # wildcards — otherwise a query for "100% effort" would match every
+        # task. Bound the length so a 100KB payload can't pin the DB on a
+        # single LIKE scan.
+        from arena.core.input_validation import sanitize_model_optional_text
+
+        safe = sanitize_model_optional_text(
+            search, max_length=100, field_name="search"
+        )
+        if safe:
+            escaped = _escape_like(safe)
+            pattern = f"%{escaped}%"
+            q = q.filter(
+                or_(
+                    AgentTask.title.ilike(pattern, escape="\\"),
+                    AgentTask.task_text.ilike(pattern, escape="\\"),
+                )
+            )
+
+    if feedback:
+        # Normalize to known values — anything else would always return zero
+        # results and silently confuse the UI. Empty string ("no feedback yet")
+        # is distinct from a positive rating, so we keep it as-is rather than
+        # coercing to None.
+        if feedback in ("positive", "negative"):
+            q = q.filter(AgentTask.user_feedback == feedback)
+        elif feedback == "none":
+            q = q.filter(
+                or_(AgentTask.user_feedback.is_(None), AgentTask.user_feedback == "")
+            )
+
+    if orchestration_id:
+        q = q.filter(AgentTask.orchestration_id == orchestration_id)
+
+    # Sort. ``score`` and ``confidence`` put nulls last so a task that's
+    # still mid-pipeline doesn't sink the top of the list — the user is
+    # asking for their best answers, not their emptiest records.
+    if sort == "oldest":
+        order_clauses = (AgentTask.created_at.asc(),)
+    elif sort == "score":
+        order_clauses = (
+            AgentTask.final_score.desc().nullslast(),
+            AgentTask.created_at.desc(),
+        )
+    elif sort == "confidence":
+        order_clauses = (
+            AgentTask.final_confidence.desc().nullslast(),
+            AgentTask.created_at.desc(),
+        )
+    else:
+        # Unknown sort values fall back to newest rather than 400 — this is
+        # a UI surface and a stale frontend shouldn't break the endpoint.
+        order_clauses = (AgentTask.created_at.desc(),)
+
     total = q.count()
     tasks = (
-        q.order_by(AgentTask.created_at.desc())
+        q.order_by(*order_clauses)
         .offset(offset)
         .limit(per_page)
         .all()
@@ -435,7 +514,27 @@ def get_user_task_history(
         "page": page,
         "per_page": per_page,
         "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+        "filters": {
+            "search": search,
+            "feedback": feedback,
+            "orchestration_id": orchestration_id,
+            "sort": sort,
+        },
     }
+
+
+def _escape_like(value: str) -> str:
+    """Escape SQL LIKE wildcards in user-provided search terms.
+
+    ``%`` and ``_`` are SQL LIKE wildcards; without escaping, a user typing
+    ``100%`` would match every row. The escape character is backslash, which
+    matches the ``escape="\\\\"`` argument we pass to ilike above.
+    """
+    return (
+        value.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
 
 
 def get_watchlist_history(
