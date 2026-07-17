@@ -12,6 +12,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Personas library: Copy mind on any card (name, quote, description)',
       '[NEW] Agent history: Copy research snapshot (score, topics, question) from the ⋯ menu',
       '[NEW] Sidebar Recents: copy any prompt or full turn from the ⋯ menu',
       '[NEW] Watchlist: copy any single watch (markdown snapshot) or just the question',

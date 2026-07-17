@@ -12,7 +12,10 @@ import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { formatPanelExport } from '../lib/panelExport';
-import { formatPersonasLibraryExport } from '../lib/personasLibraryExport';
+import {
+  formatPersonasLibraryExport,
+  formatPersonasLibraryItemCopy,
+} from '../lib/personasLibraryExport';
 import {
   panelSaveButtonLabel,
   panelSaveCaughtErrorMessage,
@@ -69,6 +72,10 @@ export function PersonasPage() {
   const panelDownloadTimerRef = useRef<number | null>(null);
   const [libraryCopyStatus, setLibraryCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [libraryDownloadStatus, setLibraryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  /** Per-mind library card copy feedback. */
+  const [mindCopyId, setMindCopyId] = useState<string | null>(null);
+  const [mindCopyStatus, setMindCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const mindCopyTimerRef = useRef<number | null>(null);
   const libraryCopyTimerRef = useRef<number | null>(null);
   const libraryDownloadTimerRef = useRef<number | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -219,6 +226,9 @@ export function PersonasPage() {
       if (libraryDownloadTimerRef.current != null) {
         window.clearTimeout(libraryDownloadTimerRef.current);
       }
+      if (mindCopyTimerRef.current != null) {
+        window.clearTimeout(mindCopyTimerRef.current);
+      }
     };
   }, []);
 
@@ -367,6 +377,57 @@ export function PersonasPage() {
     libraryCopyTimerRef.current = window.setTimeout(() => {
       setLibraryCopyStatus('idle');
       libraryCopyTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  };
+
+  const copyLibraryMind = async (persona: {
+    id: string;
+    name: string;
+    quote: string;
+    description: string;
+    onPanel?: boolean;
+    unlocked?: boolean;
+  }) => {
+    const text = formatPersonasLibraryItemCopy({
+      name: persona.name,
+      quote: persona.quote,
+      description: persona.description,
+      id: persona.id,
+      onPanel: persona.onPanel ?? unlockedSlotMap[persona.id] != null,
+      unlocked: persona.unlocked ?? canUsePersona(persona.id),
+      panelSlot: unlockedSlotMap[persona.id] ?? null,
+    });
+    if (!text) {
+      setMindCopyId(persona.id);
+      setMindCopyStatus('failed');
+      setToast({
+        message: 'Nothing to copy for this mind',
+        color: '#E57373',
+        iconColor: '#FAF7F4',
+        kind: 'error',
+      });
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    if (mindCopyTimerRef.current != null) {
+      window.clearTimeout(mindCopyTimerRef.current);
+    }
+    setMindCopyId(persona.id);
+    setMindCopyStatus(ok ? 'copied' : 'failed');
+    setToast({
+      message: ok
+        ? `${persona.name} copied as markdown`
+        : 'Could not copy mind — try again',
+      color: ok ? '#1A1714' : '#E57373',
+      iconColor: ok ? '#C4956A' : '#FAF7F4',
+      kind: ok ? 'success' : 'error',
+    });
+    if (ok) void track('persona_mind_copied', undefined, persona.id);
+    const hold = motionDuration(ok ? 2200 : 3000);
+    mindCopyTimerRef.current = window.setTimeout(() => {
+      setMindCopyStatus('idle');
+      setMindCopyId(null);
+      mindCopyTimerRef.current = null;
     }, hold > 0 ? hold : 0);
   };
 
@@ -1066,36 +1127,94 @@ export function PersonasPage() {
                   <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.6, marginTop: '.7rem' }}>
                     <HighlightQuery text={persona.description} query={libraryQuery} />
                   </p>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 8,
+                      alignItems: 'center',
+                      marginTop: '0.85rem',
+                      minHeight: 22,
+                    }}
+                  >
+                    {inSlot ? (
+                      <span
+                        style={{
+                          background: '#F0EBE3',
+                          color: '#6B6460',
+                          fontSize: '10px',
+                          padding: '3px 8px',
+                          borderRadius: '999px',
+                        }}
+                      >
+                        In slot {inSlot}
+                      </span>
+                    ) : isLocked ? (
+                      <span
+                        style={{
+                          background: '#C4956A',
+                          color: '#FAF7F4',
+                          fontSize: '10px',
+                          padding: '3px 8px',
+                          borderRadius: '999px',
+                        }}
+                      >
+                        Plus
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void copyLibraryMind({
+                          id: persona.id,
+                          name: persona.name,
+                          quote: persona.quote,
+                          description: persona.description,
+                          onPanel: inSlot != null,
+                          unlocked: !isLocked,
+                        });
+                      }}
+                      title={`Copy ${persona.name} as markdown`}
+                      aria-label={`Copy ${persona.name} as markdown`}
+                      style={{
+                        marginLeft: 'auto',
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        fontSize: 11,
+                        fontFamily: 'Georgia, serif',
+                        cursor: 'pointer',
+                        color:
+                          mindCopyId === persona.id && mindCopyStatus === 'failed'
+                            ? '#993C1D'
+                            : mindCopyId === persona.id && mindCopyStatus === 'copied'
+                              ? '#3F6B4A'
+                              : '#C4956A',
+                      }}
+                    >
+                      {mindCopyId === persona.id && mindCopyStatus === 'copied'
+                        ? 'Copied'
+                        : mindCopyId === persona.id && mindCopyStatus === 'failed'
+                          ? 'Failed'
+                          : 'Copy mind'}
+                    </button>
+                  </div>
                   {isLocked && (
                     <div
                       style={{
-                        position: 'absolute',
-                        right: '12px',
-                        bottom: '12px',
+                        marginTop: 10,
                         background: '#1A1714',
                         color: '#FAF7F4',
                         fontSize: '11px',
                         padding: '5px 12px',
                         borderRadius: '999px',
+                        display: 'inline-block',
                       }}
                     >
                       Unlock with Plus — $12/month
                     </div>
                   )}
-
-                  {inSlot ? (
-                    <div style={{ position: 'absolute', left: '1.2rem', bottom: '1rem' }}>
-                      <span style={{ background: '#F0EBE3', color: '#6B6460', fontSize: '10px', padding: '3px 8px', borderRadius: '999px' }}>
-                        In slot {inSlot}
-                      </span>
-                    </div>
-                  ) : isLocked ? (
-                    <div style={{ position: 'absolute', left: '1.2rem', bottom: '1rem' }}>
-                      <span style={{ background: '#C4956A', color: '#FAF7F4', fontSize: '10px', padding: '3px 8px', borderRadius: '999px' }}>
-                        Plus
-                      </span>
-                    </div>
-                  ) : null}
                 </div>
               );
             })}
