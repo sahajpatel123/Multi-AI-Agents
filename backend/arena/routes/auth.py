@@ -482,6 +482,23 @@ async def me(
     return orm_user_to_response(user, db)
 
 
+@router.get("/me/features")
+async def my_features(
+    user: User = Depends(get_current_user_required_orm),
+) -> dict:
+    """Just the caller's tier feature map — a cheaper alternative to
+    GET /me when a UI only needs to know 'can this user do X?'.
+
+    Returns { tier, features: {...} } where features is the boolean
+    map from TIER_FEATURES. Same auth contract as /me."""
+    tier = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
+    nt = normalize_tier(tier)
+    return {
+        "tier": tier,
+        "features": TIER_FEATURES.get(nt, TIER_FEATURES[UserTier.FREE]),
+    }
+
+
 @router.get("/check-email")
 async def check_email_availability(
     email: str = Query(..., min_length=1, max_length=255),
