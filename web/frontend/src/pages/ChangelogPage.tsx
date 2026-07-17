@@ -12,6 +12,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Agent templates: Copy template or Copy prompt on any card',
       '[NEW] Personas library: Copy mind on any card (name, quote, description)',
       '[NEW] Agent history: Copy research snapshot (score, topics, question) from the ⋯ menu',
       '[NEW] Sidebar Recents: copy any prompt or full turn from the ⋯ menu',

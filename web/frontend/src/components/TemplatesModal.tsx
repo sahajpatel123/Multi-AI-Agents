@@ -7,7 +7,11 @@ import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { filterBySearchQuery } from '../lib/sidebarSearch';
-import { formatTemplatesExport } from '../lib/templatesExport';
+import {
+  formatTemplatesExport,
+  formatTemplatesItemCopy,
+  formatTemplatesPromptCopy,
+} from '../lib/templatesExport';
 import { templatesListBodyMode } from '../lib/templatesListView';
 import {
   TEMPLATES_SORT_OPTIONS,
@@ -84,11 +88,16 @@ export function TemplatesModal({
     useState<TemplatesExpertiseFilter>(TEMPLATES_EXPERTISE_ALL);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  /** Per-card copy: template id + kind. */
+  const [itemCopyId, setItemCopyId] = useState<string | null>(null);
+  const [itemCopyKind, setItemCopyKind] = useState<'full' | 'prompt' | null>(null);
+  const [itemCopyStatus, setItemCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [recentIds, setRecentIds] = useState<string[]>(() => loadRecentTemplateIds());
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const copyTimerRef = useRef<number | null>(null);
   const downloadTimerRef = useRef<number | null>(null);
+  const itemCopyTimerRef = useRef<number | null>(null);
   const visible = open || closing;
   const reducedMotion = prefersReducedMotion();
 
@@ -183,6 +192,9 @@ export function TemplatesModal({
       setExpertiseFilter(TEMPLATES_EXPERTISE_ALL);
       setCopyStatus('idle');
       setDownloadStatus('idle');
+      setItemCopyStatus('idle');
+      setItemCopyId(null);
+      setItemCopyKind(null);
       setRecentIds(loadRecentTemplateIds());
     }
   }, [open]);
@@ -191,6 +203,7 @@ export function TemplatesModal({
     return () => {
       if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
       if (downloadTimerRef.current != null) window.clearTimeout(downloadTimerRef.current);
+      if (itemCopyTimerRef.current != null) window.clearTimeout(itemCopyTimerRef.current);
     };
   }, []);
 
@@ -245,6 +258,42 @@ export function TemplatesModal({
       }, hold > 0 ? hold : 0);
     });
   }, [buildTemplatesMarkdown]);
+
+  const copyTemplateItem = useCallback(async (t: AgentTaskTemplate, kind: 'full' | 'prompt') => {
+    const text =
+      kind === 'prompt'
+        ? formatTemplatesPromptCopy(t.prompt_template)
+        : formatTemplatesItemCopy({
+            title: t.title,
+            category: t.category,
+            description: t.description,
+            example: t.example,
+            promptTemplate: t.prompt_template,
+            slots: t.slots,
+            expertise: t.default_expertise,
+            id: t.id,
+            disabled: t.disabled,
+            disabledReason: t.disabled_reason,
+          });
+    if (!text) {
+      setItemCopyId(t.id);
+      setItemCopyKind(kind);
+      setItemCopyStatus('failed');
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    if (itemCopyTimerRef.current != null) window.clearTimeout(itemCopyTimerRef.current);
+    setItemCopyId(t.id);
+    setItemCopyKind(kind);
+    setItemCopyStatus(ok ? 'copied' : 'failed');
+    const hold = motionDuration(ok ? 2000 : 2800);
+    itemCopyTimerRef.current = window.setTimeout(() => {
+      setItemCopyStatus('idle');
+      setItemCopyId(null);
+      setItemCopyKind(null);
+      itemCopyTimerRef.current = null;
+    }, hold > 0 ? hold : 0);
+  }, []);
 
   const handleDownloadTemplates = useCallback(() => {
     const md = buildTemplatesMarkdown();
@@ -861,21 +910,20 @@ export function TemplatesModal({
               }}
             >
               {visibleTemplates.map((t) => (
-                <button
+                <div
                   key={t.id}
-                  type="button"
-                  disabled={!!t.disabled}
-                  onClick={() => selectTemplate(t)}
                   style={{
                     textAlign: 'left',
                     background: t.disabled ? '#F5F0E8' : '#FAF7F2',
                     border: '0.5px solid #E0D5C5',
                     borderRadius: 8,
                     padding: 14,
-                    cursor: t.disabled ? 'not-allowed' : 'pointer',
                     opacity: t.disabled ? 0.65 : 1,
                     transition: reducedMotion ? 'none' : 'all 0.15s',
                     fontFamily: 'Georgia, serif',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0,
                   }}
                   onMouseEnter={(e) => {
                     if (t.disabled || reducedMotion) return;
@@ -887,37 +935,136 @@ export function TemplatesModal({
                     e.currentTarget.style.background = t.disabled ? '#F5F0E8' : '#FAF7F2';
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span
+                  <button
+                    type="button"
+                    disabled={!!t.disabled}
+                    onClick={() => selectTemplate(t)}
+                    style={{
+                      textAlign: 'left',
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: t.disabled ? 'not-allowed' : 'pointer',
+                      fontFamily: 'Georgia, serif',
+                      width: '100%',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          background: '#F0E8DC',
+                          color: '#8C7355',
+                          borderRadius: 6,
+                          padding: '2px 8px',
+                          display: 'inline-block',
+                        }}
+                      >
+                        {t.category}
+                      </span>
+                      <ConduraBadge execution={t.execution} compact />
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginTop: 6 }}>
+                      <HighlightQuery text={t.title} query={searchQuery} />
+                    </div>
+                    <div style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', marginTop: 3, lineHeight: 1.4 }}>
+                      <HighlightQuery text={t.description} query={searchQuery} />
+                    </div>
+                    {t.disabled && t.disabled_reason ? (
+                      <div style={{ fontSize: 11, color: '#a89070', marginTop: 6 }}>{t.disabled_reason}</div>
+                    ) : (
+                      <div style={{ fontSize: 11, color: '#C4A882', marginTop: 6 }}>
+                        e.g. {t.example}
+                      </div>
+                    )}
+                  </button>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 10,
+                      marginTop: 10,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void copyTemplateItem(t, 'full');
+                      }}
+                      title="Copy this template as markdown"
+                      aria-label={`Copy template ${t.title}`}
                       style={{
-                        fontSize: 9,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.06em',
-                        background: '#F0E8DC',
-                        color: '#8C7355',
-                        borderRadius: 6,
-                        padding: '2px 8px',
-                        display: 'inline-block',
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        fontSize: 11,
+                        fontFamily: 'Georgia, serif',
+                        cursor: 'pointer',
+                        color:
+                          itemCopyId === t.id &&
+                          itemCopyKind === 'full' &&
+                          itemCopyStatus === 'failed'
+                            ? '#993C1D'
+                            : itemCopyId === t.id &&
+                                itemCopyKind === 'full' &&
+                                itemCopyStatus === 'copied'
+                              ? '#3F6B4A'
+                              : '#C4956A',
                       }}
                     >
-                      {t.category}
-                    </span>
-                    <ConduraBadge execution={t.execution} compact />
+                      {itemCopyId === t.id &&
+                      itemCopyKind === 'full' &&
+                      itemCopyStatus === 'copied'
+                        ? 'Copied'
+                        : itemCopyId === t.id &&
+                            itemCopyKind === 'full' &&
+                            itemCopyStatus === 'failed'
+                          ? 'Failed'
+                          : 'Copy template'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void copyTemplateItem(t, 'prompt');
+                      }}
+                      title="Copy prompt text only"
+                      aria-label={`Copy prompt for ${t.title}`}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        fontSize: 11,
+                        fontFamily: 'Georgia, serif',
+                        cursor: 'pointer',
+                        color:
+                          itemCopyId === t.id &&
+                          itemCopyKind === 'prompt' &&
+                          itemCopyStatus === 'failed'
+                            ? '#993C1D'
+                            : itemCopyId === t.id &&
+                                itemCopyKind === 'prompt' &&
+                                itemCopyStatus === 'copied'
+                              ? '#3F6B4A'
+                              : '#8C7355',
+                      }}
+                    >
+                      {itemCopyId === t.id &&
+                      itemCopyKind === 'prompt' &&
+                      itemCopyStatus === 'copied'
+                        ? 'Copied prompt'
+                        : itemCopyId === t.id &&
+                            itemCopyKind === 'prompt' &&
+                            itemCopyStatus === 'failed'
+                          ? 'Failed'
+                          : 'Copy prompt'}
+                    </button>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginTop: 6 }}>
-                    <HighlightQuery text={t.title} query={searchQuery} />
-                  </div>
-                  <div style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', marginTop: 3, lineHeight: 1.4 }}>
-                    <HighlightQuery text={t.description} query={searchQuery} />
-                  </div>
-                  {t.disabled && t.disabled_reason ? (
-                    <div style={{ fontSize: 11, color: '#a89070', marginTop: 6 }}>{t.disabled_reason}</div>
-                  ) : (
-                    <div style={{ fontSize: 11, color: '#C4A882', marginTop: 6 }}>
-                      e.g. {t.example}
-                    </div>
-                  )}
-                </button>
+                </div>
               ))}
             </div>
           )}

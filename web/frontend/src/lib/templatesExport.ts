@@ -99,3 +99,61 @@ export function formatTemplatesExport(opts: {
   lines.push('_Shared from Arena Agent templates_');
   return lines.join('\n').trim() + '\n';
 }
+
+/**
+ * Clipboard text for a single task template.
+ * Includes the prompt body so users can paste outside compose.
+ */
+export function formatTemplatesItemCopy(item: TemplatesExportItem): string {
+  const title = (item.title || '').trim();
+  const prompt = (item.promptTemplate || '').trim();
+  const description = (item.description || '').trim();
+  const example = (item.example || '').trim();
+  const id = (item.id || '').trim();
+  if (!title && !prompt && !description && !example) return '';
+
+  const lines: string[] = [`# ${title || 'Untitled template'}`, ''];
+
+  const meta: string[] = [];
+  const cat = (item.category || '').trim();
+  if (cat) meta.push(cat);
+  const slots = (item.slots || []).map((s) => (s || '').trim()).filter(Boolean);
+  if (slots.length > 0) meta.push(`${slots.length} slot${slots.length === 1 ? '' : 's'}`);
+  const expertise = (item.expertise || '').trim();
+  if (expertise) meta.push(`expertise: ${expertise}`);
+  if (item.disabled) meta.push('disabled');
+  if (meta.length > 0) {
+    lines.push(`- ${meta.join(' · ')}`);
+  }
+
+  if (description) {
+    lines.push(`- ${description}`);
+  }
+  if (example) {
+    lines.push(`- **Example:** ${example}`);
+  }
+  if (prompt) {
+    lines.push('');
+    lines.push('```');
+    lines.push(prompt);
+    lines.push('```');
+  }
+  const reason = (item.disabledReason || '').trim();
+  if (item.disabled && reason) {
+    lines.push(`- _Unavailable: ${reason}_`);
+  }
+  if (id) {
+    lines.push(`- _id: \`${id}\`_`);
+  }
+
+  lines.push('');
+  lines.push('---');
+  lines.push('_Shared from Arena Agent templates_');
+  return lines.join('\n').trim() + '\n';
+}
+
+/** Bare prompt template only — for pasting into compose or notes. */
+export function formatTemplatesPromptCopy(promptTemplate: string): string {
+  const p = (promptTemplate || '').trim();
+  return p ? `${p}\n` : '';
+}
