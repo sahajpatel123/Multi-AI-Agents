@@ -1408,6 +1408,15 @@ async def challenge_agent_answer(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    # Three parallel LLM calls per request — without a cap an authenticated
+    # client can burn provider quota (cost amplification / DoS).
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_challenge",
+        limit=15,
+        window_seconds=3600,
+        message="Too many challenge runs. Limit is 15 per hour.",
+    )
     answer = sanitize_text(body.answer, max_length=2000, field_name="answer")
     _enforce_capability_gate(capability_id="agent.challenge", task_text=answer)
 
@@ -1476,6 +1485,14 @@ async def agent_rebuttal(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    # Synchronous LLM call — bound per-user volume for cost control.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_rebuttal",
+        limit=30,
+        window_seconds=3600,
+        message="Too many rebuttal requests. Limit is 30 per hour.",
+    )
     task = body.task.strip() or "(context not provided)"
     answer = sanitize_text(body.answer, max_length=2000, field_name="answer")
     challenge = sanitize_text(body.challenge, max_length=2000, field_name="challenge")
@@ -1927,6 +1944,14 @@ async def refine_agent_answer(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    # Refinement re-enters the pipeline (LLM-heavy). Cap per user.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_refine",
+        limit=20,
+        window_seconds=3600,
+        message="Too many refine requests. Limit is 20 per hour.",
+    )
 
     message = sanitize_text(body.message, max_length=1000, field_name="message")
     _enforce_capability_gate(capability_id="agent.refine", task_text=message)

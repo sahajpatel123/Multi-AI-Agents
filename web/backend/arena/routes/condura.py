@@ -21,6 +21,7 @@ from arena.core.handoff_status import (
     STREAMING,
 )
 from arena.core.migration import list_open_flags_for_user, resolve_flag
+from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.telemetry import admin_metrics_payload, record_handoff_dispatched, record_probe_state
 from arena.database import get_db
 from arena.db_models import HandoffDraft, HandoffEvent, HandoffRecord
@@ -69,6 +70,14 @@ async def record_handoff_dispatch(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    # Bound write volume so a client cannot fill HandoffRecord tables.
+    enforce_user_rate_limit(
+        user.id,
+        scope="condura_handoff",
+        limit=60,
+        window_seconds=3600,
+        message="Too many Condura handoffs. Please try again later.",
+    )
     row = HandoffRecord(
         user_id=user.id,
         session_id=body.session_id,
@@ -98,6 +107,13 @@ async def append_handoff_event(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    enforce_user_rate_limit(
+        user.id,
+        scope="condura_handoff_event",
+        limit=120,
+        window_seconds=3600,
+        message="Too many Condura handoff events. Please try again later.",
+    )
     row = (
         db.query(HandoffRecord)
         .filter(HandoffRecord.id == handoff_id, HandoffRecord.user_id == user.id)
@@ -170,6 +186,14 @@ async def save_handoff_draft(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    # Up to 100KB payload per draft — rate-limit to stop table growth spam.
+    enforce_user_rate_limit(
+        user.id,
+        scope="condura_handoff_draft",
+        limit=40,
+        window_seconds=3600,
+        message="Too many Condura drafts. Please try again later.",
+    )
     draft = HandoffDraft(
         user_id=user.id,
         capability=body.capability.strip()[:64],
