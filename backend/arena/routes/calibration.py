@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
+from arena.core.rate_limits import enforce_user_rate_limit
 from arena.database import get_db
 from arena.db_models import AgentTask, ConfidenceRating
 from arena.models.schemas import UserResponse
@@ -20,6 +21,12 @@ from arena.models.schemas import UserResponse
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["calibration"])
+
+# Pagination upper bound for /history. Calibration ratings accumulate
+# one per rated agent task; even an aggressive user won't realistically
+# exceed this in a single page, but the cap protects against scripted
+# scrapes.
+CALIBRATION_HISTORY_MAX_PER_PAGE = 100
 
 
 def _verdict_for_delta(delta: int) -> str:
@@ -115,8 +122,6 @@ async def post_calibration_rate(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    from arena.core.rate_limits import enforce_user_rate_limit
-
     enforce_user_rate_limit(
         user.id,
         scope="calibration_rate",
@@ -242,3 +247,179 @@ async def get_calibration_rating_for_task(
             },
         }
     )
+
+
+# ─── History, re-rate, and delete ────────────────────────────────────────────
+
+
+def _serialize_rating(row: ConfidenceRating) -> dict:
+    return {
+        "id": row.id,
+        "task_id": row.task_id,
+        "user_rating": row.user_rating,
+        "system_score": row.system_score,
+        "delta": row.delta,
+        "verdict": _verdict_for_delta(row.delta),
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.get("/history")
+async def list_calibration_history(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=CALIBRATION_HISTORY_MAX_PER_PAGE),
+    min_delta: Optional[int] = Query(None, ge=-100, le=100, description="Filter: delta must be >= this (e.g., 0 shows overestimates only)."),
+    max_delta: Optional[int] = Query(None, ge=-100, le=100, description="Filter: delta must be <= this (e.g., 0 shows underestimates only)."),
+    sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', 'delta_asc', 'delta_desc'."),
+) -> dict:
+    """Paginated history of the caller's calibration ratings.
+
+    Filters target the signed delta field: positive delta means the user
+    UNDER-estimated the answer (system scored higher), negative means
+    they overestimated. min/max bounds let the UI render 'show me only
+    my underestimates' which is the actionable slice for the calibration
+    game.
+    """
+    q = db.query(ConfidenceRating).filter(ConfidenceRating.user_id == user.id)
+
+    if min_delta is not None:
+        q = q.filter(ConfidenceRating.delta >= min_delta)
+    if max_delta is not None:
+        q = q.filter(ConfidenceRating.delta <= max_delta)
+
+    # Sort. Unknown values fall back to newest so a stale frontend can't
+    # break the endpoint. 'delta_asc' = most-negative first (worst
+    # overestimates at the top).
+    if sort == "oldest":
+        order_clauses = (ConfidenceRating.created_at.asc(),)
+    elif sort == "delta_asc":
+        order_clauses = (ConfidenceRating.delta.asc(), ConfidenceRating.created_at.desc())
+    elif sort == "delta_desc":
+        order_clauses = (ConfidenceRating.delta.desc(), ConfidenceRating.created_at.desc())
+    else:
+        order_clauses = (ConfidenceRating.created_at.desc(),)
+
+    total = q.count()
+    rows = (
+        q.order_by(*order_clauses)
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    return {
+        "ratings": [_serialize_rating(r) for r in rows],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+        "filters": {"min_delta": min_delta, "max_delta": max_delta, "sort": sort},
+    }
+
+
+class RetractBody(BaseModel):
+    """Body for POST /rate/{task_id}/retract — user changes their mind and
+    re-rates. The old rating is replaced atomically so a user's history
+    reflects exactly one rating per task."""
+    rating: int = Field(..., ge=1, le=5)
+
+
+@router.post("/rate/{task_id}/retract")
+async def retract_and_rerate(
+    task_id: str,
+    body: RetractBody,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Replace an existing rating. Same rate limit as /rate so users can't
+    script infinite overwrites."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="calibration_rate",
+        limit=60,
+        window_seconds=3600,
+        message="Too many calibration ratings. Limit is 60 per hour.",
+    )
+
+    clean_id = task_id.strip()
+    task = (
+        db.query(AgentTask)
+        .filter(AgentTask.task_id == clean_id, AgentTask.user_id == user.id)
+        .first()
+    )
+    if not task:
+        # Foreign-or-missing: same shape as the existing rate endpoint.
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    existing = (
+        db.query(ConfidenceRating)
+        .filter(
+            ConfidenceRating.user_id == user.id,
+            ConfidenceRating.task_id == clean_id,
+        )
+        .first()
+    )
+    if existing is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_rated", "message": "No existing rating to retract"},
+        )
+
+    system_score = _system_score_from_task(task)
+    user_scaled = int(body.rating) * 20
+    delta = int(system_score - user_scaled)
+
+    existing.user_rating = int(body.rating)
+    existing.system_score = system_score
+    existing.delta = delta
+    db.add(existing)
+    db.commit()
+    db.refresh(existing)
+
+    stats = build_calibration_stats(db, user.id)
+    return {
+        "status": "replaced",
+        "id": existing.id,
+        "delta": delta,
+        "verdict": _verdict_for_delta(delta),
+        "user_rating": existing.user_rating,
+        "system_score": system_score,
+        "calibration_stats": stats,
+    }
+
+
+@router.delete("/rating/{task_id}")
+async def delete_calibration_rating(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Delete a single calibration rating. Foreign-or-missing ids return
+    404 with the same shape so callers can't enumerate by status code."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="calibration_delete",
+        limit=60,
+        window_seconds=3600,
+        message="Too many calibration deletes. Limit is 60 per hour.",
+    )
+
+    clean_id = task_id.strip()
+    row = (
+        db.query(ConfidenceRating)
+        .filter(
+            ConfidenceRating.user_id == user.id,
+            ConfidenceRating.task_id == clean_id,
+        )
+        .first()
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": "Rating not found"},
+        )
+    db.delete(row)
+    db.commit()
+    return {"status": "deleted", "task_id": clean_id}
