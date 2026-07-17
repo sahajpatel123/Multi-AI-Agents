@@ -89,3 +89,54 @@ export function formatWatchlistExport(opts: {
   lines.push('_Shared from Arena Agent Watchlist_');
   return lines.join('\n').trim() + '\n';
 }
+
+/**
+ * Clipboard text for a single watched question.
+ * Prefer the full card snapshot (status, cadence, latest) over the bare
+ * question so a shared note stays useful outside the app.
+ */
+export function formatWatchlistItemCopy(item: WatchlistExportItem): string {
+  const q = (item.question || '').trim();
+  if (!q) return '';
+
+  const lines: string[] = [
+    `# ${q}`,
+    '',
+    `- **Status:** ${item.isActive ? 'Active' : 'Paused'}`,
+    `- **Cadence:** ${cadenceLabel(item.intervalHours)}`,
+  ];
+
+  if (typeof item.runCount === 'number' && Number.isFinite(item.runCount)) {
+    lines.push(`- **Runs:** ${Math.max(0, Math.floor(item.runCount))}`);
+  }
+  if (item.lastRunAt) {
+    lines.push(`- **Last run:** ${formatIsoWhen(item.lastRunAt, { fallback: '—' })}`);
+  }
+  if (item.nextRunAt && item.isActive) {
+    lines.push(`- **Next run:** ${formatIsoWhen(item.nextRunAt, { fallback: '—' })}`);
+  }
+  const domain = (item.expertiseDomain || '').trim();
+  const level = (item.expertiseLevel || '').trim();
+  if (domain || level) {
+    lines.push(`- **Expertise:** ${[level, domain].filter(Boolean).join(' · ')}`);
+  }
+  const title = (item.latestTitle || '').trim();
+  if (title) {
+    const score =
+      typeof item.latestScore === 'number' && Number.isFinite(item.latestScore)
+        ? ` (${Math.round(item.latestScore)}/100)`
+        : '';
+    lines.push(`- **Latest:** ${title}${score}`);
+  }
+
+  lines.push('');
+  lines.push('---');
+  lines.push('_Shared from Arena Agent Watchlist_');
+  return lines.join('\n').trim() + '\n';
+}
+
+/** Bare question only — for re-prompting or pasting into compose. */
+export function formatWatchlistQuestionCopy(question: string): string {
+  const q = (question || '').trim();
+  return q ? `${q}\n` : '';
+}

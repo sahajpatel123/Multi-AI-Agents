@@ -27,7 +27,11 @@ import {
   WATCHLIST_INTERVALS,
   type WatchlistIntervalHours,
 } from '../lib/watchlistIntervals';
-import { formatWatchlistExport } from '../lib/watchlistExport';
+import {
+  formatWatchlistExport,
+  formatWatchlistItemCopy,
+  formatWatchlistQuestionCopy,
+} from '../lib/watchlistExport';
 import {
   WATCHLIST_SORT_OPTIONS,
   sortWatchlistItems,
@@ -108,6 +112,11 @@ export function WatchlistPage() {
   const [listSort, setListSort] = useState<WatchlistSort>('next_soon');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  /** Per-card copy: which item id last acted, and which action. */
+  const [itemCopyId, setItemCopyId] = useState<string | null>(null);
+  const [itemCopyKind, setItemCopyKind] = useState<'watch' | 'question' | null>(null);
+  const [itemCopyStatus, setItemCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const itemCopyTimerRef = useRef<number | null>(null);
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
   const [historyCache, setHistoryCache] = useState<
     Record<
@@ -382,6 +391,9 @@ export function WatchlistPage() {
       if (historyCopyTimerRef.current != null) {
         window.clearTimeout(historyCopyTimerRef.current);
       }
+      if (itemCopyTimerRef.current != null) {
+        window.clearTimeout(itemCopyTimerRef.current);
+      }
       if (historyDownloadTimerRef.current != null) {
         window.clearTimeout(historyDownloadTimerRef.current);
       }
@@ -419,6 +431,61 @@ export function WatchlistPage() {
       setHistoryCopyStatus('idle');
       historyCopyTimerRef.current = null;
     }, status === 'copied' ? 2200 : 3200);
+  };
+
+  const flashItemCopy = (
+    itemId: string,
+    kind: 'watch' | 'question',
+    status: 'copied' | 'failed',
+  ) => {
+    if (itemCopyTimerRef.current != null) {
+      window.clearTimeout(itemCopyTimerRef.current);
+    }
+    setItemCopyId(itemId);
+    setItemCopyKind(kind);
+    setItemCopyStatus(status);
+    itemCopyTimerRef.current = window.setTimeout(() => {
+      setItemCopyStatus('idle');
+      setItemCopyId(null);
+      setItemCopyKind(null);
+      itemCopyTimerRef.current = null;
+    }, status === 'copied' ? 2200 : 3200);
+  };
+
+  const copyWatchItem = async (item: AgentWatchlistItem, kind: 'watch' | 'question') => {
+    const text =
+      kind === 'question'
+        ? formatWatchlistQuestionCopy(item.question)
+        : formatWatchlistItemCopy({
+            question: item.question,
+            intervalHours: item.interval_hours,
+            isActive: item.is_active,
+            runCount: item.run_count,
+            lastRunAt: item.last_run_at,
+            nextRunAt: item.next_run_at,
+            latestTitle: item.latest_task?.title,
+            latestScore: item.latest_task?.final_score,
+            expertiseLevel: item.expertise_level,
+            expertiseDomain: item.expertise_domain,
+          });
+    if (!text) {
+      flashItemCopy(item.id, kind, 'failed');
+      setError(
+        kind === 'question'
+          ? 'Nothing to copy — this watch has no question text.'
+          : 'Nothing to copy on this watch.',
+      );
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    flashItemCopy(item.id, kind, ok ? 'copied' : 'failed');
+    if (!ok) {
+      setError(
+        kind === 'question'
+          ? 'Could not copy question — try again.'
+          : 'Could not copy this watch — try the list Copy export.',
+      );
+    }
   };
 
   const flashHistoryDownloadStatus = (status: 'done' | 'failed') => {
@@ -1317,6 +1384,74 @@ export function WatchlistPage() {
                           {historyOpenId === item.id ? 'Hide run history' : 'Run history'}
                         </button>
                       ) : null}
+                      <button
+                        type="button"
+                        onClick={() => void copyWatchItem(item, 'watch')}
+                        title="Copy this watch as markdown"
+                        aria-label={`Copy watch: ${item.question.slice(0, 80) || 'watched question'}`}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          fontSize: 11,
+                          color:
+                            itemCopyId === item.id &&
+                            itemCopyKind === 'watch' &&
+                            itemCopyStatus === 'failed'
+                              ? '#993C1D'
+                              : itemCopyId === item.id &&
+                                  itemCopyKind === 'watch' &&
+                                  itemCopyStatus === 'copied'
+                                ? '#3F6B4A'
+                                : '#C4956A',
+                          cursor: 'pointer',
+                          fontFamily: 'Georgia, serif',
+                        }}
+                      >
+                        {itemCopyId === item.id &&
+                        itemCopyKind === 'watch' &&
+                        itemCopyStatus === 'copied'
+                          ? 'Copied watch'
+                          : itemCopyId === item.id &&
+                              itemCopyKind === 'watch' &&
+                              itemCopyStatus === 'failed'
+                            ? 'Copy failed'
+                            : 'Copy watch'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void copyWatchItem(item, 'question')}
+                        title="Copy the watched question only"
+                        aria-label={`Copy question: ${item.question.slice(0, 80) || 'watched question'}`}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          fontSize: 11,
+                          color:
+                            itemCopyId === item.id &&
+                            itemCopyKind === 'question' &&
+                            itemCopyStatus === 'failed'
+                              ? '#993C1D'
+                              : itemCopyId === item.id &&
+                                  itemCopyKind === 'question' &&
+                                  itemCopyStatus === 'copied'
+                                ? '#3F6B4A'
+                                : '#8C7355',
+                          cursor: 'pointer',
+                          fontFamily: 'Georgia, serif',
+                        }}
+                      >
+                        {itemCopyId === item.id &&
+                        itemCopyKind === 'question' &&
+                        itemCopyStatus === 'copied'
+                          ? 'Copied question'
+                          : itemCopyId === item.id &&
+                              itemCopyKind === 'question' &&
+                              itemCopyStatus === 'failed'
+                            ? 'Copy failed'
+                            : 'Copy question'}
+                      </button>
                     </div>
                     {historyOpenId === item.id ? (
                       <div

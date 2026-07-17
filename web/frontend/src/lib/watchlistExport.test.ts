@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatWatchlistExport } from './watchlistExport';
+import {
+  formatWatchlistExport,
+  formatWatchlistItemCopy,
+  formatWatchlistQuestionCopy,
+} from './watchlistExport';
 
 describe('formatWatchlistExport', () => {
   it('formats active and paused items with cadence labels', () => {
@@ -55,5 +59,43 @@ describe('formatWatchlistExport', () => {
       items: [{ question: 'X', intervalHours: 72, isActive: true }],
     });
     expect(md).toContain('Every 3 days');
+  });
+});
+
+describe('formatWatchlistItemCopy', () => {
+  it('snapshots one watch as markdown', () => {
+    const md = formatWatchlistItemCopy({
+      question: 'Will rates cut this quarter?',
+      intervalHours: 24,
+      isActive: true,
+      runCount: 3,
+      lastRunAt: '2026-07-01T12:00:00.000Z',
+      nextRunAt: '2026-07-02T12:00:00.000Z',
+      latestTitle: 'Macro scan',
+      latestScore: 81,
+      expertiseLevel: 'expert',
+      expertiseDomain: 'macro',
+    });
+    expect(md).toContain('# Will rates cut this quarter?');
+    expect(md).toContain('**Status:** Active');
+    expect(md).toContain('**Cadence:** Daily (24h)');
+    expect(md).toContain('**Latest:** Macro scan (81/100)');
+    expect(md).toContain('Shared from Arena Agent Watchlist');
+  });
+
+  it('returns empty for blank question', () => {
+    expect(formatWatchlistItemCopy({ question: '  ', intervalHours: 24, isActive: true })).toBe(
+      '',
+    );
+  });
+});
+
+describe('formatWatchlistQuestionCopy', () => {
+  it('returns trimmed question with trailing newline', () => {
+    expect(formatWatchlistQuestionCopy('  Ship today?  ')).toBe('Ship today?\n');
+  });
+
+  it('returns empty for blank', () => {
+    expect(formatWatchlistQuestionCopy('   ')).toBe('');
   });
 });
