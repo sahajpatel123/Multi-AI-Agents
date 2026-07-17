@@ -94,9 +94,14 @@ class TestPersonasEndpoint:
         # 200 expected; endpoint may also be public — accept either.
         assert res.status_code == 200
         body = res.json()
-        assert isinstance(body, list)
-        assert len(body) >= 16
-        ids = {p["persona_id"] for p in body}
+        # Envelope shape — array lives under 'personas', with metadata
+        # attached (total, providers) so the UI doesn't need a second
+        # request to render a provider-filter dropdown.
+        assert isinstance(body, dict)
+        assert "personas" in body
+        assert isinstance(body["personas"], list)
+        assert body["total"] >= 16
+        ids = {p["persona_id"] for p in body["personas"]}
         assert "analyst" in ids
         assert "philosopher" in ids
         assert "contrarian" in ids
