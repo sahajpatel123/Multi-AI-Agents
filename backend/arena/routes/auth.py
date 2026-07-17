@@ -5,12 +5,14 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from sqlalchemy import Date, cast, func
 from sqlalchemy.orm import Session
 
 from arena.core.client_ip import get_request_client_ip
+from arena.core.rate_limits import enforce_user_rate_limit
 
 from arena.core.auth import (
     authenticate_user,
@@ -19,7 +21,9 @@ from arena.core.auth import (
     create_user,
     decode_token,
     get_user_by_email,
+    hash_password,
     orm_user_to_response,
+    verify_password,
 )
 
 
@@ -593,4 +597,119 @@ async def get_user_tier_summary(
             "scoring_audit": base["scoring_audit"],
         },
         "upgrade_to": upgrade_target(normalized_tier),
+    }
+
+
+# ──────────────────────────────────────────────────────────────
+# Account security: change-password + security metadata
+# ──────────────────────────────────────────────────────────────
+
+
+class ChangePasswordBody(BaseModel):
+    """Body for POST /auth/change-password.
+
+    Requiring the current password is a deliberate friction — a stolen
+    session token alone isn't enough to take over the account, the
+    attacker would also need the user's password.
+    """
+
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        ok, reason = _validate_password_strength(v)
+        if not ok:
+            raise ValueError(reason)
+        return v
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordBody,
+    request: Request,
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Rotate the caller's password.
+
+    Verifies the current password before accepting the new one — so a
+    stolen access token alone can't take over the account. Rate-limited
+    to 5/minute because the verify step runs scrypt (CPU-bound) and a
+    brute-force loop would be expensive even with strong hashing.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="auth_change_password",
+        limit=5,
+        window_seconds=60,
+        message="Too many password change attempts. Please slow down.",
+    )
+
+    matched, _ = verify_password(body.current_password, user.password_hash)
+    if not matched:
+        # Use the same response shape as a stale-token failure so a
+        # caller can't enumerate which current_password values are
+        # correct via 401 vs 422.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "current_password_invalid"},
+        )
+
+    if matched and verify_password(body.new_password, user.password_hash)[0]:
+        # Block no-op rotations — silently accepting a "new" password
+        # equal to the current one would defeat the purpose of having
+        # a separate password field.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "new_password_must_differ"},
+        )
+
+    user.password_hash = hash_password(body.new_password)
+    db.add(user)
+    db.commit()
+
+    # Surface a different log line so a SOC can grep for it.
+    logger.info("password_changed user_id=%s", user.id)
+    return {"status": "changed"}
+
+
+@router.get("/security")
+async def account_security(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Account-security metadata for the Security panel.
+
+    Returns the timestamps and counts a user needs to make sense of
+    'is this account in a healthy state?' — without exposing any
+    PII about other accounts.
+    """
+    # Account age — 'member since'.
+    member_since = user.created_at.isoformat() if user.created_at else None
+
+    # Last login timestamp. We use the most recent successful login as
+    # recorded by the UsageRecord timestamp for mode='arena' on this
+    # user — not perfect (a brand-new user with no prompts yet has no
+    # last-login signal), but a reasonable proxy without a separate
+    # login_audit table.
+    last_prompt = (
+        db.query(func.max(UsageRecord.timestamp))
+        .filter(UsageRecord.user_id == user.id)
+        .scalar()
+    )
+
+    # Password freshness proxy: 'password_changed_at' would require a
+    # new column; until that ships, the absence of a tracked timestamp
+    # is itself the signal — UI can render 'never changed' or 'set at
+    # signup' so users know the password is the original.
+    return {
+        "email": user.email,
+        "member_since": member_since,
+        "last_active_at": last_prompt.isoformat() if last_prompt else None,
+        "tier": user.tier.value if hasattr(user.tier, "value") else str(user.tier),
+        "is_verified": bool(getattr(user, "is_verified", False)),
+        "has_password": bool(user.password_hash),
+        "password_last_changed_at": None,  # TODO once column ships
     }
