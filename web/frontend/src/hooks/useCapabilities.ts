@@ -15,8 +15,6 @@ type State = {
   error: string | null;
 };
 
-const EMPTY: State = { capabilities: [], loading: true, error: null };
-
 /**
  * Fetch and cache the capability catalog.
  *
