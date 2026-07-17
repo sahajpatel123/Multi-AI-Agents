@@ -14,8 +14,11 @@ from arena.core.input_validation import sanitize_model_optional_text, sanitize_m
 from arena.core.model_router import get_all_routes_summary
 from arena.core.observability import log_ux_event
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
+from arena.core.tier_config import get_tier_str, normalize_tier
 from arena.database import get_db
-from arena.db_models import PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UXEvent, UserPreference
+from arena.db_models import (
+    PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UserPreference, UXEvent, User, UserTier,
+)
 from arena.models.schemas import UserResponse
 
 router = APIRouter(tags=["analytics"])
@@ -341,6 +344,124 @@ async def analytics_summary(
         "persona_engagement": dict(persona_engagement),
         "avg_winning_score": round(avg_winning_score, 1),
         "drift_rate": round(drift_rate, 2),
+    }
+
+
+@router.get("/analytics/engagement")
+async def analytics_engagement(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(30, ge=1, le=366, description="Window length in days, ending today (UTC)."),
+) -> dict:
+    """Engagement metrics broken down by subscription tier.
+
+    Returns engagement_rate (meaningful UX events / total prompts)
+    and the supporting counts per tier over the window. Useful for
+    the analytics dashboard's 'are paying users actually engaging
+    deeper?' question — a free user with 100 prompts and 0 events
+    has a different product story than a PRO user with 100 prompts
+    and 0 events.
+
+    All other rows from /analytics/summary compute a single
+    engagement_rate for the caller; this endpoint exists to surface
+    how engagement correlates with tier without exposing per-user
+    data from other accounts.
+    """
+    # Caller-scoped — we don't aggregate across users here. The
+    # dashboard wanting cross-user analytics should hit /metrics
+    # (admin-only). This endpoint is for a single user to see
+    # whether their engagement rate matches the rest of their tier.
+    from arena.db_models import User as UserModel
+
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    window_start = now_utc - timedelta(days=days - 1)
+
+    # Caller's tier — used for the per-tier row that includes them.
+    caller_tier = normalize_tier(get_tier_str(user))
+
+    # Single SQL join so the per-tier breakdown is one query rather
+    # than N queries. NULL user_id rows (guest IPs) bucket under
+    # UserTier.GUEST.
+    tier_rows = (
+        db.query(
+            func.coalesce(UserModel.tier, UserTier.GUEST).label("tier"),
+            func.count(func.distinct(UsageRecord.id)).label("prompts"),
+            func.count(func.distinct(UXEvent.id)).label("events"),
+        )
+        .outerjoin(UserModel, UsageRecord.user_id == UserModel.id)
+        .outerjoin(
+            UXEvent,
+            (UXEvent.user_id == UsageRecord.user_id)
+            & (UXEvent.created_at >= UsageRecord.timestamp - timedelta(minutes=5))
+            & (UXEvent.created_at <= UsageRecord.timestamp + timedelta(minutes=5)),
+        )
+        .filter(UsageRecord.timestamp >= window_start)
+        .group_by("tier")
+        .all()
+    )
+
+    MEANINGFUL_EVENTS = {
+        "deeper_opened", "response_liked", "response_saved", "debate_started",
+    }
+
+    # For each tier, compute meaningful_event_count and engagement_rate
+    # in a second pass. The join above double-counts (one row per
+    # prompt × event) so we normalize.
+    by_tier: dict[str, dict[str, int | float]] = {}
+    for row in tier_rows:
+        tier_label = str(row.tier.value if hasattr(row.tier, "value") else row.tier)
+        by_tier[tier_label] = {
+            "prompts": int(row.prompts or 0),
+            "meaningful_events": 0,
+            "engagement_rate": 0.0,
+        }
+
+    # Now count meaningful events per tier — separate query so the
+    # double-counting above doesn't pollute the rate.
+    event_rows = (
+        db.query(
+            func.coalesce(UserModel.tier, UserTier.GUEST).label("tier"),
+            func.count(UXEvent.id).label("event_count"),
+        )
+        .join(UserModel, UXEvent.user_id == UserModel.id)
+        .filter(
+            UXEvent.created_at >= window_start,
+            UXEvent.event_type.in_(MEANINGFUL_EVENTS),
+        )
+        .group_by("tier")
+        .all()
+    )
+    for row in event_rows:
+        tier_label = str(row.tier.value if hasattr(row.tier, "value") else row.tier)
+        if tier_label not in by_tier:
+            by_tier[tier_label] = {
+                "prompts": 0,
+                "meaningful_events": 0,
+                "engagement_rate": 0.0,
+            }
+        by_tier[tier_label]["meaningful_events"] = int(row.event_count or 0)
+
+    # Compute rates.
+    for tier_label, data in by_tier.items():
+        if data["prompts"] > 0:
+            data["engagement_rate"] = round(
+                min(1.0, data["meaningful_events"] / data["prompts"]),
+                3,
+            )
+
+    # Stable tier order so the dashboard doesn't shuffle.
+    tier_order = ["FREE", "PLUS", "PRO", "GUEST", "AGENT_ADDON"]
+    sorted_keys = [t for t in tier_order if t in by_tier] + [
+        t for t in by_tier if t not in tier_order
+    ]
+    tiers_list = [{"tier": t, **by_tier[t]} for t in sorted_keys]
+
+    return {
+        "window_days": days,
+        "window_start": window_start.date().isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "caller_tier": caller_tier.value if hasattr(caller_tier, "value") else str(caller_tier),
+        "tiers": tiers_list,
     }
 
 
