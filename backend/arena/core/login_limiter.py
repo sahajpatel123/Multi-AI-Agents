@@ -68,6 +68,11 @@ class LoginRateLimiter:
                 ),
                 "retry_after": remaining,
             },
+            # Standard HTTP retry hint — well-behaved clients honor it
+            # to back off without polling. Without this header, only
+            # well-behaved clients reading the body know how long to
+            # wait, which leads to thundering-herd lockout churn.
+            headers={"Retry-After": str(max(1, remaining))},
         )
 
     def assert_not_locked(self, request: Request) -> None:
@@ -81,6 +86,22 @@ class LoginRateLimiter:
             if now < lockout_until:
                 self._raise_locked(int(lockout_until - now))
             del self._lockouts[ip]
+
+    def remaining_attempts(self, request: Request) -> int:
+        """How many more failures the caller can sustain before lockout.
+
+        Exposed so the login route can attach `remaining_attempts` to
+        the 401 response — a UI can render '3 attempts remaining' so
+        users know they're approaching the threshold before it bites.
+        Returns max_attempts when no failures have been recorded yet.
+        """
+        ip = self.get_client_ip(request)
+        now = time.time()
+        with self._lock:
+            bucket = [
+                t for t in self._attempts.get(ip, []) if now - t < self.window_seconds
+            ]
+            return max(0, self.max_attempts - len(bucket))
 
     def record_failure(self, request: Request) -> None:
         """Record a confirmed failed attempt; may lock the IP and raise 429.
@@ -117,6 +138,7 @@ class LoginRateLimiter:
                         ),
                         "retry_after": self.lockout_seconds,
                     },
+                    headers={"Retry-After": str(self.lockout_seconds)},
                 )
 
     def clear(self, request: Request) -> None:

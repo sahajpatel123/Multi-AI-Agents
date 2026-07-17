@@ -236,9 +236,20 @@ async def login(
         user = authenticate_user(db, body.email, body.password)
         if not user:
             login_limiter.record_failure(request)
+            # Surface remaining attempts so the UI can render
+            # '2 attempts remaining' instead of a bare 'invalid'.
+            # The number is a soft hint — leaking it doesn't materially
+            # help an attacker who already has the email (knowing
+            # they're 1/3 down just means they have to try again on a
+            # different IP, which they could do anyway).
+            remaining = login_limiter.remaining_attempts(request)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password",
+                detail={
+                    "error": "invalid_credentials",
+                    "message": "Invalid email or password",
+                    "remaining_attempts": remaining,
+                },
             )
 
         access = create_access_token(user.id, user.email)
