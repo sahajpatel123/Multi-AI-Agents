@@ -2014,6 +2014,14 @@ async def verify_arena_answer(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    # Spawns a full agent pipeline (bridge) — same cost class as /run.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_verify_arena",
+        limit=10,
+        window_seconds=3600,
+        message="Too many Arena→Agent verifications. Limit is 10 per hour.",
+    )
 
     arena_answer = body.arena_answer.strip()
     original_question = body.original_question.strip()
@@ -2093,6 +2101,14 @@ async def cross_pollinate_agent_answer(
     Each persona evaluates whether they agree, disagree, or see important nuances missed.
     """
     _ensure_agent_access(user, db)
+    # Cheap prep endpoint but still auth+DB work; bound spam.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_pollinate",
+        limit=60,
+        window_seconds=3600,
+        message="Too many cross-pollinate requests. Limit is 60 per hour.",
+    )
 
     tid = body.task_id.strip()
     if not tid:

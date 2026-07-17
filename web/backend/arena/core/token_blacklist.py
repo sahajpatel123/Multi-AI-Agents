@@ -151,9 +151,12 @@ def add(token: str, expires_at: datetime, db: Session, reason: Optional[str] = N
     — so expired rows naturally fall out of any bounded scan.
 
     Idempotent: re-revoking the same token is a no-op (we look up by
-    the unique `token_hash` first).
+    the unique `token_hash` first). Empty / non-string tokens are ignored
+    so callers cannot poison the table with a hash of ``""``.
     """
-    h = _hash_token(token)
+    if not token or not isinstance(token, str) or not token.strip():
+        return
+    h = _hash_token(token.strip())
     existing = db.query(RevokedToken).filter(RevokedToken.token_hash == h).first()
     if existing:
         # If the existing row is already expired, refresh its expiry
@@ -176,7 +179,9 @@ def is_blacklisted(token: str, db: Session) -> bool:
     ever runs. The cost is one extra DELETE in the cold-path lookup
     — fine for an auth path that runs a handful of times per request.
     """
-    h = _hash_token(token)
+    if not token or not isinstance(token, str) or not token.strip():
+        return False
+    h = _hash_token(token.strip())
     now = _utcnow_naive()
     row = (
         db.query(RevokedToken)

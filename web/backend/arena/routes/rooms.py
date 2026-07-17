@@ -164,6 +164,14 @@ async def create_room(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
+    # Room rows + optional LLM synthesis — cap mass room creation per account.
+    enforce_user_rate_limit(
+        user.id,
+        scope="room_create",
+        limit=20,
+        window_seconds=3600,
+        message="Too many rooms created. Limit is 20 per hour.",
+    )
     rid = str(uuid4())
     short = rid.replace("-", "")[:5]
     base = f"{_slugify(body.name)}-{short}"

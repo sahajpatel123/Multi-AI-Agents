@@ -137,3 +137,22 @@ async def test_orchestrate_is_rate_limited(app_client, make_user, monkeypatch):
         json={"questions": ["What is A?", "What is B?"]},
     )
     assert last.status_code == 429, last.text
+
+
+@pytest.mark.asyncio
+async def test_verify_from_arena_is_rate_limited(app_client, make_user, monkeypatch):
+    """Bridge verification starts a full pipeline — cap before spawn."""
+    _patch_scope_limit(monkeypatch, "agent_verify_arena", max_hits=0)
+
+    user = make_user(email="verify-rl@test.com", tier=UserTier.PRO)
+    last = await app_client.post(
+        "/api/agent/verify-from-arena",
+        headers=_headers(user),
+        json={
+            "original_question": "Should we ship?",
+            "arena_answer": "Yes, ship the smallest slice.",
+            "winning_persona": "The Analyst",
+            "arena_score": 80,
+        },
+    )
+    assert last.status_code == 429, last.text

@@ -140,8 +140,24 @@ def legacy_hits() -> int:
 
 
 def decode_token(token: str) -> Optional[dict]:
+    """Decode and verify a JWT. Requires a valid signature and ``exp`` claim.
+
+    Rejects empty tokens and algorithm-confusion attempts (only HS256 is
+    accepted). Returns None on any verification failure so callers can 401.
+    """
+    if not token or not isinstance(token, str) or not token.strip():
+        return None
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return jwt.decode(
+            token.strip(),
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={
+                "require_exp": True,
+                "verify_exp": True,
+                "verify_signature": True,
+            },
+        )
     except JWTError:
         return None
 
