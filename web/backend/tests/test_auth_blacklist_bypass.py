@@ -136,3 +136,46 @@ class TestLogoutInvalidatesRefreshToken:
         # /me rejects the blacklisted access token via the dep chain.
         after = await app_client.get("/api/auth/me", headers=headers)
         assert after.status_code == 401
+
+
+class TestLogoutDoesNotRevokeForeignRefresh:
+    """Authenticated caller must not be able to blacklist another user's refresh."""
+
+    @pytest.mark.asyncio
+    async def test_logout_ignores_foreign_refresh_token(
+        self, app_client, make_user, isolated_db
+    ):
+        from arena.core.auth import create_access_token, create_refresh_token
+        from arena.core.token_blacklist import token_blacklist
+        from arena.db_models import UserTier
+
+        victim = make_user(email="victim-logout@test.com", tier=UserTier.PLUS)
+        attacker = make_user(email="attacker-logout@test.com", tier=UserTier.PLUS)
+        victim_refresh = create_refresh_token(victim.id, victim.email)
+        attacker_access = create_access_token(attacker.id, attacker.email)
+
+        logout = await app_client.post(
+            "/api/auth/logout",
+            headers={"Authorization": f"Bearer {attacker_access}"},
+            json={"refresh_token": victim_refresh},
+        )
+        assert logout.status_code == 200
+
+        SessionLocal = isolated_db
+        s = SessionLocal()
+        try:
+            assert token_blacklist.is_blacklisted(victim_refresh, s) is False, (
+                "logout must not blacklist another user's refresh token"
+            )
+        finally:
+            s.close()
+
+        # Victim can still rotate with their refresh token.
+        refreshed = await app_client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": victim_refresh},
+        )
+        assert refreshed.status_code == 200, (
+            f"victim refresh must still work after foreign logout attempt; "
+            f"got {refreshed.status_code} {refreshed.text}"
+        )

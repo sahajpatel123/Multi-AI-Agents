@@ -42,6 +42,36 @@ def _payload_exp_seconds(token: str) -> Optional[int]:
 
 def _epoch_to_naive(epoch_seconds: int) -> datetime:
     return datetime.fromtimestamp(epoch_seconds, tz=timezone.utc).replace(tzinfo=None)
+
+
+def _subject_user_id(payload: dict) -> Optional[int]:
+    """Parse JWT subject to int user id, or None if missing/malformed."""
+    raw = payload.get("sub") or payload.get("user_id")
+    if raw is None:
+        return None
+    try:
+        return int(str(raw).strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def _owned_refresh_token(token: str, user_id: int) -> Optional[dict]:
+    """Return decoded payload only if token is a live refresh JWT for user_id.
+
+    Logout must never blacklist another user's refresh token. Without this
+    check, any authenticated client could POST a victim's refresh_token in
+    the body and force-revoke their session (session DoS / forced re-login).
+    """
+    try:
+        payload = decode_token(token)
+    except Exception:
+        return None
+    if not payload or payload.get("type") != "refresh":
+        return None
+    sub = _subject_user_id(payload)
+    if sub is None or sub != int(user_id):
+        return None
+    return payload
 from arena.core.token_blacklist import token_blacklist
 from arena.core.dependencies import get_current_user_required_orm
 from arena.core.feedback_calibrator import get_answer_feedback_distribution
@@ -234,11 +264,16 @@ async def logout(request: Request, db: Session = Depends(get_db), user: User = D
     logout request AND any refresh token the client forwards (in body or
     Authorization header). Without blacklisting the refresh token too, a
     logged-out session can be silently re-minted via /api/auth/refresh.
+
+    Refresh tokens in the body are only revoked when they belong to the
+    authenticated caller — otherwise any logged-in client could force-
+    revoke another user's session by pasting their refresh JWT.
     """
     auth_header = request.headers.get("Authorization", "")
     access_token = ""
     if auth_header.startswith("Bearer "):
-        access_token = auth_header[7:]
+        # Strip consistently so blacklist lookups match the dependency's token.
+        access_token = auth_header[7:].strip()
 
     # Pull the refresh token from body OR header. Body wins if both arrive.
     refresh_token = ""
@@ -251,28 +286,43 @@ async def logout(request: Request, db: Session = Depends(get_db), user: User = D
     if not refresh_token and auth_header.startswith("Bearer "):
         # Header-fallback: also accept a refresh token here so a client that
         # only ever sets one Authorization header can still log out cleanly.
+        # If the header is the access token (normal case), ownership checks
+        # below skip treating it as a second refresh revoke.
         refresh_token = auth_header[7:].strip()
 
-    revoked_any = False
+    access_revoked = False
+    refresh_revoked = False
     if access_token:
         access_exp = _payload_exp_seconds(access_token)
         if access_exp is not None:
             token_blacklist.add(
                 access_token, expires_at=_epoch_to_naive(access_exp), db=db, reason="logout"
             )
-            revoked_any = True
+            access_revoked = True
     if refresh_token and refresh_token != access_token:
-        refresh_exp = _payload_exp_seconds(refresh_token)
-        if refresh_exp is not None:
-            token_blacklist.add(
-                refresh_token, expires_at=_epoch_to_naive(refresh_exp), db=db, reason="logout"
+        owned = _owned_refresh_token(refresh_token, user.id)
+        if owned is not None:
+            exp = owned.get("exp")
+            if isinstance(exp, (int, float)):
+                token_blacklist.add(
+                    refresh_token,
+                    expires_at=_epoch_to_naive(int(exp)),
+                    db=db,
+                    reason="logout",
+                )
+                refresh_revoked = True
+        else:
+            # Foreign or malformed refresh — do not revoke, do not error
+            # (logout of the caller's access token still succeeds).
+            logger.warning(
+                "Logout ignored non-owned or invalid refresh token for user=%s",
+                user.id,
             )
-            revoked_any = True
     logger.info(
         "Logout user=%d access_revoked=%s refresh_revoked=%s",
         user.id,
-        bool(access_token),
-        bool(refresh_token and refresh_token != access_token),
+        access_revoked,
+        refresh_revoked,
     )
     return JSONResponse({"success": True})
 
@@ -314,14 +364,14 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
             detail="Invalid or expired refresh token",
         )
 
-    user_id = payload.get("sub") or str(payload.get("user_id", ""))
-    if not user_id:
+    uid = _subject_user_id(payload)
+    if uid is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
         )
 
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    user = db.query(User).filter(User.id == uid).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
