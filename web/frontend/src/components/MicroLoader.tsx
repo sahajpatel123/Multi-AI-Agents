@@ -7,11 +7,20 @@ type LoaderPhase = 'draw' | 'hold' | 'fade';
 const WORDS = ['thinking', 'loading', 'working', 'finding'] as const;
 
 type MicroLoaderProps = {
-  /** Accessible status text (and reduced-motion label). */
+  /** Accessible status text. Also rendered as the visible text when
+   *  prefers-reduced-motion is on (the canvas animation is replaced
+   *  with this static label so vestibular users still see a status). */
   label?: string;
+  /** When false, the loader does not auto-cycle words. Useful for
+   *  contexts where one specific message is appropriate ('Analyzing…'
+   *  for example). Defaults to true. */
+  cycleWords?: boolean;
 };
 
-export default function MicroLoader({ label = 'Loading' }: MicroLoaderProps) {
+export default function MicroLoader({
+  label = 'Loading',
+  cycleWords = true,
+}: MicroLoaderProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number | null>(null);
   const pointsRef = useRef<Array<{ x: number; y: number }>>([]);
@@ -80,8 +89,16 @@ export default function MicroLoader({ label = 'Loading' }: MicroLoaderProps) {
         fadeAlphaRef.current -= 0.035;
         if (fadeAlphaRef.current <= 0) {
           fadeAlphaRef.current = 0;
-          wordIndexRef.current = (wordIndexRef.current + 1) % WORDS.length;
-          loadWord(WORDS[wordIndexRef.current]);
+          if (cycleWords) {
+            wordIndexRef.current = (wordIndexRef.current + 1) % WORDS.length;
+            loadWord(WORDS[wordIndexRef.current]);
+          } else {
+            // Stay faded — caller wants the loop to finish on one word
+            // and then idle. Returning here leaves the canvas blank,
+            // which is fine for a 1-shot loader ('Analyzing…' for
+            // example).
+            return;
+          }
         }
       }
 
@@ -122,7 +139,7 @@ export default function MicroLoader({ label = 'Loading' }: MicroLoaderProps) {
         window.cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [reducedMotion]);
+  }, [reducedMotion, cycleWords]);
 
   const shellStyle: CSSProperties = {
     display: 'flex',
@@ -157,6 +174,21 @@ export default function MicroLoader({ label = 'Loading' }: MicroLoaderProps) {
         height={72}
         style={{ width: 160, height: 72, display: 'block', background: 'transparent' }}
       />
+      {/* Always render a screen-reader-only text node so AT users hear
+        a status even while the canvas is animating. The canvas itself
+        is aria-hidden by being an unlabeled background image. */}
+      <span
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          overflow: 'hidden',
+          clip: 'rect(0, 0, 0, 0)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}…
+      </span>
     </div>
   );
 }
