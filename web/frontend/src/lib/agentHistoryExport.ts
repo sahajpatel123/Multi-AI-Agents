@@ -89,3 +89,54 @@ export function formatAgentHistoryExport(opts: {
   lines.push('_Shared from Arena Agent history_');
   return lines.join('\n').trim() + '\n';
 }
+
+/**
+ * Clipboard text for a single Agent history row.
+ * Prefer a useful research snapshot (question + score + topics) over
+ * the bare question so notes outside the app stay meaningful.
+ */
+export function formatAgentHistoryItemCopy(item: AgentHistoryExportItem): string {
+  const question = (item.question || '').trim();
+  const title = displayTitle(item);
+  if (!question && !(item.title || '').trim()) return '';
+
+  const lines: string[] = [`# ${title}`, ''];
+
+  if (question && question !== title) {
+    lines.push(`**Question:** ${question}`);
+    lines.push('');
+  } else if (question) {
+    lines.push(question);
+    lines.push('');
+  }
+
+  const meta: string[] = [];
+  if (typeof item.score === 'number' && Number.isFinite(item.score)) {
+    meta.push(`Score ${Math.round(item.score)}/100`);
+  }
+  if (typeof item.confidence === 'number' && Number.isFinite(item.confidence)) {
+    const c =
+      item.confidence <= 1
+        ? `${Math.round(item.confidence * 100)}%`
+        : `${Math.round(item.confidence)}%`;
+    meta.push(`Confidence ${c}`);
+  }
+  if (item.isLive) meta.push('Live');
+  if (item.createdAt) meta.push(formatIsoWhen(item.createdAt, { fallback: '—' }));
+  if (meta.length > 0) {
+    lines.push(`- ${meta.join(' · ')}`);
+  }
+  const topics = (item.topics || []).map((t) => (t || '').trim()).filter(Boolean);
+  if (topics.length > 0) {
+    lines.push(`- **Topics:** ${topics.join(', ')}`);
+  }
+  const taskId = (item.taskId || '').trim();
+  if (taskId) {
+    lines.push(`- _Task \`${taskId}\`_`);
+  }
+
+  lines.push('');
+  lines.push('---');
+  lines.push('_Shared from Arena Agent history_');
+  return lines.join('\n').trim() + '\n';
+}

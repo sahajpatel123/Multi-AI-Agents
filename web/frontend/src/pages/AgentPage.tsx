@@ -92,7 +92,10 @@ import {
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
-import { formatAgentHistoryExport } from '../lib/agentHistoryExport';
+import {
+  formatAgentHistoryExport,
+  formatAgentHistoryItemCopy,
+} from '../lib/agentHistoryExport';
 import {
   AGENT_HISTORY_SORT_OPTIONS,
   agentHistorySortLabel,
@@ -1928,6 +1931,27 @@ export function AgentPage() {
     setToastMessage(ok ? 'Question copied.' : 'Could not copy — try again.');
   }, []);
 
+  const copyHistoryResearch = useCallback(async (item: HistoryTask) => {
+    setOpenMenuTaskId(null);
+    setConfirmDeleteTaskId(null);
+    const text = formatAgentHistoryItemCopy({
+      title: item.title,
+      question: item.task_text,
+      score: item.final_score,
+      confidence: item.final_confidence,
+      createdAt: item.created_at,
+      topics: item.topics,
+      isLive: item.is_live,
+      taskId: item.task_id,
+    });
+    if (!text) {
+      setToastMessage('Nothing to copy on this research.');
+      return;
+    }
+    const ok = await copyToClipboard(text);
+    setToastMessage(ok ? 'Research snapshot copied.' : 'Could not copy — try again.');
+  }, []);
+
   const closeRoomCreate = useCallback(() => {
     if (creatingRoom) return;
     setShowRoomCreate(false);
@@ -3054,6 +3078,13 @@ export function AgentPage() {
                   color="#1A1714"
                   hoverBackground="#F0EBE3"
                   onClick={() => void copyHistoryQuestion(item)}
+                />
+                <AgentSidebarMenuItem
+                  icon={<Copy className="w-[14px] h-[14px]" />}
+                  label="Copy research"
+                  color="#1A1714"
+                  hoverBackground="#F0EBE3"
+                  onClick={() => void copyHistoryResearch(item)}
                 />
                 <AgentSidebarMenuItem
                   icon={<Pencil className="w-[14px] h-[14px]" />}
