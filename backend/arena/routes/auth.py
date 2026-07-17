@@ -4,7 +4,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
@@ -480,6 +480,27 @@ async def me(
     # at dependencies.py:26 is enforced — without this the endpoint had a
     # side-channel that accepted logged-out tokens.
     return orm_user_to_response(user, db)
+
+
+@router.get("/check-email")
+async def check_email_availability(
+    email: str = Query(..., min_length=1, max_length=255),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Public pre-flight check: is this email already registered?
+
+    Used by the signup form to render 'email already taken' before the
+    user submits — better UX than waiting for the 409 from /register.
+    Returns ONLY a boolean (and the normalized email), never the
+    matching user record — checking email availability must NOT leak
+    the existence of any other account.
+    """
+    normalized = email.lower().strip()
+    existing = get_user_by_email(db, normalized)
+    return {
+        "email": normalized,
+        "available": existing is None,
+    }
 
 
 @user_router.patch("/profile", response_model=UserResponse)
