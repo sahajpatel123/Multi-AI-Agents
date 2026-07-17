@@ -740,8 +740,9 @@ async def get_perspective_drift(
         .filter(RoomMember.room_id == room.id, RoomMember.user_id == user.id)
         .first()
     )
+    # Same status as missing room — avoid membership oracle (403 vs 404).
     if not is_member and room.creator_id != user.id:
-        raise HTTPException(status_code=403, detail="Only room members can view perspective drift")
+        raise HTTPException(status_code=404, detail="Room not found")
 
     rts = (
         db.query(RoomTask, AgentTask, User)

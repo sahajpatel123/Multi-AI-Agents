@@ -1010,6 +1010,13 @@ async def post_task_answer_feedback(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback",
+        limit=120,
+        window_seconds=3600,
+        message="Too many feedback submissions. Limit is 120 per hour.",
+    )
     tid = task_id.strip()
     owned = (
         db.query(AgentTaskRow)
@@ -1940,6 +1947,13 @@ async def submit_task_feedback(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback",
+        limit=120,
+        window_seconds=3600,
+        message="Too many feedback submissions. Limit is 120 per hour.",
+    )
     _enforce_capability_gate(capability_id="agent.feedback", task_text=body.feedback or "")
     task_record = (
         db.query(AgentTaskRow)

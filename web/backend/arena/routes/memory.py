@@ -105,8 +105,10 @@ async def save_memory(
             user_id=user.id,
         )
     except Exception as exc:
-        logger.exception("Memory compression failed for %s", body.session_id)
-        partial_error = str(exc)
+        # Log full detail server-side only — never return str(exc) to clients
+        # (stack paths, SQL, provider URLs, etc.).
+        logger.exception("Memory compression failed for %s: %s", body.session_id, exc)
+        partial_error = "compression_failed"
         summary = {
             "session_id": body.session_id,
             "main_topics": [],
@@ -162,8 +164,11 @@ async def save_memory(
             db,
         )
     except Exception as exc:
-        logger.exception("Memory persistence partially failed for %s", body.session_id)
-        partial_error = str(exc)
+        logger.exception(
+            "Memory persistence partially failed for %s: %s", body.session_id, exc
+        )
+        # Stable public code only — do not surface exception text.
+        partial_error = partial_error or "persistence_failed"
 
     memory.clear_session(body.session_id)
 
@@ -175,6 +180,7 @@ async def save_memory(
             "topics_extracted": list(summary.get("main_topics") or []),
             "stances_saved": stances_saved,
             "error": partial_error,
+            "message": "Some memory data could not be fully saved. Your session was closed.",
         }
 
     return {

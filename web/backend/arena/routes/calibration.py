@@ -115,6 +115,15 @@ async def post_calibration_rate(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    from arena.core.rate_limits import enforce_user_rate_limit
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="calibration_rate",
+        limit=60,
+        window_seconds=3600,
+        message="Too many calibration ratings. Limit is 60 per hour.",
+    )
     task = (
         db.query(AgentTask)
         .filter(AgentTask.task_id == body.task_id.strip(), AgentTask.user_id == user.id)
