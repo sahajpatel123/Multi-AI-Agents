@@ -28,7 +28,7 @@ import {
 } from './api';
 import { copyToClipboard } from './lib/clipboard';
 import { downloadMarkdownFile } from './lib/downloadTextFile';
-import { formatArenaExport } from './lib/arenaExport';
+import { formatArenaExport, formatArenaWinnerExport } from './lib/arenaExport';
 import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
 import { isScrollNearBottom, shouldAutoScrollChat } from './lib/chatScroll';
 import { scrollBehavior } from './lib/motion';
@@ -90,6 +90,7 @@ function App() {
   const { openModal: openProfileModal } = useProfileModal();
   const [exportCopied, setExportCopied] = useState(false);
   const [exportDownloaded, setExportDownloaded] = useState(false);
+  const [winnerCopied, setWinnerCopied] = useState(false);
   const [recentPrompts, setRecentPrompts] = useState<RecentPrompt[]>(() => loadRecentPrompts());
   const quotaExhausted = messagesRemaining <= 0;
   const personaIds = panel.map((persona) => persona.id);
@@ -426,17 +427,27 @@ function App() {
     response?.prompt,
   ]);
 
-  const buildArenaComparisonMarkdown = useCallback(() => {
-    if (!response) return null;
-    return formatArenaExport(response, (agentId) => {
+  const resolveArenaPersona = useCallback(
+    (agentId: string) => {
       const persona = getPersonaForAgentId(agentId);
       const fallback = AGENTS[agentId];
       return {
         name: persona?.name || fallback?.name || agentId,
         color: persona?.color || fallback?.color,
       };
-    });
-  }, [getPersonaForAgentId, response]);
+    },
+    [getPersonaForAgentId],
+  );
+
+  const buildArenaComparisonMarkdown = useCallback(() => {
+    if (!response) return null;
+    return formatArenaExport(response, resolveArenaPersona);
+  }, [resolveArenaPersona, response]);
+
+  const buildArenaWinnerMarkdown = useCallback(() => {
+    if (!response) return null;
+    return formatArenaWinnerExport(response, resolveArenaPersona);
+  }, [resolveArenaPersona, response]);
 
   const handleExportAllTakes = useCallback(async () => {
     const md = buildArenaComparisonMarkdown();
@@ -450,6 +461,19 @@ function App() {
       setError('Could not copy the comparison. Try again or select text manually.');
     }
   }, [buildArenaComparisonMarkdown]);
+
+  const handleExportWinner = useCallback(async () => {
+    const md = buildArenaWinnerMarkdown();
+    if (!md) return;
+    const ok = await copyToClipboard(md);
+    if (ok) {
+      setWinnerCopied(true);
+      window.setTimeout(() => setWinnerCopied(false), 1800);
+      void track('arena_export_winner');
+    } else {
+      setError('Could not copy the winner. Try again or copy from the winning card.');
+    }
+  }, [buildArenaWinnerMarkdown]);
 
   const handleDownloadAllTakes = useCallback(() => {
     const md = buildArenaComparisonMarkdown();
@@ -1384,6 +1408,17 @@ function App() {
               ) : null}
               {isDone && response ? (
                 <>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      void handleExportWinner();
+                    }}
+                    title="Copy the winning take as markdown"
+                    style={{ fontSize: 12 }}
+                  >
+                    {winnerCopied ? 'Winner copied' : 'Copy winner'}
+                  </button>
                   <button
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm"

@@ -12,6 +12,7 @@ const CHANGELOG_ENTRIES = [
       color: '#FAF7F4',
     },
     items: [
+      '[NEW] Arena: Copy winner — grab just the winning take as markdown (not the full comparison)',
       '[NEW] Agent templates: Copy template or Copy prompt on any card',
       '[NEW] Personas library: Copy mind on any card (name, quote, description)',
       '[NEW] Agent history: Copy research snapshot (score, topics, question) from the ⋯ menu',
