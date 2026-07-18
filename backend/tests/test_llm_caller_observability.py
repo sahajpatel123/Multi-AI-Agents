@@ -10,6 +10,22 @@ import pytest
 import arena.core.llm_caller as llm_caller
 
 
+def _find_record(records, message: str):
+    """Locate the first caplog record whose message matches.
+
+    Uses a list-comprehension lookup (not ``next()`` over a generator)
+    because the tests are declared ``async`` and PEP 479 promotes a
+    leaked ``StopIteration`` from a generator inside a coroutine into a
+    ``RuntimeError``, masking the real assertion failure.
+    """
+    matching = [r for r in records if r.message == message]
+    assert matching, (
+        f"expected a caplog record with message {message!r}; "
+        f"got {[r.message for r in records]!r}"
+    )
+    return matching[0]
+
+
 @pytest.mark.asyncio
 async def test_provider_failure_is_logged_without_exception_details(caplog, capsys):
     class FailingCompletions:
@@ -17,7 +33,7 @@ async def test_provider_failure_is_logged_without_exception_details(caplog, caps
             raise RuntimeError("provider response contains a secret detail")
 
     client = SimpleNamespace(chat=SimpleNamespace(completions=FailingCompletions()))
-    caplog.set_level(logging.WARNING, logger="arena.llm_caller")
+    caplog.set_level(logging.WARNING, logger="arena.core.llm_caller")
 
     result = await llm_caller.call_llm(
         client=client,
@@ -29,7 +45,7 @@ async def test_provider_failure_is_logged_without_exception_details(caplog, caps
     )
 
     assert result == ("", 0, 0)
-    record = next(record for record in caplog.records if record.message == "LLM provider call failed")
+    record = _find_record(caplog.records, "LLM provider call failed")
     assert record.provider == "openai"
     assert record.model_id == "gpt-test"
     assert record.error_type == "RuntimeError"
@@ -51,7 +67,7 @@ async def test_provider_fallback_uses_structured_warning(caplog, capsys, monkeyp
         "_get_claude_fallback",
         lambda: (fallback_client, "claude-test"),
     )
-    caplog.set_level(logging.WARNING, logger="arena.llm_caller")
+    caplog.set_level(logging.WARNING, logger="arena.core.llm_caller")
 
     result = await llm_caller.call_llm(
         client=None,
@@ -63,10 +79,8 @@ async def test_provider_fallback_uses_structured_warning(caplog, capsys, monkeyp
     )
 
     assert result == ("fallback response", 3, 2)
-    record = next(
-        record
-        for record in caplog.records
-        if record.message == "LLM provider unavailable; using Claude fallback"
+    record = _find_record(
+        caplog.records, "LLM provider unavailable; using Claude fallback"
     )
     assert record.provider == "deepseek"
     assert record.model_id == "deepseek-test"
@@ -99,7 +113,7 @@ async def test_streaming_provider_fallback_is_logged(caplog, capsys, monkeypatch
         "_get_claude_fallback",
         lambda: (fallback_client, "claude-stream-test"),
     )
-    caplog.set_level(logging.WARNING, logger="arena.llm_caller")
+    caplog.set_level(logging.WARNING, logger="arena.core.llm_caller")
 
     chunks = [
         chunk
@@ -114,10 +128,8 @@ async def test_streaming_provider_fallback_is_logged(caplog, capsys, monkeypatch
     ]
 
     assert chunks == ["streamed fallback"]
-    record = next(
-        record
-        for record in caplog.records
-        if record.message == "LLM provider unavailable; using Claude fallback"
+    record = _find_record(
+        caplog.records, "LLM provider unavailable; using Claude fallback"
     )
     assert record.provider == "grok"
     assert record.model_id == "grok-test"

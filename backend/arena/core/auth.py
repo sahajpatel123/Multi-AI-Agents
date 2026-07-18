@@ -153,7 +153,11 @@ def decode_token(token: str) -> Optional[dict]:
             SECRET_KEY,
             algorithms=[ALGORITHM],
             options={
-                "require_exp": True,
+                # PyJWT 2.10+ removed the legacy boolean `require_exp` key
+                # in favor of the unified `require` list. Silently dropped
+                # the boolean otherwise, which let un-`exp`-ed tokens
+                # through and broke decode_token_rejects_missing_exp.
+                "require": ["exp"],
                 "verify_exp": True,
                 "verify_signature": True,
             },
