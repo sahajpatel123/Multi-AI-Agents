@@ -39,11 +39,13 @@ env/
 *.db
 *.sqlite
 *.sqlite3
+backend/data/
 web/backend/data/
 
 # Logs
 *.log
 logs/
+backend/logs/
 web/backend/logs/
 *.log.*
 
