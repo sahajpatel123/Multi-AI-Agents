@@ -64,6 +64,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       style={motionStyle}
       {...rest}
     >
+      <span className="arena-btn__sheen" aria-hidden="true" />
       {left ? <span className="arena-btn__icon">{left}</span> : null}
       <span className="arena-btn__label">{children}</span>
       {!loading && iconRight ? (

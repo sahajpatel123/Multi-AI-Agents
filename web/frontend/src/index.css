@@ -44,15 +44,23 @@
   --font-display: Georgia, 'Source Serif 4', 'Times New Roman', serif;
   --ease-out-premium: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-btn: cubic-bezier(0.16, 1, 0.3, 1);
-  /* Interactive micro-motion (buttons, chips, nav) */
-  --motion-hover-ms: 200ms;
-  --motion-press-ms: 110ms;
-  --motion-lift-ms: 220ms;
-  --motion-lift-y: -1.5px;
-  --motion-press-scale: 0.98;
+  /* Soft spring overshoot — hover settle feels alive without cartoon bounce */
+  --ease-spring-soft: cubic-bezier(0.34, 1.4, 0.64, 1);
+  /* Interactive micro-motion (buttons, chips, nav) — mirrored in lib/motion.ts */
+  --motion-hover-ms: 240ms;
+  --motion-press-ms: 95ms;
+  --motion-lift-ms: 280ms;
+  --motion-micro-ms: 170ms;
+  --motion-sheen-ms: 720ms;
+  --motion-lift-y: -2px;
+  --motion-hover-scale: 1.015;
+  --motion-press-scale: 0.975;
   --motion-shadow-rest: 0 1px 2px rgba(44, 24, 16, 0.04);
-  --motion-shadow-hover: 0 8px 22px rgba(44, 24, 16, 0.12), 0 2px 6px rgba(44, 24, 16, 0.06);
-  --motion-shadow-primary-hover: 0 10px 28px rgba(44, 24, 16, 0.2), 0 3px 8px rgba(44, 24, 16, 0.1);
+  --motion-shadow-hover: 0 10px 28px rgba(44, 24, 16, 0.14), 0 3px 8px rgba(44, 24, 16, 0.07);
+  --motion-shadow-primary-hover: 0 12px 32px rgba(44, 24, 16, 0.22), 0 4px 10px rgba(44, 24, 16, 0.12),
+    0 0 0 1px rgba(196, 149, 106, 0.08);
+  --motion-glow-primary: 0 0 0 0 rgba(196, 149, 106, 0);
+  --motion-glow-primary-hover: 0 0 24px rgba(196, 149, 106, 0.18);
   /* Layout breakpoints (use in media queries): mobile ≤768, tablet 769–1024, desktop ≥1025 */
   --bp-mobile-max: 768px;
   --bp-tablet-max: 1024px;
@@ -227,7 +235,7 @@ p {
     background var(--motion-hover-ms) var(--ease-btn),
     color var(--motion-hover-ms) var(--ease-btn),
     box-shadow var(--motion-lift-ms) var(--ease-out-premium),
-    transform var(--motion-press-ms) var(--ease-btn);
+    transform var(--motion-lift-ms) var(--ease-spring-soft);
   white-space: nowrap;
   border: none;
   background: transparent;
@@ -239,10 +247,12 @@ p {
   .billing-toggle-option:hover:not(.billing-toggle-option--active) {
     color: #2c1810;
     background: rgba(253, 250, 246, 0.55);
+    transform: scale(1.02);
   }
 
   .billing-toggle-option:active {
-    transform: scale(0.98);
+    transform: scale(0.97);
+    transition-duration: var(--motion-press-ms);
   }
 }
 
@@ -676,7 +686,7 @@ canvas {
   position: relative;
   transition:
     color var(--motion-hover-ms) var(--ease-btn),
-    transform var(--motion-lift-ms) var(--ease-out-premium);
+    transform var(--motion-lift-ms) var(--ease-spring-soft);
 }
 
 .navbar-nav-link::after {
@@ -690,7 +700,7 @@ canvas {
   background: var(--cream-gold);
   transform: scaleX(0);
   transform-origin: center;
-  transition: transform var(--motion-hover-ms) var(--ease-out-premium);
+  transition: transform var(--motion-lift-ms) var(--ease-spring-soft);
   opacity: 0.9;
 }
 
@@ -698,6 +708,7 @@ canvas {
   .navbar-nav-link:hover,
   .navbar-nav-link:focus-visible {
     color: #c4956a;
+    transform: translateY(-1px);
   }
 
   .navbar-nav-link:hover::after,
@@ -706,7 +717,8 @@ canvas {
   }
 
   .navbar-nav-link:active {
-    transform: scale(0.98);
+    transform: translateY(0) scale(0.97);
+    transition-duration: var(--motion-press-ms);
   }
 }
 
@@ -753,7 +765,7 @@ canvas {
   padding: 0;
   transition:
     background var(--motion-hover-ms) var(--ease-btn),
-    transform var(--motion-lift-ms) var(--ease-out-premium),
+    transform var(--motion-lift-ms) var(--ease-spring-soft),
     box-shadow var(--motion-lift-ms) var(--ease-out-premium);
 }
 
@@ -761,13 +773,14 @@ canvas {
   .navbar-desktop-avatar:hover,
   .navbar-desktop-avatar:focus-visible {
     background: #b8845a;
-    transform: translateY(-1px) scale(1.04);
-    box-shadow: 0 4px 12px rgba(196, 149, 106, 0.35);
+    transform: translateY(-2px) scale(1.06);
+    box-shadow: 0 6px 16px rgba(196, 149, 106, 0.4);
   }
 
   .navbar-desktop-avatar:active {
-    transform: scale(0.96);
+    transform: translateY(0) scale(0.94);
     box-shadow: none;
+    transition-duration: var(--motion-press-ms);
   }
 }
 
@@ -810,9 +823,9 @@ canvas {
   cursor: pointer;
   white-space: nowrap;
   transition:
-    opacity var(--motion-hover-ms, 150ms) var(--ease-btn, ease),
-    transform var(--motion-lift-ms, 180ms) var(--ease-out-premium, cubic-bezier(0.16, 1, 0.3, 1)),
-    box-shadow var(--motion-lift-ms, 180ms) var(--ease-out-premium, cubic-bezier(0.16, 1, 0.3, 1));
+    opacity var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1));
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.08) inset,
     0 2px 8px rgba(26, 23, 20, 0.12);
@@ -836,14 +849,15 @@ canvas {
   .navbar-cta-pill:hover,
   .navbar-cta-pill:focus-visible {
     opacity: 1;
-    transform: translateY(-1px);
+    transform: translateY(-2px) scale(1.02);
     box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.1) inset,
-      0 6px 16px rgba(26, 23, 20, 0.18);
+      0 1px 0 rgba(255, 255, 255, 0.12) inset,
+      0 8px 22px rgba(26, 23, 20, 0.22),
+      0 0 20px rgba(196, 149, 106, 0.12);
   }
 
   .navbar-cta-pill:hover::after {
-    animation: navbar-cta-sheen 0.75s cubic-bezier(0.16, 1, 0.3, 1) 1;
+    animation: navbar-cta-sheen var(--motion-sheen-ms, 720ms) var(--ease-out-premium) 1;
   }
 
   .navbar-cta-pill:active {
@@ -876,17 +890,21 @@ canvas {
   flex-shrink: 0;
   transition:
     background var(--motion-hover-ms) var(--ease-btn),
-    transform var(--motion-press-ms) var(--ease-btn);
+    transform var(--motion-lift-ms) var(--ease-spring-soft),
+    box-shadow var(--motion-lift-ms) var(--ease-out-premium);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .navbar-hamburger:hover,
   .navbar-hamburger:focus-visible {
     background: #f0ebe3;
+    transform: scale(1.06);
+    box-shadow: 0 2px 8px rgba(44, 24, 16, 0.06);
   }
 
   .navbar-hamburger:active {
-    transform: scale(0.94);
+    transform: scale(0.92);
+    transition-duration: var(--motion-press-ms);
   }
 }
 
@@ -1861,6 +1879,35 @@ canvas {
   }
 }
 
+@keyframes arena-btn-sheen {
+  0% {
+    transform: translateX(-130%) skewX(-12deg);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(130%) skewX(-12deg);
+    opacity: 0;
+  }
+}
+
+@keyframes arena-btn-focus-ring {
+  0% {
+    outline-offset: 2px;
+    box-shadow: 0 0 0 0 rgba(196, 149, 106, 0.45);
+  }
+  70% {
+    outline-offset: 4px;
+    box-shadow: 0 0 0 6px rgba(196, 149, 106, 0);
+  }
+  100% {
+    outline-offset: 3px;
+    box-shadow: 0 0 0 0 rgba(196, 149, 106, 0);
+  }
+}
+
 .arena-btn-spinner {
   animation: arena-spin 0.8s linear infinite;
   color: #c4956a;
@@ -1878,13 +1925,15 @@ canvas {
   gap: 7px;
   position: relative;
   isolation: isolate;
+  overflow: hidden;
   transform: translateZ(0);
+  /* Split timings: color settles faster; transform uses soft spring for living lift */
   transition:
     background var(--motion-hover-ms) var(--ease-btn),
     color var(--motion-hover-ms) var(--ease-btn),
     border-color var(--motion-hover-ms) var(--ease-btn),
     opacity var(--motion-hover-ms) var(--ease-btn),
-    transform var(--motion-lift-ms) var(--ease-out-premium),
+    transform var(--motion-lift-ms) var(--ease-spring-soft),
     box-shadow var(--motion-lift-ms) var(--ease-out-premium),
     filter var(--motion-hover-ms) var(--ease-btn);
   white-space: nowrap;
@@ -1899,17 +1948,59 @@ canvas {
   box-shadow: var(--motion-shadow-rest);
 }
 
+/* Light sheen sweep on hover — pure CSS so plain Button and MotionButton share it */
+.arena-btn__sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.arena-btn__sheen::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 55%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.07) 40%,
+    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.07) 60%,
+    transparent 100%
+  );
+  transform: translateX(-130%) skewX(-12deg);
+  opacity: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .arena-btn:hover:not(:disabled):not(.arena-btn--loading) .arena-btn__sheen::after {
+    animation: arena-btn-sheen var(--motion-sheen-ms) var(--ease-out-premium) 1;
+  }
+}
+
 .arena-btn__icon {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: transform var(--motion-press-ms) var(--ease-btn);
+  transition: transform var(--motion-micro-ms) var(--ease-spring-soft);
 }
 
 .arena-btn__label {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
+  transition:
+    letter-spacing var(--motion-hover-ms) var(--ease-btn),
+    transform var(--motion-micro-ms) var(--ease-spring-soft);
 }
 
 .arena-btn--full {
@@ -1969,20 +2060,36 @@ canvas {
   box-shadow: 0 2px 8px rgba(44, 24, 16, 0.14);
 }
 
+/* Primary sheen uses warmer gold-tinted light */
+.arena-btn--primary .arena-btn__sheen::after {
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(196, 149, 106, 0.08) 35%,
+    rgba(255, 245, 230, 0.28) 50%,
+    rgba(196, 149, 106, 0.1) 65%,
+    transparent 100%
+  );
+}
+
 @media (hover: hover) and (pointer: fine) {
   .arena-btn--primary:hover:not(:disabled):not(.arena-btn--loading) {
     background: #3d2415;
-    transform: translateY(var(--motion-lift-y));
-    box-shadow: var(--motion-shadow-primary-hover);
-    filter: brightness(1.04);
+    transform: translateY(var(--motion-lift-y)) scale(var(--motion-hover-scale));
+    box-shadow: var(--motion-shadow-primary-hover), var(--motion-glow-primary-hover);
+    filter: brightness(1.05);
   }
 }
 
 .arena-btn--primary:active:not(:disabled):not(.arena-btn--loading) {
-  transform: translateY(0) scale(var(--motion-press-scale));
+  transform: translateY(0.5px) scale(var(--motion-press-scale));
   box-shadow: 0 1px 4px rgba(44, 24, 16, 0.16);
-  filter: brightness(0.98);
-  transition-duration: var(--motion-press-ms);
+  filter: brightness(0.97);
+  transition:
+    transform var(--motion-press-ms) var(--ease-btn),
+    box-shadow var(--motion-press-ms) var(--ease-btn),
+    filter var(--motion-press-ms) var(--ease-btn),
+    background var(--motion-press-ms) var(--ease-btn);
 }
 
 .arena-btn--secondary {
@@ -1997,15 +2104,19 @@ canvas {
     border-color: var(--cream-gold);
     color: var(--cream-gold);
     background: var(--cream-surface-tint);
-    transform: translateY(var(--motion-lift-y));
+    transform: translateY(var(--motion-lift-y)) scale(var(--motion-hover-scale));
     box-shadow: var(--motion-shadow-hover);
   }
 }
 
 .arena-btn--secondary:active:not(:disabled):not(.arena-btn--loading) {
-  transform: translateY(0) scale(var(--motion-press-scale));
+  transform: translateY(0.5px) scale(var(--motion-press-scale));
   box-shadow: var(--motion-shadow-rest);
-  transition-duration: var(--motion-press-ms);
+  transition:
+    transform var(--motion-press-ms) var(--ease-btn),
+    box-shadow var(--motion-press-ms) var(--ease-btn),
+    border-color var(--motion-press-ms) var(--ease-btn),
+    background var(--motion-press-ms) var(--ease-btn);
 }
 
 .arena-btn--ghost {
@@ -2020,15 +2131,18 @@ canvas {
   .arena-btn--ghost:hover:not(:disabled):not(.arena-btn--loading) {
     color: #c4956a;
     background: #faf3ea;
-    transform: translateY(var(--motion-lift-y));
-    box-shadow: 0 4px 14px rgba(196, 149, 106, 0.1);
+    transform: translateY(var(--motion-lift-y)) scale(var(--motion-hover-scale));
+    box-shadow: 0 6px 18px rgba(196, 149, 106, 0.12);
   }
 }
 
 .arena-btn--ghost:active:not(:disabled):not(.arena-btn--loading) {
-  transform: translateY(0) scale(var(--motion-press-scale));
+  transform: translateY(0.5px) scale(var(--motion-press-scale));
   box-shadow: none;
-  transition-duration: var(--motion-press-ms);
+  transition:
+    transform var(--motion-press-ms) var(--ease-btn),
+    background var(--motion-press-ms) var(--ease-btn),
+    color var(--motion-press-ms) var(--ease-btn);
 }
 
 .arena-btn--danger {
@@ -2042,32 +2156,54 @@ canvas {
   .arena-btn--danger:hover:not(:disabled):not(.arena-btn--loading) {
     background: #fcf0ee;
     border-color: #e87a55;
-    transform: translateY(var(--motion-lift-y));
-    box-shadow: 0 6px 18px rgba(153, 60, 29, 0.12);
+    transform: translateY(var(--motion-lift-y)) scale(var(--motion-hover-scale));
+    box-shadow: 0 8px 22px rgba(153, 60, 29, 0.14);
   }
 }
 
 .arena-btn--danger:active:not(:disabled):not(.arena-btn--loading) {
-  transform: translateY(0) scale(var(--motion-press-scale));
+  transform: translateY(0.5px) scale(var(--motion-press-scale));
   box-shadow: var(--motion-shadow-rest);
-  transition-duration: var(--motion-press-ms);
+  transition:
+    transform var(--motion-press-ms) var(--ease-btn),
+    box-shadow var(--motion-press-ms) var(--ease-btn),
+    background var(--motion-press-ms) var(--ease-btn);
 }
 
-/* Icon inside button eases with the press for a more tactile feel */
+/* Icon + label micro-motion — more life without fighting the button lift */
 @media (hover: hover) and (pointer: fine) {
   .arena-btn:hover:not(:disabled):not(.arena-btn--loading) .arena-btn__icon {
-    transform: translateY(-0.5px);
+    transform: translateY(-1px) scale(1.06);
+  }
+
+  .arena-btn:hover:not(:disabled):not(.arena-btn--loading) .arena-btn__icon--right {
+    transform: translateX(2px) translateY(-0.5px);
+  }
+
+  .arena-btn:hover:not(:disabled):not(.arena-btn--loading) .arena-btn__label {
+    letter-spacing: 0.03em;
   }
 }
 
 .arena-btn:active:not(:disabled):not(.arena-btn--loading) .arena-btn__icon {
-  transform: scale(0.96);
+  transform: scale(0.94);
+}
+
+.arena-btn:active:not(:disabled):not(.arena-btn--loading) .arena-btn__label {
+  letter-spacing: 0.01em;
+  transform: scale(0.99);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .arena-btn,
-  .arena-btn__icon {
-    transition: none !important;
+  .arena-btn__icon,
+  .arena-btn__label {
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, opacity 0.12s ease !important;
+  }
+
+  .arena-btn__sheen::after {
+    animation: none !important;
+    opacity: 0 !important;
   }
 
   .arena-btn--primary:hover:not(:disabled):not(.arena-btn--loading),
@@ -2081,6 +2217,14 @@ canvas {
     transform: none !important;
     filter: none !important;
   }
+
+  .arena-btn:hover:not(:disabled):not(.arena-btn--loading) .arena-btn__icon,
+  .arena-btn:hover:not(:disabled):not(.arena-btn--loading) .arena-btn__label,
+  .arena-btn:active:not(:disabled):not(.arena-btn--loading) .arena-btn__icon,
+  .arena-btn:active:not(:disabled):not(.arena-btn--loading) .arena-btn__label {
+    transform: none !important;
+    letter-spacing: inherit !important;
+  }
 }
 
 /* Focus rings — keyboard users get clear affordance; mouse users do not get clutter */
@@ -2090,6 +2234,7 @@ canvas {
 .arena-btn:focus-visible {
   outline: 2px solid #c4956a;
   outline-offset: 3px;
+  animation: arena-btn-focus-ring 0.55s var(--ease-out-premium) 1;
 }
 .navbar-nav-link:focus {
   outline: none;
@@ -2169,8 +2314,8 @@ canvas {
     border-color var(--motion-hover-ms) var(--ease-btn),
     color var(--motion-hover-ms) var(--ease-btn),
     box-shadow var(--motion-lift-ms) var(--ease-out-premium),
-    transform var(--motion-lift-ms) var(--ease-out-premium);
-  animation: back-to-top-in 220ms var(--ease-out-premium) both;
+    transform var(--motion-lift-ms) var(--ease-spring-soft);
+  animation: back-to-top-in 280ms var(--ease-spring-soft) both;
 }
 
 .back-to-top-btn--static {
@@ -2180,7 +2325,7 @@ canvas {
 @keyframes back-to-top-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.96);
+    transform: translateY(10px) scale(0.94);
   }
   to {
     opacity: 1;
@@ -2193,8 +2338,12 @@ canvas {
     background: #f0ebe3;
     border-color: #c4956a;
     color: #1a1714;
-    box-shadow: 0 12px 32px rgba(196, 149, 106, 0.18);
-    transform: translateY(-2px);
+    box-shadow: 0 14px 36px rgba(196, 149, 106, 0.22), 0 0 0 1px rgba(196, 149, 106, 0.08);
+    transform: translateY(-3px) scale(1.03);
+  }
+
+  .back-to-top-btn:hover .back-to-top-btn__arrow {
+    transform: translateY(-1.5px);
   }
 }
 
@@ -2204,8 +2353,9 @@ canvas {
 }
 
 .back-to-top-btn:active {
-  transform: translateY(0) scale(0.97);
+  transform: translateY(0) scale(0.96);
   transition-duration: var(--motion-press-ms);
+  transition-timing-function: var(--ease-btn);
 }
 
 .back-to-top-btn__ring-wrap {
@@ -2235,6 +2385,7 @@ canvas {
 
 .back-to-top-btn__arrow {
   position: relative;
+  transition: transform var(--motion-micro-ms, 170ms) var(--ease-spring-soft);
   z-index: 1;
   color: #2c1810;
 }
@@ -6857,7 +7008,7 @@ canvas {
    Motion button — framer-augmented CTA chrome
    ------------------------------------------------------------------ */
 .motion-btn {
-  /* Keep GPU layer for hover lift; pairs with framer-motion transforms */
+  /* Keep GPU layer for spring hover lift; pairs with framer-motion transforms */
   will-change: transform;
   transform: translateZ(0);
   /* Framer owns transform — don't fight it with CSS hover lifts */
@@ -6871,12 +7022,24 @@ canvas {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset;
 }
 
-/* CSS hover lifts are off for motion-btn — framer handles y/scale */
+/* CSS hover lifts are off for motion-btn — framer handles y/scale.
+   Shadow/filter/sheen still come from CSS so the lift feels richer. */
 @media (hover: hover) and (pointer: fine) {
   .motion-btn.arena-btn--primary:hover:not(:disabled):not(.arena-btn--loading),
   .motion-btn.arena-btn--secondary:hover:not(:disabled):not(.arena-btn--loading),
   .motion-btn.arena-btn--ghost:hover:not(:disabled):not(.arena-btn--loading),
   .motion-btn.arena-btn--danger:hover:not(:disabled):not(.arena-btn--loading) {
+    transform: none;
+  }
+
+  .motion-btn.arena-btn--primary:hover:not(:disabled):not(.arena-btn--loading) {
+    box-shadow: var(--motion-shadow-primary-hover), var(--motion-glow-primary-hover);
+  }
+
+  .motion-btn.arena-btn--primary:active:not(:disabled):not(.arena-btn--loading),
+  .motion-btn.arena-btn--secondary:active:not(:disabled):not(.arena-btn--loading),
+  .motion-btn.arena-btn--ghost:active:not(:disabled):not(.arena-btn--loading),
+  .motion-btn.arena-btn--danger:active:not(:disabled):not(.arena-btn--loading) {
     transform: none;
   }
 }
@@ -6895,6 +7058,10 @@ canvas {
   .motion-btn {
     will-change: auto;
   }
+
+  .arena-btn:focus-visible {
+    animation: none !important;
+  }
 }
 
 /* ------------------------------------------------------------------
@@ -6908,19 +7075,30 @@ canvas {
     color var(--motion-hover-ms) var(--ease-btn),
     border-color var(--motion-hover-ms) var(--ease-btn),
     opacity var(--motion-hover-ms) var(--ease-btn),
-    transform var(--motion-lift-ms) var(--ease-out-premium),
-    box-shadow var(--motion-lift-ms) var(--ease-out-premium);
+    transform var(--motion-lift-ms) var(--ease-spring-soft),
+    box-shadow var(--motion-lift-ms) var(--ease-out-premium),
+    filter var(--motion-hover-ms) var(--ease-btn);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .interactive-surface:hover:not(:disabled):not([aria-disabled='true']) {
-    transform: translateY(-1px);
+    transform: translateY(-1.5px) scale(1.012);
   }
 }
 
 .interactive-surface:active:not(:disabled):not([aria-disabled='true']) {
-  transform: translateY(0) scale(0.985);
+  transform: translateY(0.5px) scale(0.98);
   transition-duration: var(--motion-press-ms);
+  transition-timing-function: var(--ease-btn);
+}
+
+/* Dense toolbar / icon-only pressables — smaller motion envelope */
+.interactive-surface--soft:hover:not(:disabled):not([aria-disabled='true']) {
+  transform: translateY(-1px) scale(1.008);
+}
+
+.interactive-surface--soft:active:not(:disabled):not([aria-disabled='true']) {
+  transform: scale(0.985);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6929,7 +7107,46 @@ canvas {
   }
 
   .interactive-surface:hover:not(:disabled),
-  .interactive-surface:active:not(:disabled) {
+  .interactive-surface:active:not(:disabled),
+  .interactive-surface--soft:hover:not(:disabled),
+  .interactive-surface--soft:active:not(:disabled) {
+    transform: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Pressable utility — any raw button/link that should feel tactile
+   ------------------------------------------------------------------ */
+.pressable {
+  cursor: pointer;
+  transform: translateZ(0);
+  transition:
+    transform var(--motion-lift-ms) var(--ease-spring-soft),
+    opacity var(--motion-hover-ms) var(--ease-btn),
+    box-shadow var(--motion-lift-ms) var(--ease-out-premium),
+    background var(--motion-hover-ms) var(--ease-btn),
+    color var(--motion-hover-ms) var(--ease-btn),
+    border-color var(--motion-hover-ms) var(--ease-btn);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pressable:hover:not(:disabled):not([aria-disabled='true']) {
+    transform: translateY(-1.5px);
+  }
+}
+
+.pressable:active:not(:disabled):not([aria-disabled='true']) {
+  transform: translateY(0) scale(0.98);
+  transition-duration: var(--motion-press-ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pressable {
+    transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease !important;
+  }
+
+  .pressable:hover:not(:disabled),
+  .pressable:active:not(:disabled) {
     transform: none !important;
   }
 }

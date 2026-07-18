@@ -20,7 +20,7 @@ describe('Button motion wiring', () => {
     );
     const { getByRole } = render(<Button>Go</Button>);
     const btn = getByRole('button', { name: 'Go' });
-    expect(btn.style.transition).toMatch(/200ms/);
+    expect(btn.style.transition).toMatch(/240ms|280ms/);
     expect(btn.style.transition).toMatch(/transform/);
     expect(btn.style.transition).toMatch(/box-shadow/);
   });

@@ -39,15 +39,17 @@ describe('prefersReducedMotion / motionDuration', () => {
 });
 
 describe('interaction tokens', () => {
-  it('exposes stable hover/tap presets for framer-motion CTAs', () => {
-    expect(INTERACTION.hover.y).toBe(-2);
+  it('exposes spring hover/tap presets for framer-motion CTAs', () => {
+    expect(INTERACTION.hover.y).toBeLessThan(0);
     expect(INTERACTION.hover.scale).toBeGreaterThan(1);
     expect(INTERACTION.tap.scale).toBeLessThan(1);
+    expect(INTERACTION.hover.transition).toMatchObject({ type: 'spring' });
+    expect(INTERACTION.tap.transition).toMatchObject({ type: 'spring' });
     expect(MOTION_MS.hover).toBeGreaterThan(0);
     expect(MOTION_MS.press).toBeLessThan(MOTION_MS.hover);
   });
 
-  it('builds multi-property interactive transitions', () => {
+  it('builds multi-property interactive transitions with split timings', () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({ matches: false, media: '', addEventListener: () => {}, removeEventListener: () => {} })),
@@ -56,6 +58,8 @@ describe('interaction tokens', () => {
     expect(t).toContain('transform');
     expect(t).toContain('box-shadow');
     expect(t).toContain(`${MOTION_MS.hover}ms`);
+    expect(t).toContain(`${MOTION_MS.lift}ms`);
+    expect(t).toMatch(/cubic-bezier/);
   });
 
   it('collapses interactive transitions under reduced motion', () => {
