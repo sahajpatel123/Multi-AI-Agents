@@ -1354,78 +1354,72 @@ export function HomePage() {
         </div>
       </div>
 
-      {/* Manifesto Strip */}
-      <section ref={manifestoReveal.ref} style={{ ...manifestoReveal.style, maxWidth: '1080px', margin: '0 auto', padding: '48px 24px', borderTop: '0.5px solid #E0D8D0' }} className={manifestoReveal.className}>
-        <div
-          className="manifesto-line"
-          onMouseEnter={() => setManifestoHovered(1)}
-          onMouseLeave={() => setManifestoHovered(null)}
-          style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            justifyContent: 'space-between',
-            padding: '1rem 0',
-            paddingLeft: manifestoHovered === 1 ? '12px' : '0',
-            borderBottom: '0.5px solid #F0EBE3',
-            borderRadius: manifestoHovered === 1 ? '12px' : '0',
-            background: manifestoHovered === 1 ? 'rgba(196,149,106,0.04)' : 'transparent',
-            transition: 'all 200ms ease',
-            cursor: 'default',
-          }}
-        >
-          <span style={{ fontSize: '13px', color: '#C4956A', letterSpacing: '.1em', width: '32px' }}>01</span>
-          <p className="ml-text" style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-.02em', flex: 1, lineHeight: 1.2, padding: '0 2rem', color: '#1A1714' }}>
-            <span style={{ color: '#C4B8AE' }}>One</span> AI gives you one answer.
-          </p>
-          <span className="ml-tag" style={{ fontSize: '13px', color: '#6B6460', border: '0.5px solid #E0D8D0', padding: '4px 12px', borderRadius: '999px' }}>The old way</span>
-        </div>
+      {/* Manifesto Strip — three editorial beats */}
+      <section
+        ref={manifestoReveal.ref}
+        style={manifestoReveal.style}
+        className={`home-manifesto ${manifestoReveal.className}`}
+        aria-label="How Arena thinks"
+      >
+        <p className="home-manifesto__eyebrow">The idea in three lines</p>
+        <div className="home-manifesto__list" role="list">
+          <div
+            className={`manifesto-line${manifestoHovered === 1 ? ' is-hovered' : ''}`}
+            role="listitem"
+            tabIndex={0}
+            onMouseEnter={() => setManifestoHovered(1)}
+            onMouseLeave={() => setManifestoHovered(null)}
+            onFocus={() => setManifestoHovered(1)}
+            onBlur={() => setManifestoHovered(null)}
+          >
+            <span className="ml-index" aria-hidden="true">
+              01
+            </span>
+            <p className="ml-text">
+              <span className="ml-muted">One</span> AI gives you one answer.
+            </p>
+            <span className="ml-tag">The old way</span>
+          </div>
 
-        <div
-          className="manifesto-line"
-          onMouseEnter={() => setManifestoHovered(2)}
-          onMouseLeave={() => setManifestoHovered(null)}
-          style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            justifyContent: 'space-between',
-            padding: '1rem 0',
-            paddingLeft: manifestoHovered === 2 ? '12px' : '0',
-            borderBottom: '0.5px solid #F0EBE3',
-            borderRadius: manifestoHovered === 2 ? '12px' : '0',
-            background: manifestoHovered === 2 ? 'rgba(196,149,106,0.04)' : 'transparent',
-            transition: 'all 200ms ease',
-            cursor: 'default',
-          }}
-        >
-          <span style={{ fontSize: '13px', color: '#C4956A', letterSpacing: '.1em', width: '32px' }}>02</span>
-          <p className="ml-text" style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-.02em', flex: 1, lineHeight: 1.2, padding: '0 2rem', color: '#1A1714' }}>
-            Arena gives you{' '}<span style={{ fontWeight: 500, letterSpacing: manifestoHovered === 2 ? '0.01em' : '-.02em', transition: 'letter-spacing 300ms ease' }}><CountUp target={4} /></span>{' '}that compete.
-          </p>
-          <span className="ml-tag" style={{ fontSize: '13px', color: '#6B6460', border: '0.5px solid #E0D8D0', padding: '4px 12px', borderRadius: '999px' }}>The Arena way</span>
-        </div>
+          <div
+            className={`manifesto-line${manifestoHovered === 2 ? ' is-hovered' : ''}`}
+            role="listitem"
+            tabIndex={0}
+            onMouseEnter={() => setManifestoHovered(2)}
+            onMouseLeave={() => setManifestoHovered(null)}
+            onFocus={() => setManifestoHovered(2)}
+            onBlur={() => setManifestoHovered(null)}
+          >
+            <span className="ml-index" aria-hidden="true">
+              02
+            </span>
+            <p className="ml-text">
+              Arena gives you{' '}
+              <span className="ml-count">
+                <CountUp target={4} />
+              </span>{' '}
+              that compete.
+            </p>
+            <span className="ml-tag is-arena">The Arena way</span>
+          </div>
 
-        <div
-          className="manifesto-line"
-          onMouseEnter={() => setManifestoHovered(3)}
-          onMouseLeave={() => setManifestoHovered(null)}
-          style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            justifyContent: 'space-between',
-            padding: '1rem 0',
-            paddingLeft: manifestoHovered === 3 ? '12px' : '0',
-            borderBottom: '0.5px solid #F0EBE3',
-            borderRadius: manifestoHovered === 3 ? '12px' : '0',
-            background: manifestoHovered === 3 ? 'rgba(196,149,106,0.04)' : 'transparent',
-            transition: 'all 200ms ease',
-            cursor: 'default',
-          }}
-        >
-          <span style={{ fontSize: '13px', color: '#C4956A', letterSpacing: '.1em', width: '32px' }}>03</span>
-          <p className="ml-text" style={{ fontSize: '30px', fontWeight: 500, letterSpacing: '-.02em', flex: 1, lineHeight: 1.2, padding: '0 2rem', color: '#1A1714' }}>
-            The best one <span style={{ color: '#C4956A', fontStyle: 'italic', letterSpacing: manifestoHovered === 3 ? '0.01em' : '-.02em', transition: 'letter-spacing 300ms ease' }}>wins.</span>
-          </p>
-          <span className="ml-tag" style={{ fontSize: '13px', color: '#6B6460', border: '0.5px solid #E0D8D0', padding: '4px 12px', borderRadius: '999px' }}>Always</span>
+          <div
+            className={`manifesto-line${manifestoHovered === 3 ? ' is-hovered' : ''}`}
+            role="listitem"
+            tabIndex={0}
+            onMouseEnter={() => setManifestoHovered(3)}
+            onMouseLeave={() => setManifestoHovered(null)}
+            onFocus={() => setManifestoHovered(3)}
+            onBlur={() => setManifestoHovered(null)}
+          >
+            <span className="ml-index" aria-hidden="true">
+              03
+            </span>
+            <p className="ml-text">
+              The best one <span className="ml-em">wins.</span>
+            </p>
+            <span className="ml-tag is-arena">Always</span>
+          </div>
         </div>
       </section>
 
