@@ -1620,6 +1620,15 @@ async def get_agent_status(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    # Status is polled while a run is live — allow a high ceiling but
+    # still bound runaway tabs that open hundreds of concurrent polls.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_status",
+        limit=300,
+        window_seconds=60,
+        message="Too many status polls. Please slow down.",
+    )
     bb = get_blackboard(task_id)
     if bb:
         _ensure_task_owner(bb, user)
@@ -1675,6 +1684,14 @@ async def get_agent_result(
 ):
     """Returns full blackboard including per-stage output, model, and duration_ms for revision trace."""
     _ensure_agent_access(user, db)
+    # Result payloads can be large (full blackboard). Cap fetch spam.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_result",
+        limit=120,
+        window_seconds=60,
+        message="Too many result fetches. Please slow down.",
+    )
     bb = get_blackboard(task_id)
     if bb:
         _ensure_task_owner(bb, user)
