@@ -4,6 +4,7 @@ Orchestrations are web-only by capability design; no scan needed.
 """
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import logging
 from datetime import datetime, timezone
@@ -15,8 +16,6 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
-def _utc_naive() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def audit_existing_state_for_condura_impact(db: Session) -> dict[str, Any]:
@@ -56,7 +55,7 @@ def audit_existing_state_for_condura_impact(db: Session) -> dict[str, Any]:
                 kind=MigrationKind.WATCHLIST_ITEM,
                 ref_id=str(item.id),
                 affected_capability=env.value,
-                surfaced_at=_utc_naive(),
+                surfaced_at=utcnow_naive(),
             )
         )
         created += 1
@@ -91,7 +90,7 @@ def audit_existing_state_for_condura_impact(db: Session) -> dict[str, Any]:
                 kind=MigrationKind.LIVE_AGENT_TASK,
                 ref_id=str(row.task_id),
                 affected_capability=env.value,
-                surfaced_at=_utc_naive(),
+                surfaced_at=utcnow_naive(),
             )
         )
         created += 1
@@ -204,7 +203,7 @@ def resolve_flag(
     )
     if not row:
         return False
-    row.resolved_at = _utc_naive()
+    row.resolved_at = utcnow_naive()
     row.user_decision = decision[:64]
     db.commit()
     return True

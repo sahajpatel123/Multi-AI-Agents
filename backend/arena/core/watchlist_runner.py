@@ -1,6 +1,7 @@
 """Background scheduler: run due watchlist agent pipelines."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import asyncio
 import logging
@@ -16,8 +17,6 @@ from arena.db_models import User, WatchlistItem
 logger = logging.getLogger("arena.watchlist")
 
 
-def _utc_naive():
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _gate_watchlist_question(question: str) -> dict:
@@ -37,7 +36,7 @@ async def run_due_watchlist() -> None:
     # Late-bind SessionLocal so tests can monkeypatch arena.database.SessionLocal.
     db = arena_database.SessionLocal()
     try:
-        now = _utc_naive()
+        now = utcnow_naive()
         due = (
             db.query(WatchlistItem)
             .filter(WatchlistItem.is_active.is_(True), WatchlistItem.next_run_at <= now)

@@ -11,6 +11,7 @@ Both are scheduled by arena.core.condura_scheduler every 6h.
 """
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import logging
 from datetime import datetime, timedelta, timezone
@@ -28,14 +29,12 @@ _RETENTION_DAYS: dict[str, int] = {
 }
 
 
-def _utc_naive() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def mark_stale_handoffs(db: Session, *, older_than_hours: int = 6) -> int:
     from arena.db_models import HandoffRecord
 
-    cutoff = _utc_naive() - timedelta(hours=older_than_hours)
+    cutoff = utcnow_naive() - timedelta(hours=older_than_hours)
     rows = (
         db.query(HandoffRecord)
         .filter(
@@ -47,7 +46,7 @@ def mark_stale_handoffs(db: Session, *, older_than_hours: int = 6) -> int:
     n = 0
     for row in rows:
         row.status = RECONCILE_NEEDED
-        row.updated_at = _utc_naive()
+        row.updated_at = utcnow_naive()
         n += 1
     if n:
         db.commit()
@@ -67,7 +66,7 @@ def purge_expired_handoffs(db: Session) -> int:
     """
     from arena.db_models import HandoffRecord
 
-    now = _utc_naive()
+    now = utcnow_naive()
     total = 0
     for retention_class, days in _RETENTION_DAYS.items():
         horizon = now - timedelta(days=days)

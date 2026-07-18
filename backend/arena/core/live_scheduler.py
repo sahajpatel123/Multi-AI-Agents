@@ -1,6 +1,7 @@
 """Background scheduler for due live research thread checks."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import asyncio
 import logging
@@ -16,12 +17,10 @@ from arena.db_models import AgentTask
 logger = logging.getLogger("arena.live_scheduler")
 
 
-def _utc_naive() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 async def run_due_live_checks(db: Session) -> None:
-    now = _utc_naive()
+    now = utcnow_naive()
     due = (
         db.query(AgentTask)
         .filter(

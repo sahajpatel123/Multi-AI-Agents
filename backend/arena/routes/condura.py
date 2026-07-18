@@ -1,6 +1,7 @@
 """Condura handoff audit + draft APIs (browser-mediated; no server→daemon)."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import json
 import logging
@@ -37,8 +38,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _utc_naive() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 # Free-form JSON blobs (event/draft payloads) must not bloat Postgres.
@@ -201,7 +200,7 @@ async def append_handoff_event(
         row.status = kind
     elif kind in RUNNING_EVENT_KINDS:
         row.status = STREAMING
-    row.updated_at = _utc_naive()
+    row.updated_at = utcnow_naive()
     db.commit()
     return {"ok": True, "status": row.status}
 

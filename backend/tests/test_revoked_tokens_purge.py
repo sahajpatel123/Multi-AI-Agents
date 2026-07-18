@@ -16,9 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-
-def _utcnow_naive() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+from arena.core.datetime_utils import utcnow_naive
 
 
 @pytest.fixture
@@ -36,13 +34,13 @@ def isolated_db_with_revoked(isolated_db):
         # Long-dead row: yesterday's expiry. Should be purged at startup.
         s.add(RevokedToken(
             token_hash="x" * 64,
-            expires_at=_utcnow_naive() - timedelta(days=1),
+            expires_at=utcnow_naive() - timedelta(days=1),
             reason="test-seed",
         ))
         # Far-future row: should NOT be purged — token still actionable.
         s.add(RevokedToken(
             token_hash="y" * 64,
-            expires_at=_utcnow_naive() + timedelta(days=7),
+            expires_at=utcnow_naive() + timedelta(days=7),
             reason="test-seed-future",
         ))
         s.commit()
@@ -72,12 +70,12 @@ class TestStartupPurge:
         try:
             s.add(RevokedToken(
                 token_hash="x" * 64,
-                expires_at=_utcnow_naive() - timedelta(days=1),
+                expires_at=utcnow_naive() - timedelta(days=1),
                 reason="test-seed-dead",
             ))
             s.add(RevokedToken(
                 token_hash="y" * 64,
-                expires_at=_utcnow_naive() + timedelta(days=7),
+                expires_at=utcnow_naive() + timedelta(days=7),
                 reason="test-seed-live",
             ))
             s.commit()
@@ -125,10 +123,10 @@ class TestStartupPurge:
             # Add a row that's already past exp.
             s.add(RevokedToken(
                 token_hash="a" * 64,
-                expires_at=_utcnow_naive() - timedelta(days=1),
+                expires_at=utcnow_naive() - timedelta(days=1),
             ))
             # Add a row still valid.
-            add("deadbeef-purge-test", _utcnow_naive() + timedelta(days=2), s)
+            add("deadbeef-purge-test", utcnow_naive() + timedelta(days=2), s)
             s.commit()
 
             n = purge_expired(s)
@@ -167,7 +165,7 @@ class TestPeriodicPurge:
         try:
             s.add(RevokedToken(
                 token_hash="z" * 64,
-                expires_at=_utcnow_naive() - timedelta(days=1),
+                expires_at=utcnow_naive() - timedelta(days=1),
                 reason="test-periodic-seed",
             ))
             s.commit()

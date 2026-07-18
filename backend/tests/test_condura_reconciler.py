@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from arena.core.datetime_utils import utcnow_naive
 
-def _utc_naive() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 
 
 def test_mark_stale_handoffs_flips_old_streaming_rows(isolated_db):
@@ -33,7 +33,7 @@ def test_mark_stale_handoffs_flips_old_streaming_rows(isolated_db):
         db.commit()
         db.refresh(u)
 
-        old = _utc_naive() - timedelta(hours=12)
+        old = utcnow_naive() - timedelta(hours=12)
         stale = HandoffRecord(
             user_id=u.id,
             capability="agent.long_research",
@@ -47,8 +47,8 @@ def test_mark_stale_handoffs_flips_old_streaming_rows(isolated_db):
             capability="agent.research",
             execution_env="web",
             status=STREAMING,
-            updated_at=_utc_naive(),
-            created_at=_utc_naive(),
+            updated_at=utcnow_naive(),
+            created_at=utcnow_naive(),
         )
         terminal = HandoffRecord(
             user_id=u.id,
@@ -92,8 +92,8 @@ def test_purge_expired_handoffs_deletes_only_terminal_old_rows(isolated_db):
         db.commit()
         db.refresh(u)
 
-        very_old = _utc_naive() - timedelta(days=200)
-        recent = _utc_naive()
+        very_old = utcnow_naive() - timedelta(days=200)
+        recent = utcnow_naive()
         expired = HandoffRecord(
             user_id=u.id,
             capability="agent.long_research",

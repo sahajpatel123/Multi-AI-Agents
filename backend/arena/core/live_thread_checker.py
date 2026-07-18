@@ -1,6 +1,7 @@
 """Periodic live research refresh for Agent tasks (researcher-only re-run)."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import asyncio
 import json
@@ -21,8 +22,6 @@ from arena.db_models import AgentTask
 logger = logging.getLogger("arena.live_thread_checker")
 
 
-def _utc_naive() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _gate_live_task_text(task_text: str) -> dict:
@@ -111,7 +110,7 @@ async def check_live_task(task: AgentTask, db: Session) -> bool:
     When honest rejection is on and the stored question needs the user's machine,
     skip the web researcher re-run (no theater) and still advance the schedule.
     """
-    now = _utc_naive()
+    now = utcnow_naive()
     if task.live_next_check and task.live_next_check > now:
         return False
 
@@ -164,7 +163,7 @@ async def check_live_task(task: AgentTask, db: Session) -> bool:
             {
                 "id": str(uuid4()),
                 "summary": new_research[:300],
-                "found_at": _utc_naive().isoformat(),
+                "found_at": utcnow_naive().isoformat(),
                 "status": "unread",
             }
         )

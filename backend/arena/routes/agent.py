@@ -6,6 +6,7 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from arena.core.datetime_utils import utcnow_naive
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -149,8 +150,6 @@ def _live_updates_from_row(row: AgentTaskRow) -> list:
     return parsed if isinstance(parsed, list) else []
 
 
-def _utc_naive() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _merge_db_task_into_result_payload(payload: dict, row: AgentTaskRow) -> None:
@@ -1800,7 +1799,7 @@ async def create_watchlist_item(
 
     el = (body.expertise_level or "curious").strip().lower() or "curious"
     ed = (body.expertise_domain or "").strip()[:100]
-    now = _utc_naive()
+    now = utcnow_naive()
     item = WatchlistItem(
         id=str(uuid.uuid4()),
         user_id=user.id,
@@ -1860,7 +1859,7 @@ async def patch_watchlist_item(
     if not item:
         raise HTTPException(status_code=404, detail="Watchlist item not found")
 
-    now = _utc_naive()
+    now = utcnow_naive()
     if body.interval_hours is not None:
         if body.interval_hours not in WATCHLIST_INTERVALS:
             raise HTTPException(status_code=400, detail="interval_hours must be 24, 72, or 168")
@@ -2177,7 +2176,7 @@ async def toggle_agent_task_live(
             )
 
     row.is_live = want_live
-    now = _utc_naive()
+    now = utcnow_naive()
     if row.is_live:
         # Allow callers to dial cadence per task (1h..168h). Default to
         # the stored cadence or 24h if neither is set.

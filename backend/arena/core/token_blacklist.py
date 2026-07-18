@@ -20,6 +20,7 @@ call site to be deliberate about which session the lookup runs against.
 """
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import hashlib
 import logging
@@ -138,10 +139,6 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _utcnow_naive() -> datetime:
-    # The codebase stores naive UTC datetimes everywhere (Base._now);
-    # match that convention here so inequality comparisons stay correct.
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def add(token: str, expires_at: datetime, db: Session, reason: Optional[str] = None) -> None:
@@ -182,7 +179,7 @@ def is_blacklisted(token: str, db: Session) -> bool:
     if not token or not isinstance(token, str) or not token.strip():
         return False
     h = _hash_token(token.strip())
-    now = _utcnow_naive()
+    now = utcnow_naive()
     row = (
         db.query(RevokedToken)
         .filter(RevokedToken.token_hash == h, RevokedToken.expires_at > now)
@@ -211,7 +208,7 @@ def purge_expired(db: Session, batch_limit: int = 1000) -> int:
     Safe to call from a cron / scheduled task; uses an arbitrary LIMIT
     so a runaway-size table doesn't lock for minutes.
     """
-    now = _utcnow_naive()
+    now = utcnow_naive()
     rows = (
         db.query(RevokedToken)
         .filter(RevokedToken.expires_at <= now)
