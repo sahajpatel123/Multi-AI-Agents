@@ -136,6 +136,11 @@ export function SignInPage() {
           <p className="auth-page__sub">
             Save history, keep your panel synced, and pick up where you left off — free to start.
           </p>
+          <div className="auth-page__brand-proof" aria-hidden="true">
+            <span className="auth-page__proof-chip">Free forever</span>
+            <span className="auth-page__proof-chip">No card</span>
+            <span className="auth-page__proof-chip">4 personas</span>
+          </div>
         </div>
 
         <div className="auth-page__agent-grid" aria-hidden>
@@ -238,6 +243,11 @@ export function SignInPage() {
               <MotionButton type="submit" variant="primary" size="lg" fullWidth loading={busy} disabled={busy}>
                 Sign in to Arena
               </MotionButton>
+
+              <ul className="auth-page__form-trust" aria-hidden="true">
+                <li>Encrypted sessions</li>
+                <li>Cancel anytime</li>
+              </ul>
 
               <p className="auth-page__switch">
                 Don&apos;t have an account?{' '}
@@ -359,6 +369,11 @@ export function SignInPage() {
               <MotionButton type="submit" variant="primary" size="lg" fullWidth loading={busy} disabled={busy}>
                 Create free account
               </MotionButton>
+
+              <ul className="auth-page__form-trust" aria-hidden="true">
+                <li>Free forever</li>
+                <li>No card required</li>
+              </ul>
 
               <p className="auth-page__switch">
                 Already have an account?{' '}
