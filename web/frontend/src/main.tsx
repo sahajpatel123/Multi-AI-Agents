@@ -13,6 +13,7 @@ import { NetworkStatusBanner } from './components/NetworkStatusBanner'
 import { BackToTopButton } from './components/BackToTopButton'
 import { DocumentTitle } from './components/DocumentTitle'
 import { ScrollToTop } from './components/ScrollToTop'
+import { MotionButton } from './components/MotionButton'
 import './index.css'
 
 // Lazy-load each page so they're split into separate chunks. The Suspense
@@ -99,13 +100,15 @@ class ErrorBoundary extends React.Component<
             </p>
             <p className="app-crash-shell__detail">{msg}</p>
             <div className="app-crash-shell__actions">
-              <button
+              <MotionButton
                 type="button"
-                className="arena-btn arena-btn--primary arena-btn--md arena-btn--full"
+                variant="primary"
+                size="md"
+                fullWidth
                 onClick={() => window.location.reload()}
               >
                 Reload Arena
-              </button>
+              </MotionButton>
               <button
                 type="button"
                 className="arena-btn arena-btn--ghost arena-btn--md arena-btn--full"

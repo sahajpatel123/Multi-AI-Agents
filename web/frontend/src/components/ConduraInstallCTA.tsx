@@ -5,6 +5,7 @@ import { handoffClipboardUrl } from '../lib/conduraHandoff';
 import { copyToClipboard } from '../lib/clipboard';
 import { conduraPrimaryLabel, resolveInstallUrl } from '../lib/conduraCta';
 import { motionDuration } from '../lib/motion';
+import { MotionButton } from './MotionButton';
 import markUrl from '../assets/condura/mark.svg';
 
 const TITLE_ID = 'condura-cta-title';
@@ -176,11 +177,14 @@ export function ConduraInstallCTA({
         ) : null}
 
         <div className="condura-cta__actions">
-          <button
+          <MotionButton
             type="button"
             ref={firstBtnRef}
-            className="arena-btn arena-btn--primary arena-btn--md arena-btn--full"
+            variant="primary"
+            size="md"
+            fullWidth
             disabled={busy || probing}
+            loading={busy}
             onClick={async () => {
               setBusy(true);
               setError(null);
@@ -212,7 +216,7 @@ export function ConduraInstallCTA({
             }}
           >
             {conduraPrimaryLabel({ mobile, probe, probing, busy })}
-          </button>
+          </MotionButton>
           {handoffPayload ? (
             <button
               type="button"
