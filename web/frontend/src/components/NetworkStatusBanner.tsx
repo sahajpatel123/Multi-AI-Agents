@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { motionDuration } from '../lib/motion';
+import { Wifi, WifiOff, X } from 'lucide-react';
+import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import {
   NETWORK_RECONNECTED_HOLD_MS,
   networkBannerAriaLive,
@@ -18,6 +19,7 @@ export function NetworkStatusBanner() {
   );
   const [showReconnected, setShowReconnected] = useState(false);
   const reconnectTimerRef = useRef<number | null>(null);
+  const reduceMotion = prefersReducedMotion();
 
   const clearReconnectTimer = () => {
     if (reconnectTimerRef.current != null) {
@@ -62,56 +64,47 @@ export function NetworkStatusBanner() {
   if (!message || !role || !ariaLive) return null;
 
   const offline = kind === 'offline';
+  const holdMs = motionDuration(NETWORK_RECONNECTED_HOLD_MS);
+  const showProgress = !offline && !reduceMotion && holdMs > 0;
 
   return (
     <div
+      className={[
+        'network-banner',
+        offline ? 'network-banner--offline' : 'network-banner--online',
+        reduceMotion ? 'network-banner--static' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       role={role}
       aria-live={ariaLive}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 10000,
-        padding: `max(10px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px))`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 12,
-        textAlign: 'center',
-        fontSize: 13,
-        fontFamily: 'Georgia, Times New Roman, serif',
-        color: offline ? '#5C2B0E' : '#2C4A36',
-        background: offline ? 'rgba(253, 246, 236, 0.98)' : 'rgba(232, 245, 233, 0.98)',
-        borderBottom: offline
-          ? '0.5px solid rgba(196, 149, 106, 0.45)'
-          : '0.5px solid rgba(138, 168, 153, 0.45)',
-        boxShadow: '0 4px 16px rgba(44, 24, 16, 0.06)',
-      }}
     >
-      <span style={{ flex: 1, minWidth: 0, lineHeight: 1.45 }}>{message}</span>
-      {!offline ? (
-        <button
-          type="button"
-          onClick={() => {
-            clearReconnectTimer();
-            setShowReconnected(false);
-          }}
-          aria-label="Dismiss back-online notice"
-          style={{
-            flexShrink: 0,
-            background: 'transparent',
-            border: '0.5px solid rgba(44, 74, 54, 0.25)',
-            borderRadius: 6,
-            padding: '2px 8px',
-            fontSize: 12,
-            color: '#2C4A36',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
-          Dismiss
-        </button>
+      <div className="network-banner__inner">
+        <span className="network-banner__icon" aria-hidden>
+          {offline ? <WifiOff width={15} height={15} strokeWidth={1.75} /> : <Wifi width={15} height={15} strokeWidth={1.75} />}
+        </span>
+        <span className="network-banner__message">{message}</span>
+        {!offline ? (
+          <button
+            type="button"
+            className="network-banner__dismiss"
+            onClick={() => {
+              clearReconnectTimer();
+              setShowReconnected(false);
+            }}
+            aria-label="Dismiss back-online notice"
+          >
+            <X width={14} height={14} strokeWidth={2} aria-hidden />
+            <span className="network-banner__dismiss-label">Dismiss</span>
+          </button>
+        ) : null}
+      </div>
+      {showProgress ? (
+        <span
+          className="network-banner__progress"
+          style={{ animationDuration: `${holdMs}ms` }}
+          aria-hidden
+        />
       ) : null}
     </div>
   );

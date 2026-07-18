@@ -105,20 +105,35 @@ describe('NetworkStatusBanner', () => {
 
   it('dismiss button removes the reconnected banner', () => {
     installNavigator(false);
-    const { container } = render(<NetworkStatusBanner />);
+    const { container, getByLabelText } = render(<NetworkStatusBanner />);
     act(() => {
       fireOnline();
     });
     expect(container.textContent).toMatch(/Back online/);
 
-    // Click the Dismiss button — banner should hide (the reconnected
-    // toast goes away, but the user is still online so the banner
-    // is empty).
-    const dismiss = container.querySelector('button');
-    expect(dismiss).not.toBeNull();
     act(() => {
-      fireEvent.click(dismiss!);
+      fireEvent.click(getByLabelText(/dismiss back-online notice/i));
     });
     expect(container.querySelector('[role="status"]')).toBeNull();
+  });
+
+  it('applies offline chrome classes when offline', () => {
+    installNavigator(false);
+    const { container } = render(<NetworkStatusBanner />);
+    const banner = container.querySelector('.network-banner');
+    expect(banner).not.toBeNull();
+    expect(banner).toHaveClass('network-banner--offline');
+    expect(banner?.querySelector('.network-banner__icon')).not.toBeNull();
+  });
+
+  it('shows online chrome and progress rail when reconnected', () => {
+    installNavigator(false);
+    const { container } = render(<NetworkStatusBanner />);
+    act(() => {
+      fireOnline();
+    });
+    const banner = container.querySelector('.network-banner');
+    expect(banner).toHaveClass('network-banner--online');
+    expect(banner?.querySelector('.network-banner__progress')).not.toBeNull();
   });
 });
