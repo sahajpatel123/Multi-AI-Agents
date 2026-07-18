@@ -73,5 +73,6 @@ export function describeRedirectDestination(path: string): string {
   if (base === '/account') return 'your account';
   if (base.startsWith('/room/')) return 'the shared room';
   if (base === '/product') return 'Product';
+  if (base === '/capabilities') return 'Capabilities';
   return 'where you left off';
 }

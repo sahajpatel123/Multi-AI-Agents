@@ -150,6 +150,13 @@ export function Navbar() {
                   </button>
                   <button
                     type="button"
+                    className={`navbar-nav-link${isActive('/capabilities') ? ' navbar-nav-link--active' : ''}`}
+                    onClick={() => navigate('/capabilities')}
+                  >
+                    Capabilities
+                  </button>
+                  <button
+                    type="button"
                     className={`navbar-nav-link${isActive('/pricing') ? ' navbar-nav-link--active' : ''}`}
                     onClick={() => navigate('/pricing')}
                   >
@@ -184,7 +191,7 @@ export function Navbar() {
                     className="navbar-signin-link"
                     onClick={() => {
                       setRedirectIntent('/');
-                      navigate('/signin');
+                      navigate('/signin?tab=signin');
                     }}
                   >
                     Sign in
@@ -198,10 +205,10 @@ export function Navbar() {
                         return;
                       }
                       setRedirectIntent('/app');
-                      navigate('/signin');
+                      navigate('/signin?tab=signup');
                     }}
                   >
-                    Try Arena →
+                    Sign up →
                   </button>
                 </div>
               ) : (
@@ -292,6 +299,7 @@ export function Navbar() {
               ]
             : [
                 { label: 'Product', path: '/product' },
+                { label: 'Capabilities', path: '/capabilities' },
                 { label: 'Pricing', path: '/pricing' },
                 { label: 'About', path: '/about' },
               ]
@@ -309,17 +317,30 @@ export function Navbar() {
             </button>
           ))}
           {!isAuthenticated ? (
-            <button
-              type="button"
-              className="navbar-mobile-link"
-              onClick={() => {
-                setMenuOpen(false);
-                setRedirectIntent('/');
-                navigate('/signin');
-              }}
-            >
-              Sign in
-            </button>
+            <>
+              <button
+                type="button"
+                className="navbar-mobile-link"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setRedirectIntent('/');
+                  navigate('/signin?tab=signin');
+                }}
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                className="navbar-mobile-link"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setRedirectIntent('/app');
+                  navigate('/signin?tab=signup');
+                }}
+              >
+                Sign up free
+              </button>
+            </>
           ) : (
             <>
               {/* Product destinations (Arena/Agent/Watchlist) already listed above —

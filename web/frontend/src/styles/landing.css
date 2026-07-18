@@ -1,68 +1,58 @@
 /* ============================================================================
-   ARENA LANDING — Design System
+   ARENA LANDING — Warm cream editorial design system
    ----------------------------------------------------------------------------
-   Scoped implementation of the "Arena — Multi-Agent Distributed Logic Engine"
-   template. Everything lives under `.arena-landing` so none of these rules
-   leak into the rest of the app (which uses the warm editorial theme).
-
-   Improvements over the raw template:
-   • Scoped selectors (template used bare `header`/`footer`/`h1`/`p` globals)
-   • Fluid typography via clamp() — one rule covers every viewport
-   • scroll-margin-top on anchored sections so the fixed header never covers them
-   • :focus-visible rings for keyboard navigation
-   • prefers-reduced-motion support (kills loops, caret, reveals)
-   • Hover-focus card system without blur() — opacity only (readability)
-   • Pipeline grid actually renders all 8 stages (template shipped 5 of 8)
-   • content-visibility: auto on below-fold sections (rendering perf)
+   Restored to Arena’s original parchment / gold aesthetic (cream #FAF7F4,
+   ink #1A1714, accent #C4956A, Georgia / Source Serif). Structure stays under
+   `.arena-landing` so it never fights the rest of the app’s tokens.
    ========================================================================== */
 
 .arena-landing {
-  /* Palette */
-  --al-bg: #ffffff;
-  --al-bg-surface: #f8fafc;
-  --al-card: #ffffff;
-  --al-title: #0f172a;
-  --al-body: #334155;
-  --al-muted: #64748b;
-  --al-border: #e2e8f0;
+  /* Palette — warm cream editorial */
+  --al-bg: #faf7f4;
+  --al-bg-surface: #f0ebe3;
+  --al-card: #fdfaf6;
+  --al-title: #1a1714;
+  --al-body: #4a3728;
+  --al-muted: #8c7355;
+  --al-border: #e0d8d0;
 
-  /* Brand */
-  --al-brand: #4f46e5;
-  --al-brand-tint: #eef2ff;
-  --al-brand-shade: #312e81;
-  --al-brand-glow: rgba(79, 70, 229, 0.35);
+  /* Brand — soft gold */
+  --al-brand: #c4956a;
+  --al-brand-tint: #faf3ea;
+  --al-brand-shade: #2c1810;
+  --al-brand-glow: rgba(196, 149, 106, 0.28);
 
-  /* Agent identity palette (mapped to the default Arena panel) */
-  --al-agent-contrarian: #f97316;
-  --al-agent-analyst: #3b82f6;
-  --al-agent-pragmatist: #10b981;
-  --al-agent-philosopher: #8b5cf6;
+  /* Agent identity palette (canonical Arena panel) */
+  --al-agent-contrarian: #b0977e;
+  --al-agent-analyst: #8c9bab;
+  --al-agent-pragmatist: #8aa899;
+  --al-agent-philosopher: #9b8faa;
 
-  /* Dark console chrome */
-  --al-console-bg: #0f172a;
-  --al-console-panel: #1e293b;
-  --al-console-line: rgba(255, 255, 255, 0.06);
-  --al-console-text: #cbd5e1;
+  /* Dark console chrome — warm ink, not slate */
+  --al-console-bg: #1a1714;
+  --al-console-panel: #2c1810;
+  --al-console-line: rgba(250, 247, 244, 0.08);
+  --al-console-text: #e0d8d0;
 
-  /* Type */
-  --al-font-display: 'Sora', 'Inter', sans-serif;
-  --al-font-body: 'Inter', sans-serif;
-  --al-font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  /* Type — editorial serif */
+  --al-font-display: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --al-font-body: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+  --al-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /* Motion */
   --al-ease: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Layout */
   --al-header-h: 76px;
-  --al-max: 1280px;
-  --al-gutter: clamp(20px, 5vw, 80px);
+  --al-max: 1120px;
+  --al-gutter: clamp(20px, 5vw, 48px);
 
   background: var(--al-bg);
   color: var(--al-body);
   font-family: var(--al-font-body);
   font-size: 16px;
-  line-height: 1.6;
-  letter-spacing: 0;
+  line-height: 1.65;
+  letter-spacing: 0.005em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100dvh;
@@ -70,23 +60,23 @@
   position: relative;
 }
 
-/* Neutralize the global editorial theme inside the landing scope */
+/* Serif editorial type inside landing */
 .arena-landing h1,
 .arena-landing h2,
 .arena-landing h3,
 .arena-landing h4 {
   font-family: var(--al-font-display);
   color: var(--al-title);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.08;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
   margin: 0;
 }
 
 .arena-landing p {
   font-family: var(--al-font-body);
   font-size: 16px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--al-body);
   margin: 0;
 }
@@ -149,7 +139,7 @@
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--al-brand);
@@ -208,20 +198,22 @@
 
 .al-btn--brand {
   background: var(--al-title);
-  color: #fff;
+  color: var(--al-brand);
   border-color: var(--al-title);
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .al-btn--brand::before {
-  background: var(--al-brand);
+  background: #3d2415;
 }
 
 .al-btn--brand:hover,
 .al-btn--brand:focus-visible {
-  color: #fff;
+  color: #d4b08a;
   transform: translateY(-2px);
-  border-color: var(--al-brand);
-  box-shadow: 0 10px 24px var(--al-brand-glow);
+  border-color: #3d2415;
+  box-shadow: 0 10px 24px rgba(44, 24, 16, 0.18);
 }
 
 .al-btn--outline {
@@ -231,15 +223,15 @@
 }
 
 .al-btn--outline::before {
-  background: var(--al-title);
+  background: var(--al-brand-tint);
 }
 
 .al-btn--outline:hover,
 .al-btn--outline:focus-visible {
-  color: #fff;
+  color: var(--al-title);
   transform: translateY(-2px);
-  border-color: var(--al-title);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  border-color: var(--al-brand);
+  box-shadow: 0 8px 20px rgba(196, 149, 106, 0.15);
 }
 
 .al-btn--sm {
@@ -312,7 +304,7 @@
 }
 
 .al-header--scrolled {
-  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 6px 24px rgba(44, 24, 16, 0.06);
 }
 
 .al-header--hidden {
@@ -325,7 +317,7 @@
   left: 0;
   height: 2px;
   width: 100%;
-  background: linear-gradient(90deg, var(--al-brand), #818cf8);
+  background: linear-gradient(90deg, var(--al-brand), #d4b08a);
   transform-origin: left;
   transform: scaleX(0);
 }
@@ -341,7 +333,7 @@
 .al-logo {
   font-family: var(--al-font-display);
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: -0.04em;
   color: var(--al-title);
   background: none;
@@ -408,13 +400,24 @@
   gap: 12px;
 }
 
+.al-nav-signin {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--al-body) !important;
+  padding: 8px 4px !important;
+}
+
+.al-nav-signin:hover {
+  color: var(--al-title) !important;
+}
+
 .al-menu-btn {
   display: none;
   width: 42px;
   height: 42px;
   border: 1px solid var(--al-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--al-card);
   cursor: pointer;
   align-items: center;
   justify-content: center;
@@ -481,7 +484,7 @@
   overflow: clip;
 }
 
-/* ambient brand glows — extremely subtle, keeps the template's clean white */
+/* ambient cream / gold glows */
 .al-hero::before {
   content: '';
   position: absolute;
@@ -490,7 +493,7 @@
   width: 560px;
   height: 560px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(79, 70, 229, 0.07) 0%, transparent 65%);
+  background: radial-gradient(circle, rgba(196, 149, 106, 0.12) 0%, transparent 65%);
   pointer-events: none;
 }
 
@@ -502,7 +505,7 @@
   width: 520px;
   height: 520px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.05) 0%, transparent 65%);
+  background: radial-gradient(circle, rgba(176, 151, 126, 0.08) 0%, transparent 65%);
   pointer-events: none;
 }
 
@@ -528,7 +531,7 @@
   text-transform: uppercase;
   color: var(--al-muted);
   margin-bottom: 22px;
-  background: #fff;
+  background: var(--al-card);
 }
 
 .al-hero-badge i {
@@ -588,7 +591,7 @@
 
 .al-hero-proof b {
   color: var(--al-title);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .al-hero-proof span {
@@ -600,7 +603,7 @@
 .al-hero-proof span::before {
   content: '✓';
   color: var(--al-agent-pragmatist);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 /* ------------------------------------------------------ console window */
@@ -608,7 +611,7 @@
 .al-window {
   background: var(--al-console-bg);
   border-radius: 16px;
-  box-shadow: 0 30px 70px -20px rgba(15, 23, 42, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow: 0 30px 70px -20px rgba(44, 24, 16, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -653,7 +656,7 @@
 .al-window-label {
   font-family: var(--al-font-display);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.16em;
   color: var(--al-muted);
   display: inline-flex;
@@ -693,7 +696,7 @@
 
 .al-agent-card.is-active {
   border-color: var(--al-brand);
-  box-shadow: inset 0 0 14px rgba(79, 70, 229, 0.12), 0 4px 20px rgba(79, 70, 229, 0.1);
+  box-shadow: inset 0 0 14px rgba(196, 149, 106, 0.12), 0 4px 20px rgba(196, 149, 106, 0.1);
 }
 
 .al-agent-head {
@@ -709,15 +712,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #f8fafc;
+  color: #f0ebe3;
   font-family: var(--al-font-display);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .al-agent-tag {
   font-size: 9.5px;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--al-muted);
@@ -802,7 +805,7 @@
 }
 
 .al-prompt-text {
-  color: #e2e8f0;
+  color: #e0d8d0;
   font-size: 13.5px;
   white-space: pre-wrap;
   overflow-wrap: break-word;
@@ -825,11 +828,11 @@
   border: none;
   padding: 0 22px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.08em;
   border-radius: 8px;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 4px 14px rgba(196, 149, 106, 0.3);
   transition: transform 0.25s var(--al-ease), box-shadow 0.25s var(--al-ease), background 0.25s ease;
   align-self: center;
   height: 44px;
@@ -840,7 +843,7 @@
 .al-execute:focus-visible {
   background: #4338ca;
   transform: translateY(-2px);
-  box-shadow: 0 8px 22px rgba(79, 70, 229, 0.45);
+  box-shadow: 0 8px 22px rgba(196, 149, 106, 0.45);
 }
 
 .al-execute:active {
@@ -865,7 +868,7 @@
   border: 1px solid var(--al-border);
   padding: 40px 32px;
   border-radius: 10px;
-  box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 4px 6px -1px rgba(44, 24, 16, 0.04);
   opacity: 0.94;
   transition: opacity 0.35s var(--al-ease), transform 0.35s var(--al-ease),
     border-color 0.35s var(--al-ease), box-shadow 0.35s var(--al-ease);
@@ -881,7 +884,7 @@
 
 .al-feature-card h3 .al-feature-num {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--al-brand);
   letter-spacing: 0.08em;
   border: 1px solid var(--al-brand-tint);
@@ -915,7 +918,7 @@
 .al-feature-list li::before {
   content: '→';
   color: var(--al-brand);
-  font-weight: 700;
+  font-weight: 500;
   transition: transform 0.25s var(--al-ease);
 }
 
@@ -929,7 +932,7 @@
 .al-pricing-grid:not(:hover) .al-price-card--featured {
   opacity: 1;
   border-color: var(--al-title);
-  box-shadow: 0 20px 30px -8px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 20px 30px -8px rgba(44, 24, 16, 0.1);
 }
 
 .al-cards-grid:hover .al-feature-card,
@@ -942,7 +945,7 @@
   opacity: 1;
   border-color: var(--al-title);
   transform: translateY(-4px);
-  box-shadow: 0 22px 34px -10px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 22px 34px -10px rgba(44, 24, 16, 0.12);
 }
 
 /* -------------------------------------------------------------- pipeline */
@@ -958,7 +961,7 @@
   border: 1px solid var(--al-border);
   border-radius: 10px;
   padding: 28px 22px;
-  box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 4px 6px -1px rgba(44, 24, 16, 0.04);
   opacity: 0.94;
   transition: opacity 0.35s var(--al-ease), transform 0.35s var(--al-ease),
     border-color 0.35s var(--al-ease), box-shadow 0.35s var(--al-ease);
@@ -969,7 +972,7 @@
   font-family: var(--al-font-display);
   font-size: 32px;
   color: var(--al-brand-tint);
-  font-weight: 800;
+  font-weight: 500;
   line-height: 1;
   margin-bottom: 14px;
   transition: color 0.3s ease;
@@ -995,7 +998,7 @@
   opacity: 1;
   border-color: var(--al-brand);
   transform: translateY(-4px);
-  box-shadow: 0 16px 28px -10px rgba(79, 70, 229, 0.18);
+  box-shadow: 0 16px 28px -10px rgba(196, 149, 106, 0.18);
 }
 
 .al-pipeline-card:hover .al-pipeline-num {
@@ -1054,11 +1057,11 @@
   background: var(--al-console-bg);
   border-radius: 14px;
   padding: 40px 32px 32px;
-  color: #e2e8f0;
+  color: #e0d8d0;
   font-family: var(--al-font-mono);
   font-size: 13px;
   line-height: 1.7;
-  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 24px 48px -12px rgba(44, 24, 16, 0.35);
   position: relative;
   overflow-x: auto;
   white-space: pre;
@@ -1085,14 +1088,15 @@
   right: 18px;
   font-size: 9.5px;
   color: var(--al-muted);
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.08em;
 }
 
-.al-code-k { color: #f472b6; }   /* keyword */
-.al-code-f { color: #60a5fa; }   /* function */
-.al-code-c { color: #64748b; }   /* comment */
-.al-code-s { color: #34d399; }   /* string/ident */
+/* Syntax tint tuned for warm ink console (not neon SaaS colors) */
+.al-code-k { color: #e8c4a0; }   /* keyword — soft gold */
+.al-code-f { color: #c4d4e0; }   /* function — cool parchment blue */
+.al-code-c { color: #8c7355; }   /* comment — muted bronze */
+.al-code-s { color: #b8cfc0; }   /* string/ident — sage */
 
 /* --------------------------------------------------------------- pricing */
 
@@ -1125,7 +1129,7 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 4px 6px -1px rgba(44, 24, 16, 0.04);
   opacity: 0.94;
   transition: opacity 0.35s var(--al-ease), transform 0.35s var(--al-ease),
     border-color 0.35s var(--al-ease), box-shadow 0.35s var(--al-ease);
@@ -1135,7 +1139,7 @@
 .al-pricing-grid .al-price-card:focus-within {
   opacity: 1;
   transform: translateY(-6px);
-  box-shadow: 0 24px 36px -12px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 24px 36px -12px rgba(44, 24, 16, 0.14);
   border-color: var(--al-title);
 }
 
@@ -1144,14 +1148,14 @@
   position: absolute;
   top: -12px;
   right: 32px;
-  background: var(--al-brand);
-  color: #fff;
+  background: var(--al-title);
+  color: var(--al-brand);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 500;
   padding: 5px 12px;
   border-radius: 5px;
   letter-spacing: 0.07em;
-  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.35);
+  box-shadow: 0 6px 14px rgba(44, 24, 16, 0.18);
 }
 
 .al-price-card h3 {
@@ -1167,7 +1171,7 @@
 .al-price-value {
   font-family: var(--al-font-display);
   font-size: 46px;
-  font-weight: 800;
+  font-weight: 500;
   color: var(--al-title);
   margin: 22px 0;
   display: flex;
@@ -1204,7 +1208,7 @@
 .al-price-features li::before {
   content: '✓';
   color: var(--al-brand);
-  font-weight: 700;
+  font-weight: 500;
   flex-shrink: 0;
 }
 
@@ -1262,7 +1266,7 @@
 
 .al-acc-trigger h3 {
   font-size: 16.5px;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--al-title);
   transition: color 0.25s ease;
 }
@@ -1310,7 +1314,7 @@
 
 .al-footer {
   background: var(--al-title);
-  color: #fff;
+  color: #faf7f4;
   padding: clamp(56px, 7vw, 80px) 0 0;
 }
 
@@ -1336,10 +1340,10 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #64748b;
+  color: #8c7355;
   margin: 0 0 18px;
   font-family: var(--al-font-body);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .al-footer-col ul {
@@ -1370,7 +1374,7 @@
   left: 0;
   width: 100%;
   height: 1px;
-  background: #818cf8;
+  background: #d4b08a;
   transform: scaleX(0);
   transform-origin: right;
   transition: transform 0.3s var(--al-ease);
@@ -1394,9 +1398,9 @@
   gap: 12px;
   flex-wrap: wrap;
   padding: 26px 0;
-  border-top: 1px solid #334155;
+  border-top: 1px solid #4a3728;
   font-size: 13px;
-  color: #64748b;
+  color: #8c7355;
 }
 
 .al-footer-status {

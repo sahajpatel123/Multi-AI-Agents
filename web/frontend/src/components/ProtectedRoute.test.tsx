@@ -54,12 +54,14 @@ function renderRoute(opts: {
 
 describe('ProtectedRoute', () => {
   it('renders the MicroLoader while auth is loading', () => {
-    const { getByTestId, queryByTestId } = renderRoute({
+    const { getByTestId, queryByTestId, container } = renderRoute({
       loading: true,
       hasUser: false,
     });
     expect(getByTestId('micro-loader')).not.toBeNull();
     expect(queryByTestId('protected-content')).toBeNull();
+    expect(container.querySelector('.auth-gate')).not.toBeNull();
+    expect(container.querySelector('.auth-gate__wordmark')?.textContent).toMatch(/Arena/);
   });
 
   it('redirects to /signin when no user is present', () => {

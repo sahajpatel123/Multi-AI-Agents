@@ -26,6 +26,9 @@ const HomePage = lazy(() =>
 const ProductPage = lazy(() =>
   import('./pages/ProductPage').then((m) => ({ default: m.ProductPage })),
 )
+const CapabilitiesPage = lazy(() =>
+  import('./pages/CapabilitiesPage').then((m) => ({ default: m.CapabilitiesPage })),
+)
 const PricingPage = lazy(() =>
   import('./pages/PricingPage').then((m) => ({ default: m.PricingPage })),
 )
@@ -205,6 +208,7 @@ if (!rootElement) {
                     </ProtectedRoute>
                   } />
                   <Route path="/product" element={<ProductPage />} />
+                  <Route path="/capabilities" element={<CapabilitiesPage />} />
                   <Route path="/pricing" element={<PricingPage />} />
                   <Route path="/about" element={<AboutPage />} />
                   <Route path="/signin" element={<SignInPage />} />

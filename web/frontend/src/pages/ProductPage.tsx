@@ -3,326 +3,144 @@ import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
+import { prefersReducedMotion } from '../lib/motion';
+
+const ARENA_FEATURES = [
+  'Four AI personas compete simultaneously',
+  'Scored and ranked automatically',
+  'Challenge, debate, or go 1-on-1',
+  'Winner surfaces with a reason why',
+] as const;
+
+const AGENT_FEATURES = [
+  '8-stage web research pipeline',
+  'Plan → Research → Steelman → Solve → Critique → Verify → Synthesise → Judge',
+  'Verifier checks every claim before it ships',
+  'On-device work routes to Condura — not the browser',
+] as const;
 
 export function ProductPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const reduceMotion = prefersReducedMotion();
+
+  const go = (path: string) => {
+    if (isAuthenticated) {
+      navigate(path);
+      return;
+    }
+    setRedirectIntent(path);
+    navigate('/signin?tab=signup');
+  };
 
   return (
-    <div style={{ background: '#F5F0E8', minHeight: '100vh' }}>
-      <style>{`
-        @keyframes breathe {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.5); opacity: 0.6; }
-        }
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .breathe { animation: breathe 2.4s ease-in-out infinite; }
-        .animate-fade-up { animation: fadeUp 500ms ease 100ms backwards; }
-      `}</style>
-
+    <div className="mkt-page">
       <Navbar />
 
-      <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '64px 24px' }}>
-        {/* Hero */}
-        <div className="animate-fade-up" style={{ marginBottom: '3rem' }}>
-          <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#6B6460', marginBottom: '1rem' }}>Choose your mode</p>
-          <h1 style={{ fontSize: '52px', fontWeight: 500, letterSpacing: '-.03em', color: '#1A1714', lineHeight: 1.1, marginBottom: '1rem' }}>
-            Two ways to <span style={{ color: '#C4956A', fontStyle: 'italic' }}>think.</span>
+      <main
+        id="main-content"
+        className={`mkt-main${reduceMotion ? '' : ' mkt-main--enter'}`}
+        tabIndex={-1}
+        aria-labelledby="product-title"
+      >
+        <section className="mkt-hero">
+          <p className="mkt-hero__kicker">Choose your mode</p>
+          <h1 id="product-title" className="mkt-hero__title">
+            Two ways to <span className="mkt-hero__accent">think.</span>
           </h1>
-          <p style={{ fontSize: '14px', color: '#6B6460', maxWidth: '420px', lineHeight: 1.75, marginBottom: '3rem' }}>
-            Arena for debate. Agent for depth. Same intelligence, two different engines.
+          <p className="mkt-hero__lede">
+            Arena for debate. Agent for depth. Same intelligence, two different engines — pick the
+            shape of work, not a different product.
           </p>
-        </div>
+        </section>
 
-        {/* Two Product Cards */}
-        <div className="product-cards-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '2rem' }}>
-          {/* Arena Mode Card */}
+        <section className="product-modes" aria-label="Product modes">
           <button
             type="button"
-            onClick={() => {
-              if (!isAuthenticated) {
-                setRedirectIntent('/app');
-                navigate('/signin');
-                return;
-              }
-              navigate('/app');
-            }}
-            className="product-parchment-card"
-            style={{
-              background: '#FDFAF6',
-              border: '0.5px solid #E0D5C5',
-              borderLeft: '4px solid #C4956A',
-              borderRadius: '14px',
-              padding: '26px',
-              cursor: 'pointer',
-              transition: 'background 0.2s ease, transform 0.2s ease',
-              textAlign: 'left',
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: '420px',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.background = '#FAF7F0';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.background = '#FDFAF6';
-            }}
+            className="product-mode-card product-mode-card--arena"
+            onClick={() => go('/app')}
           >
-            <div
-              style={{
-                background: '#FAF3EA',
-                color: '#C4956A',
-                border: '0.5px solid #E0C8A0',
-                fontSize: '11px',
-                letterSpacing: '0.10em',
-                textTransform: 'uppercase',
-                padding: '4px 12px',
-                borderRadius: '20px',
-                marginBottom: '20px',
-                display: 'inline-block',
-                alignSelf: 'flex-start',
-              }}
-            >
-              Active now
-            </div>
-
-            <div
-              style={{
-                color: '#C4956A',
-                fontSize: '52px',
-                fontWeight: 500,
-                fontFamily: 'Georgia, serif',
-                opacity: 0.2,
-                marginBottom: '14px',
-                lineHeight: 1,
-              }}
-            >
+            <span className="product-mode-card__badge">Active now</span>
+            <span className="product-mode-card__num" aria-hidden>
               01
-            </div>
-
-            <h2
-              style={{
-                margin: 0,
-                color: '#2C1810',
-                fontSize: '22px',
-                fontWeight: 500,
-                marginBottom: '6px',
-                lineHeight: 1.2,
-              }}
-            >
-              Arena Mode
-            </h2>
-            <p
-              style={{
-                color: '#8C7355',
-                fontSize: '13px',
-                fontStyle: 'italic',
-                marginBottom: '20px',
-              }}
-            >
-              Four minds. One question.
-            </p>
-
-            <div style={{ marginBottom: 'auto' }}>
-              {['Four AI personas compete simultaneously', 'Scored and ranked automatically', 'Challenge, debate, or go 1-on-1', 'Winner surfaces with a reason why'].map((feature, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '9px' }}>
-                  <div
-                    style={{
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '50%',
-                      background: '#FAF3EA',
-                      border: '0.5px solid #C4956A',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span style={{ fontSize: '10px', color: '#C4956A', lineHeight: 1 }}>✓</span>
-                  </div>
-                  <span style={{ fontSize: '12px', color: '#4A3728' }}>{feature}</span>
-                </div>
+            </span>
+            <h2 className="product-mode-card__title">Arena Mode</h2>
+            <p className="product-mode-card__tagline">Four minds. One question.</p>
+            <ul className="product-mode-card__list">
+              {ARENA_FEATURES.map((f) => (
+                <li key={f}>
+                  <span className="product-mode-card__check" aria-hidden>
+                    ✓
+                  </span>
+                  {f}
+                </li>
               ))}
-            </div>
-
-            <div
-              style={{
-                borderTop: '0.5px solid #E0D5C5',
-                marginTop: '1.5rem',
-                paddingTop: '22px',
-              }}
-            >
-              <div
-                style={{
-                  color: '#C4956A',
-                  fontSize: '14px',
-                  fontFamily: 'Georgia, serif',
-                  letterSpacing: '0.04em',
-                  cursor: 'pointer',
-                  textDecoration: 'none',
-                  display: 'inline-block',
-                }}
-              >
-                Enter Arena →
-              </div>
-            </div>
+            </ul>
+            <span className="product-mode-card__cta">Enter Arena →</span>
           </button>
 
-          {/* Agent Mode Card */}
           <button
             type="button"
-            onClick={() => {
-              if (!isAuthenticated) {
-                setRedirectIntent('/agent');
-                navigate('/signin');
-                return;
-              }
-              navigate('/agent');
-            }}
-            className="product-parchment-card"
-            style={{
-              background: '#FDFAF6',
-              border: '0.5px solid #E0D5C5',
-              borderLeft: '4px solid #5A8C6A',
-              borderRadius: '14px',
-              padding: '26px',
-              cursor: 'pointer',
-              transition: 'background 0.2s ease, transform 0.2s ease',
-              textAlign: 'left',
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: '420px',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.background = '#F5FAF6';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.background = '#FDFAF6';
-            }}
+            className="product-mode-card product-mode-card--agent"
+            onClick={() => go('/agent')}
           >
-            <div
-              style={{
-                background: '#EAF3EC',
-                color: '#5A8C6A',
-                border: '0.5px solid #C4D8C8',
-                fontSize: '11px',
-                letterSpacing: '0.10em',
-                textTransform: 'uppercase',
-                padding: '4px 12px',
-                borderRadius: '20px',
-                marginBottom: '20px',
-                display: 'inline-block',
-                alignSelf: 'flex-start',
-              }}
-            >
+            <span className="product-mode-card__badge product-mode-card__badge--agent">
               Active now
-            </div>
-
-            <div
-              style={{
-                color: '#5A8C6A',
-                fontSize: '52px',
-                fontWeight: 500,
-                fontFamily: 'Georgia, serif',
-                opacity: 0.2,
-                marginBottom: '14px',
-                lineHeight: 1,
-              }}
-            >
+            </span>
+            <span className="product-mode-card__num product-mode-card__num--agent" aria-hidden>
               02
-            </div>
-
-            <h2
-              style={{
-                margin: 0,
-                color: '#1E2E22',
-                fontSize: '22px',
-                fontWeight: 500,
-                marginBottom: '6px',
-                lineHeight: 1.2,
-              }}
-            >
-              Agent Mode
-            </h2>
-            <p
-              style={{
-                color: '#6B8C6B',
-                fontSize: '13px',
-                fontStyle: 'italic',
-                marginBottom: '20px',
-              }}
-            >
+            </span>
+            <h2 className="product-mode-card__title">Agent Mode</h2>
+            <p className="product-mode-card__tagline product-mode-card__tagline--agent">
               Plan. Research. Solve. Verify.
             </p>
-
-            <div style={{ marginBottom: 'auto' }}>
-              {['7-stage web research pipeline', 'Plan → Research → Solve → Critique → Verify → Synthesise → Judge', 'Verifier checks every claim', 'On-device work routes to Condura — not the browser'].map((feature, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '9px' }}>
-                  <div
-                    style={{
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '50%',
-                      background: '#EAF3EC',
-                      border: '0.5px solid #8CBE9A',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
+            <ul className="product-mode-card__list">
+              {AGENT_FEATURES.map((f) => (
+                <li key={f}>
+                  <span
+                    className="product-mode-card__check product-mode-card__check--agent"
+                    aria-hidden
                   >
-                    <span style={{ fontSize: '10px', color: '#5A8C6A', lineHeight: 1 }}>✓</span>
-                  </div>
-                  <span style={{ fontSize: '12px', color: '#2E3E30' }}>{feature}</span>
-                </div>
+                    ✓
+                  </span>
+                  {f}
+                </li>
               ))}
-            </div>
-
-            <div
-              style={{
-                borderTop: '0.5px solid #E0D5C5',
-                marginTop: '1.5rem',
-                paddingTop: '22px',
-              }}
-            >
-              <div
-                style={{
-                  color: '#5A8C6A',
-                  fontSize: '14px',
-                  fontFamily: 'Georgia, serif',
-                  letterSpacing: '0.04em',
-                  cursor: 'pointer',
-                  textDecoration: 'none',
-                  display: 'inline-block',
-                }}
-              >
-                Enter Agent →
-              </div>
-            </div>
+            </ul>
+            <span className="product-mode-card__cta product-mode-card__cta--agent">
+              Enter Agent →
+            </span>
           </button>
-        </div>
+        </section>
 
-        {/* Comparison Pills */}
-        <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-          <p style={{ fontSize: '14px', color: '#6B6460', marginBottom: '1rem' }}>Not sure which to use?</p>
-          <div className="product-comparison" style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <div style={{ background: '#F0EBE3', border: '0.5px solid #E0D8D0', borderRadius: '999px', padding: '6px 16px', fontSize: '12px', color: '#6B6460' }}>
-              Arena → opinions, decisions, debate
-            </div>
-            <div style={{ background: '#F0EBE3', border: '0.5px solid #E0D8D0', borderRadius: '999px', padding: '6px 16px', fontSize: '12px', color: '#6B6460' }}>
-              Agent → research, code, complex tasks
-            </div>
+        <section className="product-compare" aria-labelledby="product-compare-heading">
+          <h2 id="product-compare-heading" className="product-compare__heading">
+            Not sure which to use?
+          </h2>
+          <div className="product-compare__pills">
+            <span className="product-compare__pill">Arena → opinions, decisions, debate</span>
+            <span className="product-compare__pill product-compare__pill--agent">
+              Agent → research, briefs, complex tasks
+            </span>
           </div>
-        </div>
-      </div>
+          <div className="mkt-cta-row">
+            <button
+              type="button"
+              className="arena-btn arena-btn--secondary arena-btn--md"
+              onClick={() => navigate('/capabilities')}
+            >
+              See all capabilities
+            </button>
+            <button
+              type="button"
+              className="arena-btn arena-btn--ghost arena-btn--md"
+              onClick={() => navigate('/pricing')}
+            >
+              Pricing
+            </button>
+          </div>
+        </section>
+      </main>
 
       <Footer />
     </div>

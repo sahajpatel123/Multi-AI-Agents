@@ -179,12 +179,13 @@ function FeatureList({
   subColor: string;
 }) {
   return (
-    <div style={{ flex: 1 }}>
+    <div className="pricing-feature-list">
       {items.map((item) => {
         const sub = isSubFeature(item);
         return (
           <div
             key={item}
+            className={`pricing-feature-list__row${sub ? ' pricing-feature-list__row--sub' : ''}`}
             style={{
               display: 'flex',
               alignItems: 'flex-start',
@@ -299,8 +300,8 @@ export function PricingPage() {
 
   const handleUpgrade = (planKey: string) => {
     if (!isAuthenticated) {
-      setRedirectIntent('/app');
-      navigate('/signin');
+      setRedirectIntent('/pricing');
+      navigate('/signin?tab=signup');
       return;
     }
     setCheckoutPlan(planKey);
@@ -328,67 +329,26 @@ export function PricingPage() {
   }, []);
 
   return (
-    <div
-      style={{
-        background: '#FAF7F4',
-        backgroundImage: 'radial-gradient(ellipse 800px 400px at 50% -100px, rgba(196,149,106,0.06) 0%, transparent 70%)',
-        minHeight: '100vh',
-      }}
-    >
+    <div className="pricing-page">
       <Navbar />
 
-      <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '2rem 24px 1.5rem' }}>
+      <main id="main-content" className="pricing-page__main" tabIndex={-1}>
         {upgradeSuccess && (
-          <div
-            role="status"
-            aria-live="polite"
-            style={{
-              background: '#EDF2EF',
-              border: '0.5px solid #8AA899',
-              borderRadius: '12px',
-              padding: '14px 20px',
-              fontSize: '14px',
-              color: '#1A1714',
-              textAlign: 'center',
-              marginBottom: '1.5rem',
-            }}
-          >
+          <div className="pricing-banner pricing-banner--success" role="status" aria-live="polite">
             {upgradeSuccessLabel === 'Agent Mode'
-              ? '🎉 Agent Mode add-on activated. Your Plus plan now includes the 7-stage pipeline.'
-              : `🎉 Welcome to ${upgradeSuccessLabel}! Your account has been upgraded.`}
+              ? 'Agent Mode add-on activated. Your Plus plan now includes the research pipeline.'
+              : `Welcome to ${upgradeSuccessLabel}! Your account has been upgraded.`}
           </div>
         )}
 
         {checkoutError && (
-          <div
-            role="alert"
-            style={{
-              background: '#FEF2F2',
-              border: '0.5px solid #E57373',
-              borderRadius: '12px',
-              padding: '14px 20px',
-              fontSize: '13px',
-              color: '#C0392B',
-              marginBottom: '1rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '12px',
-            }}
-          >
-            <span style={{ flex: 1 }}>{checkoutError}</span>
+          <div className="pricing-banner pricing-banner--error" role="alert">
+            <span className="pricing-banner__text">{checkoutError}</span>
             <button
               type="button"
+              className="pricing-banner__dismiss"
               aria-label="Dismiss"
               onClick={() => setCheckoutError(null)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#C0392B',
-                fontSize: '18px',
-                cursor: 'pointer',
-                lineHeight: 1,
-              }}
             >
               ×
             </button>
@@ -418,15 +378,13 @@ export function PricingPage() {
           />
         )}
 
-        <section className="pricing-hero" style={{ marginBottom: 0, paddingTop: '2rem', paddingBottom: '1.5rem' }}>
-          <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.14em', color: '#B0A9A2', marginBottom: '0.5rem' }}>
-            Simple, honest pricing
-          </p>
-          <h1 style={{ fontSize: '42px', fontWeight: 400, letterSpacing: '-.03em', color: '#1A1714', lineHeight: 1.1, marginBottom: '0.5rem' }}>
-            Start <span style={{ color: '#C4956A', fontStyle: 'italic', opacity: 0.9 }}>free.</span>
+        <section className="pricing-hero" aria-labelledby="pricing-title">
+          <p className="pricing-hero__kicker">Simple, honest pricing</p>
+          <h1 id="pricing-title" className="pricing-hero__title">
+            Start <span className="pricing-hero__accent">free.</span>
           </h1>
-          <p style={{ fontSize: '13px', color: '#8B8480', maxWidth: '420px', lineHeight: 1.8, marginBottom: '1.5rem' }}>
-            Upgrade when Arena becomes part of how you think.
+          <p className="pricing-hero__lede">
+            Upgrade when Arena becomes part of how you think. Cancel anytime — no lock-in.
           </p>
         </section>
 
@@ -1183,7 +1141,7 @@ export function PricingPage() {
             );
           })}
         </section>
-      </div>
+      </main>
 
       <Footer />
     </div>

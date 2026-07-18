@@ -41,12 +41,13 @@ describe('Footer', () => {
   it('renders Product and Company nav links', async () => {
     const { getByText, getByRole } = renderFooter();
     expect(getByRole('navigation', { name: /footer/i })).toBeInTheDocument();
-    expect(getByText(/How it works/i)).toBeInTheDocument();
-    expect(getByText(/Pricing/i)).toBeInTheDocument();
-    expect(getByText(/Changelog/i)).toBeInTheDocument();
-    expect(getByText(/About/i)).toBeInTheDocument();
-    expect(getByText(/^Terms$/i)).toBeInTheDocument();
-    expect(getByText(/^Privacy$/i)).toBeInTheDocument();
+    expect(getByRole('button', { name: /^Product$/i })).toBeInTheDocument();
+    expect(getByRole('button', { name: /Capabilities/i })).toBeInTheDocument();
+    expect(getByRole('button', { name: /Pricing/i })).toBeInTheDocument();
+    expect(getByRole('button', { name: /Changelog/i })).toBeInTheDocument();
+    expect(getByRole('button', { name: /About/i })).toBeInTheDocument();
+    expect(getByRole('button', { name: /^Terms$/i })).toBeInTheDocument();
+    expect(getByRole('button', { name: /^Privacy$/i })).toBeInTheDocument();
     await waitFor(() =>
       expect(getByRole('status')).toHaveTextContent(/all systems operational/i),
     );

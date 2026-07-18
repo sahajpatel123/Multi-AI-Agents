@@ -30,28 +30,27 @@ export function AccountPage() {
 
   return (
     <div
-      style={{
-        minHeight: '100vh',
-        background: '#F5F0E8',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 16,
-        padding: 24,
-      }}
+      className="account-route-shell"
+      role="status"
       aria-busy="true"
+      aria-live="polite"
       aria-label="Opening account settings"
     >
-      <MicroLoader />
-      <p style={{ margin: 0, fontSize: 14, color: '#8C7355' }}>Opening your account…</p>
-      <button
-        type="button"
-        className="arena-btn arena-btn--ghost arena-btn--sm"
-        onClick={() => navigate('/agent', { replace: true })}
-      >
-        Skip to Agent
-      </button>
+      <div className="account-route-shell__card">
+        <div className="account-route-shell__brand" aria-hidden>
+          <span className="account-route-shell__dot" />
+          <span className="account-route-shell__name">Arena</span>
+        </div>
+        <MicroLoader label="Opening account" cycleWords={false} />
+        <p className="account-route-shell__copy">Opening your account…</p>
+        <button
+          type="button"
+          className="arena-btn arena-btn--ghost arena-btn--sm"
+          onClick={() => navigate('/agent', { replace: true })}
+        >
+          Skip to Agent
+        </button>
+      </div>
     </div>
   );
 }

@@ -97,7 +97,7 @@ describe('AboutPage', () => {
     await waitFor(() => {
       expect(setRedirectIntentMock).toHaveBeenCalledWith('/app');
     });
-    expect(navigateMock).toHaveBeenCalledWith('/signin');
+    expect(navigateMock).toHaveBeenCalledWith('/signin?tab=signup');
   });
 
   it('How it works routes to /product', () => {

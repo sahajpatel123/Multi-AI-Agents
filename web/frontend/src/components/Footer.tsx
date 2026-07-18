@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_ORIGIN } from '../api';
 import { interpretHealthPayload, type SystemStatus } from '../lib/healthStatus';
-import { motionDuration, prefersReducedMotion, scrollBehavior } from '../lib/motion';
+import { motionDuration, prefersReducedMotion } from '../lib/motion';
 
 const HEALTH_POLL_MS = 45_000;
 
@@ -80,16 +80,8 @@ export function Footer() {
     };
   }, []);
 
-  const scrollToHowItWorks = () => {
-    const behavior = scrollBehavior();
-    if (window.location.pathname === '/') {
-      document.getElementById('how-it-works')?.scrollIntoView({ behavior });
-      return;
-    }
-    navigate('/');
-    window.setTimeout(() => {
-      document.getElementById('how-it-works')?.scrollIntoView({ behavior: scrollBehavior() });
-    }, reducedMotion ? 0 : 100);
+  const goHowItWorks = () => {
+    navigate('/product');
   };
 
   return (
@@ -119,8 +111,17 @@ export function Footer() {
               <h4 className="site-footer__heading">Product</h4>
               <ul className="site-footer__list">
                 <li>
-                  <button type="button" className="site-footer__link" onClick={scrollToHowItWorks}>
-                    How it works
+                  <button type="button" className="site-footer__link" onClick={goHowItWorks}>
+                    Product
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="site-footer__link"
+                    onClick={() => navigate('/capabilities')}
+                  >
+                    Capabilities
                   </button>
                 </li>
                 <li>

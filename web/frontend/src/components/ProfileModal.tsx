@@ -568,37 +568,10 @@ export function ProfileModal() {
         <button
           key={id}
           type="button"
+          className={`profile-modal__tab${activeTab === id ? ' profile-modal__tab--active' : ''}${
+            mobile ? ' profile-modal__tab--mobile' : ''
+          }`}
           onClick={() => setActiveTab(id)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 9,
-            padding: mobile ? '8px 12px' : '10px 16px',
-            fontSize: mobile ? 12 : 13,
-            color: activeTab === id ? '#2C1810' : '#6B5040',
-            fontFamily: 'Georgia, serif',
-            cursor: 'pointer',
-            transition: 'background 0.12s, color 0.12s',
-            border: 'none',
-            borderRight: mobile ? 'none' : activeTab === id ? '2px solid #C4956A' : '2px solid transparent',
-            borderBottom: mobile
-              ? activeTab === id
-                ? '2px solid #C4956A'
-                : '2px solid transparent'
-              : 'none',
-            background: activeTab === id ? '#E8DDD0' : 'transparent',
-            fontWeight: activeTab === id ? 500 : 400,
-            textAlign: 'left',
-            width: mobile ? 'auto' : '100%',
-            flexShrink: 0,
-            whiteSpace: 'nowrap',
-          }}
-          onMouseEnter={(e) => {
-            if (activeTab !== id) e.currentTarget.style.background = '#EDE4D8';
-          }}
-          onMouseLeave={(e) => {
-            if (activeTab !== id) e.currentTarget.style.background = 'transparent';
-          }}
         >
           <Icon active={activeTab === id} />
           {label}
@@ -612,144 +585,50 @@ export function ProfileModal() {
   const content = (
     <div
       role="presentation"
+      className={`profile-modal-overlay${mobile ? ' profile-modal-overlay--mobile' : ''}`}
       onMouseDown={handleOverlayPointerDown}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        background: 'rgba(30, 18, 10, 0.55)',
-        display: 'flex',
-        alignItems: mobile ? 'flex-end' : 'center',
-        justifyContent: 'center',
-        animation: overlayAnim,
-      }}
+      style={{ animation: overlayAnim }}
     >
-      <style>{`
-        @keyframes profileModalOverlayIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes profileModalOverlayOut { from { opacity: 1; } to { opacity: 0; } }
-        @keyframes profileModalPanelOpenTR {
-          from { opacity: 0; transform: scale(0.08) translate(60px, -60px); }
-          to { opacity: 1; transform: scale(1) translate(0, 0); }
-        }
-        @keyframes profileModalPanelOpenBL {
-          from { opacity: 0; transform: scale(0.08) translate(-60px, 60px); }
-          to { opacity: 1; transform: scale(1) translate(0, 0); }
-        }
-        @keyframes profileModalPanelCloseTR {
-          from { opacity: 1; transform: scale(1) translate(0, 0); }
-          to { opacity: 0; transform: scale(0.08) translate(60px, -60px); }
-        }
-        @keyframes profileModalPanelCloseBL {
-          from { opacity: 1; transform: scale(1) translate(0, 0); }
-          to { opacity: 0; transform: scale(0.08) translate(-60px, 60px); }
-        }
-      `}</style>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="profile-modal-title"
+        className={`profile-modal-panel${mobile ? ' profile-modal-panel--mobile' : ''}${
+          origin === 'bottom-left' ? ' profile-modal-panel--origin-bl' : ' profile-modal-panel--origin-tr'
+        }`}
         onMouseDown={(e) => e.stopPropagation()}
-        style={{
-          width: mobile ? '100%' : 680,
-          maxWidth: mobile ? 'none' : 'calc(100vw - 32px)',
-          height: mobile ? '90vh' : 540,
-          maxHeight: mobile ? '90vh' : 'calc(100vh - 48px)',
-          background: '#FDFAF6',
-          border: mobile ? 'none' : '0.5px solid #DDD0BC',
-          borderRadius: mobile ? '20px 20px 0 0' : 14,
-          display: 'flex',
-          flexDirection: mobile ? 'column' : 'row',
-          overflow: 'hidden',
-          transformOrigin: origin === 'bottom-left' ? 'bottom left' : 'top right',
-          animation: panelAnim,
-        }}
+        style={{ animation: panelAnim }}
       >
-        {mobile ? (
-          <div
-            style={{
-              width: 36,
-              height: 4,
-              background: '#D4C4B0',
-              borderRadius: 2,
-              margin: '12px auto 0',
-              flexShrink: 0,
-            }}
-            aria-hidden
-          />
-        ) : null}
-        <aside
-          style={{
-            width: mobile ? '100%' : 180,
-            flexShrink: 0,
-            background: '#F5EFE6',
-            borderRight: mobile ? 'none' : '0.5px solid #E0D5C5',
-            borderBottom: mobile ? '0.5px solid #E0D5C5' : 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            padding: 0,
-            maxHeight: mobile ? 'auto' : undefined,
-          }}
-        >
-          <div style={{ padding: '18px 16px 16px', borderBottom: mobile ? 'none' : '0.5px solid #E0D5C5' }}>
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                background: '#C4956A',
-                color: '#FAF7F2',
-                fontSize: 14,
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
+        {mobile ? <div className="profile-modal__grabber" aria-hidden /> : null}
+        <aside className={`profile-modal__aside${mobile ? ' profile-modal__aside--mobile' : ''}`}>
+          <div className="profile-modal__identity">
+            <div className="profile-modal__avatar" aria-hidden>
               {profileInitials(user.name, user.email)}
             </div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: '#2C1810', fontFamily: 'Georgia, serif', marginTop: 8 }}>
-              {displayName}
-            </div>
-            <div
-              style={{
-                fontSize: 10,
-                color: '#C4956A',
-                letterSpacing: '0.10em',
-                textTransform: 'uppercase',
-                marginTop: 2,
-              }}
-            >
+            <div className="profile-modal__name">{displayName}</div>
+            <div className="profile-modal__tier">
               {tierUpper === 'PRO' ? 'Pro' : tierUpper === 'PLUS' ? 'Plus' : 'Free'}
               {sub?.billing_period ? ` · ${sub.billing_period === 'annual' ? 'Annual' : 'Monthly'}` : ''}
             </div>
           </div>
           <nav
-            className="horizontal-scroll"
-            style={{
-              display: 'flex',
-              flexDirection: mobile ? 'row' : 'column',
-              marginTop: mobile ? 0 : 4,
-              overflowX: mobile ? 'auto' : 'visible',
-              flex: mobile ? undefined : 1,
-              paddingBottom: mobile ? 4 : 0,
-              borderBottom: mobile ? '0.5px solid #E0D5C5' : 'none',
-            }}
+            className={`profile-modal__nav horizontal-scroll${mobile ? ' profile-modal__nav--mobile' : ''}`}
           >
             {tabs}
           </nav>
-          <div style={{ marginTop: 'auto', padding: '14px 16px', borderTop: '0.5px solid #E0D5C5' }}>
+          <div className="profile-modal__signout">
             <Button type="button" variant="ghost" size="sm" icon={Icons.logout(14)} onClick={() => void handleSignOut()}>
               Sign out
             </Button>
           </div>
         </aside>
 
-        <div style={{ flex: 1, padding: mobile ? '16px' : '28px 30px', overflowY: 'auto' }}>
+        <div className={`profile-modal__body${mobile ? ' profile-modal__body--mobile' : ''}`}>
           <div style={{ display: activeTab === 'account' ? 'block' : 'none' }}>
-            <h2 id="profile-modal-title" style={{ fontSize: 18, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>
+            <h2 id="profile-modal-title" className="profile-modal__heading">
               Account
             </h2>
-            <p style={{ fontSize: 14, color: '#A89070', marginBottom: 24 }}>Manage your profile and expertise calibration</p>
+            <p className="profile-modal__subhead">Manage your profile and expertise calibration</p>
 
             <div style={{ marginBottom: 18 }}>
               <label

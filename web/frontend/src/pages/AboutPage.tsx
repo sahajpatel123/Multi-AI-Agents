@@ -37,7 +37,7 @@ export function AboutPage() {
       return;
     }
     setRedirectIntent('/app');
-    navigate('/signin');
+    navigate('/signin?tab=signup');
   };
 
   return (

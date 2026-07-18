@@ -37,6 +37,8 @@ export function titleForPath(pathname: string): string {
       return `Pricing · ${BRAND}`;
     case '/product':
       return `Product · ${BRAND}`;
+    case '/capabilities':
+      return `Capabilities · ${BRAND}`;
     case '/about':
       return `About · ${BRAND}`;
     case '/signin':

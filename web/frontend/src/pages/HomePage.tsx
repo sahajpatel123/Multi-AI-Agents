@@ -25,6 +25,7 @@ const SIM_AGENTS: ReadonlyArray<{ id: SimAgent; name: string; tag: string; color
   { id: 'philosopher', name: 'Philosopher', tag: 'GPT-4o · t0.7', color: 'var(--al-agent-philosopher)' },
 ];
 
+
 const SIM_EMPTY: Record<SimAgent, string> = {
   contrarian: '',
   analyst: '',
@@ -176,7 +177,7 @@ const TIERS = [
       'Orchestration, watchlist & scoring audit',
       'Calibration and refinement iterations',
     ],
-    cta: 'Provision Pro Cluster',
+    cta: 'Get Pro',
     featured: false,
     action: 'pricing' as const,
   },
@@ -259,7 +260,13 @@ function useScrollReveals(rootRef: React.RefObject<HTMLElement | null>) {
 
 /* ---------------------------------------------------------------- header */
 
-function LandingHeader({ onLaunch }: { onLaunch: () => void }) {
+function LandingHeader({
+  onLaunch,
+  onSignIn,
+}: {
+  onLaunch: () => void;
+  onSignIn: () => void;
+}) {
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -330,8 +337,11 @@ function LandingHeader({ onLaunch }: { onLaunch: () => void }) {
         </nav>
 
         <div className="al-nav-right">
+          <button type="button" className="al-nav-link al-nav-signin" onClick={onSignIn}>
+            Sign in
+          </button>
           <button type="button" className="al-btn al-btn--brand al-btn--sm" onClick={onLaunch}>
-            Deploy Node
+            Sign up
           </button>
           <button
             type="button"
@@ -358,14 +368,25 @@ function LandingHeader({ onLaunch }: { onLaunch: () => void }) {
         ))}
         <button
           type="button"
-          className="al-btn al-btn--brand al-btn--block"
+          className="al-btn al-btn--outline al-btn--block"
           style={{ marginTop: 14 }}
+          onClick={() => {
+            setMenuOpen(false);
+            onSignIn();
+          }}
+        >
+          Sign in
+        </button>
+        <button
+          type="button"
+          className="al-btn al-btn--brand al-btn--block"
+          style={{ marginTop: 8 }}
           onClick={() => {
             setMenuOpen(false);
             onLaunch();
           }}
         >
-          Deploy Node
+          Sign up free
         </button>
       </div>
     </header>
@@ -576,6 +597,7 @@ function LandingFooter() {
           <h5>Platform</h5>
           <ul>
             <li><button type="button" className="al-footer-link" onClick={go('/product')}>Product Overview</button></li>
+            <li><button type="button" className="al-footer-link" onClick={go('/capabilities')}>Capabilities</button></li>
             <li><button type="button" className="al-footer-link" onClick={go('/personas')}>Persona Library</button></li>
             <li><button type="button" className="al-footer-link" onClick={go('/pricing')}>Pricing &amp; Scale</button></li>
             <li><button type="button" className="al-footer-link" onClick={go('/changelog')}>Changelog</button></li>
@@ -614,20 +636,23 @@ export function HomePage() {
   useScrollReveals(rootRef);
 
   const launch = useCallback(
-    (path: string = '/app') => {
+    (path: string = '/app', mode: 'signup' | 'signin' = 'signup') => {
       if (isAuthenticated) {
         navigate(path);
-      } else {
-        setRedirectIntent(path);
-        navigate('/signin');
+        return;
       }
+      setRedirectIntent(path);
+      navigate(mode === 'signup' ? '/signin?tab=signup' : '/signin?tab=signin');
     },
     [isAuthenticated, navigate],
   );
 
   return (
     <div className="arena-landing" ref={rootRef}>
-      <LandingHeader onLaunch={() => launch('/app')} />
+      <LandingHeader
+        onLaunch={() => launch('/app', 'signup')}
+        onSignIn={() => launch('/app', 'signin')}
+      />
 
       <main>
         {/* ---------------------------------------------------------- hero */}
@@ -649,17 +674,15 @@ export function HomePage() {
                 insight, clarity, and honesty. The best answer wins.
               </p>
               <div className="al-hero-ctas">
-                <button type="button" className="al-btn al-btn--brand" onClick={() => launch('/app')}>
-                  Initialize Free Prompt <span className="al-btn__arrow" aria-hidden="true">→</span>
+                <button type="button" className="al-btn al-btn--brand" onClick={() => launch('/app', 'signup')}>
+                  Sign up free <span className="al-btn__arrow" aria-hidden="true">→</span>
                 </button>
                 <button
                   type="button"
                   className="al-btn al-btn--outline"
-                  onClick={() =>
-                    document.getElementById('capabilities')?.scrollIntoView({ behavior: scrollBehavior() })
-                  }
+                  onClick={() => navigate('/capabilities')}
                 >
-                  Review Internal Specs
+                  See capabilities
                 </button>
               </div>
               <div className="al-hero-proof">
@@ -806,7 +829,7 @@ export function HomePage() {
                     type="button"
                     className={`al-btn ${tier.featured ? 'al-btn--brand' : 'al-btn--outline'} al-btn--block`}
                     onClick={() =>
-                      tier.action === 'signin' ? launch('/app') : navigate('/pricing')
+                      tier.action === 'signin' ? launch('/app', 'signup') : navigate('/pricing')
                     }
                   >
                     {tier.cta}
@@ -863,17 +886,17 @@ export function HomePage() {
         {/* ------------------------------------------------------ cta band */}
         <section className="al-section al-section--tint" aria-labelledby="al-cta-title" style={{ borderBottom: 'none' }}>
           <div className="al-container al-pricing-head al-reveal" style={{ marginBottom: 0 }}>
-            <span className="al-eyebrow" style={{ justifyContent: 'center' }}>Deploy</span>
+            <span className="al-eyebrow" style={{ justifyContent: 'center' }}>Get started</span>
             <h2 id="al-cta-title">Stop asking one AI. Start asking four.</h2>
             <p style={{ marginBottom: 32 }}>
               Free tier included. Your first arena run takes under thirty seconds.
             </p>
             <div className="al-hero-ctas" style={{ justifyContent: 'center', marginBottom: 0 }}>
-              <button type="button" className="al-btn al-btn--brand" onClick={() => launch('/app')}>
-                Deploy Free Node <span className="al-btn__arrow" aria-hidden="true">→</span>
+              <button type="button" className="al-btn al-btn--brand" onClick={() => launch('/app', 'signup')}>
+                Create free account <span className="al-btn__arrow" aria-hidden="true">→</span>
               </button>
               <button type="button" className="al-btn al-btn--outline" onClick={() => navigate('/pricing')}>
-                Compare Scale Tiers
+                View pricing
               </button>
             </div>
           </div>
