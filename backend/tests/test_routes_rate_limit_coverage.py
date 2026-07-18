@@ -30,10 +30,10 @@ Files checked:
   * payments.py (cycle 47: public plans IP + read/write scopes; webhook HMAC)
   * prompt.py   (cycle 47: _check_rate_limit + health/readiness IP caps)
   * debate.py   (cycle 48: cost_tracker on POST /debate and stream)
+  * agent.py    (cycle 48: all 42 routes already defended; suite pins them)
 
 Other route files use different throttling mechanisms:
   * auth.py → mix of IP+user+login_limiter; covered by separate tests
-  * agent.py → cycle 32/33 closed the public gaps
   * metrics.py → single admin endpoint
 """
 
@@ -66,6 +66,7 @@ COVERED_FILES = [
     "payments.py",
     "prompt.py",
     "debate.py",
+    "agent.py",
 ]
 
 # Acceptable defenses inside a handler body. Match each as a regex.
