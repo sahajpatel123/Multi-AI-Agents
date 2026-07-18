@@ -752,24 +752,9 @@ export function ProfileModal() {
                 type="button"
                 disabled={saveBusy}
                 onClick={() => void handleSaveProfile()}
-                style={{
-                  padding: '9px 22px',
-                  background: '#2C1810',
-                  color: '#C4956A',
-                  fontSize: 12,
-                  border: 'none',
-                  borderRadius: 6,
-                  cursor: saveBusy ? 'default' : 'pointer',
-                  fontFamily: 'Georgia, serif',
-                  letterSpacing: '0.05em',
-                  opacity: saveBusy ? 0.7 : 1,
-                }}
-                onMouseEnter={(e) => {
-                  if (!saveBusy) e.currentTarget.style.background = '#3D2820';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#2C1810';
-                }}
+                className={['profile-save-btn', saveBusy ? 'profile-save-btn--busy' : '']
+                  .filter(Boolean)
+                  .join(' ')}
               >
                 {saveBusy ? 'Saving…' : 'Save changes'}
               </button>
@@ -1938,41 +1923,20 @@ export function ProfileModal() {
                 key={row.title}
                 type="button"
                 onClick={row.onClick}
-                onMouseEnter={(e) => {
-                  const t = e.currentTarget.querySelector('.profile-help-title') as HTMLElement | null;
-                  if (t) t.style.color = '#C4956A';
-                }}
-                onMouseLeave={(e) => {
-                  const t = e.currentTarget.querySelector('.profile-help-title') as HTMLElement | null;
-                  if (t) t.style.color = '#4A3728';
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  width: '100%',
-                  padding: '13px 0',
-                  borderBottom: idx === arr.length - 1 ? 'none' : '0.5px solid #EDE4D8',
-                  cursor: 'pointer',
-                  background: 'none',
-                  border: 'none',
-                  borderTop: 'none',
-                  borderLeft: 'none',
-                  borderRight: 'none',
-                  textAlign: 'left',
-                  transition: 'color 0.15s',
-                }}
+                className={[
+                  'profile-help-row',
+                  idx === arr.length - 1 ? 'profile-help-row--last' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               >
                 <div>
-                  <div
-                    style={{ fontSize: 13, color: '#4A3728', fontFamily: 'Georgia, serif' }}
-                    className="profile-help-title"
-                  >
-                    {row.title}
-                  </div>
-                  <div style={{ fontSize: 11, color: '#A89070', marginTop: 2 }}>{row.desc}</div>
+                  <div className="profile-help-title">{row.title}</div>
+                  <div className="profile-help-desc">{row.desc}</div>
                 </div>
-                <span style={{ color: '#C4A882', fontSize: 12 }}>→</span>
+                <span className="profile-help-arrow" aria-hidden>
+                  →
+                </span>
               </button>
             ))}
           </div>

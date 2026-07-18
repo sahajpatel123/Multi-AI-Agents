@@ -440,23 +440,16 @@ export function TemplatesModal({
                         ? 'Copy failed'
                         : 'Copy templates as markdown'
                   }
-                  style={{
-                    background: 'none',
-                    border: '0.5px solid #D4C4B0',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    fontSize: 11,
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
-                    color:
-                      copyStatus === 'failed'
-                        ? '#D85A30'
-                        : copyStatus === 'copied'
-                          ? '#5A8C6A'
-                          : '#C4956A',
-                    padding: '5px 10px',
-                    fontFamily: 'Georgia, serif',
-                  }}
+                  className={[
+                    'templates-toolbar-btn',
+                    copyStatus === 'failed'
+                      ? 'templates-toolbar-btn--danger'
+                      : copyStatus === 'copied'
+                        ? 'templates-toolbar-btn--ok'
+                        : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                 >
                   {copyStatus === 'copied'
                     ? 'Copied'
@@ -475,23 +468,16 @@ export function TemplatesModal({
                         ? 'Download failed'
                         : 'Download templates as markdown'
                   }
-                  style={{
-                    background: 'none',
-                    border: '0.5px solid #D4C4B0',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    fontSize: 11,
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
-                    color:
-                      downloadStatus === 'failed'
-                        ? '#D85A30'
-                        : downloadStatus === 'done'
-                          ? '#5A8C6A'
-                          : '#C4956A',
-                    padding: '5px 10px',
-                    fontFamily: 'Georgia, serif',
-                  }}
+                  className={[
+                    'templates-toolbar-btn',
+                    downloadStatus === 'failed'
+                      ? 'templates-toolbar-btn--danger'
+                      : downloadStatus === 'done'
+                        ? 'templates-toolbar-btn--ok'
+                        : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                 >
                   {downloadStatus === 'done'
                     ? 'Downloaded'
@@ -506,15 +492,7 @@ export function TemplatesModal({
               type="button"
               aria-label="Close"
               onClick={onClose}
-              style={{
-                border: 'none',
-                background: 'none',
-                cursor: 'pointer',
-                fontSize: 22,
-                lineHeight: 1,
-                color: '#8C7355',
-                padding: 4,
-              }}
+              className="icon-close-btn"
             >
               ×
             </button>
@@ -911,28 +889,13 @@ export function TemplatesModal({
               {visibleTemplates.map((t) => (
                 <div
                   key={t.id}
-                  style={{
-                    textAlign: 'left',
-                    background: t.disabled ? '#F5F0E8' : '#FAF7F2',
-                    border: '0.5px solid #E0D5C5',
-                    borderRadius: 8,
-                    padding: 14,
-                    opacity: t.disabled ? 0.65 : 1,
-                    transition: reducedMotion ? 'none' : 'all 0.15s',
-                    fontFamily: 'Georgia, serif',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 0,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (t.disabled || reducedMotion) return;
-                    e.currentTarget.style.borderColor = '#C4956A';
-                    e.currentTarget.style.background = '#FAF3EA';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#E0D5C5';
-                    e.currentTarget.style.background = t.disabled ? '#F5F0E8' : '#FAF7F2';
-                  }}
+                  className={[
+                    'templates-card',
+                    t.disabled ? 'templates-card--disabled' : '',
+                    reducedMotion ? 'templates-card--static' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                 >
                   <button
                     type="button"
