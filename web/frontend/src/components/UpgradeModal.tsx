@@ -186,7 +186,13 @@ export function UpgradeModal({
           <X width={16} height={16} aria-hidden />
         </button>
 
+        <p className="upgrade-modal__kicker">
+          <span className="upgrade-modal__kicker-dot" aria-hidden="true" />
+          Plus unlock
+        </p>
+
         <div className="upgrade-modal__icon" aria-hidden>
+          <span className="upgrade-modal__icon-glow" />
           <Lock width={28} height={28} />
         </div>
 
@@ -207,6 +213,16 @@ export function UpgradeModal({
             </li>
           ))}
         </ul>
+
+        <div className="upgrade-modal__minds" aria-hidden="true">
+          <span className="upgrade-modal__minds-label">16 minds on Plus</span>
+          <div className="upgrade-modal__minds-dots">
+            <span className="upgrade-modal__minds-dot" />
+            <span className="upgrade-modal__minds-dot" />
+            <span className="upgrade-modal__minds-dot" />
+            <span className="upgrade-modal__minds-dot" />
+          </div>
+        </div>
 
         {checkoutError ? (
           <p
@@ -252,6 +268,8 @@ export function UpgradeModal({
           >
             See all plans
           </Button>
+
+          <p className="upgrade-modal__note">Cancel anytime · change plans on Pricing</p>
 
           <button
             type="button"

@@ -4029,27 +4029,65 @@ canvas {
     max(16px, env(safe-area-inset-right, 0px))
     max(16px, env(safe-area-inset-bottom, 0px))
     max(16px, env(safe-area-inset-left, 0px));
-  background: rgba(26, 23, 20, 0.48);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  animation: upgrade-overlay-in 200ms var(--ease-out-premium) both;
+  background: rgba(26, 23, 20, 0.5);
+  backdrop-filter: blur(10px) saturate(1.05);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
+  animation: upgrade-overlay-in 200ms var(--ease-out-premium, cubic-bezier(0.16, 1, 0.3, 1)) both;
 }
 
 .upgrade-modal {
   position: relative;
-  background: #faf7f4;
+  background: linear-gradient(165deg, #fffdfb 0%, #faf7f4 55%, #f7f2ec 100%);
   border: 0.5px solid rgba(224, 216, 208, 0.95);
-  border-radius: 20px;
-  padding: 2.25rem 2rem 1.75rem;
+  border-radius: 22px;
+  padding: 2.15rem 1.85rem 1.65rem;
   max-width: 420px;
   width: min(100%, 420px);
   max-height: min(92vh, 720px);
   overflow-y: auto;
+  overflow-x: hidden;
   text-align: center;
+  isolation: isolate;
   box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
     0 32px 80px rgba(26, 23, 20, 0.18),
     0 2px 8px rgba(26, 23, 20, 0.06);
-  animation: upgrade-card-in 280ms var(--ease-out-premium) both;
+  animation: upgrade-card-in 280ms var(--ease-out-premium, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+
+.upgrade-modal::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2.5px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(196, 149, 106, 0.65),
+    transparent
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.upgrade-modal::after {
+  content: '';
+  position: absolute;
+  top: -40%;
+  right: -30%;
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(196, 149, 106, 0.12) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.upgrade-modal > * {
+  position: relative;
+  z-index: 1;
 }
 
 .upgrade-modal-overlay--static,
@@ -4077,10 +4115,47 @@ canvas {
   }
 }
 
+.upgrade-modal__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 auto 0.85rem;
+  padding: 4px 11px 4px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: #c4956a;
+  background: rgba(196, 149, 106, 0.1);
+  border: 0.5px solid rgba(196, 149, 106, 0.28);
+}
+
+.upgrade-modal__kicker-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #c4956a;
+  animation: upgrade-kicker-pulse 1.9s ease-out infinite;
+}
+
+@keyframes upgrade-kicker-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(196, 149, 106, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
 .upgrade-modal__close {
   position: absolute;
   top: 12px;
   right: 12px;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4093,14 +4168,16 @@ canvas {
   color: #6b6460;
   cursor: pointer;
   transition:
-    color 150ms var(--ease-btn),
-    background 150ms var(--ease-btn);
+    color 150ms var(--ease-btn, ease),
+    background 150ms var(--ease-btn, ease),
+    transform 160ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .upgrade-modal__close:hover:not(:disabled) {
     color: #1a1714;
-    background: rgba(224, 216, 208, 0.45);
+    background: rgba(224, 216, 208, 0.5);
+    transform: scale(1.04);
   }
 }
 
@@ -4115,21 +4192,45 @@ canvas {
 }
 
 .upgrade-modal__icon {
-  width: 52px;
-  height: 52px;
+  position: relative;
+  width: 56px;
+  height: 56px;
   margin: 0 auto 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
+  border-radius: 18px;
   color: #c4956a;
   background: linear-gradient(
     160deg,
-    rgba(196, 149, 106, 0.16) 0%,
+    rgba(196, 149, 106, 0.2) 0%,
     rgba(196, 149, 106, 0.06) 100%
   );
-  border: 0.5px solid rgba(196, 149, 106, 0.28);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  border: 0.5px solid rgba(196, 149, 106, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 8px 18px rgba(196, 149, 106, 0.12);
+}
+
+.upgrade-modal__icon-glow {
+  position: absolute;
+  inset: -12px;
+  border-radius: 26px;
+  background: radial-gradient(circle, rgba(196, 149, 106, 0.2) 0%, transparent 70%);
+  pointer-events: none;
+  animation: upgrade-icon-glow 3s ease-in-out infinite;
+}
+
+@keyframes upgrade-icon-glow {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
 }
 
 .upgrade-modal__title {
@@ -4142,7 +4243,7 @@ canvas {
 }
 
 .upgrade-modal__subtitle {
-  margin: 0 0 1.5rem;
+  margin: 0 0 1.15rem;
   font-size: 14px;
   color: #6b6460;
   line-height: 1.7;
@@ -4151,11 +4252,15 @@ canvas {
 .upgrade-modal__features {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0.85rem 0.9rem;
   text-align: left;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.6rem;
+  background: rgba(255, 255, 255, 0.55);
+  border: 0.5px solid #e0d8d0;
+  border-radius: 14px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
 }
 
 .upgrade-modal__feature {
@@ -4172,19 +4277,64 @@ canvas {
   height: 18px;
   margin-top: 1px;
   border-radius: 50%;
-  background: #c4956a;
+  background: linear-gradient(180deg, #d4a574 0%, #c4956a 100%);
   color: #faf7f4;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(196, 149, 106, 0.35);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 1px 3px rgba(196, 149, 106, 0.35);
+}
+
+.upgrade-modal__minds {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 1rem;
+}
+
+.upgrade-modal__minds-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a89070;
+}
+
+.upgrade-modal__minds-dots {
+  display: flex;
+  align-items: center;
+}
+
+.upgrade-modal__minds-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid #faf7f4;
+  margin-left: -2px;
+  box-shadow: 0 0 0 1px rgba(224, 216, 208, 0.65);
+}
+
+.upgrade-modal__minds-dot:first-child {
+  margin-left: 0;
+  background: #8c9bab;
+}
+.upgrade-modal__minds-dot:nth-child(2) {
+  background: #9b8faa;
+}
+.upgrade-modal__minds-dot:nth-child(3) {
+  background: #8aa899;
+}
+.upgrade-modal__minds-dot:nth-child(4) {
+  background: #b0977e;
 }
 
 .upgrade-modal__error {
-  margin: 1.15rem 0 0;
+  margin: 1rem 0 0;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 12px;
   background: rgba(216, 90, 48, 0.08);
   border: 0.5px solid rgba(216, 90, 48, 0.28);
   font-size: 13px;
@@ -4203,15 +4353,38 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
-  margin-top: 1.35rem;
+  margin-top: 1.25rem;
 }
 
 .upgrade-modal__cta {
   letter-spacing: 0.01em;
 }
 
+.upgrade-modal__actions .arena-btn--primary,
+.upgrade-modal__actions .upgrade-modal__cta {
+  background: linear-gradient(180deg, #d4a574 0%, #c4956a 55%, #b8885c 100%) !important;
+  border: none !important;
+  color: #faf7f4 !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 10px 24px rgba(196, 149, 106, 0.28) !important;
+}
+
+.upgrade-modal__actions .arena-btn--secondary {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 0.5px solid #e0d8d0;
+}
+
+.upgrade-modal__note {
+  margin: 0.15rem 0 0;
+  font-size: 11.5px;
+  color: #a89070;
+  line-height: 1.45;
+}
+
 .upgrade-modal__dismiss {
-  margin-top: 0.15rem;
+  margin-top: 0.1rem;
   padding: 10px 12px;
   min-height: 40px;
   border: none;
@@ -4222,14 +4395,14 @@ canvas {
   color: #6b6460;
   cursor: pointer;
   transition:
-    color 150ms var(--ease-btn),
-    background 150ms var(--ease-btn);
+    color 150ms var(--ease-btn, ease),
+    background 150ms var(--ease-btn, ease);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .upgrade-modal__dismiss:hover:not(:disabled) {
     color: #1a1714;
-    background: rgba(224, 216, 208, 0.35);
+    background: rgba(224, 216, 208, 0.4);
   }
 }
 
@@ -4245,7 +4418,9 @@ canvas {
 
 @media (prefers-reduced-motion: reduce) {
   .upgrade-modal-overlay,
-  .upgrade-modal {
+  .upgrade-modal,
+  .upgrade-modal__kicker-dot,
+  .upgrade-modal__icon-glow {
     animation: none !important;
   }
 }
