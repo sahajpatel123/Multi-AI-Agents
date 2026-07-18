@@ -15,9 +15,10 @@ test.describe('Arena prompt flow (mocked)', () => {
   test('home page renders, login link visible', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/Arena/);
-    // The hero CTA should be present.
-    // The hero CTA should be present.
-    await expect(page.getByRole('button', { name: /try|sign|start|get started/i }).first()).toBeVisible();
+    // Hero primary CTA (landing copy uses product language, not generic "Get started").
+    await expect(
+      page.getByRole('button', { name: /initialize free prompt|deploy (free )?node/i }).first(),
+    ).toBeVisible();
   });
 
   test('arena route redirects unauthenticated users to signin', async ({ page }) => {
