@@ -40,7 +40,11 @@ from arena.core.feedback_calibrator import (
     get_answer_feedback_distribution,
     get_recent_feedback,
 )
-from arena.core.agent_memory import get_watchlist_history, iter_user_task_export
+from arena.core.agent_memory import (
+    get_task_detail,
+    get_watchlist_history,
+    iter_user_task_export,
+)
 from arena.core.agent_metrics import (
     compute_user_agent_metrics,
     compute_user_feedback_summary,
@@ -1225,6 +1229,29 @@ async def get_task_answer_feedback(
         "note": fb.note,
         "created_at": fb.created_at.isoformat() if fb.created_at else None,
     }
+
+
+@router.get("/tasks/{task_id}/detail")
+async def get_agent_task_detail(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """One-call aggregator for the agent task detail page.
+
+    Returns the full AgentTask row (via ``to_dict``) plus the insight
+    report and any contradictions involving the task on either side.
+    Same agent-access gate as /run, /status, /result so a FREE user
+    gets 403 rather than a confusing 404.
+    """
+    _ensure_agent_access(user, db)
+    tid = task_id.strip()
+    if not tid:
+        raise HTTPException(status_code=404, detail="Task not found")
+    payload = get_task_detail(db=db, user_id=user.id, task_id=tid)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return JSONResponse(content=payload)
 
 
 @router.post("/tasks/{task_id}/feedback")

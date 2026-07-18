@@ -394,6 +394,75 @@ def get_user_memory_context(
     }
 
 
+def _serialize_contradiction(row, focus_task_id: str) -> dict[str, Any]:
+    """Compact view of a contradiction row for /tasks/{id}/detail."""
+    direction = "new" if row.new_task_id == focus_task_id else "old"
+    return {
+        "id": row.id,
+        "direction": direction,
+        "other_task_id": (
+            row.old_task_id if direction == "new" else row.new_task_id
+        ),
+        "summary": row.contradiction_summary,
+        "severity": row.severity,
+        "resolved": bool(row.resolved),
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def get_task_detail(
+    db: Session,
+    user_id: int,
+    task_id: str,
+) -> Optional[dict[str, Any]]:
+    """One-call snapshot of a single Agent task.
+
+    Combines the row, its insight report, and any contradictions
+    involving it (either side). 404-shaped (None) if the row is missing
+    or owned by a different user. The history/result/contradictions
+    routes can keep their narrower contracts — this one is the
+    'open the page' aggregator.
+    """
+    row = (
+        db.query(AgentTask)
+        .filter(AgentTask.task_id == task_id, AgentTask.user_id == user_id)
+        .first()
+    )
+    if row is None:
+        return None
+
+    contradictions = (
+        db.query(AgentContradiction)
+        .filter(
+            AgentContradiction.user_id == user_id,
+            (AgentContradiction.new_task_id == task_id)
+            | (AgentContradiction.old_task_id == task_id),
+        )
+        .order_by(AgentContradiction.created_at.desc())
+        .all()
+    )
+
+    insight = row.insight_report
+    parsed_insight: Optional[dict[str, Any]] = None
+    if isinstance(insight, dict):
+        parsed_insight = insight
+    elif isinstance(insight, str) and insight.strip():
+        try:
+            decoded = json.loads(insight)
+            if isinstance(decoded, dict):
+                parsed_insight = decoded
+        except (TypeError, ValueError):
+            parsed_insight = None
+
+    return {
+        "task": row.to_dict(),
+        "insight_report": parsed_insight,
+        "contradictions": [
+            _serialize_contradiction(c, task_id) for c in contradictions
+        ],
+    }
+
+
 def get_user_task_history(
     db: Session,
     user_id: int,
