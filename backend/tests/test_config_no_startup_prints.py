@@ -66,25 +66,42 @@ def test_optional_secret_warnings_emit_via_logger_not_stdout(caplog):
     missing key through `logger.warning(...)` — not `print(...)`.
 
     Capturing caplog + redirecting stdout ensures both paths are tested.
+
+    The test attaches an explicit handler to `arena.config` so prior tests
+    that may have set `propagate=False` (via setup_logging()) cannot
+    silently suppress the warnings from caplog's perspective.
     """
+    from arena import config as arena_config
+
     settings = _make_settings()
 
+    captured = []
+
+    class _CaptureHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            captured.append(record)
+
+    handler = _CaptureHandler(level=logging.WARNING)
+    # Save and restore propagate so we don't leak into other tests.
+    original_propagate = arena_config.logger.propagate
+    arena_config.logger.addHandler(handler)
+    arena_config.logger.propagate = True
+
     stdout_buf = io.StringIO()
+    try:
+        with caplog.at_level(logging.WARNING, logger="arena.config"):
+            original_stdout = sys.stdout
+            try:
+                sys.stdout = stdout_buf
+                settings.validate_secrets()  # must NOT SystemExit in development
+            finally:
+                sys.stdout = original_stdout
+    finally:
+        arena_config.logger.removeHandler(handler)
+        arena_config.logger.propagate = original_propagate
+
     captured_stdout = stdout_buf.getvalue()
-
-    with caplog.at_level(logging.WARNING, logger="arena.config"):
-        # Redirect stdout to a buffer so a stray print() would land there
-        # rather than polluting test output. We also assert the buffer
-        # stays empty at the end.
-        original_stdout = sys.stdout
-        try:
-            sys.stdout = stdout_buf
-            settings.validate_secrets()  # must NOT SystemExit in development
-        finally:
-            sys.stdout = original_stdout
-
-    warnings = _capture_warnings(caplog)
-    warning_texts = " | ".join(r.getMessage() for r in warnings)
+    captured_messages = " | ".join(r.getMessage() for r in captured)
 
     # All four optional-secret warnings must surface.
     for needle in (
@@ -93,8 +110,8 @@ def test_optional_secret_warnings_emit_via_logger_not_stdout(caplog):
         "RAZORPAY_KEY_SECRET not set",
         "RAZORPAY_WEBHOOK_SECRET not set",
     ):
-        assert needle in warning_texts, (
-            f"Expected startup warning {needle!r} via logger; got: {warning_texts!r}. "
+        assert needle in captured_messages, (
+            f"Expected startup warning {needle!r} via logger; got: {captured_messages!r}. "
             f"validate_secrets() likely regressed to print() — see cycle 14/15."
         )
 
