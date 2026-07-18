@@ -242,27 +242,27 @@ export function Navbar() {
       </nav>
 
       {menuOpen && (
-        <div className="mobile-only navbar-mobile-overlay" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+        <div
+          className="mobile-only navbar-mobile-overlay"
+          onClick={() => setMenuOpen(false)}
+          aria-hidden="true"
+        />
       )}
       <div
         ref={mobilePanelRef}
         className={`mobile-only navbar-mobile-panel${menuOpen ? ' open' : ''}`}
+        role="dialog"
+        aria-modal={menuOpen}
+        aria-label="Navigation menu"
         aria-hidden={!menuOpen}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+        <div className="navbar-mobile-panel__head">
           <button
             type="button"
-            onClick={() => navigate('/')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-              minHeight: 'auto',
-              minWidth: 'auto',
+            className="navbar-mobile-panel__brand"
+            onClick={() => {
+              setMenuOpen(false);
+              navigate('/');
             }}
           >
             <span className="navbar-brand-dot" aria-hidden />
@@ -270,25 +270,15 @@ export function Navbar() {
           </button>
           <button
             type="button"
+            className="navbar-mobile-panel__close"
             onClick={() => setMenuOpen(false)}
             aria-label="Close navigation menu"
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '999px',
-              border: 'none',
-              background: '#EDE4D8',
-              color: '#2C1810',
-              fontSize: '22px',
-              cursor: 'pointer',
-              lineHeight: 1,
-            }}
           >
             ×
           </button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        <div className="navbar-mobile-panel__links">
           {(isAuthenticated
             ? [
                 { label: 'Arena', path: '/app' },
@@ -307,7 +297,7 @@ export function Navbar() {
             <button
               key={item.path}
               type="button"
-              className="navbar-mobile-link"
+              className={`navbar-mobile-link${isActive(item.path) || (item.path === '/agent' && location.pathname.startsWith('/agent')) ? ' navbar-nav-link--active' : ''}`}
               onClick={() => {
                 setMenuOpen(false);
                 navigate(item.path);
@@ -343,8 +333,6 @@ export function Navbar() {
             </>
           ) : (
             <>
-              {/* Product destinations (Arena/Agent/Watchlist) already listed above —
-                  only account actions here to avoid duplicate buttons. */}
               <button
                 type="button"
                 className="navbar-mobile-link"
@@ -386,10 +374,6 @@ export function Navbar() {
             className="navbar-mobile-cta"
             onClick={() => {
               setMenuOpen(false);
-              if (isAuthenticated) {
-                navigate('/app');
-                return;
-              }
               setRedirectIntent('/app');
               navigate('/signin');
             }}
