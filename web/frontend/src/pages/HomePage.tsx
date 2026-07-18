@@ -8,6 +8,7 @@ import { Footer } from '../components/Footer';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import { useTier } from '../context/TierContext';
+import { prefersReducedMotion, scrollBehavior } from '../lib/motion';
 import '../styles/home.css';
 
 function useScrollReveal<T extends HTMLElement>(delay = 0) {
@@ -626,18 +627,49 @@ export function HomePage() {
   }, [activePromptIndex, isPromptHovered]);
 
   useEffect(() => {
+    const root = document.querySelector('.home-page-root') as HTMLElement | null;
+    const reduce = prefersReducedMotion();
+
     const handleScroll = () => {
       const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
-      const progress = (window.scrollY / scrollHeight) * 100;
+      const progress = scrollHeight > 0 ? (window.scrollY / scrollHeight) * 100 : 0;
       setScrollProgress(progress);
+      if (root) {
+        root.style.setProperty('--home-scroll', `${Math.min(100, Math.max(0, progress))}%`);
+      }
 
-      if (giant4Ref.current) {
-        giant4Ref.current.style.transform = `translateY(${window.scrollY * 0.15}px)`;
+      if (giant4Ref.current && !reduce) {
+        giant4Ref.current.style.transform = `translate3d(0, ${window.scrollY * 0.12}px, 0)`;
       }
     };
 
+    handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Subtle pointer parallax on ambient orbs — cream atmosphere depth only.
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    const root = document.querySelector('.home-page-root') as HTMLElement | null;
+    if (!root) return;
+
+    let raf = 0;
+    const onMove = (e: PointerEvent) => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const nx = (e.clientX / window.innerWidth - 0.5) * 18;
+        const ny = (e.clientY / window.innerHeight - 0.5) * 14;
+        root.style.setProperty('--home-mx', `${nx.toFixed(2)}px`);
+        root.style.setProperty('--home-my', `${ny.toFixed(2)}px`);
+      });
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('pointermove', onMove);
+    };
   }, []);
 
   useEffect(() => {
@@ -888,12 +920,12 @@ export function HomePage() {
   }, []);
 
   const scrollToHowItWorks = () => {
-    document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('how-it-works')?.scrollIntoView({ behavior: scrollBehavior() });
   };
 
   return (
     <div className="home-page-root" style={{ background: '#FAF7F4', minHeight: '100dvh', position: 'relative' }}>
-      <div className="noise-overlay" />
+      <div className="noise-overlay" aria-hidden="true" />
       <style>{`
         @keyframes ticker {
           0% { transform: translateX(0); }
@@ -906,14 +938,6 @@ export function HomePage() {
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes floatOrb1 {
-          0% { transform: translate(0px, 0px); }
-          100% { transform: translate(60px, 40px); }
-        }
-        @keyframes floatOrb2 {
-          0% { transform: translate(0px, 0px); }
-          100% { transform: translate(-50px, -60px); }
         }
         @keyframes slowRotate {
           0% { transform: rotate(0deg) scale(1); }
@@ -982,25 +1006,44 @@ export function HomePage() {
         .scroll-reveal { animation: scrollReveal 600ms cubic-bezier(0.16,1,0.3,1) forwards; }
       `}</style>
 
-      {/* Scroll Progress Bar */}
-      <div style={{ position: 'fixed', top: 0, left: 0, height: '2px', background: '#C4956A', width: `${scrollProgress}%`, zIndex: 101, transition: 'width 50ms linear' }} />
+      {/* Reading progress — gold rail over cream track */}
+      <div
+        className="home-scroll-progress"
+        role="progressbar"
+        aria-label="Page scroll progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(scrollProgress)}
+      >
+        <div className="home-scroll-progress__fill" />
+      </div>
 
-      {/* Ambient Orbs */}
-      <div style={{ position: 'fixed', top: '-100px', left: '-200px', width: '600px', height: '600px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(196,149,106,0.06) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0, animation: 'floatOrb1 18s ease-in-out infinite alternate', willChange: 'transform' }} />
-      <div style={{ position: 'fixed', bottom: '-100px', right: '-150px', width: '500px', height: '500px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(138,168,153,0.05) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0, animation: 'floatOrb2 22s ease-in-out infinite alternate', willChange: 'transform' }} />
+      {/* Ambient atmosphere — multi-orb wash + soft mesh (pointer parallax via CSS vars) */}
+      <div className="home-ambient" aria-hidden="true">
+        <div className="home-ambient__wash" />
+        <div className="home-ambient__orb home-ambient__orb--gold" />
+        <div className="home-ambient__orb home-ambient__orb--sage" />
+        <div className="home-ambient__orb home-ambient__orb--lilac" />
+        <div className="home-ambient__mesh" />
+      </div>
 
       <Navbar />
 
       {/* Hero Section */}
       <section className="home-hero-section" style={{ position: 'relative', padding: '64px 0 48px' }}>
         <div className="home-hero-inner" style={{ maxWidth: '1080px', margin: '0 auto', padding: '0 24px' }}>
-          <div className="hero-giant-num" ref={giant4Ref} style={{ position: 'absolute', top: '-20px', right: '15%', fontSize: '280px', fontWeight: 500, color: '#F0EBE3', pointerEvents: 'none', zIndex: 0, userSelect: 'none', letterSpacing: '-0.06em', animation: 'slowRotate 40s linear infinite', willChange: 'transform' }}>4</div>
+          <div className="hero-giant-num-wrap" ref={giant4Ref} aria-hidden="true">
+            <div className="hero-giant-num">4</div>
+          </div>
 
           <div className="hero-content" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '64px', alignItems: 'start', position: 'relative', zIndex: 1 }}>
             {/* Left Column */}
             <div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: '0.5px solid #E0D8D0', borderRadius: '999px', padding: '5px 14px', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '1.4rem', animation: 'heroTagPill 400ms ease 0ms backwards' }}>
-                <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#8AA899' }} className="breathe-slow" />
+              <div className="home-hero-status">
+                <span className="home-hero-status__dot" aria-hidden="true">
+                  <span className="home-hero-status__dot-ring" />
+                  <span className="home-hero-status__dot-core" />
+                </span>
                 Now live · Free to try
               </div>
 
