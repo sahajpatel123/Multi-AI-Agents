@@ -417,6 +417,57 @@ def main():
                 except Exception:
                     pass
 
+            # Password reset tokens (single-use, SHA-256-hashed, 1h TTL).
+            # Idempotent so repeated runs don't error.
+            pg_pwd_reset = """
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    token_hash VARCHAR(64) UNIQUE NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    used_at TIMESTAMP
+                )
+            """
+            sqlite_pwd_reset = """
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    token_hash VARCHAR(64) UNIQUE NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    used_at TEXT
+                )
+            """
+            pwr_sql = sqlite_pwd_reset if dialect == "sqlite" else pg_pwd_reset
+            try:
+                conn.execute(text(pwr_sql))
+                conn.commit()
+                print("==> Migrated: password_reset_tokens table", flush=True)
+            except Exception as e:
+                print(f"==> Warning (password_reset_tokens): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+            pwr_indexes = (
+                "CREATE INDEX IF NOT EXISTS ix_password_reset_tokens_user_id "
+                "ON password_reset_tokens(user_id)",
+                "CREATE INDEX IF NOT EXISTS ix_password_reset_tokens_expires_at "
+                "ON password_reset_tokens(expires_at)",
+            )
+            for idx_sql in pwr_indexes:
+                try:
+                    conn.execute(text(idx_sql))
+                    conn.commit()
+                except Exception as e:
+                    print(f"==> Warning (password_reset_tokens idx): {e}", flush=True)
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+
             # Condura integration tables (handoff mirror + migration flags)
             pg_migration_flags = """
                 CREATE TABLE IF NOT EXISTS migration_flags (
