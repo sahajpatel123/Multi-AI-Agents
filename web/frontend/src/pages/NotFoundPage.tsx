@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Button } from '../components/Button';
+import { MotionButton } from '../components/MotionButton';
 import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
@@ -108,25 +109,44 @@ export function NotFoundPage() {
           )}
 
           <div className="not-found-actions" role="group" aria-label="Recovery options">
-            {actions.map((action) => (
-              <Button
-                key={action.id}
-                type="button"
-                variant={action.variant}
-                size="md"
-                fullWidth
-                onClick={() => {
-                  if (action.requiresAuth && !isAuthenticated) {
-                    setRedirectIntent(action.path);
-                    navigate('/signin');
-                    return;
-                  }
-                  navigate(action.path);
-                }}
-              >
-                {action.label}
-              </Button>
-            ))}
+            {actions.map((action) => {
+              const go = () => {
+                if (action.requiresAuth && !isAuthenticated) {
+                  setRedirectIntent(action.path);
+                  navigate('/signin');
+                  return;
+                }
+                navigate(action.path);
+              };
+              // Primary recovery CTA gets spring MotionButton; denser secondary
+              // stack keeps plain Button so hover scales don't compete.
+              if (action.variant === 'primary') {
+                return (
+                  <MotionButton
+                    key={action.id}
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    fullWidth
+                    onClick={go}
+                  >
+                    {action.label}
+                  </MotionButton>
+                );
+              }
+              return (
+                <Button
+                  key={action.id}
+                  type="button"
+                  variant={action.variant}
+                  size="md"
+                  fullWidth
+                  onClick={go}
+                >
+                  {action.label}
+                </Button>
+              );
+            })}
           </div>
 
           <p className="not-found-hint">
