@@ -2227,6 +2227,13 @@ async def rename_agent_task(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_rename",
+        limit=60,
+        window_seconds=60,
+        message="Too many renames. Please slow down.",
+    )
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id.strip(), AgentTaskRow.user_id == user.id)
@@ -2247,6 +2254,14 @@ async def delete_agent_task(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    # Destructive — tighter than rename so a client cannot bulk-wipe history.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_delete",
+        limit=30,
+        window_seconds=60,
+        message="Too many task deletes. Please slow down.",
+    )
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id.strip(), AgentTaskRow.user_id == user.id)
