@@ -2117,6 +2117,16 @@ async def get_agent_history(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    # Filtered/paginated history is a hot path (sidebar refresh + search).
+    # Bound per-user query rate so a client cannot keep the DB warm with
+    # concurrent full-page scans.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_history",
+        limit=120,
+        window_seconds=60,
+        message="Too many history lookups. Please slow down.",
+    )
     from arena.core.agent_memory import get_user_task_history
 
     tier = normalize_tier(get_tier_str(user))

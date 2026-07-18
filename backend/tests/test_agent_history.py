@@ -121,3 +121,23 @@ async def test_history_403_for_free_tier(app_client, make_user):
 async def test_history_requires_auth(app_client):
     res = await app_client.get("/api/agent/history")
     assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_history_rate_limit_blocks_runaway(app_client, make_user):
+    """History is rate-limited (120/min) so a client cannot keep the DB warm."""
+    from collections import deque
+    import time
+
+    from arena.core import rate_limits as _rl
+
+    if hasattr(_rl.rate_limiter, "_events"):
+        _rl.rate_limiter._events.clear()
+
+    user = make_user(email="hist-rl@test.com", tier=UserTier.PRO)
+    key = f"user:agent_history:{user.id}"
+    _rl.rate_limiter._events[key] = deque([time.time()] * 120)
+    res = await app_client.get("/api/agent/history", headers=_pro_headers(user))
+    assert res.status_code == 429, res.text[:300]
+    assert res.json().get("detail", {}).get("error") == "rate_limit_exceeded"
+    _rl.rate_limiter._events.clear()
