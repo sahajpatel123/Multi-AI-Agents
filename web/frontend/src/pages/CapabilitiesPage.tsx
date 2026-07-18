@@ -102,7 +102,10 @@ export function CapabilitiesPage() {
         aria-labelledby="capabilities-title"
       >
         <section className="mkt-hero">
-          <p className="mkt-hero__kicker">Capabilities</p>
+          <p className="mkt-hero__kicker">
+            <span className="mkt-hero__kicker-dot" aria-hidden="true" />
+            Capabilities
+          </p>
           <h1 id="capabilities-title" className="mkt-hero__title">
             Everything Arena can <span className="mkt-hero__accent">do.</span>
           </h1>
@@ -110,6 +113,11 @@ export function CapabilitiesPage() {
             Debate, focus, research pipelines, watchlists, rooms, and honest on-device handoffs —
             one product surface for thinking that does not collapse to a single agreeable voice.
           </p>
+          <ul className="mkt-hero__proof" aria-hidden="true">
+            <li className="mkt-hero__proof-item">3 run modes</li>
+            <li className="mkt-hero__proof-item">8-stage pipeline</li>
+            <li className="mkt-hero__proof-item">16 personas</li>
+          </ul>
         </section>
 
         <section className="cap-section" aria-labelledby="cap-topo-heading">
@@ -184,6 +192,7 @@ export function CapabilitiesPage() {
           <p id="cap-cta-heading" className="mkt-cta-block__pitch">
             Ready to put four minds on a real question?
           </p>
+          <p className="mkt-cta-block__sub">Free to try — no card required.</p>
           <div className="mkt-cta-row">
             <MotionButton type="button" variant="primary" size="md" onClick={goArena}>
               Try Arena →
