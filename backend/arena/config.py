@@ -1,5 +1,6 @@
 """Application configuration"""
 
+import logging
 import os
 import sys
 from functools import lru_cache
@@ -9,6 +10,13 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from cryptography.fernet import Fernet
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
+
+# Module logger. validate_secrets() runs BEFORE setup_logging() in main.py,
+# so this is intentionally not yet configured — Python's root logger has a
+# LastResort handler that emits WARNING+ to stderr, which is exactly what
+# we want for startup-time visibility (operators see the warnings even if
+# the app aborts before logging is wired up).
+logger = logging.getLogger(__name__)
 
 _WEAK_SECRET_KEYS = {
     "secret",
@@ -258,8 +266,8 @@ class Settings(BaseSettings):
         # OpenAI client is None, so a missing key is non-fatal. We still validate
         # the format if a key is supplied so typos surface immediately.
         if not self.openai_api_key:
-            print(
-                "[WARNING] OPENAI_API_KEY not set. OpenAI personas "
+            logger.warning(
+                "OPENAI_API_KEY not set. OpenAI personas "
                 "(philosopher, historian, pragmatist, optimist) will fall back to Claude."
             )
         elif not self.openai_api_key.startswith("sk-"):
@@ -269,11 +277,11 @@ class Settings(BaseSettings):
         # These are optional until billing is enabled — _get_razorpay_client()
         # returns 503 when called without keys, so missing values are non-fatal.
         if not self.razorpay_api_key:
-            print("[WARNING] RAZORPAY_API_KEY not set. Payment endpoints will return 503.")
+            logger.warning("RAZORPAY_API_KEY not set. Payment endpoints will return 503.")
         if not self.razorpay_key_secret:
-            print("[WARNING] RAZORPAY_KEY_SECRET not set. Payment endpoints will return 503.")
+            logger.warning("RAZORPAY_KEY_SECRET not set. Payment endpoints will return 503.")
         if not self.razorpay_webhook_secret:
-            print("[WARNING] RAZORPAY_WEBHOOK_SECRET not set. Webhooks will be ignored.")
+            logger.warning("RAZORPAY_WEBHOOK_SECRET not set. Webhooks will be ignored.")
 
         # --- ENVIRONMENT validation ---
         render_flag = (os.getenv("RENDER") or "").strip().lower()
@@ -340,12 +348,12 @@ class Settings(BaseSettings):
         else:
             # Dev: SQLite fallback is fine; warn if encryption missing (MCP).
             if not self.encryption_key:
-                print(
-                    "[WARNING] ENCRYPTION_KEY not set. MCP token encryption disabled until set."
+                logger.warning(
+                    "ENCRYPTION_KEY not set. MCP token encryption disabled until set."
                 )
             if not self.database_url:
-                print(
-                    "[WARNING] DATABASE_URL not set — using SQLite fallback for local development."
+                logger.warning(
+                    "DATABASE_URL not set — using SQLite fallback for local development."
                 )
 
         # Exit if any critical errors
