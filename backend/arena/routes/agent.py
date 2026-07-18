@@ -2482,24 +2482,6 @@ async def submit_task_feedback(
     )
 
 
-@router.get("/feedback/recent")
-async def list_recent_feedback(
-    limit: int = 20,
-    user: UserResponse = Depends(get_current_user_required),
-    db: Session = Depends(get_db),
-):
-    """Recent feedback events for the current user, newest first.
-
-    Each entry carries the task_id, verdict, optional note, timestamp,
-    and the task title/snippet when the underlying AgentTask still
-    exists. Used by Profile to show \"what did I rate recently?\"
-    without forcing a full history reload.
-    """
-    _ensure_agent_access(user, db)
-    items = get_recent_feedback(user.id, db, limit=limit)
-    return {"success": True, "items": items, "count": len(items)}
-
-
 @router.post("/refine")
 async def refine_agent_answer(
     body: RefinementRequest,
