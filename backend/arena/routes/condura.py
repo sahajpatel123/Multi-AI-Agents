@@ -220,6 +220,14 @@ async def list_handoffs(
     filters} so the UI can render pagination controls and a filter
     summary without inferring state.
     """
+    # 60/min/user — list pagination scraping bound.
+    enforce_user_rate_limit(
+        user.id,
+        scope="condura_handoffs_list",
+        limit=60,
+        window_seconds=60,
+        message="Too many handoff list reads. Please slow down.",
+    )
     q = db.query(HandoffRecord).filter(HandoffRecord.user_id == user.id)
 
     if capability:
@@ -267,7 +275,16 @@ async def get_handoff(
     payload small, so the UI fetches the detail only when needed.
 
     Foreign-or-missing ids return 404 with the same shape so a caller
-    can't enumerate by status code."""
+    can't enumerate by status code.
+    """
+    # 60/min/user — same throttle shape as the list endpoint.
+    enforce_user_rate_limit(
+        user.id,
+        scope="condura_handoff_detail",
+        limit=60,
+        window_seconds=60,
+        message="Too many handoff detail reads. Please slow down.",
+    )
     row = (
         db.query(HandoffRecord)
         .filter(HandoffRecord.id == handoff_id, HandoffRecord.user_id == user.id)
@@ -346,6 +363,14 @@ async def list_handoff_drafts(
     Drafts are typically short-lived (the browser saves one and the user
     either submits or abandons it), so a default 50-row cap is plenty.
     """
+    # 60/min/user — list pagination scraping bound (mirrors /handoffs).
+    enforce_user_rate_limit(
+        user.id,
+        scope="condura_handoff_drafts_list",
+        limit=60,
+        window_seconds=60,
+        message="Too many handoff-draft list reads. Please slow down.",
+    )
     q = db.query(HandoffDraft).filter(HandoffDraft.user_id == user.id)
     if capability:
         q = q.filter(HandoffDraft.capability == capability)
@@ -408,6 +433,16 @@ async def delete_handoff_draft(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    # Defense-in-depth: ownership is gated (404 if not yours) but a hostile
+    # caller still gets one DB hit per attempt and burns a request lifecycle.
+    # Same shape as DELETE /api/rooms/{slug} (cycle 40).
+    enforce_user_rate_limit(
+        user.id,
+        scope="condura_handoff_draft_delete",
+        limit=10,
+        window_seconds=60,
+        message="Too many handoff-draft delete attempts. Please slow down.",
+    )
     row = (
         db.query(HandoffDraft)
         .filter(HandoffDraft.id == draft_id, HandoffDraft.user_id == user.id)
@@ -425,6 +460,14 @@ async def get_migration_flags(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    # 60/min/user — open-flags list for the caller.
+    enforce_user_rate_limit(
+        user.id,
+        scope="condura_migration_flags",
+        limit=60,
+        window_seconds=60,
+        message="Too many migration-flag reads. Please slow down.",
+    )
     return {"flags": list_open_flags_for_user(db, user.id)}
 
 
@@ -445,6 +488,14 @@ async def get_migration_flags_summary(
     wants the full history (open + resolved) we'd add an
     include_resolved query param to /migration-flags.
     """
+    # 120/min/user — cheap aggregate; status badge in UI hits this often.
+    enforce_user_rate_limit(
+        user.id,
+        scope="condura_migration_flags_summary",
+        limit=120,
+        window_seconds=60,
+        message="Too many migration-flag summary reads. Please slow down.",
+    )
     return summarize_flags_for_user(db, user.id)
 
 
@@ -455,6 +506,14 @@ async def resolve_migration_flag(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    # 30/min/user — write; cheap to spam if uncapped (just an UPDATE).
+    enforce_user_rate_limit(
+        user.id,
+        scope="condura_migration_flag_resolve",
+        limit=30,
+        window_seconds=60,
+        message="Too many migration-flag resolve attempts. Please slow down.",
+    )
     ok = resolve_flag(db, user.id, flag_id, body.decision)
     if not ok:
         raise HTTPException(status_code=404, detail="Flag not found")
