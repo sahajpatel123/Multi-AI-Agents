@@ -5,6 +5,7 @@ import { Navbar } from '../components/Navbar';
 import { AgentDot } from '../components/AgentDot';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
+import { EmptyState } from '../components/EmptyState';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { type Persona } from '../data/personas';
@@ -992,17 +993,11 @@ export function PersonasPage() {
           ) : null}
 
           {filteredLibrary.length === 0 ? (
-            <div
-              className="arena-empty-state"
-              style={{
-                background: '#FAF7F4',
-                border: '0.5px solid #E0D8D0',
-                borderRadius: 14,
-                padding: '2rem 1.25rem',
-              }}
-            >
-              <p style={{ fontSize: 15, color: '#1A1714', fontWeight: 500, margin: 0 }}>
-                {libraryQuery.trim()
+            <EmptyState
+              variant="filter"
+              icon={<Sparkles width={24} height={24} strokeWidth={1.5} aria-hidden />}
+              title={
+                libraryQuery.trim()
                   ? `No minds match “${libraryQuery.trim()}”${
                       libraryAvailability !== 'all'
                         ? ` in ${personasLibraryAvailabilityLabel(libraryAvailability).toLowerCase()}`
@@ -1014,28 +1009,29 @@ export function PersonasPage() {
                       ? 'No unlocked minds match this view.'
                       : libraryAvailability === 'locked'
                         ? 'No locked minds — your tier unlocks the full library.'
-                        : 'No minds in this view.'}
-              </p>
-              <p style={{ fontSize: 13, color: '#6B6460', marginTop: 8, maxWidth: 320, lineHeight: 1.6 }}>
-                {libraryQuery.trim()
+                        : 'No minds in this view.'
+              }
+              description={
+                libraryQuery.trim()
                   ? 'Try a name, quote fragment, or trait — for example “analyst” or “what works”.'
-                  : 'Clear the availability filter to browse every mind again.'}
-              </p>
-              <button
-                type="button"
-                className="arena-btn arena-btn--ghost arena-btn--md"
-                style={{ marginTop: 16 }}
-                onClick={() => {
-                  setLibraryQuery('');
-                  setLibraryAvailability('all');
-                  librarySearchRef.current?.focus();
-                }}
-              >
-                {libraryAvailability !== 'all' && !libraryQuery.trim()
-                  ? 'Show all minds'
-                  : 'Clear filters'}
-              </button>
-            </div>
+                  : 'Clear the availability filter to browse every mind again.'
+              }
+              actions={
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--ghost arena-btn--md"
+                  onClick={() => {
+                    setLibraryQuery('');
+                    setLibraryAvailability('all');
+                    librarySearchRef.current?.focus();
+                  }}
+                >
+                  {libraryAvailability !== 'all' && !libraryQuery.trim()
+                    ? 'Show all minds'
+                    : 'Clear filters'}
+                </button>
+              }
+            />
           ) : (
           <div
             className="persona-library-grid"
