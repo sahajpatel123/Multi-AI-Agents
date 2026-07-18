@@ -253,7 +253,10 @@ export function AgentCard({
   }, [showThinkingPhrase, thinkingPhrases.length, thinkingPhraseIndex]);
 
   const hoverLift = isHovered && !reducedMotion;
-  const cardTransition = reducedMotion ? 'none' : 'all 200ms ease';
+  // Soft spring lift + shadow settle — matches --ease-spring-soft / motion tokens
+  const cardTransition = reducedMotion
+    ? 'none'
+    : 'transform 280ms cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1), border-color 240ms cubic-bezier(0.16, 1, 0.3, 1), background 240ms cubic-bezier(0.16, 1, 0.3, 1)';
   const pulseAnim = reducedMotion ? 'none' : undefined;
 
   return (
@@ -266,9 +269,13 @@ export function AgentCard({
         animation: agentCardLoadingAnimation(!!isLoadingState, isWinner, reducedMotion),
         border: isWinner ? '1px solid #C4956A' : '0.5px solid #E0D8D0',
         borderRadius: '16px',
-        boxShadow: hoverLift ? '0 8px 24px rgba(26,23,20,0.07)' : (isHighlighted ? '0 12px 30px rgba(196, 149, 106, 0.2)' : 'none'),
+        boxShadow: hoverLift
+          ? '0 14px 36px rgba(26,23,20,0.1), 0 0 0 1px rgba(196,149,106,0.08)'
+          : isHighlighted
+            ? '0 12px 30px rgba(196, 149, 106, 0.2)'
+            : 'none',
         transition: cardTransition,
-        transform: hoverLift ? 'translateY(-3px)' : 'translateY(0)',
+        transform: hoverLift ? 'translateY(-4px) scale(1.01)' : 'translateY(0) scale(1)',
         position: 'relative',
         overflow: 'hidden',
         display: 'flex',
@@ -299,9 +306,7 @@ export function AgentCard({
                   e.stopPropagation();
                   onTitleClick();
                 }}
-                style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714', background: 'none', border: 'none', cursor: 'pointer', transition: 'opacity 150ms ease' }}
-                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
-                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                className="agent-card-title-btn"
               >
                 {resolvedDisplay.name}
               </button>
@@ -427,19 +432,8 @@ export function AgentCard({
                       e.stopPropagation();
                       setShowContradictionTooltip(!showContradictionTooltip);
                     }}
-                    style={{
-                      marginLeft: 'auto',
-                      fontSize: '11px',
-                      background: 'transparent',
-                      border: '0.5px solid #E0D8D0',
-                      borderRadius: '999px',
-                      padding: '3px 10px',
-                      color: '#6B6460',
-                      cursor: 'pointer',
-                      transition: 'background 150ms ease',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = '#F0EBE3'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    className="agent-card-micro-btn"
+                    style={{ marginLeft: 'auto' }}
                   >
                     Why?
                   </button>
@@ -623,31 +617,7 @@ export function AgentCard({
                   void track('discuss_from_card', displayPersonaId, agentId);
                   onDiscuss();
                 }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  padding: '5px 10px',
-                  borderRadius: 999,
-                  background: 'transparent',
-                  border: '0.5px solid #E0D8D0',
-                  color: '#6B6460',
-                  fontSize: 11,
-                  fontFamily: 'Georgia, serif',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(196,149,106,0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(196,149,106,0.45)';
-                  e.currentTarget.style.color = '#C4956A';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.borderColor = '#E0D8D0';
-                  e.currentTarget.style.color = '#6B6460';
-                }}
+                className="agent-card-chip"
               >
                 <MessageCircle style={{ width: 13, height: 13 }} aria-hidden />
                 Discuss
@@ -663,31 +633,7 @@ export function AgentCard({
                   void track('debate_from_card', displayPersonaId, agentId);
                   onChallenge();
                 }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  padding: '5px 10px',
-                  borderRadius: 999,
-                  background: 'transparent',
-                  border: '0.5px solid #E0D8D0',
-                  color: '#6B6460',
-                  fontSize: 11,
-                  fontFamily: 'Georgia, serif',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(196,149,106,0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(196,149,106,0.45)';
-                  e.currentTarget.style.color = '#C4956A';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.borderColor = '#E0D8D0';
-                  e.currentTarget.style.color = '#6B6460';
-                }}
+                className="agent-card-chip"
               >
                 <Swords style={{ width: 13, height: 13 }} aria-hidden />
                 Challenge
@@ -706,31 +652,13 @@ export function AgentCard({
                   e.stopPropagation();
                   if (!verifyInAgentDisabled && !verifyInAgentLoading) onVerifyInAgent();
                 }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '6px 14px',
-                  borderRadius: 999,
-                  background: 'rgba(196,149,106,0.1)',
-                  border: '0.5px solid rgba(196,149,106,0.3)',
-                  color: '#C4956A',
-                  fontSize: 12,
-                  cursor:
-                    verifyInAgentDisabled || verifyInAgentLoading ? 'not-allowed' : 'pointer',
-                  transition: 'all 150ms ease',
-                  whiteSpace: 'nowrap',
-                  opacity: verifyInAgentDisabled ? 0.45 : 1,
-                }}
-                onMouseEnter={(e) => {
-                  if (verifyInAgentDisabled || verifyInAgentLoading) return;
-                  e.currentTarget.style.background = 'rgba(196,149,106,0.18)';
-                  e.currentTarget.style.borderColor = 'rgba(196,149,106,0.5)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(196,149,106,0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(196,149,106,0.3)';
-                }}
+                className={[
+                  'agent-card-chip',
+                  'agent-card-chip--accent',
+                  verifyInAgentDisabled ? 'agent-card-chip--disabled' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               >
                 {verifyInAgentLoading ? (
                   <Loader2 className="animate-spin" style={{ width: 14, height: 14 }} />
@@ -835,8 +763,10 @@ const ActionButton = ({
         borderRadius: '6px',
         background: isHovered ? '#F0EBE3' : 'transparent',
         color: active ? activeColor : (isHovered ? '#1A1714' : '#6B6460'),
-        transition: 'all 150ms ease',
-        transform: isHovered ? 'scale(1.15)' : (isClicked ? 'scale(1.4)' : 'scale(1)'),
+        transition:
+          'transform 280ms cubic-bezier(0.34, 1.4, 0.64, 1), background 200ms cubic-bezier(0.16, 1, 0.3, 1), color 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1)',
+        transform: isHovered ? 'scale(1.18) translateY(-1px)' : isClicked ? 'scale(0.9)' : 'scale(1)',
+        boxShadow: isHovered ? '0 4px 12px rgba(44, 24, 16, 0.08)' : 'none',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

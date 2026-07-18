@@ -3260,10 +3260,12 @@
   border: 0.5px solid color-mix(in srgb, var(--mind-color) 18%, #e0d8d0);
   overflow: hidden;
   isolation: isolate;
+  transform: translateZ(0);
+  cursor: default;
   transition:
-    transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 240ms ease,
-    border-color 220ms ease;
+    transform 280ms cubic-bezier(0.34, 1.4, 0.64, 1),
+    box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .home-minds .mind-card::before {
@@ -3283,11 +3285,11 @@
 
 .home-minds .mind-card:hover,
 .home-minds .mind-card:focus-within {
-  transform: translateY(-5px);
+  transform: translateY(-6px) scale(1.015);
   box-shadow:
-    0 14px 32px color-mix(in srgb, var(--mind-color) 16%, rgba(26, 23, 20, 0.06)),
-    0 0 0 1px color-mix(in srgb, var(--mind-color) 22%, transparent);
-  border-color: color-mix(in srgb, var(--mind-color) 40%, #e0d8d0);
+    0 18px 40px color-mix(in srgb, var(--mind-color) 18%, rgba(26, 23, 20, 0.07)),
+    0 0 0 1px color-mix(in srgb, var(--mind-color) 28%, transparent);
+  border-color: color-mix(in srgb, var(--mind-color) 45%, #e0d8d0);
 }
 
 .home-minds .mind-card:hover::before,
@@ -3321,7 +3323,7 @@
   );
   transform-origin: left center;
   transform: scaleX(0.35);
-  transition: transform 500ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 520ms cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
 .home-minds .mind-card:hover .mind-card__rail-fill,
