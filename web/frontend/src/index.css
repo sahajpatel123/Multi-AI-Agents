@@ -5131,3 +5131,119 @@ canvas {
     animation: none !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   Search highlight marks — sidebar / list query matches
+   ------------------------------------------------------------------ */
+.highlight-query {
+  display: inline;
+}
+
+.highlight-query-mark {
+  background: linear-gradient(
+    180deg,
+    rgba(196, 149, 106, 0.22) 0%,
+    rgba(196, 149, 106, 0.34) 100%
+  );
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 0.15em;
+  margin: 0 -0.02em;
+  font-weight: 500;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  box-shadow: inset 0 -1px 0 rgba(196, 149, 106, 0.28);
+  /* Reset browser yellow mark defaults that fight the brand wash */
+  text-decoration: none;
+}
+
+/* Soft pulse when the filter query just changed (optional parent can toggle) */
+.highlight-query--fresh .highlight-query-mark {
+  animation: highlight-query-pop 320ms var(--ease-out-premium) both;
+}
+
+@keyframes highlight-query-pop {
+  from {
+    background-color: rgba(196, 149, 106, 0.55);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .highlight-query--fresh .highlight-query-mark {
+    animation: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .highlight-query-mark {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    box-shadow: none;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Agent dot — persona status indicator
+   ------------------------------------------------------------------ */
+.agent-dot {
+  display: inline-block;
+  border-radius: 999px;
+  flex-shrink: 0;
+  transform-origin: center;
+  vertical-align: middle;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.35),
+    0 0 0 0 transparent;
+  background-clip: padding-box;
+}
+
+.agent-dot--live {
+  /* Soft ambient halo using the fill color (set via --agent-dot-color) */
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 0 6px 1px color-mix(in srgb, var(--agent-dot-color, #c4956a) 35%, transparent);
+}
+
+.agent-dot--static {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.agent-dot--flashing {
+  filter: saturate(1.15) brightness(1.05);
+}
+
+/* Slightly richer glows per canonical mind when animation is live */
+.agent-dot--1.agent-dot--live {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 0 7px 1px rgba(140, 155, 171, 0.4);
+}
+.agent-dot--2.agent-dot--live {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 0 7px 1px rgba(155, 143, 170, 0.4);
+}
+.agent-dot--3.agent-dot--live {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 0 7px 1px rgba(138, 168, 153, 0.4);
+}
+.agent-dot--4.agent-dot--live {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 0 7px 1px rgba(176, 151, 126, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-dot {
+    animation: none !important;
+    filter: none !important;
+  }
+  .agent-dot--live {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+  }
+}

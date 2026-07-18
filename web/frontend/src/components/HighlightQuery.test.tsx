@@ -112,4 +112,25 @@ describe('HighlightQuery', () => {
     );
     expect(container.querySelector('mark')).toBeNull();
   });
+
+  it('applies highlight-query mark chrome class', () => {
+    const { container } = render(
+      <HighlightQuery text="quantum computing" query="quantum" />,
+    );
+    const mark = container.querySelector('mark');
+    expect(mark).toHaveClass('highlight-query-mark');
+    expect(container.querySelector('.highlight-query')).not.toBeNull();
+  });
+
+  it('accepts custom markClassName', () => {
+    const { container } = render(
+      <HighlightQuery
+        text="quantum computing"
+        query="quantum"
+        markClassName="custom-mark"
+      />,
+    );
+    expect(container.querySelector('mark')).toHaveClass('highlight-query-mark');
+    expect(container.querySelector('mark')).toHaveClass('custom-mark');
+  });
 });

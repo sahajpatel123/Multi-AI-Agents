@@ -1,19 +1,13 @@
 import type { CSSProperties } from 'react';
 import { splitBySearchQuery } from '../lib/highlightSearch';
 
-const DEFAULT_MARK: CSSProperties = {
-  background: 'rgba(196, 149, 106, 0.28)',
-  color: 'inherit',
-  borderRadius: 3,
-  padding: '0 1px',
-  fontWeight: 500,
-};
-
 type HighlightQueryProps = {
   text: string;
   query: string;
-  /** Optional mark styles (Arena gold wash by default). */
+  /** Optional mark styles layered on the default Arena gold wash. */
   markStyle?: CSSProperties;
+  /** Extra class on each <mark> (defaults include highlight-query-mark). */
+  markClassName?: string;
   /** When true, the search is case-sensitive. Default false. */
   caseSensitive?: boolean;
   /**
@@ -37,6 +31,7 @@ export function HighlightQuery({
   text,
   query,
   markStyle,
+  markClassName = '',
   caseSensitive = false,
   multiTerm = false,
 }: HighlightQueryProps) {
@@ -47,19 +42,21 @@ export function HighlightQuery({
   if (segments.length === 0) return null;
   if (segments.length === 1 && !segments[0].match) return <>{text}</>;
 
-  const markSx = markStyle ? { ...DEFAULT_MARK, ...markStyle } : DEFAULT_MARK;
+  const markClass = ['highlight-query-mark', markClassName].filter(Boolean).join(' ');
 
   return (
-    <>
+    <span className="highlight-query">
       {segments.map((seg, i) =>
         seg.match ? (
-          <mark key={i} style={markSx}>
+          <mark key={i} className={markClass} style={markStyle}>
             {seg.text}
           </mark>
         ) : (
-          <span key={i}>{seg.text}</span>
+          <span key={i} className="highlight-query-plain">
+            {seg.text}
+          </span>
         ),
       )}
-    </>
+    </span>
   );
 }

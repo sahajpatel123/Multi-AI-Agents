@@ -1940,6 +1940,15 @@ async def patch_watchlist_item(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_watchlist_access(user)
+    # Watchlist mutations re-write per-row scheduler state. Cap per user
+    # so a misbehaving client cannot thrash the active-thread pool.
+    enforce_user_rate_limit(
+        user.id,
+        scope="watchlist_update",
+        limit=60,
+        window_seconds=3600,
+        message="Too many watchlist updates. Limit is 60 per hour.",
+    )
     item = (
         db.query(WatchlistItem)
         .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
@@ -1975,6 +1984,15 @@ async def delete_watchlist_item(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_watchlist_access(user)
+    # Destructive: bound the burst so a runaway script cannot bulk-wipe a
+    # user's watchlist (and the active scheduler entries that depend on it).
+    enforce_user_rate_limit(
+        user.id,
+        scope="watchlist_delete",
+        limit=30,
+        window_seconds=3600,
+        message="Too many watchlist deletes. Limit is 30 per hour.",
+    )
     item = (
         db.query(WatchlistItem)
         .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
