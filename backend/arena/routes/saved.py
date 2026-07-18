@@ -115,6 +115,15 @@ async def get_saved(
     don't break the silent-gate contract that the existing /saved endpoint
     established.
     """
+    # 60/min/user — list pagination scraping bound. Per-user so a single
+    # abusive client can't starve other callers.
+    enforce_user_rate_limit(
+        user.id,
+        scope="saved_list",
+        limit=60,
+        window_seconds=60,
+        message="Too many saved-response list reads. Please slow down.",
+    )
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         return {
             "items": [],
@@ -288,6 +297,15 @@ async def delete_saved_bulk(
     can show a partial-success message if a stale page referenced ids
     another user has since claimed.
     """
+    # 10/min/user — destructive bulk delete; ownership is gated but a hostile
+    # caller can still burn DB hits if uncapped. Same shape as DELETE rooms (40).
+    enforce_user_rate_limit(
+        user.id,
+        scope="saved_bulk_delete",
+        limit=10,
+        window_seconds=60,
+        message="Too many saved-response bulk delete attempts. Please slow down.",
+    )
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,
@@ -327,6 +345,14 @@ async def delete_saved(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> dict:
+    # 10/min/user — destructive single delete. Same shape as DELETE rooms /bulk.
+    enforce_user_rate_limit(
+        user.id,
+        scope="saved_delete",
+        limit=10,
+        window_seconds=60,
+        message="Too many saved-response delete attempts. Please slow down.",
+    )
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         raise HTTPException(
             status_code=403,

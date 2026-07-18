@@ -1,8 +1,9 @@
 """Persona library routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
+from arena.core.rate_limits import enforce_ip_rate_limit
 from arena.core.tier_config import get_tier_personas, normalize_tier
 from arena.database import get_db
 from arena.db_models import PersonaLibrary
@@ -38,6 +39,7 @@ def _serialize(persona: PersonaLibrary, allowed: set[str] | None) -> dict:
 
 @router.get("/personas")
 async def list_personas(
+    request: Request,
     db: Session = Depends(get_db),
     provider: str | None = Query(
         None,
@@ -60,6 +62,16 @@ async def list_personas(
     Tier-aware flags only attach when ``tier`` is supplied, so anonymous
     callers can't fingerprint whether a persona is paywalled.
     """
+    # Public catalog. 60/min/IP caps scraping; the response is small but
+    # the DB query runs on every call so a hostile client should not
+    # be able to spam it.
+    enforce_ip_rate_limit(
+        request,
+        scope="personas_list",
+        limit=60,
+        window_seconds=60,
+        message="Too many persona list reads. Please slow down.",
+    )
     q = db.query(PersonaLibrary).order_by(PersonaLibrary.display_order.asc())
     if provider:
         # Case-insensitive match on the provider column. Lowercasing both
@@ -94,6 +106,7 @@ async def list_personas(
 
 @router.get("/personas/{persona_id}")
 async def get_persona(
+    request: Request,
     persona_id: str,
     db: Session = Depends(get_db),
     tier: str | None = Query(
@@ -103,7 +116,16 @@ async def get_persona(
     ),
 ) -> dict:
     """Fetch a single persona by id. 404 if it doesn't exist — clients
-    shouldn't have to scan the list to confirm an id is valid."""
+    shouldn't have to scan the list to confirm an id is valid.
+    """
+    # Public detail read. 120/min/IP — higher ceiling for hover/select.
+    enforce_ip_rate_limit(
+        request,
+        scope="personas_detail",
+        limit=120,
+        window_seconds=60,
+        message="Too many persona detail reads. Please slow down.",
+    )
     persona = (
         db.query(PersonaLibrary)
         .filter(PersonaLibrary.persona_id == persona_id)
