@@ -1,6 +1,7 @@
 """Recent answer-feedback endpoint contract."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import json
 from datetime import datetime, timedelta, timezone
@@ -12,7 +13,7 @@ from arena.db_models import AgentTask, AnswerFeedback, UserTier
 
 
 def _task(*, suffix, user_id, verdict="correct"):
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     task = AgentTask(
         user_id=user_id,
         task_id=f"task-fb-{suffix}",
@@ -109,7 +110,7 @@ async def test_recent_feedback_orphan_row_is_returned_without_title(
     user = make_user(email="recent-fb-orphan@test.com", tier=UserTier.PRO)
     # Insert only the feedback — the matching task was deleted before
     # the user submitted feedback (race or admin cleanup).
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     orphan = AnswerFeedback(
         user_id=user.id,
         task_id="task-fb-orphan",

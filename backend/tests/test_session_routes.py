@@ -1,6 +1,7 @@
 """Integration tests for /api/session list and delete endpoints."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timezone
 
@@ -29,7 +30,7 @@ def _make_session(user_id, *, session_id: str, topics: list[str] | None = None) 
     """Build a SessionData with no turns — the list endpoint reads turn count
     from len(session_data.turns), which is 0 here. We don't need real turns
     to test list/delete routing; the route doesn't deserialize turn contents."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     return SessionData(
         session_id=session_id,
         user_id=str(user_id),

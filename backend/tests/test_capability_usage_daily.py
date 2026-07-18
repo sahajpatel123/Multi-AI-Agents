@@ -1,6 +1,7 @@
 """Daily trend added to /api/agent/capability-usage."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timezone
 
@@ -13,7 +14,7 @@ from arena.db_models import UsageRecord, UserTier
 def _make_record(*, user_id, mode, prompt_category="question", days_ago=0):
     from datetime import timedelta
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     return UsageRecord(
         user_id=user_id,
         mode=mode,

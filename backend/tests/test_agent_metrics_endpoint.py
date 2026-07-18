@@ -1,6 +1,7 @@
 """Agent Mode metrics endpoint and aggregator."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import json
 from datetime import datetime, timedelta, timezone
@@ -22,7 +23,7 @@ def _make_user(email="metrics-bob@test.com", tier=UserTier.PRO):
 
 
 def _make_task(user_id, *, days_ago=0, topics=None, feedback=None, is_live=False, suffix=""):
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     return AgentTask(
         user_id=user_id,
         task_id=f"task-{user_id}-{days_ago}-{topics}-{suffix}",

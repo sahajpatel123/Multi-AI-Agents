@@ -1,6 +1,7 @@
 """Integration tests for GET /api/agent/history (paginated list)."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timedelta, timezone
 
@@ -16,7 +17,7 @@ def _seed(session, *, user_id: int, task_id: str, days_ago: int = 0, score: int 
         task_id=task_id,
         task_text=f"Question for {task_id}",
         final_score=score,
-        created_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_ago),
+        created_at=utcnow_naive() - timedelta(days=days_ago),
     )
     session.add(row)
     session.flush()

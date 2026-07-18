@@ -1,6 +1,7 @@
 """Integration tests for GET /api/analytics/activity."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import uuid
 from datetime import datetime, time, timedelta, timezone
@@ -19,7 +20,7 @@ def _seed_records(db, user_id: int, events: list[tuple[int, str]]) -> list[Usage
     gives three records, not two.
     """
     created: list[UsageRecord] = []
-    today = datetime.now(timezone.utc).replace(tzinfo=None).date()
+    today = utcnow_naive().date()
     for days_ago, mode in events:
         target_day = today - timedelta(days=days_ago)
         ts = datetime.combine(target_day, time(12, 0))

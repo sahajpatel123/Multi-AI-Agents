@@ -9,6 +9,7 @@ file focuses on the additions layered on top:
 """
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -44,7 +45,7 @@ def _seed_usage(
     latency_ms: int | None = 100,
     cost: float = 0.0,
 ) -> UsageRecord:
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     rec = UsageRecord(
         user_id=user_id,
         request_id=str(uuid.uuid4()),
@@ -67,7 +68,7 @@ def _seed_scoring_audit(
     fallback: bool = False,
     hours_ago: int = 1,
 ) -> ScoringAudit:
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     rec = ScoringAudit(
         session_id=str(uuid.uuid4()),
         user_id=user_id,

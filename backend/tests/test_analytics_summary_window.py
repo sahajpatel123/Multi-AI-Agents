@@ -1,6 +1,7 @@
 """Integration tests for /api/analytics/summary window + engagement + streak."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -20,7 +21,7 @@ def _seed_usage(
     hours_ago: int = 1,
     mode: str = "arena",
 ) -> UsageRecord:
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     rec = UsageRecord(
         user_id=user_id,
         request_id=str(uuid.uuid4()),
@@ -44,7 +45,7 @@ def _seed_event(
     persona_id: str | None = "analyst",
     hours_ago: int = 1,
 ) -> UXEvent:
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     rec = UXEvent(
         user_id=user_id,
         session_id=str(uuid.uuid4()),
@@ -59,7 +60,7 @@ def _seed_event(
 
 
 def _seed_scoring(db, *, user_id: int, hours_ago: int = 1, score: int = 80) -> ScoringAudit:
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     rec = ScoringAudit(
         session_id=str(uuid.uuid4()),
         user_id=user_id,
@@ -76,7 +77,7 @@ def _seed_scoring(db, *, user_id: int, hours_ago: int = 1, score: int = 80) -> S
 
 
 def _seed_summary(db, *, user_id: int, days_ago: int = 0, topics: list | None = None) -> SessionSummary:
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     import json as _json
     rec = SessionSummary(
         session_id=str(uuid.uuid4()),

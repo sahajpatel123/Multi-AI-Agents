@@ -1,6 +1,7 @@
 """Agent feedback daily summary endpoint and aggregator contract."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import json
 from datetime import datetime, timedelta, timezone
@@ -13,7 +14,7 @@ from arena.db_models import AgentTask, AnswerFeedback, UserTier
 
 
 def _make_feedback(*, user_id, suffix, verdict, days_ago=0):
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     return AnswerFeedback(
         user_id=user_id,
         task_id=f"task-fb-{suffix}",

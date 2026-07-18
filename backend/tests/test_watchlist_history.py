@@ -1,6 +1,7 @@
 """Integration tests for GET /api/agent/watchlist/{item_id}/history."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timedelta, timezone
 
@@ -22,7 +23,7 @@ def _seed_watch(session, *, user_id: str, question: str = "Quantum trends?") -> 
         expertise_level="curious",
         expertise_domain="",
         is_active=True,
-        next_run_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=24),
+        next_run_at=utcnow_naive() + timedelta(hours=24),
     )
     session.add(item)
     session.flush()
@@ -40,7 +41,7 @@ def _seed_run(
     days_ago: int = 0,
     feedback: str | None = None,
 ) -> AgentTask:
-    created_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_ago)
+    created_at = utcnow_naive() - timedelta(days=days_ago)
     row = AgentTask(
         user_id=user_id,
         task_id=f"t-{watchlist_item_id[:8]}-{days_ago}-{score}",

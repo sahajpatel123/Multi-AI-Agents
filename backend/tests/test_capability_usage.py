@@ -1,6 +1,7 @@
 """Integration tests for /api/agent/capability-usage."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -19,7 +20,7 @@ def _seed_usage(
     prompt_category: str | None = "agent.run_pipeline",
     hours_ago: int = 1,
 ):
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     rec = UsageRecord(
         user_id=user_id,
         request_id=str(uuid.uuid4()),

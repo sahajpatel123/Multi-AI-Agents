@@ -1,6 +1,7 @@
 """JWT decode must require exp and reject empty / garbage tokens."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timezone
 
@@ -47,7 +48,7 @@ def test_blacklist_ignores_empty_token(isolated_db):
     try:
         token_blacklist.add(
             "",
-            expires_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            expires_at=utcnow_naive(),
             db=s,
         )
         assert s.query(RevokedToken).count() == 0

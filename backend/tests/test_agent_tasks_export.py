@@ -1,6 +1,7 @@
 """Agent tasks JSONL export endpoint contract."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import json
 from datetime import datetime, timezone
@@ -12,7 +13,7 @@ from arena.db_models import AgentTask, UserTier
 
 
 def _make_task(*, suffix, user_id, verdict=None, topics=None, title=None):
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     return AgentTask(
         user_id=user_id,
         task_id=f"task-export-{suffix}",
@@ -116,7 +117,7 @@ async def test_export_jsonl_handles_malformed_topics(app_client, db_session, mak
         task_text="q",
         final_answer="a",
         topics="not-json",  # invalid JSON
-        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        created_at=utcnow_naive(),
     )
     db_session.add(task)
     db_session.commit()

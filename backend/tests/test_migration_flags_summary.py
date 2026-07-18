@@ -1,6 +1,7 @@
 """Integration tests for /api/condura/migration-flags/summary."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timezone
 
@@ -25,7 +26,7 @@ def _seed_flag(
         ref_id=ref_id,
         affected_capability=capability,
         resolved_at=resolved_at,
-        surfaced_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        surfaced_at=utcnow_naive(),
     )
 
 
@@ -55,7 +56,7 @@ async def test_summary_counts_only_open_flags(
     db_session.add(_seed_flag(
         db_session, user_id=user.id, capability="hybrid_delegate",
         ref_id="ref-2",
-        resolved_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        resolved_at=utcnow_naive(),
     ))
     db_session.commit()
 

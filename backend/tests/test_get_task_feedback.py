@@ -1,6 +1,7 @@
 """Integration tests for GET /api/agent/tasks/{task_id}/feedback."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timezone
 
@@ -27,7 +28,7 @@ def _seed_feedback(session, *, user_id: int, task_id: str, verdict: str = "accur
         task_id=task_id,
         verdict=verdict,
         note=note,
-        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        created_at=utcnow_naive(),
     )
     session.add(row)
     session.flush()

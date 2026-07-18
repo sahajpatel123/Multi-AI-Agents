@@ -1,3 +1,4 @@
+from arena.core.datetime_utils import utcnow_naive
 """Integration tests for the streaming prompt endpoint (POST /api/prompt/stream).
 
 Tests the full SSE streaming flow: input pipeline -> parallel agents -> scoring -> result.
@@ -131,7 +132,7 @@ class TestPromptStreamingEndpoint:
             email="limited@test.com",
             tier=UserTier.FREE,
             prompt_count_today=5,  # FREE limit is 5/day
-            prompt_count_reset_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            prompt_count_reset_at=utcnow_naive(),
         )
         from arena.core.auth import create_access_token
         headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}

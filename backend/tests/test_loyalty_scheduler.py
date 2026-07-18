@@ -1,6 +1,7 @@
 """Loyalty scheduler hardening: per-user isolation + failure backoff."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timedelta, timezone
 
@@ -27,7 +28,7 @@ def _make_user(*, id: int = 1, loyalty_resume_at=None, attempts: int = 0, next_a
 
 
 def test_user_is_due_respects_resume_at_and_backoff():
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     past = now - timedelta(hours=1)
     future = now + timedelta(hours=1)
     assert loyalty._user_is_due(_make_user(id=1, loyalty_resume_at=past), now) is True
@@ -53,7 +54,7 @@ def test_user_is_due_respects_resume_at_and_backoff():
 
 
 def test_next_retry_after_follows_backoff_ladder():
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     # _RETRY_BACKOFF_MINUTES is indexed by failure count: index 0 = 5m
     # after the first failure, index 1 = 30m after the second, etc.
     # 1 failure -> 30 min (index 1)
@@ -141,7 +142,7 @@ async def test_check_loyalty_resumes_isolates_per_user_failure(monkeypatch):
                 return _FakeQuery({"first": subs_by_id.get(n + 1)})
             return super().query(model)
 
-    past = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+    past = utcnow_naive() - timedelta(hours=1)
     good = _make_user(id=1, loyalty_resume_at=past)
     bad = _make_user(id=2, loyalty_resume_at=past)
     session = SwitchingSession(users=[good, bad], subscription=None)
@@ -162,7 +163,7 @@ async def test_check_loyalty_resumes_clears_state_when_subscription_missing(monk
     the user is not stuck paying for a paused schedule indefinitely."""
     monkeypatch.setattr(loyalty, "_get_razorpay_client", lambda: object())
 
-    past = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+    past = utcnow_naive() - timedelta(hours=1)
     user = _make_user(
         id=11,
         loyalty_resume_at=past,

@@ -1,6 +1,7 @@
 """Integration tests for GET /api/agent/feedback/recent."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timedelta, timezone
 
@@ -46,7 +47,7 @@ def _seed_feedback(
         task_id=task_id,
         verdict=verdict,
         note=note,
-        created_at=created_at or datetime.now(timezone.utc).replace(tzinfo=None),
+        created_at=created_at or utcnow_naive(),
     )
     session.add(row)
     session.flush()
@@ -55,7 +56,7 @@ def _seed_feedback(
 
 @pytest.mark.asyncio
 async def test_recent_returns_seeded_items_newest_first(app_client, pro_user, pro_headers, db_session):
-    base = datetime.now(timezone.utc).replace(tzinfo=None)
+    base = utcnow_naive()
     _seed_task(db_session, user_id=pro_user.id, task_id="t1", title="Quantum intro", task_text="Explain qubits")
     _seed_task(db_session, user_id=pro_user.id, task_id="t2", title="Ethics of AI", task_text="Discuss agency")
     _seed_feedback(db_session, user_id=pro_user.id, task_id="t1", verdict="accurate", created_at=base - timedelta(days=1))

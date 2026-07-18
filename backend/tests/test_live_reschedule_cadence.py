@@ -1,6 +1,7 @@
 """Live thread reschedule cadence: per-task override + clamped default."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timedelta, timezone
 
@@ -57,7 +58,7 @@ async def test_check_live_task_advances_next_check_by_custom_cadence(
         db.add(u)
         db.commit()
         db.refresh(u)
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = utcnow_naive()
         task = AgentTask(
             user_id=u.id,
             task_id="task-cadence-1",
@@ -91,7 +92,7 @@ async def test_check_live_task_advances_next_check_by_custom_cadence(
         result = await ltc.check_live_task(row, db)
         assert result is False
         # The next-check must be ~6 hours out, not the 24h default.
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = utcnow_naive()
         delta_hours = (row.live_next_check - now).total_seconds() / 3600
         assert 5.9 < delta_hours < 6.1, f"expected ~6h, got {delta_hours}"
     finally:

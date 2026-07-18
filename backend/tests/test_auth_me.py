@@ -1,6 +1,7 @@
 """Integration tests for GET /api/auth/me."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import pytest
 
@@ -39,7 +40,7 @@ async def test_me_rejects_blacklisted_token(app_client, make_user, db_session):
     token = create_access_token(user.id, user.email)
     blacklist_add(
         token,
-        datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1),
+        utcnow_naive() + timedelta(hours=1),
         db_session,
     )
     res = await app_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})

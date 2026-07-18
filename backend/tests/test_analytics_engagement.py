@@ -1,6 +1,7 @@
 """Integration tests for /api/analytics/engagement per-tier breakdown."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -18,7 +19,7 @@ def _seed_usage(
     hours_ago: int = 1,
     mode: str = "arena",
 ):
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     rec = UsageRecord(
         user_id=user_id,
         request_id=str(uuid.uuid4()),
@@ -41,7 +42,7 @@ def _seed_event(
     event_type: str = "deeper_opened",
     hours_ago: int = 1,
 ):
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     rec = UXEvent(
         user_id=user_id,
         session_id=str(uuid.uuid4()),

@@ -7,6 +7,7 @@ Drives shipped entry points:
 """
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
@@ -159,7 +160,7 @@ async def test_run_due_watchlist_skips_local_intent_when_honesty_on(
         db.add(u)
         db.commit()
         db.refresh(u)
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = utcnow_naive()
         item = WatchlistItem(
             user_id=u.id,
             question="Open Linear and create a ticket from this research",
@@ -234,7 +235,7 @@ async def test_check_live_task_skips_researcher_on_local_intent(
         db.add(u)
         db.commit()
         db.refresh(u)
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = utcnow_naive()
         task = AgentTask(
             user_id=u.id,
             task_id="task-live-local-1",

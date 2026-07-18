@@ -1,6 +1,7 @@
 """Integration tests for GET /api/agent/history filters and sort."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import json
 from datetime import datetime, timedelta, timezone
@@ -34,7 +35,7 @@ def _seed(
         user_feedback=feedback,
         orchestration_id=orchestration_id,
         topics=json.dumps([]),
-        created_at=datetime.now(timezone.utc).replace(tzinfo=None)
+        created_at=utcnow_naive()
         - timedelta(days=days_ago),
     )
     session.add(row)

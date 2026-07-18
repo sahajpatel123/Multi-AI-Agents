@@ -1,6 +1,7 @@
 """Integration tests for /auth/change-password and /auth/security."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 import pytest
 
@@ -142,7 +143,7 @@ async def test_security_last_active_at_reflects_recent_prompt(
         request_id=str(uuid.uuid4()),
         mode="arena",
         total_processing_ms=100,
-        timestamp=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1),
+        timestamp=utcnow_naive() - timedelta(hours=1),
     )
     db_session.add(rec)
     db_session.commit()

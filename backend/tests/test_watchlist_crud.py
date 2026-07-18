@@ -1,6 +1,7 @@
 """Integration tests for Watchlist CRUD routes (POST/PATCH/DELETE)."""
 
 from __future__ import annotations
+from arena.core.datetime_utils import utcnow_naive
 
 from datetime import datetime, timezone
 
@@ -51,7 +52,7 @@ async def test_create_rejects_invalid_interval(app_client, make_user):
 async def test_create_enforces_max_active(app_client, make_user, db_session):
     """The cap is 10 active watches per user."""
     user = make_user(email="wl-cap@test.com", tier=UserTier.PRO)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     for i in range(10):
         db_session.add(
             WatchlistItem(
@@ -106,7 +107,7 @@ async def test_patch_updates_interval(app_client, make_user, db_session):
         expertise_level="curious",
         expertise_domain="",
         is_active=True,
-        next_run_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        next_run_at=utcnow_naive(),
         run_count=0,
     )
     db_session.add(item)
@@ -127,7 +128,7 @@ async def test_patch_updates_interval(app_client, make_user, db_session):
 async def test_patch_pauses_and_resumes(app_client, make_user, db_session):
     """Toggling is_active drives the pause switch in the UI."""
     user = make_user(email="wl-pause@test.com", tier=UserTier.PRO)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     item = WatchlistItem(
         user_id=user.id,
         question="Pause test",
@@ -169,7 +170,7 @@ async def test_patch_rejects_invalid_interval(app_client, make_user, db_session)
         expertise_level="curious",
         expertise_domain="",
         is_active=True,
-        next_run_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        next_run_at=utcnow_naive(),
         run_count=0,
     )
     db_session.add(item)
@@ -195,7 +196,7 @@ async def test_patch_404_for_other_users_watch(app_client, make_user, db_session
         expertise_level="curious",
         expertise_domain="",
         is_active=True,
-        next_run_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        next_run_at=utcnow_naive(),
         run_count=0,
     )
     db_session.add(bob_item)
@@ -220,7 +221,7 @@ async def test_delete_removes_item(app_client, make_user, db_session):
         expertise_level="curious",
         expertise_domain="",
         is_active=True,
-        next_run_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        next_run_at=utcnow_naive(),
         run_count=0,
     )
     db_session.add(item)
@@ -247,7 +248,7 @@ async def test_delete_404_for_other_users_watch(app_client, make_user, db_sessio
         expertise_level="curious",
         expertise_domain="",
         is_active=True,
-        next_run_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        next_run_at=utcnow_naive(),
         run_count=0,
     )
     db_session.add(bob_item)
@@ -283,7 +284,7 @@ async def test_delete_403_for_free_tier(app_client, make_user, db_session):
         expertise_level="curious",
         expertise_domain="",
         is_active=True,
-        next_run_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        next_run_at=utcnow_naive(),
         run_count=0,
     )
     db_session.add(item)
