@@ -44,7 +44,7 @@ ROUTES_DIR = Path(__file__).resolve().parent.parent / "arena" / "routes"
 # must have a rate-limit call OR an admin gate inside its handler body.
 # Don't add files that legitimately use a different throttle mechanism
 # (tier-limit, signature verification, etc.) — those get separate coverage.
-COVERED_FILES = ["rooms.py", "condura.py", "personas.py", "saved.py"]
+COVERED_FILES = ["rooms.py", "condura.py", "personas.py", "saved.py", "calibration.py"]
 
 # Acceptable defenses inside a handler body. Match each as a regex.
 DEFENSES = {

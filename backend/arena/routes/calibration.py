@@ -216,6 +216,14 @@ async def get_calibration_stats(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    # 60/min/user — UI status badge hits this often; per-user cap.
+    enforce_user_rate_limit(
+        user.id,
+        scope="calibration_stats",
+        limit=60,
+        window_seconds=60,
+        message="Too many calibration stats reads. Please slow down.",
+    )
     return JSONResponse(content=build_calibration_stats(db, user.id))
 
 
@@ -225,6 +233,14 @@ async def get_calibration_rating_for_task(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    # 60/min/user — UI loads this on hover/select.
+    enforce_user_rate_limit(
+        user.id,
+        scope="calibration_rating_detail",
+        limit=60,
+        window_seconds=60,
+        message="Too many calibration rating reads. Please slow down.",
+    )
     row = (
         db.query(ConfidenceRating)
         .filter(
@@ -282,6 +298,14 @@ async def list_calibration_history(
     my underestimates' which is the actionable slice for the calibration
     game.
     """
+    # 60/min/user — paginated history; same shape as /saved.
+    enforce_user_rate_limit(
+        user.id,
+        scope="calibration_history",
+        limit=60,
+        window_seconds=60,
+        message="Too many calibration history reads. Please slow down.",
+    )
     q = db.query(ConfidenceRating).filter(ConfidenceRating.user_id == user.id)
 
     if min_delta is not None:
