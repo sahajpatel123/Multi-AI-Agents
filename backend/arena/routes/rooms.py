@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Session
@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from arena.config import get_settings
 from arena.core.dependencies import get_current_user_optional_orm, get_current_user_required_orm
 from arena.core.input_validation import sanitize_html, sanitize_model_html, sanitize_model_text
-from arena.core.rate_limits import enforce_user_rate_limit
+from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.room_synthesiser import synthesise_room
 from arena.database import SessionLocal, get_db
 from arena.db_models import AgentTask, Room, RoomMember, RoomTask, User
@@ -227,6 +227,14 @@ async def my_rooms(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ) -> dict[str, Any]:
+    # 60/min/user — caps list pagination scraping.
+    enforce_user_rate_limit(
+        user.id,
+        scope="room_my_rooms",
+        limit=60,
+        window_seconds=60,
+        message="Too many my-rooms requests. Please slow down.",
+    )
     """List rooms the caller belongs to, newest activity first.
 
     Was a hard-capped top-5 — fine for a sidebar widget, useless once a
@@ -278,6 +286,14 @@ async def discover_rooms(
         None, max_length=128, description="Case-insensitive substring match on name or slug.",
     ),
 ) -> dict[str, Any]:
+    # 60/min/user — discover list pagination; same shape as /my-rooms.
+    enforce_user_rate_limit(
+        user.id,
+        scope="room_discover",
+        limit=60,
+        window_seconds=60,
+        message="Too many discover requests. Please slow down.",
+    )
     """Browse active rooms across all users — for the 'Discover' tab
     that lets a logged-in user find rooms to join.
 
@@ -332,6 +348,15 @@ async def list_room_members(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
+    # 60/min/user — public read, but still bound so a single user can't
+    # paginate every room's member list aggressively.
+    enforce_user_rate_limit(
+        user.id,
+        scope="room_members",
+        limit=60,
+        window_seconds=60,
+        message="Too many room-member reads. Please slow down.",
+    )
     """List members of a room. Caller must be a member to view the
     membership — non-members get 404 (same shape as missing room) so
     private rooms can't be enumerated by slug.
@@ -445,10 +470,20 @@ async def get_synthesis(
 
 @router.get("/{slug}")
 async def get_room(
+    request: Request,
     slug: str,
     db: Session = Depends(get_db),
     current: Optional[User] = Depends(get_current_user_optional_orm),
 ) -> dict[str, Any]:
+    # Public-shareable read: cap to 60/min/IP so a single client can't
+    # hammer the slug enumeration surface.
+    enforce_ip_rate_limit(
+        request,
+        scope="room_get",
+        limit=60,
+        window_seconds=60,
+        message="Too many room reads from this IP. Please slow down.",
+    )
     """Shareable room board payload.
 
     Viewing must NEVER auto-join the caller. Auto-join on GET let any
@@ -691,6 +726,16 @@ async def delete_room(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
+    # Defense-in-depth: the route is already gated by an ownership check
+    # (404 if the room isn't yours), but a hostile caller still gets one
+    # DB hit per request and burns a request lifecycle. Bound the attempts.
+    enforce_user_rate_limit(
+        user.id,
+        scope="room_delete",
+        limit=10,
+        window_seconds=60,
+        message="Too many room delete attempts. Please slow down.",
+    )
     room = db.query(Room).filter(Room.slug == slug).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -864,6 +909,14 @@ async def get_perspective_drift(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
+    # 30/min/user — heavy read (parses every room task's answer). Cap low.
+    enforce_user_rate_limit(
+        user.id,
+        scope="room_perspective_drift",
+        limit=30,
+        window_seconds=60,
+        message="Too many perspective-drift reads. Please slow down.",
+    )
     """
     Analyze how research perspectives have drifted across room tasks.
 
