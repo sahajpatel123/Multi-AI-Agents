@@ -69,3 +69,16 @@ title = "Multi-AI-Agents gitleaks config"
   paths = [
     '''(^|/)web/frontend/src/components/integrationServices\.ts$''',
   ]
+
+# Historical Fernet key committed in caaab225b9120993d11f22243bdf5d68958aba71
+# (2026-07-13). The current ci.yml no longer embeds it (the file now generates
+# a key at runtime), but the old commit's literal is in git history forever,
+# and `generic-api-key` flags any 44-char base64 string on full history scans.
+# Allowlist matches the EXACT committed bytes only — any future Fernet key
+# paste in a new commit still trips the rule. If the leaked value was ever
+# the prod MCP-token encryption key, rotate + re-enroll stored tokens.
+[[allowlists]]
+  description = "Historical Fernet key literal in caaab225 (precise suppression)"
+  regexes = [
+    '''yFosmwgHKj-5dIFtmC5tl6yEWawwqRqZwE749ltw5Mc=''',
+  ]
