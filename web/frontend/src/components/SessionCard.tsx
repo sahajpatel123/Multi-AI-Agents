@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { X } from 'lucide-react';
 import { AGENTS } from '../types';
 import { AgentDot } from './AgentDot';
 
@@ -7,9 +7,7 @@ interface SessionCardProps {
   winnerAgentId: string;
   timestamp: string;
   isActive: boolean;
-  /** Optional delete affordance — when provided, a small × button
-   *  appears on hover. The button's onClick stops propagation so the
-   *  parent card onClick isn't also fired. */
+  /** Optional delete affordance — visible on hover/focus so keyboard users can reach it. */
   onDelete?: () => void;
   /** Optional count of saved/messages/etc. rendered in the meta line. */
   messageCount?: number;
@@ -26,103 +24,62 @@ export function SessionCard({
   messageCount,
 }: SessionCardProps) {
   const winnerConfig = AGENTS[winnerAgentId];
+  const winnerName = winnerConfig?.name || 'Unknown mind';
   const timeAgo = formatTimeAgo(timestamp);
-  const [hovered, setHovered] = useState(false);
+  const promptPreview = prompt.trim() || 'Untitled session';
 
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{ position: 'relative' }}
+      className={[
+        'session-card',
+        isActive ? 'session-card--active' : '',
+        onDelete ? 'session-card--deletable' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       <button
+        type="button"
+        className="session-card__main"
         onClick={onClick}
         aria-pressed={isActive}
-        aria-label={`Open session: ${prompt}`}
-        style={{
-          width: '100%',
-          textAlign: 'left',
-          padding: '8px 10px',
-          paddingRight: onDelete && hovered ? '28px' : '10px',
-          borderRadius: '10px',
-          border: isActive ? '0.5px solid transparent' : 'none',
-          borderLeft: isActive ? '2px solid #C4956A' : 'none',
-          background: isActive ? '#F0EBE3' : 'transparent',
-          cursor: 'pointer',
-          transition: 'all 150ms ease',
-          fontFamily: 'inherit',
-        }}
-        onMouseEnter={(e) => {
-          if (!isActive) e.currentTarget.style.background = '#F0EBE3';
-        }}
-        onMouseLeave={(e) => {
-          if (!isActive) e.currentTarget.style.background = 'transparent';
-        }}
+        aria-label={`Open session: ${promptPreview}`}
       >
-        <p
-          style={{
-            fontSize: '13px',
-            color: '#1A1714',
-            lineHeight: '1.5',
-            marginBottom: '6px',
-            overflow: 'hidden',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-          }}
-        >
-          {prompt}
-        </p>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: '11px',
-            gap: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
-            <AgentDot agentId={winnerAgentId} size={5} />
-            <span style={{ color: '#6B6460', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {winnerConfig.name}
-            </span>
+        <p className="session-card__prompt">{promptPreview}</p>
+        <div className="session-card__meta">
+          <div className="session-card__winner">
+            {winnerConfig ? (
+              <AgentDot agentId={winnerAgentId} size={6} />
+            ) : (
+              <span className="session-card__dot-fallback" aria-hidden />
+            )}
+            <span className="session-card__winner-name">{winnerName}</span>
             {messageCount !== undefined && messageCount > 0 ? (
-              <span style={{ color: '#6B6460', opacity: 0.6 }}>· {messageCount} msg</span>
+              <span className="session-card__count">· {messageCount} msg</span>
             ) : null}
           </div>
-          <span style={{ color: '#6B6460', opacity: 0.6, whiteSpace: 'nowrap' }}>{timeAgo}</span>
+          {timeAgo ? (
+            <time className="session-card__time" dateTime={timestamp} title={timestamp}>
+              {timeAgo}
+            </time>
+          ) : (
+            <span className="session-card__time" aria-hidden />
+          )}
         </div>
       </button>
-      {onDelete && hovered ? (
+
+      {onDelete ? (
         <button
           type="button"
+          className="session-card__delete"
           aria-label="Delete session"
+          title="Delete session"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
           }}
-          style={{
-            position: 'absolute',
-            right: 6,
-            top: 6,
-            width: 22,
-            height: 22,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'transparent',
-            border: '0.5px solid rgba(107, 100, 96, 0.25)',
-            borderRadius: 6,
-            color: '#6B6460',
-            cursor: 'pointer',
-            fontSize: 13,
-            lineHeight: 1,
-            padding: 0,
-            fontFamily: 'inherit',
-          }}
         >
-          ×
+          <X width={12} height={12} strokeWidth={2} aria-hidden />
         </button>
       ) : null}
     </div>

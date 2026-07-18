@@ -1,35 +1,12 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
 import {
   collapsiblePromptAriaLabel,
   collapsiblePromptHint,
   isCollapsiblePrompt,
 } from '../lib/collapsiblePrompt';
-import { motionTransition, prefersReducedMotion } from '../lib/motion';
-
-const TEXT_STYLE: CSSProperties = {
-  fontFamily: 'Georgia, serif',
-  fontSize: 15,
-  fontStyle: 'italic',
-  color: '#4A3728',
-  lineHeight: 1.65,
-  textAlign: 'center',
-  margin: 0,
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
-};
-
-const HINT_STYLE: CSSProperties = {
-  display: 'block',
-  textAlign: 'center',
-  marginTop: 6,
-  fontSize: 11,
-  color: '#C4A882',
-  letterSpacing: '0.10em',
-  textTransform: 'uppercase',
-  fontFamily: 'Georgia, serif',
-  fontStyle: 'normal',
-};
+import { prefersReducedMotion } from '../lib/motion';
 
 type CollapsiblePromptProps = {
   text: string;
@@ -40,69 +17,60 @@ export function CollapsiblePrompt({ text }: CollapsiblePromptProps) {
   const isMobile = useIsMobile();
   const isLong = isCollapsiblePrompt(text);
   const reducedMotion = prefersReducedMotion();
+  const bodyId = useId();
 
   useEffect(() => {
     setExpanded(false);
   }, [text]);
 
-  const outer: CSSProperties = {
-    maxWidth: 680,
-    margin: '0 auto 32px auto',
-    padding: isMobile ? '10px 16px' : undefined,
-    ...(isLong ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
-  };
-
-  const textStyle: CSSProperties = {
-    ...TEXT_STYLE,
-    fontSize: isMobile ? 13 : 15,
-    transition: motionTransition('all', 300),
-  };
+  const shellClass = [
+    'collapsible-prompt',
+    isMobile ? 'collapsible-prompt--mobile' : '',
+    isLong ? 'collapsible-prompt--collapsible' : '',
+    isLong && expanded ? 'collapsible-prompt--expanded' : '',
+    isLong && !expanded ? 'collapsible-prompt--collapsed' : '',
+    reducedMotion ? 'collapsible-prompt--static' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   if (!isLong) {
     return (
-      <div style={outer}>
-        <p style={textStyle}>{text}</p>
+      <div className={shellClass}>
+        <p className="collapsible-prompt__text">{text}</p>
       </div>
     );
   }
 
+  const toggle = () => setExpanded((v) => !v);
+
   return (
-    <div
-      style={outer}
-      onClick={() => setExpanded((v) => !v)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          setExpanded((v) => !v);
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-expanded={expanded}
-      aria-label={collapsiblePromptAriaLabel(expanded)}
-    >
-      <div
-        style={{
-          maxHeight: expanded ? '500px' : '1.6em',
-          overflow: 'hidden',
-          whiteSpace: expanded ? 'normal' : 'nowrap',
-          textOverflow: expanded ? 'clip' : 'ellipsis',
-          transition: reducedMotion
-            ? 'none'
-            : 'max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-        }}
+    <div className={shellClass}>
+      <button
+        type="button"
+        className="collapsible-prompt__toggle"
+        onClick={toggle}
+        aria-expanded={expanded}
+        aria-controls={bodyId}
+        aria-label={collapsiblePromptAriaLabel(expanded)}
       >
-        <p
-          style={{
-            ...textStyle,
-            whiteSpace: expanded ? 'normal' : 'nowrap',
-            textOverflow: expanded ? 'clip' : 'ellipsis',
-          }}
-        >
-          {text}
-        </p>
-      </div>
-      <span style={HINT_STYLE}>{collapsiblePromptHint(expanded)}</span>
+        <div id={bodyId} className="collapsible-prompt__clip">
+          <p className="collapsible-prompt__text">{text}</p>
+          {!expanded ? <span className="collapsible-prompt__fade" aria-hidden /> : null}
+        </div>
+        <span className="collapsible-prompt__hint">
+          <span className="collapsible-prompt__hint-label">
+            {collapsiblePromptHint(expanded)}
+          </span>
+          <ChevronDown
+            className="collapsible-prompt__chevron"
+            width={14}
+            height={14}
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        </span>
+      </button>
     </div>
   );
 }

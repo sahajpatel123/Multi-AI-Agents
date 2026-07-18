@@ -91,11 +91,26 @@ describe('SessionCard', () => {
         onDelete={onDelete}
       />,
     );
-    const card = getByRole('button', { name: /Open session/ }).parentElement!;
-    fireEvent.mouseEnter(card);
+    // Delete is focusable in the tree (revealed via focus-within / touch).
     fireEvent.click(getByRole('button', { name: /Delete session/ }));
     expect(onDelete).toHaveBeenCalledTimes(1);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('applies session-card chrome classes', () => {
+    const { container, getByRole } = render(
+      <SessionCard
+        prompt="hi"
+        winnerAgentId={AGENT}
+        timestamp={new Date().toISOString()}
+        isActive
+        onClick={() => {}}
+        onDelete={() => {}}
+      />,
+    );
+    expect(container.querySelector('.session-card')).toHaveClass('session-card--active');
+    expect(container.querySelector('.session-card')).toHaveClass('session-card--deletable');
+    expect(getByRole('button', { name: /Delete session/ })).toHaveClass('session-card__delete');
   });
 
   it('renders message count when provided', () => {

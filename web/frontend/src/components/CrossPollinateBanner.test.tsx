@@ -14,9 +14,8 @@ describe('CrossPollinateBanner', () => {
     const { getByText } = render(
       <CrossPollinateBanner sourceTaskId="task-1" onDismiss={() => {}} />,
     );
-    expect(
-      getByText(/Cross-pollinating Agent answer/),
-    ).toBeInTheDocument();
+    expect(getByText(/four minds will review it/i)).toBeInTheDocument();
+    expect(getByText(/cross-pollination/i)).toBeInTheDocument();
   });
 
   it('includes the intelligence score when provided', () => {
@@ -54,7 +53,7 @@ describe('CrossPollinateBanner', () => {
     );
     // Default text (no score) renders.
     expect(queryByText(/NaN/)).toBeNull();
-    expect(getByText(/Cross-pollinating Agent answer/)).toBeInTheDocument();
+    expect(getByText(/four minds will review it/i)).toBeInTheDocument();
   });
 
   it('clicking the dismiss button fires onDismiss', () => {
@@ -72,5 +71,21 @@ describe('CrossPollinateBanner', () => {
     );
     const region = getByRole('status');
     expect(region).toHaveAttribute('aria-live', 'polite');
+  });
+
+  it('applies polished chrome classes and score pill', () => {
+    const { container, getByText } = render(
+      <CrossPollinateBanner
+        sourceTaskId="task-1"
+        onDismiss={() => {}}
+        intelScore={91}
+      />,
+    );
+    expect(container.querySelector('.cross-pollinate-banner')).toHaveClass(
+      'cross-pollinate-banner--scored',
+    );
+    expect(container.querySelector('.cross-pollinate-banner__icon')).not.toBeNull();
+    expect(getByText(/91\/100/)).toHaveClass('cross-pollinate-banner__score');
+    expect(getByText(/cross-pollination/i)).toBeInTheDocument();
   });
 });

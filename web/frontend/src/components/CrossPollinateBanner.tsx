@@ -1,4 +1,5 @@
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, X } from 'lucide-react';
+import { prefersReducedMotion } from '../lib/motion';
 
 interface CrossPollinateBannerProps {
   sourceTaskId: string | null;
@@ -18,50 +19,49 @@ export function CrossPollinateBanner({
     typeof intelScore === 'number' && Number.isFinite(intelScore)
       ? Math.round(intelScore)
       : null;
+  const reduceMotion = prefersReducedMotion();
 
   return (
     <div
       role="status"
       aria-live="polite"
-      style={{
-        background: 'rgba(114, 137, 190, 0.08)',
-        borderRadius: 12,
-        padding: '10px 14px',
-        marginBottom: '1rem',
-        maxWidth: 600,
-        marginLeft: 'auto',
-        marginRight: 'auto',
-        fontSize: 13,
-        color: '#5A6B9A',
-        textAlign: 'center',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-      }}
+      className={[
+        'cross-pollinate-banner',
+        score != null ? 'cross-pollinate-banner--scored' : '',
+        reduceMotion ? 'cross-pollinate-banner--static' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
-      <ArrowLeftRight size={16} style={{ flexShrink: 0 }} aria-hidden />
-      <span style={{ flex: 1, minWidth: 0, lineHeight: 1.45 }}>
-        {score != null
-          ? `Cross-pollinating Agent answer (score ${score}/100) — four minds will review it`
-          : 'Cross-pollinating Agent answer — four minds will review it'}
+      <span className="cross-pollinate-banner__icon" aria-hidden>
+        <ArrowLeftRight width={15} height={15} strokeWidth={1.75} />
       </span>
+
+      <div className="cross-pollinate-banner__body">
+        <span className="cross-pollinate-banner__kicker">Cross-pollination</span>
+        <p className="cross-pollinate-banner__message">
+          {score != null ? (
+            <>
+              Agent answer (
+              <span className="cross-pollinate-banner__score" title="Agent intelligence score">
+                {score}/100
+              </span>
+              ) — four minds will review it
+            </>
+          ) : (
+            'Agent answer — four minds will review it'
+          )}
+        </p>
+      </div>
+
       <button
         type="button"
+        className="cross-pollinate-banner__dismiss"
         aria-label="Dismiss cross-pollination notice"
+        title="Dismiss"
         onClick={onDismiss}
-        style={{
-          flexShrink: 0,
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          fontSize: 16,
-          color: '#A89070',
-          lineHeight: 1,
-          padding: 0,
-        }}
       >
-        ×
+        <X width={14} height={14} strokeWidth={2} aria-hidden />
       </button>
     </div>
   );

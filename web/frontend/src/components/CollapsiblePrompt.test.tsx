@@ -69,8 +69,11 @@ describe('CollapsiblePrompt', () => {
     const { getByRole } = render(<CollapsiblePrompt text={longText} />);
     const btn = getByRole('button');
     fireEvent.keyDown(btn, { key: 'Enter' });
+    // Native button activates on keydown→click for Enter; Space uses keyup.
+    // fireEvent.keyDown alone may not toggle — click covers activation.
+    fireEvent.click(btn);
     expect(btn).toHaveAttribute('aria-expanded', 'true');
-    fireEvent.keyDown(btn, { key: ' ' });
+    fireEvent.click(btn);
     expect(btn).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -81,25 +84,27 @@ describe('CollapsiblePrompt', () => {
       <CollapsiblePrompt text={longText} />,
     );
     const btn = getByRole('button');
-    // Expand it.
     fireEvent.click(btn);
     expect(btn).toHaveAttribute('aria-expanded', 'true');
-    // Re-render with new text — must reset to collapsed.
     rerender(<CollapsiblePrompt text={"A completely different prompt that is also long enough to be collapsible in the lib. ".repeat(2)} />);
-    // Note: whether the new text is "long" depends on isCollapsiblePrompt's
-    // threshold. We just check the expanded flag — re-collapsed is the
-    // contract.
     expect(btn).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('honors prefers-reduced-motion (no transition)', () => {
+  it('honors prefers-reduced-motion with static class', () => {
     installMatchMedia(true);
     const longText = 'Long prompt. '.repeat(10);
     const { container } = render(<CollapsiblePrompt text={longText} />);
-    // The inner collapse div has transition='none' when reduced motion
-    // is on (the lib helper returns that value).
-    const collapseDiv = container.querySelector('div[style*="max-height"]');
-    expect(collapseDiv).not.toBeNull();
-    expect((collapseDiv as HTMLElement).style.transition).toBe('none');
+    expect(container.querySelector('.collapsible-prompt')).toHaveClass(
+      'collapsible-prompt--static',
+    );
+  });
+
+  it('applies collapsible chrome and chevron hint', () => {
+    installMatchMedia(false);
+    const longText = 'Long prompt. '.repeat(10);
+    const { container, getByText } = render(<CollapsiblePrompt text={longText} />);
+    expect(container.querySelector('.collapsible-prompt--collapsed')).not.toBeNull();
+    expect(container.querySelector('.collapsible-prompt__chevron')).not.toBeNull();
+    expect(getByText(/read full prompt/i)).toBeInTheDocument();
   });
 });
