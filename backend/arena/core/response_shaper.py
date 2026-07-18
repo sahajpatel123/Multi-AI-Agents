@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 import anthropic
 
+from arena.core.datetime_utils import utcnow_naive
 from arena.core.model_router import get_route_for_task
 from arena.models.schemas import (
     AgentResponse,
@@ -163,7 +164,7 @@ async def assemble_payload(
             one_liner=one_liner,
             confidence=max(0, min(100, resp.confidence)),
             key_assumption=resp.key_assumption.strip() if resp.key_assumption else "No assumption stated",
-            timestamp=resp.timestamp or datetime.now(timezone.utc).replace(tzinfo=None),
+            timestamp=resp.timestamp or utcnow_naive(),
         )
 
         final_scored.append(
@@ -198,5 +199,5 @@ async def assemble_payload(
         all_responses=final_scored,
         integrity=integrity,
         tools_used=tools_used or [],
-        timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+        timestamp=utcnow_naive(),
     )

@@ -1,6 +1,7 @@
 from typing import TypedDict, List, Optional
 from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
+from arena.core.datetime_utils import utcnow_naive
 import json
 from asyncio import wait_for
 
@@ -68,7 +69,7 @@ Return ONLY valid JSON:
         decay_reason = result.get("decay_reason", "")
         time_sensitive_claims = result.get("time_sensitive_claims", [])
         
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = utcnow_naive()
         if decay_class == "permanent":
             recheck_by = None
         elif decay_class == "durable":

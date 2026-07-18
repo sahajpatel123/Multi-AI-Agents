@@ -13,11 +13,12 @@ from arena.config import get_settings
 from arena.core.model_router import estimate_call_cost
 from arena.core.tier_config import get_credit_budget, get_daily_limit, get_tier_str, normalize_tier, upgrade_target
 from arena.db_models import GuestRateLimit, User, UsageRecord
+from arena.core.datetime_utils import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
 def _now_utc() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return utcnow_naive()
 
 
 def get_today_token_usage(db: Session, user_id: int) -> int:

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from arena.config import get_settings
 from arena.database import SessionLocal
 from arena.db_models import Subscription, User
+from arena.core.datetime_utils import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ def _get_razorpay_client() -> razorpay.Client:
 def _next_retry_after(failures: int) -> datetime:
     """Return the next allowed attempt time based on prior failure count."""
     minutes = _RETRY_BACKOFF_MINUTES[min(failures, len(_RETRY_BACKOFF_MINUTES) - 1)]
-    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=minutes)
+    return utcnow_naive() + timedelta(minutes=minutes)
 
 
 def _user_is_due(user: User, now: datetime) -> bool:
@@ -53,7 +54,7 @@ async def check_loyalty_resumes(db: Session) -> None:
     ``loyalty_resume_attempts`` and back off; a successful resume resets
     all loyalty state to neutral.
     """
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     due = (
         db.query(User)
         .filter(

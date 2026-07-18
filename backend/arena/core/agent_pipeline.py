@@ -18,6 +18,7 @@ from arena.core.stages.researcher import run_researcher
 from arena.core.stages.solver import run_solver
 from arena.core.stages.synthesizer import run_synthesizer
 from arena.core.stages.verifier import run_verifier
+from arena.core.datetime_utils import utcnow_naive
 
 logger = logging.getLogger("arena.agent_pipeline")
 
@@ -121,7 +122,7 @@ def record_agent_task_usage(bb: Blackboard) -> None:
             output_tokens=bb.total_output_tokens,
             mode="agent",
             prompt_category="agent_task",
-            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+            timestamp=utcnow_naive(),
         )
         db.add(usage)
         db.commit()

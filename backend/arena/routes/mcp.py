@@ -19,6 +19,7 @@ from arena.core.token_crypto import encrypt_token, get_fernet
 from arena.database import get_db
 from arena.db_models import MCPIntegration
 from arena.models.schemas import UserResponse
+from arena.core.datetime_utils import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -337,7 +338,7 @@ async def connect_manual(
         .filter(MCPIntegration.user_id == user.id, MCPIntegration.service == svc)
         .first()
     )
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     if existing:
         existing.access_token = enc
         existing.display_name = body.display_name.strip()[:128]

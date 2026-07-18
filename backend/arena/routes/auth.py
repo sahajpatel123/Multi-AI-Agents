@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from arena.core.client_ip import get_request_client_ip
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
+from arena.core.datetime_utils import utcnow_naive
 
 from arena.core.errors import error_response, ErrorCodes
 from arena.core.auth import (
@@ -863,7 +864,7 @@ async def forgot_password(
     if user is not None:
         raw_token = secrets.token_urlsafe(48)
         token_hash = _hash_reset_token(raw_token)
-        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
+        expires_at = utcnow_naive() + timedelta(
             seconds=_RESET_TOKEN_TTL_SECONDS
         )
         row = PasswordResetToken(
@@ -914,7 +915,7 @@ async def reset_password(
     )
 
     token_hash = _hash_reset_token(body.token)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     row = (
         db.query(PasswordResetToken)
         .filter(

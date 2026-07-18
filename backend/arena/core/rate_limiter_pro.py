@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.db_models import UsageRecord
+from arena.core.datetime_utils import utcnow_naive
 
 
 def _now_utc() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return utcnow_naive()
 
 
 def check_pro_window_limit(db: Session, user_id: int) -> Optional[dict]:

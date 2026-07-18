@@ -22,6 +22,7 @@ from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.room_synthesiser import synthesise_room
 from arena.database import SessionLocal, get_db
 from arena.db_models import AgentTask, Room, RoomMember, RoomTask, User
+from arena.core.datetime_utils import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,7 @@ async def run_room_synthesis(slug: str) -> None:
         result = await synthesise_room(room, tasks, members)
         if result:
             room.synthesis = result
-            room.synthesis_updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            room.synthesis_updated_at = utcnow_naive()
             db.add(room)
             db.commit()
     except Exception as exc:
@@ -197,7 +198,7 @@ async def create_room(
     db.add(room)
     db.flush()
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     member = RoomMember(room_id=room.id, user_id=user.id, joined_at=now, last_seen_at=now)
     db.add(member)
 
@@ -468,7 +469,7 @@ async def get_room(
         )
         if rm:
             # Presence heartbeat for existing members only.
-            rm.last_seen_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            rm.last_seen_at = utcnow_naive()
             db.add(rm)
             db.commit()
 
@@ -539,7 +540,7 @@ async def join_room(
         .first()
     )
     if existing:
-        existing.last_seen_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        existing.last_seen_at = utcnow_naive()
         db.add(existing)
         db.commit()
     else:
@@ -558,7 +559,7 @@ async def join_room(
         )
         if int(n) >= MAX_ROOM_MEMBERS:
             raise HTTPException(status_code=400, detail="Room is full")
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = utcnow_naive()
         db.add(RoomMember(room_id=room.id, user_id=user.id, joined_at=now, last_seen_at=now))
         db.commit()
 

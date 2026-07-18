@@ -33,7 +33,12 @@ class UserTier(str, PyEnum):
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    # Local import avoids a circular import: db_models is loaded while
+    # arena.core is being initialized (via .orchestrator → .memory chain),
+    # and pulling from arena.core.datetime_utils at module scope would
+    # race with that init.
+    from arena.core.datetime_utils import utcnow_naive
+    return utcnow_naive()
 
 
 class User(Base):

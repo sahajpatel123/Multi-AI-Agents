@@ -21,6 +21,7 @@ from arena.core.dependencies import get_current_user_required_orm
 from arena.database import get_db
 from arena.db_models import Subscription, User, UserTier
 from arena.models.schemas import SubscribePlanRequest, VerifyPaymentRequest
+from arena.core.datetime_utils import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +288,7 @@ def _loyalty_on_pro_monthly_charged(
     if user.consecutive_payments == 10:
         user.loyalty_reward_active = True
         user.loyalty_free_months_remaining = 2
-        user.loyalty_resume_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=62)
+        user.loyalty_resume_at = utcnow_naive() + timedelta(days=62)
         try:
             client = _get_razorpay_client()
             client.subscription.pause(row.razorpay_subscription_id, {"pause_at": "now"})

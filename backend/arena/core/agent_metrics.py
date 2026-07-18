@@ -10,6 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from arena.db_models import AgentTask, AnswerFeedback, Orchestration, User
+from arena.core.datetime_utils import utcnow_naive
 
 
 def _utc_day_floor(dt: datetime) -> datetime:
@@ -31,7 +32,7 @@ def compute_user_agent_metrics(
     even when the user is in a non-UTC timezone.
     """
     user_id = user.id
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
 
     # Lifetime counters. Feedback rows are counted in Python instead of
     # via ``func.iif`` so the same query works on SQLite (tests) and
@@ -160,7 +161,7 @@ def compute_user_feedback_summary(
     totals = Counter(r.verdict for r in rows if r.verdict)
     total = sum(totals.values())
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     cutoff = _utc_day_floor(now) - timedelta(days=max(0, window_days - 1))
     counts_by_day: dict[Any, int] = defaultdict(int)
     for row in rows:

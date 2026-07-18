@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.dependencies import get_current_user_required
+from arena.core.datetime_utils import utcnow_naive
 from arena.core.cost_tracker import (
     RateLimitExceeded,
     check_and_increment_user,
@@ -577,7 +578,7 @@ async def save_discuss_thread(
         message="Too many thread saves. Limit is 120 per hour.",
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     row = DiscussThread(
         user_id=user.id,
         agent_id=body.agent_id.strip(),

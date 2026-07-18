@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
+from arena.core.datetime_utils import utcnow_naive
 from arena.core.tier_config import (
     TIER_DAILY_LIMITS,
     TIER_FEATURES,
@@ -56,7 +57,7 @@ def compute_user_entitlements(
         features["agent_orchestrate"] = True
         features["scoring_audit"] = True
 
-    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    now = now or utcnow_naive()
 
     subscription: Optional[Subscription] = None
     if user.subscription_id:

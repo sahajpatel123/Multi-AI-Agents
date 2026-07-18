@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from arena.core.dependencies import get_current_user_required_orm
 from arena.database import get_db
 from arena.db_models import ScoringAudit, UsageRecord, User, UserTier
+from arena.core.datetime_utils import utcnow_naive
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
@@ -64,7 +65,7 @@ async def get_metrics(
     # multiple admins from one origin hit.
     response.headers["Cache-Control"] = "private, max-age=15, s-maxage=15"
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     last_24h = now - timedelta(hours=24)
     last_7d = now - timedelta(days=7)
 

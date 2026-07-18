@@ -16,6 +16,7 @@ from arena.core.observability import log_ux_event
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.tier_config import get_tier_str, normalize_tier
 from arena.database import get_db
+from arena.core.datetime_utils import utcnow_naive
 from arena.db_models import (
     PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UserPreference, UXEvent, User, UserTier,
 )
@@ -167,7 +168,7 @@ async def analytics_summary(
     # Anchor the window in UTC to match the naive-UTC timestamps written
     # by db_models._now(); using local time would mis-bucket events near
     # midnight for any user not on UTC.
-    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    now_utc = utcnow_naive()
     window_start = now_utc - timedelta(days=window_days - 1)
     window_start_day = window_start.date()
 
@@ -373,7 +374,7 @@ async def analytics_engagement(
     # whether their engagement rate matches the rest of their tier.
     from arena.db_models import User as UserModel
 
-    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    now_utc = utcnow_naive()
     window_start = now_utc - timedelta(days=days - 1)
 
     # Caller's tier — used for the per-tier row that includes them.
@@ -493,7 +494,7 @@ async def analytics_activity(
     # _now() in db_models stores naive UTC, so we anchor the window in UTC
     # too — using local time here would mis-bucket events near day boundaries
     # for any user not on UTC.
-    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    now_utc = utcnow_naive()
     end_day = now_utc.date()
     start_day = end_day - timedelta(days=days - 1)
     start_dt = datetime.combine(start_day, time.min)
