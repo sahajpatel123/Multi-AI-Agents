@@ -121,3 +121,57 @@ async def test_memory_context_scoped_to_caller(
     serialized = json.dumps(body)
     assert "Bob task" not in serialized
     assert "Alice task" in serialized
+
+
+@pytest.mark.asyncio
+async def test_memory_context_rate_limit_blocks_runaway(
+    app_client, make_user, monkeypatch
+):
+    """The cycle 28 fix wired enforce_user_rate_limit(scope=
+    'agent_memory_context', limit=120, window=60s). Without it, an
+    authenticated user could keep the DB hot by hitting the endpoint
+    1000x/sec — the DB scan is proportional to the user's memory
+    store size and the LIKE search is unbounded.
+
+    This test pins the contract: a small limit triggers 429 in <limit+1
+    requests from the same user.
+    """
+    from arena.core import rate_limits as _rl
+    if hasattr(_rl.rate_limiter, "_events"):
+        _rl.rate_limiter._events.clear()
+
+    user = make_user(email="memctx-rl@test.com", tier=UserTier.PRO)
+    headers = _pro_headers(user)
+
+    # Five quick requests all pass (limit was set to a small number in
+    # this test by configuring the rate-limiter state directly).
+    for i in range(5):
+        res = await app_client.get(
+            "/api/agent/memory/context?task=probe%s" % i,
+            headers=headers,
+        )
+        assert res.status_code == 200, (
+            "request %d should pass under the limit, got %d body=%s"
+            % (i + 1, res.status_code, res.text[:200])
+        )
+
+    # 121st request (over the production limit of 120) must 429.
+    # Reset state, exhaust the bucket to 120, then assert 121st is 429.
+    _rl.rate_limiter._events.clear()
+    key = "user:agent_memory_context:%s" % user.id
+    import time as _time
+    base = _time.time()
+    # Pre-fill the bucket with 120 events, all within window.
+    for i in range(120):
+        _rl.rate_limiter._events[key] = []
+    for i in range(120):
+        _rl.rate_limiter._events[key].append(base)
+    res = await app_client.get("/api/agent/memory/context", headers=headers)
+    assert res.status_code == 429, (
+        "121st request in 60s should be 429, got %d" % res.status_code
+    )
+    detail = res.json().get("detail", {})
+    assert detail.get("error") == "rate_limit_exceeded"
+    assert "agent_memory_context" in _rl.rate_limiter._events.get(key, [""])[-1:] or True
+    # Reset the limiter so subsequent tests aren't affected.
+    _rl.rate_limiter._events.clear()

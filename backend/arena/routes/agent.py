@@ -2249,6 +2249,18 @@ async def get_memory_context(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    # Bound per-user queries. The handler runs a LIKE search over the
+    # caller's AgentStance + AgentTask rows; cost is proportional to
+    # the user's memory-store size. Without a per-user cap an
+    # authenticated client could hit this endpoint 1000x/sec and keep
+    # the DB hot (and pin memory in the response shape).
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_memory_context",
+        limit=120,
+        window_seconds=60,
+        message="Too many memory-context lookups. Please slow down.",
+    )
     from arena.core.agent_memory import get_user_memory_context
 
     context = get_user_memory_context(
