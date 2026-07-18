@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { NotFoundPage } from './NotFoundPage';
 
@@ -9,6 +9,8 @@ const authState = {
   loading: false,
   isLoading: false,
 };
+
+const copyMock = vi.fn();
 
 vi.mock('../hooks/useAuth', () => ({
   useAuth: () => authState,
@@ -22,6 +24,10 @@ vi.mock('../components/Footer', () => ({
   Footer: () => <div data-testid="footer" />,
 }));
 
+vi.mock('../lib/clipboard', () => ({
+  copyToClipboard: (...args: unknown[]) => copyMock(...args),
+}));
+
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -31,11 +37,17 @@ function renderAt(path: string) {
 }
 
 describe('NotFoundPage', () => {
-  it('renders recovery actions for guests', () => {
+  beforeEach(() => {
     authState.isAuthenticated = false;
+    authState.user = null;
+    copyMock.mockReset();
+    copyMock.mockResolvedValue(true);
+  });
+
+  it('renders recovery actions for guests', () => {
     renderAt('/missing');
-    expect(screen.getByText(/isn't in the arena/i)).toBeInTheDocument();
-    expect(screen.getByText(/Requested: \/missing/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /isn't in the arena/i })).toBeInTheDocument();
+    expect(screen.getByText('/missing')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /back to home/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try arena/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /how it works/i })).toBeInTheDocument();
@@ -48,5 +60,20 @@ describe('NotFoundPage', () => {
     expect(screen.getByRole('button', { name: /open arena/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /agent mode/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /watchlist/i })).toBeInTheDocument();
+  });
+
+  it('exposes main landmark and recovery group', () => {
+    renderAt('/nope');
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content');
+    expect(screen.getByRole('group', { name: /recovery options/i })).toBeInTheDocument();
+  });
+
+  it('copies the requested path', async () => {
+    renderAt('/missing-page');
+    fireEvent.click(screen.getByRole('button', { name: /copy requested path/i }));
+    await waitFor(() => {
+      expect(copyMock).toHaveBeenCalledWith('/missing-page');
+    });
+    expect(await screen.findByRole('button', { name: /path copied/i })).toBeInTheDocument();
   });
 });

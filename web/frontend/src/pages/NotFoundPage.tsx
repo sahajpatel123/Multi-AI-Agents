@@ -1,7 +1,12 @@
+import { useEffect, useState } from 'react';
+import { Compass, Copy, Check } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { Button } from '../components/Button';
 import { useAuth } from '../hooks/useAuth';
+import { copyToClipboard } from '../lib/clipboard';
+import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { formatAttemptedPath, notFoundActions } from '../lib/notFoundRecovery';
 
@@ -11,73 +16,84 @@ export function NotFoundPage() {
   const { isAuthenticated } = useAuth();
   const attempted = formatAttemptedPath(location.pathname, location.search);
   const actions = notFoundActions(isAuthenticated);
+  const [copied, setCopied] = useState(false);
+  const reduceMotion = prefersReducedMotion();
+
+  useEffect(() => {
+    if (!copied) return;
+    const hold = motionDuration(1800);
+    if (hold <= 0) {
+      setCopied(false);
+      return;
+    }
+    const t = window.setTimeout(() => setCopied(false), hold);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+
+  const handleCopyPath = async () => {
+    if (!attempted) return;
+    const ok = await copyToClipboard(attempted);
+    if (ok) setCopied(true);
+  };
 
   return (
-    <div style={{ background: '#F5F0E8', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="not-found-page">
       <Navbar />
       <main
-        style={{
-          flex: 1,
-          maxWidth: 480,
-          width: '100%',
-          margin: '0 auto',
-          padding: '64px 24px',
-          textAlign: 'center',
-        }}
+        id="main-content"
+        className={`not-found-main${reduceMotion ? '' : ' page-enter'}`}
+        tabIndex={-1}
+        aria-labelledby="not-found-title"
       >
-        <p
-          style={{
-            fontSize: 12,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: '#C4956A',
-            marginBottom: 12,
-          }}
-        >
-          404
-        </p>
-        <h1
-          style={{
-            fontSize: 'clamp(28px, 5vw, 36px)',
-            fontWeight: 500,
-            letterSpacing: '-0.02em',
-            color: '#1A1714',
-            margin: '0 0 12px',
-          }}
-        >
-          This page isn&apos;t in the arena
-        </h1>
-        <p style={{ fontSize: 15, color: '#6B6460', lineHeight: 1.65, margin: '0 0 12px' }}>
-          The link may be old, mistyped, or the take was never shared. Head back to something real.
-        </p>
-        {attempted ? (
-          <p
-            style={{
-              fontSize: 12,
-              color: '#A89070',
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-              margin: '0 0 28px',
-              wordBreak: 'break-all',
-            }}
-          >
-            Requested: {attempted}
+        <div className="not-found-card">
+          <div className="not-found-mark" aria-hidden>
+            <span className="not-found-mark__glow" />
+            <Compass className="not-found-mark__icon" width={28} height={28} strokeWidth={1.5} />
+          </div>
+
+          <p className="not-found-kicker">404 · Lost path</p>
+          <h1 id="not-found-title" className="not-found-title">
+            This page isn&apos;t in the arena
+          </h1>
+          <p className="not-found-body">
+            The link may be old, mistyped, or the take was never shared. Head back to something
+            real.
           </p>
-        ) : (
-          <div style={{ marginBottom: 28 }} />
-        )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'stretch' }}>
-          {actions.map((action) => {
-            const className =
-              action.variant === 'primary'
-                ? 'arena-btn arena-btn--primary arena-btn--md arena-btn--full'
-                : action.variant === 'secondary'
-                  ? 'arena-btn arena-btn--secondary arena-btn--md arena-btn--full'
-                  : 'arena-btn arena-btn--ghost arena-btn--md arena-btn--full';
-            return (
+
+          {attempted ? (
+            <div className="not-found-path">
+              <div className="not-found-path__meta">
+                <span className="not-found-path__label">Requested</span>
+                <code className="not-found-path__value" title={attempted}>
+                  {attempted}
+                </code>
+              </div>
               <button
+                type="button"
+                className="not-found-path__copy"
+                onClick={() => void handleCopyPath()}
+                aria-label={copied ? 'Path copied' : 'Copy requested path'}
+              >
+                {copied ? (
+                  <Check width={14} height={14} aria-hidden />
+                ) : (
+                  <Copy width={14} height={14} aria-hidden />
+                )}
+                <span>{copied ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+          ) : (
+            <div className="not-found-path not-found-path--empty" aria-hidden />
+          )}
+
+          <div className="not-found-actions" role="group" aria-label="Recovery options">
+            {actions.map((action) => (
+              <Button
                 key={action.id}
                 type="button"
-                className={className}
+                variant={action.variant}
+                size="md"
+                fullWidth
                 onClick={() => {
                   if (action.requiresAuth && !isAuthenticated) {
                     setRedirectIntent(action.path);
@@ -88,9 +104,9 @@ export function NotFoundPage() {
                 }}
               >
                 {action.label}
-              </button>
-            );
-          })}
+              </Button>
+            ))}
+          </div>
         </div>
       </main>
       <Footer />
