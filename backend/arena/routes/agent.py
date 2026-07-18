@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from arena.core.datetime_utils import utcnow_naive
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
@@ -33,7 +33,7 @@ from arena.core.input_validation import (
     sanitize_model_text,
     sanitize_text,
 )
-from arena.core.rate_limits import enforce_user_rate_limit
+from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.tier_config import UserTier, get_credit_budget, get_tier_str, has_feature, normalize_tier
 from arena.core.agent_orchestration import synthesise_tasks
 from arena.core.feedback_calibrator import (
@@ -997,14 +997,32 @@ async def upload_agent_attachment(
 
 
 @router.get("/templates")
-async def list_agent_templates() -> dict:
+async def list_agent_templates(request: Request) -> dict:
     """Public list of task prompt templates (grouped by category)."""
+    # Templates are static marketing copy but still cost DB/cache on every hit.
+    # Bound per-IP so a scrape script cannot pin the worker.
+    enforce_ip_rate_limit(
+        request,
+        scope="agent_templates",
+        limit=60,
+        window_seconds=60,
+        message="Too many template lookups. Please slow down.",
+    )
     return get_templates_grouped_by_category()
 
 
 @router.get("/capabilities")
-async def list_agent_capabilities() -> dict:
+async def list_agent_capabilities(request: Request) -> dict:
     """Capability taxonomy for UI badges and Condura handoff."""
+    # Capability taxonomy is public, but the route is hit on every Agent page
+    # mount. Cap per-IP to keep a runaway client from hammering the registry.
+    enforce_ip_rate_limit(
+        request,
+        scope="agent_capabilities",
+        limit=60,
+        window_seconds=60,
+        message="Too many capability lookups. Please slow down.",
+    )
     return {"capabilities": list_capabilities()}
 
 
@@ -1126,7 +1144,7 @@ async def get_capability_usage(
 
 
 @router.get("/capabilities/docs")
-async def list_capability_docs() -> dict:
+async def list_capability_docs(request: Request) -> dict:
     """Extended markdown docs for every capability in the registry.
 
     The /capabilities endpoint returns the short one-liner description;
@@ -1135,6 +1153,15 @@ async def list_capability_docs() -> dict:
     capability metadata is public, and a paying customer evaluating
     the product shouldn't need to log in just to read docs.
     """
+    # Long-form docs over every capability is heavier than /capabilities.
+    # Bound per-IP so a doc-scraping loop cannot dominate the worker pool.
+    enforce_ip_rate_limit(
+        request,
+        scope="agent_capability_docs",
+        limit=60,
+        window_seconds=60,
+        message="Too many capability-doc lookups. Please slow down.",
+    )
     from arena.core.capabilities import CAPABILITY_DOCS, REGISTRY
 
     items = []
@@ -1153,9 +1180,20 @@ async def list_capability_docs() -> dict:
 
 
 @router.get("/capabilities/docs/{capability_id}")
-async def get_capability_doc_endpoint(capability_id: str) -> dict:
+async def get_capability_doc_endpoint(
+    capability_id: str,
+    request: Request,
+) -> dict:
     """Single-capability doc lookup. 404 if the id is unknown so a
     client can detect a typo without a try/except."""
+    # Per-id lookups can be scripted (e.g. a doc-index bot). Cap per-IP.
+    enforce_ip_rate_limit(
+        request,
+        scope="agent_capability_doc_by_id",
+        limit=60,
+        window_seconds=60,
+        message="Too many capability-doc lookups. Please slow down.",
+    )
     doc = get_capability_doc(capability_id)
     if doc is None:
         raise HTTPException(
@@ -1166,18 +1204,27 @@ async def get_capability_doc_endpoint(capability_id: str) -> dict:
 
 
 @router.get("/capabilities/examples")
-async def list_capability_examples_endpoint() -> dict:
+async def list_capability_examples_endpoint(request: Request) -> dict:
     """Curated 'try one' prompt examples for every capability.
 
     Powers the Agent page's suggestion chip row — a first-time user
     clicks a chip instead of staring at an empty textarea. No auth:
     examples are public marketing copy, not user data.
     """
+    # Examples are public marketing, but the response payload is sizable.
+    # Cap per-IP to keep a loop from pinning the worker.
+    enforce_ip_rate_limit(
+        request,
+        scope="agent_capability_examples",
+        limit=60,
+        window_seconds=60,
+        message="Too many capability-example lookups. Please slow down.",
+    )
     return {"examples": list_capability_examples()}
 
 
 @router.get("/capabilities/stats")
-async def list_capability_stats() -> dict:
+async def list_capability_stats(request: Request) -> dict:
     """Per-capability aggregate counts and metadata.
 
     Useful for the Agent page's 'popular capabilities' widget —
@@ -1186,6 +1233,15 @@ async def list_capability_stats() -> dict:
     capabilities, etc.). No DB queries — pulls straight from the
     in-memory REGISTRY. No auth.
     """
+    # Stats are static registry metadata but called on every Agent-page
+    # mount. Cap per-IP to prevent scrape storms.
+    enforce_ip_rate_limit(
+        request,
+        scope="agent_capability_stats",
+        limit=60,
+        window_seconds=60,
+        message="Too many capability-stat lookups. Please slow down.",
+    )
     items: list[dict[str, Any]] = []
     for cap_id, cap in REGISTRY.items():
         item: dict[str, Any] = {
@@ -1210,6 +1266,16 @@ async def get_task_answer_feedback(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    # Rate-limit BEFORE the access check so a scripted sweep can't even
+    # probe for which task IDs are theirs. 120/min mirrors the sister
+    # POST /tasks/{id}/feedback endpoint.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_feedback_get",
+        limit=120,
+        window_seconds=60,
+        message="Too many task-feedback lookups. Please slow down.",
+    )
     _ensure_agent_access(user, db)
     tid = task_id.strip()
     owned = (
