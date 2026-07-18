@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef } from 'react';
 import { getWordPoints } from '../hooks/useCalligraphyCanvas';
 import { prefersReducedMotion } from '../lib/motion';
 
@@ -93,10 +93,6 @@ export default function MicroLoader({
             wordIndexRef.current = (wordIndexRef.current + 1) % WORDS.length;
             loadWord(WORDS[wordIndexRef.current]);
           } else {
-            // Stay faded — caller wants the loop to finish on one word
-            // and then idle. Returning here leaves the canvas blank,
-            // which is fine for a 1-shot loader ('Analyzing…' for
-            // example).
             return;
           }
         }
@@ -141,54 +137,44 @@ export default function MicroLoader({
     };
   }, [reducedMotion, cycleWords]);
 
-  const shellStyle: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '24px 0',
-  };
-
   if (reducedMotion) {
     return (
-      <div role="status" aria-live="polite" aria-busy="true" style={shellStyle}>
-        <span
-          style={{
-            fontSize: 13,
-            color: '#C4956A',
-            fontStyle: 'italic',
-            fontFamily: 'Georgia, Times New Roman, serif',
-          }}
-        >
-          {label}…
-        </span>
+      <div
+        className="micro-loader micro-loader--static"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div className="micro-loader__panel">
+          <span className="micro-loader__pulse" aria-hidden>
+            <span />
+            <span />
+            <span />
+          </span>
+          <span className="micro-loader__label">{label}…</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div role="status" aria-live="polite" aria-busy="true" aria-label={label} style={shellStyle}>
-      <canvas
-        ref={canvasRef}
-        width={160}
-        height={72}
-        style={{ width: 160, height: 72, display: 'block', background: 'transparent' }}
-      />
-      {/* Always render a screen-reader-only text node so AT users hear
-        a status even while the canvas is animating. The canvas itself
-        is aria-hidden by being an unlabeled background image. */}
-      <span
-        style={{
-          position: 'absolute',
-          width: 1,
-          height: 1,
-          overflow: 'hidden',
-          clip: 'rect(0, 0, 0, 0)',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {label}…
-      </span>
+    <div
+      className="micro-loader"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label={label}
+    >
+      <div className="micro-loader__panel">
+        <canvas
+          ref={canvasRef}
+          className="micro-loader__canvas"
+          width={160}
+          height={72}
+          aria-hidden
+        />
+        <span className="micro-loader__sr-only">{label}…</span>
+      </div>
     </div>
   );
 }

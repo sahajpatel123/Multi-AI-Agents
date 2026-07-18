@@ -48,15 +48,23 @@ describe('MotionButton', () => {
   it('disables interaction when loading or disabled', () => {
     stubMatchMedia(false);
     const onClick = vi.fn();
-    const { getByRole } = render(
+    const { getByRole, container } = render(
       <MotionButton loading onClick={onClick}>
         Save
       </MotionButton>,
     );
     const btn = getByRole('button', { name: 'Save' }) as HTMLButtonElement;
     expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute('aria-busy', 'true');
+    expect(container.querySelector('.arena-btn-spinner')).not.toBeNull();
     fireEvent.click(btn);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('applies motion-btn chrome class', () => {
+    stubMatchMedia(false);
+    const { getByRole } = render(<MotionButton>Lift</MotionButton>);
+    expect(getByRole('button', { name: 'Lift' })).toHaveClass('motion-btn');
   });
 
   it('fires onClick when enabled', () => {

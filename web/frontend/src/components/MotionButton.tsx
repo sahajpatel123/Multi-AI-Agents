@@ -1,5 +1,6 @@
 import { motion, type HTMLMotionProps } from 'framer-motion';
 import { forwardRef, type ReactNode } from 'react';
+import { ButtonSpinner } from './Icons';
 import { prefersReducedMotion } from '../lib/motion';
 
 export type MotionButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -40,48 +41,64 @@ export const MotionButton = forwardRef<HTMLButtonElement, MotionButtonProps>(
       disabled,
       children,
       className = '',
+      type = 'button',
       ...rest
     },
     ref,
   ) {
+    const busy = Boolean(loading);
+    const isDisabled = Boolean(disabled || loading);
+    const reduced = prefersReducedMotion();
+    // No lift/press while disabled or busy — motion would read as interactive.
+    const allowMotion = !reduced && !isDisabled;
+
     const classes = [
       'arena-btn',
+      'motion-btn',
       `arena-btn--${variant}`,
       `arena-btn--${size}`,
       fullWidth ? 'arena-btn--full' : '',
       loading ? 'arena-btn--loading' : '',
+      reduced ? 'motion-btn--static' : '',
       className,
     ]
       .filter(Boolean)
       .join(' ');
 
-    // reducedMotion is computed once per render; flipping it mid-render would
-    // re-mount the motion tree which is overkill for a boolean toggle.
-    const reduced = prefersReducedMotion();
+    const left = loading ? <ButtonSpinner size={14} /> : icon;
 
     return (
       <motion.button
         ref={ref}
-        type={rest.type ?? 'button'}
-        disabled={disabled || loading}
+        type={type}
+        disabled={isDisabled}
         className={classes}
-        // when=hover and when=tap require no listener wiring; framer-motion
-        // owns the event lifecycle and animates within an internal RAF loop.
-        // Scale values picked to read as "press" without making the button
-        // feel like it's dancing — 1.02 lift, 0.97 press.
-        whileHover={reduced ? undefined : { y: -2, scale: 1.02 }}
-        whileTap={reduced ? undefined : { scale: 0.97 }}
-        // 180ms matches Button.motion.test.tsx so the two components feel
-        // like one design system, not two competing motion vocabularies.
+        aria-busy={busy || undefined}
+        whileHover={
+          allowMotion
+            ? {
+                y: -2,
+                scale: 1.02,
+                transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
+              }
+            : undefined
+        }
+        whileTap={
+          allowMotion
+            ? {
+                scale: 0.97,
+                y: 0,
+                transition: { duration: 0.12, ease: [0.22, 1, 0.36, 1] },
+              }
+            : undefined
+        }
         transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
         {...rest}
       >
-        {icon ? <span className="arena-btn__icon">{icon}</span> : null}
+        {left ? <span className="arena-btn__icon">{left}</span> : null}
         <span className="arena-btn__label">{children}</span>
         {!loading && iconRight ? (
-          <span className="arena-btn__icon arena-btn__icon--right">
-            {iconRight}
-          </span>
+          <span className="arena-btn__icon arena-btn__icon--right">{iconRight}</span>
         ) : null}
       </motion.button>
     );

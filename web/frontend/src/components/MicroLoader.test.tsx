@@ -67,6 +67,14 @@ describe('MicroLoader', () => {
     // No canvas — the static text label replaces it.
     expect(container.querySelector('canvas')).toBeNull();
     expect(container.textContent).toMatch(/Working/);
+    expect(container.querySelector('.micro-loader')).toHaveClass('micro-loader--static');
+  });
+
+  it('applies micro-loader chrome classes when animating', () => {
+    installMatchMedia(false);
+    const { container } = render(<MicroLoader />);
+    expect(container.querySelector('.micro-loader__panel')).not.toBeNull();
+    expect(container.querySelector('.micro-loader__canvas')).not.toBeNull();
   });
 
   it('renders a screen-reader-only text node for the label', () => {
