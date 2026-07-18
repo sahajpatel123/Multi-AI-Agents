@@ -17,7 +17,7 @@ from arena.core.client_ip import get_request_client_ip
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.datetime_utils import utcnow_naive
 
-from arena.core.errors import error_response, ErrorCodes
+from arena.core.errors import ErrorCodes
 from arena.core.auth import (
     authenticate_user,
     create_access_token,

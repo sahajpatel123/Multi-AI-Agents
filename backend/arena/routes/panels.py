@@ -1,6 +1,5 @@
 """User panel persistence routes."""
 
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 from fastapi import APIRouter, Depends, HTTPException

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required

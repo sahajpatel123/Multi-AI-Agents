@@ -1,9 +1,9 @@
 """Analytics and UX tracking routes."""
 
 from collections import Counter, defaultdict
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -18,7 +18,7 @@ from arena.core.tier_config import get_tier_str, normalize_tier
 from arena.database import get_db
 from arena.core.datetime_utils import utcnow_naive
 from arena.db_models import (
-    PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UserPreference, UXEvent, User, UserTier,
+    PersonaDriftLog, SavedResponse, ScoringAudit, SessionSummary, UsageRecord, UserPreference, UXEvent, UserTier,
 )
 from arena.models.schemas import UserResponse
 

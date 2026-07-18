@@ -2,17 +2,13 @@
 
 import json
 import uuid
-from datetime import datetime, timezone
 from typing import Optional
-
-import anthropic
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
-from arena.config import get_settings
 from arena.core.dependencies import get_current_user_required
 from arena.core.datetime_utils import utcnow_naive
 from arena.core.cost_tracker import (

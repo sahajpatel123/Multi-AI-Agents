@@ -3,13 +3,11 @@
 import asyncio
 import json
 import uuid
-import anthropic
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from arena.config import get_settings
 from arena.core.dependencies import get_current_user_required
 from arena.core.cost_tracker import (
     RateLimitExceeded,

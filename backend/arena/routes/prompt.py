@@ -1,6 +1,5 @@
 """Prompt route — main endpoint for submitting prompts to agents"""
 
-import asyncio
 import json
 import time
 import uuid

@@ -5,7 +5,7 @@ from arena.core.datetime_utils import utcnow_naive
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query

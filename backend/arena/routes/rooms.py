@@ -6,7 +6,7 @@ import json
 import logging
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.dependencies import get_current_user_optional_orm, get_current_user_required_orm
-from arena.core.input_validation import sanitize_html, sanitize_model_html, sanitize_model_text
+from arena.core.input_validation import sanitize_html, sanitize_model_html
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.room_synthesiser import synthesise_room
 from arena.database import SessionLocal, get_db
