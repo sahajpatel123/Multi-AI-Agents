@@ -15,9 +15,9 @@ test.describe('Arena prompt flow (mocked)', () => {
   test('home page renders, login link visible', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/Arena/);
-    // Hero primary CTA (landing copy uses product language, not generic "Get started").
+    // Classic cream landing hero CTA ("Begin thinking") and related entry points.
     await expect(
-      page.getByRole('button', { name: /initialize free prompt|deploy (free )?node/i }).first(),
+      page.getByRole('button', { name: /begin thinking|try arena|watch it work|sign in/i }).first(),
     ).toBeVisible();
   });
 

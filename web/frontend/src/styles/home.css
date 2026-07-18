@@ -1,0 +1,357 @@
+/* ============================================================================
+   ARENA HOME — Classic warm-cream editorial landing
+   ----------------------------------------------------------------------------
+   Restored from the pre-.arena-landing design (parent of e46c1f0).
+   Palette: cream #FAF7F4, surface #F0EBE3, ink #1A1714 / #2C1810,
+   gold accent #C4956A. Imported only by HomePage.tsx.
+   ========================================================================== */
+
+/* RESTORED classic warm-cream HomePage styles (pre-arena-landing) */
+
+/* Quick access (HomePage) — portal backdrop; must live outside overflow:hidden ancestors */
+.quick-access-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(26, 23, 20, 0.45);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+@media (min-width: 769px) {
+  .quick-access-floating.quick-access-floating--corner {
+    position: fixed !important;
+    left: auto !important;
+    right: 32px !important;
+    width: auto !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    bottom: 32px !important;
+    top: auto !important;
+    z-index: 10001 !important;
+  }
+}
+
+.home-page-root {
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+@keyframes letterDrop {
+  0% {
+    opacity: 0;
+    transform: translateY(-40px) rotate(-8deg) scale(0.8);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0px);
+  }
+  80% {
+    transform: translateY(4px) rotate(0.5deg) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes ellipsisDot {
+  0% {
+    content: '.';
+  }
+  33% {
+    content: '..';
+  }
+  66% {
+    content: '...';
+  }
+  100% {
+    content: '.';
+  }
+}
+
+@keyframes scoreOvershoot {
+  0% {
+    width: 0%;
+  }
+  85% {
+    width: var(--overshoot-score);
+  }
+  100% {
+    width: var(--score);
+  }
+}
+
+@keyframes pillBreathe {
+  0%, 100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 14px 2px rgba(196,149,106,0.12);
+  }
+}
+
+@keyframes mindEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes trophyPop {
+  0% {
+    transform: scale(0) rotate(-20deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.3) rotate(5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes winnerRise {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes dotSatisfied {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 768px) {
+  .home-hero-section {
+    padding: 40px 0 32px !important;
+  }
+  .home-hero-inner {
+    padding: 0 20px !important;
+  }
+  .hero-content {
+    grid-template-columns: 1fr !important;
+    gap: 2rem !important;
+  }
+  .hero-giant-num {
+    display: none !important;
+  }
+  .hero-right {
+    order: -1;
+  }
+  .hero-h1 span {
+    font-size: 42px !important;
+  }
+  .home-hero-sub {
+    font-size: 15px !important;
+    line-height: 1.6 !important;
+  }
+  .hero-actions {
+    flex-direction: column !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+  .hero-actions > * {
+    width: 100% !important;
+    text-align: center !important;
+    justify-content: center !important;
+  }
+  .home-floating-cta,
+  .quick-access-floating {
+    position: fixed !important;
+    left: 16px !important;
+    right: 16px !important;
+    width: calc(100% - 32px) !important;
+    max-width: 420px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    bottom: max(16px, calc(12px + env(safe-area-inset-bottom, 0px))) !important;
+    top: auto !important;
+    font-size: 14px !important;
+    z-index: 10001 !important;
+  }
+  .debate-card {
+    padding: 10px 12px !important;
+    min-height: 80px !important;
+    max-height: none !important;
+    width: 100% !important;
+  }
+  .debate-card .dc-text {
+    font-size: 12px !important;
+  }
+  .hero-actions {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+  .hero-actions button,
+  .hero-actions a {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+  .manifesto-line {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    padding: 1.2rem 0 !important;
+  }
+  .compare-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .how-steps {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    border-radius: 16px !important;
+  }
+      }
+
+@media (max-width: 480px) {
+  .hero-h1 span {
+    font-size: 28px !important;
+  }
+
+  .persona-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .footer-top {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .page-enter,
+  .condura-cta-panel,
+    .navbar-brand-dot,
+  .breathe,
+  .arena-btn-spinner {
+    animation: none !important;
+  }
+}
+
+@keyframes heroLetterPop {
+  0% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes analystFlicker {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  16% {
+    transform: scale(0.3);
+    opacity: 0.45;
+  }
+  33% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.3);
+    opacity: 0.45;
+  }
+  66% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  83% {
+    transform: scale(0.3);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes blurReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+    filter: blur(8px);
+  }
+  60% {
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+.home-hero-letter {
+  will-change: transform, opacity, filter;
+}
+
+.home-hero-card {
+  will-change: transform;
+}
+
+.hero-score-fill {
+  will-change: transform, width;
+}
+
+.hero-score-fill-overshoot {
+  animation: scoreOvershoot 700ms cubic-bezier(0.16,1,0.3,1) both;
+}
+
+.debate-ellipsis::after {
+  content: '.';
+  animation: ellipsisDot 1s steps(1, end) infinite;
+}
+
+.blur-reveal {
+  opacity: 0;
+  animation: none;
+  will-change: transform, opacity, filter;
+}
+
+.blur-reveal.visible {
+  animation: blurReveal 700ms cubic-bezier(0.16,1,0.3,1) both;
+}
+

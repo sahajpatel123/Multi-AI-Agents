@@ -7103,3 +7103,270 @@ canvas {
     animation: none !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   App crash + route chunk load shells
+   ------------------------------------------------------------------ */
+.app-crash-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(2rem, env(safe-area-inset-top, 0px)) 1.5rem max(2rem, env(safe-area-inset-bottom, 0px));
+  background:
+    radial-gradient(ellipse 70% 45% at 50% 0%, rgba(196, 149, 106, 0.1), transparent 55%),
+    #f5f0e8;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+  color: #2c1810;
+}
+
+.app-crash-shell__card {
+  max-width: 420px;
+  width: 100%;
+  background: #faf7f4;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 16px;
+  padding: 28px 24px;
+  box-shadow: 0 12px 32px rgba(44, 24, 16, 0.08);
+}
+
+.app-crash-shell__kicker {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #c4956a;
+}
+
+.app-crash-shell__title {
+  margin: 0 0 12px;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: #1a1714;
+}
+
+.app-crash-shell__body {
+  margin: 0 0 16px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: #6b6460;
+}
+
+.app-crash-shell__detail {
+  margin: 0 0 20px;
+  font-size: 12px;
+  color: #a89070;
+  word-break: break-word;
+  padding: 10px 12px;
+  background: rgba(240, 235, 227, 0.8);
+  border-radius: 10px;
+  border: 0.5px solid #e0d8d0;
+}
+
+.app-crash-shell__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.route-chunk-fallback {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(24px, env(safe-area-inset-top, 0px)) 24px max(24px, env(safe-area-inset-bottom, 0px));
+  background:
+    radial-gradient(ellipse 70% 40% at 50% 0%, rgba(196, 149, 106, 0.1), transparent 55%),
+    #f5f0e8;
+}
+
+.route-chunk-fallback__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 340px;
+  padding: 1.75rem 1.5rem;
+  background: rgba(250, 247, 244, 0.92);
+  border: 0.5px solid #e0d8d0;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(44, 24, 16, 0.06);
+}
+
+.route-chunk-fallback__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.route-chunk-fallback__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c4956a;
+  box-shadow: 0 0 0 3px rgba(196, 149, 106, 0.18);
+}
+
+.route-chunk-fallback__name {
+  font-size: 15px;
+  font-weight: 500;
+  color: #1a1714;
+  font-family: Georgia, 'Source Serif 4', serif;
+}
+
+.route-chunk-fallback__copy {
+  margin: 0;
+  font-size: 13px;
+  color: #8c7355;
+  text-align: center;
+}
+
+.route-chunk-fallback .micro-loader {
+  padding: 6px 0;
+}
+
+/* ------------------------------------------------------------------
+   Condura install / handoff CTA modal
+   ------------------------------------------------------------------ */
+.condura-cta-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  background: rgba(26, 23, 20, 0.48);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px))
+    max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+
+.condura-cta-overlay--mobile {
+  align-items: flex-end;
+  padding-left: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+}
+
+.condura-cta-panel {
+  background: #faf7f4;
+  border-radius: 16px;
+  max-width: 440px;
+  width: 100%;
+  padding: 24px;
+  border: 0.5px solid #e0d8d0;
+  box-shadow: 0 20px 48px rgba(26, 23, 20, 0.14);
+  animation: condura-cta-in 280ms var(--ease-out-premium) both;
+}
+
+.condura-cta-panel--mobile {
+  border-radius: 20px 20px 0 0;
+  max-width: none;
+  padding-top: 10px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 24px));
+}
+
+.condura-cta__grabber {
+  width: 36px;
+  height: 4px;
+  background: #d4c4b0;
+  border-radius: 2px;
+  margin: 0 auto 14px;
+}
+
+.condura-cta__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.condura-cta__mark {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    160deg,
+    rgba(196, 149, 106, 0.18) 0%,
+    rgba(196, 149, 106, 0.06) 100%
+  );
+  border: 0.5px solid rgba(196, 149, 106, 0.3);
+}
+
+.condura-cta__mark img {
+  display: block;
+}
+
+.condura-cta__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  color: #2c1810;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  font-family: Georgia, 'Source Serif 4', serif;
+}
+
+.condura-cta__message {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: #6b6460;
+  line-height: 1.6;
+}
+
+.condura-cta__honesty {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #a89070;
+  line-height: 1.5;
+  padding: 10px 12px;
+  background: rgba(196, 149, 106, 0.08);
+  border: 0.5px solid rgba(196, 149, 106, 0.22);
+  border-radius: 10px;
+}
+
+.condura-cta__mobile-note {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #8c7355;
+  line-height: 1.5;
+}
+
+.condura-cta__error {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #a94442;
+  padding: 10px 12px;
+  background: rgba(169, 68, 66, 0.06);
+  border-radius: 10px;
+  border: 0.5px solid rgba(169, 68, 66, 0.2);
+  line-height: 1.45;
+}
+
+.condura-cta__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.condura-cta__status {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: #5a8a5a;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .condura-cta-panel {
+    animation: none !important;
+  }
+}

@@ -70,11 +70,9 @@ export function ConduraInstallCTA({
       clearCopyTimer();
       return;
     }
-    // Focus the primary button on open so keyboard users can act immediately.
     firstBtnRef.current?.focus();
   }, [open]);
 
-  // Lock background scroll while the honesty CTA is open (parity with other modals).
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -84,7 +82,6 @@ export function ConduraInstallCTA({
     };
   }, [open]);
 
-  // Escape-key closes the modal.
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -94,8 +91,6 @@ export function ConduraInstallCTA({
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
-  // Basic focus trap: if tabbing past the last focusable button, cycle
-  // back to the first (and Shift+Tab past the first goes to the last).
   useEffect(() => {
     if (!open) return;
     const trap = (e: KeyboardEvent) => {
@@ -108,11 +103,9 @@ export function ConduraInstallCTA({
           e.preventDefault();
           last.focus();
         }
-      } else {
-        if (document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
     };
     window.addEventListener('keydown', trap);
@@ -147,61 +140,42 @@ export function ConduraInstallCTA({
       role="dialog"
       aria-modal="true"
       aria-labelledby={TITLE_ID}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 10050,
-        background: 'rgba(26,23,20,0.45)',
-        display: 'flex',
-        alignItems: mobile ? 'flex-end' : 'center',
-        justifyContent: 'center',
-        padding: 16,
-      }}
+      className={`condura-cta-overlay${mobile ? ' condura-cta-overlay--mobile' : ''}`}
       onClick={onClose}
     >
       <div
-        className="condura-cta-panel"
-        style={{
-          background: '#FAF7F4',
-          borderRadius: mobile ? '20px 20px 0 0' : 16,
-          maxWidth: 440,
-          width: '100%',
-          padding: 24,
-          border: '0.5px solid #E0D8D0',
-          boxShadow: '0 16px 40px rgba(26,23,20,0.12)',
-        }}
+        className={`condura-cta-panel${mobile ? ' condura-cta-panel--mobile' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-          <img src={markUrl} alt="" width={22} height={22} />
-          <h2 id={TITLE_ID} style={{ margin: 0, fontSize: 20, fontWeight: 500, color: '#2c1810' }}>{title}</h2>
+        {mobile ? <div className="condura-cta__grabber" aria-hidden /> : null}
+
+        <div className="condura-cta__header">
+          <span className="condura-cta__mark" aria-hidden>
+            <img src={markUrl} alt="" width={20} height={20} />
+          </span>
+          <h2 id={TITLE_ID} className="condura-cta__title">
+            {title}
+          </h2>
         </div>
-        <p style={{ margin: '0 0 16px', fontSize: 15, color: '#6B6460', lineHeight: 1.6 }}>{message}</p>
-        <p style={{ margin: '0 0 16px', fontSize: 12, color: '#a89070', lineHeight: 1.5 }}>
-          No browser shims, cloud desktops, or fake local control — if Condura is not installed, this step stays pending.
+
+        <p className="condura-cta__message">{message}</p>
+        <p className="condura-cta__honesty">
+          No browser shims, cloud desktops, or fake local control — if Condura is not installed,
+          this step stays pending.
         </p>
-        {mobile && (
-          <p style={{ margin: '0 0 16px', fontSize: 13, color: '#8c7355' }}>
+        {mobile ? (
+          <p className="condura-cta__mobile-note">
             Condura runs on macOS / Windows / Linux. Save this handoff and open it on your desktop.
           </p>
-        )}
+        ) : null}
+
         {error ? (
-          <p
-            role="alert"
-            style={{
-              margin: '0 0 12px',
-              fontSize: 13,
-              color: '#a94442',
-              padding: '10px 12px',
-              background: 'rgba(169,68,66,0.06)',
-              borderRadius: 10,
-              border: '0.5px solid rgba(169,68,66,0.2)',
-            }}
-          >
+          <p role="alert" className="condura-cta__error">
             {error}
           </p>
         ) : null}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+        <div className="condura-cta__actions">
           <button
             type="button"
             ref={firstBtnRef}
@@ -225,7 +199,6 @@ export function ConduraInstallCTA({
                   return;
                 }
                 if (probe.kind === 'installed_not_running') {
-                  // Custom protocol — still request noopener when supported.
                   window.open('condura://', '_blank', 'noopener,noreferrer');
                   await runProbe();
                   return;
@@ -240,7 +213,7 @@ export function ConduraInstallCTA({
           >
             {conduraPrimaryLabel({ mobile, probe, probing, busy })}
           </button>
-          {handoffPayload && (
+          {handoffPayload ? (
             <button
               type="button"
               className="arena-btn arena-btn--secondary arena-btn--md arena-btn--full"
@@ -248,7 +221,7 @@ export function ConduraInstallCTA({
             >
               {copied ? 'Copied handoff link' : 'Copy handoff'}
             </button>
-          )}
+          ) : null}
           <button
             type="button"
             ref={lastBtnRef}
@@ -258,11 +231,12 @@ export function ConduraInstallCTA({
             Close
           </button>
         </div>
-        {probe.kind === 'ready' && probe.version && (
-          <p style={{ margin: '12px 0 0', fontSize: 12, color: '#a89070' }}>
+
+        {probe.kind === 'ready' && probe.version ? (
+          <p className="condura-cta__status" role="status">
             Condura {probe.version} detected
           </p>
-        )}
+        ) : null}
       </div>
     </div>
   );

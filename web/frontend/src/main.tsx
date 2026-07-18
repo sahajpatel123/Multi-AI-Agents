@@ -89,59 +89,16 @@ class ErrorBoundary extends React.Component<
           ? this.state.error.message
           : 'Something unexpected happened.';
       return (
-        <div
-          role="alert"
-          style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '2rem',
-            background: '#F5F0E8',
-            fontFamily: 'Georgia, Times New Roman, serif',
-            color: '#2c1810',
-          }}
-        >
-          <div
-            style={{
-              maxWidth: 420,
-              width: '100%',
-              background: '#FAF7F4',
-              border: '0.5px solid #E0D8D0',
-              borderRadius: 16,
-              padding: '28px 24px',
-              boxShadow: '0 12px 32px rgba(44,24,16,0.08)',
-            }}
-          >
-            <p
-              style={{
-                margin: '0 0 8px',
-                fontSize: 12,
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                color: '#C4956A',
-              }}
-            >
-              Arena
-            </p>
-            <h2 style={{ margin: '0 0 12px', fontSize: 22, fontWeight: 500 }}>
-              This screen hit a snag
-            </h2>
-            <p style={{ margin: '0 0 20px', fontSize: 15, lineHeight: 1.65, color: '#6B6460' }}>
+        <div className="app-crash-shell" role="alert">
+          <div className="app-crash-shell__card">
+            <p className="app-crash-shell__kicker">Arena</p>
+            <h2 className="app-crash-shell__title">This screen hit a snag</h2>
+            <p className="app-crash-shell__body">
               Your session is fine. Reload to continue — if it keeps happening, try signing out
               and back in.
             </p>
-            <p
-              style={{
-                margin: '0 0 20px',
-                fontSize: 12,
-                color: '#A89070',
-                wordBreak: 'break-word',
-              }}
-            >
-              {msg}
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <p className="app-crash-shell__detail">{msg}</p>
+            <div className="app-crash-shell__actions">
               <button
                 type="button"
                 className="arena-btn arena-btn--primary arena-btn--md arena-btn--full"
@@ -167,6 +124,27 @@ class ErrorBoundary extends React.Component<
   }
 }
 
+function RouteChunkFallback() {
+  return (
+    <div
+      className="route-chunk-fallback"
+      role="status"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Loading page"
+    >
+      <div className="route-chunk-fallback__card">
+        <div className="route-chunk-fallback__brand" aria-hidden>
+          <span className="route-chunk-fallback__dot" />
+          <span className="route-chunk-fallback__name">Arena</span>
+        </div>
+        <MicroLoader label="Loading page" cycleWords={false} />
+        <p className="route-chunk-fallback__copy">Loading this page…</p>
+      </div>
+    </div>
+  );
+}
+
 const rootElement = document.getElementById('root');
 
 if (!rootElement) {
@@ -188,17 +166,7 @@ if (!rootElement) {
                 <a href="#main-content" className="skip-to-content">
                   Skip to content
                 </a>
-                <Suspense fallback={
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minHeight: '100vh',
-                    background: '#F5F0E8',
-                  }}>
-                    <MicroLoader />
-                  </div>
-                }>
+                <Suspense fallback={<RouteChunkFallback />}>
                 <div id="main-content" className="page-enter" tabIndex={-1} style={{ outline: 'none' }}>
                 <Routes>
                   <Route path="/" element={<HomePage />} />
