@@ -1891,6 +1891,37 @@ async def get_agent_metrics(
     return JSONResponse(content=payload)
 
 
+@router.get("/feedback/recent")
+async def list_recent_feedback(
+    limit: int = Query(20, ge=1, le=200),
+    verdict: Optional[str] = Query(
+        None,
+        description=(
+            "Filter by verdict: 'correct', 'partial', or 'wrong'. "
+            "Unknown values return an empty list."
+        ),
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Paginated recent feedback for the agent page.
+
+    Scoped to the caller's own AnswerFeedback rows; verdict filter is
+    exact-match on the canonical values, and the result is ordered
+    newest-first. Tasks that have been deleted (or never existed in
+    production) are returned with title=None so the UI can render them
+    as a tombstone rather than 500 on a join.
+    """
+    _ensure_agent_access(user, db)
+    items = get_recent_feedback(
+        db=db,
+        user_id=user.id,
+        limit=limit,
+        verdict=verdict,
+    )
+    return JSONResponse(content={"success": True, "items": items, "count": len(items)})
+
+
 @router.get("/history")
 async def get_agent_history(
     page: int = Query(1, ge=1),

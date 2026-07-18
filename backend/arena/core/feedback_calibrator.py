@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 
 from arena.db_models import AgentTask, AnswerFeedback
 
+try:  # Python 3.9+: keep imports minimal in module-level
+    from datetime import timezone  # type: ignore
+except ImportError:  # pragma: no cover - Python 3.11+
+    from datetime import timezone  # type: ignore[no-redef]
+
 
 def get_answer_feedback_distribution(user_id: int, db: Session) -> dict[str, int]:
     """Percent breakdown of verdicts for Profile / POST response."""
@@ -56,6 +61,7 @@ def get_recent_feedback(
     user_id: int,
     db: Session,
     limit: int = 20,
+    verdict: str | None = None,
 ) -> List[Dict[str, Any]]:
     """Recent feedback events with task title and snippet for display.
 
@@ -64,22 +70,43 @@ def get_recent_feedback(
     cascade with the feedback so the join will simply omit them — we
     still return the verdict row with title=None in that case so the
     consumer can decide how to render.
+
+    ``verdict`` filters to one of the canonical values (``correct``,
+    ``partial``, ``wrong``); unknown values return an empty list rather
+    than matching nothing silently.
     """
-    cap = max(1, min(int(limit), 100))
-    rows = (
+    cap = max(1, min(int(limit), 200))
+
+    q = (
         db.query(AnswerFeedback, AgentTask)
         .outerjoin(AgentTask, AnswerFeedback.task_id == AgentTask.task_id)
         .filter(AnswerFeedback.user_id == user_id)
-        .order_by(AnswerFeedback.created_at.desc())
+    )
+    if verdict is not None:
+        if verdict in {"correct", "partial", "wrong"}:
+            q = q.filter(AnswerFeedback.verdict == verdict)
+        else:
+            return []
+
+    rows = (
+        q.order_by(AnswerFeedback.created_at.desc())
         .limit(cap)
         .all()
     )
+    def _coerce_created(value):
+        iso = value.isoformat() if value else None
+        # Tests rely on a timezone-bearing ISO string for naive-aware
+        # datetimes; convert naive to UTC so the shape stays stable.
+        if iso and value is not None and getattr(value, "tzinfo", None) is None:
+            return value.replace(tzinfo=timezone.utc).isoformat()
+        return iso
+
     return [
         {
             "task_id": fb.task_id,
             "verdict": fb.verdict,
             "note": fb.note,
-            "created_at": fb.created_at.isoformat() if fb.created_at else None,
+            "created_at": _coerce_created(fb.created_at),
             "title": (task.title or "").strip() if task and task.title else None,
             "task_text": (task.task_text or "")[:160] if task and task.task_text else None,
         }

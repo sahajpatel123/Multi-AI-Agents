@@ -8,13 +8,21 @@ from arena.core.feedback_calibrator import get_recent_feedback
 
 
 def _make_session(rows):
-    """Stub a SQLAlchemy Session that returns ``rows`` from .query()."""
+    """Stub a SQLAlchemy Session that returns ``rows`` from .query().
+
+    Every chainable method (outerjoin / filter / order_by / offset /
+    limit) must return the same ``query`` mock so a chain like
+    ``q.order_by(...).offset(...).limit(...).all()`` resolves to the
+    final ``.all()`` call. Without ``offset.return_value = query`` the
+    chain breaks at ``.offset()`` and the mock returns an empty list.
+    """
     session = MagicMock()
     query = MagicMock()
     session.query.return_value = query
     query.outerjoin.return_value = query
     query.filter.return_value = query
     query.order_by.return_value = query
+    query.offset.return_value = query
     query.limit.return_value = query
     query.all.return_value = rows
     return session
@@ -79,11 +87,11 @@ def test_handles_missing_task_for_outerjoin():
 def test_limit_is_clamped_to_safe_range():
     session = _make_session([])
     get_recent_feedback(user_id=1, db=session, limit=0)  # floor → 1
-    get_recent_feedback(user_id=1, db=session, limit=10_000)  # ceiling → 100
+    get_recent_feedback(user_id=1, db=session, limit=10_000)  # ceiling → 200
     last = session.query.return_value.limit
-    # The two clamp calls should have requested limit=1 and limit=100.
+    # The two clamp calls should have requested limit=1 and limit=200.
     assert last.call_args_list[0].args == (1,)
-    assert last.call_args_list[1].args == (100,)
+    assert last.call_args_list[1].args == (200,)
 
 
 def test_limit_is_cast_to_int():

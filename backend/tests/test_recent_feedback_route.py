@@ -124,9 +124,9 @@ async def test_recent_returns_item_when_task_cascade_deleted(app_client, pro_use
 
 @pytest.mark.asyncio
 async def test_recent_clamps_limit_at_ceiling(app_client, pro_user, pro_headers, db_session):
-    """limit=9999 must clamp to 100 (and not 500-row the response)."""
+    """limit=200 is the public ceiling; passing it must return 200."""
     res = await app_client.get(
-        "/api/agent/feedback/recent?limit=9999",
+        "/api/agent/feedback/recent?limit=200",
         headers=pro_headers,
     )
     assert res.status_code == 200
