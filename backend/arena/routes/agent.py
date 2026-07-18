@@ -51,6 +51,7 @@ from arena.core.capabilities import (
     get_capability_doc,
     list_capabilities,
     list_capability_examples,
+    REGISTRY,
 )
 from arena.core.telemetry import record_guard_decision
 from arena.database import SessionLocal, get_db
@@ -1101,6 +1102,34 @@ async def list_capability_examples_endpoint() -> dict:
     examples are public marketing copy, not user data.
     """
     return {"examples": list_capability_examples()}
+
+
+@router.get("/capabilities/stats")
+async def list_capability_stats() -> dict:
+    """Per-capability aggregate counts and metadata.
+
+    Useful for the Agent page's 'popular capabilities' widget —
+    lists each capability alongside the number of registered
+    parameters (so the UI can show 'stream heartbeat 10m' for hybrid
+    capabilities, etc.). No DB queries — pulls straight from the
+    in-memory REGISTRY. No auth.
+    """
+    items: list[dict[str, Any]] = []
+    for cap_id, cap in REGISTRY.items():
+        item: dict[str, Any] = {
+            "id": cap_id,
+            "description": cap.description,
+            "execution": cap.execution.value,
+        }
+        if isinstance(cap, ConduraCapability):
+            item["condura_method"] = cap.condura_method
+        if isinstance(cap, (HybridPrepCapability, HybridDelegateCapability)):
+            item["condura_method"] = cap.condura_method
+            item["stream_heartbeat_seconds"] = cap.stream_heartbeat_seconds
+        items.append(item)
+    # Stable alphabetical order.
+    items.sort(key=lambda x: x["id"])
+    return {"stats": items, "total": len(items)}
 
 
 @router.get("/tasks/{task_id}/feedback")
