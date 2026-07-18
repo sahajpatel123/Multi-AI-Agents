@@ -186,8 +186,11 @@ def compute_user_feedback_summary(
             "partial": int(totals.get("partial", 0)),
             "wrong": int(totals.get("wrong", 0)),
         },
+        # Accuracy rate — fraction of feedback that marked the AI correct.
+        # Was previously (total / total) = always 1.0, which made the
+        # dashboard's accuracy chart useless. Cycle 34 fix.
         "rate": round(
-            (total / total) if total else 0.0, 4
+            (totals.get("correct", 0) / total) if total else 0.0, 4
         ),
         "window_days": window_days,
         "daily_trend": daily_trend,

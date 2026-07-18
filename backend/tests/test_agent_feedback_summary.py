@@ -60,7 +60,8 @@ def test_feedback_summary_tallies_verdicts(db_session, make_user):
     payload = compute_user_feedback_summary(db=db_session, user=user)
     assert payload["total"] == 6
     assert payload["verdicts"] == {"correct": 3, "partial": 2, "wrong": 1}
-    assert payload["rate"] == 1.0
+    # Accuracy rate = correct / total. Was previously always 1.0 (total/total).
+    assert payload["rate"] == round(3 / 6, 4)
 
 
 def test_feedback_summary_daily_trend_pads_to_window(db_session, make_user):
@@ -140,3 +141,66 @@ async def test_feedback_summary_endpoint_window_is_clamped(app_client, make_user
     )
     assert res.status_code == 200
     assert len(res.json()["daily_trend"]) == 14
+
+
+# ─── Accuracy rate pinning (cycle-34 bug) ────────────────────────────────────
+# Bug: rate was computed as total/total, always 1.0 for any non-zero feedback.
+# Fix: rate = correct / total (accuracy). Tests below pin the new contract
+# so the bug can't return — a regression to total/total would produce 1.0
+# in test_accuracy_rate_pins_correct_over_total below.
+
+
+def test_accuracy_rate_is_zero_when_no_feedback(db_session, make_user):
+    user = make_user(email="fb-acc-zero@test.com", tier=UserTier.PRO)
+    db_session.add(user); db_session.commit(); db_session.refresh(user)
+    payload = compute_user_feedback_summary(db=db_session, user=user)
+    assert payload["total"] == 0
+    assert payload["rate"] == 0
+
+
+def test_accuracy_rate_is_one_when_all_correct(db_session, make_user):
+    user = make_user(email="fb-acc-all-correct@test.com", tier=UserTier.PRO)
+    db_session.add(user); db_session.commit(); db_session.refresh(user)
+    for i in range(5):
+        db_session.add(_make_feedback(user_id=user.id, suffix=f"c-{i}", verdict="correct"))
+    db_session.commit()
+
+    payload = compute_user_feedback_summary(db=db_session, user=user)
+    assert payload["total"] == 5
+    assert payload["rate"] == 1.0
+
+
+def test_accuracy_rate_is_zero_when_all_wrong(db_session, make_user):
+    user = make_user(email="fb-acc-all-wrong@test.com", tier=UserTier.PRO)
+    db_session.add(user); db_session.commit(); db_session.refresh(user)
+    for i in range(3):
+        db_session.add(_make_feedback(user_id=user.id, suffix=f"w-{i}", verdict="wrong"))
+    db_session.commit()
+
+    payload = compute_user_feedback_summary(db=db_session, user=user)
+    assert payload["total"] == 3
+    assert payload["rate"] == 0
+
+
+def test_accuracy_rate_pins_correct_over_total(db_session, make_user):
+    """The cycle-34 regression guard.
+
+    3 correct, 2 partial, 1 wrong out of 6 must give accuracy 0.5.
+    If rate regresses to total/total, this would fail (would be 1.0).
+    """
+    user = make_user(email="fb-acc-mixed@test.com", tier=UserTier.PRO)
+    db_session.add(user); db_session.commit(); db_session.refresh(user)
+    for verdict, count in [("correct", 3), ("partial", 2), ("wrong", 1)]:
+        for i in range(count):
+            db_session.add(
+                _make_feedback(
+                    user_id=user.id,
+                    suffix=f"{verdict}-{i}",
+                    verdict=verdict,
+                )
+            )
+    db_session.commit()
+
+    payload = compute_user_feedback_summary(db=db_session, user=user)
+    assert payload["total"] == 6
+    assert payload["rate"] == round(3 / 6, 4)  # = 0.5; NOT 1.0
