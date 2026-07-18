@@ -1449,6 +1449,15 @@ async def export_orchestration_pdf(
 ):
     _ensure_agent_access(user, db)
     _ensure_agent_orchestrate_access(user)
+    # HTML/PDF render walks every child task + blackboard overlay — bound
+    # abuse so concurrent export spam cannot pin CPU/memory.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_export_pdf",
+        limit=30,
+        window_seconds=3600,
+        message="Too many orchestration PDF exports. Limit is 30 per hour.",
+    )
 
     oid = orch_id.strip()
     orch = (
@@ -1496,6 +1505,15 @@ async def export_task_pdf(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    # Report generation is CPU-heavy (HTML → PDF). Cap per-user so a
+    # client cannot burn workers with concurrent export loops.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_export_pdf",
+        limit=30,
+        window_seconds=3600,
+        message="Too many task PDF exports. Limit is 30 per hour.",
+    )
     tid = task_id.strip()
     row = (
         db.query(AgentTaskRow)
