@@ -113,9 +113,26 @@ jobs:
               floor   = tuple(int(x) for x in min_ver.split('.'))
               if current < floor:
                   failures.append(f'REGRESSED: {pkg}=={match.group(1)} (require >= {min_ver})')
-          if failures:
+          # Negative-pin guard: packages that MUST NOT appear in
+          # requirements.txt. python-jose pulls ecdsa 0.19.2 (PYSEC-2026-1325,
+          # Minerva timing attack) and was eliminated in cycle 1 in favor of
+          # PyJWT. Reintroducing it would silently re-expose the vuln that
+          # pip-audit catches via the broader scan above — but this guard
+          # fails faster and produces a clearer message.
+          FORBIDDEN = {
+              'python-jose': 'pulls ecdsa 0.19.2 (PYSEC-2026-1325); use PyJWT',
+              'ecdsa':       'transitive of python-jose; eliminated via PyJWT in cycle 1',
+          }
+          forbidden_hits = []
+          for pkg, why in FORBIDDEN.items():
+              pattern = rf'^{re.escape(pkg)}(?:\[.*?\])?(?:==|>=|~=|@)'
+              if re.search(pattern, text, re.MULTILINE):
+                  forbidden_hits.append(f'FORBIDDEN: {pkg} — {why}')
+          if failures or forbidden_hits:
               print('Security floor violations:')
               for f in failures:
+                  print(f'  - {f}')
+              for f in forbidden_hits:
                   print(f'  - {f}')
               sys.exit(1)
           print('Security floor OK')
