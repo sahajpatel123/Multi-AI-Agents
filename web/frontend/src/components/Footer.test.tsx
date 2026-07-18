@@ -32,7 +32,10 @@ describe('Footer', () => {
   it('renders the brand and tagline', async () => {
     const { getByLabelText, getByText, getByRole } = renderFooter();
     expect(getByLabelText(/arena home/i)).toBeInTheDocument();
-    expect(getByText(/Four minds/i)).toBeInTheDocument();
+    expect(
+      getByText(/Four minds\. One question\. The best answer wins\./i),
+    ).toBeInTheDocument();
+    expect(getByRole('button', { name: /back to top/i })).toBeInTheDocument();
     await waitFor(() =>
       expect(getByRole('status')).toHaveTextContent(/all systems operational/i),
     );

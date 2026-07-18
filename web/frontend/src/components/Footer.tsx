@@ -84,6 +84,14 @@ export function Footer() {
     navigate('/product');
   };
 
+  const scrollToTop = () => {
+    if (typeof window === 'undefined') return;
+    window.scrollTo({
+      top: 0,
+      behavior: reducedMotion ? 'auto' : 'smooth',
+    });
+  };
+
   return (
     <footer className="site-footer" role="contentinfo">
       <div className="site-footer__inner">
@@ -104,6 +112,15 @@ export function Footer() {
             <p className="site-footer__tagline">
               Four minds. One question. The best answer wins.
             </p>
+            <div className="site-footer__minds" aria-hidden="true">
+              <span className="site-footer__minds-label">Four minds</span>
+              <div className="site-footer__minds-dots">
+                <span className="site-footer__minds-dot" />
+                <span className="site-footer__minds-dot" />
+                <span className="site-footer__minds-dot" />
+                <span className="site-footer__minds-dot" />
+              </div>
+            </div>
           </div>
 
           <nav className="site-footer__nav" aria-label="Footer">
@@ -184,17 +201,30 @@ export function Footer() {
           <span className="site-footer__copy">
             © {year} Arena. All rights reserved.
           </span>
-          <div
-            className={`site-footer__status site-footer__status--${systemStatus}`}
-            role="status"
-            aria-live="polite"
-            title={statusTitle}
-          >
-            <span
-              className={`site-footer__status-dot${statusPulse ? ' site-footer__status-dot--pulse' : ''}`}
-              aria-hidden
-            />
-            <span className="site-footer__status-label">{statusLabel}</span>
+          <div className="site-footer__bottom-actions">
+            <button
+              type="button"
+              className="site-footer__top-btn"
+              onClick={scrollToTop}
+              aria-label="Back to top"
+            >
+              <span className="site-footer__top-btn-icon" aria-hidden="true">
+                ↑
+              </span>
+              Top
+            </button>
+            <div
+              className={`site-footer__status site-footer__status--${systemStatus}`}
+              role="status"
+              aria-live="polite"
+              title={statusTitle}
+            >
+              <span
+                className={`site-footer__status-dot${statusPulse ? ' site-footer__status-dot--pulse' : ''}`}
+                aria-hidden
+              />
+              <span className="site-footer__status-label">{statusLabel}</span>
+            </div>
           </div>
         </div>
       </div>
