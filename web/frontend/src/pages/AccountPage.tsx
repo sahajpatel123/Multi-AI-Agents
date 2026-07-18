@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProfileModal } from '../context/ProfileModalContext';
 import MicroLoader from '../components/MicroLoader';
+import { MotionButton } from '../components/MotionButton';
+import { prefersReducedMotion } from '../lib/motion';
 
 /**
  * Legacy `/account` route: opens the universal profile modal.
@@ -12,6 +14,7 @@ export function AccountPage() {
   const { openModal, isOpen, closing } = useProfileModal();
   const navigate = useNavigate();
   const sawOpen = useRef(false);
+  const reduceMotion = prefersReducedMotion();
 
   useEffect(() => {
     openModal('top-right', 'account');
@@ -30,7 +33,7 @@ export function AccountPage() {
 
   return (
     <div
-      className="account-route-shell"
+      className={`account-route-shell${reduceMotion ? ' account-route-shell--static' : ''}`}
       role="status"
       aria-busy="true"
       aria-live="polite"
@@ -43,13 +46,14 @@ export function AccountPage() {
         </div>
         <MicroLoader label="Opening account" cycleWords={false} />
         <p className="account-route-shell__copy">Opening your account…</p>
-        <button
+        <MotionButton
           type="button"
-          className="arena-btn arena-btn--ghost arena-btn--sm"
+          variant="ghost"
+          size="sm"
           onClick={() => navigate('/agent', { replace: true })}
         >
           Skip to Agent
-        </button>
+        </MotionButton>
       </div>
     </div>
   );
