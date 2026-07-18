@@ -1,22 +1,19 @@
 """Background scheduler for due live research thread checks."""
 
 from __future__ import annotations
-from arena.core.datetime_utils import utcnow_naive
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from arena.core.datetime_utils import utcnow_naive
 from arena.core.live_thread_checker import check_live_task
 from arena.database import SessionLocal
 from arena.db_models import AgentTask
 
 logger = logging.getLogger("arena.live_scheduler")
-
-
 
 
 async def run_due_live_checks(db: Session) -> None:

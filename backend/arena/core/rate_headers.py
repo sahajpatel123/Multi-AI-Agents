@@ -49,9 +49,12 @@ async def rate_limit_headers(
     from arena.db_models import User
 
     db_user = db.query(User).filter(User.id == user.id).first()
-    messages_used = int(getattr(db_user, "prompt_count_today", 0) or 0)
+    # Missing row (race after hard-delete) must still emit stable headers.
+    messages_used = (
+        int(getattr(db_user, "prompt_count_today", 0) or 0) if db_user is not None else 0
+    )
     messages_limit = TIER_MESSAGE_LIMITS.get(tier, TIER_MESSAGE_LIMITS[UserTier.FREE])
-    tokens_used = get_today_token_usage(db, user.id)
+    tokens_used = get_today_token_usage(db, user.id) if db_user is not None else 0
     tokens_limit = TIER_DAILY_LIMITS.get(tier, TIER_DAILY_LIMITS[UserTier.FREE])
 
     return {
