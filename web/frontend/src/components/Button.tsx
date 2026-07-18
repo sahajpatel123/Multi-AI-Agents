@@ -5,7 +5,7 @@ import {
   type ReactNode,
 } from 'react';
 import { ButtonSpinner } from './Icons';
-import { motionTransition } from '../lib/motion';
+import { interactiveTransition } from '../lib/motion';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -51,10 +51,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   // Inline transition collapses to `none` when prefers-reduced-motion is on,
   // so press/hover feedback never fights the user's OS setting.
   const motionStyle: CSSProperties = {
-    transition: motionTransition(
-      'background, color, border-color, opacity, transform, box-shadow',
-      180,
-    ),
+    transition: interactiveTransition(),
     ...style,
   };
 

@@ -1,7 +1,7 @@
 import { motion, type HTMLMotionProps } from 'framer-motion';
 import { forwardRef, type ReactNode } from 'react';
 import { ButtonSpinner } from './Icons';
-import { prefersReducedMotion } from '../lib/motion';
+import { INTERACTION, prefersReducedMotion } from '../lib/motion';
 
 export type MotionButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 export type MotionButtonSize = 'sm' | 'md' | 'lg';
@@ -74,25 +74,12 @@ export const MotionButton = forwardRef<HTMLButtonElement, MotionButtonProps>(
         disabled={isDisabled}
         className={classes}
         aria-busy={busy || undefined}
-        whileHover={
-          allowMotion
-            ? {
-                y: -2,
-                scale: 1.02,
-                transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
-              }
-            : undefined
-        }
-        whileTap={
-          allowMotion
-            ? {
-                scale: 0.97,
-                y: 0,
-                transition: { duration: 0.12, ease: [0.22, 1, 0.36, 1] },
-              }
-            : undefined
-        }
-        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+        whileHover={allowMotion ? INTERACTION.hover : undefined}
+        whileTap={allowMotion ? INTERACTION.tap : undefined}
+        transition={{
+          duration: INTERACTION.hover.transition.duration,
+          ease: INTERACTION.hover.transition.ease,
+        }}
         {...rest}
       >
         {left ? <span className="arena-btn__icon">{left}</span> : null}

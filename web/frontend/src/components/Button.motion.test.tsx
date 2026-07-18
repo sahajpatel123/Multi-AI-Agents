@@ -20,7 +20,9 @@ describe('Button motion wiring', () => {
     );
     const { getByRole } = render(<Button>Go</Button>);
     const btn = getByRole('button', { name: 'Go' });
-    expect(btn.style.transition).toMatch(/180ms/);
+    expect(btn.style.transition).toMatch(/200ms/);
+    expect(btn.style.transition).toMatch(/transform/);
+    expect(btn.style.transition).toMatch(/box-shadow/);
   });
 
   it('collapses transition to none when reduced motion is on', () => {
