@@ -362,6 +362,9 @@ class AgentTaskRenameRequest(BaseModel):
 
 class LiveToggleBody(BaseModel):
     is_live: Optional[bool] = None
+    # Optional reschedule window (hours, clamped 1..168) so users can
+    # dial cadence per task without waiting for the next toggle round.
+    reschedule_hours: Optional[int] = Field(default=None, ge=1, le=168)
 
 
 class MarkLiveReadBody(BaseModel):
@@ -1988,7 +1991,13 @@ async def toggle_agent_task_live(
     row.is_live = want_live
     now = _utc_naive()
     if row.is_live:
-        row.live_next_check = now + timedelta(hours=24)
+        # Allow callers to dial cadence per task (1h..168h). Default to
+        # the stored cadence or 24h if neither is set.
+        cadence = body.reschedule_hours
+        if cadence is None:
+            cadence = int(getattr(row, "live_reschedule_hours", 24) or 24)
+        row.live_reschedule_hours = cadence
+        row.live_next_check = now + timedelta(hours=cadence)
     else:
         row.live_next_check = None
     db.commit()

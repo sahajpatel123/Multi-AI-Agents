@@ -33,6 +33,25 @@ def _gate_live_task_text(task_text: str) -> dict:
     )
 
 
+def _reschedule_hours(task: AgentTask) -> int:
+    """Resolve the next-check window for a live task.
+
+    Reads ``task.live_reschedule_hours`` and clamps to a sane range
+    (1h–7d) so a misconfigured value cannot starve or burn the budget.
+    Defaults to 24h when the column is unset (None on freshly-built
+    ORM instances), preserving the prior contract for tasks written
+    before this column shipped.
+    """
+    raw = getattr(task, "live_reschedule_hours", None)
+    if raw is None:
+        return 24
+    try:
+        raw_int = int(raw)
+    except (TypeError, ValueError):
+        return 24
+    return max(1, min(raw_int, 24 * 7))
+
+
 async def check_if_update_meaningful(
     original: str,
     new_research: str,
@@ -87,7 +106,7 @@ async def run_researcher_for_live_task(task: AgentTask) -> str:
 async def check_live_task(task: AgentTask, db: Session) -> bool:
     """
     Re-run researcher on the stored question; if findings are meaningfully new vs final answer,
-    append to live_updates. Always advances last_checked and next_check (24h guard).
+    append to live_updates. Always advances last_checked and next_check.
 
     When honest rejection is on and the stored question needs the user's machine,
     skip the web researcher re-run (no theater) and still advance the schedule.
@@ -97,6 +116,7 @@ async def check_live_task(task: AgentTask, db: Session) -> bool:
         return False
 
     db.refresh(task)
+    interval_hours = _reschedule_hours(task)
 
     gate = _gate_live_task_text(task.task_text or "")
     record_guard_decision(gate["capability_id"], f"live_{gate['decision']}")
@@ -107,7 +127,7 @@ async def check_live_task(task: AgentTask, db: Session) -> bool:
             gate["env"].value,
         )
         task.live_last_checked = now
-        task.live_next_check = now + timedelta(hours=24)
+        task.live_next_check = now + timedelta(hours=interval_hours)
         try:
             db.commit()
         except Exception as e:
@@ -151,7 +171,7 @@ async def check_live_task(task: AgentTask, db: Session) -> bool:
         task.live_updates = updates
 
     task.live_last_checked = now
-    task.live_next_check = now + timedelta(hours=24)
+    task.live_next_check = now + timedelta(hours=interval_hours)
     try:
         db.commit()
     except Exception as e:

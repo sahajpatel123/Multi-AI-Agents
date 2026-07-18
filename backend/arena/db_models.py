@@ -461,6 +461,7 @@ class AgentTask(Base):
     is_live = Column(Boolean, default=False, nullable=False)
     live_last_checked = Column(DateTime, nullable=True)
     live_next_check = Column(DateTime, nullable=True)
+    live_reschedule_hours = Column(Integer, default=24, nullable=False)
     live_updates = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
 
