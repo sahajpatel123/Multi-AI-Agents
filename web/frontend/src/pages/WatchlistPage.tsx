@@ -4,6 +4,7 @@ import MicroLoader from '../components/MicroLoader';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
 import { EmptyState } from '../components/EmptyState';
+import { MotionButton } from '../components/MotionButton';
 import {
   ApiError,
   deleteAgentWatchlist,
@@ -811,13 +812,14 @@ export function WatchlistPage() {
               </svg>
             }
             actions={
-              <button
+              <MotionButton
                 type="button"
-                className="arena-btn arena-btn--primary arena-btn--md"
+                variant="primary"
+                size="md"
                 onClick={() => navigate('/agent')}
               >
                 Start a research task →
-              </button>
+              </MotionButton>
             }
           />
         ) : (

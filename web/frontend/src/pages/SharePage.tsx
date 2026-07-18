@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { EmptyState } from '../components/EmptyState';
+import { MotionButton } from '../components/MotionButton';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { AGENTS } from '../types';
 import { isCollapsiblePrompt } from '../lib/collapsiblePrompt';
@@ -228,9 +229,9 @@ export function SharePage() {
             title="This share link is empty or expired"
             description="Ask something in Arena and share a take from any of the four minds."
             actions={
-              <button type="button" className="arena-btn arena-btn--primary arena-btn--md" onClick={goTry}>
+              <MotionButton type="button" variant="primary" size="md" onClick={goTry}>
                 Try Arena →
-              </button>
+              </MotionButton>
             }
           />
         ) : (
@@ -406,9 +407,9 @@ export function SharePage() {
               </div>
 
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
-                <button type="button" className="arena-btn arena-btn--primary arena-btn--md" onClick={goTry}>
+                <MotionButton type="button" variant="primary" size="md" onClick={goTry}>
                   {isAuthenticated ? 'Open Arena' : 'Try this in Arena'} →
-                </button>
+                </MotionButton>
                 <button
                   type="button"
                   className="arena-btn arena-btn--ghost arena-btn--md"
