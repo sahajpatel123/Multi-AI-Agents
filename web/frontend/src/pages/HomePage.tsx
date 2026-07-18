@@ -1076,80 +1076,91 @@ export function HomePage() {
               </div>
             </div>
 
-            {/* Right Column - Live Example */}
-            <div className="hero-right" style={{ position: 'relative', height: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
-                <span style={{ fontSize: '12px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#6B6460' }}>Live example</span>
+            {/* Right Column — Live debate stage */}
+            <div className="hero-right home-debate-stage" aria-label="Live debate example">
+              <div className="home-debate-stage__header">
+                <span className="home-debate-stage__live">
+                  <span className="home-debate-stage__live-dot" aria-hidden="true" />
+                  Live
+                </span>
                 <span
+                  className="home-debate-stage__topic"
                   style={{
-                    fontSize: '13px',
-                    color: '#C4956A',
                     opacity: debateState.topicLabelVisible ? 1 : 0,
                     transform: debateState.topicLabelDirection === 'left'
                       ? 'translateX(-10px)'
                       : debateState.topicLabelDirection === 'right'
                         ? 'translateX(10px)'
                         : 'translateX(0)',
-                    transition: 'opacity 400ms ease, transform 400ms ease',
                   }}
                 >
-                  · {activeTopic.question}
+                  {activeTopic.question}
                 </span>
-                <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
+                <span className="home-debate-stage__topic-rule" aria-hidden="true" />
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '9px', letterSpacing: '.1em', textTransform: 'uppercase', color: '#6B6460', minWidth: '44px' }}>
-                  Intensity
-                </span>
-                <div style={{ flex: 1, height: '2px', borderRadius: '999px', background: '#F0EBE3', overflow: 'hidden' }}>
+              <div className="home-debate-intensity" aria-hidden="true">
+                <span className="home-debate-intensity__label">Intensity</span>
+                <div className="home-debate-intensity__track">
                   <div
+                    className="home-debate-intensity__fill"
                     style={{
-                      height: '100%',
                       width: debateState.round === 1 ? '33%' : debateState.round === 2 ? '66%' : '100%',
-                      borderRadius: '999px',
-                      background: debateState.round === 1 ? '#8AA899' : debateState.round === 2 ? '#C4956A' : '#B0977E',
-                      transition: 'width 600ms ease, transform 600ms ease',
+                      background:
+                        debateState.round === 1
+                          ? '#8AA899'
+                          : debateState.round === 2
+                            ? '#C4956A'
+                            : '#B0977E',
                     }}
                   />
+                  <div className="home-debate-intensity__ticks">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
                 </div>
                 <span
+                  className="home-debate-intensity__level"
                   style={{
-                    fontSize: '9px',
-                    letterSpacing: '.1em',
-                    textTransform: 'uppercase',
-                    color: debateState.round === 1 ? '#8AA899' : debateState.round === 2 ? '#C4956A' : '#B0977E',
-                    minWidth: '28px',
-                    textAlign: 'right',
+                    color:
+                      debateState.round === 1
+                        ? '#8AA899'
+                        : debateState.round === 2
+                          ? '#C4956A'
+                          : '#B0977E',
                   }}
                 >
                   {debateState.round === 1 ? 'Low' : debateState.round === 2 ? 'High' : 'Peak'}
                 </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.85rem' }}>
-                <span style={{ fontSize: '10px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#6B6460' }}>
-                  Round {debateState.round} of 3
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {[1, 2, 3].map((dot) => (
-                    <div
-                      key={dot}
-                      style={{
-                        width: '6px',
-                        height: '6px',
-                        borderRadius: '50%',
-                        background: dot === debateState.round ? '#C4956A' : 'transparent',
-                        border: dot === debateState.round ? 'none' : '0.5px solid #E0D8D0',
-                        transform: dot === debateState.round ? 'scale(1.05)' : 'scale(1)',
-                        transition: 'all 300ms ease',
-                      }}
-                    />
-                  ))}
+              <div className="home-debate-rounds" aria-label={`Round ${debateState.round} of 3`}>
+                <span className="home-debate-rounds__label">Round {debateState.round} of 3</span>
+                <div className="home-debate-rounds__steps">
+                  {[1, 2, 3].map((step, stepIdx) => {
+                    const done = step < debateState.round;
+                    const active = step === debateState.round;
+                    return (
+                      <div key={step} className="home-debate-rounds__step">
+                        {stepIdx > 0 ? (
+                          <span
+                            className={`home-debate-rounds__connector${done || active ? ' is-done' : ''}`}
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        <span
+                          className={`home-debate-rounds__node${done ? ' is-done' : ''}${active ? ' is-active' : ''}`}
+                        >
+                          {step}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', perspective: '800px' }}>
+              <div className="home-debate-stack">
                 {HERO_AGENT_ORDER.map((agent, idx) => {
                   const agentState = debateState.agentStates[agent];
                   const isWinner = debateState.winnerId === agent;
@@ -1173,6 +1184,15 @@ export function HomePage() {
                   const reactionRotate = reaction === 'contrarian' ? 'rotate(-0.8deg)' : 'rotate(0deg)';
                   const cardTransform = `translateX(${cardTranslateX}px) translateY(${cardTranslateY}px) scale(${cardScale}) ${reactionRotate} ${heroCardTransforms[idx] || 'rotateX(0deg) rotateY(0deg)'}`;
                   const textOpacity = isTransitioning ? 0 : 1;
+                  const cardClass = [
+                    'home-hero-card',
+                    'debate-card',
+                    isWinning ? 'is-winning' : '',
+                    isListening ? 'is-listening' : '',
+                    isTyping ? 'is-typing' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
 
                   return (
                     <div
@@ -1180,47 +1200,36 @@ export function HomePage() {
                       onMouseMove={(e) => handleHeroCardMouseMove(idx, e)}
                       onMouseEnter={() => setHeroCardHovered(idx)}
                       onMouseLeave={() => handleHeroCardMouseLeave(idx)}
-                      className="home-hero-card debate-card"
+                      className={cardClass}
                       style={{
-                        background: isWinning ? '#FFFCF9' : '#FFFFFF',
-                        border: isWinning ? '1px solid #C4956A' : '0.5px solid #E0D8D0',
-                        borderRadius: '12px',
-                        padding: '12px 14px',
-                        width: '100%',
-                        minHeight: '90px',
-                        maxHeight: '120px',
-                        overflow: 'hidden',
-                        position: 'relative',
+                        ['--debate-accent' as string]: color,
                         animation: `heroCard${idx + 1} 600ms cubic-bezier(0.16,1,0.3,1) ${300 + idx * 120}ms backwards, floatCard${idx + 1} ${[4, 5, 3.5, 4.5][idx]}s ease-in-out infinite`,
-                        transformStyle: 'preserve-3d',
                         transform: cardTransform,
                         opacity: cardOpacity,
-                        boxShadow: isWinning ? '0 10px 28px rgba(196,149,106,0.14)' : 'none',
                         transition: heroCardHovered === idx
-                          ? 'opacity 400ms ease, border 300ms ease, background 300ms ease, box-shadow 400ms ease'
-                          : 'transform 500ms ease, opacity 400ms ease, border 300ms ease, background 300ms ease, box-shadow 400ms ease',
-                        willChange: 'transform, opacity',
+                          ? 'opacity 400ms ease, border-color 300ms ease, background 300ms ease, box-shadow 400ms ease'
+                          : 'transform 500ms ease, opacity 400ms ease, border-color 300ms ease, background 300ms ease, box-shadow 400ms ease',
                       }}
                     >
+                      <div className="debate-card__sheen" aria-hidden="true" />
+
                       {reaction === 'philosopher' ? (
                         <div
                           style={{
                             position: 'absolute',
                             inset: 0,
                             background: 'rgba(155,143,170,0.06)',
-                            opacity: 1,
-                            transition: 'opacity 600ms ease',
                             pointerEvents: 'none',
+                            zIndex: 0,
                           }}
+                          aria-hidden="true"
                         />
                       ) : null}
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '7px' }}>
+                      <div className="debate-card__meta" style={{ position: 'relative', zIndex: 1 }}>
                         <div
+                          className={`debate-card__avatar${!isSatisfied ? ' breathe' : ''}`}
                           style={{
-                            width: '7px',
-                            height: '7px',
-                            borderRadius: '50%',
                             background: color,
                             animation: reaction === 'analyst'
                               ? 'analystFlicker 300ms ease'
@@ -1228,52 +1237,39 @@ export function HomePage() {
                               ? 'dotSatisfied 400ms ease'
                               : `breathe ${isThinking ? 1 : isTyping ? 2 : isListening ? 4 : 2.4}s ease-in-out infinite`,
                           }}
-                          className={!isSatisfied ? 'breathe' : undefined}
                         />
-                        <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>{agent}</span>
+                        <span className="debate-card__name">{agent}</span>
                         <span
+                          className="debate-card__trophy"
                           style={{
                             opacity: isWinning ? 1 : 0,
                             transform: isWinning ? 'scale(1)' : 'scale(0.5)',
                             animation: isWinning ? 'trophyPop 400ms cubic-bezier(0.34,1.56,0.64,1)' : 'none',
-                            transformOrigin: 'center',
-                            fontSize: '11px',
-                            lineHeight: 1,
                           }}
+                          aria-hidden={!isWinning}
                         >
                           🏆
                         </span>
                         <div
+                          className={`debate-card__badge${isWinning ? ' is-winner' : ''}`}
                           style={{
-                            marginLeft: 'auto',
-                            background: isWinning ? '#C4956A' : '#F0EBE3',
-                            color: isWinning ? '#FAF7F4' : '#6B6460',
-                            padding: '2px 8px',
-                            borderRadius: '999px',
-                            fontSize: '11px',
                             opacity: isWinning ? 1 : 0.85,
                             transform: reaction === 'pragmatist' ? 'scale(1.15)' : isWinning ? 'scale(1)' : 'scale(0.96)',
-                            transition: 'opacity 300ms ease, background 300ms ease, color 300ms ease, transform 300ms ease',
                           }}
                         >
                           {isWinning ? `Winner · ${activeTopic.finalScores[agent]}` : activeTopic.finalScores[agent]}
                         </div>
                       </div>
 
-                      <div style={{ minHeight: '16px', marginBottom: '4px' }}>
-                        {isThinking ? (
-                          <span style={{ fontSize: '12px', color: '#C4B8AE', fontStyle: 'italic' }} className="debate-ellipsis" />
-                        ) : null}
+                      <div className="debate-card__typing-hint" style={{ position: 'relative', zIndex: 1 }}>
+                        {isThinking ? <span className="debate-ellipsis" /> : null}
                       </div>
 
                       <p
                         className="dc-text"
                         style={{
-                          fontSize: '12px',
-                          color: '#6B6460',
-                          lineHeight: 1.6,
-                          margin: '7px 0',
-                          minHeight: '40px',
+                          position: 'relative',
+                          zIndex: 1,
                           opacity: textOpacity,
                           transform: isTransitioning ? 'translateY(-8px)' : 'translateY(0)',
                           transition: `opacity 200ms ease ${idx * 60}ms, transform 200ms ease ${idx * 60}ms`,
@@ -1281,31 +1277,37 @@ export function HomePage() {
                       >
                         {renderDebateText(text, agent, isTyping)}
                         {debateState.typingCursor[agent] ? (
-                          <span style={{ color, animation: 'blink 0.8s step-end infinite' }}>|</span>
+                          <span
+                            className="debate-card__caret"
+                            style={{ background: color }}
+                            aria-hidden="true"
+                          />
                         ) : null}
                       </p>
 
                       <div
+                        className="debate-card__score"
                         style={{
-                          height: '2px',
-                          background: '#F0EBE3',
-                          borderRadius: '999px',
-                          overflow: 'hidden',
+                          position: 'relative',
+                          zIndex: 1,
                           opacity: debateState.scoreBarsVisible ? (isLosing ? 0.5 : 1) : 0,
                           transform: debateState.anticipation ? 'scaleX(1.01)' : 'scaleX(1)',
-                          transition: 'opacity 200ms ease, transform 300ms ease',
-                          marginTop: '8px',
                         }}
                       >
                         <div
-                          className={debateState.overshootAgent === agent && debateState.phase === 'scoring' ? 'hero-score-fill hero-score-fill-overshoot' : 'hero-score-fill'}
+                          className={
+                            debateState.overshootAgent === agent && debateState.phase === 'scoring'
+                              ? 'hero-score-fill hero-score-fill-overshoot'
+                              : 'hero-score-fill'
+                          }
                           style={
                             {
-                              height: '100%',
                               background: color,
                               width: debateState.scoreBarsVisible ? scorePercent : '0%',
-                              borderRadius: '999px',
-                              transition: debateState.phase === 'scoring' ? 'width 700ms cubic-bezier(0.16,1,0.3,1)' : 'width 300ms ease',
+                              transition:
+                                debateState.phase === 'scoring'
+                                  ? 'width 700ms cubic-bezier(0.16,1,0.3,1)'
+                                  : 'width 300ms ease',
                               '--score': scorePercent,
                               '--overshoot-score': overshootPercent,
                               animationDelay: `${idx * 50}ms`,
