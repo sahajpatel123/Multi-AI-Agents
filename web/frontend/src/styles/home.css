@@ -2,8 +2,9 @@
    ARENA HOME — Classic warm-cream editorial landing
    ----------------------------------------------------------------------------
    Restored from the pre-.arena-landing design (parent of e46c1f0).
-   Palette: cream #FAF7F4, surface #F0EBE3, ink #1A1714 / #2C1810,
-   gold accent #C4956A. Imported only by HomePage.tsx.
+   Palette is owned by :root cream tokens in index.css:
+     bg #FAF7F4 · surface #F0EBE3 · ink #1A1714 / #2C1810 · gold #C4956A
+   Imported only by HomePage.tsx.
    ========================================================================== */
 
 /* RESTORED classic warm-cream HomePage styles (pre-arena-landing) */
@@ -35,7 +36,12 @@
 
 .home-page-root {
   min-height: 100dvh;
+  min-height: 100vh;
   overflow-x: hidden;
+  background: var(--cream-bg, #faf7f4);
+  color: var(--cream-ink-deep, #2c1810);
+  position: relative;
+  font-family: var(--font-serif, Georgia, 'Source Serif 4', 'Times New Roman', serif);
 }
 
 @keyframes letterDrop {

@@ -924,7 +924,7 @@ export function HomePage() {
   };
 
   return (
-    <div className="home-page-root" style={{ background: '#FAF7F4', minHeight: '100dvh', position: 'relative' }}>
+    <div className="home-page-root">
       <div className="noise-overlay" aria-hidden="true" />
       <style>{`
         @keyframes ticker {
