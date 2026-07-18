@@ -2055,6 +2055,15 @@ async def export_tasks_jsonl(
     in 100-row batches to bound memory on both server and client.
     """
     _ensure_agent_access(user, db)
+    # Full-history scan + serialize. Bound abuse so an authenticated
+    # client cannot pin the DB with concurrent full exports.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_tasks_export_jsonl",
+        limit=30,
+        window_seconds=3600,
+        message="Too many task exports. Limit is 30 per hour.",
+    )
     rows = iter_user_task_export(
         db=db,
         user_id=user.id,
