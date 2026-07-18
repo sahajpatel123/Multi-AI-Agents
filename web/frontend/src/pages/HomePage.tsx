@@ -1486,39 +1486,124 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* How It Works */}
-      <section id="how-it-works" ref={howItWorksReveal.ref} style={{ ...howItWorksReveal.style, maxWidth: '1080px', margin: '4rem auto 0', padding: '0 24px' }} className={howItWorksReveal.className}>
-        <p style={{ fontSize: '12px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '1.2rem' }}>How it works</p>
+      {/* How It Works — four-step journey */}
+      <section
+        id="how-it-works"
+        ref={howItWorksReveal.ref}
+        style={howItWorksReveal.style}
+        className={`home-how ${howItWorksReveal.className}`}
+      >
+        <div className="home-how__header">
+          <div>
+            <p className="home-how__eyebrow">How it works</p>
+            <h2 className="home-how__title">Four steps. One clearer answer.</h2>
+          </div>
+          <p className="home-how__lede">
+            From a single prompt to a scored winner — then as deep as you want to go.
+          </p>
+        </div>
 
-        <div className="how-steps" style={{ display: 'flex', border: '0.5px solid #E0D8D0', borderRadius: '16px', overflow: 'hidden' }}>
-          {[
-            { num: '01', title: 'Ask anything', body: 'A question, a decision, a debate. No restrictions.' },
-            { num: '02', title: 'Four minds fire', body: 'All four respond simultaneously, each from a radically different angle.' },
-            { num: '03', title: 'A winner emerges', body: 'Scored by a fifth AI. Best answer surfaces automatically.' },
-            { num: '04', title: 'Go deeper', body: 'Challenge, debate, or go 1-on-1. You control the depth.' },
-          ].map((step, idx) => (
-            <div
-              className="how-step"
-              key={step.num}
-              onMouseEnter={() => setHowItWorksHovered(idx)}
-              onMouseLeave={() => setHowItWorksHovered(null)}
-              style={{
-                flex: 1,
-                padding: '1.5rem',
-                borderRight: idx < 3 ? '0.5px solid #E0D8D0' : 'none',
-                position: 'relative',
-                background: howItWorksHovered === idx ? 'rgba(196,149,106,0.04)' : 'transparent',
-                transition: 'all 200ms ease',
-              }}
-            >
-              <div className="hs-num" style={{ fontSize: '48px', fontWeight: 500, color: howItWorksHovered === idx ? 'rgba(196,149,106,0.2)' : '#F0EBE3', lineHeight: 1, marginBottom: '.8rem', transition: 'color 200ms ease' }}>{step.num}</div>
-              {idx < 3 && (
-                <div className="hs-arrow" style={{ position: 'absolute', right: '-10px', top: '1.5rem', width: '20px', height: '20px', borderRadius: '50%', background: '#FAF7F4', border: '0.5px solid #E0D8D0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: howItWorksHovered === idx ? '#1A1714' : '#C4956A', zIndex: 2, transform: howItWorksHovered === idx ? 'scale(1.2)' : 'scale(1)', transition: 'all 200ms ease' }}>→</div>
-              )}
-              <h4 style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714', marginBottom: '.5rem' }}>{step.title}</h4>
-              <p style={{ fontSize: '13px', color: '#6B6460', lineHeight: 1.55 }}>{step.body}</p>
-            </div>
-          ))}
+        <div
+          className={`home-how__rail${howItWorksReveal.className.includes('visible') || howItWorksHovered !== null ? ' is-active' : ''}`}
+          aria-hidden="true"
+        >
+          <div
+            className="home-how__rail-fill"
+            style={
+              howItWorksHovered !== null
+                ? { width: `${((howItWorksHovered + 1) / 4) * 100}%`, animation: 'none' }
+                : undefined
+            }
+          />
+        </div>
+
+        <div className="how-steps" role="list">
+          {(
+            [
+              {
+                num: '01',
+                title: 'Ask anything',
+                body: 'A question, a decision, a debate. No restrictions.',
+                foot: 'Your prompt',
+                accent: '#8AA899',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 19V5M12 5l-5 5M12 5l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M5 19h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                ),
+              },
+              {
+                num: '02',
+                title: 'Four minds fire',
+                body: 'All four respond simultaneously, each from a radically different angle.',
+                foot: 'Parallel stream',
+                accent: '#8C9BAB',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="7" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.5" />
+                    <circle cx="17" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.5" />
+                    <circle cx="7" cy="16" r="2.2" stroke="currentColor" strokeWidth="1.5" />
+                    <circle cx="17" cy="16" r="2.2" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                ),
+              },
+              {
+                num: '03',
+                title: 'A winner emerges',
+                body: 'Scored by a fifth AI. Best answer surfaces automatically.',
+                foot: 'Judge scores',
+                accent: '#C4956A',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M8 12l2.5 2.5L16 9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="12" cy="12" r="8.25" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                ),
+              },
+              {
+                num: '04',
+                title: 'Go deeper',
+                body: 'Challenge, debate, or go 1-on-1. You control the depth.',
+                foot: 'Your control',
+                accent: '#B0977E',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ),
+              },
+            ] as const
+          ).map((step, idx) => {
+            const isHovered = howItWorksHovered === idx;
+            return (
+              <div
+                className={`how-step${isHovered ? ' is-hovered' : ''}`}
+                key={step.num}
+                role="listitem"
+                onMouseEnter={() => setHowItWorksHovered(idx)}
+                onMouseLeave={() => setHowItWorksHovered(null)}
+                onFocus={() => setHowItWorksHovered(idx)}
+                onBlur={() => setHowItWorksHovered(null)}
+                tabIndex={0}
+                style={{ ['--how-accent' as string]: step.accent }}
+              >
+                <div className="how-step__icon">{step.icon}</div>
+                <div className="hs-num">{step.num}</div>
+                {idx < 3 ? (
+                  <div className="hs-arrow" aria-hidden="true">
+                    →
+                  </div>
+                ) : null}
+                <h3 className="how-step__title">{step.title}</h3>
+                <p className="how-step__body">{step.body}</p>
+                <div className="how-step__foot">
+                  <span className="how-step__foot-dot" aria-hidden="true" />
+                  {step.foot}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
