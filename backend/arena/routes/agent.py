@@ -40,6 +40,10 @@ from arena.core.feedback_calibrator import (
     get_recent_feedback,
 )
 from arena.core.agent_memory import get_watchlist_history, iter_user_task_export
+from arena.core.agent_metrics import (
+    compute_user_agent_metrics,
+    compute_user_feedback_summary,
+)
 from arena.core.report_generator import (
     generate_orchestration_report_html,
     generate_report_html,
@@ -1878,12 +1882,36 @@ async def get_agent_metrics(
     any timezone math itself.
     """
     _ensure_agent_access(user, db)
-    from arena.core.agent_metrics import compute_user_agent_metrics
 
     orm_user = db.query(User).filter(User.id == user.id).first()
     if orm_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     payload = compute_user_agent_metrics(
+        db=db,
+        user=orm_user,
+        window_days=window_days,
+    )
+    return JSONResponse(content=payload)
+
+
+@router.get("/feedback/summary")
+async def get_feedback_summary(
+    window_days: int = Query(30, ge=1, le=90),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Lifetime verdict counts + a UTC daily trend for the caller.
+
+    Powers the agent dashboard's "feedback per day" sparkline. Lives
+    next to /api/agent/metrics and /api/agent/feedback/recent so the
+    three feedback surfaces share the same UTC-day bucketing
+    contract.
+    """
+    _ensure_agent_access(user, db)
+    orm_user = db.query(User).filter(User.id == user.id).first()
+    if orm_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    payload = compute_user_feedback_summary(
         db=db,
         user=orm_user,
         window_days=window_days,

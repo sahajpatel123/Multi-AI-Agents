@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from arena.db_models import AgentTask, Orchestration, User
+from arena.db_models import AgentTask, AnswerFeedback, Orchestration, User
 
 
 def _utc_day_floor(dt: datetime) -> datetime:
@@ -136,4 +136,58 @@ def compute_user_agent_metrics(
         },
         "daily_trend": daily_trend,
         "top_topics": top_topics,
+    }
+
+
+def compute_user_feedback_summary(
+    db: Session,
+    user: User,
+    window_days: int = 30,
+) -> dict[str, Any]:
+    """Daily + lifetime breakdown of the caller's answer feedback.
+
+    Distinct from ``compute_user_agent_metrics`` because answer feedback
+    is stored in a separate ``answer_feedbacks`` table (one row per
+    verdict, no per-task dedup). Lifetime totals are split by verdict;
+    the daily trend is bucketed by UTC day like the agent metrics
+    payload so the dashboard can render one consistent heatmap.
+    """
+    rows = (
+        db.query(AnswerFeedback)
+        .filter(AnswerFeedback.user_id == user.id)
+        .all()
+    )
+    totals = Counter(r.verdict for r in rows if r.verdict)
+    total = sum(totals.values())
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    cutoff = _utc_day_floor(now) - timedelta(days=max(0, window_days - 1))
+    counts_by_day: dict[Any, int] = defaultdict(int)
+    for row in rows:
+        if row.created_at is None or row.created_at < cutoff:
+            continue
+        ts = row.created_at
+        if ts.tzinfo is not None:
+            ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
+        counts_by_day[_utc_day_floor(ts).date()] += 1
+
+    daily_trend: list[dict[str, Any]] = []
+    for offset in range(window_days):
+        day = cutoff.date() + timedelta(days=offset)
+        daily_trend.append(
+            {"date": day.isoformat(), "count": counts_by_day.get(day, 0)}
+        )
+
+    return {
+        "total": total,
+        "verdicts": {
+            "correct": int(totals.get("correct", 0)),
+            "partial": int(totals.get("partial", 0)),
+            "wrong": int(totals.get("wrong", 0)),
+        },
+        "rate": round(
+            (total / total) if total else 0.0, 4
+        ),
+        "window_days": window_days,
+        "daily_trend": daily_trend,
     }
