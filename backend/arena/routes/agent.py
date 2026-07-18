@@ -1394,6 +1394,14 @@ async def get_orchestration_status(
 ):
     _ensure_agent_access(user, db)
     _ensure_agent_orchestrate_access(user)
+    # Polled while multi-task runs complete — high ceiling, still bounded.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orchestrate_status",
+        limit=300,
+        window_seconds=60,
+        message="Too many orchestration status polls. Please slow down.",
+    )
 
     orch = db.query(Orchestration).filter(Orchestration.id == orch_id.strip()).first()
     if not orch or orch.user_id != user.id:
@@ -2329,6 +2337,13 @@ async def get_agent_task_live_updates(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_live_updates",
+        limit=120,
+        window_seconds=60,
+        message="Too many live-update lookups. Please slow down.",
+    )
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
@@ -2347,6 +2362,13 @@ async def mark_agent_live_updates_read(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_live_mark_read",
+        limit=120,
+        window_seconds=60,
+        message="Too many mark-read requests. Please slow down.",
+    )
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
