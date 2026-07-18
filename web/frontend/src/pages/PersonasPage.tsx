@@ -531,32 +531,7 @@ export function PersonasPage() {
       <Navbar />
 
       <main style={{ maxWidth: '1180px', margin: '0 auto', padding: '4rem 24px 5rem' }}>
-        <button
-          type="button"
-          onClick={() => navigate('/app')}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '13px',
-            color: '#6B6460',
-            background: '#F0EBE3',
-            border: '0.5px solid #E0D8D0',
-            borderRadius: '999px',
-            padding: '7px 16px',
-            cursor: 'pointer',
-            transition: 'all 150ms ease',
-            marginBottom: '1.5rem',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#E0D8D0';
-            e.currentTarget.style.color = '#1A1714';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#F0EBE3';
-            e.currentTarget.style.color = '#6B6460';
-          }}
-        >
+        <button type="button" onClick={() => navigate('/app')} className="personas-back-btn">
           ← Back to Arena
         </button>
 
@@ -615,24 +590,7 @@ export function PersonasPage() {
                 <button
                   type="button"
                   onClick={() => setActiveSlot(index as SlotIndex)}
-                  style={{
-                    position: 'absolute',
-                    right: '1.2rem',
-                    bottom: '0.95rem',
-                    fontSize: '11px',
-                    color: '#C4956A',
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'color 150ms ease',
-                    padding: 0,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#1A1714';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '#C4956A';
-                  }}
+                  className="personas-swap-btn"
                 >
                   Swap →
                 </button>

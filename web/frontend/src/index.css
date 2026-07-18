@@ -3070,17 +3070,19 @@ canvas {
     color var(--motion-hover-ms) var(--ease-btn),
     border-color var(--motion-hover-ms) var(--ease-btn),
     background var(--motion-hover-ms) var(--ease-btn),
-    transform var(--motion-press-ms) var(--ease-btn);
+    transform var(--motion-lift-ms) var(--ease-spring-soft);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .auth-modal-tab:hover:not(.auth-modal-tab--active) {
     color: #1a1714;
     background: rgba(250, 247, 244, 0.7);
+    transform: translateY(-1px);
   }
 
   .auth-modal-tab:active {
-    transform: scale(0.99);
+    transform: scale(0.98);
+    transition-duration: var(--motion-press-ms);
   }
 }
 
@@ -6437,14 +6439,97 @@ canvas {
   flex-direction: column;
   overflow: hidden;
   isolation: isolate;
+  transform: translateZ(0);
   transition:
-    transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 240ms ease;
+    transform var(--motion-lift-ms) var(--ease-spring-soft),
+    box-shadow var(--motion-lift-ms) var(--ease-out-premium),
+    border-color var(--motion-hover-ms) var(--ease-btn);
 }
 
 .about-story-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 36px rgba(44, 24, 16, 0.07);
+  transform: translateY(-5px) scale(1.012);
+  box-shadow: 0 18px 40px rgba(44, 24, 16, 0.09);
+}
+
+/* Personas page — back / swap micro-interactions */
+.personas-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #6b6460;
+  background: #f0ebe3;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 999px;
+  padding: 7px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: 1.5rem;
+  transform: translateZ(0);
+  transition:
+    background var(--motion-hover-ms) var(--ease-btn),
+    color var(--motion-hover-ms) var(--ease-btn),
+    border-color var(--motion-hover-ms) var(--ease-btn),
+    transform var(--motion-lift-ms) var(--ease-spring-soft),
+    box-shadow var(--motion-lift-ms) var(--ease-out-premium);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .personas-back-btn:hover {
+    background: #e0d8d0;
+    color: #1a1714;
+    transform: translateY(-1.5px) scale(1.02);
+    box-shadow: 0 4px 14px rgba(44, 24, 16, 0.08);
+  }
+}
+
+.personas-back-btn:active {
+  transform: translateY(0) scale(0.97);
+  transition-duration: var(--motion-press-ms);
+}
+
+.personas-swap-btn {
+  position: absolute;
+  right: 1.2rem;
+  bottom: 0.95rem;
+  font-size: 11px;
+  color: #c4956a;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: inherit;
+  transition:
+    color var(--motion-hover-ms) var(--ease-btn),
+    transform var(--motion-lift-ms) var(--ease-spring-soft),
+    letter-spacing var(--motion-hover-ms) var(--ease-btn);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .personas-swap-btn:hover {
+    color: #1a1714;
+    transform: translateX(3px);
+    letter-spacing: 0.02em;
+  }
+}
+
+.personas-swap-btn:active {
+  transform: translateX(1px) scale(0.98);
+  transition-duration: var(--motion-press-ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .personas-back-btn,
+  .personas-swap-btn {
+    transition: background 0.12s ease, color 0.12s ease !important;
+  }
+
+  .personas-back-btn:hover,
+  .personas-back-btn:active,
+  .personas-swap-btn:hover,
+  .personas-swap-btn:active {
+    transform: none !important;
+  }
 }
 
 .about-story-card--beige {
