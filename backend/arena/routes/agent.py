@@ -1868,6 +1868,15 @@ async def list_watchlist_items(
     db: Session = Depends(get_db),
 ):
     _ensure_agent_watchlist_access(user)
+    # Watchlist list is polled by the agent sidebar — bound per-user
+    # so concurrent clients cannot fan out full-item serializations.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_list",
+        limit=120,
+        window_seconds=60,
+        message="Too many watchlist lookups. Please slow down.",
+    )
     items = (
         db.query(WatchlistItem)
         .filter(WatchlistItem.user_id == user.id)
@@ -1958,6 +1967,13 @@ async def get_watchlist_item_history(
     Limit is clamped to [1, 200].
     """
     _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_history",
+        limit=60,
+        window_seconds=60,
+        message="Too many watchlist history lookups. Please slow down.",
+    )
     item = (
         db.query(WatchlistItem)
         .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
