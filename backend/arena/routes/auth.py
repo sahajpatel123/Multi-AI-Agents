@@ -315,6 +315,14 @@ async def logout(request: Request, db: Session = Depends(get_db), user: User = D
     authenticated caller — otherwise any logged-in client could force-
     revoke another user's session by pasting their refresh JWT.
     """
+    # 30/min/user — blacklist writes; stop logout-flood thrash.
+    enforce_user_rate_limit(
+        user.id,
+        scope="auth_logout",
+        limit=30,
+        window_seconds=60,
+        message="Too many logout attempts. Please slow down.",
+    )
     auth_header = request.headers.get("Authorization", "")
     access_token = ""
     if auth_header.startswith("Bearer "):
@@ -486,6 +494,14 @@ async def me(
     # Routed through get_current_user_required_orm so the blacklist check
     # at dependencies.py:26 is enforced — without this the endpoint had a
     # side-channel that accepted logged-out tokens.
+    # 120/min/user — shell hydrate is hot; still cap token-replay spam.
+    enforce_user_rate_limit(
+        user.id,
+        scope="auth_me",
+        limit=120,
+        window_seconds=60,
+        message="Too many profile reads. Please slow down.",
+    )
     return orm_user_to_response(user, db)
 
 
@@ -498,6 +514,14 @@ async def my_features(
 
     Returns { tier, features: {...} } where features is the boolean
     map from TIER_FEATURES. Same auth contract as /me."""
+    # 120/min/user — feature gates poll often; match /me ceiling.
+    enforce_user_rate_limit(
+        user.id,
+        scope="auth_me_features",
+        limit=120,
+        window_seconds=60,
+        message="Too many feature-map reads. Please slow down.",
+    )
     tier = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
     nt = normalize_tier(tier)
     return {
@@ -781,6 +805,14 @@ async def account_security(
     'is this account in a healthy state?' — without exposing any
     PII about other accounts.
     """
+    # 60/min/user — panel load + DB max() on usage; keep scrapers out.
+    enforce_user_rate_limit(
+        user.id,
+        scope="auth_security",
+        limit=60,
+        window_seconds=60,
+        message="Too many security panel reads. Please slow down.",
+    )
     # Account age — 'member since'.
     member_since = user.created_at.isoformat() if user.created_at else None
 
@@ -806,7 +838,8 @@ async def account_security(
         "tier": user.tier.value if hasattr(user.tier, "value") else str(user.tier),
         "is_verified": bool(getattr(user, "is_verified", False)),
         "has_password": bool(user.password_hash),
-        "password_last_changed_at": None,  # TODO once column ships
+        # Column not shipped yet — UI treats null as "unknown / set at signup".
+        "password_last_changed_at": None,
     }
 
 
