@@ -676,16 +676,21 @@ export function HomePage() {
     if (!quickOpen) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const handler = (e: MouseEvent) => {
+    const onPointer = (e: MouseEvent) => {
       const el = document.getElementById('quick-access-widget');
       if (el && !el.contains(e.target as Node)) {
         setQuickOpen(false);
       }
     };
-    document.addEventListener('mousedown', handler);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setQuickOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = prevOverflow;
-      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
     };
   }, [quickOpen]);
 
@@ -1894,44 +1899,21 @@ export function HomePage() {
 
       <Footer />
 
-      <style>{`
-        @keyframes quickPulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(0.7); }
-        }
-        @keyframes quickExpand {
-          from {
-            opacity: 0;
-            transform: scale(0.92) translateY(8px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-        @media (max-width: 768px) {
-          .quick-access-card-inner {
-            width: calc(100vw - 40px) !important;
-            max-width: 260px !important;
-          }
-        }
-      `}</style>
-
       {typeof document !== 'undefined'
         ? createPortal(
             <>
               {!quickOpen ? (
                 <Button
                   type="button"
-                  className="quick-access-floating quick-access-floating--corner"
+                  className="quick-access-floating quick-access-floating--corner quick-access-fab"
                   variant="primary"
                   size="md"
                   icon={Icons.sparkle(16)}
                   onClick={() => setQuickOpen(true)}
-                  style={{
-                    boxShadow: '0 4px 20px rgba(44, 24, 16, 0.12)',
-                  }}
+                  aria-haspopup="dialog"
+                  aria-expanded={false}
                 >
+                  <span className="quick-access-fab__live" aria-hidden="true" />
                   Open Arena
                 </Button>
               ) : (
@@ -1944,212 +1926,114 @@ export function HomePage() {
                   />
                   <div
                     id="quick-access-widget"
-                    className="quick-access-floating quick-access-floating--corner"
-                    style={{ position: 'relative' }}
+                    className="quick-access-floating quick-access-floating--corner quick-access-panel"
+                    role="dialog"
+                    aria-label="Quick access"
+                    aria-modal="true"
                   >
-          <button
-            type="button"
-            aria-label="Close quick access"
-            onClick={() => setQuickOpen(false)}
-            style={{
-              position: 'absolute',
-              top: -16,
-              right: -16,
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              background: '#2C1810',
-              border: '0.5px solid #3D2820',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              zIndex: 1001,
-              padding: 0,
-            }}
-          >
-            <span style={{ fontSize: 16, color: '#C4956A', lineHeight: 1 }}>×</span>
-          </button>
+                    <button
+                      type="button"
+                      className="quick-access-panel__close"
+                      aria-label="Close quick access"
+                      onClick={() => setQuickOpen(false)}
+                    >
+                      ×
+                    </button>
 
-          <div
-            className="quick-access-card-inner"
-            style={{
-              width: 260,
-              background: '#FDFAF6',
-              border: '0.5px solid #DDD0BC',
-              borderRadius: 16,
-              overflow: 'hidden',
-              animation: 'quickExpand 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-              transformOrigin: 'bottom right',
-            }}
-          >
-            <div
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setQuickOpen(false);
-                  if (isAuthenticated) navigate('/app');
-                  else {
-                    setRedirectIntent('/app');
-                    navigate('/signin');
-                  }
-                }
-              }}
-              onClick={() => {
-                setQuickOpen(false);
-                if (isAuthenticated) navigate('/app');
-                else {
-                  setRedirectIntent('/app');
-                  navigate('/signin');
-                }
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '14px 16px',
-                cursor: 'pointer',
-                transition: 'background 0.12s',
-                borderBottom: '0.5px solid #EDE4D8',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#F5EFE6';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  background: '#F0E8DC',
-                  border: '0.5px solid #D4C4B0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" stroke="#C4956A" strokeWidth="1.5" />
-                  <path
-                    d="M12 8v5l2.5 2.5"
-                    stroke="#C4956A"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                <div style={{ fontSize: 14, color: '#2C1810', fontWeight: 500, marginBottom: 2 }}>Arena</div>
-                <div style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic' }}>Four minds debate your question</div>
-              </div>
-              <span style={{ fontSize: 12, color: '#C4A882', marginLeft: 'auto', flexShrink: 0 }}>→</span>
-            </div>
+                    <div className="quick-access-card-inner">
+                      <div className="quick-access-card__header">
+                        <span className="quick-access-card__header-dot" aria-hidden="true" />
+                        <span className="quick-access-card__header-kicker">Jump in</span>
+                      </div>
 
-            <div
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setQuickOpen(false);
-                  if (isAuthenticated) navigate('/agent');
-                  else {
-                    setRedirectIntent('/agent');
-                    navigate('/signin');
-                  }
-                }
-              }}
-              onClick={() => {
-                setQuickOpen(false);
-                if (isAuthenticated) navigate('/agent');
-                else {
-                  setRedirectIntent('/agent');
-                  navigate('/signin');
-                }
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '14px 16px',
-                cursor: 'pointer',
-                transition: 'background 0.12s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#F5EFE6';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  background: '#EAF0E8',
-                  border: '0.5px solid #C4D4C0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M12 2L2 7l10 5 10-5-10-5z"
-                    stroke="#5A8C6A"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M2 17l10 5 10-5"
-                    stroke="#5A8C6A"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M2 12l10 5 10-5"
-                    stroke="#5A8C6A"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                <div style={{ fontSize: 14, color: '#2C1810', fontWeight: 500, marginBottom: 2 }}>Agent</div>
-                <div style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic' }}>7-stage deep research pipeline</div>
-              </div>
-              <span style={{ fontSize: 12, color: '#C4A882', marginLeft: 'auto', flexShrink: 0 }}>→</span>
-            </div>
+                      <button
+                        type="button"
+                        className="quick-access-row"
+                        onClick={() => {
+                          setQuickOpen(false);
+                          if (isAuthenticated) navigate('/app');
+                          else {
+                            setRedirectIntent('/app');
+                            navigate('/signin');
+                          }
+                        }}
+                      >
+                        <span className="quick-access-row__icon quick-access-row__icon--arena" aria-hidden="true">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
+                            <path
+                              d="M12 8v5l2.5 2.5"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        <span className="quick-access-row__copy">
+                          <span className="quick-access-row__title">Arena</span>
+                          <span className="quick-access-row__sub">Four minds debate your question</span>
+                        </span>
+                        <span className="quick-access-row__arrow" aria-hidden="true">
+                          →
+                        </span>
+                      </button>
 
-            <div
-              style={{
-                padding: '9px 16px',
-                background: '#FAF7F2',
-                borderTop: '0.5px solid #EDE4D8',
-                fontSize: 11,
-                textAlign: 'center',
-                letterSpacing: '0.04em',
-                color: isAuthenticated ? '#A89070' : '#C4A882',
-              }}
-            >
-              {isAuthenticated
-                ? `${formatQuickAccessTierLabel(tier)} · Active`
-                : 'Sign in to access both modes'}
-            </div>
-          </div>
-        </div>
+                      <button
+                        type="button"
+                        className="quick-access-row"
+                        onClick={() => {
+                          setQuickOpen(false);
+                          if (isAuthenticated) navigate('/agent');
+                          else {
+                            setRedirectIntent('/agent');
+                            navigate('/signin');
+                          }
+                        }}
+                      >
+                        <span className="quick-access-row__icon quick-access-row__icon--agent" aria-hidden="true">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                            <path
+                              d="M12 2L2 7l10 5 10-5-10-5z"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <path
+                              d="M2 17l10 5 10-5"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <path
+                              d="M2 12l10 5 10-5"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        <span className="quick-access-row__copy">
+                          <span className="quick-access-row__title">Agent</span>
+                          <span className="quick-access-row__sub">7-stage deep research pipeline</span>
+                        </span>
+                        <span className="quick-access-row__arrow" aria-hidden="true">
+                          →
+                        </span>
+                      </button>
+
+                      <div
+                        className={`quick-access-card__foot${isAuthenticated ? '' : ' is-guest'}`}
+                      >
+                        {isAuthenticated
+                          ? `${formatQuickAccessTierLabel(tier)} · Active`
+                          : 'Sign in to access both modes'}
+                      </div>
+                    </div>
+                  </div>
                 </>
               )}
             </>,

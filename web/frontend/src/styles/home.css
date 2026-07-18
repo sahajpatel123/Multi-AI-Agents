@@ -9,19 +9,71 @@
 
 /* RESTORED classic warm-cream HomePage styles (pre-arena-landing) */
 
-/* Quick access (HomePage) — portal backdrop; must live outside overflow:hidden ancestors */
+/* ============================================================================
+   QUICK ACCESS — floating launcher + mode panel (loop 10)
+   Cream FAB and expanded dual-mode card; lives above page scroll.
+   ========================================================================== */
+
 .quick-access-backdrop {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: rgba(26, 23, 20, 0.45);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  background: rgba(26, 23, 20, 0.42);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: quickBackdropIn 200ms ease forwards;
+}
+
+@keyframes quickBackdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes quickPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.72);
+  }
+}
+
+@keyframes quickExpand {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes quickFabIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.quick-access-floating.quick-access-floating--corner {
+  position: fixed !important;
+  z-index: 10001 !important;
 }
 
 @media (min-width: 769px) {
   .quick-access-floating.quick-access-floating--corner {
-    position: fixed !important;
     left: auto !important;
     right: 32px !important;
     width: auto !important;
@@ -30,7 +82,277 @@
     margin-right: 0 !important;
     bottom: 32px !important;
     top: auto !important;
-    z-index: 10001 !important;
+  }
+}
+
+/* Closed FAB */
+.quick-access-fab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px 12px 14px !important;
+  border-radius: 999px !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.2) inset,
+    0 10px 28px rgba(44, 24, 16, 0.14),
+    0 0 0 0 rgba(196, 149, 106, 0.35) !important;
+  animation: quickFabIn 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition:
+    transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 220ms ease !important;
+}
+
+.quick-access-fab::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 1px solid rgba(196, 149, 106, 0.35);
+  opacity: 0.7;
+  animation: quickFabRing 2.4s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes quickFabRing {
+  0% {
+    transform: scale(0.96);
+    opacity: 0.65;
+  }
+  70% {
+    transform: scale(1.12);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.12);
+    opacity: 0;
+  }
+}
+
+.quick-access-fab:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 14px 32px rgba(196, 149, 106, 0.32) !important;
+}
+
+.quick-access-fab:focus-visible {
+  outline: 2px solid #faf7f4 !important;
+  outline-offset: 3px !important;
+}
+
+.quick-access-fab__live {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #faf7f4;
+  box-shadow: 0 0 0 0 rgba(250, 247, 244, 0.5);
+  animation: quickPulse 1.8s ease-out infinite;
+  flex-shrink: 0;
+}
+
+/* Open panel shell */
+.quick-access-panel {
+  position: relative;
+}
+
+.quick-access-panel__close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #1a1714;
+  border: 0.5px solid rgba(196, 149, 106, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  padding: 0;
+  color: #c4956a;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 0 6px 16px rgba(26, 23, 20, 0.2);
+  transition:
+    transform 180ms ease,
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.quick-access-panel__close:hover {
+  transform: scale(1.06);
+  background: #2c1810;
+  color: #faf7f4;
+}
+
+.quick-access-panel__close:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 2px;
+}
+
+.quick-access-card-inner {
+  width: 280px;
+  background: linear-gradient(180deg, #fffdfb 0%, #fdfaf6 100%);
+  border: 0.5px solid #ddd0bc;
+  border-radius: 18px;
+  overflow: hidden;
+  animation: quickExpand 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: bottom right;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 20px 48px rgba(44, 24, 16, 0.14);
+}
+
+.quick-access-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 10px;
+  border-bottom: 0.5px solid #ede4d8;
+  background: rgba(240, 235, 227, 0.35);
+}
+
+.quick-access-card__header-kicker {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #a89070;
+  font-weight: 500;
+}
+
+.quick-access-card__header-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8aa899;
+  animation: quickPulse 1.8s ease-out infinite;
+}
+
+.quick-access-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: background 140ms ease;
+}
+
+.quick-access-row + .quick-access-row {
+  border-top: 0.5px solid #ede4d8;
+}
+
+.quick-access-row:hover,
+.quick-access-row:focus-visible {
+  background: #f5efe6;
+  outline: none;
+}
+
+.quick-access-row:focus-visible {
+  box-shadow: inset 0 0 0 1.5px rgba(196, 149, 106, 0.45);
+}
+
+.quick-access-row__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.quick-access-row:hover .quick-access-row__icon,
+.quick-access-row:focus-visible .quick-access-row__icon {
+  transform: scale(1.06);
+}
+
+.quick-access-row__icon--arena {
+  background: #f0e8dc;
+  border: 0.5px solid #d4c4b0;
+  color: #c4956a;
+}
+
+.quick-access-row__icon--agent {
+  background: #eaf0e8;
+  border: 0.5px solid #c4d4c0;
+  color: #5a8c6a;
+}
+
+.quick-access-row__copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.quick-access-row__title {
+  font-size: 14px;
+  color: #2c1810;
+  font-weight: 500;
+  margin-bottom: 2px;
+  letter-spacing: -0.01em;
+}
+
+.quick-access-row__sub {
+  font-size: 11.5px;
+  color: #a89070;
+  font-style: italic;
+  line-height: 1.35;
+}
+
+.quick-access-row__arrow {
+  font-size: 13px;
+  color: #c4a882;
+  flex-shrink: 0;
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), color 180ms ease;
+}
+
+.quick-access-row:hover .quick-access-row__arrow,
+.quick-access-row:focus-visible .quick-access-row__arrow {
+  transform: translateX(3px);
+  color: #c4956a;
+}
+
+.quick-access-card__foot {
+  padding: 10px 16px;
+  background: #faf7f2;
+  border-top: 0.5px solid #ede4d8;
+  font-size: 11px;
+  text-align: center;
+  letter-spacing: 0.04em;
+  color: #a89070;
+}
+
+.quick-access-card__foot.is-guest {
+  color: #c4a882;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-access-backdrop,
+  .quick-access-fab,
+  .quick-access-fab::before,
+  .quick-access-fab__live,
+  .quick-access-card-inner,
+  .quick-access-card__header-dot {
+    animation: none !important;
+  }
+
+  .quick-access-fab:hover {
+    transform: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .quick-access-card-inner {
+    width: calc(100vw - 40px);
+    max-width: 300px;
   }
 }
 
