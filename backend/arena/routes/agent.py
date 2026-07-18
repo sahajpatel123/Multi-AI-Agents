@@ -1025,7 +1025,9 @@ async def get_capability_usage(
     '12 arena, 5 agent' totals without a second roundtrip.
     """
     from arena.db_models import UsageRecord
-    from datetime import datetime, timezone, timedelta
+    from datetime import timedelta
+
+    from arena.core.datetime_utils import utcnow_naive
 
     enforce_user_rate_limit(
         user.id,
@@ -1035,7 +1037,7 @@ async def get_capability_usage(
         message="Too many capability-usage requests. Limit is 60 per hour.",
     )
 
-    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    now_utc = utcnow_naive()
     window_start = now_utc - timedelta(days=days - 1)
 
     # Single GROUP BY over the relevant columns; cheap because
@@ -1245,6 +1247,14 @@ async def get_agent_task_detail(
     gets 403 rather than a confusing 404.
     """
     _ensure_agent_access(user, db)
+    # Detail aggregates task row + insight + either-side contradictions.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_detail",
+        limit=120,
+        window_seconds=60,
+        message="Too many task detail lookups. Please slow down.",
+    )
     tid = task_id.strip()
     if not tid:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -2074,6 +2084,13 @@ async def list_recent_feedback(
     as a tombstone rather than 500 on a join.
     """
     _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_recent",
+        limit=120,
+        window_seconds=60,
+        message="Too many recent-feedback lookups. Please slow down.",
+    )
     items = get_recent_feedback(
         db=db,
         user_id=user.id,
@@ -2373,6 +2390,13 @@ async def get_saved_agent_task(
 ):
     """Load a persisted Agent task from DB when no in-memory blackboard exists."""
     _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_saved_task",
+        limit=120,
+        window_seconds=60,
+        message="Too many saved-task lookups. Please slow down.",
+    )
     row = (
         db.query(AgentTaskRow)
         .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
