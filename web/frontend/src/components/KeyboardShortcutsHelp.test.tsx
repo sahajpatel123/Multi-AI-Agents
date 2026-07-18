@@ -73,4 +73,31 @@ describe('KeyboardShortcutsHelp', () => {
       expect(dialog).toHaveAttribute('aria-modal', 'true');
     });
   });
+
+  it('renders polished panel chrome and shortcut keys', async () => {
+    const { container, getByLabelText } = render(
+      <KeyboardShortcutsHelp surface="arena" />,
+    );
+    pressKey('?');
+    await waitFor(() => {
+      expect(container.querySelector('.kbd-help-panel')).not.toBeNull();
+    });
+    expect(getByLabelText(/close shortcuts/i)).toBeInTheDocument();
+    expect(container.querySelectorAll('.kbd-help-kbd').length).toBeGreaterThan(0);
+    expect(container.querySelector('.kbd-help-mark')).not.toBeNull();
+  });
+
+  it('close button dismisses the panel', async () => {
+    const { container, getByLabelText } = render(
+      <KeyboardShortcutsHelp surface="arena" />,
+    );
+    pressKey('?');
+    await waitFor(() => {
+      expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    });
+    fireEvent.click(getByLabelText(/close shortcuts/i));
+    await waitFor(() => {
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+    });
+  });
 });

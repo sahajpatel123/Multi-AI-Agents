@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { Link2, Copy, Mail, Check, Share2 } from 'lucide-react';
 import { copyToClipboard } from '../lib/clipboard';
 import {
@@ -8,7 +15,7 @@ import {
   canUseNativeShare,
   invokeNativeShare,
 } from '../lib/shareUrl';
-import { prefersReducedMotion } from '../lib/motion';
+import { motionDuration, prefersReducedMotion } from '../lib/motion';
 
 interface ShareDropdownProps {
   agentId: string;
@@ -26,6 +33,12 @@ interface ShareDropdownProps {
   anchorRef: React.RefObject<HTMLElement>;
 }
 
+type MenuPlacement = {
+  top: number;
+  left: number;
+  openUp: boolean;
+};
+
 export function ShareDropdown({
   agentId,
   agentName,
@@ -40,14 +53,60 @@ export function ShareDropdown({
   const [copiedState, setCopiedState] = useState<'link' | 'text' | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
+  const [placement, setPlacement] = useState<MenuPlacement | null>(null);
   const reducedMotion = prefersReducedMotion();
+  const labelId = useId();
+  const errorId = useId();
 
   useEffect(() => {
     setNativeShareAvailable(canUseNativeShare());
   }, []);
 
+  useLayoutEffect(() => {
+    if (!isOpen || !anchorRef.current) {
+      setPlacement(null);
+      return;
+    }
+
+    const place = () => {
+      const anchor = anchorRef.current;
+      const menu = dropdownRef.current;
+      if (!anchor) return;
+
+      const rect = anchor.getBoundingClientRect();
+      const menuWidth = menu?.offsetWidth || 220;
+      const menuHeight = menu?.offsetHeight || 280;
+      const gap = 8;
+      const pad = 12;
+
+      let left = rect.right - menuWidth;
+      left = Math.max(pad, Math.min(left, window.innerWidth - menuWidth - pad));
+
+      const spaceBelow = window.innerHeight - rect.bottom - gap;
+      const spaceAbove = rect.top - gap;
+      const openUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
+
+      let top = openUp ? rect.top - gap - menuHeight : rect.bottom + gap;
+      top = Math.max(pad, Math.min(top, window.innerHeight - menuHeight - pad));
+
+      setPlacement({ top, left, openUp });
+    };
+
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [isOpen, anchorRef, nativeShareAvailable, copyError, copiedState]);
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setCopyError(null);
+      setCopiedState(null);
+      return;
+    }
 
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -60,16 +119,43 @@ export function ShareDropdown({
       }
     };
 
-    const handleEscape = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
         onClose();
+        anchorRef.current?.focus();
+        return;
+      }
+
+      if (!dropdownRef.current) return;
+      const items = Array.from(
+        dropdownRef.current.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+      );
+      if (items.length === 0) return;
+
+      const active = document.activeElement as HTMLElement | null;
+      const index = items.indexOf(active as HTMLElement);
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        const next = index < 0 ? 0 : (index + 1) % items.length;
+        items[next]?.focus();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        const next = index < 0 ? items.length - 1 : (index - 1 + items.length) % items.length;
+        items[next]?.focus();
+      } else if (event.key === 'Home') {
+        event.preventDefault();
+        items[0]?.focus();
+      } else if (event.key === 'End') {
+        event.preventDefault();
+        items[items.length - 1]?.focus();
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
+    document.addEventListener('keydown', handleKeyDown);
 
-    // Focus first menuitem for keyboard users
     const focusTimer = window.setTimeout(() => {
       const first = dropdownRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
       first?.focus();
@@ -77,16 +163,20 @@ export function ShareDropdown({
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('keydown', handleKeyDown);
       window.clearTimeout(focusTimer);
     };
   }, [isOpen, onClose, anchorRef]);
 
   useEffect(() => {
-    if (copiedState) {
-      const timer = setTimeout(() => setCopiedState(null), 1500);
-      return () => clearTimeout(timer);
+    if (!copiedState) return;
+    const hold = motionDuration(1500);
+    if (hold <= 0) {
+      setCopiedState(null);
+      return;
     }
+    const timer = window.setTimeout(() => setCopiedState(null), hold);
+    return () => window.clearTimeout(timer);
   }, [copiedState]);
 
   if (!isOpen) return null;
@@ -176,111 +266,89 @@ ${shareUrl}`;
     onClose();
   };
 
-  const getDropdownPosition = () => {
-    if (!anchorRef.current) return {};
-
-    const rect = anchorRef.current.getBoundingClientRect();
-    return {
-      position: 'fixed' as const,
-      top: `${rect.bottom + 8}px`,
-      right: `${window.innerWidth - rect.right}px`,
-    };
-  };
+  const style: CSSProperties = placement
+    ? {
+        position: 'fixed',
+        top: placement.top,
+        left: placement.left,
+      }
+    : {
+        position: 'fixed',
+        // Off-screen first paint so layout can measure without a flash at 0,0
+        top: -9999,
+        left: -9999,
+        visibility: 'hidden',
+      };
 
   return (
     <div
       ref={dropdownRef}
       role="menu"
+      aria-labelledby={labelId}
       aria-label="Share this take"
-      style={{
-        ...getDropdownPosition(),
-        background: '#FFFFFF',
-        border: '0.5px solid #E0D8D0',
-        borderRadius: '10px',
-        boxShadow: '0 4px 20px rgba(26,23,20,0.08)',
-        padding: '6px',
-        minWidth: '200px',
-        zIndex: 1000,
-        animation: reducedMotion ? 'none' : 'shareDropdownEnter 200ms ease',
-      }}
+      className={[
+        'share-menu',
+        placement?.openUp ? 'share-menu--up' : 'share-menu--down',
+        reducedMotion ? 'share-menu--static' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      style={style}
     >
-      {!reducedMotion ? (
-        <style>
-          {`
-          @keyframes shareDropdownEnter {
-            from {
-              opacity: 0;
-              transform: translateY(-6px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-        `}
-        </style>
-      ) : null}
-
-      <div
-        style={{
-          fontSize: '11px',
-          color: '#6B6460',
-          padding: '6px 10px 4px',
-          letterSpacing: '0.05em',
-          textTransform: 'uppercase',
-        }}
-      >
+      <div id={labelId} className="share-menu__label">
         Share this take
       </div>
 
-      <div
-        style={{
-          height: '1px',
-          background: '#E0D8D0',
-          margin: '0 6px',
-        }}
-      />
+      <div className="share-menu__divider" aria-hidden />
 
-      <div style={{ marginTop: '2px' }}>
+      <div className="share-menu__body">
         {copyError ? (
-          <p
-            role="alert"
-            style={{
-              fontSize: 11,
-              color: '#993C1D',
-              padding: '6px 10px 8px',
-              margin: 0,
-              lineHeight: 1.45,
-            }}
-          >
+          <p id={errorId} role="alert" className="share-menu__error">
             {copyError}
           </p>
         ) : null}
 
         {nativeShareAvailable ? (
           <ShareOption
-            icon={<Share2 className="w-4 h-4" />}
+            icon={<Share2 width={16} height={16} aria-hidden />}
             label="Share…"
             onClick={() => {
               void handleNativeShare();
             }}
+            describedBy={copyError ? errorId : undefined}
           />
         ) : null}
 
         <ShareOption
-          icon={copiedState === 'link' ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+          icon={
+            copiedState === 'link' ? (
+              <Check width={16} height={16} aria-hidden />
+            ) : (
+              <Link2 width={16} height={16} aria-hidden />
+            )
+          }
           label={copiedState === 'link' ? 'Copied!' : 'Copy link'}
+          success={copiedState === 'link'}
           onClick={() => {
             void handleCopyLink();
           }}
+          describedBy={copyError ? errorId : undefined}
         />
 
         <ShareOption
-          icon={copiedState === 'text' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          icon={
+            copiedState === 'text' ? (
+              <Check width={16} height={16} aria-hidden />
+            ) : (
+              <Copy width={16} height={16} aria-hidden />
+            )
+          }
           label={copiedState === 'text' ? 'Copied!' : 'Copy as text'}
+          success={copiedState === 'text'}
           onClick={() => {
             void handleCopyText();
           }}
+          describedBy={copyError ? errorId : undefined}
         />
 
         <ShareOption
@@ -304,7 +372,7 @@ ${shareUrl}`;
         />
 
         <ShareOption
-          icon={<Mail className="w-4 h-4" />}
+          icon={<Mail width={16} height={16} aria-hidden />}
           label="Share via email"
           onClick={handleShareEmail}
         />
@@ -317,36 +385,23 @@ interface ShareOptionProps {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
+  success?: boolean;
+  describedBy?: string;
 }
 
-function ShareOption({ icon, label, onClick }: ShareOptionProps) {
-  const [isHovered, setIsHovered] = useState(false);
-  const reducedMotion = prefersReducedMotion();
-
+function ShareOption({ icon, label, onClick, success, describedBy }: ShareOptionProps) {
   return (
     <button
       type="button"
       role="menuitem"
+      className={['share-menu__item', success ? 'share-menu__item--success' : '']
+        .filter(Boolean)
+        .join(' ')}
       onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        padding: '9px 12px',
-        borderRadius: '8px',
-        fontSize: '13px',
-        color: '#1A1714',
-        cursor: 'pointer',
-        transition: reducedMotion ? 'none' : 'background 150ms ease',
-        background: isHovered ? '#F0EBE3' : 'transparent',
-        border: 'none',
-      }}
+      aria-describedby={describedBy}
     >
-      {icon}
-      {label}
+      <span className="share-menu__item-icon">{icon}</span>
+      <span className="share-menu__item-label">{label}</span>
     </button>
   );
 }

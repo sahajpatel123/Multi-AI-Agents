@@ -66,6 +66,17 @@ describe('PromptInput', () => {
     expect(textarea).not.toBeNull();
   });
 
+  it('exposes an accessible send control label', () => {
+    render(<PromptInput onSubmit={() => {}} isLoading={false} />);
+    const send = screen.getByRole('button', { name: /enter a prompt to send/i });
+    expect(send).toBeDisabled();
+  });
+
+  it('marks the form busy while loading', () => {
+    const { container } = render(<PromptInput onSubmit={() => {}} isLoading />);
+    expect(container.querySelector('form')).toHaveAttribute('aria-busy', 'true');
+  });
+
   it('applies presetPrompt on mount and tracks presetPromptNonce updates', () => {
     const { rerender } = render(
       <PromptInput

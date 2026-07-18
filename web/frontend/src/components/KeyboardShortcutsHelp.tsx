@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import { Keyboard, X } from 'lucide-react';
 import {
   isBareQuestionHelpKey,
   shortcutsForSurface,
   shortcutsPanelTitle,
   type ShortcutSurface,
 } from '../lib/keyboardShortcuts';
+import { prefersReducedMotion } from '../lib/motion';
 import { shouldCaptureSlashFocus } from '../lib/slashFocus';
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Press `?` (when not typing in a field) to toggle a compact shortcuts panel.
@@ -13,8 +18,10 @@ import { shouldCaptureSlashFocus } from '../lib/slashFocus';
 export function KeyboardShortcutsHelp({ surface }: { surface: ShortcutSurface }) {
   const [open, setOpen] = useState(false);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const shortcuts = shortcutsForSurface(surface);
   const title = shortcutsPanelTitle(surface);
+  const reduceMotion = prefersReducedMotion();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -42,109 +49,95 @@ export function KeyboardShortcutsHelp({ surface }: { surface: ShortcutSurface })
     };
   }, [open]);
 
+  // Focus trap while the panel is open
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const nodes = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ).filter((el) => {
+        if (el.hasAttribute('disabled')) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      if (nodes.length === 0) return;
+
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (e.shiftKey) {
+        if (active === first || !panelRef.current.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !panelRef.current.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
   if (!open) return null;
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="keyboard-shortcuts-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 12000,
-        background: 'rgba(26,23,20,0.35)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-      }}
+      className={`kbd-help-overlay${reduceMotion ? ' kbd-help-overlay--static' : ''}`}
+      role="presentation"
       onClick={() => setOpen(false)}
     >
       <div
-        style={{
-          background: '#FAF7F4',
-          border: '0.5px solid #E0D8D0',
-          borderRadius: 16,
-          maxWidth: 360,
-          width: '100%',
-          padding: '20px 22px 18px',
-          boxShadow: '0 16px 40px rgba(26,23,20,0.12)',
-        }}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="keyboard-shortcuts-title"
+        className={`kbd-help-panel${reduceMotion ? ' kbd-help-panel--static' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            marginBottom: 14,
-          }}
-        >
-          <h2
-            id="keyboard-shortcuts-title"
-            style={{
-              margin: 0,
-              fontSize: 16,
-              fontWeight: 500,
-              color: '#1A1714',
-              fontFamily: 'Georgia, serif',
-            }}
-          >
-            {title}
-          </h2>
+        <div className="kbd-help-header">
+          <div className="kbd-help-heading">
+            <span className="kbd-help-mark" aria-hidden>
+              <Keyboard width={16} height={16} strokeWidth={1.75} />
+            </span>
+            <h2 id="keyboard-shortcuts-title" className="kbd-help-title">
+              {title}
+            </h2>
+          </div>
           <button
             ref={closeBtnRef}
             type="button"
+            className="kbd-help-close"
             onClick={() => setOpen(false)}
             aria-label="Close shortcuts"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 18,
-              color: '#A89070',
-              lineHeight: 1,
-              padding: 4,
-            }}
           >
-            ×
+            <X width={16} height={16} aria-hidden />
           </button>
         </div>
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+        <ul className="kbd-help-list">
           {shortcuts.map((row) => (
-            <li
-              key={`${row.keys}-${row.action}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 16,
-              }}
-            >
-              <span style={{ fontSize: 13, color: '#6B6460', lineHeight: 1.4 }}>{row.action}</span>
-              <kbd
-                style={{
-                  flexShrink: 0,
-                  fontSize: 12,
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                  color: '#1A1714',
-                  background: '#F0EBE3',
-                  border: '0.5px solid #E0D8D0',
-                  borderRadius: 6,
-                  padding: '3px 8px',
-                  minWidth: 28,
-                  textAlign: 'center',
-                }}
-              >
-                {row.keys}
-              </kbd>
+            <li key={`${row.keys}-${row.action}`} className="kbd-help-row">
+              <span className="kbd-help-action">{row.action}</span>
+              <span className="kbd-help-keys" aria-hidden={false}>
+                {row.keys.split(/\s*\+\s*/).map((part, i) => (
+                  <span key={`${row.keys}-${part}-${i}`} className="kbd-help-key-group">
+                    {i > 0 ? <span className="kbd-help-plus">+</span> : null}
+                    <kbd className="kbd-help-kbd">{part}</kbd>
+                  </span>
+                ))}
+              </span>
             </li>
           ))}
         </ul>
-        <p style={{ margin: '14px 0 0', fontSize: 11, color: '#A89070', lineHeight: 1.5 }}>
-          Press <kbd style={{ fontFamily: 'ui-monospace, monospace' }}>?</kbd> or Esc to close.
+
+        <p className="kbd-help-footnote">
+          Press <kbd className="kbd-help-kbd kbd-help-kbd--inline">?</kbd> or{' '}
+          <kbd className="kbd-help-kbd kbd-help-kbd--inline">Esc</kbd> to close.
         </p>
       </div>
     </div>

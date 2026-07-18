@@ -155,7 +155,7 @@ describe('ShareDropdown', () => {
     cleanupAnchor(anchor);
   });
 
-  it('honors prefers-reduced-motion (no enter animation)', () => {
+  it('honors prefers-reduced-motion (static menu class)', () => {
     installMatchMedia(true);
     const anchor = makeAnchor();
     const { container } = render(
@@ -170,8 +170,26 @@ describe('ShareDropdown', () => {
       />,
     );
     const menu = container.querySelector('[role="menu"]') as HTMLElement;
-    // No enter animation under reduced motion — animation style is 'none'.
-    expect(menu.style.animation).toBe('none');
+    expect(menu).toHaveClass('share-menu--static');
+    cleanupAnchor(anchor);
+  });
+
+  it('applies share-menu chrome classes', () => {
+    installMatchMedia(false);
+    const anchor = makeAnchor();
+    const { container } = render(
+      <ShareDropdown
+        agentId="agent_1"
+        agentName="The Analyst"
+        oneLiner="A take"
+        prompt="What?"
+        isOpen
+        onClose={() => {}}
+        anchorRef={anchor}
+      />,
+    );
+    expect(container.querySelector('.share-menu')).not.toBeNull();
+    expect(container.querySelectorAll('.share-menu__item').length).toBeGreaterThanOrEqual(4);
     cleanupAnchor(anchor);
   });
 });
