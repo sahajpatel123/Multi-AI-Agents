@@ -379,48 +379,33 @@ export function PricingPage() {
         )}
 
         <section className="pricing-hero" aria-labelledby="pricing-title">
-          <p className="pricing-hero__kicker">Simple, honest pricing</p>
+          <p className="pricing-hero__kicker">
+            <span className="pricing-hero__kicker-dot" aria-hidden="true" />
+            Simple, honest pricing
+          </p>
           <h1 id="pricing-title" className="pricing-hero__title">
             Start <span className="pricing-hero__accent">free.</span>
           </h1>
           <p className="pricing-hero__lede">
             Upgrade when Arena becomes part of how you think. Cancel anytime — no lock-in.
           </p>
+          <ul className="pricing-hero__proof" aria-hidden="true">
+            <li className="pricing-hero__proof-item">Cancel anytime</li>
+            <li className="pricing-hero__proof-item">No lock-in</li>
+            <li className="pricing-hero__proof-item">Free tier forever</li>
+          </ul>
         </section>
 
         {hasActiveSubscription && (
-          <div
-            style={{
-              maxWidth: '680px',
-              margin: '0 auto 2rem',
-              background: '#EDF2EF',
-              border: '0.5px solid rgba(90,138,90,0.2)',
-              borderRadius: '12px',
-              padding: '12px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              fontSize: '13px',
-              color: '#5A8A5A',
-            }}
-          >
-            <CheckCircle size={16} color="#5A8A5A" />
+          <div className="pricing-active-banner" role="status">
+            <CheckCircle size={16} color="#5A8A5A" aria-hidden />
             <span>
               You are on the <strong>{isPro ? 'Pro' : 'Plus'}</strong> plan.
             </span>
             <button
               type="button"
+              className="pricing-active-banner__manage"
               onClick={() => openModal('top-right', 'plan')}
-              style={{
-                marginLeft: 'auto',
-                background: 'transparent',
-                border: 'none',
-                padding: 0,
-                fontSize: '12px',
-                color: '#5A8A5A',
-                textDecoration: 'underline',
-                cursor: 'pointer',
-              }}
             >
               Manage subscription →
             </button>
@@ -447,57 +432,18 @@ export function PricingPage() {
           </div>
         </div>
 
-        <section
-          className="pricing-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '16px',
-            alignItems: 'stretch',
-            marginBottom: '1.5rem',
-          }}
-        >
-          <div
-            style={{
-              background: '#FDFCFB',
-              border: '0.5px solid #E8E2DA',
-              borderRadius: '20px',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              position: 'relative',
-            }}
-          >
+        <section className="pricing-grid" aria-label="Pricing plans">
+          <div className="pricing-plan-card">
             {isAuthenticated && isCurrentPlan('free') ? (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: 14,
-                  right: 14,
-                  background: '#2C1810',
-                  color: '#C4956A',
-                  fontSize: 10,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  padding: '2px 10px',
-                  borderRadius: 8,
-                  zIndex: 2,
-                }}
-              >
-                Your plan
-              </span>
+              <span className="pricing-plan-card__badge">Your plan</span>
             ) : null}
-            <div style={{ display: 'inline-flex', background: '#F0EBE3', color: '#6B6460', borderRadius: '999px', padding: '4px 10px', fontSize: '11px', marginBottom: '1rem' }}>
-              Free forever
-            </div>
-            <p style={{ fontSize: '24px', fontWeight: 500, color: '#1A1714', letterSpacing: '-0.02em', marginBottom: '.8rem' }}>
-              Explorer
-            </p>
+            <div className="pricing-plan-card__pill">Free forever</div>
+            <p className="pricing-plan-card__name">Explorer</p>
             <PriceDisplay amount="0" period="" />
             <p className="pricing-price-sub" style={{ marginBottom: '1rem' }}>
               forever
             </p>
-            <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', margin: '0.75rem 0' }} />
+            <div className="pricing-plan-card__divider" />
             <FeatureList items={explorerFeatures} dotColor="#D4CCC4" textColor="#1A1714" subColor="#8B8480" />
             {isCurrentPlan('free') ? (
               <div
@@ -525,58 +471,13 @@ export function PricingPage() {
             )}
           </div>
 
-          <div
-            style={{
-              border: '1px solid rgba(196,149,106,0.35)',
-              borderRadius: '20px',
-              padding: '1.5rem',
-              position: 'relative',
-              background: '#FFFFFF',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 2px 24px rgba(196,149,106,0.06), 0 0 0 4px rgba(196,149,106,0.04)',
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                top: '-14px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: '#C4956A',
-                color: '#FAF7F4',
-                fontSize: '10px',
-                fontWeight: 400,
-                padding: '4px 14px',
-                borderRadius: '999px',
-                letterSpacing: '.04em',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Most popular
-            </div>
+          <div className="pricing-plan-card pricing-plan-card--featured">
+            <div className="pricing-plan-card__ribbon">Most popular</div>
             {isAuthenticated && isCurrentPlan('plus') ? (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: 14,
-                  right: 14,
-                  background: '#2C1810',
-                  color: '#C4956A',
-                  fontSize: 10,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  padding: '2px 10px',
-                  borderRadius: 8,
-                  zIndex: 2,
-                }}
-              >
-                Your plan
-              </span>
+              <span className="pricing-plan-card__badge">Your plan</span>
             ) : null}
-            <p style={{ fontSize: '24px', fontWeight: 500, color: '#1A1714', letterSpacing: '-0.02em', marginBottom: '.8rem' }}>
-              Plus
-            </p>
+            <div className="pricing-plan-card__pill">Best value</div>
+            <p className="pricing-plan-card__name">Plus</p>
 
             {billing === 'monthly' ? (
               <>
@@ -611,7 +512,7 @@ export function PricingPage() {
               </>
             )}
 
-            <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', margin: '0.75rem 0' }} />
+            <div className="pricing-plan-card__divider" />
             <FeatureList items={thinkerFeatures} dotColor="rgba(196,149,106,0.5)" textColor="#1A1714" subColor="#8B8480" />
             {isCurrentPlan('plus') ? (
               <div
@@ -732,39 +633,12 @@ export function PricingPage() {
             ) : null}
           </div>
 
-          <div
-            style={{
-              background: '#FFFFFF',
-              border: '1px solid rgba(196,149,106,0.35)',
-              borderRadius: '20px',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              position: 'relative',
-            }}
-          >
+          <div className="pricing-plan-card">
             {isAuthenticated && isCurrentPlan('pro') ? (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: 14,
-                  right: 14,
-                  background: '#2C1810',
-                  color: '#C4956A',
-                  fontSize: 10,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  padding: '2px 10px',
-                  borderRadius: 8,
-                  zIndex: 2,
-                }}
-              >
-                Your plan
-              </span>
+              <span className="pricing-plan-card__badge">Your plan</span>
             ) : null}
-            <p style={{ fontSize: '24px', fontWeight: 500, color: '#1A1714', letterSpacing: '-0.02em', marginBottom: '.8rem' }}>
-              Pro
-            </p>
+            <div className="pricing-plan-card__pill">Full power</div>
+            <p className="pricing-plan-card__name">Pro</p>
 
             {billing === 'monthly' ? (
               <>
@@ -807,7 +681,7 @@ export function PricingPage() {
               </>
             )}
 
-            <div style={{ height: '0.5px', background: 'rgba(26,23,20,0.06)', margin: '0.75rem 0' }} />
+            <div className="pricing-plan-card__divider" />
             <FeatureList items={architectFeatures} dotColor="rgba(196,149,106,0.5)" textColor="#1A1714" subColor="#6B6460" />
             {isAuthenticated && isCurrentPlan('pro') ? (
               <p style={{ fontSize: 11, color: '#5A8C6A', fontStyle: 'italic', margin: '0 0 10px' }}>Agent Mode included</p>
