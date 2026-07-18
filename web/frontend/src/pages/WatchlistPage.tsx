@@ -599,14 +599,15 @@ export function WatchlistPage() {
       >
         <div style={{ maxWidth: 520, margin: '0 auto', textAlign: 'center' }}>
           <p style={{ fontSize: 15, color: '#4A3728' }}>Watchlist is available on Arena Plus and Pro.</p>
-          <button
+          <MotionButton
             type="button"
-            className="arena-btn arena-btn--primary arena-btn--md"
+            variant="primary"
+            size="md"
             style={{ marginTop: 16 }}
             onClick={() => navigate('/pricing')}
           >
             View plans →
-          </button>
+          </MotionButton>
           <button
             type="button"
             className="arena-btn arena-btn--ghost arena-btn--md"

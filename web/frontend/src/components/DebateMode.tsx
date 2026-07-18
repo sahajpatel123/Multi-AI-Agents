@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { AgentAnswerMarkdown } from './AgentAnswerMarkdown';
 import { AgentDot } from './AgentDot';
+import { MotionButton } from './MotionButton';
 import { usePanel } from '../context/PanelContext';
 import {
   canOfferDebateFollowUp,
@@ -1249,16 +1250,17 @@ export function DebateMode({
                   Three rounds in. Want one optional bonus round to finish the thread?
                 </p>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  <button
+                  <MotionButton
                     type="button"
-                    className="arena-btn arena-btn--primary arena-btn--sm"
+                    variant="primary"
+                    size="sm"
                     onClick={() => {
                       setFollowUpUnlocked(true);
                       window.setTimeout(() => inputRef.current?.focus(), 50);
                     }}
                   >
                     Unlock bonus round
-                  </button>
+                  </MotionButton>
                   <button
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm"
