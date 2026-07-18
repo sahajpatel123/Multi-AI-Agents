@@ -47,6 +47,9 @@ from arena.core.report_generator import (
 )
 from arena.core.templates import get_templates_grouped_by_category
 from arena.core.capabilities import (
+    ConduraCapability,
+    HybridDelegateCapability,
+    HybridPrepCapability,
     evaluate_capability_gate,
     get_capability_doc,
     list_capabilities,
