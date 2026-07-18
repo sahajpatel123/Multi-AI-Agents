@@ -904,6 +904,11 @@ async def run_refinement_background(
             bb2.status = AgentStatus.FAILED
             bb2.error = str(e)
         logger.exception("[REFINEMENT] Background failed task_id=%s", task_id)
+    finally:
+        # Drop the in-memory blackboard after refinement completes
+        # (success or failure). Without this the active_tasks dict
+        # grows unbounded for users who refine often.
+        remove_blackboard(task_id)
 
 
 async def run_bridge_pipeline_background(task_id: str, user_id: int) -> None:
@@ -920,6 +925,12 @@ async def run_bridge_pipeline_background(task_id: str, user_id: int) -> None:
             bb2.error = str(e)
         logger.exception("[BRIDGE] Pipeline error task_id=%s", task_id)
         return
+    finally:
+        # Drop the in-memory blackboard after the bridge pipeline
+        # completes (success or failure). Mirrors the cycle 17 fix
+        # in run_agent_pipeline_background so the active_tasks dict
+        # doesn't grow unbounded for verify-from-arena traffic.
+        remove_blackboard(task_id)
 
     if bb.status != AgentStatus.COMPLETE:
         return
