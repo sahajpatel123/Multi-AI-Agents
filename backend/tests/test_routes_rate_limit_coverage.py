@@ -26,12 +26,12 @@ Files checked:
   * session.py  (cycle 43 closed get + list gaps)
   * discuss.py  (cycle 44 closed thread list/detail; stream uses cost_tracker)
   * analytics.py (cycle 45 closed engagement gap; admin routes use require_admin_email)
+  * memory.py   (cycle 46 closed summaries list/detail; uses @memory_router)
 
 Other route files use different throttling mechanisms:
   * debate.py / prompt.py → tier-limit via cost_tracker.check_and_increment_user
   * auth.py / payments.py → mix of IP+user+signature verification; covered by separate tests
   * agent.py → cycle 32/33 closed the public gaps
-  * memory.py → already audited
   * metrics.py → single admin endpoint
 """
 
@@ -60,6 +60,7 @@ COVERED_FILES = [
     "session.py",
     "discuss.py",
     "analytics.py",
+    "memory.py",
 ]
 
 # Acceptable defenses inside a handler body. Match each as a regex.
@@ -74,10 +75,11 @@ DEFENSES = {
     "tier_cost_tracker": re.compile(r"\bcheck_and_increment_user\b"),
 }
 
-# `@router.<method>("<path>")` — multi-line decorators OK (open paren on
-# the same line; the test only needs the method + path).
+# `@router.<method>("<path>")` and aliases like `@memory_router.get(...)`.
+# Multi-line decorators OK (open paren on the same line; the test only
+# needs the method + path).
 _DECORATOR_RE = re.compile(
-    r'@router\.(get|post|patch|delete|put)\(\s*\n?\s*[\'"]([^\'"]+)[\'"]',
+    r'@(?:router|memory_router)\.(get|post|patch|delete|put)\(\s*\n?\s*[\'"]([^\'"]+)[\'"]',
     re.MULTILINE,
 )
 
@@ -123,7 +125,7 @@ def _function_body(py_file: Path, start_line: int) -> str:
         return ""
     end = min(func_start + 120, len(lines))
     for j in range(func_start + 1, end):
-        if re.match(r"@router\.(get|post|patch|delete|put)\b", lines[j]):
+        if re.match(r"@(?:router|memory_router)\.(get|post|patch|delete|put)\b", lines[j]):
             end = j
             break
     return "\n".join(lines[func_start:end])

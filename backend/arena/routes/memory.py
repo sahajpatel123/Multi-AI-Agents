@@ -261,6 +261,14 @@ async def list_summaries(
     (session_summary, key_positions_taken) are omitted from list rows —
     clients fetch the full body via GET /summaries/{id} only when needed.
     """
+    # 60/min/user — paginated history; ILIKE search can be DB-heavy.
+    enforce_user_rate_limit(
+        user.id,
+        scope="memory_summaries_list",
+        limit=60,
+        window_seconds=60,
+        message="Too many memory summary list reads. Please slow down.",
+    )
     if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
         return {
             "summaries": [],
@@ -320,6 +328,14 @@ async def get_summary(
 
     Scope by owner so foreign ids look like missing ones (no 403 oracle).
     """
+    # 120/min/user — detail hydrate on open; ownership still gates.
+    enforce_user_rate_limit(
+        user.id,
+        scope="memory_summary_detail",
+        limit=120,
+        window_seconds=60,
+        message="Too many memory summary reads. Please slow down.",
+    )
     if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
         raise HTTPException(
             status_code=403,
