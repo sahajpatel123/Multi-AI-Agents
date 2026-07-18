@@ -1,0 +1,393 @@
+/* ============================================================================
+   SHARE LANDING — public take page (/share)
+   Cream parchment stage for shared Arena minds. Additive polish only.
+   ========================================================================== */
+
+.share-landing {
+  --share-accent: #c4956a;
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(ellipse 70% 45% at 50% -8%, color-mix(in srgb, var(--share-accent) 16%, transparent), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 100% 40%, rgba(155, 143, 170, 0.07), transparent 50%),
+    radial-gradient(ellipse 35% 30% at 0% 70%, rgba(138, 168, 153, 0.06), transparent 50%),
+    #f5f0e8;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+  color: #2c1810;
+  overflow-x: hidden;
+}
+
+.share-landing__orbs {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.share-landing__orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(1px);
+}
+
+.share-landing__orb--a {
+  width: 380px;
+  height: 380px;
+  top: 10%;
+  right: -80px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--share-accent) 14%, transparent) 0%, transparent 70%);
+  animation: shareOrbA 20s ease-in-out infinite alternate;
+}
+
+.share-landing__orb--b {
+  width: 320px;
+  height: 320px;
+  bottom: 12%;
+  left: -90px;
+  background: radial-gradient(circle, rgba(138, 168, 153, 0.1) 0%, transparent 70%);
+  animation: shareOrbB 24s ease-in-out infinite alternate;
+}
+
+@keyframes shareOrbA {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(-18px, 14px);
+  }
+}
+
+@keyframes shareOrbB {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(16px, -12px);
+  }
+}
+
+.share-landing > :not(.share-landing__orbs) {
+  position: relative;
+  z-index: 1;
+}
+
+.share-landing__main {
+  flex: 1;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+  padding: clamp(2.5rem, 6vw, 3.25rem) 24px 4rem;
+}
+
+.share-landing__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 4px 12px 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #c4956a;
+  font-weight: 500;
+  background: rgba(196, 149, 106, 0.08);
+  border: 0.5px solid rgba(196, 149, 106, 0.22);
+}
+
+.share-landing__kicker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c4956a;
+  box-shadow: 0 0 0 0 rgba(196, 149, 106, 0.4);
+  animation: shareKickerPulse 1.9s ease-out infinite;
+}
+
+@keyframes shareKickerPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(196, 149, 106, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.share-landing__title {
+  margin: 0 0 1.65rem;
+  font-size: clamp(1.75rem, 5vw, 2.25rem);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  color: #1a1714;
+  line-height: 1.2;
+}
+
+.share-landing__title em {
+  color: #c4956a;
+  font-style: italic;
+}
+
+/* Take card */
+.share-take {
+  --take-color: #c4956a;
+  background: linear-gradient(180deg, #fffdfb 0%, #faf7f4 100%);
+  border: 0.5px solid #e0d8d0;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 18px 44px rgba(44, 24, 16, 0.07);
+}
+
+.share-take__rail {
+  height: 3.5px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--take-color) 70%, #fff),
+    var(--take-color)
+  );
+}
+
+.share-take__body {
+  padding: 1.4rem 1.35rem 1.25rem;
+}
+
+.share-take__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 1.05rem;
+}
+
+.share-take__dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--take-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--take-color) 22%, transparent);
+  flex-shrink: 0;
+  animation: shareDotBreathe 2.6s ease-in-out infinite;
+}
+
+@keyframes shareDotBreathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+.share-take__name {
+  font-size: 15px;
+  font-weight: 500;
+  color: #1a1714;
+  letter-spacing: -0.01em;
+}
+
+.share-take__badge {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a89070;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 0.5px solid #e0d8d0;
+  background: rgba(240, 235, 227, 0.65);
+}
+
+.share-take__section {
+  margin-bottom: 1.15rem;
+}
+
+.share-take__label {
+  margin: 0 0 6px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #a89070;
+  font-weight: 500;
+}
+
+.share-take__prompt {
+  margin: 0;
+  font-size: 14.5px;
+  color: #6b6460;
+  font-style: italic;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.share-take__prompt.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.share-take__expand {
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #c4956a;
+  font-family: Georgia, 'Source Serif 4', serif;
+  border-bottom: 0.5px solid transparent;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.share-take__expand:hover,
+.share-take__expand:focus-visible {
+  color: #1a1714;
+  border-bottom-color: #c4956a;
+}
+
+.share-take__expand:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.share-take__answer {
+  margin: 0;
+  padding: 15px 16px;
+  background: #ffffff;
+  border-left: 3px solid var(--take-color);
+  border-radius: 0 14px 14px 0;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.share-take__fallback {
+  margin: 0;
+  font-size: 14px;
+  color: #8c7355;
+  font-style: italic;
+}
+
+.share-take__foot {
+  border-top: 0.5px solid #e0d8d0;
+  padding: 1.15rem 1.35rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: linear-gradient(180deg, rgba(250, 247, 244, 0.4) 0%, rgba(240, 235, 227, 0.35) 100%);
+}
+
+.share-take__lede {
+  margin: 0;
+  font-size: 13.5px;
+  color: #6b6460;
+  line-height: 1.6;
+}
+
+.share-take__error {
+  margin: 0;
+  font-size: 12.5px;
+  color: #993c1d;
+  line-height: 1.45;
+}
+
+.share-take__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.share-take__tools .arena-btn {
+  border-radius: 999px;
+}
+
+.share-take__tools .arena-btn--secondary.is-success {
+  color: #4f7a66;
+  border-color: rgba(138, 168, 153, 0.5);
+  background: rgba(232, 242, 236, 0.85);
+}
+
+.share-take__ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.share-take__ctas .arena-btn--primary,
+.share-take__ctas .motion-btn {
+  border-radius: 999px;
+}
+
+.share-landing__minds {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 1.25rem;
+  justify-content: center;
+}
+
+.share-landing__minds-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a89070;
+}
+
+.share-landing__minds-dots {
+  display: flex;
+  align-items: center;
+}
+
+.share-landing__minds-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid #faf7f4;
+  margin-left: -3px;
+  box-shadow: 0 0 0 1px rgba(224, 216, 208, 0.65);
+}
+
+.share-landing__minds-dot:first-child {
+  margin-left: 0;
+  background: #8c9bab;
+}
+.share-landing__minds-dot:nth-child(2) {
+  background: #9b8faa;
+}
+.share-landing__minds-dot:nth-child(3) {
+  background: #8aa899;
+}
+.share-landing__minds-dot:nth-child(4) {
+  background: #b0977e;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-landing__orb,
+  .share-landing__kicker-dot,
+  .share-take__dot {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .share-landing__main {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .share-take__body,
+  .share-take__foot {
+    padding-left: 1.1rem;
+    padding-right: 1.1rem;
+  }
+}

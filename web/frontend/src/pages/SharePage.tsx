@@ -23,6 +23,7 @@ import {
   canUseNativeShare,
   invokeNativeShare,
 } from '../lib/shareUrl';
+import '../styles/share-landing.css';
 
 const MAX_PARAM_LEN = 2000;
 
@@ -185,42 +186,27 @@ export function SharePage() {
     }
   };
 
+  const promptClamped = Boolean(prompt && !promptExpanded && isCollapsiblePrompt(prompt));
+
   return (
-    <div style={{ background: '#F5F0E8', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div
+      className="share-landing"
+      style={{ ['--share-accent' as string]: agent.color || '#c4956a' }}
+    >
+      <div className="share-landing__orbs" aria-hidden="true">
+        <div className="share-landing__orb share-landing__orb--a" />
+        <div className="share-landing__orb share-landing__orb--b" />
+      </div>
       <Navbar />
 
-      <main
-        style={{
-          flex: 1,
-          maxWidth: 640,
-          width: '100%',
-          margin: '0 auto',
-          padding: '48px 24px 64px',
-        }}
-      >
-        <p
-          style={{
-            fontSize: 12,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: '#C4956A',
-            marginBottom: 12,
-          }}
-        >
+      <main className="share-landing__main">
+        <p className="share-landing__kicker">
+          <span className="share-landing__kicker-dot" aria-hidden="true" />
           Shared from Arena
         </p>
 
-        <h1
-          style={{
-            fontSize: 'clamp(28px, 5vw, 36px)',
-            fontWeight: 500,
-            letterSpacing: '-0.02em',
-            color: '#1A1714',
-            margin: '0 0 28px',
-            lineHeight: 1.2,
-          }}
-        >
-          One mind. One take.
+        <h1 className="share-landing__title">
+          One mind. <em>One take.</em>
         </h1>
 
         {!hasContent ? (
@@ -236,88 +222,28 @@ export function SharePage() {
           />
         ) : (
           <article
-            style={{
-              background: '#FAF7F4',
-              border: '0.5px solid #E0D8D0',
-              borderRadius: 16,
-              overflow: 'hidden',
-              boxShadow: '0 12px 32px rgba(44,24,16,0.06)',
-            }}
+            className="share-take"
+            style={{ ['--take-color' as string]: agent.color }}
           >
-            <div style={{ height: 3, background: agent.color }} />
-            <div style={{ padding: '24px 22px 20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                <span
-                  aria-hidden
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    background: agent.color,
-                    boxShadow: `0 0 0 3px ${agent.color}33`,
-                  }}
-                />
-                <span style={{ fontSize: 15, fontWeight: 500, color: '#1A1714' }}>{agent.name}</span>
-                <span
-                  style={{
-                    marginLeft: 'auto',
-                    fontSize: 10,
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                    color: '#A89070',
-                  }}
-                >
-                  Arena take
-                </span>
+            <div className="share-take__rail" aria-hidden="true" />
+            <div className="share-take__body">
+              <div className="share-take__head">
+                <span className="share-take__dot" aria-hidden="true" />
+                <span className="share-take__name">{agent.name}</span>
+                <span className="share-take__badge">Arena take</span>
               </div>
 
               {prompt ? (
-                <div style={{ marginBottom: 18 }}>
-                  <p
-                    style={{
-                      fontSize: 10,
-                      letterSpacing: '0.12em',
-                      textTransform: 'uppercase',
-                      color: '#A89070',
-                      margin: '0 0 6px',
-                    }}
-                  >
-                    The question
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 14,
-                      color: '#6B6460',
-                      fontStyle: 'italic',
-                      lineHeight: 1.65,
-                      margin: 0,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      display: !promptExpanded && isCollapsiblePrompt(prompt) ? '-webkit-box' : undefined,
-                      WebkitLineClamp:
-                        !promptExpanded && isCollapsiblePrompt(prompt) ? 4 : undefined,
-                      WebkitBoxOrient:
-                        !promptExpanded && isCollapsiblePrompt(prompt) ? 'vertical' : undefined,
-                      overflow:
-                        !promptExpanded && isCollapsiblePrompt(prompt) ? 'hidden' : undefined,
-                    }}
-                  >
+                <div className="share-take__section">
+                  <p className="share-take__label">The question</p>
+                  <p className={`share-take__prompt${promptClamped ? ' is-clamped' : ''}`}>
                     {prompt}
                   </p>
                   {isCollapsiblePrompt(prompt) ? (
                     <button
                       type="button"
+                      className="share-take__expand"
                       onClick={() => setPromptExpanded((v) => !v)}
-                      style={{
-                        marginTop: 6,
-                        padding: 0,
-                        border: 'none',
-                        background: 'none',
-                        cursor: 'pointer',
-                        fontSize: 12,
-                        color: '#C4956A',
-                        fontFamily: 'Georgia, serif',
-                      }}
                     >
                       {promptExpanded ? 'Show less' : 'Show full question'}
                     </button>
@@ -326,47 +252,29 @@ export function SharePage() {
               ) : null}
 
               {response ? (
-                <div
-                  style={{
-                    margin: 0,
-                    padding: '14px 16px',
-                    background: '#FFFFFF',
-                    borderLeft: `3px solid ${agent.color}`,
-                    borderRadius: '0 12px 12px 0',
-                  }}
-                >
+                <div className="share-take__answer">
                   <AgentAnswerMarkdown markdown={response} question={prompt || undefined} />
                 </div>
               ) : (
-                <p style={{ fontSize: 14, color: '#8C7355', fontStyle: 'italic', margin: 0 }}>
-                  {agent.oneLiner}
-                </p>
+                <p className="share-take__fallback">{agent.oneLiner}</p>
               )}
             </div>
 
-            <div
-              style={{
-                borderTop: '0.5px solid #E0D8D0',
-                padding: '18px 22px 22px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-              }}
-            >
-              <p style={{ fontSize: 13, color: '#6B6460', margin: 0, lineHeight: 1.6 }}>
+            <div className="share-take__foot">
+              <p className="share-take__lede">
                 Four minds answer every question. Challenge any take. Keep the best.
               </p>
 
               {copyError ? (
-                <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: 0, lineHeight: 1.45 }}>
+                <p className="share-take__error" role="alert">
                   {copyError}
                 </p>
               ) : null}
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div className="share-take__tools">
                 <button
                   type="button"
-                  className="arena-btn arena-btn--secondary arena-btn--sm"
+                  className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'take' ? ' is-success' : ''}`}
                   onClick={() => {
                     void handleCopyTake();
                   }}
@@ -375,7 +283,7 @@ export function SharePage() {
                 </button>
                 <button
                   type="button"
-                  className="arena-btn arena-btn--secondary arena-btn--sm"
+                  className={`arena-btn arena-btn--secondary arena-btn--sm${downloadStatus === 'done' ? ' is-success' : ''}`}
                   onClick={handleDownloadTake}
                 >
                   {downloadStatus === 'done'
@@ -386,7 +294,7 @@ export function SharePage() {
                 </button>
                 <button
                   type="button"
-                  className="arena-btn arena-btn--secondary arena-btn--sm"
+                  className={`arena-btn arena-btn--secondary arena-btn--sm${copied === 'link' ? ' is-success' : ''}`}
                   onClick={() => {
                     void handleCopyLink();
                   }}
@@ -406,7 +314,7 @@ export function SharePage() {
                 ) : null}
               </div>
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
+              <div className="share-take__ctas">
                 <MotionButton type="button" variant="primary" size="md" onClick={goTry}>
                   {isAuthenticated ? 'Open Arena' : 'Try this in Arena'} →
                 </MotionButton>
@@ -421,6 +329,18 @@ export function SharePage() {
             </div>
           </article>
         )}
+
+        {hasContent ? (
+          <div className="share-landing__minds" aria-hidden="true">
+            <span className="share-landing__minds-label">Four minds on every question</span>
+            <div className="share-landing__minds-dots">
+              <span className="share-landing__minds-dot" />
+              <span className="share-landing__minds-dot" />
+              <span className="share-landing__minds-dot" />
+              <span className="share-landing__minds-dot" />
+            </div>
+          </div>
+        ) : null}
       </main>
 
       <Footer />
