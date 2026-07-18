@@ -10,6 +10,19 @@ import pytest
 import arena.core.llm_caller as llm_caller
 
 
+@pytest.fixture(autouse=True)
+def _capture_llm_logs(caplog):
+    logger = llm_caller.logger
+    previous_level = logger.level
+    logger.addHandler(caplog.handler)
+    logger.setLevel(logging.WARNING)
+    try:
+        yield
+    finally:
+        logger.removeHandler(caplog.handler)
+        logger.setLevel(previous_level)
+
+
 def _find_record(records, message: str):
     """Locate the first caplog record whose message matches.
 
