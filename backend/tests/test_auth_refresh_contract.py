@@ -15,9 +15,6 @@ from arena.core.auth import create_refresh_token
 from arena.db_models import UserTier
 
 
-def _pro_headers(user):
-    from arena.core.auth import create_access_token
-    return {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
 
 
 # ─── Auth + token-type contract ─────────────────────────────────────────────
