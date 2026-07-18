@@ -24,9 +24,10 @@ Files checked:
   * mcp.py      (cycle 43 closed list/catalog/disconnect gaps)
   * panels.py   (cycle 43 closed panel read + presets gaps)
   * session.py  (cycle 43 closed get + list gaps)
+  * discuss.py  (cycle 44 closed thread list/detail; stream uses cost_tracker)
 
 Other route files use different throttling mechanisms:
-  * debate.py / discuss.py / prompt.py → tier-limit via cost_tracker.check_and_increment_user
+  * debate.py / prompt.py → tier-limit via cost_tracker.check_and_increment_user
   * auth.py / payments.py → mix of IP+user+signature verification; covered by separate tests
   * agent.py → cycle 32/33 closed the public gaps
   * memory.py / analytics.py → already audited
@@ -56,6 +57,7 @@ COVERED_FILES = [
     "mcp.py",
     "panels.py",
     "session.py",
+    "discuss.py",
 ]
 
 # Acceptable defenses inside a handler body. Match each as a regex.
@@ -66,6 +68,8 @@ DEFENSES = {
     "admin_gate": re.compile(r"\brequire_admin_email\b"),
     "razorpay_sig": re.compile(r"\bverify_razorpay_signature\b"),
     "stripe_sig": re.compile(r"\bverify_stripe_signature\b"),
+    # LLM spend throttle used by discuss/debate/prompt stream handlers.
+    "tier_cost_tracker": re.compile(r"\bcheck_and_increment_user\b"),
 }
 
 # `@router.<method>("<path>")` — multi-line decorators OK (open paren on
@@ -99,11 +103,17 @@ def _function_body(py_file: Path, start_line: int) -> str:
     ``@router.`` decorator (or EOF). Caps at 120 lines so a long handler
     still fits without swallowing a later route's rate-limit call
     (which would create a false-positive "protected" verdict).
+
+    Multi-line decorators (``@router.post(\\n  "/path",\\n  responses=...)``)
+    need a wider look-ahead than 6 lines — 24 covers responses= dicts without
+    jumping into a later route's body.
     """
     source = py_file.read_text()
     lines = source.split("\n")
+    # start_line is 1-indexed (from the decorator match); convert to 0-index.
+    start_idx = max(start_line - 1, 0)
     func_start = None
-    for i in range(start_line, min(start_line + 6, len(lines))):
+    for i in range(start_idx, min(start_idx + 24, len(lines))):
         if re.match(r"\s*(?:async )?def ", lines[i]):
             func_start = i
             break

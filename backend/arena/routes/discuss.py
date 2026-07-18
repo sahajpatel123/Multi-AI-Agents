@@ -428,6 +428,14 @@ async def list_discuss_threads(
     keeps the silent-gate contract consistent with the other
     feature-gated endpoints.
     """
+    # 60/min/user — paginated history; same shape as /saved list.
+    enforce_user_rate_limit(
+        user.id,
+        scope="discuss_threads_list",
+        limit=60,
+        window_seconds=60,
+        message="Too many discuss thread list reads. Please slow down.",
+    )
     tier = normalize_tier(get_tier_str(user))
     if not has_feature(tier, "discuss"):
         return {
@@ -477,6 +485,14 @@ async def get_discuss_thread(
 
     Foreign-or-missing ids return 404 with the same shape (no oracle).
     """
+    # 120/min/user — thread open / poll hydrate; ownership still gates.
+    enforce_user_rate_limit(
+        user.id,
+        scope="discuss_thread_detail",
+        limit=120,
+        window_seconds=60,
+        message="Too many discuss thread reads. Please slow down.",
+    )
     row = (
         db.query(DiscussThread)
         .filter(DiscussThread.id == thread_id, DiscussThread.user_id == user.id)
