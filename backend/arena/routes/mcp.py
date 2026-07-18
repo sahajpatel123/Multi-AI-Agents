@@ -151,6 +151,14 @@ async def list_integrations(
     the bare array would, but no one did because the original was wrapped
     in a dict already at this endpoint).
     """
+    # 60/min/user — list is hot on settings open; cap scrapers / DB spam.
+    enforce_user_rate_limit(
+        user.id,
+        scope="mcp_list",
+        limit=60,
+        window_seconds=60,
+        message="Too many integration list reads. Please slow down.",
+    )
     q = db.query(MCPIntegration).filter(MCPIntegration.user_id == user.id)
     if not include_inactive:
         q = q.filter(MCPIntegration.is_active.is_(True))
@@ -201,6 +209,14 @@ async def list_service_catalog(
       - category: grouping for the UI (docs / dev / chat / etc.)
       - connected: true if the user already has this service connected
     """
+    # 60/min/user — catalog is small but hits the integrations table.
+    enforce_user_rate_limit(
+        user.id,
+        scope="mcp_services",
+        limit=60,
+        window_seconds=60,
+        message="Too many integration catalog reads. Please slow down.",
+    )
     connected = {
         row.service
         for row in db.query(MCPIntegration).filter(
@@ -370,6 +386,14 @@ async def disconnect_integration(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    # 20/hour/user — soft-delete; ownership-gated but still write traffic.
+    enforce_user_rate_limit(
+        user.id,
+        scope="mcp_disconnect",
+        limit=20,
+        window_seconds=3600,
+        message="Too many integration disconnect attempts. Please try again later.",
+    )
     row = (
         db.query(MCPIntegration)
         .filter(MCPIntegration.id == integration_id, MCPIntegration.user_id == user.id)

@@ -160,6 +160,14 @@ async def get_panel(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> dict:
+    # 120/min/user — panel shell loads often; higher than writes.
+    enforce_user_rate_limit(
+        user.id,
+        scope="panel_read",
+        limit=120,
+        window_seconds=60,
+        message="Too many panel reads. Please slow down.",
+    )
     panel = _get_or_create_panel(user.id, db)
     return _panel_to_dict(panel)
 
@@ -177,6 +185,14 @@ async def list_panel_presets(
     the paywalled slots. The UI can render locked presets with an upgrade
     badge rather than hiding them entirely.
     """
+    # 60/min/user — static catalog + light DB for tier flags.
+    enforce_user_rate_limit(
+        user.id,
+        scope="panel_presets",
+        limit=60,
+        window_seconds=60,
+        message="Too many panel preset reads. Please slow down.",
+    )
     tier = normalize_tier(get_tier_str(user))
     presets = []
     for name, slots in PANEL_PRESETS.items():

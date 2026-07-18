@@ -21,12 +21,15 @@ Files checked:
   * condura.py  (cycle 41 closed 6 gaps)
   * personas.py (cycle 42 closed 2 public-catalog gaps)
   * saved.py    (cycle 42 closed 2 destructive-delete gaps)
+  * mcp.py      (cycle 43 closed list/catalog/disconnect gaps)
+  * panels.py   (cycle 43 closed panel read + presets gaps)
+  * session.py  (cycle 43 closed get + list gaps)
 
 Other route files use different throttling mechanisms:
   * debate.py / discuss.py / prompt.py → tier-limit via cost_tracker.check_and_increment_user
   * auth.py / payments.py → mix of IP+user+signature verification; covered by separate tests
   * agent.py → cycle 32/33 closed the public gaps
-  * calibration.py / panels.py / memory.py / analytics.py → already audited
+  * memory.py / analytics.py → already audited
   * metrics.py → single admin endpoint
 """
 
@@ -44,7 +47,16 @@ ROUTES_DIR = Path(__file__).resolve().parent.parent / "arena" / "routes"
 # must have a rate-limit call OR an admin gate inside its handler body.
 # Don't add files that legitimately use a different throttle mechanism
 # (tier-limit, signature verification, etc.) — those get separate coverage.
-COVERED_FILES = ["rooms.py", "condura.py", "personas.py", "saved.py", "calibration.py"]
+COVERED_FILES = [
+    "rooms.py",
+    "condura.py",
+    "personas.py",
+    "saved.py",
+    "calibration.py",
+    "mcp.py",
+    "panels.py",
+    "session.py",
+]
 
 # Acceptable defenses inside a handler body. Match each as a regex.
 DEFENSES = {

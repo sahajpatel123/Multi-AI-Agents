@@ -52,6 +52,14 @@ async def get_session(
     Checks short-term memory first, then long-term storage.
     Requires authentication - users can only access their own sessions.
     """
+    # 60/min/user — session hydrate on route enter; block id-scan spam.
+    enforce_user_rate_limit(
+        user.id,
+        scope="session_get",
+        limit=60,
+        window_seconds=60,
+        message="Too many session reads. Please slow down.",
+    )
     memory = get_memory_manager()
     session = memory.get_session(session_id)
 
@@ -79,6 +87,14 @@ async def list_sessions(
     Each row carries the bare minimum (id, topic, last_active) so the
     list payload stays small even if a user has 50 active threads.
     """
+    # 60/min/user — list walks in-memory store; cap hostile polling.
+    enforce_user_rate_limit(
+        user.id,
+        scope="session_list",
+        limit=60,
+        window_seconds=60,
+        message="Too many session list reads. Please slow down.",
+    )
     memory = get_memory_manager()
     # _store lives on ShortTermMemory; MemoryManager wraps it under
     # .short_term. Reaching through keeps the route decoupled from
