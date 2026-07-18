@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { EmptyState } from '../components/EmptyState';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { AGENTS } from '../types';
 import { isCollapsiblePrompt } from '../lib/collapsiblePrompt';
@@ -222,26 +223,16 @@ export function SharePage() {
         </h1>
 
         {!hasContent ? (
-          <div
-            className="arena-empty-state"
-            style={{
-              background: '#FAF7F4',
-              border: '0.5px solid #E0D8D0',
-              borderRadius: 16,
-              padding: '32px 24px',
-              textAlign: 'center',
-            }}
-          >
-            <p style={{ fontSize: 15, color: '#4A3728', margin: '0 0 8px', fontWeight: 500 }}>
-              This share link is empty or expired
-            </p>
-            <p style={{ fontSize: 13, color: '#8C7355', margin: '0 0 20px', lineHeight: 1.6 }}>
-              Ask something in Arena and share a take from any of the four minds.
-            </p>
-            <button type="button" className="arena-btn arena-btn--primary arena-btn--md" onClick={goTry}>
-              Try Arena →
-            </button>
-          </div>
+          <EmptyState
+            variant="card"
+            title="This share link is empty or expired"
+            description="Ask something in Arena and share a take from any of the four minds."
+            actions={
+              <button type="button" className="arena-btn arena-btn--primary arena-btn--md" onClick={goTry}>
+                Try Arena →
+              </button>
+            }
+          />
         ) : (
           <article
             style={{

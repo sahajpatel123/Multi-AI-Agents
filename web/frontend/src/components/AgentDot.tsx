@@ -29,6 +29,13 @@ const FLASH_ANIMATIONS: Record<string, string> = {
   agent_4: 'dot-flash-4 400ms ease-out',
 };
 
+const AGENT_INDEX: Record<string, number> = {
+  agent_1: 1,
+  agent_2: 2,
+  agent_3: 3,
+  agent_4: 4,
+};
+
 export function AgentDot({
   agentId,
   size = 10,
@@ -41,13 +48,7 @@ export function AgentDot({
   const agent = AGENTS[agentId];
   const [isFlashing, setIsFlashing] = useState(false);
   const previousFlashKey = useRef(flashKey);
-  // Per-instance cache so we don't re-query matchMedia every render —
-  // it's stable for the session and the call is cheap but not free.
-  const reducedMotionRef = useRef<boolean | null>(null);
-  if (reducedMotionRef.current === null) {
-    reducedMotionRef.current = prefersReducedMotion();
-  }
-  const reducedMotion = reducedMotionRef.current;
+  const reducedMotion = prefersReducedMotion();
 
   useEffect(() => {
     if (flashKey === 0 || flashKey === previousFlashKey.current) return;
@@ -69,30 +70,40 @@ export function AgentDot({
 
   if (!agent) return null;
 
+  const fill = color || agent.color;
   // disableAnimation is the explicit prop; prefers-reduced-motion is
-  // the implicit OS-level opt-out. Either suppresses animations. We
-  // don't gate the flash on flashKey — a flash with no animation is
-  // just a static dot, which is still a meaningful UX beat.
+  // the implicit OS-level opt-out. Either suppresses animations.
   const animate = !disableAnimation && !reducedMotion;
   const animation = !animate
     ? 'none'
     : isFlashing
-    ? `${FLASH_ANIMATIONS[agentId]}, ${BREATHE_ANIMATIONS[agentId]}`
-    : BREATHE_ANIMATIONS[agentId];
+      ? `${FLASH_ANIMATIONS[agentId] || 'dot-flash-1 400ms ease-out'}, ${BREATHE_ANIMATIONS[agentId] || 'breathe-1 2.4s ease-in-out infinite'}`
+      : BREATHE_ANIMATIONS[agentId] || 'breathe-1 2.4s ease-in-out infinite';
+
+  const idx = AGENT_INDEX[agentId] || 0;
+  const classes = [
+    'agent-dot',
+    idx ? `agent-dot--${idx}` : '',
+    animate ? 'agent-dot--live' : 'agent-dot--static',
+    isFlashing && animate ? 'agent-dot--flashing' : '',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <span
       aria-hidden="true"
-      className={className}
+      className={classes}
+      title={agent.name}
       style={{
         width: size,
         height: size,
         minWidth: size,
         minHeight: size,
-        display: 'inline-block',
-        borderRadius: '999px',
-        backgroundColor: color || agent.color,
-        transformOrigin: 'center',
+        // CSS custom property so the soft ring tracks the fill color
+        ['--agent-dot-color' as string]: fill,
+        backgroundColor: fill,
         animation,
         ...style,
       }}

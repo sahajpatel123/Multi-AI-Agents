@@ -84,10 +84,21 @@ describe('AgentDot', () => {
     expect(dot.style.animation).toBe('none');
   });
 
-  it('renders a circle shape (border-radius 999px)', () => {
+  it('renders a circle via agent-dot class', () => {
     installMatchMedia(false);
     const { container } = render(<AgentDot agentId="agent_1" />);
     const dot = container.querySelector('span')!;
-    expect(dot.style.borderRadius).toBe('999px');
+    expect(dot).toHaveClass('agent-dot');
+    expect(dot).toHaveClass('agent-dot--1');
+    expect(dot).toHaveClass('agent-dot--live');
+  });
+
+  it('uses static class when animation is disabled', () => {
+    installMatchMedia(false);
+    const { container } = render(
+      <AgentDot agentId="agent_2" disableAnimation />,
+    );
+    expect(container.querySelector('span')).toHaveClass('agent-dot--static');
+    expect(container.querySelector('span')).not.toHaveClass('agent-dot--live');
   });
 });

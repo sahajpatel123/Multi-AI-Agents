@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import MicroLoader from '../components/MicroLoader';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
+import { EmptyState } from '../components/EmptyState';
 import {
   ApiError,
   deleteAgentWatchlist,
@@ -765,63 +766,60 @@ export function WatchlistPage() {
             <MicroLoader label="Loading watchlist" />
           </div>
         ) : bodyMode === 'load_error' ? (
-          <div
-            className="arena-empty-state"
-            role="alert"
-            ref={errorRef}
-            tabIndex={-1}
-            style={{ outline: 'none' }}
-          >
-            <p style={{ fontSize: 15, color: '#4A3728', fontWeight: 500, marginBottom: 0 }}>
-              Could not load watchlist
-            </p>
-            <p style={{ fontSize: 13, color: '#8C7355', marginTop: 8, maxWidth: 340, lineHeight: 1.6 }}>
-              {error || 'Something went wrong reaching the server. Your watched tasks are safe — try again.'}
-            </p>
-            <button
-              type="button"
-              className="arena-btn arena-btn--primary arena-btn--md"
-              style={{ marginTop: 20 }}
-              onClick={() => void load()}
-            >
-              Retry
-            </button>
-            <button
-              type="button"
-              className="arena-btn arena-btn--ghost arena-btn--md"
-              style={{ marginTop: 8 }}
-              onClick={() => navigate('/agent')}
-            >
-              Back to Agent
-            </button>
+          <div ref={errorRef} tabIndex={-1} style={{ outline: 'none' }}>
+            <EmptyState
+              variant="error"
+              alert
+              title="Could not load watchlist"
+              description={
+                error ||
+                'Something went wrong reaching the server. Your watched tasks are safe — try again.'
+              }
+              actions={
+                <>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--primary arena-btn--md"
+                    onClick={() => void load()}
+                  >
+                    Retry
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--md"
+                    onClick={() => navigate('/agent')}
+                  >
+                    Back to Agent
+                  </button>
+                </>
+              }
+            />
           </div>
         ) : bodyMode === 'empty' ? (
-          <div className="arena-empty-state">
-            <svg width={48} height={48} viewBox="0 0 24 24" fill="none" aria-hidden style={{ color: '#D4C4B0' }}>
-              <path
-                d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <p style={{ fontSize: 15, color: '#4A3728', fontWeight: 500, marginTop: 16, marginBottom: 0 }}>
-              No watched tasks yet
-            </p>
-            <p style={{ fontSize: 13, color: '#8C7355', marginTop: 8, maxWidth: 340, lineHeight: 1.6 }}>
-              Run a research task in Agent Mode, then watch it — Arena re-checks on your schedule
-              and only notifies you when findings actually change.
-            </p>
-            <button
-              type="button"
-              className="arena-btn arena-btn--primary arena-btn--md"
-              style={{ marginTop: 20 }}
-              onClick={() => navigate('/agent')}
-            >
-              Start a research task →
-            </button>
-          </div>
+          <EmptyState
+            title="No watched tasks yet"
+            description="Run a research task in Agent Mode, then watch it — Arena re-checks on your schedule and only notifies you when findings actually change."
+            icon={
+              <svg width={28} height={28} viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            }
+            actions={
+              <button
+                type="button"
+                className="arena-btn arena-btn--primary arena-btn--md"
+                onClick={() => navigate('/agent')}
+              >
+                Start a research task →
+              </button>
+            }
+          />
         ) : (
           <div
             style={{
@@ -1127,15 +1125,11 @@ export function WatchlistPage() {
             </div>
 
             {filteredItems.length === 0 ? (
-              <div
-                className="arena-empty-state"
-                style={{ padding: '2.5rem 1rem' }}
-              >
-                <p style={{ fontSize: 15, color: '#4A3728', fontWeight: 500, margin: 0 }}>
-                  No matches
-                </p>
-                <p style={{ fontSize: 13, color: '#8C7355', marginTop: 8, maxWidth: 320, lineHeight: 1.6 }}>
-                  {searchQuery.trim()
+              <EmptyState
+                variant="filter"
+                title="No matches"
+                description={
+                  searchQuery.trim()
                     ? `Nothing matches “${searchQuery.trim()}”${statusFilter !== 'all' ? ` in ${statusFilter} watches` : ''}${
                         urgencyFilter !== 'all' ? ` · ${watchlistUrgencyLabel(urgencyFilter)}` : ''
                       }${cadenceFilter !== 'all' ? ` · ${watchlistCadenceLabel(cadenceFilter)}` : ''}${
@@ -1181,27 +1175,28 @@ export function WatchlistPage() {
                                       ? 'No active watches right now — resume a paused one or start a new research task.'
                                       : statusFilter === 'paused'
                                         ? 'No paused watches.'
-                                        : 'No matches.'}
-                </p>
-                <button
-                  type="button"
-                  className="arena-btn arena-btn--ghost arena-btn--md"
-                  style={{ marginTop: 16 }}
-                  onClick={() => {
-                    setSearchQuery('');
-                    setStatusFilter('all');
-                    setScoreFilter('all');
-                    setCadenceFilter('all');
-                    setUrgencyFilter('all');
-                    setExpertiseFilter(WATCHLIST_EXPERTISE_ALL);
-                    setDomainFilter(WATCHLIST_DOMAIN_ALL);
-                    setListSort('next_soon');
-                    searchRef.current?.focus();
-                  }}
-                >
-                  Clear filters
-                </button>
-              </div>
+                                        : 'No matches.'
+                }
+                actions={
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--md"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setStatusFilter('all');
+                      setScoreFilter('all');
+                      setCadenceFilter('all');
+                      setUrgencyFilter('all');
+                      setExpertiseFilter(WATCHLIST_EXPERTISE_ALL);
+                      setDomainFilter(WATCHLIST_DOMAIN_ALL);
+                      setListSort('next_soon');
+                      searchRef.current?.focus();
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                }
+              />
             ) : (
             filteredItems.map((item) => {
               const badge = intervalBadge(item.interval_hours);
