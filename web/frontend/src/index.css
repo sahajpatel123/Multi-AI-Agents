@@ -2140,11 +2140,11 @@ canvas {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   transition:
-    background 150ms var(--ease-btn),
-    border-color 150ms var(--ease-btn),
-    color 150ms var(--ease-btn),
-    box-shadow 150ms var(--ease-btn),
-    transform 150ms var(--ease-btn);
+    background var(--motion-hover-ms) var(--ease-btn),
+    border-color var(--motion-hover-ms) var(--ease-btn),
+    color var(--motion-hover-ms) var(--ease-btn),
+    box-shadow var(--motion-lift-ms) var(--ease-out-premium),
+    transform var(--motion-lift-ms) var(--ease-out-premium);
   animation: back-to-top-in 220ms var(--ease-out-premium) both;
 }
 
@@ -2169,7 +2169,7 @@ canvas {
     border-color: #c4956a;
     color: #1a1714;
     box-shadow: 0 12px 32px rgba(196, 149, 106, 0.18);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
   }
 }
 
@@ -2179,7 +2179,8 @@ canvas {
 }
 
 .back-to-top-btn:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.97);
+  transition-duration: var(--motion-press-ms);
 }
 
 .back-to-top-btn__ring-wrap {
@@ -2886,15 +2887,20 @@ canvas {
   margin-bottom: -1px;
   cursor: pointer;
   transition:
-    color 150ms var(--ease-btn),
-    border-color 150ms var(--ease-btn),
-    background 150ms var(--ease-btn);
+    color var(--motion-hover-ms) var(--ease-btn),
+    border-color var(--motion-hover-ms) var(--ease-btn),
+    background var(--motion-hover-ms) var(--ease-btn),
+    transform var(--motion-press-ms) var(--ease-btn);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .auth-modal-tab:hover:not(.auth-modal-tab--active) {
     color: #1a1714;
     background: rgba(250, 247, 244, 0.7);
+  }
+
+  .auth-modal-tab:active {
+    transform: scale(0.99);
   }
 }
 
@@ -4442,14 +4448,19 @@ canvas {
   color: #a89070;
   cursor: pointer;
   transition:
-    color 150ms var(--ease-btn),
-    background 150ms var(--ease-btn);
+    color var(--motion-hover-ms) var(--ease-btn),
+    background var(--motion-hover-ms) var(--ease-btn),
+    transform var(--motion-press-ms) var(--ease-btn);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .kbd-help-close:hover {
     color: #1a1714;
     background: rgba(224, 216, 208, 0.45);
+  }
+
+  .kbd-help-close:active {
+    transform: scale(0.92);
   }
 }
 
@@ -4661,8 +4672,9 @@ canvas {
   border: none;
   text-align: left;
   transition:
-    background 150ms var(--ease-btn),
-    color 150ms var(--ease-btn);
+    background var(--motion-hover-ms) var(--ease-btn),
+    color var(--motion-hover-ms) var(--ease-btn),
+    transform var(--motion-press-ms) var(--ease-btn);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -4679,6 +4691,7 @@ canvas {
 
 .share-menu__item:active {
   background: #e8e2d8;
+  transform: scale(0.99);
 }
 
 .share-menu__item--success {
@@ -4847,10 +4860,25 @@ canvas {
   opacity: 0;
   pointer-events: none;
   transition:
-    opacity 140ms var(--ease-btn),
-    color 140ms var(--ease-btn),
-    background 140ms var(--ease-btn),
-    border-color 140ms var(--ease-btn);
+    opacity var(--motion-hover-ms) var(--ease-btn),
+    color var(--motion-hover-ms) var(--ease-btn),
+    background var(--motion-hover-ms) var(--ease-btn),
+    border-color var(--motion-hover-ms) var(--ease-btn),
+    transform var(--motion-press-ms) var(--ease-btn),
+    box-shadow var(--motion-lift-ms) var(--ease-out-premium);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .session-card__delete:hover {
+    color: #993c1d;
+    border-color: rgba(153, 60, 29, 0.28);
+    background: #fcf0ee;
+    box-shadow: 0 2px 8px rgba(153, 60, 29, 0.12);
+  }
+
+  .session-card__delete:active {
+    transform: translateY(-50%) scale(0.92);
+  }
 }
 
 /* Reveal delete on hover, keyboard focus, or touch (always on coarse pointers). */
