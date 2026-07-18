@@ -66,12 +66,20 @@ async def generate_one_liner(
 
 
 def _extract_first_sentence(text: str) -> str:
-    """Extract the first sentence as a fallback one-liner."""
+    """Extract the first sentence as a fallback one-liner.
+
+    Uses the earliest sentence terminator among ``.`` / ``!`` / ``?``
+    within the first 200 characters so a later period cannot swallow
+    an earlier question or exclamation.
+    """
     text = text.strip()
-    for end in [".", "!", "?"]:
+    end_idx: int | None = None
+    for end in (".", "!", "?"):
         idx = text.find(end)
         if idx != -1 and idx < 200:
-            return text[: idx + 1]
+            end_idx = idx if end_idx is None else min(end_idx, idx)
+    if end_idx is not None:
+        return text[: end_idx + 1]
     # No sentence-ending found, truncate
     if len(text) > 100:
         return text[:97] + "..."
