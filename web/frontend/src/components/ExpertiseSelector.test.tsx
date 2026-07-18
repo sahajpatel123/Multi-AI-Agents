@@ -100,14 +100,22 @@ describe('ExpertiseSelector', () => {
     radios.forEach((r) => expect(r).toBeDisabled());
   });
 
-  it('honors prefers-reduced-motion for chip transitions', () => {
+  it('honors prefers-reduced-motion with static class', () => {
     installMatchMedia(true);
     const { container } = render(
       <ExpertiseSelector level="curious" domain="" onChange={() => {}} />,
     );
-    const radio = container.querySelector('[role="radio"]')!;
-    // With reduced motion, transition is 'none' — no animation
-    // queued on hover/focus.
-    expect(radio.style.transition).toBe('none');
+    expect(container.querySelector('.expertise-selector')).toHaveClass(
+      'expertise-selector--static',
+    );
+  });
+
+  it('applies selected chip chrome', () => {
+    installMatchMedia(false);
+    const { container } = render(
+      <ExpertiseSelector level="practitioner" domain="" onChange={() => {}} />,
+    );
+    expect(container.querySelector('.expertise-selector__chip--selected')).not.toBeNull();
+    expect(container.querySelector('.expertise-selector')).toHaveClass('expertise-selector');
   });
 });

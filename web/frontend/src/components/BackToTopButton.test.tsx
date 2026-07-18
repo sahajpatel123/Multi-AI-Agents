@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render } from '@testing-library/react';
 import { BackToTopButton } from './BackToTopButton';
 
@@ -32,7 +32,6 @@ function installMatchMedia(reduce: boolean) {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  // Reset matchMedia between tests.
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     configurable: true,
@@ -48,19 +47,29 @@ describe('BackToTopButton', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders when scrollY crosses the threshold', () => {
-    setScrollY(0);
+  it('renders when scrollY is past the threshold', () => {
+    setScrollY(600);
     installMatchMedia(false);
-    const { container } = render(<BackToTopButton />);
-    expect(container.firstChild).toBeNull();
+    const { getByRole } = render(<BackToTopButton />);
+    expect(getByRole('button', { name: /back to top/i })).toBeInTheDocument();
+  });
 
-    act(() => {
-      setScrollY(600);
-      window.dispatchEvent(new Event('scroll'));
+  it('shows progress ring chrome when visible', () => {
+    setScrollY(800);
+    installMatchMedia(false);
+    Object.defineProperty(document.documentElement, 'scrollHeight', {
+      configurable: true,
+      value: 4000,
     });
-    const btn = container.querySelector('button');
-    expect(btn).not.toBeNull();
-    expect(btn).toHaveAttribute('aria-label', 'Back to top');
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 800,
+    });
+    const { container, getByRole } = render(<BackToTopButton />);
+    const btn = getByRole('button', { name: /back to top/i });
+    expect(btn).toBeInTheDocument();
+    expect(container.querySelector('.back-to-top-btn__ring')).not.toBeNull();
+    expect(container.querySelector('.back-to-top-btn__ring-progress')).not.toBeNull();
   });
 
   it('click scrolls to top and focuses main content', () => {
@@ -88,7 +97,6 @@ describe('BackToTopButton', () => {
     setScrollY(0);
     installMatchMedia(false);
     const { unmount } = render(<BackToTopButton />);
-    // After unmount, scroll events should not throw.
     expect(() => window.dispatchEvent(new Event('scroll'))).not.toThrow();
     unmount();
   });

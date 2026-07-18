@@ -132,4 +132,33 @@ describe('UserMenu', () => {
     fireEvent.click(getByText(/Sign out/i));
     expect(onLogout).toHaveBeenCalled();
   });
+
+  it('shows usage progress and tier chrome when open', () => {
+    installMatchMedia(false);
+    const { getByLabelText, getByRole, getByText, container } = render(
+      <UserMenu
+        user={makeUser('PLUS')}
+        isLoading={false}
+        onSignInClick={() => {}}
+        onLogout={() => {}}
+      />,
+    );
+    fireEvent.click(getByLabelText(/Account menu/i));
+    expect(getByRole('progressbar', { name: /messages used today/i })).toBeInTheDocument();
+    expect(getByText(/2 \/ 15 messages/i)).toBeInTheDocument();
+    expect(container.querySelector('.user-menu__tier--plus')).not.toBeNull();
+  });
+
+  it('renders loading skeleton with status role', () => {
+    installMatchMedia(false);
+    const { getByRole } = render(
+      <UserMenu
+        user={null}
+        isLoading
+        onSignInClick={() => {}}
+        onLogout={() => {}}
+      />,
+    );
+    expect(getByRole('status', { name: /loading account/i })).toHaveClass('user-menu-skeleton');
+  });
 });

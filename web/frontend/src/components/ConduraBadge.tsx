@@ -18,27 +18,28 @@ export function ConduraBadge({
   compact?: boolean;
 }) {
   if (!execution || execution === 'web') return null;
+
+  const known = execution in LABELS;
   const label = LABELS[execution] || 'Condura';
+  const variant = known ? execution : 'unknown';
+
   return (
     <span
-      className="env-badge env-badge--condura"
+      className={[
+        'env-badge',
+        'env-badge--condura',
+        `env-badge--${variant}`,
+        compact ? 'env-badge--compact' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       title={TOOLTIP}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        fontSize: compact ? 11 : 12,
-        padding: compact ? '2px 8px' : '4px 10px',
-        borderRadius: 999,
-        background: 'rgba(196,149,106,0.12)',
-        color: '#8c7355',
-        border: '0.5px solid rgba(196,149,106,0.35)',
-        fontFamily: 'Georgia, serif',
-        whiteSpace: 'nowrap',
-      }}
+      aria-label={`${label}. ${TOOLTIP}`}
     >
-      <img src={markUrl} alt="" width={14} height={14} style={{ display: 'block' }} />
-      {label}
+      <span className="env-badge__mark" aria-hidden>
+        <img src={markUrl} alt="" width={14} height={14} />
+      </span>
+      <span className="env-badge__label">{label}</span>
     </span>
   );
 }

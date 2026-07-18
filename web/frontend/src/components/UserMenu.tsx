@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { LogOut, Zap } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { LogOut, UserRound, Zap } from 'lucide-react';
 import { User } from '../types';
 import { prefersReducedMotion } from '../lib/motion';
 
@@ -16,6 +16,12 @@ const FREE_LIMIT = 5;
 const PLUS_LIMIT = 15;
 const PRO_LIMIT = 35;
 
+function usageTone(pct: number): 'ok' | 'warn' | 'danger' {
+  if (pct >= 95) return 'danger';
+  if (pct >= 70) return 'warn';
+  return 'ok';
+}
+
 export function UserMenu({
   user,
   isLoading,
@@ -25,98 +31,91 @@ export function UserMenu({
 }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const avatarRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const reducedMotion = prefersReducedMotion();
 
-  const breatheStyle = `
-    @keyframes breathe {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.5); opacity: 0.6; }
-    }
-  `;
-
-  // Close on outside click or Escape
+  // Close on outside click or Escape; arrow-key menuitem navigation
   useEffect(() => {
     if (!isOpen) return;
+
     const onPointer = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         setIsOpen(false);
+        avatarRef.current?.focus();
+        return;
+      }
+
+      if (!panelRef.current) return;
+      const items = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+      );
+      if (items.length === 0) return;
+
+      const active = document.activeElement as HTMLElement | null;
+      const index = items.indexOf(active as HTMLElement);
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = index < 0 ? 0 : (index + 1) % items.length;
+        items[next]?.focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const next = index < 0 ? items.length - 1 : (index - 1 + items.length) % items.length;
+        items[next]?.focus();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        items[0]?.focus();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        items[items.length - 1]?.focus();
       }
     };
+
     document.addEventListener('mousedown', onPointer);
     window.addEventListener('keydown', onKey);
+
+    const t = window.setTimeout(() => {
+      const first = panelRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+      first?.focus();
+    }, 0);
+
     return () => {
       document.removeEventListener('mousedown', onPointer);
       window.removeEventListener('keydown', onKey);
+      window.clearTimeout(t);
     };
   }, [isOpen]);
 
   if (isLoading) {
-    const reduced = prefersReducedMotion();
     return (
-      <>
-        {!reduced ? <style>{breatheStyle}</style> : null}
-        <div
-          role="status"
-          aria-label="Loading account"
-          style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%',
-            background: '#E0D8D0',
-            animation: reduced ? 'none' : 'breathe 2.4s ease-in-out infinite',
-          }}
-        />
-      </>
+      <div
+        role="status"
+        aria-label="Loading account"
+        className={`user-menu-skeleton${reducedMotion ? ' user-menu-skeleton--static' : ''}`}
+      />
     );
   }
 
   // Guest state — show "Sign In" text link + "Try Arena" pill
   if (!user) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <button
-          type="button"
-          onClick={onSignInClick}
-          style={{
-            fontSize: '13px',
-            color: '#6B6460',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '8px 12px',
-            transition: 'color 150ms ease',
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'}
-          onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}
-        >
+      <div className="user-menu-guest">
+        <button type="button" className="user-menu-guest__signin" onClick={onSignInClick}>
           Sign in
         </button>
         <button
           type="button"
-          className="desktop-only"
+          className="user-menu-guest__cta desktop-only"
           onClick={onSignInClick}
-          style={{
-            fontSize: '13px',
-            fontWeight: 500,
-            color: '#FAF7F4',
-            background: '#1A1714',
-            border: 'none',
-            borderRadius: '999px',
-            padding: '8px 16px',
-            cursor: 'pointer',
-            transition: 'all 150ms ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#C4956A';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#1A1714';
-          }}
         >
           Try Arena
         </button>
@@ -125,173 +124,118 @@ export function UserMenu({
   }
 
   // Logged-in state
-  const initial = user.email[0].toUpperCase();
+  const initial = (user.name?.trim()?.[0] || user.email[0] || '?').toUpperCase();
   const isPro = user.tier === 'PRO';
   const isPlus = user.tier === 'PLUS';
   const limit = isPro ? PRO_LIMIT : isPlus ? PLUS_LIMIT : FREE_LIMIT;
-  const used = user.prompt_count_today;
-  const pct = Math.min((used / limit) * 100, 100);
+  const used = user.prompt_count_today ?? 0;
+  const pct = Math.min((used / Math.max(limit, 1)) * 100, 100);
+  const tone = usageTone(pct);
+  const tierLabel = user.tier.charAt(0) + user.tier.slice(1).toLowerCase();
 
   return (
-    <div style={{ position: 'relative', zIndex: 90 }} ref={menuRef}>
-      {/* Avatar button */}
+    <div className="user-menu" ref={menuRef}>
       <button
+        ref={avatarRef}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        className={`user-menu__avatar${isOpen ? ' user-menu__avatar--open' : ''}`}
+        onClick={() => setIsOpen((v) => !v)}
         aria-label="Account menu"
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        style={{
-          width: '32px',
-          height: '32px',
-          borderRadius: '50%',
-          border: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '13px',
-          fontWeight: 500,
-          color: '#1A1714',
-          background: '#F0EBE3',
-          cursor: 'pointer',
-          transition: 'all 150ms ease',
-        }}
-        onMouseEnter={(e) => e.currentTarget.style.background = '#E0D8D0'}
-        onMouseLeave={(e) => e.currentTarget.style.background = '#F0EBE3'}
+        aria-controls={isOpen ? menuId : undefined}
       >
         {initial}
       </button>
 
-      {/* Dropdown */}
-      {isOpen && (
+      {isOpen ? (
         <div
+          ref={panelRef}
+          id={menuId}
           role="menu"
           aria-label="Account"
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: '40px',
-            width: '256px',
-            border: '0.5px solid #E0D8D0',
-            borderRadius: '10px',
-            zIndex: 100,
-            padding: '4px',
-            background: '#FFFFFF',
-            boxShadow: '0 16px 34px rgba(26, 23, 20, 0.12)',
-          }}
+          className={`user-menu__panel${reducedMotion ? ' user-menu__panel--static' : ''}`}
         >
-          {/* User info */}
-          <div style={{ padding: '0.75rem 1rem', borderBottom: '0.5px solid #E0D8D0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#F0EBE3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 500, color: '#1A1714' }}>
-                {initial}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <p style={{ fontSize: '11px', color: '#6B6460', textTransform: 'capitalize' }}>{user.tier.toLowerCase()}</p>
-                  {isPro && (
-                    <span style={{ fontSize: '11px', fontWeight: 500, color: '#C4956A' }}>Pro</span>
-                  )}
-                </div>
+          <div className="user-menu__header">
+            <div className="user-menu__avatar user-menu__avatar--lg" aria-hidden>
+              {initial}
+            </div>
+            <div className="user-menu__identity">
+              <p className="user-menu__email" title={user.email}>
+                {user.email}
+              </p>
+              <div className="user-menu__tier-row">
+                <span
+                  className={[
+                    'user-menu__tier',
+                    isPro ? 'user-menu__tier--pro' : '',
+                    isPlus ? 'user-menu__tier--plus' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {tierLabel}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Usage */}
-          <div style={{ padding: '0.75rem 1rem', borderBottom: '0.5px solid #E0D8D0' }}>
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontSize: '11px', color: '#6B6460' }}>Today</span>
-                <span style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714' }}>
-                  {used} / {limit} messages used
-                </span>
-              </div>
-              <div style={{ height: '2px', background: '#E0D8D0', borderRadius: '999px', overflow: 'hidden' }}>
-                <div
-                  style={{
-                    height: '100%',
-                    background: isPro ? '#C4956A' : '#C4956A',
-                    borderRadius: '999px',
-                    width: `${pct}%`,
-                    transition: 'width 300ms ease',
-                  }}
-                />
-              </div>
-              <p style={{ fontSize: '11px', color: '#6B6460', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Zap style={{ width: '12px', height: '12px', color: '#C4956A' }} />
-                Resets daily
-              </p>
-            </>
+          <div className="user-menu__usage">
+            <div className="user-menu__usage-row">
+              <span className="user-menu__usage-label">Today</span>
+              <span className="user-menu__usage-value">
+                {used} / {limit} messages
+              </span>
+            </div>
+            <div
+              className="user-menu__meter"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={limit}
+              aria-valuenow={Math.min(used, limit)}
+              aria-label="Messages used today"
+            >
+              <div
+                className={`user-menu__meter-fill user-menu__meter-fill--${tone}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <p className="user-menu__usage-note">
+              <Zap width={12} height={12} aria-hidden />
+              Resets daily
+            </p>
           </div>
 
-          {/* Actions */}
-          {onProfileClick ? (
+          <div className="user-menu__actions">
+            {onProfileClick ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="user-menu__item"
+                onClick={() => {
+                  setIsOpen(false);
+                  onProfileClick();
+                }}
+              >
+                <UserRound width={14} height={14} aria-hidden />
+                Profile &amp; account
+              </button>
+            ) : null}
             <button
               type="button"
               role="menuitem"
+              className="user-menu__item user-menu__item--danger"
               onClick={() => {
                 setIsOpen(false);
-                onProfileClick();
-              }}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '10px 1rem',
-                fontSize: '13px',
-                color: '#6B6460',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                transition: 'all 150ms ease',
-                borderRadius: '6px',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#1A1714';
-                e.currentTarget.style.background = '#F0EBE3';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#6B6460';
-                e.currentTarget.style.background = 'transparent';
+                onLogout();
               }}
             >
-              {'Profile & account'}
+              <LogOut width={14} height={14} aria-hidden />
+              Sign out
             </button>
-          ) : null}
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => { setIsOpen(false); onLogout(); }}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '10px 1rem',
-              fontSize: '13px',
-              color: '#6B6460',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'all 150ms ease',
-              borderRadius: '6px',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = '#1A1714';
-              e.currentTarget.style.background = '#F0EBE3';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = '#6B6460';
-              e.currentTarget.style.background = 'transparent';
-            }}
-          >
-            <LogOut style={{ width: '14px', height: '14px' }} aria-hidden />
-            Sign out
-          </button>
+          </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
