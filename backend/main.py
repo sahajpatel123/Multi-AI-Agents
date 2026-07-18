@@ -353,15 +353,33 @@ def create_app() -> FastAPI:
         asyncio.create_task(schedule_condura_reconciler())
 
     # ── Startup self-test: verify global exception handler is wired ──────
-    # We deliberately trigger a controlled error to ensure the exception
-    # handler captures it correctly. This catches misconfigurations early.
-    try:
-        raise RuntimeError("STARTUP_SELF_TEST: global exception handler")
-    except RuntimeError as exc:
-        if "STARTUP_SELF_TEST" in str(exc):
-            logger.info("Global exception handler self-test passed")
-        else:
-            raise
+    # Earlier versions of this block raised a local RuntimeError, caught
+    # it on the next line, and logged a success message — that never
+    # exercised the @app.exception_handler(Exception) handler, only
+    # Python's try/except, so a misconfigured handler would still "pass"
+    # on every deploy.
+    #
+    # Two checks are needed to actually verify the handler:
+    #   1. It is registered on the app (decorator ran).
+    #   2. It returns the standardized envelope on a real exception.
+    #
+    # (1) is satisfied by `create_app()` reaching this point — FastAPI
+    # would have raised if the decorator was malformed. (2) requires
+    # triggering an actual exception, which a runtime ASGI request would
+    # do; instead of relying on a TestClient here (which would drag in
+    # the app lifespan and DB connectivity), the handler is exercised
+    # by the dedicated test in tests/test_global_exception_handler.py.
+    # So this block is now a fast no-op + an explicit sanity assertion.
+    from arena.core.errors import ErrorCodes
+
+    handlers = app.exception_handlers or {}
+    if Exception not in handlers:
+        raise RuntimeError(
+            "Global Exception handler is not registered — startup aborting"
+        )
+    logger.info(
+        "Global exception handler wired (code=%s)", ErrorCodes.INTERNAL_ERROR
+    )
 
     # ── Health check ──────────────────────────────────────────
     @app.get("/api/health", tags=["health"])
