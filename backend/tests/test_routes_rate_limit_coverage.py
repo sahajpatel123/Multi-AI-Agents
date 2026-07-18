@@ -25,12 +25,13 @@ Files checked:
   * panels.py   (cycle 43 closed panel read + presets gaps)
   * session.py  (cycle 43 closed get + list gaps)
   * discuss.py  (cycle 44 closed thread list/detail; stream uses cost_tracker)
+  * analytics.py (cycle 45 closed engagement gap; admin routes use require_admin_email)
 
 Other route files use different throttling mechanisms:
   * debate.py / prompt.py → tier-limit via cost_tracker.check_and_increment_user
   * auth.py / payments.py → mix of IP+user+signature verification; covered by separate tests
   * agent.py → cycle 32/33 closed the public gaps
-  * memory.py / analytics.py → already audited
+  * memory.py → already audited
   * metrics.py → single admin endpoint
 """
 
@@ -58,6 +59,7 @@ COVERED_FILES = [
     "panels.py",
     "session.py",
     "discuss.py",
+    "analytics.py",
 ]
 
 # Acceptable defenses inside a handler body. Match each as a regex.

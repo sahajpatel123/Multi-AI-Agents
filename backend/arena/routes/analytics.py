@@ -372,6 +372,14 @@ async def analytics_engagement(
     # dashboard wanting cross-user analytics should hit /metrics
     # (admin-only). This endpoint is for a single user to see
     # whether their engagement rate matches the rest of their tier.
+    # Bound like summary/activity — multi-join aggregation is not free.
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_engagement",
+        limit=60,
+        window_seconds=3600,
+        message="Too many analytics engagement requests. Limit is 60 per hour.",
+    )
     from arena.db_models import User as UserModel
 
     now_utc = utcnow_naive()
