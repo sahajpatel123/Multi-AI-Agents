@@ -105,7 +105,6 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     # LLM
-    default_model: str = "claude-sonnet-4-20250514"
     max_tokens: int = 1024
     timeout_seconds: int = 30
 
@@ -132,8 +131,6 @@ class Settings(BaseSettings):
     admin_email: str = ""
 
     # Rate limits
-    guest_daily_limit: int = 5
-    registered_daily_limit: int = 7
     pro_window_messages: int = 45
     pro_window_hours: int = 5
 
