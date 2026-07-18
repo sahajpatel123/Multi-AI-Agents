@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from jose import jwt as jose_jwt
+import jwt as pyjwt
 
 
 def test_decode_token_rejects_empty():
@@ -19,7 +19,7 @@ def test_decode_token_rejects_missing_exp():
     from arena.core import auth
 
     # Token without exp claim — must fail require_exp.
-    raw = jose_jwt.encode(
+    raw = pyjwt.encode(
         {"sub": "1", "type": "access"},
         auth.SECRET_KEY,
         algorithm=auth.ALGORITHM,

@@ -24,8 +24,12 @@ sqlalchemy==2.0.35
 alembic==1.13.3
 psycopg[binary]==3.3.4
 
-# Auth - upgraded for security fixes (python-jose 3.5+, python-multipart 0.0.32+)
-python-jose[cryptography]==3.5.0
+# Auth - migrated to PyJWT to drop python-jose's transitive ecdsa dependency
+# (python-jose 3.5.0 pulls ecdsa 0.19.2, flagged PYSEC-2026-1325 / Minerva timing
+# attack on P-256 with no upstream fix planned). PyJWT (actively maintained) does
+# not depend on ecdsa and produces byte-compatible RFC 7519 HS256 tokens, so
+# in-flight access/refresh tokens issued by the old signer still validate.
+PyJWT==2.10.1
 # Transitive floor: pyasn1 0.4.x has PYSEC-2026-2263 (fixed in 0.6.3+)
 pyasn1==0.6.4
 bcrypt==4.2.0

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt as _bcrypt
-from jose import JWTError, jwt
+import jwt as _pyjwt
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
@@ -106,7 +106,7 @@ def create_access_token(user_id: int, email: str) -> str:
         # token-rotation property.
         "jti": str(uuid.uuid4()),
     }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return _pyjwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_refresh_token(user_id: int, email: str) -> str:
@@ -124,7 +124,7 @@ def create_refresh_token(user_id: int, email: str) -> str:
         # can be blacklisted and replay rejected.
         "jti": str(uuid.uuid4()),
     }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return _pyjwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def legacy_hits() -> int:
@@ -148,7 +148,7 @@ def decode_token(token: str) -> Optional[dict]:
     if not token or not isinstance(token, str) or not token.strip():
         return None
     try:
-        return jwt.decode(
+        return _pyjwt.decode(
             token.strip(),
             SECRET_KEY,
             algorithms=[ALGORITHM],
@@ -158,7 +158,7 @@ def decode_token(token: str) -> Optional[dict]:
                 "verify_signature": True,
             },
         )
-    except JWTError:
+    except _pyjwt.PyJWTError:
         return None
 
 

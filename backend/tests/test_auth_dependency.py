@@ -20,14 +20,13 @@ def _request_with_token(token: str) -> Request:
 async def test_non_numeric_subject_yields_401_not_500(db_session):
     """A validly-signed token whose `sub` is non-numeric must raise 401, not let
     int() throw a ValueError that surfaces as a 500."""
-    from jose import jwt
-
+    import jwt as pyjwt
     from arena.config import get_settings
     from arena.core.auth import ALGORITHM
     from arena.core.dependencies import get_current_user
 
     settings = get_settings()
-    token = jwt.encode(
+    token = pyjwt.encode(
         {"sub": "not-a-number", "type": "access"},
         settings.secret_key,
         algorithm=ALGORITHM,
