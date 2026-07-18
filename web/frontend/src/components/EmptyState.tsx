@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { prefersReducedMotion } from '../lib/motion';
 
-export type EmptyStateVariant = 'default' | 'error' | 'card' | 'filter';
+export type EmptyStateVariant = 'default' | 'error' | 'card' | 'filter' | 'compact';
 
 export type EmptyStateProps = {
   title: string;

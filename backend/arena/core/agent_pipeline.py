@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -307,7 +306,7 @@ async def run_agent_pipeline_on_blackboard(
             bb.status = AgentStatus.COMPLETE
 
         if bb.status == AgentStatus.COMPLETE and bb.completed_at is None:
-            bb.completed_at = datetime.now(timezone.utc)
+            bb.completed_at = utcnow_naive()
 
         if bb.status == AgentStatus.COMPLETE and not bb.conversation:
             bb.add_message("user", bb.original_task or bb.task)
@@ -470,7 +469,7 @@ Address specifically: {intent.get("instruction")}
         existing_bb = await run_judge(existing_bb)
         if existing_bb.status == AgentStatus.NEEDS_REVISION:
             existing_bb.status = AgentStatus.COMPLETE
-            existing_bb.completed_at = datetime.now(timezone.utc)
+            existing_bb.completed_at = utcnow_naive()
 
         existing_bb.add_message(
             role="agent",

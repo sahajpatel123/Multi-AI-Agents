@@ -52,6 +52,7 @@ import {
 } from '../api';
 import { ConduraInstallCTA } from '../components/ConduraInstallCTA';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
+import { EmptyState } from '../components/EmptyState';
 import { TemporalEvolutionPanel } from '../components/TemporalEvolutionPanel';
 import { buildHandoffPayload } from '../lib/conduraHandoff';
 import { dispatchHandoff, pairDevice, ConduraClientError } from '../lib/conduraClient';
@@ -3561,31 +3562,27 @@ export function AgentPage() {
               {roomsBodyMode === 'loading' ? (
                 <div style={{ fontSize: 11, color: '#C4B8AE', padding: '4px 0' }}>Loading…</div>
               ) : roomsBodyMode === 'load_error' ? (
-                <div role="alert" style={{ fontSize: 12, color: '#8C7355', padding: '4px 2px 8px', lineHeight: 1.45 }}>
-                  Could not load rooms.
-                  <button
-                    type="button"
-                    onClick={() => void loadMyRooms()}
-                    style={{
-                      display: 'block',
-                      marginTop: 6,
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      color: '#C4956A',
-                      fontSize: 12,
-                      cursor: 'pointer',
-                      fontFamily: 'Georgia, serif',
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    Retry
-                  </button>
-                </div>
+                <EmptyState
+                  variant="compact"
+                  alert
+                  title="Could not load rooms."
+                  description="Your rooms are safe — try again."
+                  actions={
+                    <button
+                      type="button"
+                      className="arena-btn arena-btn--ghost arena-btn--sm"
+                      onClick={() => void loadMyRooms()}
+                    >
+                      Retry
+                    </button>
+                  }
+                />
               ) : roomsBodyMode === 'empty' ? (
-                <div style={{ fontSize: 12, color: '#C4B8AE', padding: '4px 2px 6px', lineHeight: 1.45 }}>
-                  No rooms yet — create one to research with others.
-                </div>
+                <EmptyState
+                  variant="compact"
+                  title="No rooms yet"
+                  description="Create one to research with others."
+                />
               ) : (
                 <>
                   {myRooms.length > 1 ? (
@@ -4432,37 +4429,27 @@ export function AgentPage() {
             {historyBodyMode === 'loading' ? (
               <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 0' }}>Loading…</div>
             ) : historyBodyMode === 'load_error' ? (
-              <div
-                role="alert"
-                style={{ fontSize: 12, color: '#8C7355', textAlign: 'center', padding: '1.5rem 0.75rem', lineHeight: 1.5 }}
-              >
-                Could not load research history.
-                <br />
-                <span style={{ color: '#A89070' }}>Your past tasks are safe — try again.</span>
-                <button
-                  type="button"
-                  onClick={() => void loadTaskHistory()}
-                  style={{
-                    display: 'block',
-                    margin: '10px auto 0',
-                    fontSize: 12,
-                    color: '#C4956A',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontFamily: 'Georgia, serif',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  Retry
-                </button>
-              </div>
+              <EmptyState
+                variant="compact"
+                alert
+                title="Could not load research history."
+                description="Your past tasks are safe — try again."
+                actions={
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => void loadTaskHistory()}
+                  >
+                    Retry
+                  </button>
+                }
+              />
             ) : historyBodyMode === 'empty' ? (
-              <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '2rem 1rem', lineHeight: 1.5 }}>
-                No research yet.
-                <br />
-                <span style={{ color: '#A89070' }}>Ask something hard below — it will show up here.</span>
-              </div>
+              <EmptyState
+                variant="compact"
+                title="No research yet."
+                description="Ask something hard below — it will show up here."
+              />
             ) : filteredTaskHistory.length === 0 ? (
               <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '1.5rem 0.75rem', lineHeight: 1.5 }}>
                 {historySearchQuery.trim()

@@ -4,12 +4,12 @@ import asyncio
 import json
 import time
 import uuid
-from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from arena.core.datetime_utils import utcnow_naive
 from arena.core.dependencies import get_current_user_required
 from arena.core.contradiction_detector import get_contradiction_detector
 from arena.core.cost_tracker import (
@@ -603,7 +603,7 @@ async def prompt_readiness(db: Session = Depends(get_db)) -> JSONResponse:
     body = {
         "status": "ok" if ok else "degraded",
         "service": "arena-prompt",
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": utcnow_naive().isoformat() + "Z",
         "checks": checks,
     }
     return JSONResponse(status_code=200 if ok else 503, content=body)

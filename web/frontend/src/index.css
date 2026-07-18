@@ -2213,6 +2213,58 @@ canvas {
   border-radius: 14px;
 }
 
+/* Dense sidebar / panel empty chrome (Agent rooms + history rails) */
+.arena-empty-state--compact {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0.85rem 0.35rem 1rem;
+  align-items: flex-start;
+  text-align: left;
+  animation: none;
+}
+
+.arena-empty-state--compact .arena-empty-state__icon {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 0.45rem;
+}
+
+.arena-empty-state--compact .arena-empty-state__title {
+  font-size: 12px;
+  font-weight: 500;
+  color: #8c7355;
+  letter-spacing: 0;
+  line-height: 1.45;
+}
+
+.arena-empty-state--compact .arena-empty-state__description {
+  font-size: 12px;
+  color: #a89070;
+  margin-top: 0.25rem;
+  max-width: none;
+  line-height: 1.45;
+}
+
+.arena-empty-state--compact .arena-empty-state__actions {
+  margin-top: 0.55rem;
+  width: 100%;
+  justify-content: flex-start;
+  gap: 0.35rem;
+}
+
+.arena-empty-state--compact.arena-empty-state--error {
+  padding: 0.85rem 0.35rem 1rem;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  max-width: none;
+}
+
+.arena-empty-state--compact.arena-empty-state--error .arena-empty-state__title {
+  color: #8c7355;
+}
+
 .arena-empty-state--error {
   max-width: 400px;
   padding: 2rem 1.35rem;

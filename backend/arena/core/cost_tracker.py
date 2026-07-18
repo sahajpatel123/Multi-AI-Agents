@@ -23,7 +23,7 @@ def _now_utc() -> datetime:
 
 def get_today_token_usage(db: Session, user_id: int) -> int:
     """Sum input+output tokens for usage_records since UTC midnight today."""
-    today_start = datetime.now(timezone.utc).replace(
+    today_start = utcnow_naive().replace(
         hour=0, minute=0, second=0, microsecond=0
     )
     token_sum = UsageRecord.input_tokens + UsageRecord.output_tokens
