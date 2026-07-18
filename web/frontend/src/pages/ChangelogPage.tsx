@@ -1,5 +1,6 @@
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import '../styles/changelog.css';
 
 const CHANGELOG_ENTRIES = [
   {
@@ -317,77 +318,93 @@ const CHANGELOG_ENTRIES = [
   },
 ];
 
+type ItemKind = 'new' | 'improved' | 'fixed' | 'other';
+
+function parseChangelogItem(raw: string): { kind: ItemKind; label: string; text: string } {
+  const m = raw.match(/^\[([^\]]+)\]\s*(.*)$/);
+  if (!m) return { kind: 'other', label: 'Note', text: raw };
+  const tag = m[1].toUpperCase();
+  const text = m[2] || raw;
+  if (tag.includes('NEW')) return { kind: 'new', label: 'New', text };
+  if (tag.includes('IMPROV')) return { kind: 'improved', label: 'Improved', text };
+  if (tag.includes('FIX')) return { kind: 'fixed', label: 'Fixed', text };
+  return { kind: 'other', label: tag.slice(0, 10), text };
+}
+
 export function ChangelogPage() {
   return (
-    <div style={{ background: '#FAF7F4', minHeight: '100vh' }}>
-      <style>{`
-        @keyframes breathe {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.5); opacity: 0.6; }
-        }
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .breathe { animation: breathe 2.4s ease-in-out infinite; }
-        .animate-fade-up { animation: fadeUp 500ms ease 100ms backwards; }
-      `}</style>
-
+    <div className="changelog-page">
       <Navbar />
 
-      <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '64px 24px' }}>
-        <div className="animate-fade-up" style={{ marginBottom: '3rem' }}>
-          <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#6B6460', marginBottom: '1rem' }}>What's new</p>
-          <h1 style={{ fontSize: '48px', fontWeight: 500, letterSpacing: '-.03em', color: '#1A1714', lineHeight: 1.1, marginBottom: '1rem' }}>Changelog</h1>
-          <p style={{ fontSize: '14px', color: '#6B6460', marginBottom: '3rem' }}>Every update, improvement, and fix — documented.</p>
-        </div>
+      <main id="main-content" className="changelog-page__main" tabIndex={-1}>
+        <header className="changelog-page__hero">
+          <p className="changelog-page__kicker">
+            <span className="changelog-page__kicker-dot" aria-hidden="true" />
+            What&apos;s new
+          </p>
+          <h1 className="changelog-page__title">Changelog</h1>
+          <p className="changelog-page__lede">
+            Every update, improvement, and fix — documented.
+          </p>
+        </header>
 
-        <div style={{ position: 'relative', paddingLeft: '2rem' }}>
-          <div style={{ position: 'absolute', left: '4px', top: 0, bottom: 0, width: '1px', background: '#E0D8D0' }} />
+        <div className="changelog-timeline">
+          <div className="changelog-timeline__rail" aria-hidden="true" />
 
-          {CHANGELOG_ENTRIES.map((entry, idx) => (
-            <div key={idx} className="changelog-entry" style={{ position: 'relative', marginBottom: '2.5rem' }}>
-              <div className="timeline-dot breathe" style={{ position: 'absolute', left: '-2rem', top: '8px', width: '8px', height: '8px', borderRadius: '50%', background: '#C4956A' }} />
+          {CHANGELOG_ENTRIES.map((entry) => {
+            const isLatest = Boolean(entry.badge?.label?.toLowerCase().includes('latest'));
+            return (
+              <article
+                key={`${entry.version}-${entry.date}`}
+                className={`changelog-entry${isLatest ? ' changelog-entry--latest' : ''}`}
+              >
+                <span className="changelog-entry__dot" aria-hidden="true" />
 
-              <div>
-                <p style={{ fontSize: '11px', letterSpacing: '.08em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '.4rem' }}>{entry.date}</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '.8rem' }}>
-                  <div style={{ background: '#F0EBE3', color: '#1A1714', fontSize: '11px', padding: '3px 10px', borderRadius: '999px', display: 'inline-block' }}>{entry.version}</div>
-                  {entry.badge ? (
-                    <div
-                      style={{
-                        background: entry.badge.background,
-                        color: entry.badge.color,
-                        fontSize: '11px',
-                        padding: '3px 10px',
-                        borderRadius: '999px',
-                        display: 'inline-block',
-                      }}
-                    >
-                      {entry.badge.label}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="changelog-card" style={{ background: '#FFFFFF', border: '0.5px solid #E0D8D0', borderRadius: '14px', padding: '1.5rem' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>{entry.title}</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '.55rem' }}>
-                    {entry.items.map((item) => (
-                      <p key={item} style={{ fontSize: '13px', color: '#6B6460', lineHeight: 1.65 }}>
-                        {item}
-                      </p>
-                    ))}
+                <div className="changelog-entry__meta">
+                  <p className="changelog-entry__date">{entry.date}</p>
+                  <div className="changelog-entry__chips">
+                    <span className="changelog-entry__version">{entry.version}</span>
+                    {entry.badge ? (
+                      <span
+                        className="changelog-entry__badge"
+                        style={{
+                          background: entry.badge.background,
+                          color: entry.badge.color,
+                        }}
+                      >
+                        {entry.badge.label}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
-              </div>
-            </div>
-          ))}
+
+                <div className="changelog-card">
+                  <h2 className="changelog-card__title">{entry.title}</h2>
+                  <ul className="changelog-card__list">
+                    {entry.items.map((item) => {
+                      const parsed = parseChangelogItem(item);
+                      return (
+                        <li key={item} className="changelog-item">
+                          <span
+                            className={`changelog-item__tag changelog-item__tag--${parsed.kind}`}
+                          >
+                            {parsed.label}
+                          </span>
+                          <p className="changelog-item__text">{parsed.text}</p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </article>
+            );
+          })}
         </div>
 
-        <p style={{ fontSize: '13px', color: '#B0A9A2', textAlign: 'center', marginTop: '3rem', marginBottom: '2rem' }}>
+        <p className="changelog-page__foot">
           Arena is actively being built. New updates ship regularly.
         </p>
-      </div>
+      </main>
 
       <Footer />
     </div>
