@@ -12,7 +12,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from arena.core.client_ip import get_request_client_ip
+from arena.core.client_ip import (
+    _from_x_forwarded_for,
+    _looks_like_ip,
+    get_request_client_ip,
+)
 
 
 def _request(
@@ -145,3 +149,24 @@ class TestClientIpProductionUsesRightmostHop:
             headers={"X-Forwarded-For": "8.8.8.8, 203.0.113.77"},
         )
         assert get_request_client_ip(req) == "203.0.113.77"
+
+
+class TestFromXForwardedForHelpers:
+    def test_rightmost_valid_with_ipv4_port(self):
+        assert (
+            _from_x_forwarded_for("8.8.8.8, 203.0.113.9:51234")
+            == "203.0.113.9"
+        )
+
+    def test_skips_garbage_then_returns_valid(self):
+        assert _from_x_forwarded_for("not-ip, still-bad, 198.51.100.1") == "198.51.100.1"
+
+    def test_empty_header(self):
+        assert _from_x_forwarded_for("") is None
+        assert _from_x_forwarded_for("   ,  , ") is None
+
+    def test_looks_like_ip(self):
+        assert _looks_like_ip("127.0.0.1") is True
+        assert _looks_like_ip("::1") is True
+        assert _looks_like_ip("not-an-ip") is False
+        assert _looks_like_ip("999.999.999.999") is False
