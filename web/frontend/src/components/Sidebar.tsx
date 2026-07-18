@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { Button } from './Button';
 import { Icons } from './Icons';
 import {
@@ -798,21 +805,15 @@ export function Sidebar({
                   aria-label={filter.label}
                   title={filter.label}
                   onClick={() => setActiveFilter(filter.value)}
-                  className="flex items-center justify-center"
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '50%',
-                    background: isActive ? '#C4956A' : '#F0EBE3',
-                    color: isActive ? '#FFFFFF' : '#6B6460',
-                    transition: 'all 150ms ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.background = '#E0D8D0';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.background = '#F0EBE3';
-                  }}
+                  className={[
+                    'sidebar-filter-dot',
+                    'flex',
+                    'items-center',
+                    'justify-center',
+                    isActive ? 'sidebar-filter-dot--active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                 >
                   {filter.icon}
                 </button>
@@ -2001,42 +2002,19 @@ interface MenuActionProps {
 }
 
 function MenuAction({ icon, label, isPrimary = false, onClick }: MenuActionProps) {
-  const [isHovered, setIsHovered] = useState(false);
-
   return (
     <button
       type="button"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
-      style={{
-        width: '100%',
-        background: isPrimary ? '#1A1714' : '#F0EBE3',
-        color: isPrimary ? '#FAF7F4' : '#1A1714',
-        borderRadius: '999px',
-        padding: '8px 16px',
-        fontSize: '13px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        border: isPrimary ? 'none' : '0.5px solid #E0D8D0',
-        cursor: 'pointer',
-        transition: 'all 150ms ease',
-        opacity: isHovered ? (isPrimary ? 0.85 : 1) : 1,
-      }}
-      onMouseOver={(e) => {
-        if (!isPrimary) e.currentTarget.style.background = '#E0D8D0';
-      }}
-      onMouseOut={(e) => {
-        if (!isPrimary) e.currentTarget.style.background = '#F0EBE3';
-      }}
+      className={[
+        'sidebar-menu-action',
+        isPrimary ? 'sidebar-menu-action--primary' : 'sidebar-menu-action--secondary',
+      ].join(' ')}
     >
-      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px' }}>
+      <span className="sidebar-menu-action__icon" aria-hidden>
         {icon}
       </span>
-      <span style={{ fontWeight: 400 }}>
-        {label}
-      </span>
+      <span className="sidebar-menu-action__label">{label}</span>
     </button>
   );
 }
@@ -2050,24 +2028,18 @@ interface MenuItemProps {
 }
 
 function MenuItem({ icon, label, color, hoverBackground, onClick }: MenuItemProps) {
-  const [isHovered, setIsHovered] = useState(false);
-
   return (
     <button
       type="button"
       onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className="w-full flex items-center gap-2"
-      style={{
-        padding: '8px 12px',
-        fontSize: '13px',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        transition: 'all 150ms ease',
-        color,
-        background: isHovered ? hoverBackground : 'transparent',
-      }}
+      className="sidebar-menu-item w-full flex items-center gap-2"
+      style={
+        {
+          color,
+          // CSS custom property lets hover background stay data-driven without JS
+          ['--sidebar-menu-item-hover-bg' as string]: hoverBackground,
+        } as CSSProperties
+      }
     >
       {icon}
       {label}
