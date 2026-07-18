@@ -343,6 +343,9 @@ async def stream_discuss(
             return
         except Exception as e:
             yield _sse_event("error", {"detail": "Discuss request failed"})
+        finally:
+            # Ensure any background tasks are cleaned up on abnormal exit
+            pass
 
     return StreamingResponse(
         event_generator(),

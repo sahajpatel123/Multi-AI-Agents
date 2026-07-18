@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from arena.core.client_ip import get_request_client_ip
 from arena.core.rate_limits import enforce_user_rate_limit
 
+from arena.core.errors import error_response, ErrorCodes
 from arena.core.auth import (
     authenticate_user,
     create_access_token,
@@ -385,7 +386,7 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
+            detail={"error": ErrorCodes.INVALID_TOKEN, "message": "Invalid or expired refresh token"},
         )
 
     # Honor the blacklist: a logout that revoked the refresh token must
@@ -400,7 +401,7 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
+            detail={"error": ErrorCodes.INVALID_TOKEN, "message": "Invalid or expired refresh token"},
         )
 
     uid = _subject_user_id(payload)
@@ -439,7 +440,7 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
         # or skip blacklisting entirely.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
+            detail={"error": ErrorCodes.INVALID_TOKEN, "message": "Invalid or expired refresh token"},
         )
     try:
         token_blacklist.add(
@@ -455,7 +456,7 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Unable to complete token rotation. Please try again.",
+            detail={"error": ErrorCodes.SERVICE_UNAVAILABLE, "message": "Unable to complete token rotation. Please try again."},
         ) from _exc
 
     new_access = create_access_token(user.id, user.email)
@@ -533,7 +534,7 @@ async def patch_user_profile(
         if level not in _EXPERTISE_LEVELS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid expertise_level",
+                detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Invalid expertise_level"},
             )
         user.expertise_level = level
     if body.expertise_domain is not None:

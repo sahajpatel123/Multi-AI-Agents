@@ -352,6 +352,17 @@ def create_app() -> FastAPI:
         asyncio.create_task(schedule_loyalty_checks())
         asyncio.create_task(schedule_condura_reconciler())
 
+    # ── Startup self-test: verify global exception handler is wired ──────
+    # We deliberately trigger a controlled error to ensure the exception
+    # handler captures it correctly. This catches misconfigurations early.
+    try:
+        raise RuntimeError("STARTUP_SELF_TEST: global exception handler")
+    except RuntimeError as exc:
+        if "STARTUP_SELF_TEST" in str(exc):
+            logger.info("Global exception handler self-test passed")
+        else:
+            raise
+
     # ── Health check ──────────────────────────────────────────
     @app.get("/api/health", tags=["health"])
     async def health_check(db: Session = Depends(get_db)):

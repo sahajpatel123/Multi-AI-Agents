@@ -6,6 +6,7 @@ from .scorer import Scorer
 from .input_pipeline import run_input_pipeline
 from .persona_integrity import check_integrity
 from .response_shaper import assemble_payload
+from .errors import error_response, ErrorCodes
 
 __all__ = [
     "AGENTS",
@@ -15,4 +16,6 @@ __all__ = [
     "run_input_pipeline",
     "check_integrity",
     "assemble_payload",
+    "error_response",
+    "ErrorCodes",
 ]
