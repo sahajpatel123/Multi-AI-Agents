@@ -4,6 +4,8 @@ import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
+logger = logging.getLogger(__name__)
+
 from arena.core.assumption_surfacer import surface_assumptions
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard
 from arena.core.dissent_engine import generate_dissent_report
@@ -119,12 +121,16 @@ def record_agent_task_usage(bb: Blackboard) -> None:
             output_tokens=bb.total_output_tokens,
             mode="agent",
             prompt_category="agent_task",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         db.add(usage)
         db.commit()
-    except Exception as e:
-        print(f"Usage tracking failed: {e}")
+    except Exception:
+        # Use logger.exception so the traceback lands in the same stream
+        # as the rest of the structured logs; a print() here would be
+        # the only thing on stdout in a process otherwise wired to
+        # the JSON logger.
+        logger.exception("Usage tracking failed for task_id=%s", bb.task_id)
         db.rollback()
     finally:
         db.close()
