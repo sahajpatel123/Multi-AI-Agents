@@ -27,10 +27,12 @@ Files checked:
   * discuss.py  (cycle 44 closed thread list/detail; stream uses cost_tracker)
   * analytics.py (cycle 45 closed engagement gap; admin routes use require_admin_email)
   * memory.py   (cycle 46 closed summaries list/detail; uses @memory_router)
+  * payments.py (cycle 47: public plans IP + read/write scopes; webhook HMAC)
+  * prompt.py   (cycle 47: _check_rate_limit + health/readiness IP caps)
 
 Other route files use different throttling mechanisms:
-  * debate.py / prompt.py → tier-limit via cost_tracker.check_and_increment_user
-  * auth.py / payments.py → mix of IP+user+signature verification; covered by separate tests
+  * debate.py → tier-limit via cost_tracker.check_and_increment_user
+  * auth.py → mix of IP+user+login_limiter; covered by separate tests
   * agent.py → cycle 32/33 closed the public gaps
   * metrics.py → single admin endpoint
 """
@@ -61,6 +63,8 @@ COVERED_FILES = [
     "discuss.py",
     "analytics.py",
     "memory.py",
+    "payments.py",
+    "prompt.py",
 ]
 
 # Acceptable defenses inside a handler body. Match each as a regex.
@@ -73,6 +77,13 @@ DEFENSES = {
     "stripe_sig": re.compile(r"\bverify_stripe_signature\b"),
     # LLM spend throttle used by discuss/debate/prompt stream handlers.
     "tier_cost_tracker": re.compile(r"\bcheck_and_increment_user\b"),
+    # Module-local wrappers that call enforce_* / cost_tracker.
+    "payment_rate_limit": re.compile(
+        r"\b_enforce_payment_(?:rate_limit|write_rate_limit|read_rate_limit)\b"
+    ),
+    "prompt_rate_limit": re.compile(r"\b_check_rate_limit\b"),
+    # Razorpay webhook HMAC (payments.py uses hmac_sha256_hex_equal directly).
+    "razorpay_hmac": re.compile(r"\bhmac_sha256_hex_equal\b"),
 }
 
 # `@router.<method>("<path>")` and aliases like `@memory_router.get(...)`.

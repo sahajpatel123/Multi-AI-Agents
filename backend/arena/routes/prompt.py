@@ -19,6 +19,7 @@ from arena.core.cost_tracker import (
     check_token_budget,
     record_usage,
 )
+from arena.core.rate_limits import enforce_ip_rate_limit
 from arena.core.input_pipeline import run_input_pipeline
 from arena.core.memory import SessionOwnershipError, get_memory_manager
 from arena.core.observability import (
@@ -540,7 +541,7 @@ def _sse_event(event: str, data: dict) -> str:
 
 
 @router.get("/prompt/health")
-async def prompt_health() -> dict:
+async def prompt_health(request: Request) -> dict:
     """Liveness probe — process is up and the route is reachable.
 
     No auth, no DB call: this is the cheapest possible check so a
@@ -548,11 +549,22 @@ async def prompt_health() -> dict:
     Postgres. A 200 here means the FastAPI worker can serve requests;
     it does NOT mean the prompt pipeline works. Use /readiness for that.
     """
+    # Generous IP cap — probes are frequent; still block abusive floods.
+    enforce_ip_rate_limit(
+        request,
+        scope="prompt_health",
+        limit=300,
+        window_seconds=60,
+        message="Too many health probes. Please slow down.",
+    )
     return {"status": "ok", "service": "arena-prompt"}
 
 
 @router.get("/prompt/readiness")
-async def prompt_readiness(db: Session = Depends(get_db)) -> JSONResponse:
+async def prompt_readiness(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> JSONResponse:
     """Readiness probe — DB reachable AND short-term memory store loaded.
 
     A 200 means the prompt pipeline can plausibly serve a request:
@@ -567,6 +579,14 @@ async def prompt_readiness(db: Session = Depends(get_db)) -> JSONResponse:
     Returns 503 if any check fails — load balancers and uptime
     checkers treat 503 as 'remove from rotation'.
     """
+    # Lower than liveness — readiness hits Postgres.
+    enforce_ip_rate_limit(
+        request,
+        scope="prompt_readiness",
+        limit=120,
+        window_seconds=60,
+        message="Too many readiness probes. Please slow down.",
+    )
     checks: dict[str, str] = {}
     ok = True
 

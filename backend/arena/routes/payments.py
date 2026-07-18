@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.hmac_verify import hmac_sha256_hex_equal
-from arena.core.rate_limits import enforce_user_rate_limit
+from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.entitlements import compute_user_entitlements
 from arena.core.tier_config import get_tier_str
 from arena.core.dependencies import get_current_user_required_orm
@@ -29,12 +29,29 @@ router = APIRouter(tags=["payments"])
 
 
 def _enforce_payment_rate_limit(user_id: int) -> None:
+    """Legacy alias — write/checkout path (kept for call sites that mean "mutate")."""
+    _enforce_payment_write_rate_limit(user_id)
+
+
+def _enforce_payment_write_rate_limit(user_id: int) -> None:
+    """Strict cap for checkout, verify, cancel, and addon mutations."""
     enforce_user_rate_limit(
         user_id,
-        scope="payments",
+        scope="payments_write",
         limit=5,
         window_seconds=60,
         message="Too many payment requests. Limit is 5 per minute.",
+    )
+
+
+def _enforce_payment_read_rate_limit(user_id: int) -> None:
+    """Higher ceiling for status/entitlements/history — account shell may hit several."""
+    enforce_user_rate_limit(
+        user_id,
+        scope="payments_read",
+        limit=60,
+        window_seconds=60,
+        message="Too many billing status reads. Please slow down.",
     )
 
 
@@ -945,7 +962,7 @@ async def get_subscription_status(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
-    _enforce_payment_rate_limit(user.id)
+    _enforce_payment_read_rate_limit(user.id)
     tier_val = user.tier.value if hasattr(user.tier, "value") else str(user.tier)
 
     row: Optional[Subscription] = None
@@ -1051,7 +1068,7 @@ async def cancel_subscription(
 
 
 @router.get("/plans")
-async def list_plans() -> dict:
+async def list_plans(request: Request) -> dict:
     """Public plans catalog for the pricing page. No auth required —
     anyone (including logged-out visitors) can see what we sell and at
     what price. Amounts are in paise (smallest currency unit) so the
@@ -1061,6 +1078,14 @@ async def list_plans() -> dict:
     per-tier `feature_highlights` block so the pricing page can render
     checkmarks without a second roundtrip.
     """
+    # Public catalog — IP cap so scrapers cannot hammer plan config reads.
+    enforce_ip_rate_limit(
+        request,
+        scope="payments_plans",
+        limit=60,
+        window_seconds=60,
+        message="Too many plan catalog reads. Please slow down.",
+    )
     settings = get_settings()
     plans = _plan_map(settings)
     items = []
@@ -1108,7 +1133,7 @@ async def get_my_entitlements(
     a single coherent entitlement summary without consulting the
     subscription row separately.
     """
-    _enforce_payment_rate_limit(user.id)
+    _enforce_payment_read_rate_limit(user.id)
     payload = compute_user_entitlements(db=db, user=user)
     return JSONResponse(content=payload)
 
@@ -1129,7 +1154,7 @@ async def subscription_history(
     is the full timeline (renewals, downgrades, cancellations, agent
     add-on toggles) so a user can answer 'when did I last renew?'.
     """
-    _enforce_payment_rate_limit(user.id)
+    _enforce_payment_read_rate_limit(user.id)
 
     q = db.query(Subscription).filter(Subscription.user_id == user.id)
 
