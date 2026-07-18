@@ -243,3 +243,61 @@ async def test_session_endpoints_require_auth(app_client):
     ]:
         res = await app_client.request(method, path)
         assert res.status_code == 401, f"{method} {path} returned {res.status_code}"
+
+
+@pytest.mark.asyncio
+async def test_delete_session_clears_persona_integrity_drift_history(
+    app_client, make_user
+):
+    """Deleting a session must drop the persona_integrity in-memory
+    drift history for that session_id. Without this cleanup the
+    process-local defaultdict grows unbounded for users who delete
+    many sessions over a long-running process.
+    """
+    user = make_user(email="sess-drift@test.com", tier=UserTier.PRO)
+    from arena.core import persona_integrity
+
+    session_id = "drift-target"
+    _seed_in_memory(user.id, session_id=session_id)
+    # Seed drift history for two agents under this session.
+    persona_integrity.record_response("agent_1", "verdict-1", session_id)
+    persona_integrity.record_response("agent_2", "verdict-2", session_id)
+    assert session_id in persona_integrity._session_history
+    assert len(persona_integrity._session_history[session_id]) == 2
+
+    res = await app_client.delete(
+        f"/api/session/{session_id}", headers=_pro_headers(user)
+    )
+    assert res.status_code == 200
+
+    # The persona_integrity history for this session must be gone
+    # — the route's delete path now calls clear_session_history()
+    # alongside memory.clear_session().
+    assert session_id not in persona_integrity._session_history
+
+
+@pytest.mark.asyncio
+async def test_delete_all_sessions_clears_persona_integrity_history(
+    app_client, make_user
+):
+    """Bulk delete must clear drift history for every session the caller
+    owned, and only those — foreign sessions keep their history."""
+    user = make_user(email="sess-bulk-drift@test.com", tier=UserTier.PRO)
+    from arena.core import persona_integrity
+
+    _seed_in_memory(user.id, session_id="keep-history-A")
+    _seed_in_memory(user.id, session_id="keep-history-B")
+    persona_integrity.record_response("agent_1", "v", "keep-history-A")
+    persona_integrity.record_response("agent_1", "v", "keep-history-B")
+    # Add an unrelated session that the caller does not own; its
+    # history must survive the bulk delete.
+    persona_integrity.record_response("agent_1", "v", "not-mine")
+
+    res = await app_client.delete("/api/sessions", headers=_pro_headers(user))
+    assert res.status_code == 200
+    assert res.json() == {"status": "deleted", "deleted": 2}
+
+    assert "keep-history-A" not in persona_integrity._session_history
+    assert "keep-history-B" not in persona_integrity._session_history
+    # Foreign session's history is untouched.
+    assert "not-mine" in persona_integrity._session_history

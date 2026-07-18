@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from arena.models.schemas import SessionData, ErrorResponse, UserResponse
 from arena.core.memory import get_memory_manager
+from arena.core.persona_integrity import clear_session_history
 from arena.core.dependencies import get_current_user_required
 from arena.core.rate_limits import enforce_user_rate_limit
 from arena.database import get_db
@@ -156,8 +157,12 @@ async def delete_session(
         )
 
     # clear_session pops the entry from _store — same code path the
-    # /api/memory/save handler uses after compression.
+    # /api/memory/save handler uses after compression. Also drop the
+    # persona_integrity drift history for this session_id so the
+    # in-process defaultdict doesn't grow unbounded for users who
+    # delete sessions frequently.
     memory.clear_session(session_id)
+    clear_session_history(session_id)
     return {"status": "deleted", "session_id": session_id}
 
 
@@ -190,5 +195,8 @@ async def delete_all_sessions(
         state = store.get(sid)
         if state is not None and _is_owner(state, user.id):
             memory.clear_session(sid)
+            # Mirror the per-session cleanup: drop the persona_integrity
+            # drift history alongside the in-memory session state.
+            clear_session_history(sid)
             deleted += 1
     return {"status": "deleted", "deleted": deleted}
