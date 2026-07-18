@@ -2060,3 +2060,219 @@
   }
 }
 
+/* ============================================================================
+   PROMPT TICKER — marquee of live questions (loop 6)
+   Cream rail with edge fades, chips, pause-on-hover.
+   ========================================================================== */
+
+.home-ticker {
+  position: relative;
+  border-top: 0.5px solid #e0d8d0;
+  border-bottom: 0.5px solid #e0d8d0;
+  background:
+    linear-gradient(180deg, rgba(240, 235, 227, 0.45) 0%, rgba(250, 247, 244, 0.2) 100%);
+  overflow: hidden;
+  padding: 0;
+}
+
+.home-ticker__inner {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 46px;
+}
+
+.home-ticker__label {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 16px 0 20px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #6b6460;
+  font-weight: 500;
+  border-right: 0.5px solid #e0d8d0;
+  background: rgba(250, 247, 244, 0.75);
+  z-index: 2;
+  height: 46px;
+  position: relative;
+}
+
+.home-ticker__label-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c4956a;
+  box-shadow: 0 0 0 0 rgba(196, 149, 106, 0.4);
+  animation: homeTickerLive 1.8s ease-out infinite;
+}
+
+@keyframes homeTickerLive {
+  0% {
+    box-shadow: 0 0 0 0 rgba(196, 149, 106, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.home-ticker__viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000 4%,
+    #000 96%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000 4%,
+    #000 96%,
+    transparent 100%
+  );
+}
+
+.home-ticker__track {
+  display: flex;
+  width: max-content;
+  white-space: nowrap;
+  animation: homeTickerScroll 36s linear infinite;
+  will-change: transform;
+}
+
+.home-ticker:hover .home-ticker__track,
+.home-ticker:focus-within .home-ticker__track {
+  animation-play-state: paused;
+}
+
+@keyframes homeTickerScroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.home-ticker__group {
+  display: flex;
+  align-items: center;
+}
+
+.home-ticker__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  height: 46px;
+  font-size: 13.5px;
+  color: #4a3728;
+  border-right: 0.5px solid rgba(224, 216, 208, 0.85);
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.home-ticker__chip:hover {
+  background: rgba(196, 149, 106, 0.07);
+  color: #1a1714;
+}
+
+.home-ticker__chip-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1;
+  color: #c4956a;
+  background: rgba(196, 149, 106, 0.1);
+  border: 0.5px solid rgba(196, 149, 106, 0.22);
+  flex-shrink: 0;
+}
+
+.home-ticker__chip:nth-child(4n + 1) .home-ticker__chip-mark {
+  color: #8c9bab;
+  background: rgba(140, 155, 171, 0.12);
+  border-color: rgba(140, 155, 171, 0.25);
+}
+
+.home-ticker__chip:nth-child(4n + 2) .home-ticker__chip-mark {
+  color: #9b8faa;
+  background: rgba(155, 143, 170, 0.12);
+  border-color: rgba(155, 143, 170, 0.25);
+}
+
+.home-ticker__chip:nth-child(4n + 3) .home-ticker__chip-mark {
+  color: #8aa899;
+  background: rgba(138, 168, 153, 0.12);
+  border-color: rgba(138, 168, 153, 0.25);
+}
+
+.home-ticker__chip:nth-child(4n + 4) .home-ticker__chip-mark {
+  color: #b0977e;
+  background: rgba(176, 151, 126, 0.12);
+  border-color: rgba(176, 151, 126, 0.25);
+}
+
+.home-ticker__chip-text {
+  letter-spacing: 0.005em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-ticker__label-dot {
+    animation: none !important;
+  }
+
+  .home-ticker__track {
+    animation: none !important;
+    flex-wrap: wrap;
+    width: 100%;
+    white-space: normal;
+    justify-content: flex-start;
+  }
+
+  .home-ticker__group:last-child {
+    display: none;
+  }
+
+  .home-ticker__group {
+    flex-wrap: wrap;
+  }
+
+  .home-ticker__chip {
+    height: auto;
+    padding: 8px 14px;
+    border-right: none;
+    border-bottom: 0.5px solid #e0d8d0;
+  }
+
+  .home-ticker__viewport {
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .home-ticker__label {
+    padding: 0 12px;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+  }
+
+  .home-ticker__chip {
+    font-size: 12.5px;
+    padding: 0 14px;
+  }
+}
+

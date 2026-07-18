@@ -929,10 +929,6 @@ export function HomePage() {
     <div className="home-page-root">
       <div className="noise-overlay" aria-hidden="true" />
       <style>{`
-        @keyframes ticker {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
         @keyframes breathe {
           0%, 100% { transform: scale(1); opacity: 1; }
           50% { transform: scale(1.5); opacity: 0.6; }
@@ -1326,15 +1322,35 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Ticker */}
-      <div ref={tickerReveal.ref} style={{ ...tickerReveal.style, borderTop: '0.5px solid #E0D8D0', borderBottom: '0.5px solid #E0D8D0', overflow: 'hidden', padding: '9px 0' }} className={tickerReveal.className}>
-        <div style={{ display: 'flex', whiteSpace: 'nowrap', animation: 'ticker 22s linear infinite' }}>
-          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, idx) => (
-            <div key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '0 20px', borderRight: '0.5px solid #E0D8D0', fontSize: '14px', color: '#6B6460' }}>
-              <span style={{ fontSize: '13px', color: '#C4956A' }}>→</span>
-              {item}
+      {/* Prompt ticker — live questions marquee */}
+      <div
+        ref={tickerReveal.ref}
+        style={tickerReveal.style}
+        className={`home-ticker ${tickerReveal.className}`}
+        aria-label="Example questions people ask in Arena"
+      >
+        <div className="home-ticker__inner">
+          <div className="home-ticker__label">
+            <span className="home-ticker__label-dot" aria-hidden="true" />
+            People ask
+          </div>
+          <div className="home-ticker__viewport">
+            <div className="home-ticker__track">
+              {/* Duplicate groups for seamless loop */}
+              {[0, 1].map((group) => (
+                <div className="home-ticker__group" key={group} aria-hidden={group === 1}>
+                  {TICKER_ITEMS.map((item) => (
+                    <div className="home-ticker__chip" key={`${group}-${item}`}>
+                      <span className="home-ticker__chip-mark" aria-hidden="true">
+                        →
+                      </span>
+                      <span className="home-ticker__chip-text">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       </div>
 
