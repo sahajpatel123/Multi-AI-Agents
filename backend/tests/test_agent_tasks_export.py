@@ -161,8 +161,10 @@ async def test_export_jsonl_search_filter(app_client, db_session, make_user):
 
 @pytest.mark.asyncio
 async def test_export_jsonl_rate_limit_blocks_runaway(app_client, make_user):
-    """Full-history export is expensive; production caps 30/hour per user."""
+    """Full-history export is rate-limited (30/hour) so an authenticated
+    client cannot pin the DB with concurrent bulk downloads."""
     import time as _time
+    from collections import deque
 
     from arena.core import rate_limits as _rl
 
@@ -176,43 +178,15 @@ async def test_export_jsonl_rate_limit_blocks_runaway(app_client, make_user):
     for i in range(3):
         res = await app_client.get("/api/agent/tasks/export.jsonl", headers=headers)
         assert res.status_code == 200, (
-            f"request {i + 1} should pass under limit, got {res.status_code}"
+            "request %d should pass under limit, got %d"
+            % (i + 1, res.status_code)
         )
 
-    # Pre-fill the per-user bucket to the production ceiling (30/hour).
-    _rl.rate_limiter._events.clear()
-    key = f"user:agent_tasks_export_jsonl:{user.id}"
-    base = _time.time()
-    _rl.rate_limiter._events[key] = [base] * 30
-
-    res = await app_client.get("/api/agent/tasks/export.jsonl", headers=headers)
-    assert res.status_code == 429, (
-        f"31st export in the window should be 429, got {res.status_code}"
-    )
-    detail = res.json().get("detail", {})
-    assert detail.get("error") == "rate_limit_exceeded"
-
-    _rl.rate_limiter._events.clear()
-
-
-@pytest.mark.asyncio
-async def test_export_jsonl_rate_limit_blocks_runaway(app_client, make_user):
-    """Full-history export is rate-limited (30/hour) so an authenticated
-    client cannot pin the DB with concurrent bulk downloads."""
-    from arena.core import rate_limits as _rl
-    import time as _time
-
-    if hasattr(_rl.rate_limiter, "_events"):
-        _rl.rate_limiter._events.clear()
-
-    user = make_user(email="export-rl@test.com", tier=UserTier.PRO)
-    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
-    key = "user:agent_tasks_export_jsonl:%s" % user.id
-    base = _time.time()
     # Pre-fill the bucket to the production limit (30/hour) using a
     # real deque so InMemoryRateLimiter.hit can popleft safely.
-    from collections import deque
-
+    _rl.rate_limiter._events.clear()
+    key = "user:agent_tasks_export_jsonl:%s" % user.id
+    base = _time.time()
     _rl.rate_limiter._events[key] = deque([base] * 30)
     res = await app_client.get("/api/agent/tasks/export.jsonl", headers=headers)
     assert res.status_code == 429, (
