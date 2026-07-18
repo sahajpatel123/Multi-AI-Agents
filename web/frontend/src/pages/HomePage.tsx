@@ -903,12 +903,12 @@ export function HomePage() {
   }, []);
 
   const handleCTAButtonMouseMove = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    if (!ctaButtonRef.current) return;
+    if (!ctaButtonRef.current || prefersReducedMotion()) return;
     const rect = ctaButtonRef.current.getBoundingClientRect();
     const btnCenterX = rect.left + rect.width / 2;
     const btnCenterY = rect.top + rect.height / 2;
-    const distX = (e.clientX - btnCenterX) * 0.25;
-    const distY = (e.clientY - btnCenterY) * 0.25;
+    const distX = (e.clientX - btnCenterX) * 0.22;
+    const distY = (e.clientY - btnCenterY) * 0.22;
     ctaButtonRef.current.style.transform = `translate(${distX}px, ${distY}px)`;
     ctaButtonRef.current.style.transition = 'none';
   }, []);
@@ -916,7 +916,9 @@ export function HomePage() {
   const handleCTAButtonMouseLeave = useCallback(() => {
     if (!ctaButtonRef.current) return;
     ctaButtonRef.current.style.transform = 'translate(0, 0)';
-    ctaButtonRef.current.style.transition = 'transform 400ms ease';
+    ctaButtonRef.current.style.transition = prefersReducedMotion()
+      ? 'none'
+      : 'transform 400ms cubic-bezier(0.16, 1, 0.3, 1)';
   }, []);
 
   const scrollToHowItWorks = () => {
@@ -1713,17 +1715,38 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* CTA Band */}
-      <section ref={ctaBandReveal.ref} style={{ ...ctaBandReveal.style, maxWidth: '1080px', margin: '4rem auto 0', padding: '0 24px' }} className={ctaBandReveal.className}>
-        <div className="cta-band" style={{ background: '#1A1714', borderRadius: '20px', padding: '2.5rem 3rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <p style={{ fontSize: '10px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'rgba(250,247,244,0.4)', marginBottom: '.6rem' }}>Ready to think differently?</p>
-            <h2 className="cta-band-title" style={{ fontSize: '28px', fontWeight: 500, color: '#FAF7F4', letterSpacing: '-.02em', lineHeight: 1.2 }}>
-              Stop asking one AI. Start asking <span style={{ color: '#C4956A', fontStyle: 'italic' }}>four.</span>
+      {/* CTA Band — closing conversion moment */}
+      <section
+        ref={ctaBandReveal.ref}
+        style={ctaBandReveal.style}
+        className={`home-cta ${ctaBandReveal.className}`}
+      >
+        <div className="cta-band">
+          <div className="cta-band__glow cta-band__glow--a" aria-hidden="true" />
+          <div className="cta-band__glow cta-band__glow--b" aria-hidden="true" />
+
+          <div className="cta-band__copy">
+            <p className="cta-band__eyebrow">
+              <span className="cta-band__eyebrow-line" aria-hidden="true" />
+              Ready to think differently?
+            </p>
+            <h2 className="cta-band-title">
+              Stop asking one AI. Start asking <em>four.</em>
             </h2>
+            <div className="cta-band__minds" aria-hidden="true">
+              <span className="cta-band__minds-label">Four minds</span>
+              <div className="cta-band__dots">
+                <span className="cta-band__dot" style={{ background: '#8C9BAB' }} />
+                <span className="cta-band__dot" style={{ background: '#9B8FAA' }} />
+                <span className="cta-band__dot" style={{ background: '#8AA899' }} />
+                <span className="cta-band__dot" style={{ background: '#B0977E' }} />
+              </div>
+            </div>
           </div>
-          <div className="cta-band-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
+
+          <div className="cta-band-right">
             <button
+              type="button"
               className="cta-main"
               ref={ctaButtonRef}
               onClick={() => {
@@ -1736,21 +1759,20 @@ export function HomePage() {
               }}
               onMouseMove={handleCTAButtonMouseMove}
               onMouseLeave={handleCTAButtonMouseLeave}
-              style={{
-                padding: '12px 28px',
-                borderRadius: '999px',
-                background: '#C4956A',
-                color: '#FAF7F4',
-                fontSize: '13px',
-                border: 'none',
-                cursor: 'pointer',
-                transition: 'opacity 150ms',
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'}
             >
-              Try Arena free →
+              <span className="cta-main__label">
+                Try Arena free
+                <span className="cta-main__arrow" aria-hidden="true">
+                  →
+                </span>
+              </span>
             </button>
-            <span style={{ fontSize: '12px', color: 'rgba(250,247,244,0.4)' }}>Free account required</span>
+            <p className="cta-band__note">Free account · no card to start</p>
+            <div className="cta-band__proof" aria-hidden="true">
+              <span className="cta-band__chip">4 personas</span>
+              <span className="cta-band__chip">5th judge</span>
+              <span className="cta-band__chip">&lt;30s</span>
+            </div>
           </div>
         </div>
       </section>
