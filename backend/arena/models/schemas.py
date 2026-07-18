@@ -77,8 +77,8 @@ class AgentResponse(BaseModel):
 
 class PromptRequest(BaseModel):
     """Request to submit a prompt to all agents"""
-    
-    prompt: str = Field(..., min_length=1, max_length=10000, description="User's prompt")
+
+    prompt: str = Field(..., min_length=1, max_length=2000, description="User's prompt")
     session_id: str | None = Field(None, description="Optional session ID for continuity")
     persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
 
@@ -184,7 +184,7 @@ class DiscussChatMessage(BaseModel):
 class DiscussRequest(BaseModel):
     """Request to send a message in a 1-on-1 discussion"""
     agent_id: str = Field(..., description="Which agent to talk to")
-    message: str = Field(..., min_length=1, max_length=10000, description="User's message")
+    message: str = Field(..., min_length=1, max_length=2000, description="User's message")
     conversation_history: list[DiscussChatMessage] = Field(default_factory=list, description="Full conversation so far")
     original_verdict: str = Field(..., description="Agent's original verdict for context")
     original_prompt: str = Field(..., description="The original arena prompt for context")
