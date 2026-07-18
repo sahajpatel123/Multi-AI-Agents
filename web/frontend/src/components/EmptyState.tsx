@@ -41,6 +41,10 @@ export function EmptyState({
     .filter(Boolean)
     .join(' ');
 
+  const showDefaultMark = !icon && variant !== 'compact';
+  const showMinds =
+    variant !== 'compact' && variant !== 'error' && !alert;
+
   return (
     <div
       className={classes}
@@ -51,10 +55,28 @@ export function EmptyState({
         <div className="arena-empty-state__icon" aria-hidden>
           {icon}
         </div>
+      ) : showDefaultMark ? (
+        <div className="arena-empty-state__mark" aria-hidden>
+          <span className="arena-empty-state__mark-glow" />
+          <span className="arena-empty-state__mark-glyph">
+            {variant === 'error' ? '!' : variant === 'filter' ? '⌀' : '·'}
+          </span>
+        </div>
       ) : null}
       <h2 className="arena-empty-state__title">{title}</h2>
       {description ? (
         <p className="arena-empty-state__description">{description}</p>
+      ) : null}
+      {showMinds ? (
+        <div className="arena-empty-state__minds" aria-hidden="true">
+          <span className="arena-empty-state__minds-label">Four minds ready</span>
+          <div className="arena-empty-state__minds-dots">
+            <span className="arena-empty-state__minds-dot" />
+            <span className="arena-empty-state__minds-dot" />
+            <span className="arena-empty-state__minds-dot" />
+            <span className="arena-empty-state__minds-dot" />
+          </div>
+        </div>
       ) : null}
       {children}
       {actions ? <div className="arena-empty-state__actions">{actions}</div> : null}
