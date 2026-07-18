@@ -73,15 +73,14 @@ jobs:
           pip install pip-audit
           # Scan requirements.txt directly so we cover every dependency,
           # not just what happens to be installed in the CI environment.
-          # A HIGH/CRITICAL finding now FAILS the build. Transitive deps
-          # without an upstream fix are individually triaged via the
-          # --ignore-vuln list below; the tier_config pin guard in the
-          # next step locks the direct-dep security floor.
-          # Only ignore vulns with no upstream fix available.
-          # Starlette/pyasn1 ignores removed once FastAPI 0.139.2 + pyasn1 0.6.4
-          # land (see requirements.txt). ecdsa PYSEC-2026-1325 still has no fix.
-          pip-audit -r requirements.txt \
-            --ignore-vuln PYSEC-2026-1325
+          # A HIGH/CRITICAL finding now FAILS the build. The pin-floor
+          # guard in the next step locks the direct-dep security floor,
+          # so individual --ignore-vuln entries are reserved for transitive
+          # deps where upstream has no fix planned. python-jose's transitive
+          # ecdsa (PYSEC-2026-1325, Minerva) was eliminated entirely by the
+          # python-jose -> PyJWT 2.13.0 migration in e9d4e2e + dd11ffc, so
+          # no ignore is needed anymore.
+          pip-audit -r requirements.txt
 
       - name: Pin floor guard (security-required versions)
         run: |
@@ -93,7 +92,7 @@ jobs:
           REQUIRED = {
               'fastapi':       '0.139.2',
               'pyasn1':        '0.6.4',
-              'python-jose':   '3.5.0',
+              'PyJWT':         '2.13.0',
               'python-multipart': '0.0.32',
               'cryptography':  '48.0.1',
               'Pillow':        '12.3.0',
