@@ -586,3 +586,86 @@ def get_watchlist_history(
     }
 
     return {"items": items, "stats": stats}
+
+
+def iter_user_task_export(
+    db: Session,
+    user_id: int,
+    *,
+    retention_days: int = 30,
+    search: str | None = None,
+    feedback: str | None = None,
+    batch_size: int = 100,
+) -> list[dict[str, Any]]:
+    """Yield caller task rows for the JSONL export endpoint.
+
+    Streaming-friendly: returns a list of dicts the route serializes
+    one-per-line so a 5000-task export doesn't pin memory on either
+    side. ``batch_size`` controls how many rows the underlying query
+    fetches per round-trip; smaller is friendlier to Postgres.
+
+    The dict shape is a superset of ``to_dict_summary`` plus the
+    fields an offline archive cares about: full task text, final
+    answer, score, confidence, sources, topics, feedback. Scope is
+    always the caller — never rows from another user.
+    """
+    import json as _json
+
+    from arena.core.input_validation import sanitize_model_optional_text
+
+    cap = max(1, min(int(batch_size), 500))
+    cutoff = datetime.utcnow() - timedelta(days=max(0, retention_days))
+
+    q = db.query(AgentTask).filter(
+        AgentTask.user_id == user_id,
+        AgentTask.created_at >= cutoff,
+    )
+
+    if search:
+        safe = sanitize_model_optional_text(
+            search, max_length=100, field_name="search"
+        )
+        if safe:
+            escaped = _escape_like(safe)
+            pattern = f"%{escaped}%"
+            q = q.filter(
+                or_(
+                    AgentTask.title.ilike(pattern, escape="\\"),
+                    AgentTask.task_text.ilike(pattern, escape="\\"),
+                )
+            )
+
+    if feedback in ("positive", "negative"):
+        q = q.filter(AgentTask.user_feedback == feedback)
+    elif feedback == "none":
+        q = q.filter(
+            or_(AgentTask.user_feedback.is_(None), AgentTask.user_feedback == "")
+        )
+
+    q = q.order_by(AgentTask.created_at.desc())
+
+    rows_out: list[dict[str, Any]] = []
+    for task in q.yield_per(cap):
+        try:
+            topics = _json.loads(task.topics or "[]")
+        except (TypeError, ValueError):
+            topics = []
+        if not isinstance(topics, list):
+            topics = []
+        rows_out.append(
+            {
+                "task_id": task.task_id,
+                "title": task.title,
+                "task_text": task.task_text,
+                "final_answer": task.final_answer,
+                "final_score": task.final_score,
+                "final_confidence": task.final_confidence,
+                "topics": topics,
+                "user_feedback": task.user_feedback,
+                "is_live": bool(getattr(task, "is_live", False)),
+                "orchestration_id": getattr(task, "orchestration_id", None),
+                "watchlist_item_id": getattr(task, "watchlist_item_id", None),
+                "created_at": task.created_at.isoformat() if task.created_at else None,
+            }
+        )
+    return rows_out

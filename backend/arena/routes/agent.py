@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -39,7 +39,7 @@ from arena.core.feedback_calibrator import (
     get_answer_feedback_distribution,
     get_recent_feedback,
 )
-from arena.core.agent_memory import get_watchlist_history
+from arena.core.agent_memory import get_watchlist_history, iter_user_task_export
 from arena.core.report_generator import (
     generate_orchestration_report_html,
     generate_report_html,
@@ -1920,6 +1920,51 @@ async def list_recent_feedback(
         verdict=verdict,
     )
     return JSONResponse(content={"success": True, "items": items, "count": len(items)})
+
+
+@router.get("/tasks/export.jsonl")
+async def export_tasks_jsonl(
+    retention_days: int = Query(30, ge=1, le=365),
+    search: str | None = Query(None, max_length=100),
+    feedback: str | None = Query(
+        None,
+        description=(
+            "Optional filter: 'positive', 'negative', or 'none'. Unknown "
+            "values are ignored rather than 400-ing the request."
+        ),
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Stream caller agent tasks as newline-delimited JSON.
+
+    Same auth and filter contract as /api/agent/history. Output is
+    ``application/x-ndjson`` so generic JSONL clients (jq -c, log
+    shippers) can ingest it line-by-line. Rows are yielded newest-first
+    in 100-row batches to bound memory on both server and client.
+    """
+    _ensure_agent_access(user, db)
+    rows = iter_user_task_export(
+        db=db,
+        user_id=user.id,
+        retention_days=retention_days,
+        search=search,
+        feedback=feedback,
+    )
+    import json as _json
+
+    def _serialize():
+        for row in rows:
+            yield (_json.dumps(row, ensure_ascii=False) + "\n").encode("utf-8")
+
+    headers = {
+        "Content-Disposition": 'attachment; filename="agent-tasks.jsonl"',
+    }
+    return StreamingResponse(
+        _serialize(),
+        media_type="application/x-ndjson",
+        headers=headers,
+    )
 
 
 @router.get("/history")
