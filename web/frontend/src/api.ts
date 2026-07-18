@@ -1010,6 +1010,49 @@ export async function getAgentResult(taskId: string): Promise<unknown> {
   return data;
 }
 
+/** Contradiction involving a task on either side (new or old). */
+export type AgentTaskDetailContradiction = {
+  id: number;
+  direction: 'new' | 'old' | string;
+  other_task_id: string;
+  summary: string;
+  severity: string;
+  resolved: boolean;
+  created_at: string | null;
+};
+
+/** One-call aggregator for the agent task detail page. */
+export type AgentTaskDetailPayload = {
+  task: Record<string, unknown> & {
+    task_id: string;
+    title?: string | null;
+    task_text?: string;
+    final_answer?: string | null;
+  };
+  insight_report: Record<string, unknown> | null;
+  contradictions: AgentTaskDetailContradiction[];
+};
+
+export async function getAgentTaskDetail(taskId: string): Promise<AgentTaskDetailPayload> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/detail`,
+  );
+  const data = await parseJsonSafely<
+    AgentTaskDetailPayload & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Task detail request failed'), response.status, data);
+  }
+  if (!data || !data.task || !data.task.task_id) {
+    throw new Error('Empty or invalid task detail response');
+  }
+  return {
+    task: data.task,
+    insight_report: data.insight_report ?? null,
+    contradictions: Array.isArray(data.contradictions) ? data.contradictions : [],
+  };
+}
+
 export async function exportAgentTaskPdf(taskId: string): Promise<Blob> {
   const response = await apiFetch(`/api/agent/tasks/${encodeURIComponent(taskId)}/export/pdf`);
   if (!response.ok) {
