@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { MotionButton } from '../components/MotionButton';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
@@ -124,13 +125,14 @@ export function ProductPage() {
             </span>
           </div>
           <div className="mkt-cta-row">
-            <button
+            <MotionButton
               type="button"
-              className="arena-btn arena-btn--secondary arena-btn--md"
+              variant="secondary"
+              size="md"
               onClick={() => navigate('/capabilities')}
             >
               See all capabilities
-            </button>
+            </MotionButton>
             <button
               type="button"
               className="arena-btn arena-btn--ghost arena-btn--md"

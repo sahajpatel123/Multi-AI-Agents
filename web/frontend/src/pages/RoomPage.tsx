@@ -5,6 +5,7 @@ import { addRoomTask, getAgentHistory, getRoom, getRoomSynthesis, joinRoom, remo
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
+import { MotionButton } from '../components/MotionButton';
 import { PerspectiveDriftPanel } from '../components/PerspectiveDriftPanel';
 import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -1099,18 +1100,20 @@ export function RoomPage() {
               : 'Sign in to join this room and add your research tasks.'}
         </p>
         {user && isMember ? (
-          <button
+          <MotionButton
             type="button"
-            className="arena-btn arena-btn--primary arena-btn--md"
+            variant="primary"
+            size="md"
             style={{ marginTop: 18 }}
             onClick={() => setShowTaskPicker(true)}
           >
             Add your first task →
-          </button>
+          </MotionButton>
         ) : !user ? (
-          <button
+          <MotionButton
             type="button"
-            className="arena-btn arena-btn--primary arena-btn--md"
+            variant="primary"
+            size="md"
             style={{ marginTop: 18 }}
             onClick={() => {
               setRedirectIntent(`/room/${slug}`);
@@ -1118,7 +1121,7 @@ export function RoomPage() {
             }}
           >
             Sign in to join →
-          </button>
+          </MotionButton>
         ) : null}
       </div>
     ) : (
@@ -1945,13 +1948,14 @@ export function RoomPage() {
           {loadErr || 'This room may have been removed, or the invite link is no longer valid.'}
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginTop: 24 }}>
-          <button
+          <MotionButton
             type="button"
-            className="arena-btn arena-btn--primary arena-btn--md"
+            variant="primary"
+            size="md"
             onClick={() => void loadRoom()}
           >
             Try again
-          </button>
+          </MotionButton>
           <button
             type="button"
             className="arena-btn arena-btn--ghost arena-btn--md"
