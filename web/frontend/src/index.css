@@ -4258,13 +4258,14 @@ canvas {
   justify-content: center;
   cursor: not-allowed;
   color: #c0b8b0;
+  transform: translateZ(0);
   transition:
-    background 180ms var(--ease-btn),
-    border-color 180ms var(--ease-btn),
-    box-shadow 180ms var(--ease-btn),
-    transform 180ms var(--ease-btn),
-    opacity 180ms var(--ease-btn),
-    color 180ms var(--ease-btn);
+    background var(--motion-hover-ms) var(--ease-btn),
+    border-color var(--motion-hover-ms) var(--ease-btn),
+    box-shadow var(--motion-lift-ms) var(--ease-out-premium),
+    transform var(--motion-lift-ms) var(--ease-out-premium),
+    opacity var(--motion-hover-ms) var(--ease-btn),
+    color var(--motion-hover-ms) var(--ease-btn);
 }
 
 .prompt-input-send--armed {
@@ -4285,8 +4286,15 @@ canvas {
 
 @media (hover: hover) and (pointer: fine) {
   .prompt-input-send--armed:not(:disabled):hover {
-    transform: scale(1.06) translateY(-1px);
+    transform: scale(1.08) translateY(-2px);
     background: linear-gradient(140deg, #b8895e 0%, #c9965e 100%);
+    box-shadow:
+      0 8px 22px rgba(196, 149, 106, 0.42),
+      0 2px 6px rgba(196, 149, 106, 0.2);
+  }
+
+  .prompt-input-send--armed:not(:disabled):hover .prompt-input-send__icon {
+    transform: translateY(-1px);
   }
 }
 
@@ -4296,12 +4304,28 @@ canvas {
 }
 
 .prompt-input-send:active:not(:disabled).prompt-input-send--armed {
-  transform: scale(0.98) translateY(0);
+  transform: scale(0.94) translateY(0);
+  box-shadow: 0 1px 4px rgba(196, 149, 106, 0.28);
+  transition-duration: var(--motion-press-ms);
 }
 
 .prompt-input-send__icon {
   display: block;
   flex-shrink: 0;
+  transition: transform var(--motion-press-ms) var(--ease-btn);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prompt-input-send,
+  .prompt-input-send__icon {
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease,
+      opacity 0.12s ease !important;
+  }
+
+  .prompt-input-send--armed:not(:disabled):hover,
+  .prompt-input-send:active:not(:disabled).prompt-input-send--armed {
+    transform: none !important;
+  }
 }
 
 @media (max-width: 480px) {

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Eye, EyeOff, X } from 'lucide-react';
-import { Button } from './Button';
+import { MotionButton } from './MotionButton';
 import { authCaughtErrorMessage } from '../lib/authFormMessages';
 import { prefersReducedMotion } from '../lib/motion';
 import { clearRedirectIntent } from '../utils/redirectIntent';
@@ -317,7 +317,7 @@ export function AuthModal({
             </p>
           ) : null}
 
-          <Button
+          <MotionButton
             type="submit"
             variant="primary"
             size="md"
@@ -332,7 +332,7 @@ export function AuthModal({
               : tab === 'login'
                 ? 'Log in'
                 : 'Create account'}
-          </Button>
+          </MotionButton>
 
           {tab === 'signup' ? (
             <p className="auth-modal-footnote">

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { MotionButton } from '../components/MotionButton';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
 import { setRedirectIntent } from '../utils/redirectIntent';
@@ -184,9 +185,9 @@ export function CapabilitiesPage() {
             Ready to put four minds on a real question?
           </p>
           <div className="mkt-cta-row">
-            <button type="button" className="arena-btn arena-btn--primary arena-btn--md" onClick={goArena}>
+            <MotionButton type="button" variant="primary" size="md" onClick={goArena}>
               Try Arena →
-            </button>
+            </MotionButton>
             <button
               type="button"
               className="arena-btn arena-btn--secondary arena-btn--md"

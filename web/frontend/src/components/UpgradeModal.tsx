@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Check, Lock, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './Button';
+import { MotionButton } from './MotionButton';
 import { RazorpayCheckout } from './RazorpayCheckout';
 import { useAuth } from '../hooks/useAuth';
 import { useTier } from '../context/TierContext';
@@ -220,7 +221,7 @@ export function UpgradeModal({
         ) : null}
 
         <div className="upgrade-modal__actions">
-          <Button
+          <MotionButton
             ref={primaryRef}
             type="button"
             variant="primary"
@@ -236,7 +237,7 @@ export function UpgradeModal({
               : checkoutError
                 ? 'Try upgrade again — ₹999/mo'
                 : 'Upgrade to Plus — ₹999/mo'}
-          </Button>
+          </MotionButton>
 
           <Button
             type="button"
