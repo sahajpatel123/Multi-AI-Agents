@@ -1423,78 +1423,89 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Comparison Section */}
-      <section ref={comparisonReveal.ref} style={{ ...comparisonReveal.style, maxWidth: '1080px', margin: '4rem auto 0', padding: '0 24px' }} className={comparisonReveal.className}>
-        <p style={{ fontSize: '12px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '1.2rem' }}>Why Arena beats asking one AI</p>
+      {/* Comparison — One AI vs Arena */}
+      <section
+        ref={comparisonReveal.ref}
+        style={comparisonReveal.style}
+        className={`home-compare ${comparisonReveal.className}`}
+        aria-labelledby="home-compare-title"
+      >
+        <div className="home-compare__header">
+          <div>
+            <p className="home-compare__eyebrow">Why Arena</p>
+            <h2 className="home-compare__title" id="home-compare-title">
+              Why Arena beats asking one AI
+            </h2>
+          </div>
+          <p className="home-compare__lede">
+            Same question. Different architecture. One gives comfort — the other gives contention.
+          </p>
+        </div>
 
-        <div className="compare-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          {/* One AI Card */}
-          <div
+        <div className="compare-grid">
+          <span className="home-compare__vs" aria-hidden="true">
+            vs
+          </span>
+
+          <article
+            className={`compare-card compare-card--solo${comparisonHovered === 'left' ? ' is-hovered' : ''}`}
+            tabIndex={0}
             onMouseEnter={() => setComparisonHovered('left')}
             onMouseLeave={() => setComparisonHovered(null)}
-            style={{
-              border: '0.5px solid #E0D8D0',
-              borderRadius: '16px',
-              padding: '1.5rem',
-              transform: comparisonHovered === 'left' ? 'translateY(-6px)' : 'translateY(0)',
-              transition: 'transform 250ms cubic-bezier(0.16,1,0.3,1)',
-            }}
+            onFocus={() => setComparisonHovered('left')}
+            onBlur={() => setComparisonHovered(null)}
           >
-            <div style={{ background: '#F0EBE3', color: '#6B6460', fontSize: '10px', padding: '4px 10px', borderRadius: '999px', display: 'inline-block', marginBottom: '1rem' }}>One AI</div>
-            <h3 style={{ fontSize: '16px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>Single perspective</h3>
-            
-            {['Optimized to agree with you', 'No competing viewpoints', 'Confidence without challenge', 'No ranking — all answers feel equal'].map((item, itemIdx) => (
-              <div
-                key={itemIdx}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginBottom: '.7rem',
-                  transform: comparisonHovered === 'left' ? 'translateX(4px)' : 'translateX(0)',
-                  opacity: comparisonHovered === 'left' ? 1 : 0.7,
-                  transition: `all 300ms ease ${itemIdx * 30}ms`,
-                }}
-              >
-                <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#F0EBE3', color: '#B0977E', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', flexShrink: 0 }}>✕</div>
-                <span style={{ fontSize: '14px', color: '#6B6460' }}>{item}</span>
-              </div>
-            ))}
-          </div>
+            <div className="compare-card__badge">
+              <span className="compare-card__badge-dot" aria-hidden="true" />
+              One AI
+            </div>
+            <h3 className="compare-card__title">Single perspective</h3>
+            <ul className="compare-card__list">
+              {[
+                'Optimized to agree with you',
+                'No competing viewpoints',
+                'Confidence without challenge',
+                'No ranking — all answers feel equal',
+              ].map((item) => (
+                <li className="compare-card__row" key={item}>
+                  <span className="compare-card__icon" aria-hidden="true">
+                    ✕
+                  </span>
+                  <p className="compare-card__text">{item}</p>
+                </li>
+              ))}
+            </ul>
+          </article>
 
-          {/* Arena Card */}
-          <div
+          <article
+            className={`compare-card compare-card--arena${comparisonHovered === 'right' ? ' is-hovered' : ''}`}
+            tabIndex={0}
             onMouseEnter={() => setComparisonHovered('right')}
             onMouseLeave={() => setComparisonHovered(null)}
-            style={{
-              background: '#1A1714',
-              borderRadius: '16px',
-              padding: '1.5rem',
-              transform: comparisonHovered === 'right' ? 'translateY(-6px)' : 'translateY(0)',
-              transition: 'transform 250ms cubic-bezier(0.16,1,0.3,1)',
-            }}
+            onFocus={() => setComparisonHovered('right')}
+            onBlur={() => setComparisonHovered(null)}
           >
-            <div style={{ background: '#C4956A', color: '#FAF7F4', fontSize: '10px', padding: '4px 10px', borderRadius: '999px', display: 'inline-block', marginBottom: '1rem' }}>Arena</div>
-            <h3 style={{ fontSize: '16px', fontWeight: 500, color: '#FAF7F4', marginBottom: '1rem' }}>Four competing minds</h3>
-            
-            {['Four opposing worldviews on every answer', 'Scored on logic, directness, originality', 'Winner surfaces with a reason why', 'Challenge, debate, go 1-on-1 on demand'].map((item, itemIdx) => (
-              <div
-                key={itemIdx}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginBottom: '.7rem',
-                  transform: comparisonHovered === 'right' ? 'translateX(4px)' : 'translateX(0)',
-                  opacity: comparisonHovered === 'right' ? 1 : 0.7,
-                  transition: `all 300ms ease ${itemIdx * 30}ms`,
-                }}
-              >
-                <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#C4956A', color: '#FAF7F4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', flexShrink: 0 }}>✓</div>
-                <span style={{ fontSize: '14px', color: 'rgba(250,247,244,0.7)' }}>{item}</span>
-              </div>
-            ))}
-          </div>
+            <div className="compare-card__badge">
+              <span className="compare-card__badge-dot" aria-hidden="true" />
+              Arena
+            </div>
+            <h3 className="compare-card__title">Four competing minds</h3>
+            <ul className="compare-card__list">
+              {[
+                'Four opposing worldviews on every answer',
+                'Scored on logic, directness, originality',
+                'Winner surfaces with a reason why',
+                'Challenge, debate, go 1-on-1 on demand',
+              ].map((item) => (
+                <li className="compare-card__row" key={item}>
+                  <span className="compare-card__icon" aria-hidden="true">
+                    ✓
+                  </span>
+                  <p className="compare-card__text">{item}</p>
+                </li>
+              ))}
+            </ul>
+          </article>
         </div>
       </section>
 
