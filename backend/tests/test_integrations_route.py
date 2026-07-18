@@ -4,13 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from arena.core.auth import create_access_token
 from arena.core.token_crypto import encrypt_token, get_fernet
 from arena.db_models import MCPIntegration, UserTier
 
-
-def _pro_headers(user):
-    return {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
 
 
 def _seed_integration(

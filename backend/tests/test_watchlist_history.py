@@ -6,16 +6,12 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from arena.core.auth import create_access_token
 from arena.db_models import AgentTask, UserTier, WatchlistItem
 
 
 def _make_pro(make_user):
     return make_user(email="wh-pro@test.com", tier=UserTier.PRO)
 
-
-def _pro_headers(user):
-    return {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
 
 
 def _seed_watch(session, *, user_id: str, question: str = "Quantum trends?") -> WatchlistItem:

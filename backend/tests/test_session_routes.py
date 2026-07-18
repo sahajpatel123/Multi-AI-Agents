@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 
 import pytest
 
-from arena.core.auth import create_access_token
 from arena.core.memory import get_memory_manager
 from arena.models.schemas import SessionData
 from arena.db_models import UserTier
@@ -24,9 +23,6 @@ def _clear_short_term_store():
     if memory.short_term._store:
         memory.short_term._store.clear()
 
-
-def _pro_headers(user):
-    return {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
 
 
 def _make_session(user_id, *, session_id: str, topics: list[str] | None = None) -> SessionData:

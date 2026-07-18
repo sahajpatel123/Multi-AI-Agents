@@ -7,12 +7,8 @@ from datetime import datetime, time, timedelta, timezone
 
 import pytest
 
-from arena.core.auth import create_access_token
 from arena.db_models import UsageRecord, UserTier
 
-
-def _pro_headers(user):
-    return {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
 
 
 def _seed_records(db, user_id: int, events: list[tuple[int, str]]) -> list[UsageRecord]:

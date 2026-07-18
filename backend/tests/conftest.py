@@ -203,6 +203,37 @@ def stub_openai(monkeypatch):
 
 # ─── Auth helper ───────────────────────────────────────────────────────────
 
+
+def _make_pro_headers(user):
+    """Build the Authorization header for a pro-tier user."""
+    from arena.core.auth import create_access_token
+
+    return {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
+
+
+@pytest.fixture(autouse=True)
+def _install_pro_headers_in_test_modules(request):
+    """Pytest doesn't auto-import module-level helpers from conftest,
+    so we install ``_pro_headers`` on each test module before the
+    test runs. Lets us keep the existing ``_pro_headers(user)`` call
+    sites in 46 test files unchanged.
+    """
+    module = request.module
+    if not hasattr(module, "_pro_headers"):
+        module._pro_headers = _make_pro_headers
+    yield
+
+
+@pytest.fixture
+def pro_headers():
+    """Callable that returns the Authorization header for a user.
+
+    Use as a fixture for new tests; legacy tests rely on the
+    module-globals injection from ``_install_pro_headers_in_test_modules``.
+    """
+    return _make_pro_headers
+
+
 @pytest.fixture
 def make_user(isolated_db):
     """Factory that creates a User with the given tier."""

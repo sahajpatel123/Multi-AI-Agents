@@ -4,12 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from arena.core.auth import create_access_token
 from arena.db_models import AgentTask, UserTier
 
-
-def _pro_headers(user):
-    return {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
 
 
 def _seed(session, *, user_id: int, task_id: str):

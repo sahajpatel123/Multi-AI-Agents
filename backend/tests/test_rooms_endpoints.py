@@ -6,12 +6,8 @@ import uuid
 
 import pytest
 
-from arena.core.auth import create_access_token
 from arena.db_models import Room, RoomMember, User, UserTier
 
-
-def _pro_headers(user):
-    return {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
 
 
 def _seed_room(db, *, slug: str, creator_id: int, name: str = "Room", is_active: bool = True):
