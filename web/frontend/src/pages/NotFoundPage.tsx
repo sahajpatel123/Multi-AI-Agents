@@ -38,6 +38,10 @@ export function NotFoundPage() {
 
   return (
     <div className="not-found-page">
+      <div className="not-found-page__orbs" aria-hidden="true">
+        <div className="not-found-page__orb not-found-page__orb--a" />
+        <div className="not-found-page__orb not-found-page__orb--b" />
+      </div>
       <Navbar />
       <main
         id="main-content"
@@ -46,12 +50,19 @@ export function NotFoundPage() {
         aria-labelledby="not-found-title"
       >
         <div className="not-found-card">
+          <span className="not-found-card__watermark" aria-hidden="true">
+            404
+          </span>
+
           <div className="not-found-mark" aria-hidden>
             <span className="not-found-mark__glow" />
             <Compass className="not-found-mark__icon" width={28} height={28} strokeWidth={1.5} />
           </div>
 
-          <p className="not-found-kicker">404 · Lost path</p>
+          <p className="not-found-kicker">
+            <span className="not-found-kicker__dot" aria-hidden="true" />
+            404 · Lost path
+          </p>
           <h1 id="not-found-title" className="not-found-title">
             This page isn&apos;t in the arena
           </h1>
@@ -59,6 +70,16 @@ export function NotFoundPage() {
             The link may be old, mistyped, or the take was never shared. Head back to something
             real.
           </p>
+
+          <div className="not-found-minds" aria-hidden="true">
+            <span className="not-found-minds__label">Still four minds</span>
+            <div className="not-found-minds__dots">
+              <span className="not-found-minds__dot" />
+              <span className="not-found-minds__dot" />
+              <span className="not-found-minds__dot" />
+              <span className="not-found-minds__dot" />
+            </div>
+          </div>
 
           {attempted ? (
             <div className="not-found-path">
@@ -70,7 +91,7 @@ export function NotFoundPage() {
               </div>
               <button
                 type="button"
-                className="not-found-path__copy"
+                className={`not-found-path__copy${copied ? ' is-copied' : ''}`}
                 onClick={() => void handleCopyPath()}
                 aria-label={copied ? 'Path copied' : 'Copy requested path'}
               >
@@ -107,6 +128,10 @@ export function NotFoundPage() {
               </Button>
             ))}
           </div>
+
+          <p className="not-found-hint">
+            Tip: start from Home or jump straight into a fresh Arena run.
+          </p>
         </div>
       </main>
       <Footer />
