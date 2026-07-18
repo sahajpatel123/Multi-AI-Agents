@@ -1983,6 +1983,15 @@ async def get_agent_metrics(
     any timezone math itself.
     """
     _ensure_agent_access(user, db)
+    # Aggregation over AgentTask + Orchestration for the window — bound
+    # dashboard spam so a client cannot force repeated full scans.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_metrics",
+        limit=60,
+        window_seconds=60,
+        message="Too many metrics lookups. Please slow down.",
+    )
 
     orm_user = db.query(User).filter(User.id == user.id).first()
     if orm_user is None:
@@ -2009,6 +2018,13 @@ async def get_feedback_summary(
     contract.
     """
     _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_summary",
+        limit=60,
+        window_seconds=60,
+        message="Too many feedback-summary lookups. Please slow down.",
+    )
     orm_user = db.query(User).filter(User.id == user.id).first()
     if orm_user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -2699,6 +2715,15 @@ async def get_temporal_evolution(
     How this task's answer evolved vs related research runs (similar question prefix).
     """
     _ensure_agent_access(user, db)
+    # Prefix match + evolution analysis over related tasks — bound
+    # concurrent detail-page fans so related-task scans stay cheap.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_temporal_evolution",
+        limit=60,
+        window_seconds=60,
+        message="Too many evolution lookups. Please slow down.",
+    )
 
     from arena.core.temporal_evolution import analyze_temporal_evolution, extract_answer_snippet
 
