@@ -1609,16 +1609,27 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Persona Library — live product surface (not vaporware) */}
-      <section ref={personaLibraryReveal.ref} style={{ ...personaLibraryReveal.style, maxWidth: '1080px', margin: '4rem auto 0', padding: '0 24px' }} className={personaLibraryReveal.className}>
-        <div className="persona-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', gap: 16, flexWrap: 'wrap' }}>
+      {/* Persona Library — live product surface */}
+      <section
+        ref={personaLibraryReveal.ref}
+        style={personaLibraryReveal.style}
+        className={`home-personas ${personaLibraryReveal.className}`}
+        aria-labelledby="home-personas-title"
+      >
+        <div className="persona-header">
           <div>
-            <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#C4956A', marginBottom: '.4rem' }}>Available now</p>
-            <h2 style={{ fontSize: '24px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714' }}>The Persona Library</h2>
+            <p className="home-personas__eyebrow">
+              <span className="home-personas__eyebrow-dot" aria-hidden="true" />
+              Available now
+            </p>
+            <h2 className="home-personas__title" id="home-personas-title">
+              The Persona Library
+              <span className="home-personas__title-count">16 minds</span>
+            </h2>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, maxWidth: 280 }}>
-            <p className="persona-subtitle" style={{ fontSize: '14px', color: '#6B6460', textAlign: 'right', lineHeight: 1.6, margin: 0 }}>
-              16 distinct minds. Pick any four to build your panel. Different problems call for different thinkers.
+          <div className="home-personas__aside">
+            <p className="persona-subtitle">
+              Pick any four to build your panel. Different problems call for different thinkers.
             </p>
             <button
               type="button"
@@ -1630,57 +1641,73 @@ export function HomePage() {
           </div>
         </div>
 
-        <div className="persona-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-          {ACTIVE_PERSONAS.map((persona, idx) => (
-            <div
-              key={persona.name}
-              onMouseEnter={() => setPersonaHovered(idx)}
-              onMouseLeave={() => setPersonaHovered(null)}
-              style={{
-                border: personaHovered === idx ? `0.5px solid ${persona.color}` : '0.5px solid #E0D8D0',
-                borderRadius: '12px',
-                padding: '1rem',
-                background: '#FFFFFF',
-                transform: personaHovered === idx ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)',
-                boxShadow: personaHovered === idx ? '0 8px 24px rgba(26,23,20,0.08)' : 'none',
-                transition: 'all 200ms ease',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '.6rem' }}>
-                <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: persona.color, transform: personaHovered === idx ? 'scale(1.6)' : 'scale(1)', boxShadow: personaHovered === idx ? `0 0 8px ${persona.color}` : 'none', transition: 'all 200ms ease' }} className="breathe" />
-                <span style={{ fontSize: '12px', fontWeight: 500, color: '#1A1714' }}>{persona.name}</span>
-              </div>
-              <p style={{ fontSize: '12px', fontStyle: 'italic', color: '#6B6460', lineHeight: 1.5 }}>{persona.quote}</p>
-            </div>
-          ))}
-
-          {MORE_PERSONAS.map((persona, idx) => (
-            <div
-              key={persona.name}
-              onMouseEnter={() => setMorePersonaHovered(idx)}
-              onMouseLeave={() => setMorePersonaHovered(null)}
-              style={{
-                border: '0.5px solid #E0D8D0',
-                borderRadius: '12px',
-                padding: '1rem',
-                background: '#FFFFFF',
-                transform: morePersonaHovered === idx ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)',
-                boxShadow: morePersonaHovered === idx ? '0 8px 24px rgba(26,23,20,0.08)' : 'none',
-                transition: 'all 200ms ease',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '.6rem' }}>
-                <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4B8AE', transform: morePersonaHovered === idx ? 'scale(1.6)' : 'scale(1)', transition: 'all 200ms ease' }} />
-                <span style={{ fontSize: '12px', fontWeight: 500, color: '#1A1714' }}>{persona.name}</span>
-              </div>
-              <p style={{ fontSize: '12px', fontStyle: 'italic', color: '#6B6460', lineHeight: 1.5 }}>{persona.quote}</p>
-            </div>
-          ))}
+        <div className="home-personas__group">
+          <p className="home-personas__group-label">Core four · default panel</p>
+          <div className="persona-grid" role="list">
+            {ACTIVE_PERSONAS.map((persona, idx) => {
+              const hovered = personaHovered === idx;
+              return (
+                <article
+                  key={persona.name}
+                  role="listitem"
+                  tabIndex={0}
+                  className={`persona-card is-core${hovered ? ' is-hovered' : ''}`}
+                  style={{ ['--persona-accent' as string]: persona.color }}
+                  onMouseEnter={() => setPersonaHovered(idx)}
+                  onMouseLeave={() => setPersonaHovered(null)}
+                  onFocus={() => setPersonaHovered(idx)}
+                  onBlur={() => setPersonaHovered(null)}
+                >
+                  <div className="persona-card__head">
+                    <span className="persona-card__dot" aria-hidden="true" />
+                    <span className="persona-card__name">{persona.name}</span>
+                    <span className="persona-card__badge">Live</span>
+                  </div>
+                  <p className="persona-card__quote">{persona.quote}</p>
+                </article>
+              );
+            })}
+          </div>
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: '14px', color: '#6B6460', marginTop: '1rem' }}>
-          Explore all 16 personas in the library.
-        </p>
+        <div className="home-personas__group">
+          <p className="home-personas__group-label">Also in the library</p>
+          <div className="persona-grid" role="list">
+            {MORE_PERSONAS.map((persona, idx) => {
+              const hovered = morePersonaHovered === idx;
+              return (
+                <article
+                  key={persona.name}
+                  role="listitem"
+                  tabIndex={0}
+                  className={`persona-card${hovered ? ' is-hovered' : ''}`}
+                  style={{ ['--persona-accent' as string]: '#C4B8AE' }}
+                  onMouseEnter={() => setMorePersonaHovered(idx)}
+                  onMouseLeave={() => setMorePersonaHovered(null)}
+                  onFocus={() => setMorePersonaHovered(idx)}
+                  onBlur={() => setMorePersonaHovered(null)}
+                >
+                  <div className="persona-card__head">
+                    <span className="persona-card__dot" aria-hidden="true" />
+                    <span className="persona-card__name">{persona.name}</span>
+                  </div>
+                  <p className="persona-card__quote">{persona.quote}</p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="home-personas__footer">
+          <p className="home-personas__footer-text">Explore every mind and craft a custom panel.</p>
+          <button
+            type="button"
+            className="home-personas__footer-link"
+            onClick={() => navigate('/personas')}
+          >
+            Open full library →
+          </button>
+        </div>
       </section>
 
       {/* The Four Minds */}

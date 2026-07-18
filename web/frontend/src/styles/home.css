@@ -1720,3 +1720,343 @@
   }
 }
 
+/* ============================================================================
+   PERSONA LIBRARY — mind grid polish (loop 5)
+   Cream cards, core-four feature strip, library density.
+   ========================================================================== */
+
+.home-personas {
+  max-width: 1080px;
+  margin: 4rem auto 0;
+  padding: 0 24px;
+}
+
+.home-personas .persona-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 1.35rem;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.home-personas__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 0.4rem;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #c4956a;
+  font-weight: 500;
+}
+
+.home-personas__eyebrow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8aa899;
+  box-shadow: 0 0 0 0 rgba(138, 168, 153, 0.4);
+  animation: homePersonaLive 2s ease-out infinite;
+}
+
+@keyframes homePersonaLive {
+  0% {
+    box-shadow: 0 0 0 0 rgba(138, 168, 153, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.home-personas__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: #1a1714;
+  line-height: 1.2;
+}
+
+.home-personas__title-count {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+  color: #6b6460;
+  background: #f0ebe3;
+  border: 0.5px solid #e0d8d0;
+}
+
+.home-personas__aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: 300px;
+}
+
+.home-personas .persona-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #6b6460;
+  text-align: right;
+  line-height: 1.6;
+}
+
+.home-personas__group-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 0.65rem;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #a89070;
+  font-weight: 500;
+}
+
+.home-personas__group-label::after {
+  content: '';
+  flex: 1;
+  height: 0.5px;
+  background: linear-gradient(90deg, #e0d8d0, transparent);
+}
+
+.home-personas__group + .home-personas__group {
+  margin-top: 1.15rem;
+}
+
+.home-personas .persona-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.home-personas .persona-card {
+  --persona-accent: #c4b8ae;
+  position: relative;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 14px;
+  padding: 1rem 1rem 0.95rem;
+  background: #ffffff;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background 220ms ease;
+  cursor: default;
+}
+
+.home-personas .persona-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2.5px;
+  background: var(--persona-accent);
+  opacity: 0.55;
+  transition: opacity 220ms ease, height 220ms ease;
+}
+
+.home-personas .persona-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 80% 60% at 50% 0%,
+    color-mix(in srgb, var(--persona-accent) 12%, transparent),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.home-personas .persona-card.is-core {
+  background: linear-gradient(180deg, #fffdfb 0%, #ffffff 55%);
+}
+
+.home-personas .persona-card.is-hovered {
+  transform: translateY(-5px) scale(1.015);
+  border-color: color-mix(in srgb, var(--persona-accent) 55%, #e0d8d0);
+  box-shadow:
+    0 12px 28px rgba(26, 23, 20, 0.08),
+    0 0 0 1px color-mix(in srgb, var(--persona-accent) 18%, transparent);
+}
+
+.home-personas .persona-card.is-hovered::before {
+  opacity: 1;
+  height: 3px;
+}
+
+.home-personas .persona-card.is-hovered::after {
+  opacity: 1;
+}
+
+.home-personas .persona-card:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 2px;
+}
+
+.home-personas .persona-card__head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0.55rem;
+}
+
+.home-personas .persona-card__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--persona-accent);
+  flex-shrink: 0;
+  transition:
+    transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 220ms ease;
+}
+
+.home-personas .persona-card.is-hovered .persona-card__dot {
+  transform: scale(1.55);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--persona-accent) 55%, transparent);
+}
+
+.home-personas .persona-card.is-core .persona-card__dot {
+  animation: breathe 2.8s ease-in-out infinite;
+}
+
+.home-personas .persona-card__name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #1a1714;
+  letter-spacing: -0.01em;
+  min-width: 0;
+}
+
+.home-personas .persona-card__badge {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8aa899;
+  background: rgba(138, 168, 153, 0.12);
+  border: 0.5px solid rgba(138, 168, 153, 0.28);
+  padding: 2px 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.home-personas .persona-card__quote {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: #6b6460;
+  line-height: 1.55;
+}
+
+.home-personas .persona-card__quote::before {
+  content: '“';
+  color: color-mix(in srgb, var(--persona-accent) 50%, #c4b8ae);
+  margin-right: 1px;
+  font-style: normal;
+}
+
+.home-personas__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 1.15rem;
+  flex-wrap: wrap;
+}
+
+.home-personas__footer-text {
+  margin: 0;
+  font-size: 13px;
+  color: #6b6460;
+}
+
+.home-personas__footer-link {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #c4956a;
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 0.5px solid transparent;
+  transition: border-color 180ms ease, color 180ms ease;
+}
+
+.home-personas__footer-link:hover {
+  color: #1a1714;
+  border-bottom-color: #c4956a;
+}
+
+.home-personas__footer-link:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-personas__eyebrow-dot,
+  .home-personas .persona-card.is-core .persona-card__dot {
+    animation: none !important;
+  }
+
+  .home-personas .persona-card {
+    transition: none;
+  }
+
+  .home-personas .persona-card.is-hovered {
+    transform: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .home-personas .persona-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .home-personas .persona-header {
+    align-items: flex-start;
+  }
+
+  .home-personas__aside {
+    align-items: flex-start;
+    max-width: none;
+  }
+
+  .home-personas .persona-subtitle {
+    text-align: left;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-personas .persona-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
