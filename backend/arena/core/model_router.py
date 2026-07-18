@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+
 import anthropic
 import openai as openai_sdk
 
 from arena.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -18,7 +22,10 @@ if grok_api_key:
     )
 else:
     grok_client = None
-    print("[WARNING] GROK_API_KEY not set. Grok personas will fall back to Claude.")
+    logger.warning(
+        "provider_key_missing",
+        extra={"provider": "grok", "fallback": "claude"},
+    )
 
 openai_api_key = settings.openai_api_key or ""
 if openai_api_key:
@@ -27,7 +34,10 @@ if openai_api_key:
     )
 else:
     openai_client = None
-    print("[WARNING] OPENAI_API_KEY not set. OpenAI personas will fall back to Claude.")
+    logger.warning(
+        "provider_key_missing",
+        extra={"provider": "openai", "fallback": "claude"},
+    )
 
 deepseek_api_key = settings.deepseek_api_key or ""
 if deepseek_api_key:
@@ -37,7 +47,10 @@ if deepseek_api_key:
     )
 else:
     deepseek_client = None
-    print("[WARNING] DEEPSEEK_API_KEY not set. DeepSeek personas will fall back to Claude.")
+    logger.warning(
+        "provider_key_missing",
+        extra={"provider": "deepseek", "fallback": "claude"},
+    )
 
 MODEL_REGISTRY = {
     "claude_haiku": {

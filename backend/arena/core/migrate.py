@@ -1,6 +1,10 @@
+import logging
+
 from sqlalchemy import text
 
 from arena.database import engine
+
+logger = logging.getLogger(__name__)
 
 
 def run_safe_migrations():
@@ -28,8 +32,8 @@ def run_safe_migrations():
             try:
                 conn.execute(text(sql))
                 conn.commit()
-            except Exception as e:
-                print(f"Migration warning (non-fatal): {e}")
+            except Exception:
+                logger.exception("safe_migration_failed", extra={"sql": sql.strip()})
                 conn.rollback()
 
-    print("Safe migrations complete.")
+    logger.info("safe_migrations_complete", extra={"count": len(migrations)})
