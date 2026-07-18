@@ -3,6 +3,7 @@
 import json
 import logging
 import logging.handlers
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -296,6 +297,60 @@ def log_unhandled_exception(request_id: str, user_id: str, exc: Exception) -> No
 # Health data
 # ─────────────────────────────────────────────────
 
+def _read_rss_bytes() -> Optional[int]:
+    """Read RSS (resident set size) for the current process in bytes.
+
+    Prefers ``psutil`` for cross-platform reliability, but falls back to
+    parsing ``/proc/self/status`` so the endpoint stays useful on minimal
+    images that do not ship psutil. Returns ``None`` when neither path
+    yields a number, instead of raising — operators only see this field
+    go missing rather than the whole endpoint 500.
+    """
+    try:
+        import psutil  # type: ignore[import-not-found]
+
+        return int(psutil.Process(os.getpid()).memory_info().rss)
+    except Exception:
+        pass
+
+    status_path = Path("/proc/self/status")
+    if not status_path.exists():
+        return None
+    try:
+        for line in status_path.read_text().splitlines():
+            if line.startswith("VmRSS:"):
+                parts = line.split()
+                if len(parts) >= 2 and parts[1].isdigit():
+                    # VmRSS is reported in kilobytes.
+                    return int(parts[1]) * 1024
+    except Exception:
+        return None
+    return None
+
+
+def _read_open_fd_count() -> Optional[int]:
+    """Count file descriptors currently open by this process.
+
+    Falls back to ``/proc/self/fd`` on Linux and silently returns
+    ``None`` on platforms (or sandboxes) where that path isn't readable.
+    """
+    fd_dir = Path("/proc/self/fd")
+    if not fd_dir.exists():
+        return None
+    try:
+        return sum(1 for entry in fd_dir.iterdir())
+    except Exception:
+        return None
+
+
+def _read_cpu_count() -> Optional[int]:
+    """Return the host's logical CPU count, or ``None`` if it cannot be read."""
+    try:
+        return os.cpu_count()
+    except Exception:
+        return None
+
+
 def get_health_data(db_connected: bool) -> dict:
     """Public health payload exposed at GET /api/health.
 
@@ -345,4 +400,10 @@ def get_health_data_detailed(db_connected: bool) -> dict:
         # Once this stays 0 for a full user-active window (~90 days), the
         # fallback branch can be deleted safely.
         "legacy_password_hits": legacy_hits(),
+        # Process-resource snapshot. Each helper swallows its own
+        # exceptions so a single unavailable metric never takes down the
+        # endpoint — operators see the field go ``null`` instead of a 500.
+        "process_rss_bytes": _read_rss_bytes(),
+        "process_open_fds": _read_open_fd_count(),
+        "host_cpu_count": _read_cpu_count(),
     }
