@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from arena.db_models import PersonaDriftLog, ScoringAudit, UXEvent
 
+logger = logging.getLogger(__name__)
+
 # ─────────────────────────────────────────────────
 # Log setup — daily rotating JSON log file
 # ─────────────────────────────────────────────────
@@ -177,8 +179,8 @@ async def log_drift_result(
         )
         db.add(log)
         db.commit()
-    except Exception as e:
-        print(f"[OBS] drift log failed: {e}")
+    except Exception:
+        logger.exception("drift log failed")
         db.rollback()
 
 
@@ -216,8 +218,8 @@ async def log_scoring_result(
         )
         db.add(audit)
         db.commit()
-    except Exception as e:
-        print(f"[OBS] scoring audit failed: {e}")
+    except Exception:
+        logger.exception("scoring audit failed")
         db.rollback()
 
 
@@ -241,8 +243,8 @@ async def log_ux_event(
         )
         db.add(event)
         db.commit()
-    except Exception as e:
-        print(f"[OBS] ux event failed: {e}")
+    except Exception:
+        logger.exception("ux event failed")
         db.rollback()
 
 
