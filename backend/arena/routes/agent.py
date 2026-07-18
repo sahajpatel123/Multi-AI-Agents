@@ -22,7 +22,7 @@ from arena.core.file_ingest import process_upload
 from arena.core.http_headers import content_disposition_attachment
 from arena.core.upload_store import UPLOAD_DIR, ensure_upload_dir, register_upload, resolve_attachments
 from arena.core.dependencies import get_current_user_required
-from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard
+from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard, remove_blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 from arena.core.cost_tracker import get_today_token_usage
@@ -788,6 +788,13 @@ async def run_agent_pipeline_background(
             bb2.error = str(e)
         logger.exception("[AGENT] Background pipeline error task_id=%s", task_id)
         return
+    finally:
+        # Drop the in-memory blackboard regardless of pipeline outcome.
+        # active_tasks is a module-level dict that grows unbounded if we
+        # never remove entries — every completed/errored blackboard
+        # would otherwise pin a full pipeline state object for the
+        # lifetime of the process.
+        remove_blackboard(task_id)
 
     if bb.status != AgentStatus.COMPLETE:
         return
@@ -1049,6 +1056,44 @@ async def get_capability_usage(
         if category:
             by_category[category] = by_category.get(category, 0) + count
 
+    # Daily trend — pulled as the raw (timestamp, mode) tuples so the
+    # bucketing stays Python-side and SQLite + Postgres behave the same.
+    daily_rows = (
+        db.query(UsageRecord.timestamp, UsageRecord.mode)
+        .filter(
+            UsageRecord.user_id == user.id,
+            UsageRecord.timestamp >= window_start,
+        )
+        .all()
+    )
+    from collections import defaultdict
+    from datetime import timezone as _tz
+
+    daily_counts: dict[Any, dict[str, int]] = defaultdict(
+        lambda: {"agent": 0, "web": 0}
+    )
+    for ts, mode in daily_rows:
+        if ts is None:
+            continue
+        if ts.tzinfo is not None:
+            ts = ts.astimezone(_tz.utc).replace(tzinfo=None)
+        day = ts.date()
+        bucket_label = "agent" if mode == "agent" else "web"
+        daily_counts[day][bucket_label] += 1
+
+    daily_trend: list[dict[str, Any]] = []
+    start_day = window_start.date()
+    for offset in range(days):
+        day = start_day + timedelta(days=offset)
+        bucket = daily_counts.get(day, {"agent": 0, "web": 0})
+        daily_trend.append(
+            {
+                "date": day.isoformat(),
+                "agent": bucket.get("agent", 0),
+                "web": bucket.get("web", 0),
+            }
+        )
+
     return {
         "window_days": days,
         "window_start": window_start.date().isoformat(),
@@ -1060,6 +1105,7 @@ async def get_capability_usage(
             "web": web_total,
             "all": agent_total + web_total,
         },
+        "daily_trend": daily_trend,
     }
 
 
