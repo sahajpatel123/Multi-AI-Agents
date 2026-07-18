@@ -1731,34 +1731,101 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* The Four Minds */}
-      <section ref={agentMindsReveal.ref} style={{ ...agentMindsReveal.style, maxWidth: '1080px', margin: '4rem auto 0', padding: '0 24px' }} className={agentMindsReveal.className}>
-        <h2 style={{ fontSize: '22px', fontWeight: 500, letterSpacing: '-.02em', color: '#1A1714', marginBottom: '.4rem' }}>Meet the four minds</h2>
-        <p style={{ fontSize: '14px', color: '#6B6460', marginBottom: '1.5rem' }}>Active now. Each built with a different temperature and reasoning mandate.</p>
+      {/* The Four Minds — temperature portraits */}
+      <section
+        ref={agentMindsReveal.ref}
+        style={agentMindsReveal.style}
+        className={`home-minds ${agentMindsReveal.className}`}
+        aria-labelledby="home-minds-title"
+      >
+        <div className="home-minds__header">
+          <div>
+            <p className="home-minds__eyebrow">Default panel</p>
+            <h2 className="home-minds__title" id="home-minds-title">
+              Meet the four minds
+            </h2>
+          </div>
+          <p className="home-minds__lede">
+            Active now. Each built with a different temperature and reasoning mandate.
+          </p>
+        </div>
 
-        <div className="agents-deep-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-          {[
-            { name: 'The Analyst', color: '#8C9BAB', bg: '#EEF0F2', temp: 0.2, quote: 'I find the flaw in everything.' },
-            { name: 'The Philosopher', color: '#9B8FAA', bg: '#F0EDF2', temp: 0.7, quote: 'I question the premise first.' },
-            { name: 'The Pragmatist', color: '#8AA899', bg: '#EDF2EF', temp: 0.5, quote: 'I only care what works.' },
-            { name: 'The Contrarian', color: '#B0977E', bg: '#F2EDE8', temp: 1.0, quote: 'I say what no one else will.' },
-          ].map((agent) => (
-            <div key={agent.name} style={{ background: agent.bg, borderRadius: '14px', padding: '1.2rem' }}>
-              <div style={{ height: '2px', background: agent.color, borderRadius: '999px', marginBottom: '1rem' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '.6rem' }}>
-                <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: agent.color }} className="breathe" />
-                <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>{agent.name}</span>
+        <div className="agents-deep-grid" role="list">
+          {(
+            [
+              {
+                name: 'The Analyst',
+                color: '#8C9BAB',
+                bg: '#EEF0F2',
+                temp: 0.2,
+                band: 'Cool',
+                quote: 'I find the flaw in everything.',
+              },
+              {
+                name: 'The Philosopher',
+                color: '#9B8FAA',
+                bg: '#F0EDF2',
+                temp: 0.7,
+                band: 'Warm',
+                quote: 'I question the premise first.',
+              },
+              {
+                name: 'The Pragmatist',
+                color: '#8AA899',
+                bg: '#EDF2EF',
+                temp: 0.5,
+                band: 'Balanced',
+                quote: 'I only care what works.',
+              },
+              {
+                name: 'The Contrarian',
+                color: '#B0977E',
+                bg: '#F2EDE8',
+                temp: 1.0,
+                band: 'Hot',
+                quote: 'I say what no one else will.',
+              },
+            ] as const
+          ).map((agent) => (
+            <article
+              key={agent.name}
+              role="listitem"
+              tabIndex={0}
+              className="mind-card"
+              style={
+                {
+                  ['--mind-color' as string]: agent.color,
+                  ['--mind-bg' as string]: agent.bg,
+                } as React.CSSProperties
+              }
+            >
+              <div className="mind-card__rail" aria-hidden="true">
+                <div className="mind-card__rail-fill" />
               </div>
-              <p style={{ fontSize: '13px', color: '#6B6460', fontStyle: 'italic', lineHeight: 1.5, marginBottom: '.8rem' }}>{agent.quote}</p>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '10px', color: '#6B6460' }}>temp</span>
-                <div style={{ flex: 1, height: '2px', background: 'rgba(0,0,0,0.1)', borderRadius: '999px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', background: agent.color, opacity: 0.7, width: `${agent.temp * 100}%`, borderRadius: '999px' }} />
+              <div className="mind-card__head">
+                <span className="mind-card__dot" aria-hidden="true" />
+                <span className="mind-card__name">{agent.name}</span>
+                <span className="mind-card__temp-tag">{agent.band}</span>
+              </div>
+              <p className="mind-card__quote">{agent.quote}</p>
+              <div
+                className="mind-card__meter"
+                aria-label={`Temperature ${agent.temp}`}
+              >
+                <span className="mind-card__meter-label">Temp</span>
+                <div className="mind-card__meter-track">
+                  <div
+                    className="mind-card__meter-fill"
+                    style={{ width: `${agent.temp * 100}%` }}
+                  />
                 </div>
-                <span style={{ fontSize: '10px', color: '#6B6460' }}>{agent.temp}</span>
+                <span className="mind-card__meter-value">{agent.temp.toFixed(1)}</span>
               </div>
-            </div>
+              <div className="mind-card__scale" aria-hidden="true">
+                <span>Precise</span>
+                <span>Bold</span>
+              </div>
+            </article>
           ))}
         </div>
       </section>
