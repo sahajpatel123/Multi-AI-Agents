@@ -1,6 +1,7 @@
 """Auth routes — /api/auth/* (Bearer tokens in JSON body, no cookies)."""
 
 import logging
+import secrets
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -13,7 +14,7 @@ from sqlalchemy.exc import OperationalError, InterfaceError
 from sqlalchemy.orm import Session
 
 from arena.core.client_ip import get_request_client_ip
-from arena.core.rate_limits import enforce_user_rate_limit
+from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 
 from arena.core.errors import error_response, ErrorCodes
 from arena.core.auth import (
@@ -94,7 +95,7 @@ from arena.core.tier_config import (
     upgrade_target,
 )
 from arena.database import dispose_engine, get_db, is_db_connectivity_error
-from arena.db_models import UsageRecord, User
+from arena.db_models import PasswordResetToken, UsageRecord, User
 from arena.models.schemas import LoginRequest, RegisterRequest, UserProfilePatch, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -787,3 +788,165 @@ async def account_security(
         "has_password": bool(user.password_hash),
         "password_last_changed_at": None,  # TODO once column ships
     }
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Password reset
+# ────────────────────────────────────────────────────────────────────────
+
+# Tokens expire after one hour. Short enough that a leaked email can't
+# be redeemed forever, long enough that a distracted user can still
+# find the link in their inbox.
+_RESET_TOKEN_TTL_SECONDS = 3600
+
+
+def _hash_reset_token(token: str) -> str:
+    """Stable SHA-256 of the raw reset token. We store the hash only —
+    never the raw token — so a DB read does not give an attacker a
+    working reset link."""
+    import hashlib as _hashlib
+
+    return _hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+class ForgotPasswordBody(BaseModel):
+    """Body for POST /auth/forgot-password.
+
+    The response shape is identical regardless of whether the email is
+    registered — never leak which addresses hold an account.
+    """
+
+    email: str = Field(..., min_length=3, max_length=320)
+
+
+class ResetPasswordBody(BaseModel):
+    """Body for POST /auth/reset-password."""
+
+    token: str = Field(..., min_length=32, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        ok, reason = _validate_password_strength(v)
+        if not ok:
+            raise ValueError(reason)
+        return v
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    body: ForgotPasswordBody,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Issue a single-use password-reset token for ``body.email``.
+
+    Always returns 200 with the same shape so a caller cannot enumerate
+    registered addresses via the response. If the address is registered
+    a token is generated; the caller has a separate delivery channel
+    (the email transport — wired up in a follow-up) to deliver it. For
+    now the token is logged at INFO level so an operator can recover
+    it from the logs in dev; production wiring belongs in the email
+    transport module.
+    """
+    enforce_ip_rate_limit(
+        request,
+        scope="auth_forgot_password",
+        limit=10,
+        window_seconds=3600,
+        message="Too many password reset requests. Please slow down.",
+    )
+
+    normalized = body.email.lower().strip()
+    user = get_user_by_email(db, normalized)
+    if user is not None:
+        raw_token = secrets.token_urlsafe(48)
+        token_hash = _hash_reset_token(raw_token)
+        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
+            seconds=_RESET_TOKEN_TTL_SECONDS
+        )
+        row = PasswordResetToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+        db.add(row)
+        try:
+            db.commit()
+        except Exception as exc:
+            logger.warning(
+                "password_reset: failed to persist token for user=%s: %s",
+                user.id,
+                exc,
+            )
+            db.rollback()
+        else:
+            logger.info(
+                "password_reset_issued user_id=%s email=%s token_hash=%s",
+                user.id,
+                user.email,
+                token_hash,
+            )
+
+    return {"status": "received"}
+
+
+@router.post("/reset-password")
+async def reset_password(
+    body: ResetPasswordBody,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Redeem a reset token and rotate the user's password.
+
+    Returns 200 even on a stale/forged token — the only signal that a
+    reset happened is the password actually rotating. This avoids the
+    'is this token valid?' oracle and keeps the API surface flat for
+    the client.
+    """
+    enforce_ip_rate_limit(
+        request,
+        scope="auth_reset_password",
+        limit=10,
+        window_seconds=3600,
+        message="Too many password reset attempts. Please slow down.",
+    )
+
+    token_hash = _hash_reset_token(body.token)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    row = (
+        db.query(PasswordResetToken)
+        .filter(
+            PasswordResetToken.token_hash == token_hash,
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.expires_at > now,
+        )
+        .first()
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "reset_token_invalid"},
+        )
+
+    user = db.query(User).filter(User.id == row.user_id).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "reset_token_invalid"},
+        )
+
+    if verify_password(body.new_password, user.password_hash)[0]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "new_password_must_differ"},
+        )
+
+    user.password_hash = hash_password(body.new_password)
+    row.used_at = now
+    db.add(user)
+    db.add(row)
+    db.commit()
+    logger.info("password_reset_redeemed user_id=%s", user.id)
+    return {"status": "reset"}

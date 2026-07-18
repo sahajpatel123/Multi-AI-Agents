@@ -228,6 +228,24 @@ class GuestRateLimit(Base):
     reset_at = Column(DateTime, default=_now, nullable=False)
 
 
+class PasswordResetToken(Base):
+    """Single-use, time-bounded password-reset token.
+
+    Stores SHA-256(token) only — never the raw token. Used by the
+    public /auth/forgot-password + /auth/reset-password flow. A reset
+    marks ``used_at`` so the row cannot be replayed; a periodic sweep
+    purges expired rows alongside the revoked-token one.
+    """
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=_now, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used_at = Column(DateTime, nullable=True)
+
+
 class UserPreference(Base):
     __tablename__ = "user_preferences"
 
