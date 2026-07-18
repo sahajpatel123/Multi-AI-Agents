@@ -3782,66 +3782,60 @@ export function AgentPage() {
                     </div>
                   ) : null}
                   {filteredMyRooms.length === 0 ? (
-                    <div style={{ fontSize: 12, color: '#C4B8AE', padding: '4px 2px 8px', lineHeight: 1.45 }}>
-                      {roomsSearchQuery.trim()
-                        ? `No rooms match “${roomsSearchQuery.trim()}”${
-                            roomsActivityFilter !== 'all'
-                              ? ` in ${agentRoomsActivityLabel(roomsActivityFilter).toLowerCase()}`
-                              : ''
-                          }${
-                            roomsOccupancyFilter !== 'all'
-                              ? ` · ${agentRoomsOccupancyLabel(roomsOccupancyFilter)}`
-                              : ''
-                          }${
-                            roomsMembershipFilter !== 'all'
-                              ? ` · ${agentRoomsMembershipLabel(roomsMembershipFilter)}`
-                              : ''
-                          }`
-                        : roomsMembershipFilter !== 'all' &&
-                            roomsActivityFilter === 'all' &&
-                            roomsOccupancyFilter === 'all'
-                          ? roomsMembershipFilter === 'solo'
-                            ? 'No solo rooms in this view.'
-                            : 'No shared rooms in this view.'
-                          : roomsOccupancyFilter !== 'all' && roomsActivityFilter === 'all'
-                            ? roomsOccupancyFilter === 'empty'
-                              ? 'No empty rooms — every room has tasks.'
-                              : 'No rooms with tasks in this view.'
-                            : roomsActivityFilter === 'needs_attention'
-                              ? 'No rooms with new synthesis right now.'
-                              : roomsActivityFilter === 'caught_up'
-                                ? 'No caught-up rooms in this view.'
-                                : 'No rooms in this view.'}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRoomsSearchQuery('');
-                          setRoomsActivityFilter('all');
-                          setRoomsOccupancyFilter('all');
-                          setRoomsMembershipFilter('all');
-                          roomsSearchRef.current?.focus();
-                        }}
-                        style={{
-                          display: 'block',
-                          marginTop: 6,
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          color: '#C4956A',
-                          fontSize: 12,
-                          cursor: 'pointer',
-                          fontFamily: 'Georgia, serif',
-                          textDecoration: 'underline',
-                        }}
-                      >
-                        {(roomsActivityFilter !== 'all' ||
-                          roomsOccupancyFilter !== 'all' ||
-                          roomsMembershipFilter !== 'all') &&
-                        !roomsSearchQuery.trim()
-                          ? 'Show all rooms'
-                          : 'Clear filters'}
-                      </button>
-                    </div>
+                    <EmptyState
+                      variant="compact"
+                      title={
+                        roomsSearchQuery.trim()
+                          ? `No rooms match “${roomsSearchQuery.trim()}”${
+                              roomsActivityFilter !== 'all'
+                                ? ` in ${agentRoomsActivityLabel(roomsActivityFilter).toLowerCase()}`
+                                : ''
+                            }${
+                              roomsOccupancyFilter !== 'all'
+                                ? ` · ${agentRoomsOccupancyLabel(roomsOccupancyFilter)}`
+                                : ''
+                            }${
+                              roomsMembershipFilter !== 'all'
+                                ? ` · ${agentRoomsMembershipLabel(roomsMembershipFilter)}`
+                                : ''
+                            }`
+                          : roomsMembershipFilter !== 'all' &&
+                              roomsActivityFilter === 'all' &&
+                              roomsOccupancyFilter === 'all'
+                            ? roomsMembershipFilter === 'solo'
+                              ? 'No solo rooms in this view.'
+                              : 'No shared rooms in this view.'
+                            : roomsOccupancyFilter !== 'all' && roomsActivityFilter === 'all'
+                              ? roomsOccupancyFilter === 'empty'
+                                ? 'No empty rooms — every room has tasks.'
+                                : 'No rooms with tasks in this view.'
+                              : roomsActivityFilter === 'needs_attention'
+                                ? 'No rooms with new synthesis right now.'
+                                : roomsActivityFilter === 'caught_up'
+                                  ? 'No caught-up rooms in this view.'
+                                  : 'No rooms in this view.'
+                      }
+                      actions={
+                        <button
+                          type="button"
+                          className="arena-btn arena-btn--ghost arena-btn--sm"
+                          onClick={() => {
+                            setRoomsSearchQuery('');
+                            setRoomsActivityFilter('all');
+                            setRoomsOccupancyFilter('all');
+                            setRoomsMembershipFilter('all');
+                            roomsSearchRef.current?.focus();
+                          }}
+                        >
+                          {(roomsActivityFilter !== 'all' ||
+                            roomsOccupancyFilter !== 'all' ||
+                            roomsMembershipFilter !== 'all') &&
+                          !roomsSearchQuery.trim()
+                            ? 'Show all rooms'
+                            : 'Clear filters'}
+                        </button>
+                      }
+                    />
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {filteredMyRooms.map((r: any) => {

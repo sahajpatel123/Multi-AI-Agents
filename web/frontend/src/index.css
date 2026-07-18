@@ -223,7 +223,11 @@ p {
   font-size: 15px;
   font-family: Georgia, serif;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    background var(--motion-hover-ms) var(--ease-btn),
+    color var(--motion-hover-ms) var(--ease-btn),
+    box-shadow var(--motion-lift-ms) var(--ease-out-premium),
+    transform var(--motion-press-ms) var(--ease-btn);
   white-space: nowrap;
   border: none;
   background: transparent;
@@ -231,11 +235,32 @@ p {
   font-weight: 400;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .billing-toggle-option:hover:not(.billing-toggle-option--active) {
+    color: #2c1810;
+    background: rgba(253, 250, 246, 0.55);
+  }
+
+  .billing-toggle-option:active {
+    transform: scale(0.98);
+  }
+}
+
 .billing-toggle-option--active {
   background: #fdfaf6;
   color: #2c1810;
   font-weight: 500;
   box-shadow: 0 1px 4px rgba(44, 24, 16, 0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .billing-toggle-option {
+    transition: background 0.12s ease, color 0.12s ease !important;
+  }
+
+  .billing-toggle-option:active {
+    transform: none !important;
+  }
 }
 
 .billing-toggle-save-badge {
