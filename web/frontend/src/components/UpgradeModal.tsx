@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useId, useState } from 'react';
-import { Lock, Check } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Check, Lock, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Button } from './Button';
 import { RazorpayCheckout } from './RazorpayCheckout';
 import { useAuth } from '../hooks/useAuth';
 import { useTier } from '../context/TierContext';
-import { DEFAULT_REDIRECT_INTENT, setRedirectIntent } from '../utils/redirectIntent';
+import { prefersReducedMotion } from '../lib/motion';
 import { shouldUpgradeModalEscapeClose } from '../lib/upgradeModalEscape';
+import { DEFAULT_REDIRECT_INTENT, setRedirectIntent } from '../utils/redirectIntent';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -17,7 +19,10 @@ const featureItems = [
   'Debate mode — challenge any mind',
   'All 16 personas unlocked',
   'Memory across sessions',
-];
+] as const;
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function UpgradeModal({
   isOpen,
@@ -30,7 +35,13 @@ export function UpgradeModal({
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const titleId = useId();
+  const descId = useId();
   const errorId = useId();
+  const featuresId = useId();
+  const cardRef = useRef<HTMLDivElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const reduceMotion = prefersReducedMotion();
 
   const handleClose = useCallback(() => {
     setCheckoutPlan(null);
@@ -46,22 +57,60 @@ export function UpgradeModal({
     }
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    const t = window.setTimeout(() => primaryRef.current?.focus(), 40);
     return () => {
       document.body.style.overflow = prevOverflow;
+      window.clearTimeout(t);
     };
   }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (!shouldUpgradeModalEscapeClose(checkoutPlan)) return;
-      e.preventDefault();
-      handleClose();
+      if (e.key === 'Escape') {
+        if (!shouldUpgradeModalEscapeClose(checkoutPlan)) return;
+        e.preventDefault();
+        handleClose();
+        return;
+      }
+
+      if (e.key !== 'Tab' || !cardRef.current) return;
+
+      const nodes = Array.from(
+        cardRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ).filter((el) => {
+        if (el.hasAttribute('disabled') || el.getAttribute('aria-hidden') === 'true') {
+          return false;
+        }
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      if (nodes.length === 0) return;
+
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (e.shiftKey) {
+        if (active === first || !cardRef.current.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !cardRef.current.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
     };
+
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [isOpen, checkoutPlan, handleClose]);
+
+  useEffect(() => {
+    if (!checkoutError) return;
+    errorRef.current?.focus();
+  }, [checkoutError]);
 
   const handleUpgradePlusMonthly = () => {
     if (!isAuthenticated) {
@@ -95,24 +144,18 @@ export function UpgradeModal({
 
   if (!isOpen) return null;
 
+  const checkoutBusy = checkoutPlan != null;
+
   return (
     <div
-      className="upgrade-modal-overlay"
+      className={`upgrade-modal-overlay${reduceMotion ? ' upgrade-modal-overlay--static' : ''}`}
       role="presentation"
-      onClick={handleClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 300,
-        background: 'rgba(26,23,20,0.5)',
-        backdropFilter: 'blur(8px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
+      onClick={() => {
+        if (checkoutBusy) return;
+        handleClose();
       }}
     >
-      {checkoutPlan && (
+      {checkoutPlan ? (
         <RazorpayCheckout
           key={checkoutPlan}
           planKey={checkoutPlan}
@@ -121,161 +164,103 @@ export function UpgradeModal({
           onError={onCheckoutError}
           onClose={onCheckoutDismiss}
         />
-      )}
+      ) : null}
+
       <div
-        className="upgrade-modal"
+        ref={cardRef}
+        className={`upgrade-modal${reduceMotion ? ' upgrade-modal--static' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={descId}
         onClick={(e) => e.stopPropagation()}
-        style={{
-          background: '#FAF7F4',
-          borderRadius: '20px',
-          padding: '2.5rem',
-          maxWidth: '420px',
-          width: '90%',
-          textAlign: 'center',
-          boxShadow: '0 32px 80px rgba(26,23,20,0.18)',
-        }}
       >
-        <div
-          style={{
-            width: '32px',
-            height: '32px',
-            color: '#C4956A',
-            margin: '0 auto 1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
+        <button
+          type="button"
+          className="upgrade-modal__close"
+          onClick={handleClose}
+          aria-label="Close"
+          disabled={checkoutBusy}
         >
-          <Lock style={{ width: '32px', height: '32px' }} aria-hidden />
+          <X width={16} height={16} aria-hidden />
+        </button>
+
+        <div className="upgrade-modal__icon" aria-hidden>
+          <Lock width={28} height={28} />
         </div>
-        <h2
-          id={titleId}
-          style={{
-            fontSize: '22px',
-            fontWeight: 500,
-            letterSpacing: '-.02em',
-            marginBottom: '.5rem',
-            color: '#1A1714',
-          }}
-        >
+
+        <h2 id={titleId} className="upgrade-modal__title">
           This is a Plus feature
         </h2>
-        <p
-          style={{
-            fontSize: '14px',
-            color: '#6B6460',
-            lineHeight: 1.7,
-            marginBottom: '2rem',
-          }}
-        >
+        <p id={descId} className="upgrade-modal__subtitle">
           {subtitle}
         </p>
 
-        <div style={{ textAlign: 'left' }}>
+        <ul id={featuresId} className="upgrade-modal__features" aria-label="Plus includes">
           {featureItems.map((item) => (
-            <div
-              key={item}
-              style={{
-                display: 'flex',
-                gap: '8px',
-                alignItems: 'center',
-                fontSize: '13px',
-                color: '#1A1714',
-                marginBottom: '.5rem',
-              }}
-            >
-              <span
-                style={{
-                  width: '16px',
-                  height: '16px',
-                  borderRadius: '50%',
-                  background: '#C4956A',
-                  color: '#FAF7F4',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-                aria-hidden
-              >
-                <Check style={{ width: '10px', height: '10px' }} />
+            <li key={item} className="upgrade-modal__feature">
+              <span className="upgrade-modal__check" aria-hidden>
+                <Check width={10} height={10} strokeWidth={2.5} />
               </span>
               <span>{item}</span>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
 
         {checkoutError ? (
           <p
+            ref={errorRef}
             id={errorId}
             role="alert"
-            style={{
-              margin: '1.25rem 0 0',
-              fontSize: 13,
-              color: '#D85A30',
-              lineHeight: 1.5,
-              textAlign: 'left',
-            }}
+            tabIndex={-1}
+            className="upgrade-modal__error"
           >
             {checkoutError}
           </p>
         ) : null}
 
-        <button
-          type="button"
-          onClick={handleUpgradePlusMonthly}
-          aria-describedby={checkoutError ? errorId : undefined}
-          style={{
-            width: '100%',
-            padding: '13px 24px',
-            borderRadius: '999px',
-            background: '#1A1714',
-            color: '#FAF7F4',
-            fontSize: '14px',
-            marginTop: checkoutError ? '0.85rem' : '1.5rem',
-            border: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          {checkoutError ? 'Try upgrade again — ₹999/mo' : 'Upgrade to Plus — ₹999/mo'}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            handleClose();
-            navigate('/pricing');
-          }}
-          style={{
-            width: '100%',
-            padding: '11px 24px',
-            borderRadius: '999px',
-            background: 'transparent',
-            color: '#6B6460',
-            fontSize: '13px',
-            marginTop: '0.65rem',
-            border: '0.5px solid #E0D8D0',
-            cursor: 'pointer',
-          }}
-        >
-          See all plans
-        </button>
-        <button
-          type="button"
-          onClick={handleClose}
-          style={{
-            fontSize: '13px',
-            color: '#6B6460',
-            cursor: 'pointer',
-            marginTop: '.8rem',
-            background: 'transparent',
-            border: 'none',
-          }}
-        >
-          Maybe later
-        </button>
+        <div className="upgrade-modal__actions">
+          <Button
+            ref={primaryRef}
+            type="button"
+            variant="primary"
+            size="md"
+            fullWidth
+            loading={checkoutBusy}
+            onClick={handleUpgradePlusMonthly}
+            aria-describedby={checkoutError ? errorId : featuresId}
+            className="upgrade-modal__cta"
+          >
+            {checkoutBusy
+              ? 'Opening checkout…'
+              : checkoutError
+                ? 'Try upgrade again — ₹999/mo'
+                : 'Upgrade to Plus — ₹999/mo'}
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            fullWidth
+            disabled={checkoutBusy}
+            onClick={() => {
+              handleClose();
+              navigate('/pricing');
+            }}
+          >
+            See all plans
+          </Button>
+
+          <button
+            type="button"
+            className="upgrade-modal__dismiss"
+            onClick={handleClose}
+            disabled={checkoutBusy}
+          >
+            Maybe later
+          </button>
+        </div>
       </div>
     </div>
   );

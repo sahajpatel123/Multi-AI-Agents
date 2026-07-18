@@ -58,15 +58,14 @@ describe('UpgradeModal', () => {
   });
 
   it('renders the modal dialog when isOpen is true', () => {
-    const { container } = renderModal();
-    expect(container.querySelector('.upgrade-modal-overlay')).not.toBeNull();
+    const { getByRole } = renderModal();
+    expect(getByRole('dialog')).toBeInTheDocument();
+    expect(getByRole('dialog')).toHaveAccessibleName(/plus feature/i);
   });
 
   it('lists the upgrade feature items', () => {
-    const { getAllByText } = renderModal();
-    // The feature items appear in the markup (possibly more than once
-    // because the subtitle also mentions 'Debate mode'). Use
-    // getAllByText to assert presence without caring about count.
+    const { getAllByText, getByRole } = renderModal();
+    expect(getByRole('list', { name: /plus includes/i })).toBeInTheDocument();
     expect(getAllByText(/Debate mode/i).length).toBeGreaterThan(0);
     expect(getAllByText(/16 personas/i).length).toBeGreaterThan(0);
     expect(getAllByText(/Memory across sessions/i).length).toBeGreaterThan(0);
@@ -75,7 +74,6 @@ describe('UpgradeModal', () => {
   it('clicking the overlay fires onClose', async () => {
     const onClose = vi.fn();
     const { container } = renderModal({ onClose });
-    // Click the overlay (not the inner content).
     const overlay = container.querySelector('.upgrade-modal-overlay')!;
     fireEvent.click(overlay);
     await waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -84,7 +82,27 @@ describe('UpgradeModal', () => {
   it('Escape key fires onClose', async () => {
     const onClose = vi.fn();
     renderModal({ onClose });
-    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.keyDown(window, { key: 'Escape' });
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('close button dismisses the modal', async () => {
+    const onClose = vi.fn();
+    const { getByLabelText } = renderModal({ onClose });
+    fireEvent.click(getByLabelText(/^close$/i));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('Maybe later dismisses the modal', async () => {
+    const onClose = vi.fn();
+    const { getByRole } = renderModal({ onClose });
+    fireEvent.click(getByRole('button', { name: /maybe later/i }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('upgrade CTA launches checkout stub for authenticated users', async () => {
+    const { getByRole, findByTestId } = renderModal();
+    fireEvent.click(getByRole('button', { name: /upgrade to plus/i }));
+    expect(await findByTestId('razorpay-checkout-stub')).toBeInTheDocument();
   });
 });

@@ -1,4 +1,9 @@
-import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
+import {
+  forwardRef,
+  type ButtonHTMLAttributes,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { ButtonSpinner } from './Icons';
 import { motionTransition } from '../lib/motion';
 
@@ -14,20 +19,23 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
-export function Button({
-  variant = 'primary',
-  size = 'md',
-  icon,
-  iconRight,
-  loading = false,
-  disabled,
-  fullWidth,
-  children,
-  className = '',
-  type = 'button',
-  style,
-  ...rest
-}: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    variant = 'primary',
+    size = 'md',
+    icon,
+    iconRight,
+    loading = false,
+    disabled,
+    fullWidth,
+    children,
+    className = '',
+    type = 'button',
+    style,
+    ...rest
+  },
+  ref,
+) {
   const classes = [
     'arena-btn',
     `arena-btn--${variant}`,
@@ -52,6 +60,7 @@ export function Button({
 
   return (
     <button
+      ref={ref}
       type={type}
       disabled={disabled || loading}
       className={classes}
@@ -65,4 +74,4 @@ export function Button({
       ) : null}
     </button>
   );
-}
+});
