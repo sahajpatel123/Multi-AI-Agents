@@ -45,7 +45,10 @@ export function ProductPage() {
         aria-labelledby="product-title"
       >
         <section className="mkt-hero">
-          <p className="mkt-hero__kicker">Choose your mode</p>
+          <p className="mkt-hero__kicker">
+            <span className="mkt-hero__kicker-dot" aria-hidden="true" />
+            Choose your mode
+          </p>
           <h1 id="product-title" className="mkt-hero__title">
             Two ways to <span className="mkt-hero__accent">think.</span>
           </h1>
@@ -53,6 +56,11 @@ export function ProductPage() {
             Arena for debate. Agent for depth. Same intelligence, two different engines — pick the
             shape of work, not a different product.
           </p>
+          <ul className="mkt-hero__proof" aria-hidden="true">
+            <li className="mkt-hero__proof-item">Free to try</li>
+            <li className="mkt-hero__proof-item">Same account</li>
+            <li className="mkt-hero__proof-item">Switch anytime</li>
+          </ul>
         </section>
 
         <section className="product-modes" aria-label="Product modes">
@@ -61,7 +69,10 @@ export function ProductPage() {
             className="product-mode-card product-mode-card--arena"
             onClick={() => go('/app')}
           >
-            <span className="product-mode-card__badge">Active now</span>
+            <span className="product-mode-card__badge">
+              <span className="product-mode-card__badge-dot" aria-hidden="true" />
+              Active now
+            </span>
             <span className="product-mode-card__num" aria-hidden>
               01
             </span>
@@ -86,6 +97,7 @@ export function ProductPage() {
             onClick={() => go('/agent')}
           >
             <span className="product-mode-card__badge product-mode-card__badge--agent">
+              <span className="product-mode-card__badge-dot" aria-hidden="true" />
               Active now
             </span>
             <span className="product-mode-card__num product-mode-card__num--agent" aria-hidden>
