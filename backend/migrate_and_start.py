@@ -57,6 +57,7 @@ def main():
             "live_next_check TIMESTAMP",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
             "live_updates JSONB",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
         ]
         sqlite_json_fallback = [
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS insight_report TEXT",
@@ -66,6 +67,7 @@ def main():
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS live_last_checked TEXT",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS live_next_check TEXT",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS live_updates TEXT",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
         ]
 
         pg_confidence_table = """

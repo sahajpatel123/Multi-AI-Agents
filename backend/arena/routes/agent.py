@@ -1864,6 +1864,33 @@ async def get_watchlist_item_history(
     return JSONResponse(content={"success": True, **payload})
 
 
+@router.get("/metrics")
+async def get_agent_metrics(
+    window_days: int = Query(30, ge=1, le=90),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Per-user Agent Mode metrics: lifetime counts + 30-day daily trend.
+
+    Scoped to the caller's own AgentTask and Orchestration rows — never
+    exposes data from other users. The 30-day trend is bucketed by UTC
+    day so the UI can render it as a calendar heatmap without doing
+    any timezone math itself.
+    """
+    _ensure_agent_access(user, db)
+    from arena.core.agent_metrics import compute_user_agent_metrics
+
+    orm_user = db.query(User).filter(User.id == user.id).first()
+    if orm_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    payload = compute_user_agent_metrics(
+        db=db,
+        user=orm_user,
+        window_days=window_days,
+    )
+    return JSONResponse(content=payload)
+
+
 @router.get("/history")
 async def get_agent_history(
     page: int = Query(1, ge=1),
