@@ -3498,3 +3498,202 @@
   }
 }
 
+/* ============================================================================
+   HERO ACTIONS — primary + secondary CTAs under the hero title (loop 12)
+   Cream-native lift, sheen, and micro trust line — not a redesign.
+   ========================================================================== */
+
+.home-hero-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 2rem;
+  animation: heroSubtext 500ms ease 400ms backwards;
+}
+
+.home-hero-actions__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Scope polish to hero only so global arena-btn stays stable elsewhere */
+.home-hero-actions .arena-btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+  will-change: transform;
+}
+
+.home-hero-actions .arena-btn--primary {
+  background: linear-gradient(180deg, #d4a574 0%, #c4956a 52%, #b8885c 100%);
+  border: none;
+  color: #faf7f4;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 10px 26px rgba(196, 149, 106, 0.28);
+}
+
+.home-hero-actions .arena-btn--primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 32%,
+    rgba(255, 255, 255, 0.32) 48%,
+    transparent 64%
+  );
+  transform: translateX(-130%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.home-hero-actions .arena-btn--primary .arena-btn__label,
+.home-hero-actions .arena-btn--primary .arena-btn__icon {
+  position: relative;
+  z-index: 1;
+}
+
+.home-hero-actions .arena-btn--secondary {
+  background: rgba(253, 250, 246, 0.85);
+  border: 0.5px solid #e0d8d0;
+  color: #1a1714;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.home-hero-actions .arena-btn--secondary .arena-btn__icon--right {
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .home-hero-actions .arena-btn--primary:hover:not(:disabled) {
+    filter: brightness(1.04);
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.32) inset,
+      0 14px 32px rgba(196, 149, 106, 0.36);
+  }
+
+  .home-hero-actions .arena-btn--primary:hover:not(:disabled)::before {
+    animation: homeHeroCtaSheen 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1;
+  }
+
+  .home-hero-actions .arena-btn--secondary:hover:not(:disabled) {
+    border-color: #c4956a;
+    background: #fff;
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 10px 24px rgba(44, 24, 16, 0.07);
+  }
+
+  .home-hero-actions .arena-btn--secondary:hover:not(:disabled) .arena-btn__icon--right {
+    transform: translateX(3px);
+  }
+
+  .home-hero-actions .arena-btn:active:not(:disabled) {
+    transform: translateY(0) scale(0.985);
+  }
+}
+
+.home-hero-actions .arena-btn:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 3px;
+}
+
+@keyframes homeHeroCtaSheen {
+  0% {
+    transform: translateX(-130%);
+  }
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+.home-hero-actions__trust {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-hero-actions__trust-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #8c7355;
+  letter-spacing: 0.01em;
+}
+
+.home-hero-actions__trust-item + .home-hero-actions__trust-item::before {
+  content: '';
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #d4c8bc;
+  margin-right: 2px;
+}
+
+.home-hero-actions__trust-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8aa899;
+  box-shadow: 0 0 0 0 rgba(138, 168, 153, 0.4);
+  animation: homeHeroTrustPulse 2s ease-out infinite;
+}
+
+@keyframes homeHeroTrustPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(138, 168, 153, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.home-hero-actions__trust-icon {
+  color: #c4956a;
+  font-size: 11px;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-actions,
+  .home-hero-actions .arena-btn--primary::before,
+  .home-hero-actions__trust-dot {
+    animation: none !important;
+  }
+
+  .home-hero-actions .arena-btn:hover {
+    transform: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .home-hero-actions__row {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-hero-actions .arena-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+

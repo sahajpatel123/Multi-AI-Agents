@@ -1069,13 +1069,47 @@ export function HomePage() {
                 Four AI personalities with opposing worldviews compete to answer your question. Scored on logic, directness, and originality. The best answer wins — automatically.
               </p>
 
-              <div className="hero-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '2rem', animation: 'heroSubtext 500ms ease 400ms backwards', flexWrap: 'wrap' }}>
-                <Button variant="primary" size="lg" icon={Icons.arrowRight(18)} onClick={() => navigate('/app')}>
-                  Begin thinking
-                </Button>
-                <Button variant="secondary" size="lg" onClick={scrollToHowItWorks}>
-                  Watch it work
-                </Button>
+              <div className="home-hero-actions hero-actions">
+                <div className="home-hero-actions__row">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    iconRight={Icons.arrowRight(18)}
+                    onClick={() => navigate('/app')}
+                  >
+                    Begin thinking
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    iconRight={
+                      <span className="home-hero-actions__watch-arrow" aria-hidden="true">
+                        ↓
+                      </span>
+                    }
+                    onClick={scrollToHowItWorks}
+                  >
+                    Watch it work
+                  </Button>
+                </div>
+                <ul className="home-hero-actions__trust" aria-label="Why start free">
+                  <li className="home-hero-actions__trust-item">
+                    <span className="home-hero-actions__trust-dot" aria-hidden="true" />
+                    Free to try
+                  </li>
+                  <li className="home-hero-actions__trust-item">
+                    <span className="home-hero-actions__trust-icon" aria-hidden="true">
+                      ◆
+                    </span>
+                    No card required
+                  </li>
+                  <li className="home-hero-actions__trust-item">
+                    <span className="home-hero-actions__trust-icon" aria-hidden="true">
+                      ◇
+                    </span>
+                    Winner in under 30s
+                  </li>
+                </ul>
               </div>
             </div>
 
