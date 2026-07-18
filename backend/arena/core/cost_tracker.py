@@ -216,8 +216,14 @@ def check_token_budget(db: Session, user_id: int, estimated_cost: float = 0.0) -
     The daily budget is per-tier (see TIER_DAILY_LIMITS in tier_config.py).
     The check runs BEFORE the LLM fan-out so we never burn tokens for a
     request we're going to reject.
+
+    Uses with_for_update() to prevent concurrent requests from both reading
+    the pre-budget value and passing the check — a TOCTOU race that would
+    let a user exceed their daily token budget by ~2x under concurrent load.
+    The row lock is released by db.commit() in record_usage() downstream.
+    SQLite ignores FOR UPDATE; Postgres (production) enforces it.
     """
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).with_for_update().first()
     if not user:
         return
 

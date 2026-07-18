@@ -1,5 +1,6 @@
 """Provider-aware LLM caller for Claude and OpenAI-compatible APIs."""
 
+import logging
 from typing import Any, List, Optional, Union
 
 from tenacity import (
@@ -8,6 +9,44 @@ from tenacity import (
     stop_after_attempt,
     wait_random_exponential,
 )
+
+
+logger = logging.getLogger(__name__)
+
+
+def _log_provider_fallback(
+    provider: str,
+    model_id: str,
+    fallback_model_id: str,
+    *,
+    streaming: bool,
+) -> None:
+    """Record a fallback without logging prompts or exception details."""
+    logger.warning(
+        "LLM provider unavailable; using Claude fallback",
+        extra={
+            "provider": provider,
+            "model_id": model_id,
+            "fallback_model_id": fallback_model_id,
+            "streaming": streaming,
+        },
+    )
+
+
+def _log_provider_failure(
+    provider: str,
+    model_id: str,
+    exc: Exception,
+) -> None:
+    """Record safe, low-cardinality diagnostics for a failed provider call."""
+    logger.warning(
+        "LLM provider call failed",
+        extra={
+            "provider": provider,
+            "model_id": model_id,
+            "error_type": type(exc).__name__,
+        },
+    )
 
 
 def _get_claude_fallback() -> tuple[Any, str]:
@@ -139,7 +178,12 @@ async def call_llm(
         if provider in {"grok", "openai", "deepseek"}:
             if client is None:
                 fallback_client, fallback_model_id = _get_claude_fallback()
-                print(f"[FALLBACK] {provider} client not initialized, using Claude")
+                _log_provider_fallback(
+                    provider,
+                    model_id,
+                    fallback_model_id,
+                    streaming=False,
+                )
                 return await call_llm(
                     client=fallback_client,
                     provider="claude",
@@ -173,7 +217,8 @@ async def call_llm(
         raise ValueError(
             f"Unknown provider: {provider}. Must be claude, grok, openai, or deepseek."
         )
-    except Exception:
+    except Exception as exc:
+        _log_provider_failure(provider, model_id, exc)
         return "", 0, 0
 
 
@@ -216,7 +261,12 @@ async def call_llm_streaming(
     elif provider in {"grok", "openai", "deepseek"}:
         if client is None:
             fallback_client, fallback_model_id = _get_claude_fallback()
-            print(f"[FALLBACK] {provider} client not initialized, using Claude streaming fallback")
+            _log_provider_fallback(
+                provider,
+                model_id,
+                fallback_model_id,
+                streaming=True,
+            )
             async for text in call_llm_streaming(
                 client=fallback_client,
                 provider="claude",

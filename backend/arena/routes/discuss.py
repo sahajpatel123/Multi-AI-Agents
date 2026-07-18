@@ -313,8 +313,8 @@ async def stream_discuss(
                     temperature=agent.temperature,
                     system=system_prompt,
                     messages=messages,
-                ) as stream:
-                    async for text in stream.text_stream:
+                ) as active_stream:
+                    async for text in active_stream.text_stream:
                         full_text += text
                         yield _sse_event("token", {
                             "agent_id": request.agent_id,
@@ -336,6 +336,11 @@ async def stream_discuss(
 
             yield _sse_event("result", final.model_dump(mode="json"))
 
+        except GeneratorExit:
+            # Client disconnected mid-stream — the async context manager
+            # handles stream cleanup via __aexit__ on generator close.
+            # Swallow silently — no error event needed for a disconnected client.
+            return
         except Exception as e:
             yield _sse_event("error", {"detail": "Discuss request failed"})
 

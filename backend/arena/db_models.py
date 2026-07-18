@@ -62,62 +62,71 @@ class User(Base):
     subscription_status = Column(String(32), nullable=True)
     subscription_end_date = Column(DateTime, nullable=True)
 
-    sessions = relationship("DBSession", back_populates="user", cascade="all, delete-orphan")
-    usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan")
-    preferences = relationship("UserPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    stance_entries = relationship("AgentStance", back_populates="user", cascade="all, delete-orphan")
-    session_summaries = relationship("SessionSummary", back_populates="user", cascade="all, delete-orphan")
-    panel = relationship("UserPanel", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    saved_responses = relationship("SavedResponse", back_populates="user", cascade="all, delete-orphan")
-    persona_drift_logs = relationship("PersonaDriftLog", back_populates="user", cascade="all, delete-orphan")
-    scoring_audits = relationship("ScoringAudit", back_populates="user", cascade="all, delete-orphan")
-    ux_events = relationship("UXEvent", back_populates="user", cascade="all, delete-orphan")
-    agent_tasks = relationship("AgentTask", back_populates="user", cascade="all, delete-orphan")
-    discuss_threads = relationship("DiscussThread", back_populates="user", cascade="all, delete-orphan")
+    sessions = relationship("DBSession", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    preferences = relationship("UserPreference", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="joined")
+    stance_entries = relationship("AgentStance", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    session_summaries = relationship("SessionSummary", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    panel = relationship("UserPanel", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="joined")
+    saved_responses = relationship("SavedResponse", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    persona_drift_logs = relationship("PersonaDriftLog", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    scoring_audits = relationship("ScoringAudit", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    ux_events = relationship("UXEvent", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    agent_tasks = relationship("AgentTask", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    discuss_threads = relationship("DiscussThread", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     agent_contradictions = relationship(
         "AgentContradiction",
         back_populates="user",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     confidence_ratings = relationship(
         "ConfidenceRating",
         back_populates="user",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     answer_feedbacks = relationship(
         "AnswerFeedback",
         back_populates="user",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     orchestrations = relationship(
         "Orchestration",
         back_populates="user",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     watchlist_items = relationship(
         "WatchlistItem",
         back_populates="user",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     subscriptions = relationship(
         "Subscription",
         back_populates="user",
         foreign_keys="Subscription.user_id",
+        lazy="selectin",
     )
     room_memberships = relationship(
         "RoomMember",
         back_populates="user",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     created_rooms = relationship(
         "Room",
         back_populates="creator",
         foreign_keys="Room.creator_id",
+        lazy="selectin",
     )
     mcp_integrations = relationship(
         "MCPIntegration",
         back_populates="user",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     consecutive_payments = Column(Integer, default=0, nullable=False)
@@ -149,7 +158,7 @@ class Subscription(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 
-    user = relationship("User", back_populates="subscriptions", foreign_keys=[user_id])
+    user = relationship("User", back_populates="subscriptions", foreign_keys=[user_id], lazy="joined")
 
 
 class DBSession(Base):
@@ -163,8 +172,8 @@ class DBSession(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
     last_active = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 
-    user = relationship("User", back_populates="sessions")
-    turns = relationship("DBTurn", back_populates="session", cascade="all, delete-orphan")
+    user = relationship("User", back_populates="sessions", lazy="joined")
+    turns = relationship("DBTurn", back_populates="session", cascade="all, delete-orphan", lazy="selectin")
 
 
 class DBTurn(Base):
@@ -178,7 +187,7 @@ class DBTurn(Base):
     winner_id = Column(String(20), nullable=False)
     timestamp = Column(DateTime, default=_now, nullable=False)
 
-    session = relationship("DBSession", back_populates="turns")
+    session = relationship("DBSession", back_populates="turns", lazy="joined")
 
 
 class UsageRecord(Base):
@@ -201,7 +210,7 @@ class UsageRecord(Base):
     total_processing_ms = Column(Integer, default=0)
     timestamp = Column(DateTime, default=_now, nullable=False, index=True)
 
-    user = relationship("User", back_populates="usage_records")
+    user = relationship("User", back_populates="usage_records", lazy="joined")
 
 
 class GuestRateLimit(Base):
@@ -229,7 +238,7 @@ class UserPreference(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 
-    user = relationship("User", back_populates="preferences")
+    user = relationship("User", back_populates="preferences", lazy="joined")
 
 
 class AgentStance(Base):
@@ -247,7 +256,7 @@ class AgentStance(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 
-    user = relationship("User", back_populates="stance_entries")
+    user = relationship("User", back_populates="stance_entries", lazy="joined")
 
     __table_args__ = (
         Index("idx_agent_stances_user_persona_topic", "user_id", "persona_id", "topic_normalized"),
@@ -271,7 +280,7 @@ class SessionSummary(Base):
     compressed_at = Column(DateTime, default=_now, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    user = relationship("User", back_populates="session_summaries")
+    user = relationship("User", back_populates="session_summaries", lazy="joined")
 
 
 class PersonaLibrary(Base):
@@ -303,7 +312,7 @@ class UserPanel(Base):
     slot_4 = Column(String(50), default="contrarian", nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 
-    user = relationship("User", back_populates="panel")
+    user = relationship("User", back_populates="panel", lazy="joined")
 
 
 class SavedResponse(Base):
@@ -322,8 +331,8 @@ class SavedResponse(Base):
     score = Column(Integer, nullable=True)
     confidence = Column(Integer, nullable=True)
     saved_at = Column(DateTime, default=_now, nullable=False)
+    user = relationship("User", back_populates="saved_responses", lazy="joined")
 
-    user = relationship("User", back_populates="saved_responses")
 
     __table_args__ = (
         Index("idx_saved_responses_user_session", "user_id", "session_id"),
@@ -349,7 +358,7 @@ class PersonaDriftLog(Base):
     final_response_snippet = Column(String(300), nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    user = relationship("User", back_populates="persona_drift_logs")
+    user = relationship("User", back_populates="persona_drift_logs", lazy="joined")
 
     __table_args__ = (
         Index("idx_persona_drift_persona_detected", "persona_id", "drift_detected"),
@@ -377,7 +386,7 @@ class ScoringAudit(Base):
     fallback_used = Column(Boolean, default=False, comment="True if scoring failed and fallback used")
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    user = relationship("User", back_populates="scoring_audits")
+    user = relationship("User", back_populates="scoring_audits", lazy="joined")
 
     __table_args__ = (
         Index("idx_scoring_audits_winner_persona", "winner_persona_id"),
@@ -399,7 +408,7 @@ class UXEvent(Base):
     event_metadata = Column("metadata", JSON, nullable=True, comment="Extra event data")
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    user = relationship("User", back_populates="ux_events")
+    user = relationship("User", back_populates="ux_events", lazy="joined")
 
 
 class AgentTask(Base):
@@ -432,18 +441,20 @@ class AgentTask(Base):
     live_updates = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    user = relationship("User", back_populates="agent_tasks")
-    orchestration = relationship("Orchestration", back_populates="child_tasks")
-    watchlist_item = relationship("WatchlistItem", back_populates="spawned_tasks")
+    user = relationship("User", back_populates="agent_tasks", lazy="joined")
+    orchestration = relationship("Orchestration", back_populates="child_tasks", lazy="joined")
+    watchlist_item = relationship("WatchlistItem", back_populates="spawned_tasks", lazy="joined")
     room_task_links = relationship(
         "RoomTask",
         back_populates="agent_task",
         foreign_keys="RoomTask.task_id",
+        lazy="selectin",
     )
     answer_feedbacks = relationship(
         "AnswerFeedback",
         back_populates="agent_task",
         foreign_keys="AnswerFeedback.task_id",
+        lazy="selectin",
     )
 
     def to_dict_summary(self) -> dict:
@@ -505,7 +516,7 @@ class ConfidenceRating(Base):
     delta = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    user = relationship("User", back_populates="confidence_ratings")
+    user = relationship("User", back_populates="confidence_ratings", lazy="joined")
 
 
 class AnswerFeedback(Base):
@@ -528,11 +539,12 @@ class AnswerFeedback(Base):
     note = Column(Text, nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    user = relationship("User", back_populates="answer_feedbacks")
+    user = relationship("User", back_populates="answer_feedbacks", lazy="joined")
     agent_task = relationship(
         "AgentTask",
         back_populates="answer_feedbacks",
         foreign_keys=[task_id],
+        lazy="joined",
     )
 
 
@@ -554,8 +566,8 @@ class WatchlistItem(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    user = relationship("User", back_populates="watchlist_items")
-    spawned_tasks = relationship("AgentTask", back_populates="watchlist_item")
+    user = relationship("User", back_populates="watchlist_items", lazy="joined")
+    spawned_tasks = relationship("AgentTask", back_populates="watchlist_item", lazy="selectin")
 
 
 class Orchestration(Base):
@@ -572,8 +584,8 @@ class Orchestration(Base):
     status = Column(String(32), default="running", nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    user = relationship("User", back_populates="orchestrations")
-    child_tasks = relationship("AgentTask", back_populates="orchestration")
+    user = relationship("User", back_populates="orchestrations", lazy="joined")
+    child_tasks = relationship("AgentTask", back_populates="orchestration", lazy="selectin")
 
 
 class AgentContradiction(Base):
@@ -590,7 +602,7 @@ class AgentContradiction(Base):
     resolved = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    user = relationship("User", back_populates="agent_contradictions")
+    user = relationship("User", back_populates="agent_contradictions", lazy="joined")
 
 
 class Room(Base):
@@ -607,9 +619,9 @@ class Room(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    creator = relationship("User", back_populates="created_rooms", foreign_keys=[creator_id])
-    members = relationship("RoomMember", back_populates="room", cascade="all, delete-orphan")
-    room_tasks = relationship("RoomTask", back_populates="room", cascade="all, delete-orphan")
+    creator = relationship("User", back_populates="created_rooms", foreign_keys=[creator_id], lazy="joined")
+    members = relationship("RoomMember", back_populates="room", cascade="all, delete-orphan", lazy="selectin")
+    room_tasks = relationship("RoomTask", back_populates="room", cascade="all, delete-orphan", lazy="selectin")
 
 
 class RoomMember(Base):
@@ -622,8 +634,8 @@ class RoomMember(Base):
     joined_at = Column(DateTime, default=_now, nullable=False)
     last_seen_at = Column(DateTime, default=_now, nullable=False)
 
-    room = relationship("Room", back_populates="members")
-    user = relationship("User", back_populates="room_memberships")
+    room = relationship("Room", back_populates="members", lazy="joined")
+    user = relationship("User", back_populates="room_memberships", lazy="joined")
 
 
 class MCPIntegration(Base):
@@ -643,7 +655,7 @@ class MCPIntegration(Base):
     connected_at = Column(DateTime, default=_now, nullable=False)
     integration_metadata = Column("metadata", JSON, nullable=True)
 
-    user = relationship("User", back_populates="mcp_integrations")
+    user = relationship("User", back_populates="mcp_integrations", lazy="joined")
 
 
 class RevokedToken(Base):
@@ -680,14 +692,15 @@ class RoomTask(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     added_at = Column(DateTime, default=_now, nullable=False)
 
-    room = relationship("Room", back_populates="room_tasks")
+    room = relationship("Room", back_populates="room_tasks", lazy="joined")
     agent_task = relationship(
         "AgentTask",
         back_populates="room_task_links",
         foreign_keys=[task_id],
         primaryjoin="RoomTask.task_id==AgentTask.task_id",
+        lazy="joined",
     )
-    user = relationship("User")
+    user = relationship("User", lazy="joined")
 
 
 class MigrationKind(str, PyEnum):
@@ -779,5 +792,5 @@ class DiscussThread(Base):
     last_message_at = Column(DateTime, default=_now, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
 
-    user = relationship("User", back_populates="discuss_threads")
+    user = relationship("User", back_populates="discuss_threads", lazy="joined")
 
