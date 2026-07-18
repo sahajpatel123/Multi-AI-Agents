@@ -1,15 +1,48 @@
-import { useEffect, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_ORIGIN } from '../api';
 import { interpretHealthPayload, type SystemStatus } from '../lib/healthStatus';
-import { motionDuration, motionTransition, prefersReducedMotion, scrollBehavior } from '../lib/motion';
+import { motionDuration, prefersReducedMotion, scrollBehavior } from '../lib/motion';
 
 const HEALTH_POLL_MS = 45_000;
+
+function statusCopy(status: SystemStatus): {
+  label: string;
+  title: string;
+} {
+  switch (status) {
+    case 'operational':
+      return {
+        label: 'All systems operational',
+        title: 'API health check passed',
+      };
+    case 'degraded':
+      return {
+        label: 'Systems degraded',
+        title: 'API reported degraded status',
+      };
+    case 'unreachable':
+      return {
+        label: 'Status unavailable',
+        title: 'Could not reach the API health endpoint',
+      };
+    default:
+      return {
+        label: 'Checking status…',
+        title: 'Checking API health',
+      };
+  }
+}
 
 export function Footer() {
   const navigate = useNavigate();
   const [systemStatus, setSystemStatus] = useState<SystemStatus>('checking');
   const reducedMotion = prefersReducedMotion();
+  const year = new Date().getFullYear();
+  const { label: statusLabel, title: statusTitle } = statusCopy(systemStatus);
+  const statusPulse =
+    !reducedMotion &&
+    (systemStatus === 'operational' || systemStatus === 'checking');
 
   useEffect(() => {
     let cancelled = false;
@@ -51,130 +84,117 @@ export function Footer() {
     const behavior = scrollBehavior();
     if (window.location.pathname === '/') {
       document.getElementById('how-it-works')?.scrollIntoView({ behavior });
-    } else {
-      navigate('/');
-      window.setTimeout(() => {
-        document.getElementById('how-it-works')?.scrollIntoView({ behavior: scrollBehavior() });
-      }, reducedMotion ? 0 : 100);
+      return;
     }
-  };
-
-  const statusLabel =
-    systemStatus === 'operational'
-      ? 'All systems operational'
-      : systemStatus === 'degraded'
-        ? 'Systems degraded'
-        : systemStatus === 'unreachable'
-          ? 'Status unavailable'
-          : 'Checking status…';
-  const statusColor =
-    systemStatus === 'operational'
-      ? '#8AA899'
-      : systemStatus === 'degraded'
-        ? '#C4956A'
-        : systemStatus === 'unreachable'
-          ? '#A89070'
-          : '#C4A882';
-
-  const linkStyle: CSSProperties = {
-    display: 'block',
-    fontSize: '13px',
-    color: '#6B6460',
-    marginBottom: '.35rem',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    padding: 0,
-    textAlign: 'left',
-    transition: motionTransition('color', 150),
-  };
-
-  const onLinkEnter = (e: MouseEvent<HTMLButtonElement>) => {
-    e.currentTarget.style.color = '#1A1714';
-  };
-  const onLinkLeave = (e: MouseEvent<HTMLButtonElement>) => {
-    e.currentTarget.style.color = '#6B6460';
+    navigate('/');
+    window.setTimeout(() => {
+      document.getElementById('how-it-works')?.scrollIntoView({ behavior: scrollBehavior() });
+    }, reducedMotion ? 0 : 100);
   };
 
   return (
-    <footer
-      style={{
-        maxWidth: '1080px',
-        margin: '5rem auto 0',
-        padding: '0 24px',
-        borderTop: '0.5px solid #E0D8D0',
-        paddingTop: '2.5rem',
-        paddingBottom: 'max(2rem, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
-      }}
-    >
-      {!reducedMotion ? (
-        <style>{`
-        @keyframes breathe {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.5); opacity: 0.6; }
-        }
-        .breathe { animation: breathe 2.4s ease-in-out infinite; }
-        .breathe-slow { animation: breathe 3.2s ease-in-out infinite; }
-      `}</style>
-      ) : null}
+    <footer className="site-footer" role="contentinfo">
+      <div className="site-footer__inner">
+        <div className="site-footer__top">
+          <div className="site-footer__brand-block">
+            <button
+              type="button"
+              className="site-footer__brand"
+              onClick={() => navigate('/')}
+              aria-label="Arena home"
+            >
+              <span
+                className={`site-footer__brand-dot${reducedMotion ? '' : ' site-footer__brand-dot--breathe'}`}
+                aria-hidden
+              />
+              <span className="site-footer__brand-name">Arena</span>
+            </button>
+            <p className="site-footer__tagline">
+              Four minds. One question. The best answer wins.
+            </p>
+          </div>
 
-      <div className="footer-top" style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
-        <div>
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '.8rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-          >
-            <div
-              style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }}
-              className={reducedMotion ? undefined : 'breathe'}
-            />
-            <span style={{ fontSize: '16px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
-          </button>
-          <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.7 }}>Four minds. One question. The best answer wins.</p>
+          <nav className="site-footer__nav" aria-label="Footer">
+            <div className="site-footer__col">
+              <h4 className="site-footer__heading">Product</h4>
+              <ul className="site-footer__list">
+                <li>
+                  <button type="button" className="site-footer__link" onClick={scrollToHowItWorks}>
+                    How it works
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="site-footer__link"
+                    onClick={() => navigate('/pricing')}
+                  >
+                    Pricing
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="site-footer__link"
+                    onClick={() => navigate('/changelog')}
+                  >
+                    Changelog
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div className="site-footer__col">
+              <h4 className="site-footer__heading">Company</h4>
+              <ul className="site-footer__list">
+                <li>
+                  <button
+                    type="button"
+                    className="site-footer__link"
+                    onClick={() => navigate('/about')}
+                  >
+                    About
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="site-footer__link"
+                    onClick={() => navigate('/terms')}
+                  >
+                    Terms
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="site-footer__link"
+                    onClick={() => navigate('/privacy')}
+                  >
+                    Privacy
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </nav>
         </div>
 
-        <div>
-          <h4 style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714', marginBottom: '.8rem', textTransform: 'uppercase', letterSpacing: '.08em' }}>Product</h4>
-          <button type="button" onClick={scrollToHowItWorks} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>How it works</button>
-          <button type="button" onClick={() => navigate('/pricing')} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>Pricing</button>
-          <button type="button" onClick={() => navigate('/changelog')} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>Changelog</button>
-        </div>
-
-        <div>
-          <h4 style={{ fontSize: '11px', fontWeight: 500, color: '#1A1714', marginBottom: '.8rem', textTransform: 'uppercase', letterSpacing: '.08em' }}>Company</h4>
-          <button type="button" onClick={() => navigate('/about')} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>About</button>
-          <button type="button" onClick={() => navigate('/terms')} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>Terms</button>
-          <button type="button" onClick={() => navigate('/privacy')} style={linkStyle} onMouseEnter={onLinkEnter} onMouseLeave={onLinkLeave}>Privacy</button>
-        </div>
-
-      </div>
-
-      <div className="footer-bottom" style={{ borderTop: '0.5px solid #E0D8D0', marginTop: '1.5rem', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '12px', color: '#6B6460' }}>© 2026 Arena. All rights reserved.</span>
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          role="status"
-          aria-live="polite"
-          title={
-            systemStatus === 'operational'
-              ? 'API health check passed'
-              : systemStatus === 'degraded'
-                ? 'API reported degraded status'
-                : systemStatus === 'unreachable'
-                  ? 'Could not reach the API health endpoint'
-                  : 'Checking API health'
-          }
-        >
+        <div className="site-footer__bottom">
+          <span className="site-footer__copy">
+            © {year} Arena. All rights reserved.
+          </span>
           <div
-            style={{ width: '5px', height: '5px', borderRadius: '50%', background: statusColor }}
-            className={
-              !reducedMotion && (systemStatus === 'operational' || systemStatus === 'checking')
-                ? 'breathe-slow'
-                : undefined
-            }
-          />
-          <span style={{ fontSize: '12px', color: statusColor }}>{statusLabel}</span>
+            className={`site-footer__status site-footer__status--${systemStatus}`}
+            role="status"
+            aria-live="polite"
+            title={statusTitle}
+          >
+            <span
+              className={`site-footer__status-dot${statusPulse ? ' site-footer__status-dot--pulse' : ''}`}
+              aria-hidden
+            />
+            <span className="site-footer__status-label">{statusLabel}</span>
+          </div>
         </div>
       </div>
     </footer>
