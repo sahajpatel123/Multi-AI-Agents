@@ -1,5 +1,6 @@
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { prefersReducedMotion } from '../lib/motion';
 
 const SECTIONS = [
   {
@@ -34,60 +35,59 @@ const SECTIONS = [
     title: 'Contact',
     body: 'For privacy concerns, reach out via the GitHub repository or LinkedIn.',
   },
-];
+] as const;
 
 export function PrivacyPage() {
+  const reduceMotion = prefersReducedMotion();
+
   return (
-    <div style={{ background: '#FAF7F4', minHeight: '100vh' }}>
-      <style>{`
-        @keyframes breathe {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.5); opacity: 0.6; }
-        }
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .breathe { animation: breathe 2.4s ease-in-out infinite; }
-        .breathe-slow { animation: breathe 3.2s ease-in-out infinite; }
-        .animate-fade-up { animation: fadeUp 500ms ease 100ms backwards; }
-      `}</style>
-
+    <div className="legal-page">
       <Navbar />
+      <main
+        id="main-content"
+        className={`legal-page__main${reduceMotion ? '' : ' page-enter'}`}
+        tabIndex={-1}
+        aria-labelledby="privacy-title"
+      >
+        <header className="legal-hero">
+          <p className="legal-hero__kicker">
+            <span className="legal-hero__kicker-dot" aria-hidden="true" />
+            Legal
+          </p>
+          <h1 id="privacy-title" className="legal-hero__title">
+            Privacy Policy
+          </h1>
+          <p className="legal-hero__meta">Last updated: July 2026</p>
+          <p className="legal-hero__lede">
+            How Arena handles your account, prompts, and billing data — in plain language.
+          </p>
+        </header>
 
-      <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '64px 24px' }}>
-        {/* Hero */}
-        <div className="animate-fade-up legal-hero" style={{ marginBottom: '3rem' }}>
-          <p style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#6B6460', marginBottom: '1rem' }}>Legal</p>
-          <h1 style={{ fontSize: '48px', fontWeight: 500, letterSpacing: '-.03em', color: '#1A1714', lineHeight: 1.1, marginBottom: '.8rem' }}>Privacy Policy</h1>
-          <p style={{ fontSize: '12px', color: '#6B6460' }}>Last updated: July 2026</p>
-        </div>
-
-        {/* Content */}
-        <div className="legal-content" style={{ maxWidth: '680px', margin: '0 auto' }}>
+        <div className="legal-content" role="list">
           {SECTIONS.map((section, idx) => (
-            <div key={idx}>
-              <h2 style={{ fontSize: '16px', fontWeight: 500, color: '#1A1714', marginBottom: '.6rem', marginTop: idx === 0 ? 0 : '2.5rem' }}>
-                {section.title}
-              </h2>
-              <p style={{ fontSize: '14px', color: '#6B6460', lineHeight: 1.8 }}>
-                {section.body.split('\n').map((paragraph, paragraphIndex, paragraphs) => (
-                  <span key={`${section.title}-${paragraphIndex}`}>
-                    {paragraph}
-                    {paragraphIndex < paragraphs.length - 1 ? (
-                      <>
-                        <br />
-                        <br />
-                      </>
-                    ) : null}
-                  </span>
+            <article
+              key={section.title}
+              className="legal-section"
+              role="listitem"
+              style={
+                reduceMotion
+                  ? undefined
+                  : { animationDelay: `${Math.min(idx * 40, 280)}ms` }
+              }
+            >
+              <span className="legal-section__index" aria-hidden="true">
+                {String(idx + 1).padStart(2, '0')}
+              </span>
+              <h2 className="legal-section__title">{section.title}</h2>
+              <div className="legal-section__body">
+                {section.body.split('\n').map((paragraph, paragraphIndex) => (
+                  <p key={`${section.title}-${paragraphIndex}`}>{paragraph}</p>
                 ))}
-              </p>
-            </div>
+              </div>
+            </article>
           ))}
         </div>
-      </div>
-
+      </main>
       <Footer />
     </div>
   );
