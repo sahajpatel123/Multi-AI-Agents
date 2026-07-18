@@ -50,6 +50,69 @@ class TestAuthEndpoints:
         assert r2.status_code in {400, 409, 422}
 
     @pytest.mark.asyncio
+    async def test_register_rate_limit_blocks_before_user_created(
+        self, app_client, db_session, isolated_db
+    ):
+        """The IP rate limit MUST run BEFORE create_user. Otherwise
+        a 429 from the rate limit leaves a phantom user record —
+        the email is now in the DB and a future /register attempt
+        for the same email returns 409 instead of registering.
+
+        This is the cycle 24 fix: moving enforce_ip_rate_limit above
+        create_user. The test pins the contract: after 5 successful
+        registrations, the 6th attempt must be 429 AND must not have
+        created a 6th user row.
+        """
+        from arena.db_models import User as UserModel
+        from arena.core.rate_limits import rate_limiter as _rl
+        # Reset the in-memory limiter so the test isn't order-dependent.
+        if hasattr(_rl, "_events"):
+            _rl._events.clear()
+
+        for i in range(5):
+            r = await app_client.post(
+                "/api/auth/register",
+                json={
+                    "email": f"rluser{i}@test.com",
+                    "password": "Strong1Pass",
+                    "name": f"R{i}",
+                },
+            )
+            assert r.status_code == 201, (
+                f"registration {i + 1} should succeed under the rate limit, "
+                f"got status {r.status_code} body={r.text[:200]}"
+            )
+
+        # 6th attempt from the same IP — same scope as the previous
+        # five — must be rate-limited and must NOT create a user.
+        r6 = await app_client.post(
+            "/api/auth/register",
+            json={
+                "email": "rluser6@test.com",
+                "password": "Strong1Pass",
+                "name": "R6",
+            },
+        )
+        assert r6.status_code == 429, (
+            f"6th registration from same IP should be 429, got {r6.status_code}"
+        )
+
+        # The 6th attempt must NOT have created a phantom user record.
+        from sqlalchemy import select
+        SessionLocal = isolated_db
+        s = SessionLocal()
+        try:
+            phantom = s.execute(
+                select(UserModel).where(UserModel.email == "rluser6@test.com")
+            ).scalar_one_or_none()
+            assert phantom is None, (
+                "rate-limited register must not have created a user record; "
+                "phantom accounts accumulate over time without this fix"
+            )
+        finally:
+            s.close()
+
+    @pytest.mark.asyncio
     async def test_login_returns_tokens(self, app_client):
         await app_client.post("/api/auth/register", json={
             "email": "log@test.com", "password": "Strong1Pass", "name": "L",

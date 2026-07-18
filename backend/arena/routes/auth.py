@@ -188,6 +188,21 @@ async def register(
         # Lockout check only — do not pre-count this attempt as a failure.
         registration_limiter.assert_not_locked(request)
 
+        # Bound successful account creation per IP (mass-signup spam).
+        # This MUST run BEFORE create_user: if it triggers after the user
+        # is already committed, the user record exists in the DB while
+        # the response is 429 — and the next /register attempt with the
+        # same email returns 409, leaving a phantom account.
+        from arena.core.rate_limits import enforce_ip_rate_limit
+
+        enforce_ip_rate_limit(
+            request,
+            scope="registration_create",
+            limit=5,
+            window_seconds=3600,
+            message="Too many accounts created from this network. Please try again later.",
+        )
+
         is_valid, error_msg = _validate_password_strength(body.password)
         if not is_valid:
             registration_limiter.record_failure(request)
@@ -206,17 +221,6 @@ async def register(
         user = create_user(db, body.email, body.password, body.name)
         access = create_access_token(user.id, user.email)
         refresh = create_refresh_token(user.id, user.email)
-        # Bound successful account creation per IP (mass-signup spam).
-        # Failure-only lockout above does not limit happy-path creates.
-        from arena.core.rate_limits import enforce_ip_rate_limit
-
-        enforce_ip_rate_limit(
-            request,
-            scope="registration_create",
-            limit=5,
-            window_seconds=3600,
-            message="Too many accounts created from this network. Please try again later.",
-        )
         registration_limiter.clear(request)
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
