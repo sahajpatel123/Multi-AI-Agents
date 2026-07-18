@@ -860,12 +860,11 @@ export function TemplatesModal({
               }
             />
           ) : catalogMode === 'empty' || visibleTemplates.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-              <p style={{ margin: 0, fontSize: 15, color: '#2C1810', fontWeight: 500 }}>
-                {catalogMode === 'empty' ? 'No templates yet' : 'No templates match'}
-              </p>
-              <p style={{ margin: '8px 0 0', fontSize: 13, color: '#8C7355', lineHeight: 1.55 }}>
-                {catalogMode === 'empty'
+            <EmptyState
+              variant={catalogMode === 'empty' ? 'default' : 'filter'}
+              title={catalogMode === 'empty' ? 'No templates yet' : 'No templates match'}
+              description={
+                catalogMode === 'empty'
                   ? 'Templates will show up here when available. You can still write a custom research question.'
                   : searchQuery.trim() ||
                       availabilityFilter !== 'all' ||
@@ -881,25 +880,26 @@ export function TemplatesModal({
                           ? ` · ${templatesExpertiseLabel(expertiseFilter, expertiseOptions)}`
                           : ''
                       }.`
-                    : `No templates in ${activeTab} yet.`}
-              </p>
-              {catalogMode === 'list' ? (
-                <button
-                  type="button"
-                  className="arena-btn arena-btn--ghost arena-btn--md"
-                  style={{ marginTop: 16 }}
-                  onClick={() => {
-                    setSearchQuery('');
-                    setActiveTab('All');
-                    setAvailabilityFilter('all');
-                    setExpertiseFilter(TEMPLATES_EXPERTISE_ALL);
-                    searchRef.current?.focus();
-                  }}
-                >
-                  Clear filters
-                </button>
-              ) : null}
-            </div>
+                    : `No templates in ${activeTab} yet.`
+              }
+              actions={
+                catalogMode === 'list' ? (
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--md"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setActiveTab('All');
+                      setAvailabilityFilter('all');
+                      setExpertiseFilter(TEMPLATES_EXPERTISE_ALL);
+                      searchRef.current?.focus();
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                ) : null
+              }
+            />
           ) : (
             <div
               style={{
