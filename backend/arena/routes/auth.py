@@ -504,6 +504,7 @@ async def my_features(
 
 @router.get("/check-email")
 async def check_email_availability(
+    request: Request,
     email: str = Query(..., min_length=1, max_length=255),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -514,7 +515,21 @@ async def check_email_availability(
     Returns ONLY a boolean (and the normalized email), never the
     matching user record — checking email availability must NOT leak
     the existence of any other account.
+
+    IP rate limit (5/min, scoped per IP) blocks the email-enumeration
+    attack: without it an unauthenticated caller could probe thousands
+    of addresses per second and learn which ones are registered. The
+    response shape is constant (just the bool), so a successful probe
+    tells the attacker 'this email is taken' — which is exactly the
+    leak we need to throttle.
     """
+    enforce_ip_rate_limit(
+        request,
+        scope="auth_check_email",
+        limit=5,
+        window_seconds=60,
+        message="Too many email-availability checks. Please slow down.",
+    )
     normalized = email.lower().strip()
     existing = get_user_by_email(db, normalized)
     return {

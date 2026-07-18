@@ -113,3 +113,36 @@ async def test_check_email_does_not_differentiate_active_vs_disabled(app_client,
     res = await app_client.get("/api/auth/check-email?email=keep@example.com")
     body = res.json()
     assert body["available"] is False
+
+
+@pytest.mark.asyncio
+async def test_check_email_rate_limit_blocks_enumeration(app_client, make_user, monkeypatch):
+    """Without an IP rate limit an attacker could probe thousands of
+    addresses per second and learn which ones are registered.
+    Cycle 23 fix wired enforce_ip_rate_limit(scope='auth_check_email',
+    limit=5, window=60s). This test pins the contract."""
+    import arena.core.rate_limits as rl_mod
+    # Reset the in-memory limiter state so the test isn't order-dependent.
+    rl_mod.rate_limiter._events.clear() if hasattr(rl_mod.rate_limiter, "_events") else None
+
+    # Five requests in a row from the same IP all succeed.
+    for i in range(5):
+        res = await app_client.get(
+            "/api/auth/check-email?email=probe%s@example.com" % i
+        )
+        assert res.status_code == 200, (
+            "request %d should pass under the limit" % (i + 1)
+        )
+
+    # Sixth request in the same window must be rate-limited.
+    res = await app_client.get("/api/auth/check-email?email=probe6@example.com")
+    assert res.status_code == 429, (
+        "sixth request in 60s from same IP should be 429"
+    )
+    # The 429 detail includes the message and a retry_after; scope is
+    # recorded server-side (in the rate_limiter key) but not echoed
+    # in the response body. Just verify the error code is right.
+    detail = res.json().get("detail", {})
+    assert detail.get("error") == "rate_limit_exceeded"
+    assert "slow down" in detail.get("message", "").lower()
+    assert detail.get("retry_after", 0) > 0
