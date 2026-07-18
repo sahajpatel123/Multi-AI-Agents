@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
+from arena.core.admin_gate import require_admin_email
 from arena.core.dependencies import get_current_user_required
 from arena.core.handoff_status import (
     ALL_KNOWN_STATUSES,
@@ -22,7 +23,12 @@ from arena.core.handoff_status import (
 )
 from arena.core.migration import list_open_flags_for_user, resolve_flag, summarize_flags_for_user
 from arena.core.rate_limits import enforce_user_rate_limit
-from arena.core.telemetry import admin_metrics_payload, record_handoff_dispatched, record_probe_state
+from arena.core.telemetry import (
+    admin_metrics_payload,
+    record_handoff_dispatched,
+    record_probe_state,
+    render_prometheus,
+)
 from arena.database import get_db
 from arena.db_models import HandoffDraft, HandoffEvent, HandoffRecord
 from arena.models.schemas import UserResponse
@@ -483,7 +489,21 @@ async def get_condura_metrics(
     Process-local telemetry snapshot (no PII). Requires ADMIN_EMAIL match —
     same gate as /api/metrics so any logged-in user cannot scrape ops counters.
     """
-    from arena.core.admin_gate import require_admin_email
-
     require_admin_email(user.email)
     return JSONResponse(content=admin_metrics_payload())
+
+
+@router.get("/metrics/prom", response_class=PlainTextResponse)
+async def get_condura_metrics_prom(
+    user: UserResponse = Depends(get_current_user_required),
+):
+    """Prometheus text-format snapshot of the in-process counters.
+
+    Same admin gate as /api/condura/metrics — the operator scraper
+    needs a bearer token, and the email must match ADMIN_EMAIL.
+    Returns ``text/plain; version=0.0.4`` so Prometheus servers accept
+    the response without a content-type override.
+    """
+    require_admin_email(user.email)
+    body = render_prometheus()
+    return PlainTextResponse(content=body, media_type="text/plain; version=0.0.4")
