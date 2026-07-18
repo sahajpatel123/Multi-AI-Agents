@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentTaskTemplate } from '../api';
 import { ConduraBadge } from './ConduraBadge';
+import { EmptyState } from './EmptyState';
 import { HighlightQuery } from './HighlightQuery';
+import { MotionButton } from './MotionButton';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
@@ -839,27 +841,24 @@ export function TemplatesModal({
               <p style={{ margin: 0, fontSize: 14, color: '#8C7355' }}>Loading templates…</p>
             </div>
           ) : catalogMode === 'load_error' ? (
-            <div
-              role="alert"
-              style={{ textAlign: 'center', padding: '2rem 1rem' }}
-            >
-              <p style={{ margin: 0, fontSize: 15, color: '#2C1810', fontWeight: 500 }}>
-                Could not load templates
-              </p>
-              <p style={{ margin: '8px 0 0', fontSize: 13, color: '#8C7355', lineHeight: 1.55 }}>
-                Check your connection and try again. Your compose box still works without a template.
-              </p>
-              {onRetryLoad ? (
-                <button
-                  type="button"
-                  className="arena-btn arena-btn--primary arena-btn--md"
-                  style={{ marginTop: 16 }}
-                  onClick={() => onRetryLoad()}
-                >
-                  Retry
-                </button>
-              ) : null}
-            </div>
+            <EmptyState
+              variant="error"
+              alert
+              title="Could not load templates"
+              description="Check your connection and try again. Your compose box still works without a template."
+              actions={
+                onRetryLoad ? (
+                  <MotionButton
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    onClick={() => onRetryLoad()}
+                  >
+                    Retry
+                  </MotionButton>
+                ) : null
+              }
+            />
           ) : catalogMode === 'empty' || visibleTemplates.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
               <p style={{ margin: 0, fontSize: 15, color: '#2C1810', fontWeight: 500 }}>

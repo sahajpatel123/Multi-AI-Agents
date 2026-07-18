@@ -778,13 +778,14 @@ export function WatchlistPage() {
               }
               actions={
                 <>
-                  <button
+                  <MotionButton
                     type="button"
-                    className="arena-btn arena-btn--primary arena-btn--md"
+                    variant="primary"
+                    size="md"
                     onClick={() => void load()}
                   >
                     Retry
-                  </button>
+                  </MotionButton>
                   <button
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--md"

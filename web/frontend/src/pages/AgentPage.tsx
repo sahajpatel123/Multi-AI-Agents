@@ -4445,103 +4445,98 @@ export function AgentPage() {
                 description="Ask something hard below — it will show up here."
               />
             ) : filteredTaskHistory.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#C4B8AE', textAlign: 'center', padding: '1.5rem 0.75rem', lineHeight: 1.5 }}>
-                {historySearchQuery.trim()
-                  ? `No history matches “${historySearchQuery.trim()}”${
-                      historyStatusFilter !== 'all'
-                        ? ` in ${agentHistoryStatusLabel(historyStatusFilter).toLowerCase()}`
-                        : ''
-                    }${
-                      historyScoreFilter !== 'all'
-                        ? ` · ${agentHistoryScoreLabel(historyScoreFilter)}`
-                        : ''
-                    }${
-                      historyConfidenceFilter !== 'all'
-                        ? ` · ${agentHistoryConfidenceLabel(historyConfidenceFilter)}`
-                        : ''
-                    }${
-                      historyRecencyFilter !== 'all'
-                        ? ` · ${agentHistoryRecencyLabel(historyRecencyFilter)}`
-                        : ''
-                    }${
-                      historyFeedbackFilter !== 'all'
-                        ? ` · ${agentHistoryFeedbackLabel(historyFeedbackFilter)}`
-                        : ''
-                    }${
-                      historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL
-                        ? ` · ${agentHistoryTopicLabel(historyTopicFilter, historyTopicOptions)}`
-                        : ''
-                    }`
-                  : historyRecencyFilter !== 'all' &&
-                      historyStatusFilter === 'all' &&
-                      historyScoreFilter === 'all' &&
-                      historyConfidenceFilter === 'all' &&
-                      historyFeedbackFilter === 'all' &&
-                      historyTopicFilter === AGENT_HISTORY_TOPIC_ALL
-                    ? `No tasks from ${agentHistoryRecencyLabel(historyRecencyFilter).toLowerCase()}.`
-                    : historyFeedbackFilter !== 'all' &&
+              <EmptyState
+                variant="compact"
+                title={
+                  historySearchQuery.trim()
+                    ? `No history matches “${historySearchQuery.trim()}”${
+                        historyStatusFilter !== 'all'
+                          ? ` in ${agentHistoryStatusLabel(historyStatusFilter).toLowerCase()}`
+                          : ''
+                      }${
+                        historyScoreFilter !== 'all'
+                          ? ` · ${agentHistoryScoreLabel(historyScoreFilter)}`
+                          : ''
+                      }${
+                        historyConfidenceFilter !== 'all'
+                          ? ` · ${agentHistoryConfidenceLabel(historyConfidenceFilter)}`
+                          : ''
+                      }${
+                        historyRecencyFilter !== 'all'
+                          ? ` · ${agentHistoryRecencyLabel(historyRecencyFilter)}`
+                          : ''
+                      }${
+                        historyFeedbackFilter !== 'all'
+                          ? ` · ${agentHistoryFeedbackLabel(historyFeedbackFilter)}`
+                          : ''
+                      }${
+                        historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL
+                          ? ` · ${agentHistoryTopicLabel(historyTopicFilter, historyTopicOptions)}`
+                          : ''
+                      }`
+                    : historyRecencyFilter !== 'all' &&
                         historyStatusFilter === 'all' &&
                         historyScoreFilter === 'all' &&
                         historyConfidenceFilter === 'all' &&
-                        historyRecencyFilter === 'all' &&
+                        historyFeedbackFilter === 'all' &&
                         historyTopicFilter === AGENT_HISTORY_TOPIC_ALL
-                      ? `No tasks marked ${agentHistoryFeedbackLabel(historyFeedbackFilter).toLowerCase()}.`
-                      : historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL &&
+                      ? `No tasks from ${agentHistoryRecencyLabel(historyRecencyFilter).toLowerCase()}.`
+                      : historyFeedbackFilter !== 'all' &&
                           historyStatusFilter === 'all' &&
                           historyScoreFilter === 'all' &&
                           historyConfidenceFilter === 'all' &&
                           historyRecencyFilter === 'all' &&
-                          historyFeedbackFilter === 'all'
-                        ? `No tasks tagged ${agentHistoryTopicLabel(historyTopicFilter, historyTopicOptions)}.`
-                        : historyConfidenceFilter !== 'all' &&
+                          historyTopicFilter === AGENT_HISTORY_TOPIC_ALL
+                        ? `No tasks marked ${agentHistoryFeedbackLabel(historyFeedbackFilter).toLowerCase()}.`
+                        : historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL &&
                             historyStatusFilter === 'all' &&
                             historyScoreFilter === 'all' &&
-                            historyTopicFilter === AGENT_HISTORY_TOPIC_ALL &&
+                            historyConfidenceFilter === 'all' &&
                             historyRecencyFilter === 'all' &&
                             historyFeedbackFilter === 'all'
-                          ? `No tasks with confidence ${agentHistoryConfidenceLabel(historyConfidenceFilter)}.`
-                          : historyScoreFilter !== 'all' && historyStatusFilter === 'all'
-                            ? `No tasks with score ${agentHistoryScoreLabel(historyScoreFilter)}.`
-                            : historyStatusFilter === 'live'
-                              ? 'No live weekly-update tasks yet.'
-                              : historyStatusFilter === 'completed'
-                                ? 'No one-off research tasks in this view.'
-                                : 'No matching history.'}
-                <br />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHistorySearchQuery('');
-                    setHistoryStatusFilter('all');
-                    setHistoryScoreFilter('all');
-                    setHistoryConfidenceFilter('all');
-                    setHistoryRecencyFilter('all');
-                    setHistoryFeedbackFilter('all');
-                    setHistoryTopicFilter(AGENT_HISTORY_TOPIC_ALL);
-                    historySearchRef.current?.focus();
-                  }}
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    color: '#C4956A',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontFamily: 'Georgia, serif',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  {(historyStatusFilter !== 'all' ||
-                    historyScoreFilter !== 'all' ||
-                    historyConfidenceFilter !== 'all' ||
-                    historyRecencyFilter !== 'all' ||
-                    historyFeedbackFilter !== 'all' ||
-                    historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL) &&
-                  !historySearchQuery.trim()
-                    ? 'Show all history'
-                    : 'Clear filters'}
-                </button>
-              </div>
+                          ? `No tasks tagged ${agentHistoryTopicLabel(historyTopicFilter, historyTopicOptions)}.`
+                          : historyConfidenceFilter !== 'all' &&
+                              historyStatusFilter === 'all' &&
+                              historyScoreFilter === 'all' &&
+                              historyTopicFilter === AGENT_HISTORY_TOPIC_ALL &&
+                              historyRecencyFilter === 'all' &&
+                              historyFeedbackFilter === 'all'
+                            ? `No tasks with confidence ${agentHistoryConfidenceLabel(historyConfidenceFilter)}.`
+                            : historyScoreFilter !== 'all' && historyStatusFilter === 'all'
+                              ? `No tasks with score ${agentHistoryScoreLabel(historyScoreFilter)}.`
+                              : historyStatusFilter === 'live'
+                                ? 'No live weekly-update tasks yet.'
+                                : historyStatusFilter === 'completed'
+                                  ? 'No one-off research tasks in this view.'
+                                  : 'No matching history.'
+                }
+                actions={
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      setHistorySearchQuery('');
+                      setHistoryStatusFilter('all');
+                      setHistoryScoreFilter('all');
+                      setHistoryConfidenceFilter('all');
+                      setHistoryRecencyFilter('all');
+                      setHistoryFeedbackFilter('all');
+                      setHistoryTopicFilter(AGENT_HISTORY_TOPIC_ALL);
+                      historySearchRef.current?.focus();
+                    }}
+                  >
+                    {(historyStatusFilter !== 'all' ||
+                      historyScoreFilter !== 'all' ||
+                      historyConfidenceFilter !== 'all' ||
+                      historyRecencyFilter !== 'all' ||
+                      historyFeedbackFilter !== 'all' ||
+                      historyTopicFilter !== AGENT_HISTORY_TOPIC_ALL) &&
+                    !historySearchQuery.trim()
+                      ? 'Show all history'
+                      : 'Clear filters'}
+                  </button>
+                }
+              />
             ) : (
               <div className="space-y-1">
                 {filteredTaskHistory.map((item) => renderAgentHistoryRow(item))}

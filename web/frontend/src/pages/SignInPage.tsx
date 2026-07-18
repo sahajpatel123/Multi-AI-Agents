@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
-import { Button } from '../components/Button';
+import { MotionButton } from '../components/MotionButton';
 import { useAuth } from '../hooks/useAuth';
 import {
   getRedirectIntent,
@@ -235,9 +235,9 @@ export function SignInPage() {
                 </p>
               ) : null}
 
-              <Button type="submit" variant="primary" size="lg" fullWidth loading={busy} disabled={busy}>
+              <MotionButton type="submit" variant="primary" size="lg" fullWidth loading={busy} disabled={busy}>
                 Sign in to Arena
-              </Button>
+              </MotionButton>
 
               <p className="auth-page__switch">
                 Don&apos;t have an account?{' '}
@@ -356,9 +356,9 @@ export function SignInPage() {
                 </p>
               ) : null}
 
-              <Button type="submit" variant="primary" size="lg" fullWidth loading={busy} disabled={busy}>
+              <MotionButton type="submit" variant="primary" size="lg" fullWidth loading={busy} disabled={busy}>
                 Create free account
-              </Button>
+              </MotionButton>
 
               <p className="auth-page__switch">
                 Already have an account?{' '}
