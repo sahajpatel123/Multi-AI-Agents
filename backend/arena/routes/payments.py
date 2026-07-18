@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from arena.config import get_settings
 from arena.core.hmac_verify import hmac_sha256_hex_equal
 from arena.core.rate_limits import enforce_user_rate_limit
+from arena.core.entitlements import compute_user_entitlements
 from arena.core.tier_config import get_tier_str
 from arena.core.dependencies import get_current_user_required_orm
 from arena.database import get_db
@@ -1090,6 +1091,25 @@ async def list_plans() -> dict:
 # ──────────────────────────────────────────────────────────────
 # Subscription history — paginated list of all subscriptions ever
 # ──────────────────────────────────────────────────────────────
+
+
+@router.get("/entitlements")
+async def get_my_entitlements(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_required_orm),
+) -> dict[str, Any]:
+    """Aggregate tier + subscription + loyalty + add-on state.
+
+    Powers the account page's 'what does my plan include' panel. Same
+    rate-limit gate as the other read endpoints. Plus users with the
+    Agent add-on (active or still inside the loyalty free-period
+    window) see ``features.agent_mode = true`` here so the UI can show
+    a single coherent entitlement summary without consulting the
+    subscription row separately.
+    """
+    _enforce_payment_rate_limit(user.id)
+    payload = compute_user_entitlements(db=db, user=user)
+    return JSONResponse(content=payload)
 
 
 @router.get("/subscriptions/history")
