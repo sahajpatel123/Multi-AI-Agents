@@ -287,7 +287,7 @@ def _loyalty_on_pro_monthly_charged(
     if user.consecutive_payments == 10:
         user.loyalty_reward_active = True
         user.loyalty_free_months_remaining = 2
-        user.loyalty_resume_at = datetime.utcnow() + timedelta(days=62)
+        user.loyalty_resume_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=62)
         try:
             client = _get_razorpay_client()
             client.subscription.pause(row.razorpay_subscription_id, {"pause_at": "now"})

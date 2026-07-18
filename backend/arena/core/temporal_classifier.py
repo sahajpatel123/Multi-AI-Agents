@@ -1,5 +1,5 @@
 from typing import TypedDict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 import json
 from asyncio import wait_for
@@ -68,7 +68,7 @@ Return ONLY valid JSON:
         decay_reason = result.get("decay_reason", "")
         time_sensitive_claims = result.get("time_sensitive_claims", [])
         
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         if decay_class == "permanent":
             recheck_by = None
         elif decay_class == "durable":

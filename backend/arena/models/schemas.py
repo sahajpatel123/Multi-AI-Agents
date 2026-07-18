@@ -1,7 +1,17 @@
 """Pydantic models for request/response data contracts"""
 
 from typing import Optional, List, Any, Dict, Literal
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow_naive() -> datetime:
+    """Naive-UTC now() — matches what every other schema field stores.
+
+    Used as a Pydantic default_factory on timestamp / created_at fields.
+    Replaces the deprecated ``datetime.utcnow`` while preserving the
+    existing wire format (naive ISO without tz suffix).
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from enum import Enum
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -72,7 +82,7 @@ class AgentResponse(BaseModel):
     one_liner: str = Field(..., description="Single sentence summary")
     confidence: int = Field(..., ge=0, le=100, description="Confidence score 0-100")
     key_assumption: str = Field(..., description="The biggest assumption this answer rests on")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="ISO datetime")
+    timestamp: datetime = Field(default_factory=_utcnow_naive, description="ISO datetime")
 
 
 class PromptRequest(BaseModel):
@@ -123,7 +133,7 @@ class PromptResponse(BaseModel):
     all_responses: list[ScoredAgent] = Field(..., description="All 4 agent responses with scores")
     integrity: IntegrityReport | None = Field(None, description="Persona integrity report")
     tools_used: list[str] = Field(default_factory=list, description="List of tools that were used (e.g., ['calculator', 'web_search'])")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow_naive)
 
 
 class DebateMessage(BaseModel):
@@ -131,7 +141,7 @@ class DebateMessage(BaseModel):
     agent_id: str = Field(..., description="Agent or 'user' who sent this message")
     content: str = Field(..., description="Message content")
     round_number: int = Field(..., ge=0, description="Which debate round this belongs to")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow_naive)
 
 
 class DebateRequest(BaseModel):
@@ -162,7 +172,7 @@ class DebateReaction(BaseModel):
     agent_number: int = Field(..., ge=1, le=4, description="Agent number")
     content: str = Field(..., description="Short reaction (2-3 sentences)")
     stance: str = Field(..., description="agree / disagree / partially agree")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow_naive)
 
 
 class DebateRoundResponse(BaseModel):
@@ -178,7 +188,7 @@ class DiscussChatMessage(BaseModel):
     """A single message in a 1-on-1 discussion"""
     role: str = Field(..., description="'user' or 'agent'")
     content: str = Field(..., description="Message content")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow_naive)
 
 
 class DiscussRequest(BaseModel):
@@ -211,7 +221,7 @@ class SessionTurn(BaseModel):
     prompt: str = Field(..., description="Original user prompt")
     agent_responses: dict[str, AgentResponse] = Field(..., description="All 4 agent responses keyed by agent_id")
     winner_id: str = Field(..., description="Which agent won this turn")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow_naive)
 
 
 class SessionData(BaseModel):
@@ -220,8 +230,8 @@ class SessionData(BaseModel):
     user_id: str = Field(default="anonymous", description="User identifier (anonymous or registered)")
     turns: list[SessionTurn] = Field(default_factory=list, description="All turns in this session")
     topics: list[str] = Field(default_factory=list, description="Topics discussed (LLM-extracted)")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    last_active: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow_naive)
+    last_active: datetime = Field(default_factory=_utcnow_naive)
 
 
 class MemoryContext(BaseModel):
@@ -236,7 +246,7 @@ class ErrorResponse(BaseModel):
 
     error: str
     detail: str | None = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow_naive)
 
 
 # ─────────────────────────────────────────────────

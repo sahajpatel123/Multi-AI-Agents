@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import or_
@@ -422,7 +422,7 @@ def get_user_task_history(
     """
     offset = (page - 1) * per_page
 
-    cutoff = datetime.utcnow() - timedelta(days=max(0, retention_days))
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(0, retention_days))
     q = db.query(AgentTask).filter(
         AgentTask.user_id == user_id,
         AgentTask.created_at >= cutoff,
@@ -614,7 +614,7 @@ def iter_user_task_export(
     from arena.core.input_validation import sanitize_model_optional_text
 
     cap = max(1, min(int(batch_size), 500))
-    cutoff = datetime.utcnow() - timedelta(days=max(0, retention_days))
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(0, retention_days))
 
     q = db.query(AgentTask).filter(
         AgentTask.user_id == user_id,

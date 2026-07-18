@@ -6,7 +6,7 @@ import json
 import logging
 import re
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -112,7 +112,7 @@ async def run_room_synthesis(slug: str) -> None:
         result = await synthesise_room(room, tasks, members)
         if result:
             room.synthesis = result
-            room.synthesis_updated_at = datetime.utcnow()
+            room.synthesis_updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             db.add(room)
             db.commit()
     except Exception as exc:
@@ -197,7 +197,7 @@ async def create_room(
     db.add(room)
     db.flush()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     member = RoomMember(room_id=room.id, user_id=user.id, joined_at=now, last_seen_at=now)
     db.add(member)
 
@@ -468,7 +468,7 @@ async def get_room(
         )
         if rm:
             # Presence heartbeat for existing members only.
-            rm.last_seen_at = datetime.utcnow()
+            rm.last_seen_at = datetime.now(timezone.utc).replace(tzinfo=None)
             db.add(rm)
             db.commit()
 
@@ -539,7 +539,7 @@ async def join_room(
         .first()
     )
     if existing:
-        existing.last_seen_at = datetime.utcnow()
+        existing.last_seen_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.add(existing)
         db.commit()
     else:
@@ -558,7 +558,7 @@ async def join_room(
         )
         if int(n) >= MAX_ROOM_MEMBERS:
             raise HTTPException(status_code=400, detail="Room is full")
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         db.add(RoomMember(room_id=room.id, user_id=user.id, joined_at=now, last_seen_at=now))
         db.commit()
 
