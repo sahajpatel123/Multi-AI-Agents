@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  INTERACTION,
+  MOTION_MS,
+  interactiveTransition,
   motionDuration,
   motionTransition,
   prefersReducedMotion,
@@ -32,5 +35,34 @@ describe('prefersReducedMotion / motionDuration', () => {
     expect(motionDuration(200)).toBe(0);
     expect(motionTransition('all', 200)).toBe('none');
     expect(scrollBehavior()).toBe('auto');
+  });
+});
+
+describe('interaction tokens', () => {
+  it('exposes stable hover/tap presets for framer-motion CTAs', () => {
+    expect(INTERACTION.hover.y).toBe(-2);
+    expect(INTERACTION.hover.scale).toBeGreaterThan(1);
+    expect(INTERACTION.tap.scale).toBeLessThan(1);
+    expect(MOTION_MS.hover).toBeGreaterThan(0);
+    expect(MOTION_MS.press).toBeLessThan(MOTION_MS.hover);
+  });
+
+  it('builds multi-property interactive transitions', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: false, media: '', addEventListener: () => {}, removeEventListener: () => {} })),
+    );
+    const t = interactiveTransition();
+    expect(t).toContain('transform');
+    expect(t).toContain('box-shadow');
+    expect(t).toContain(`${MOTION_MS.hover}ms`);
+  });
+
+  it('collapses interactive transitions under reduced motion', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true, media: '(prefers-reduced-motion: reduce)', addEventListener: () => {}, removeEventListener: () => {} })),
+    );
+    expect(interactiveTransition()).toBe('none');
   });
 });
