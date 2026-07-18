@@ -29,9 +29,9 @@ Files checked:
   * memory.py   (cycle 46 closed summaries list/detail; uses @memory_router)
   * payments.py (cycle 47: public plans IP + read/write scopes; webhook HMAC)
   * prompt.py   (cycle 47: _check_rate_limit + health/readiness IP caps)
+  * debate.py   (cycle 48: cost_tracker on POST /debate and stream)
 
 Other route files use different throttling mechanisms:
-  * debate.py → tier-limit via cost_tracker.check_and_increment_user
   * auth.py → mix of IP+user+login_limiter; covered by separate tests
   * agent.py → cycle 32/33 closed the public gaps
   * metrics.py → single admin endpoint
@@ -65,6 +65,7 @@ COVERED_FILES = [
     "memory.py",
     "payments.py",
     "prompt.py",
+    "debate.py",
 ]
 
 # Acceptable defenses inside a handler body. Match each as a regex.
