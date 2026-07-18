@@ -133,6 +133,11 @@ class User(Base):
     loyalty_reward_active = Column(Boolean, default=False, nullable=False)
     loyalty_free_months_remaining = Column(Integer, default=0, nullable=False)
     loyalty_resume_at = Column(DateTime, nullable=True)
+    # Operator-telemetry for the loyalty resume sweep. attempts counts
+    # consecutive failures (reset to 0 on success); next_attempt_at delays
+    # retries so a misconfigured Razorpay key does not hammer the API.
+    loyalty_resume_attempts = Column(Integer, default=0, nullable=False)
+    loyalty_resume_next_attempt_at = Column(DateTime, nullable=True)
     agent_addon_active = Column(Boolean, default=False, nullable=False)
     agent_addon_cancelling = Column(Boolean, default=False, nullable=False)
     addon_subscription_id = Column(String(64), nullable=True)
