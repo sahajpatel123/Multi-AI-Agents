@@ -112,7 +112,7 @@ async def run_due_watchlist() -> None:
                 try:
                     db.rollback()
                 except Exception:
-                    pass
+                    logger.debug("db.rollback() failed in watchlist item error path", exc_info=True)
     finally:
         db.close()
 

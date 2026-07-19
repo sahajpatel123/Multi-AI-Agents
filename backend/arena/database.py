@@ -203,7 +203,10 @@ def _build_engine() -> Engine:
                 try:
                     engine.dispose()  # type: ignore[name-defined]
                 except Exception:
-                    pass
+                    # Engine disposal during a connect-retry is best-effort;
+                    # the next iteration builds a fresh engine anyway. Log at
+                    # debug so a noisy retry loop doesn't flood the log.
+                    logger.debug("engine.dispose() failed during retry", exc_info=True)
                 if attempt < max_attempts:
                     wait = min(2 ** attempt, 8)
                     logger.warning(
@@ -313,14 +316,17 @@ def get_db() -> Generator[Session, None, None]:
             try:
                 db.rollback()
             except Exception:
-                pass
+                logger.debug("db.rollback() failed in get_db error path", exc_info=True)
             dispose_engine()
         raise
     finally:
         try:
             db.close()
         except Exception:
-            pass
+            # Session close is best-effort; the connection pool will reap
+            # stragglers. Log at debug so teardown noise doesn't drown
+            # real signals.
+            logger.debug("db.close() failed in get_db finally", exc_info=True)
 
 
 def init_db() -> None:

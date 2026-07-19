@@ -1,6 +1,9 @@
 from typing import TypedDict, List
 import json
+import logging
 from asyncio import wait_for
+
+logger = logging.getLogger(__name__)
 
 class DissentPosition(TypedDict):
     claim: str
@@ -71,4 +74,9 @@ Critique output: {critique_output}"""
         return result
         
     except Exception:
+        # Surface the underlying parse/format error so we can spot LLM drift
+        # without needing to reproduce a 4xx from the API. The call falls
+        # through to the default empty dissent report on purpose — dissent is
+        # additive to the answer, not a hard requirement.
+        logger.exception("dissent_engine.parse_dissent: returning empty report")
         return {"positions": [], "minority_view_summary": ""}
