@@ -15,6 +15,7 @@ import { DocumentTitle } from './components/DocumentTitle'
 import { ScrollToTop } from './components/ScrollToTop'
 import { MotionButton } from './components/MotionButton'
 import './index.css'
+import './styles/verdict-prism.css'
 
 // Lazy-load each page so they're split into separate chunks. The Suspense
 // fallback below renders MicroLoader while a chunk loads, giving a
@@ -29,6 +30,9 @@ const ProductPage = lazy(() =>
 )
 const CapabilitiesPage = lazy(() =>
   import('./pages/CapabilitiesPage').then((m) => ({ default: m.CapabilitiesPage })),
+)
+const DocsPage = lazy(() =>
+  import('./pages/DocsPage').then((m) => ({ default: m.DocsPage })),
 )
 const PricingPage = lazy(() =>
   import('./pages/PricingPage').then((m) => ({ default: m.PricingPage })),
@@ -180,6 +184,7 @@ if (!rootElement) {
                   } />
                   <Route path="/product" element={<ProductPage />} />
                   <Route path="/capabilities" element={<CapabilitiesPage />} />
+                  <Route path="/docs" element={<DocsPage />} />
                   <Route path="/pricing" element={<PricingPage />} />
                   <Route path="/about" element={<AboutPage />} />
                   <Route path="/signin" element={<SignInPage />} />

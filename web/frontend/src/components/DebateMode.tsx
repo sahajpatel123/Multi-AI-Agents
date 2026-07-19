@@ -235,7 +235,7 @@ export function DebateMode({
           background: 'none',
           cursor: 'pointer',
           fontSize: 11,
-          fontFamily: 'Georgia, serif',
+          fontFamily: 'var(--vp-font-sans)',
           color: opts.dark
             ? active && pieceCopyStatus === 'failed'
               ? '#F5A89A'
@@ -246,7 +246,7 @@ export function DebateMode({
               ? '#993C1D'
               : active && pieceCopyStatus === 'copied'
                 ? '#5A8A5A'
-                : '#C4956A',
+                : '#F0B84E',
         }}
       >
         {label}
@@ -486,7 +486,7 @@ export function DebateMode({
             height: '12px',
             borderRadius: '50%',
             background: agent.color,
-            border: '2px solid #FAF7F4',
+            border: '2px solid #0B0C0A',
             boxShadow: `0 0 0 3px ${agent.color}33`,
           }}
         />
@@ -515,7 +515,7 @@ export function DebateMode({
             <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>
               {agent.name}
             </span>
-            <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#6B6460', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+            <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#A0A39A', letterSpacing: '.08em', textTransform: 'uppercase' }}>
               Reaction {index + 1}
             </span>
           </div>
@@ -573,7 +573,7 @@ export function DebateMode({
       {round.userInterjection ? (
         <div style={{ display: 'flex', justifyContent: 'flex-end', maxWidth: '680px', margin: '0 auto', width: '100%' }}>
           <div style={{ maxWidth: '420px', background: '#1A1714', borderRadius: '14px', padding: '12px 14px' }}>
-            <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: 1.7 }}>{round.userInterjection}</p>
+            <p style={{ fontSize: '14px', color: '#F3F0E7', lineHeight: 1.7 }}>{round.userInterjection}</p>
             <p style={{ fontSize: '11px', color: 'rgba(250,247,244,0.5)', marginTop: '4px' }}>You</p>
             {pieceCopyButton(
               `r${round.roundNumber}-you`,
@@ -669,7 +669,7 @@ export function DebateMode({
               challenged
             </span>
           </div>
-          <span style={{ fontSize: '10px', letterSpacing: '.2em', textTransform: 'uppercase', color: '#6B6460' }}>
+          <span style={{ fontSize: '10px', letterSpacing: '.2em', textTransform: 'uppercase', color: '#A0A39A' }}>
             In the arena
           </span>
         </div>
@@ -682,15 +682,15 @@ export function DebateMode({
           style={{
             marginTop: '14px',
             padding: '12px 14px',
-            background: '#FAF7F4',
+            background: '#0B0C0A',
             borderRadius: '10px',
             borderLeft: `2px solid ${challengedConfig.color}`,
           }}
         >
-          <div style={{ fontSize: '10px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '4px' }}>
+          <div style={{ fontSize: '10px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#A0A39A', marginBottom: '4px' }}>
             Key assumption
           </div>
-          <p style={{ fontSize: '13px', color: '#6B6460', lineHeight: 1.6, fontStyle: 'italic' }}>
+          <p style={{ fontSize: '13px', color: '#A0A39A', lineHeight: 1.6, fontStyle: 'italic' }}>
             {challengedAgent.response.key_assumption}
           </p>
         </div>
@@ -714,7 +714,7 @@ export function DebateMode({
   );
 
   return (
-    <div className="debate-layout" style={{ minHeight: '100vh', background: '#FAF7F4', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+    <div className="debate-layout" style={{ minHeight: '100vh', background: '#0B0C0A', position: 'relative', display: 'flex', flexDirection: 'column' }}>
       <div className="noise-overlay" />
       <div
         style={{
@@ -774,7 +774,7 @@ export function DebateMode({
               width: '6px',
               height: '6px',
               borderRadius: '50%',
-              background: '#C4956A',
+              background: '#F0B84E',
               animation: reducedMotion ? 'none' : 'breathe 2.4s ease-in-out infinite',
             }}
           />
@@ -801,15 +801,15 @@ export function DebateMode({
                   : copyFeedback === 'copied'
                     ? '#5A8C6A'
                     : phase === 'streaming' || rounds.length === 0
-                      ? '#A89070'
-                      : '#C4956A',
+                      ? '#A0A39A'
+                      : '#F0B84E',
               background: 'none',
               border: '0.5px solid #E0D8D0',
               borderRadius: 999,
               padding: '4px 10px',
               cursor:
                 phase === 'streaming' || rounds.length === 0 ? 'not-allowed' : 'pointer',
-              fontFamily: 'Georgia, serif',
+              fontFamily: 'var(--vp-font-sans)',
               whiteSpace: 'nowrap',
             }}
           >
@@ -836,15 +836,15 @@ export function DebateMode({
                   : downloadFeedback === 'done'
                     ? '#5A8C6A'
                     : phase === 'streaming' || rounds.length === 0
-                      ? '#A89070'
-                      : '#C4956A',
+                      ? '#A0A39A'
+                      : '#F0B84E',
               background: 'none',
               border: '0.5px solid #E0D8D0',
               borderRadius: 999,
               padding: '4px 10px',
               cursor:
                 phase === 'streaming' || rounds.length === 0 ? 'not-allowed' : 'pointer',
-              fontFamily: 'Georgia, serif',
+              fontFamily: 'var(--vp-font-sans)',
               whiteSpace: 'nowrap',
             }}
           >
@@ -856,10 +856,10 @@ export function DebateMode({
           </button>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '96px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-              <span style={{ fontSize: '11px', color: '#6B6460', letterSpacing: '.08em', textTransform: 'uppercase', marginRight: '4px' }}>Round</span>
+              <span style={{ fontSize: '11px', color: '#A0A39A', letterSpacing: '.08em', textTransform: 'uppercase', marginRight: '4px' }}>Round</span>
               <span style={{ fontSize: '18px', fontWeight: 500, color: '#1A1714' }}>{Math.max(currentRound, phase === 'streaming' ? currentRound + 1 : currentRound || 1)}</span>
-              <span style={{ color: '#6B6460' }}>/</span>
-              <span style={{ fontSize: '14px', color: '#6B6460' }}>{displayRoundCap}</span>
+              <span style={{ color: '#A0A39A' }}>/</span>
+              <span style={{ fontSize: '14px', color: '#A0A39A' }}>{displayRoundCap}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
               {displayRoundDots.map((dot) => {
@@ -872,7 +872,7 @@ export function DebateMode({
                       width: '8px',
                       height: '8px',
                       borderRadius: '50%',
-                      background: state === 'active' ? '#C4956A' : state === 'done' ? 'rgba(26,23,20,0.3)' : 'transparent',
+                      background: state === 'active' ? '#F0B84E' : state === 'done' ? 'rgba(26,23,20,0.3)' : 'transparent',
                       border: state === 'upcoming' ? '0.5px solid #E0D8D0' : 'none',
                     }}
                   />
@@ -888,14 +888,14 @@ export function DebateMode({
           <div className="debate-pre-layout">
             <div>
               {challengedCard}
-              <p style={{ fontSize: '13px', color: '#6B6460', fontStyle: 'italic', marginTop: '16px', padding: '12px 0', lineHeight: 1.5, maxWidth: '680px' }}>
+              <p style={{ fontSize: '13px', color: '#A0A39A', fontStyle: 'italic', marginTop: '16px', padding: '12px 0', lineHeight: 1.5, maxWidth: '680px' }}>
                 {originalPrompt}
               </p>
             </div>
 
             <div className="debate-pre-action-column">
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ fontSize: '10px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#6B6460', marginBottom: '12px' }}>
+                <div style={{ fontSize: '10px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#A0A39A', marginBottom: '12px' }}>
                   Waiting to react
                 </div>
                 <div className="debate-pre-pill-stack">
@@ -921,14 +921,14 @@ export function DebateMode({
                           }}
                         />
                         <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>{agent.name}</span>
-                        <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#6B6460' }}>Ready</span>
+                        <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#A0A39A' }}>Ready</span>
                       </div>
                     );
                   })}
                 </div>
                 <div style={{ margin: '20px 0', width: '100%', height: '0.5px', background: '#E0D8D0' }} />
                 <div className="debate-pre-cta">
-                  <div style={{ fontSize: '11px', color: '#6B6460', letterSpacing: '.06em', textAlign: 'center', marginBottom: '10px' }}>
+                  <div style={{ fontSize: '11px', color: '#A0A39A', letterSpacing: '.06em', textAlign: 'center', marginBottom: '10px' }}>
                     Ready to see what they think?
                   </div>
                   <button
@@ -937,7 +937,7 @@ export function DebateMode({
                   >
                     Start the debate
                   </button>
-                  <div style={{ fontSize: '11px', color: '#6B6460', textAlign: 'center', marginTop: '8px' }}>
+                  <div style={{ fontSize: '11px', color: '#A0A39A', textAlign: 'center', marginTop: '8px' }}>
                     Three minds will challenge this view
                   </div>
                 </div>
@@ -960,7 +960,7 @@ export function DebateMode({
                 gap: 12,
               }}
             >
-              <p style={{ fontSize: '13px', color: '#6B6460', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
+              <p style={{ fontSize: '13px', color: '#A0A39A', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
               <button
                 type="button"
                 aria-label="Dismiss error"
@@ -970,7 +970,7 @@ export function DebateMode({
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: 16,
-                  color: '#A89070',
+                  color: '#A0A39A',
                   lineHeight: 1,
                   padding: 0,
                   flexShrink: 0,
@@ -994,10 +994,10 @@ export function DebateMode({
             <div className="debate-colosseum-divider" style={{ display: 'flex', alignItems: 'center', gap: '16px', margin: '0 auto 32px', maxWidth: '680px' }}>
               <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#6B6460', marginBottom: '4px' }}>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.12em', color: '#A0A39A', marginBottom: '4px' }}>
                   The question
                 </div>
-                <p style={{ fontSize: '13px', color: '#6B6460', fontStyle: 'italic', textAlign: 'center', maxWidth: '360px', lineHeight: 1.5, padding: '0 16px' }}>
+                <p style={{ fontSize: '13px', color: '#A0A39A', fontStyle: 'italic', textAlign: 'center', maxWidth: '360px', lineHeight: 1.5, padding: '0 16px' }}>
                   {originalPrompt}
                 </p>
               </div>
@@ -1030,7 +1030,7 @@ export function DebateMode({
 
             <div className="debate-colosseum-label" style={{ maxWidth: '680px', margin: '0 auto 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
-              <span style={{ fontSize: '10px', letterSpacing: '.15em', textTransform: 'uppercase', color: '#6B6460', textAlign: 'center' }}>
+              <span style={{ fontSize: '10px', letterSpacing: '.15em', textTransform: 'uppercase', color: '#A0A39A', textAlign: 'center' }}>
                 How the others react
               </span>
               <div style={{ flex: 1, height: '0.5px', background: '#E0D8D0' }} />
@@ -1089,7 +1089,7 @@ export function DebateMode({
                   gap: 12,
                 }}
               >
-                <p style={{ fontSize: '13px', color: '#6B6460', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
+                <p style={{ fontSize: '13px', color: '#A0A39A', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
                 <button
                   type="button"
                   aria-label="Dismiss error"
@@ -1099,7 +1099,7 @@ export function DebateMode({
                     border: 'none',
                     cursor: 'pointer',
                     fontSize: 16,
-                    color: '#A89070',
+                    color: '#A0A39A',
                     lineHeight: 1,
                     padding: 0,
                     flexShrink: 0,
@@ -1132,9 +1132,9 @@ export function DebateMode({
                 style={{
                   pointerEvents: 'auto',
                   fontSize: 12,
-                  fontFamily: 'Georgia, serif',
+                  fontFamily: 'var(--vp-font-sans)',
                   color: '#FAF7F2',
-                  background: '#C4956A',
+                  background: '#F0B84E',
                   border: 'none',
                   borderRadius: 999,
                   padding: '6px 14px',
@@ -1182,10 +1182,10 @@ export function DebateMode({
                   style={{
                     margin: 0,
                     fontSize: 13,
-                    color: '#6B6460',
+                    color: '#A0A39A',
                     textAlign: 'center',
                     lineHeight: 1.55,
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                   }}
                 >
                   Three rounds in. Want one optional bonus round to finish the thread?
@@ -1251,7 +1251,7 @@ export function DebateMode({
                       color: '#1A1714',
                       outline: 'none',
                     }}
-                    onFocus={(e) => e.currentTarget.style.borderColor = '#C4956A'}
+                    onFocus={(e) => e.currentTarget.style.borderColor = '#F0B84E'}
                     onBlur={(e) => e.currentTarget.style.borderColor = '#E0D8D0'}
                   />
                   <span
@@ -1264,8 +1264,8 @@ export function DebateMode({
                         charBudgetTone(interjection.length, DEBATE_INTERJECTION_MAX_CHARS) === 'danger'
                           ? '#D85A30'
                           : charBudgetTone(interjection.length, DEBATE_INTERJECTION_MAX_CHARS) === 'warn'
-                            ? '#C4956A'
-                            : '#A89070',
+                            ? '#F0B84E'
+                            : '#A0A39A',
                     }}
                   >
                     {charBudgetLabel(interjection.length, DEBATE_INTERJECTION_MAX_CHARS)}
@@ -1291,7 +1291,7 @@ export function DebateMode({
                         padding: '14px 24px',
                         borderRadius: '999px',
                         background: '#1A1714',
-                        color: '#FAF7F4',
+                        color: '#F3F0E7',
                         border: 'none',
                         fontSize: '14px',
                         fontWeight: 500,
@@ -1310,9 +1310,9 @@ export function DebateMode({
                   style={{
                     margin: 0,
                     fontSize: 13,
-                    color: '#6B6460',
+                    color: '#A0A39A',
                     textAlign: 'center',
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                     lineHeight: 1.5,
                   }}
                 >
@@ -1332,7 +1332,7 @@ export function DebateMode({
                     padding: '14px 24px',
                     borderRadius: '999px',
                     background: '#1A1714',
-                    color: '#FAF7F4',
+                    color: '#F3F0E7',
                     border: 'none',
                     fontSize: '14px',
                     cursor: 'pointer',
@@ -1344,7 +1344,7 @@ export function DebateMode({
             )}
           </div>
         ) : (
-          <div style={{ fontSize: '11px', color: '#6B6460' }}>The arena is reacting...</div>
+          <div style={{ fontSize: '11px', color: '#A0A39A' }}>The arena is reacting...</div>
         )}
           </div>
         </>

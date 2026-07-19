@@ -138,6 +138,13 @@ export function Navbar() {
                   >
                     Pricing
                   </button>
+                  <button
+                    type="button"
+                    className={`navbar-nav-link${isActive('/docs') ? ' navbar-nav-link--active' : ''}`}
+                    onClick={() => navigate('/docs')}
+                  >
+                    Docs
+                  </button>
                 </>
               ) : (
                 <>
@@ -150,10 +157,10 @@ export function Navbar() {
                   </button>
                   <button
                     type="button"
-                    className={`navbar-nav-link${isActive('/capabilities') ? ' navbar-nav-link--active' : ''}`}
-                    onClick={() => navigate('/capabilities')}
+                    className={`navbar-nav-link${isActive('/personas') ? ' navbar-nav-link--active' : ''}`}
+                    onClick={() => navigate('/personas')}
                   >
-                    Capabilities
+                    Personas
                   </button>
                   <button
                     type="button"
@@ -164,10 +171,10 @@ export function Navbar() {
                   </button>
                   <button
                     type="button"
-                    className={`navbar-nav-link${isActive('/about') ? ' navbar-nav-link--active' : ''}`}
-                    onClick={() => navigate('/about')}
+                    className={`navbar-nav-link${isActive('/docs') ? ' navbar-nav-link--active' : ''}`}
+                    onClick={() => navigate('/docs')}
                   >
-                    About
+                    Docs
                   </button>
                 </>
               )}
@@ -285,13 +292,16 @@ export function Navbar() {
                 { label: 'Agent', path: '/agent' },
                 { label: 'Watchlist', path: '/agent/watchlist' },
                 { label: 'Pricing', path: '/pricing' },
-                { label: 'About', path: '/about' },
+                { label: 'Documentation', path: '/docs' },
+                { label: 'Changelog', path: '/changelog' },
               ]
             : [
                 { label: 'Product', path: '/product' },
                 { label: 'Capabilities', path: '/capabilities' },
+                { label: 'Personas', path: '/personas' },
                 { label: 'Pricing', path: '/pricing' },
-                { label: 'About', path: '/about' },
+                { label: 'Documentation', path: '/docs' },
+                { label: 'Changelog', path: '/changelog' },
               ]
           ).map((item) => (
             <button

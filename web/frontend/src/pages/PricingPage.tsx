@@ -111,22 +111,22 @@ const architectFeatures = [
 ];
 
 const MINDS = [
-  { name: 'The Analyst', locked: false, color: '#8C9BAB' },
-  { name: 'The Philosopher', locked: false, color: '#9B8FAA' },
-  { name: 'The Pragmatist', locked: false, color: '#8AA899' },
-  { name: 'The Contrarian', locked: false, color: '#B0977E' },
-  { name: 'The Futurist', locked: false, color: '#9B8FAA' },
+  { name: 'The Analyst', locked: false, color: '#5ED8FF' },
+  { name: 'The Philosopher', locked: false, color: '#A98CF8' },
+  { name: 'The Pragmatist', locked: false, color: '#D7F64A' },
+  { name: 'The Contrarian', locked: false, color: '#FF6652' },
+  { name: 'The Futurist', locked: false, color: '#A98CF8' },
   { name: 'The Empath', locked: false, color: '#AA8F8F' },
-  { name: 'The Scientist', locked: true, color: '#8C9BAB' },
+  { name: 'The Scientist', locked: true, color: '#5ED8FF' },
   { name: 'The Historian', locked: true, color: '#A89B8C' },
-  { name: 'The Economist', locked: true, color: '#8AA899' },
-  { name: 'The Ethicist', locked: true, color: '#9B8FAA' },
-  { name: 'The Stoic', locked: true, color: '#8C9BAB' },
-  { name: 'The Strategist', locked: true, color: '#B0977E' },
-  { name: 'The Engineer', locked: true, color: '#8C9BAB' },
-  { name: 'The Optimist', locked: true, color: '#8AA899' },
-  { name: 'First Principles', locked: true, color: '#9B8FAA' },
-  { name: "Devil's Advocate", locked: true, color: '#B0977E' },
+  { name: 'The Economist', locked: true, color: '#D7F64A' },
+  { name: 'The Ethicist', locked: true, color: '#A98CF8' },
+  { name: 'The Stoic', locked: true, color: '#5ED8FF' },
+  { name: 'The Strategist', locked: true, color: '#FF6652' },
+  { name: 'The Engineer', locked: true, color: '#5ED8FF' },
+  { name: 'The Optimist', locked: true, color: '#D7F64A' },
+  { name: 'First Principles', locked: true, color: '#A98CF8' },
+  { name: "Devil's Advocate", locked: true, color: '#FF6652' },
 ] as const;
 
 const unlockedPillTimings = [
@@ -439,7 +439,7 @@ export function PricingPage() {
                   borderRadius: '999px',
                   border: '0.5px solid #E0D8D0',
                   background: '#F0EBE3',
-                  color: '#6B6460',
+                  color: '#A0A39A',
                   fontSize: '14px',
                   cursor: 'default',
                   marginTop: 'auto',
@@ -530,7 +530,7 @@ export function PricingPage() {
                   padding: '11px',
                   borderRadius: '999px',
                   background: '#F0EBE3',
-                  color: '#6B6460',
+                  color: '#A0A39A',
                   fontSize: '14px',
                   fontWeight: 500,
                   cursor: 'default',
@@ -563,14 +563,14 @@ export function PricingPage() {
               <div
                 style={{
                   background: '#FAF3EA',
-                  border: '0.5px solid #C4956A',
+                  border: '0.5px solid #F0B84E',
                   borderRadius: 10,
                   padding: '14px 16px',
                   marginTop: 10,
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: '#2C1810' }}>⚡ Add Agent Mode</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#F3F0E7' }}>⚡ Add Agent Mode</span>
                   <div className="price-display price-display--compact" style={{ marginLeft: 'auto' }}>
                     <span className="currency">₹</span>
                     <span className="amount">599</span>
@@ -668,7 +668,7 @@ export function PricingPage() {
             )}
 
             <div className="pricing-plan-card__divider" />
-            <FeatureList items={architectFeatures} dotColor="rgba(196,149,106,0.5)" textColor="#1A1714" subColor="#6B6460" />
+            <FeatureList items={architectFeatures} dotColor="rgba(196,149,106,0.5)" textColor="#1A1714" subColor="#A0A39A" />
             {isAuthenticated && isCurrentPlan('pro') ? (
               <p style={{ fontSize: 11, color: '#5A8C6A', fontStyle: 'italic', margin: '0 0 10px' }}>Agent Mode included</p>
             ) : null}
@@ -679,7 +679,7 @@ export function PricingPage() {
                   padding: '11px',
                   borderRadius: '999px',
                   background: 'rgba(196,149,106,0.15)',
-                  color: '#C4956A',
+                  color: '#F0B84E',
                   fontSize: '14px',
                   fontWeight: 500,
                   cursor: 'default',
@@ -707,7 +707,7 @@ export function PricingPage() {
             <p
               style={{
                 fontSize: '11px',
-                color: '#A89070',
+                color: '#A0A39A',
                 fontStyle: 'italic',
                 textAlign: 'center',
                 marginTop: '8px',
@@ -870,7 +870,7 @@ export function PricingPage() {
 
           <div style={{ marginTop: '1.2rem' }}>
             {isPlus || isPro ? (
-              <p style={{ fontSize: '12px', color: '#8AA899' }}>All 16 minds available in your panel</p>
+              <p style={{ fontSize: '12px', color: '#D7F64A' }}>All 16 minds available in your panel</p>
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
@@ -878,7 +878,7 @@ export function PricingPage() {
                     style={{
                       background: 'rgba(196,149,106,0.1)',
                       border: '0.5px solid rgba(196,149,106,0.25)',
-                      color: '#C4956A',
+                      color: '#F0B84E',
                       fontSize: '11px',
                       padding: '4px 12px',
                       borderRadius: '999px',
@@ -891,7 +891,7 @@ export function PricingPage() {
                     style={{
                       background: 'rgba(26,23,20,0.04)',
                       border: '0.5px solid rgba(26,23,20,0.08)',
-                      color: '#6B6460',
+                      color: '#A0A39A',
                       fontSize: '11px',
                       padding: '4px 12px',
                       borderRadius: '999px',
@@ -911,7 +911,7 @@ export function PricingPage() {
           <div className="comparison-table-wrapper" style={{ border: '0.5px solid #E0D8D0', borderRadius: '12px', overflow: 'hidden' }}>
             <div className="comparison-table" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', background: '#F0EBE3' }}>
               {['Feature', 'Explorer', 'Plus', 'Pro'].map((label) => (
-                <div key={label} style={{ padding: '14px 16px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.08em', color: '#6B6460' }}>
+                <div key={label} style={{ padding: '14px 16px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.08em', color: '#A0A39A' }}>
                   {label}
                 </div>
               ))}
@@ -923,7 +923,7 @@ export function PricingPage() {
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
-                  background: index % 2 === 0 ? '#FFFFFF' : '#FAF7F4',
+                  background: index % 2 === 0 ? '#151713' : '#0B0C0A',
                   borderTop: '0.5px solid #E0D8D0',
                 }}
               >
@@ -933,7 +933,7 @@ export function PricingPage() {
                     style={{
                       padding: '14px 16px',
                       fontSize: '13px',
-                      color: cell === '✓' || cell === '✓ Soon' ? '#8AA899' : cell === '✕' ? '#C4B8AE' : '#1A1714',
+                      color: cell === '✓' || cell === '✓ Soon' ? '#D7F64A' : cell === '✕' ? '#777B72' : '#F3F0E7',
                       fontWeight: cell === '✓' || cell === '✓ Soon' ? 500 : 400,
                     }}
                   >
@@ -974,7 +974,7 @@ export function PricingPage() {
                     padding: '0.75rem 0',
                     cursor: 'pointer',
                     textAlign: 'left',
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                   }}
                 >
                   <span style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714' }}>{faq.question}</span>
@@ -983,7 +983,7 @@ export function PricingPage() {
                     style={{
                       flexShrink: 0,
                       fontSize: 18,
-                      color: '#C4956A',
+                      color: '#F0B84E',
                       lineHeight: 1,
                       transform: open ? 'rotate(45deg)' : 'none',
                       transition: 'transform 160ms ease',

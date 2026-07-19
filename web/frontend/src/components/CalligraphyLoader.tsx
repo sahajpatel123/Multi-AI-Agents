@@ -87,10 +87,10 @@ export function CalligraphyLoader({
     dotRefs.current.forEach((dot, idx) => {
       if (!dot) return;
       if (idx < STAGE_KEYS.indexOf(stageKey)) {
-        dot.style.background = '#C4956A';
+        dot.style.background = '#F0B84E';
         dot.style.transform = 'scale(1)';
       } else if (idx === STAGE_KEYS.indexOf(stageKey)) {
-        dot.style.background = '#C4956A';
+        dot.style.background = '#F0B84E';
         dot.style.transform = prefersReducedMotion() ? 'scale(1)' : 'scale(1.5)';
       } else {
         dot.style.background = '#DDD4C4';
@@ -236,9 +236,9 @@ export function CalligraphyLoader({
       >
         <p
           style={{
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--vp-font-sans)',
             fontSize: 'clamp(28px, 6vw, 42px)',
-            color: '#C4956A',
+            color: '#F0B84E',
             letterSpacing: '0.04em',
             margin: 0,
             textTransform: 'lowercase',
@@ -248,7 +248,7 @@ export function CalligraphyLoader({
         </p>
         <div
           style={{
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--vp-font-sans)',
             fontSize: 13,
             color: '#8C7355',
             letterSpacing: '0.05em',
@@ -286,7 +286,7 @@ export function CalligraphyLoader({
                 width: 5,
                 height: 5,
                 borderRadius: '50%',
-                background: idx <= activeIndex ? '#C4956A' : '#DDD4C4',
+                background: idx <= activeIndex ? '#F0B84E' : '#DDD4C4',
                 display: 'block',
               }}
             />
@@ -314,7 +314,7 @@ export function CalligraphyLoader({
       <div
         ref={statusRef}
         style={{
-          fontFamily: 'Georgia, serif',
+          fontFamily: 'var(--vp-font-sans)',
           fontSize: 13,
           color: '#8C7355',
           letterSpacing: '0.05em',
@@ -356,7 +356,7 @@ export function CalligraphyLoader({
               width: 5,
               height: 5,
               borderRadius: '50%',
-              background: idx === 0 ? '#C4956A' : '#DDD4C4',
+              background: idx === 0 ? '#F0B84E' : '#DDD4C4',
               transform: idx === 0 ? 'scale(1.5)' : 'scale(1)',
               transition: 'background 0.5s ease, transform 0.3s ease',
               display: 'block',

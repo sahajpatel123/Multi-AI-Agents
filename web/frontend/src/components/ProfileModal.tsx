@@ -67,7 +67,7 @@ function formatRelativeConnected(iso: string | null): string {
 }
 
 function TabIconAccount({ active }: { active: boolean }) {
-  const c = active ? '#C4956A' : 'currentColor';
+  const c = active ? '#F0B84E' : 'currentColor';
   return (
     <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
@@ -82,7 +82,7 @@ function TabIconAccount({ active }: { active: boolean }) {
 }
 
 function TabIconPlan({ active }: { active: boolean }) {
-  const c = active ? '#C4956A' : 'currentColor';
+  const c = active ? '#F0B84E' : 'currentColor';
   return (
     <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
@@ -97,7 +97,7 @@ function TabIconPlan({ active }: { active: boolean }) {
 }
 
 function TabIconUsage({ active }: { active: boolean }) {
-  const c = active ? '#C4956A' : 'currentColor';
+  const c = active ? '#F0B84E' : 'currentColor';
   return (
     <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
@@ -112,7 +112,7 @@ function TabIconUsage({ active }: { active: boolean }) {
 }
 
 function TabIconIntegrations({ active }: { active: boolean }) {
-  const c = active ? '#C4956A' : 'currentColor';
+  const c = active ? '#F0B84E' : 'currentColor';
   return (
     <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
@@ -134,7 +134,7 @@ function TabIconIntegrations({ active }: { active: boolean }) {
 }
 
 function TabIconHelp({ active }: { active: boolean }) {
-  const c = active ? '#C4956A' : 'currentColor';
+  const c = active ? '#F0B84E' : 'currentColor';
   return (
     <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
@@ -184,7 +184,7 @@ function UsageChart({
     slice.forEach((v, i) => {
       const bh = Math.max(2, (v / max) * (h - 8));
       const y = h - 4 - bh;
-      ctx.fillStyle = isPlaceholder ? '#E8DDD0' : i === 13 ? '#C4956A' : '#E8DDD0';
+      ctx.fillStyle = isPlaceholder ? '#30332D' : i === 13 ? '#F0B84E' : '#30332D';
       const r = 2;
       if (typeof ctx.roundRect === 'function') {
         ctx.beginPath();
@@ -728,7 +728,7 @@ export function ProfileModal() {
 
           <div style={{ display: activeTab === 'plan' ? 'block' : 'none' }}>
             <h2 className="profile-modal__section-heading">Your plan</h2>
-            <p style={{ fontSize: 14, color: '#A89070', marginBottom: 16 }}>Current subscription and billing details</p>
+            <p style={{ fontSize: 14, color: '#A0A39A', marginBottom: 16 }}>Current subscription and billing details</p>
             {subLoading ? (
               <div style={{ padding: 24, display: 'flex', justifyContent: 'center' }}>
                 <MicroLoader />
@@ -737,7 +737,7 @@ export function ProfileModal() {
               <>
                 <div
                   style={{
-                    background: '#2C1810',
+                    background: '#F3F0E7',
                     borderRadius: 10,
                     padding: 20,
                     marginBottom: 16,
@@ -748,8 +748,8 @@ export function ProfileModal() {
                   <div style={{ borderTop: '0.5px solid #3D2820', margin: '14px 0' }} />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
                     {planFeatures(user.tier).map((f) => (
-                      <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#A89070' }}>
-                        <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#C4956A', flexShrink: 0 }} />
+                      <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#A0A39A' }}>
+                        <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#F0B84E', flexShrink: 0 }} />
                         {f}
                       </div>
                     ))}
@@ -758,14 +758,14 @@ export function ProfileModal() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
                       <div>
                         <div style={{ fontSize: 11, color: '#6B5040' }}>Next billing date</div>
-                        <div style={{ fontSize: 13, color: '#C4956A', fontWeight: 500 }}>
+                        <div style={{ fontSize: 13, color: '#F0B84E', fontWeight: 500 }}>
                           {sub.amount != null ? `${formatInrPaise(sub.amount)} · ` : ''}
                           {sub.current_end ? new Date(sub.current_end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: 11, color: '#6B5040' }}>Per month</div>
-                        <div style={{ fontSize: 28, color: '#C4956A', fontWeight: 500, fontFamily: 'Georgia, serif' }}>
+                        <div style={{ fontSize: 28, color: '#F0B84E', fontWeight: 500, fontFamily: 'var(--vp-font-sans)' }}>
                           {sub.amount != null && sub.billing_period === 'annual'
                             ? formatInrPaise(Math.round(sub.amount / 12))
                             : sub.amount != null
@@ -805,7 +805,7 @@ export function ProfileModal() {
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
-                      <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#A89070' }}>
+                      <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#A0A39A' }}>
                         Loyalty reward
                       </span>
                       <span
@@ -825,17 +825,17 @@ export function ProfileModal() {
                         style={{
                           height: '100%',
                           width: `${Math.min((consecutive / 10) * 100, 100)}%`,
-                          background: '#C4956A',
+                          background: '#F0B84E',
                           borderRadius: 3,
                           transition: 'width 0.4s ease',
                         }}
                       />
                     </div>
-                    <div style={{ fontSize: 11, color: '#A89070', marginTop: 5 }}>
+                    <div style={{ fontSize: 11, color: '#A0A39A', marginTop: 5 }}>
                       Month {consecutive} of 10 — {Math.max(10 - consecutive, 0)} months to go
                     </div>
                     {consecutive >= 8 ? (
-                      <div style={{ fontSize: 11, color: '#C4956A', fontStyle: 'italic', marginTop: 8, lineHeight: 1.45 }}>
+                      <div style={{ fontSize: 11, color: '#F0B84E', fontStyle: 'italic', marginTop: 8, lineHeight: 1.45 }}>
                         Almost there — stay through month 10 and get months 11 &amp; 12 completely free
                       </div>
                     ) : null}
@@ -859,7 +859,7 @@ export function ProfileModal() {
                       background: 'transparent',
                       color: '#8C7355',
                       fontSize: 11,
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                       cursor: cancelBusy ? 'default' : 'pointer',
                     }}
                   >
@@ -873,7 +873,7 @@ export function ProfileModal() {
                         fontSize: 10,
                         letterSpacing: '0.1em',
                         textTransform: 'uppercase',
-                        color: '#A89070',
+                        color: '#A0A39A',
                         marginTop: 16,
                         marginBottom: 10,
                       }}
@@ -890,10 +890,10 @@ export function ProfileModal() {
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                          <span style={{ fontSize: 14, color: '#2C1810', fontWeight: 500 }}>Agent Mode</span>
-                          <span style={{ fontSize: 14, color: '#C4956A' }}>₹599/month</span>
+                          <span style={{ fontSize: 14, color: '#F3F0E7', fontWeight: 500 }}>Agent Mode</span>
+                          <span style={{ fontSize: 14, color: '#F0B84E' }}>₹599/month</span>
                         </div>
-                        <p style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
+                        <p style={{ fontSize: 11, color: '#A0A39A', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
                           7-stage research pipeline · Full Agent access · Plus limits apply
                         </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, color: '#4A3728', marginBottom: 0 }}>
@@ -917,7 +917,7 @@ export function ProfileModal() {
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
-                          <span style={{ fontSize: 14, color: '#2C1810', fontWeight: 500 }}>Agent Mode</span>
+                          <span style={{ fontSize: 14, color: '#F3F0E7', fontWeight: 500 }}>Agent Mode</span>
                           <span
                             style={{
                               background: '#639922',
@@ -943,10 +943,10 @@ export function ProfileModal() {
                               border: 'none',
                               padding: 0,
                               fontSize: 12,
-                              color: '#A89070',
+                              color: '#A0A39A',
                               textDecoration: 'underline dotted',
                               cursor: 'pointer',
-                              fontFamily: 'Georgia, serif',
+                              fontFamily: 'var(--vp-font-sans)',
                             }}
                           >
                             Cancel add-on →
@@ -961,8 +961,8 @@ export function ProfileModal() {
                               padding: '12px 14px',
                             }}
                           >
-                            <div style={{ fontSize: 12, color: '#2C1810', marginBottom: 8 }}>Cancel Agent add-on?</div>
-                            <div style={{ fontSize: 11, color: '#A89070', marginBottom: 10, lineHeight: 1.45 }}>
+                            <div style={{ fontSize: 12, color: '#F3F0E7', marginBottom: 8 }}>Cancel Agent add-on?</div>
+                            <div style={{ fontSize: 11, color: '#A0A39A', marginBottom: 10, lineHeight: 1.45 }}>
                               You keep access until end of current billing period.
                             </div>
                             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -971,14 +971,14 @@ export function ProfileModal() {
                                 disabled={addonBusy}
                                 onClick={() => setAddonCancelConfirm(false)}
                                 style={{
-                                  border: '0.5px solid #D4C4B0',
+                                  border: '0.5px solid #35382F',
                                   color: '#8C7355',
                                   borderRadius: 20,
                                   padding: '6px 14px',
                                   fontSize: 12,
                                   background: 'transparent',
                                   cursor: addonBusy ? 'default' : 'pointer',
-                                  fontFamily: 'Georgia, serif',
+                                  fontFamily: 'var(--vp-font-sans)',
                                 }}
                               >
                                 Keep add-on
@@ -1007,7 +1007,7 @@ export function ProfileModal() {
                                   fontSize: 12,
                                   background: 'transparent',
                                   cursor: addonBusy ? 'default' : 'pointer',
-                                  fontFamily: 'Georgia, serif',
+                                  fontFamily: 'var(--vp-font-sans)',
                                 }}
                               >
                                 {addonBusy ? '…' : 'Yes, cancel'}
@@ -1026,7 +1026,7 @@ export function ProfileModal() {
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
-                          <span style={{ fontSize: 14, color: '#2C1810', fontWeight: 500 }}>Agent Mode</span>
+                          <span style={{ fontSize: 14, color: '#F3F0E7', fontWeight: 500 }}>Agent Mode</span>
                           <span
                             style={{
                               background: '#BA7517',
@@ -1062,10 +1062,10 @@ export function ProfileModal() {
                             border: 'none',
                             padding: 0,
                             fontSize: 12,
-                            color: '#C4956A',
+                            color: '#F0B84E',
                             textDecoration: 'underline dotted',
                             cursor: addonBusy ? 'default' : 'pointer',
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                           }}
                         >
                           Changed your mind? Reactivate →
@@ -1112,22 +1112,22 @@ export function ProfileModal() {
                     { n: usage.total_tasks_month, l: 'Tasks this month' },
                   ].map((t) => (
                     <div key={t.l} style={{ background: '#F0E8DC', borderRadius: 8, padding: '12px 14px' }}>
-                      <div style={{ fontSize: 20, color: '#2C1810', fontWeight: 500, fontFamily: 'Georgia, serif' }}>{t.n.toLocaleString()}</div>
-                      <div style={{ fontSize: 10, color: '#A89070', marginTop: 3, letterSpacing: '0.04em' }}>{t.l}</div>
+                      <div style={{ fontSize: 20, color: '#F3F0E7', fontWeight: 500, fontFamily: 'var(--vp-font-sans)' }}>{t.n.toLocaleString()}</div>
+                      <div style={{ fontSize: 10, color: '#A0A39A', marginTop: 3, letterSpacing: '0.04em' }}>{t.l}</div>
                     </div>
                   ))}
                 </div>
                 {(() => {
                   const dailyPct = usage.daily_limit > 0 ? (usage.credits_used_today / usage.daily_limit) * 100 : 0;
                   const weeklyPct = usage.weekly_limit > 0 ? (usage.credits_used_week / usage.weekly_limit) * 100 : 0;
-                  const dailyFill = dailyPct > 85 ? '#C0392B' : '#C4956A';
-                  const weekFill = weeklyPct > 85 ? '#C0392B' : '#C4956A';
+                  const dailyFill = dailyPct > 85 ? '#C0392B' : '#F0B84E';
+                  const weekFill = weeklyPct > 85 ? '#C0392B' : '#F0B84E';
                   return (
                     <>
                       <div style={{ marginBottom: 12 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
                           <span style={{ color: '#8C7355' }}>Daily limit</span>
-                          <span style={{ color: '#A89070' }}>
+                          <span style={{ color: '#A0A39A' }}>
                             {usage.credits_used_today.toLocaleString()} / {usage.daily_limit.toLocaleString()} used
                           </span>
                         </div>
@@ -1138,7 +1138,7 @@ export function ProfileModal() {
                       <div style={{ marginBottom: 12 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
                           <span style={{ color: '#8C7355' }}>Weekly limit</span>
-                          <span style={{ color: '#A89070' }}>
+                          <span style={{ color: '#A0A39A' }}>
                             {usage.credits_used_week.toLocaleString()} / {usage.weekly_limit.toLocaleString()} used
                           </span>
                         </div>
@@ -1149,12 +1149,12 @@ export function ProfileModal() {
                     </>
                   );
                 })()}
-                <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A89070', letterSpacing: '0.10em', margin: '16px 0 8px' }}>14-day activity</div>
+                <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A0A39A', letterSpacing: '0.10em', margin: '16px 0 8px' }}>14-day activity</div>
                 <UsageChart
                   data={usage.usage_history && usage.usage_history.length === 14 ? usage.usage_history : PLACEHOLDER_HISTORY}
                   isPlaceholder={!usage.usage_history || usage.usage_history.length !== 14}
                 />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontFamily: 'Georgia, serif', marginTop: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontFamily: 'var(--vp-font-sans)', marginTop: 6 }}>
                   <span style={{ color: '#C4A882' }}>14 days ago</span>
                   <span style={{ color: '#C4A882' }}>Today</span>
                 </div>
@@ -1162,7 +1162,7 @@ export function ProfileModal() {
                   style={{
                     fontSize: 10,
                     textTransform: 'uppercase',
-                    color: '#A89070',
+                    color: '#A0A39A',
                     letterSpacing: '0.10em',
                     margin: '22px 0 10px',
                   }}
@@ -1186,14 +1186,14 @@ export function ProfileModal() {
                   >
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
                       <div>
-                        <div style={{ fontSize: 10, color: '#A89070', marginBottom: 4 }}>Calibration score</div>
-                        <div style={{ fontSize: 28, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>
+                        <div style={{ fontSize: 10, color: '#A0A39A', marginBottom: 4 }}>Calibration score</div>
+                        <div style={{ fontSize: 28, color: '#F3F0E7', fontFamily: 'var(--vp-font-sans)', fontWeight: 500 }}>
                           {calStats.calibration_score ?? 0}
                           <span style={{ fontSize: 14, color: '#8C7355' }}>/100</span>
                         </div>
                       </div>
                       <div style={{ flex: 1, minWidth: 120 }}>
-                        <div style={{ fontSize: 10, color: '#A89070', marginBottom: 4 }}>Avg. gap vs system</div>
+                        <div style={{ fontSize: 10, color: '#A0A39A', marginBottom: 4 }}>Avg. gap vs system</div>
                         <div style={{ fontSize: 15, color: '#4A3728', display: 'flex', alignItems: 'center', gap: 6 }}>
                           {(calStats.avg_delta ?? 0) > 0 ? (
                             <span style={{ color: '#639922' }}>↑</span>
@@ -1243,7 +1243,7 @@ export function ProfileModal() {
                       </div>
                     </div>
                     <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 10, color: '#A89070', marginRight: 4 }}>Last 5</span>
+                      <span style={{ fontSize: 10, color: '#A0A39A', marginRight: 4 }}>Last 5</span>
                       {(calStats.recent_ratings ?? []).map((r, i) => {
                         const d = Number(r.delta ?? 0);
                         const a = Math.abs(d);
@@ -1273,7 +1273,7 @@ export function ProfileModal() {
                   style={{
                     fontSize: 10,
                     textTransform: 'uppercase',
-                    color: '#A89070',
+                    color: '#A0A39A',
                     letterSpacing: '0.10em',
                     margin: '22px 0 10px',
                   }}
@@ -1319,7 +1319,7 @@ export function ProfileModal() {
                       <span style={{ color: '#BA7517' }}>Partial {fbAcc.partial_pct}%</span>
                       <span style={{ color: '#C0392B' }}>Wrong {fbAcc.wrong_pct}%</span>
                     </div>
-                    <p style={{ fontSize: 11, color: '#A89070', marginTop: 10, marginBottom: 0 }}>
+                    <p style={{ fontSize: 11, color: '#A0A39A', marginTop: 10, marginBottom: 0 }}>
                       Based on {fbAcc.total} rated answer{fbAcc.total === 1 ? '' : 's'}
                     </p>
                   </div>
@@ -1332,7 +1332,7 @@ export function ProfileModal() {
                   style={{
                     fontSize: 10,
                     textTransform: 'uppercase',
-                    color: '#A89070',
+                    color: '#A0A39A',
                     letterSpacing: '0.10em',
                     margin: '22px 0 10px',
                   }}
@@ -1407,7 +1407,7 @@ export function ProfileModal() {
                               title="Open this research in Agent Mode"
                               style={{
                                 fontSize: 13,
-                                color: '#2C1810',
+                                color: '#F3F0E7',
                                 lineHeight: 1.4,
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
@@ -1432,7 +1432,7 @@ export function ProfileModal() {
                               <p
                                 style={{
                                   fontSize: 11,
-                                  color: '#6B6460',
+                                  color: '#A0A39A',
                                   marginTop: 4,
                                   marginBottom: 0,
                                   fontStyle: 'italic',
@@ -1445,7 +1445,7 @@ export function ProfileModal() {
                             <div
                               style={{
                                 fontSize: 11,
-                                color: '#A89070',
+                                color: '#A0A39A',
                                 marginTop: 4,
                               }}
                               title={item.created_at ? new Date(item.created_at).toLocaleString() : undefined}
@@ -1464,7 +1464,7 @@ export function ProfileModal() {
 
           <div style={{ display: activeTab === 'integrations' ? 'block' : 'none', maxHeight: mobile ? undefined : 'min(72vh, 640px)' }}>
             <h2 className="profile-modal__section-heading">Integrations</h2>
-            <p style={{ fontSize: 12, color: '#A89070', marginBottom: 16 }}>
+            <p style={{ fontSize: 12, color: '#A0A39A', marginBottom: 16 }}>
               Connect your tools to include personal context in Agent research.
             </p>
             {mcpLoading ? (
@@ -1502,9 +1502,9 @@ export function ProfileModal() {
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
-                      <PlugIcon size={20} color="#D4C4B0" />
+                      <PlugIcon size={20} color="#35382F" />
                     </div>
-                    <p style={{ fontSize: 14, color: '#A89070', fontStyle: 'italic', margin: 0 }}>
+                    <p style={{ fontSize: 14, color: '#A0A39A', fontStyle: 'italic', margin: 0 }}>
                       No tools connected yet
                     </p>
                     <p style={{ fontSize: 12, color: '#C4A882', marginTop: 4, marginBottom: 0 }}>
@@ -1519,7 +1519,7 @@ export function ProfileModal() {
                         fontSize: 10,
                         textTransform: 'uppercase',
                         letterSpacing: '0.06em',
-                        color: '#A89070',
+                        color: '#A0A39A',
                         marginBottom: 8,
                       }}
                     >
@@ -1545,7 +1545,7 @@ export function ProfileModal() {
                               }}
                             >
                               <span style={{ display: 'flex', flexShrink: 0 }}>{getBrandIcon(row.service, 16)}</span>
-                              <span style={{ fontSize: 12, color: '#2C1810' }}>{label}</span>
+                              <span style={{ fontSize: 12, color: '#F3F0E7' }}>{label}</span>
                               <button
                                 type="button"
                                 aria-label={`Remove ${label}`}
@@ -1571,7 +1571,7 @@ export function ProfileModal() {
                                   padding: '0 0 0 4px',
                                   cursor: 'pointer',
                                   fontSize: 12,
-                                  color: '#A89070',
+                                  color: '#A0A39A',
                                   lineHeight: 1,
                                 }}
                               >
@@ -1641,7 +1641,7 @@ export function ProfileModal() {
                           >
                             {getBrandIcon(service.id, 20)}
                           </div>
-                          <div style={{ fontSize: 14, color: '#2C1810', fontWeight: 500, flex: 1 }}>{service.name}</div>
+                          <div style={{ fontSize: 14, color: '#F3F0E7', fontWeight: 500, flex: 1 }}>{service.name}</div>
                           <span
                             style={{
                               fontSize: 10,
@@ -1658,7 +1658,7 @@ export function ProfileModal() {
                             {connected ? '✓ Connected' : 'Not connected'}
                           </span>
                         </div>
-                        <p style={{ fontSize: 12, color: '#A89070', fontStyle: 'italic', margin: '0 0 10px' }}>
+                        <p style={{ fontSize: 12, color: '#A0A39A', fontStyle: 'italic', margin: '0 0 10px' }}>
                           {service.description}
                         </p>
                         {!connected ? (
@@ -1674,7 +1674,7 @@ export function ProfileModal() {
                                 padding: 0,
                                 cursor: 'pointer',
                                 fontSize: 11,
-                                color: '#C4956A',
+                                color: '#F0B84E',
                                 marginBottom: expanded ? 10 : 0,
                               }}
                             >
@@ -1686,7 +1686,7 @@ export function ProfileModal() {
                                   style={{
                                     fontSize: 10,
                                     textTransform: 'uppercase',
-                                    color: '#A89070',
+                                    color: '#A0A39A',
                                     marginBottom: 4,
                                   }}
                                 >
@@ -1699,7 +1699,7 @@ export function ProfileModal() {
                                   style={{
                                     fontSize: 10,
                                     textTransform: 'uppercase',
-                                    color: '#A89070',
+                                    color: '#A0A39A',
                                     marginBottom: 4,
                                   }}
                                 >
@@ -1716,19 +1716,19 @@ export function ProfileModal() {
                                   style={{
                                     width: '100%',
                                     boxSizing: 'border-box',
-                                    border: '0.5px solid #D4C4B0',
+                                    border: '0.5px solid #35382F',
                                     borderRadius: 6,
                                     padding: '8px 10px',
                                     fontSize: 12,
-                                    fontFamily: 'Georgia, serif',
+                                    fontFamily: 'var(--vp-font-sans)',
                                     background: '#FDFAF6',
                                     outline: 'none',
                                   }}
                                   onFocus={(e) => {
-                                    e.target.style.borderColor = '#C4956A';
+                                    e.target.style.borderColor = '#F0B84E';
                                   }}
                                   onBlur={(e) => {
-                                    e.target.style.borderColor = '#D4C4B0';
+                                    e.target.style.borderColor = '#35382F';
                                   }}
                                 />
                                 <div style={{ marginTop: 8 }}>
@@ -1794,11 +1794,11 @@ export function ProfileModal() {
                                       flex: 1,
                                       padding: '6px 10px',
                                       borderRadius: 8,
-                                      border: '0.5px solid #D4C4B0',
+                                      border: '0.5px solid #35382F',
                                       background: '#FAF7F2',
                                       fontSize: 12,
                                       cursor: 'pointer',
-                                      color: '#2C1810',
+                                      color: '#F3F0E7',
                                     }}
                                   >
                                     Keep

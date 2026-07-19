@@ -25,7 +25,7 @@ export function CaveatGridCard({ caveat: c, displayNum }: { caveat: StructuredCa
           gridColumn: 'span 2',
           position: 'relative',
           overflow: 'hidden',
-          background: '#2C1810',
+          background: '#F3F0E7',
           borderRadius: 10,
           padding: '18px 20px',
           display: 'flex',
@@ -72,10 +72,10 @@ export function CaveatGridCard({ caveat: c, displayNum }: { caveat: StructuredCa
             zIndex: 1,
           }}
         >
-          <Clock width={22} height={22} color="#C4956A" strokeWidth={1.5} />
+          <Clock width={22} height={22} color="#F0B84E" strokeWidth={1.5} />
         </div>
         <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
-          <div style={{ fontSize: 9, color: '#C4956A', marginBottom: 4 }}>⏳ Time-sensitive</div>
+          <div style={{ fontSize: 9, color: '#F0B84E', marginBottom: 4 }}>⏳ Time-sensitive</div>
           <div style={{ fontSize: 17, fontWeight: 500, color: '#E8D5BE', marginBottom: 6 }}>{c.keyword}</div>
           <div style={{ fontSize: 11, color: '#8C7355', lineHeight: 1.45 }}>{c.description}</div>
           {c.expires ? (
@@ -93,9 +93,9 @@ export function CaveatGridCard({ caveat: c, displayNum }: { caveat: StructuredCa
             >
               <span
                 className="caveat-expiry-pulse-dot"
-                style={{ width: 6, height: 6, borderRadius: '50%', background: '#C4956A', flexShrink: 0 }}
+                style={{ width: 6, height: 6, borderRadius: '50%', background: '#F0B84E', flexShrink: 0 }}
               />
-              <span style={{ fontSize: 10, color: '#C4956A' }}>
+              <span style={{ fontSize: 10, color: '#F0B84E' }}>
                 Expires {c.expires} · Perishable
               </span>
             </div>
@@ -127,7 +127,7 @@ export function CaveatGridCard({ caveat: c, displayNum }: { caveat: StructuredCa
             width: 4,
             height: '100%',
             background:
-              'repeating-linear-gradient(180deg, #C4956A 0, #C4956A 8px, transparent 8px, transparent 14px)',
+              'repeating-linear-gradient(180deg, #F0B84E 0, #F0B84E 8px, transparent 8px, transparent 14px)',
           }}
         />
         <span
@@ -137,7 +137,7 @@ export function CaveatGridCard({ caveat: c, displayNum }: { caveat: StructuredCa
             right: 10,
             fontSize: 48,
             fontWeight: 500,
-            color: '#C4956A',
+            color: '#F0B84E',
             opacity: 0.12,
             lineHeight: 1,
           }}
@@ -145,8 +145,8 @@ export function CaveatGridCard({ caveat: c, displayNum }: { caveat: StructuredCa
           {displayNum}
         </span>
         <div style={{ paddingLeft: 8, position: 'relative', zIndex: 1 }}>
-          <div style={{ fontSize: 9, color: '#C4956A', marginBottom: 4 }}>⚠ Methodological</div>
-          <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginBottom: 6 }}>{c.keyword}</div>
+          <div style={{ fontSize: 9, color: '#F0B84E', marginBottom: 4 }}>⚠ Methodological</div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: '#F3F0E7', marginBottom: 6 }}>{c.keyword}</div>
           <div style={{ fontSize: 11, color: '#6B5040', lineHeight: 1.45, marginBottom: 10 }}>{c.description}</div>
           <span
             style={{
@@ -189,7 +189,7 @@ export function CaveatGridCard({ caveat: c, displayNum }: { caveat: StructuredCa
             fontSize: 64,
             color: '#534AB7',
             opacity: 0.12,
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--vp-font-sans)',
             lineHeight: 1,
           }}
         >
@@ -284,7 +284,7 @@ export function CaveatGridCard({ caveat: c, displayNum }: { caveat: StructuredCa
         </div>
         <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
           <div style={{ fontSize: 9, color: '#639922', marginBottom: 4 }}>◇ Completeness</div>
-          <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginBottom: 4 }}>{c.keyword}</div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: '#F3F0E7', marginBottom: 4 }}>{c.keyword}</div>
           <div style={{ fontSize: 11, color: '#4A5C28', lineHeight: 1.45, opacity: 0.9 }}>{c.description}</div>
         </div>
       </div>
@@ -343,7 +343,7 @@ export function CaveatGridCard({ caveat: c, displayNum }: { caveat: StructuredCa
         </span>
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ fontSize: 9, color: '#D85A30', marginBottom: 4 }}>◎ Precision</div>
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#2C1810', marginBottom: 6 }}>{c.keyword}</div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#F3F0E7', marginBottom: 6 }}>{c.keyword}</div>
           <div style={{ fontSize: 11, color: '#712B13', opacity: 0.75, lineHeight: 1.45 }}>{c.description}</div>
         </div>
       </div>
@@ -402,8 +402,8 @@ export function CaveatGridCard({ caveat: c, displayNum }: { caveat: StructuredCa
       </span>
       <div style={{ position: 'relative', zIndex: 1 }}>
         <div style={{ fontSize: 9, color: '#8C7355', marginBottom: 4 }}>▣ Scoring</div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: '#2C1810', marginBottom: 6 }}>{c.keyword}</div>
-        <div style={{ fontSize: 11, color: '#6B6460', lineHeight: 1.45 }}>{c.description}</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: '#F3F0E7', marginBottom: 6 }}>{c.keyword}</div>
+        <div style={{ fontSize: 11, color: '#A0A39A', lineHeight: 1.45 }}>{c.description}</div>
       </div>
     </div>
   );
@@ -432,7 +432,7 @@ export function AnalyticalCaveatsSection({ caveats }: { caveats: StructuredCavea
       `}</style>
       <div
         style={{
-          background: '#2C1810',
+          background: '#F3F0E7',
           borderRadius: '12px 12px 0 0',
           padding: '13px 20px',
           display: 'flex',
@@ -441,13 +441,13 @@ export function AnalyticalCaveatsSection({ caveats }: { caveats: StructuredCavea
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Layers width={16} height={16} color="#C4956A" strokeWidth={1.5} opacity={0.9} aria-hidden />
+          <Layers width={16} height={16} color="#F0B84E" strokeWidth={1.5} opacity={0.9} aria-hidden />
           <span
             style={{
               fontSize: 11,
               letterSpacing: '0.16em',
               textTransform: 'uppercase',
-              color: '#C4956A',
+              color: '#F0B84E',
             }}
           >
             Analytical Caveats
@@ -457,7 +457,7 @@ export function AnalyticalCaveatsSection({ caveats }: { caveats: StructuredCavea
           style={{
             fontSize: 10,
             background: 'rgba(196,149,106,0.2)',
-            color: '#C4956A',
+            color: '#F0B84E',
             padding: '2px 8px',
             borderRadius: 8,
             border: '0.5px solid rgba(196,149,106,0.3)',

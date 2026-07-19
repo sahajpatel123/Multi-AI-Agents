@@ -145,8 +145,8 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
             style={{
               fontSize: fs.h2,
               fontWeight: 500,
-              color: '#2C1810',
-              fontFamily: 'Georgia, serif',
+              color: '#F3F0E7',
+              fontFamily: 'var(--vp-font-sans)',
               marginTop: '20px',
               marginBottom: '8px',
               lineHeight: '1.4',
@@ -165,8 +165,8 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
           style={{
             fontSize: fs.h1,
             fontWeight: 500,
-            color: '#2C1810',
-            fontFamily: 'Georgia, serif',
+            color: '#F3F0E7',
+            fontFamily: 'var(--vp-font-sans)',
             marginTop: '24px',
             marginBottom: '10px',
             lineHeight: '1.3',
@@ -186,8 +186,8 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
           style={{
             fontSize: fs.h2,
             fontWeight: 500,
-            color: '#2C1810',
-            fontFamily: 'Georgia, serif',
+            color: '#F3F0E7',
+            fontFamily: 'var(--vp-font-sans)',
             marginTop: '20px',
             marginBottom: '8px',
             lineHeight: '1.4',
@@ -209,7 +209,7 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
             fontSize: fs.h3,
             fontWeight: 500,
             color: '#4A3728',
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--vp-font-sans)',
             marginTop: '16px',
             marginBottom: '6px',
             ...headingScrollPad,
@@ -223,8 +223,8 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
       <p
         style={{
           fontSize: fs.p,
-          color: '#2C1810',
-          fontFamily: 'Georgia, serif',
+          color: '#F3F0E7',
+          fontFamily: 'var(--vp-font-sans)',
           lineHeight: '1.82',
           marginBottom: '14px',
         }}
@@ -256,8 +256,8 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
       <li
         style={{
           fontSize: fs.li,
-          color: '#2C1810',
-          fontFamily: 'Georgia, serif',
+          color: '#F3F0E7',
+          fontFamily: 'var(--vp-font-sans)',
           lineHeight: '1.7',
           marginBottom: '5px',
         }}
@@ -269,7 +269,7 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
       <strong
         style={{
           fontWeight: 600,
-          color: '#2C1810',
+          color: '#F3F0E7',
         }}
       >
         {children}
@@ -288,7 +288,7 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
     blockquote: ({ children }) => (
       <blockquote
         style={{
-          borderLeft: '3px solid #C4956A',
+          borderLeft: '3px solid #F0B84E',
           paddingLeft: '14px',
           margin: '16px 0',
           color: '#6B5040',
@@ -320,7 +320,7 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
             className={className}
             style={{
               fontSize: '13px',
-              color: '#2C1810',
+              color: '#F3F0E7',
               fontFamily: 'monospace',
             }}
           >
@@ -359,7 +359,7 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
             width: '100%',
             borderCollapse: 'collapse',
             fontSize: '13px',
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--vp-font-sans)',
           }}
         >
           {children}
@@ -372,7 +372,7 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
           background: '#F0E8DC',
           padding: '8px 12px',
           border: '0.5px solid #E0D5C5',
-          color: '#2C1810',
+          color: '#F3F0E7',
           fontWeight: 500,
           textAlign: 'left',
         }}
@@ -417,7 +417,7 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
                 margin: 0,
                 fontSize: 12,
                 color: '#8C7355',
-                fontFamily: 'Georgia, serif',
+                fontFamily: 'var(--vp-font-sans)',
                 letterSpacing: '0.02em',
               }}
             >
@@ -449,7 +449,7 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
                     border: 'none',
                     background: 'none',
                     cursor: 'pointer',
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                     fontSize: 12,
                     color: '#4A3728',
                     fontWeight: 500,
@@ -457,12 +457,12 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
                 >
                   <span>
                     On this page
-                    <span style={{ color: '#A89070', fontWeight: 400 }}>
+                    <span style={{ color: '#A0A39A', fontWeight: 400 }}>
                       {' '}
                       · {headings.length} sections
                     </span>
                   </span>
-                  <span style={{ color: '#A89070', fontSize: 11 }} aria-hidden>
+                  <span style={{ color: '#A0A39A', fontSize: 11 }} aria-hidden>
                     {outlineOpen ? '▴' : '▾'}
                   </span>
                 </button>
@@ -491,9 +491,9 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
                         ? '#D85A30'
                         : outlineCopyStatus === 'copied'
                           ? '#5A8C6A'
-                          : '#A89070',
+                          : '#A0A39A',
                     cursor: 'pointer',
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                     lineHeight: 1.4,
                   }}
                 >
@@ -528,7 +528,7 @@ export function AgentAnswerMarkdown({ markdown, question, emptyMessage }: AgentA
                             border: 'none',
                             background: 'transparent',
                             cursor: 'pointer',
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                             fontSize: h.level === 1 ? 13 : 12,
                             color: h.level === 3 ? '#8C7355' : '#4A3728',
                             padding: '4px 6px',

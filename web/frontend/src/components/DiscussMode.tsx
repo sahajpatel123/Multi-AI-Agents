@@ -54,7 +54,7 @@ export function DiscussMode({
     () => ({
       ...AGENTS[activeAgent.response.agent_id],
       name: persona?.name || AGENTS[activeAgent.response.agent_id]?.name || activeAgent.response.agent_id,
-      color: persona?.color || AGENTS[activeAgent.response.agent_id]?.color || '#6B6460',
+      color: persona?.color || AGENTS[activeAgent.response.agent_id]?.color || '#A0A39A',
     }),
     [activeAgent.response.agent_id, persona?.name, persona?.color],
   );
@@ -196,7 +196,7 @@ export function DiscussMode({
           background: 'none',
           cursor: 'pointer',
           fontSize: 11,
-          fontFamily: 'Georgia, serif',
+          fontFamily: 'var(--vp-font-sans)',
           color: opts.dark
             ? active && msgCopyStatus === 'failed'
               ? '#F5A89A'
@@ -207,7 +207,7 @@ export function DiscussMode({
               ? '#993C1D'
               : active && msgCopyStatus === 'copied'
                 ? '#5A8A5A'
-                : '#C4956A',
+                : '#F0B84E',
         }}
       >
         {label}
@@ -386,14 +386,14 @@ export function DiscussMode({
     const base = AGENTS[agentId];
     return {
       name: p?.name || base?.name || agentId,
-      color: p?.color || base?.color || '#6B6460',
+      color: p?.color || base?.color || '#A0A39A',
     };
   };
 
   return (
     <div
       className="discuss-layout"
-      style={{ display: 'flex', gap: '1rem', minHeight: '60vh', background: '#FAF7F4' }}
+      style={{ display: 'flex', gap: '1rem', minHeight: '60vh', background: '#0B0C0A' }}
     >
       <style>{`
         @keyframes breathe {
@@ -447,7 +447,7 @@ export function DiscussMode({
       {/* Switch minds — always available (was permanently display:none) */}
       {otherAgents.length > 0 ? (
         <div className="discuss-switcher" aria-label="Switch to another mind">
-          <p className="discuss-switcher-label" style={{ fontSize: '11px', color: '#6B6460', fontWeight: 500, margin: '0 0 0.25rem' }}>
+          <p className="discuss-switcher-label" style={{ fontSize: '11px', color: '#A0A39A', fontWeight: 500, margin: '0 0 0.25rem' }}>
             Other minds
           </p>
           {otherAgents.map((scored) => {
@@ -475,7 +475,7 @@ export function DiscussMode({
                 <p
                   style={{
                     fontSize: '11px',
-                    color: '#6B6460',
+                    color: '#A0A39A',
                     lineHeight: 1.45,
                     margin: 0,
                     display: '-webkit-box',
@@ -513,7 +513,7 @@ export function DiscussMode({
             <span style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714' }}>
               {agentConfig.name}
             </span>
-            <span style={{ fontSize: '11px', color: '#6B6460' }}>1-on-1</span>
+            <span style={{ fontSize: '11px', color: '#A0A39A' }}>1-on-1</span>
             <button
               type="button"
               onClick={() => {
@@ -529,14 +529,14 @@ export function DiscussMode({
                     ? '#993C1D'
                     : copyFeedback === 'copied'
                       ? '#5A8C6A'
-                      : '#C4956A',
+                      : '#F0B84E',
                 background: 'none',
                 border: '0.5px solid #E0D8D0',
                 borderRadius: 999,
                 padding: '4px 10px',
                 cursor: isStreaming ? 'not-allowed' : 'pointer',
                 opacity: isStreaming ? 0.5 : 1,
-                fontFamily: 'Georgia, serif',
+                fontFamily: 'var(--vp-font-sans)',
               }}
             >
               {copyFeedback === 'copied'
@@ -557,14 +557,14 @@ export function DiscussMode({
                     ? '#993C1D'
                     : downloadFeedback === 'done'
                       ? '#5A8C6A'
-                      : '#C4956A',
+                      : '#F0B84E',
                 background: 'none',
                 border: '0.5px solid #E0D8D0',
                 borderRadius: 999,
                 padding: '4px 10px',
                 cursor: isStreaming ? 'not-allowed' : 'pointer',
                 opacity: isStreaming ? 0.5 : 1,
-                fontFamily: 'Georgia, serif',
+                fontFamily: 'var(--vp-font-sans)',
               }}
             >
               {downloadFeedback === 'done'
@@ -611,7 +611,7 @@ export function DiscussMode({
                   <span style={{ fontSize: '11px', fontWeight: 500, color: agentConfig.color }}>
                     {agentConfig.name}
                   </span>
-                  <span style={{ fontSize: '11px', color: '#6B6460', fontStyle: 'italic', marginLeft: 4 }}>
+                  <span style={{ fontSize: '11px', color: '#A0A39A', fontStyle: 'italic', marginLeft: 4 }}>
                     Original take
                   </span>
                 </div>
@@ -636,7 +636,7 @@ export function DiscussMode({
             >
               {msg.role === 'user' ? (
                 <div style={{ maxWidth: '80%', background: '#1A1714', borderRadius: '12px', padding: '12px 14px' }}>
-                  <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: '1.7', whiteSpace: 'pre-wrap', margin: 0 }}>{msg.content}</p>
+                  <p style={{ fontSize: '14px', color: '#F3F0E7', lineHeight: '1.7', whiteSpace: 'pre-wrap', margin: 0 }}>{msg.content}</p>
                   {messageCopyButton(`msg-${i}`, {
                     role: 'user',
                     content: msg.content,
@@ -651,7 +651,7 @@ export function DiscussMode({
                       {agentConfig.name}
                     </span>
                     {i === 0 ? (
-                      <span style={{ fontSize: '11px', color: '#6B6460', fontStyle: 'italic', marginLeft: 4 }}>
+                      <span style={{ fontSize: '11px', color: '#A0A39A', fontStyle: 'italic', marginLeft: 4 }}>
                         Original take
                       </span>
                     ) : null}
@@ -708,7 +708,7 @@ export function DiscussMode({
                       animation: reducedMotion ? 'none' : 'breathe 2.4s ease-in-out infinite',
                     }}
                   />
-                  <span style={{ fontSize: '11px', color: '#6B6460', fontStyle: 'italic' }}>Thinking...</span>
+                  <span style={{ fontSize: '11px', color: '#A0A39A', fontStyle: 'italic' }}>Thinking...</span>
                 </div>
               </div>
             </div>
@@ -735,9 +735,9 @@ export function DiscussMode({
               style={{
                 pointerEvents: 'auto',
                 fontSize: 12,
-                fontFamily: 'Georgia, serif',
+                fontFamily: 'var(--vp-font-sans)',
                 color: '#FAF7F2',
-                background: '#C4956A',
+                background: '#F0B84E',
                 border: 'none',
                 borderRadius: 999,
                 padding: '6px 14px',
@@ -766,7 +766,7 @@ export function DiscussMode({
               gap: 10,
             }}
           >
-            <p style={{ fontSize: '12px', color: '#6B6460', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
+            <p style={{ fontSize: '12px', color: '#A0A39A', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
             <button
               type="button"
               aria-label="Dismiss error"
@@ -776,7 +776,7 @@ export function DiscussMode({
                 border: 'none',
                 cursor: 'pointer',
                 fontSize: 16,
-                color: '#A89070',
+                color: '#A0A39A',
                 lineHeight: 1,
                 padding: 0,
                 flexShrink: 0,
@@ -820,7 +820,7 @@ export function DiscussMode({
               opacity: isStreaming ? 0.5 : 1,
               transition: 'border-color 200ms ease',
             }}
-            onFocus={(e) => e.currentTarget.style.borderColor = '#C4956A'}
+            onFocus={(e) => e.currentTarget.style.borderColor = '#F0B84E'}
             onBlur={(e) => e.currentTarget.style.borderColor = '#E0D8D0'}
           />
           <button
@@ -843,8 +843,8 @@ export function DiscussMode({
                 charBudgetTone(input.length, DISCUSS_MESSAGE_MAX_CHARS) === 'danger'
                   ? '#D85A30'
                   : charBudgetTone(input.length, DISCUSS_MESSAGE_MAX_CHARS) === 'warn'
-                    ? '#C4956A'
-                    : '#A89070',
+                    ? '#F0B84E'
+                    : '#A0A39A',
             }}
           >
             {charBudgetLabel(input.length, DISCUSS_MESSAGE_MAX_CHARS)}

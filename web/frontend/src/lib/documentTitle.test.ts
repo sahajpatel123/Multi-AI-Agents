@@ -13,6 +13,7 @@ describe('titleForPath', () => {
     expect(titleForPath('/pricing')).toBe('Pricing · Arena');
     expect(titleForPath('/product')).toBe('Product · Arena');
     expect(titleForPath('/capabilities')).toBe('Capabilities · Arena');
+    expect(titleForPath('/docs')).toBe('Documentation · Arena');
     expect(titleForPath('/about')).toBe('About · Arena');
   });
 

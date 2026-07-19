@@ -724,7 +724,7 @@ export function RoomPage() {
               marginBottom: 10,
               width: '100%',
               background: selected ? 'rgba(196,149,106,0.12)' : 'transparent',
-              border: selected ? '0.5px solid #C4956A' : '0.5px solid transparent',
+              border: selected ? '0.5px solid #F0B84E' : '0.5px solid transparent',
               borderRadius: 8,
               padding: '4px 6px',
               cursor: 'pointer',
@@ -750,15 +750,15 @@ export function RoomPage() {
               {getUserInitials(m.name || '')}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: '#2C1810', fontWeight: 500 }}>{m.name}</div>
-              <div style={{ fontSize: 10, color: '#A89070' }}>{m.task_count ?? 0} tasks</div>
+              <div style={{ fontSize: 12, color: '#F3F0E7', fontWeight: 500 }}>{m.name}</div>
+              <div style={{ fontSize: 10, color: '#A0A39A' }}>{m.task_count ?? 0} tasks</div>
             </div>
             <span
               style={{
                 width: 6,
                 height: 6,
                 borderRadius: '50%',
-                background: roomMemberOnline(m.last_seen_at, nowMs) ? '#639922' : '#D4C4B0',
+                background: roomMemberOnline(m.last_seen_at, nowMs) ? '#639922' : '#35382F',
                 marginLeft: 'auto',
                 flexShrink: 0,
               }}
@@ -775,13 +775,13 @@ export function RoomPage() {
             marginBottom: 10,
             background: 'none',
             border: 'none',
-            color: '#C4956A',
+            color: '#F0B84E',
             fontSize: 11,
             cursor: 'pointer',
             textAlign: 'left',
             padding: '0 6px',
             textDecoration: 'underline',
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--vp-font-sans)',
           }}
         >
           Show all members' tasks
@@ -799,7 +799,7 @@ export function RoomPage() {
           onClick={() => setShowTaskPicker(true)}
           style={{
             width: '100%',
-            border: '0.5px dashed #D4C4B0',
+            border: '0.5px dashed #35382F',
             borderRadius: 8,
             padding: '8px 12px',
             fontSize: 12,
@@ -827,7 +827,7 @@ export function RoomPage() {
     >
       <div
         style={{
-          background: '#2C1810',
+          background: '#F3F0E7',
           padding: '12px 18px',
           display: 'flex',
           justifyContent: 'space-between',
@@ -835,7 +835,7 @@ export function RoomPage() {
           gap: 12,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#C4956A' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#F0B84E' }}>
           <LayersIcon />
           <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Group synthesis</span>
         </div>
@@ -877,7 +877,7 @@ export function RoomPage() {
                       ? '#F0997B'
                       : copyStatus === 'copied'
                         ? '#5A8C6A'
-                        : '#C4956A',
+                        : '#F0B84E',
                   padding: '3px 8px',
                   fontSize: 10,
                   letterSpacing: '0.04em',
@@ -910,7 +910,7 @@ export function RoomPage() {
                       ? '#F0997B'
                       : synthDownloadStatus === 'done'
                         ? '#5A8C6A'
-                        : '#C4956A',
+                        : '#F0B84E',
                   padding: '3px 8px',
                   fontSize: 10,
                   letterSpacing: '0.04em',
@@ -933,7 +933,7 @@ export function RoomPage() {
                   background: 'none',
                   border: 'none',
                   cursor: synthesisRefreshing ? 'default' : 'pointer',
-                  color: '#C4956A',
+                  color: '#F0B84E',
                   padding: 4,
                   opacity: synthesisRefreshing ? 0.5 : 1,
                   display: 'flex',
@@ -951,11 +951,11 @@ export function RoomPage() {
       </div>
       {!synthesis || tasks.length < 2 ? (
         <div style={{ padding: 32, textAlign: 'center' }}>
-          <svg width={32} height={32} viewBox="0 0 32 32" fill="none" aria-hidden style={{ margin: '0 auto 12px', display: 'block', color: '#D4C4B0' }}>
+          <svg width={32} height={32} viewBox="0 0 32 32" fill="none" aria-hidden style={{ margin: '0 auto 12px', display: 'block', color: '#35382F' }}>
             <circle cx="12" cy="16" r="9" stroke="currentColor" strokeWidth={1.5} fill="none" />
             <circle cx="20" cy="16" r="9" stroke="currentColor" strokeWidth={1.5} fill="none" />
           </svg>
-          <div style={{ fontSize: 14, color: '#A89070', fontStyle: 'italic' }}>
+          <div style={{ fontSize: 14, color: '#A0A39A', fontStyle: 'italic' }}>
             Add 2 or more tasks to see group synthesis
           </div>
           <div style={{ fontSize: 12, color: '#C4A882', marginTop: 4 }}>
@@ -978,11 +978,11 @@ export function RoomPage() {
               <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#D85A30', marginBottom: 6 }}>
                 ⚠ {c.member_a} vs {c.member_b}
               </div>
-              <div style={{ fontSize: 12, color: '#2C1810' }}>{c.claim_a}</div>
-              <div style={{ fontSize: 10, color: '#A89070', fontStyle: 'italic', margin: '4px 0' }}>vs</div>
-              <div style={{ fontSize: 12, color: '#2C1810' }}>{c.claim_b}</div>
+              <div style={{ fontSize: 12, color: '#F3F0E7' }}>{c.claim_a}</div>
+              <div style={{ fontSize: 10, color: '#A0A39A', fontStyle: 'italic', margin: '4px 0' }}>vs</div>
+              <div style={{ fontSize: 12, color: '#F3F0E7' }}>{c.claim_b}</div>
               {c.resolution_hint ? (
-                <div style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', marginTop: 5 }}>{c.resolution_hint}</div>
+                <div style={{ fontSize: 11, color: '#A0A39A', fontStyle: 'italic', marginTop: 5 }}>{c.resolution_hint}</div>
               ) : null}
               <button
                 type="button"
@@ -990,13 +990,13 @@ export function RoomPage() {
                 style={{
                   marginTop: 8,
                   background: 'none',
-                  border: '0.5px solid #D4C4B0',
+                  border: '0.5px solid #35382F',
                   borderRadius: 6,
                   padding: '5px 12px',
                   fontSize: 11,
-                  color: '#C4956A',
+                  color: '#F0B84E',
                   cursor: 'pointer',
-                  fontFamily: 'Georgia, serif',
+                  fontFamily: 'var(--vp-font-sans)',
                 }}
               >
                 Resolve this →
@@ -1005,7 +1005,7 @@ export function RoomPage() {
           ))}
           {patterns.length > 0 ? (
             <>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A89070', margin: '12px 12px 6px' }}>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A0A39A', margin: '12px 12px 6px' }}>
                 Shared patterns across all tasks
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, margin: '0 12px 12px' }}>
@@ -1014,7 +1014,7 @@ export function RoomPage() {
                     key={j}
                     style={{
                       background: '#F0E8DC',
-                      border: '0.5px solid #D4C4B0',
+                      border: '0.5px solid #35382F',
                       borderRadius: 10,
                       fontSize: 11,
                       color: '#4A3728',
@@ -1040,7 +1040,7 @@ export function RoomPage() {
                   fontSize: 10,
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
-                  color: '#A89070',
+                  color: '#A0A39A',
                   marginBottom: 8,
                 }}
               >
@@ -1071,7 +1071,7 @@ export function RoomPage() {
           viewBox="0 0 24 24"
           fill="none"
           aria-hidden
-          style={{ margin: '0 auto 14px', display: 'block', color: '#D4C4B0' }}
+          style={{ margin: '0 auto 14px', display: 'block', color: '#35382F' }}
         >
           <path
             d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"
@@ -1081,7 +1081,7 @@ export function RoomPage() {
           />
           <rect x="9" y="3" width="6" height="4" rx="1" stroke="currentColor" strokeWidth={1.5} />
         </svg>
-        <p style={{ margin: 0, fontSize: 15, color: '#4A3728', fontWeight: 500, fontFamily: 'Georgia, serif' }}>
+        <p style={{ margin: 0, fontSize: 15, color: '#4A3728', fontWeight: 500, fontFamily: 'var(--vp-font-sans)' }}>
           No research tasks yet
         </p>
         <p
@@ -1138,7 +1138,7 @@ export function RoomPage() {
       >
         <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#C4A882' }}>
           Research board
-          <span style={{ marginLeft: 8, color: '#A89070', letterSpacing: 0, textTransform: 'none', fontSize: 11 }}>
+          <span style={{ marginLeft: 8, color: '#A0A39A', letterSpacing: 0, textTransform: 'none', fontSize: 11 }}>
             {filteredBoardTasks.length}
             {boardQuery.trim() ||
             boardMemberFilter !== 'all' ||
@@ -1171,10 +1171,10 @@ export function RoomPage() {
                 title="Sort research board"
                 style={{
                   fontSize: 11,
-                  fontFamily: 'Georgia, serif',
+                  fontFamily: 'var(--vp-font-sans)',
                   color: '#4A3728',
                   background: '#FAF7F2',
-                  border: '0.5px solid #D4C4B0',
+                  border: '0.5px solid #35382F',
                   borderRadius: 6,
                   padding: '4px 8px',
                   cursor: 'pointer',
@@ -1200,7 +1200,7 @@ export function RoomPage() {
                 onClick={() => void copyBoard()}
                 style={{
                   background: 'none',
-                  border: '0.5px solid #D4C4B0',
+                  border: '0.5px solid #35382F',
                   borderRadius: 6,
                   cursor: 'pointer',
                   color:
@@ -1208,7 +1208,7 @@ export function RoomPage() {
                       ? '#D85A30'
                       : boardCopyStatus === 'copied'
                         ? '#5A8C6A'
-                        : '#C4956A',
+                        : '#F0B84E',
                   padding: '4px 10px',
                   fontSize: 10,
                   letterSpacing: '0.04em',
@@ -1235,7 +1235,7 @@ export function RoomPage() {
                 onClick={() => downloadBoard()}
                 style={{
                   background: 'none',
-                  border: '0.5px solid #D4C4B0',
+                  border: '0.5px solid #35382F',
                   borderRadius: 6,
                   cursor: 'pointer',
                   color:
@@ -1243,7 +1243,7 @@ export function RoomPage() {
                       ? '#D85A30'
                       : boardDownloadStatus === 'done'
                         ? '#5A8C6A'
-                        : '#C4956A',
+                        : '#F0B84E',
                   padding: '4px 10px',
                   fontSize: 10,
                   letterSpacing: '0.04em',
@@ -1272,8 +1272,8 @@ export function RoomPage() {
                 width: '100%',
                 boxSizing: 'border-box',
                 fontSize: 12,
-                fontFamily: 'Georgia, serif',
-                color: '#2C1810',
+                fontFamily: 'var(--vp-font-sans)',
+                color: '#F3F0E7',
                 background: '#FAF7F2',
                 border: '0.5px solid #E0D5C5',
                 borderRadius: 8,
@@ -1298,7 +1298,7 @@ export function RoomPage() {
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: 14,
-                  color: '#A89070',
+                  color: '#A0A39A',
                   lineHeight: 1,
                   padding: 4,
                 }}
@@ -1328,11 +1328,11 @@ export function RoomPage() {
             style={{
               padding: '4px 10px',
               borderRadius: 999,
-              border: boardMemberFilter === 'all' ? 'none' : '0.5px solid #D4C4B0',
-              background: boardMemberFilter === 'all' ? '#C4956A' : 'transparent',
+              border: boardMemberFilter === 'all' ? 'none' : '0.5px solid #35382F',
+              background: boardMemberFilter === 'all' ? '#F0B84E' : 'transparent',
               color: boardMemberFilter === 'all' ? '#FAF7F2' : '#8C7355',
               fontSize: 11,
-              fontFamily: 'Georgia, serif',
+              fontFamily: 'var(--vp-font-sans)',
               cursor: 'pointer',
             }}
           >
@@ -1352,11 +1352,11 @@ export function RoomPage() {
                 style={{
                   padding: '4px 10px',
                   borderRadius: 999,
-                  border: selected ? 'none' : '0.5px solid #D4C4B0',
+                  border: selected ? 'none' : '0.5px solid #35382F',
                   background: selected ? getUserColor(m.user_id) : 'transparent',
                   color: selected ? '#FAF7F2' : '#8C7355',
                   fontSize: 11,
-                  fontFamily: 'Georgia, serif',
+                  fontFamily: 'var(--vp-font-sans)',
                   cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -1408,11 +1408,11 @@ export function RoomPage() {
                 style={{
                   padding: '4px 10px',
                   borderRadius: 999,
-                  border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                  border: selected ? '0.5px solid #F0B84E' : '0.5px solid #35382F',
                   background: selected ? '#F0E6DA' : 'transparent',
                   color: selected ? '#4A3728' : '#8C7355',
                   fontSize: 11,
-                  fontFamily: 'Georgia, serif',
+                  fontFamily: 'var(--vp-font-sans)',
                   cursor: 'pointer',
                 }}
               >
@@ -1445,11 +1445,11 @@ export function RoomPage() {
                 style={{
                   padding: '4px 10px',
                   borderRadius: 999,
-                  border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                  border: selected ? '0.5px solid #F0B84E' : '0.5px solid #35382F',
                   background: selected ? '#F0E6DA' : 'transparent',
                   color: selected ? '#4A3728' : '#8C7355',
                   fontSize: 11,
-                  fontFamily: 'Georgia, serif',
+                  fontFamily: 'var(--vp-font-sans)',
                   cursor: 'pointer',
                 }}
               >
@@ -1482,11 +1482,11 @@ export function RoomPage() {
                 style={{
                   padding: '4px 10px',
                   borderRadius: 999,
-                  border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                  border: selected ? '0.5px solid #F0B84E' : '0.5px solid #35382F',
                   background: selected ? '#F0E6DA' : 'transparent',
                   color: selected ? '#4A3728' : '#8C7355',
                   fontSize: 11,
-                  fontFamily: 'Georgia, serif',
+                  fontFamily: 'var(--vp-font-sans)',
                   cursor: 'pointer',
                 }}
               >
@@ -1504,7 +1504,7 @@ export function RoomPage() {
             marginBottom: 10,
             fontSize: 12,
             color: '#5A4A3A',
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--vp-font-sans)',
           }}
         >
           {taskActionToast}
@@ -1593,7 +1593,7 @@ export function RoomPage() {
               marginTop: 12,
               background: 'none',
               border: 'none',
-              color: '#C4956A',
+              color: '#F0B84E',
               fontSize: 13,
               cursor: 'pointer',
               textDecoration: 'underline',
@@ -1640,7 +1640,7 @@ export function RoomPage() {
                   background: '#FAF7F2',
                   border:
                     isExpanded || hoverTask === t.task_id
-                      ? '0.5px solid #C4956A'
+                      ? '0.5px solid #F0B84E'
                       : '0.5px solid #E0D5C5',
                   borderRadius: 10,
                   padding: 14,
@@ -1683,10 +1683,10 @@ export function RoomPage() {
                   >
                     {getUserInitials(name)}
                   </div>
-                  <span style={{ fontSize: 11, color: '#A89070' }}>{name}</span>
+                  <span style={{ fontSize: 11, color: '#A0A39A' }}>{name}</span>
                   <span style={{ flex: 1, minWidth: 4 }} />
                   {t.final_score != null ? (
-                    <span style={{ fontSize: 10, color: '#C4956A' }}>{t.final_score}/100</span>
+                    <span style={{ fontSize: 10, color: '#F0B84E' }}>{t.final_score}/100</span>
                   ) : null}
                   {(() => {
                     const conf = formatHistoryConfidenceBadge(t.final_confidence);
@@ -1702,7 +1702,7 @@ export function RoomPage() {
                     );
                   })()}
                   <span
-                    style={{ fontSize: 10, color: '#A89070' }}
+                    style={{ fontSize: 10, color: '#A0A39A' }}
                     title={roomBoardTimeTitle(t.created_at) || undefined}
                   >
                     {formatRoomBoardRelative(t.created_at, nowMs)}
@@ -1711,7 +1711,7 @@ export function RoomPage() {
                 <div
                   style={{
                     fontSize: 13,
-                    color: '#2C1810',
+                    color: '#F3F0E7',
                     fontWeight: 500,
                     lineHeight: 1.4,
                     marginBottom: 6,
@@ -1742,8 +1742,8 @@ export function RoomPage() {
                       background: 'none',
                       cursor: 'pointer',
                       fontSize: 11,
-                      color: '#C4956A',
-                      fontFamily: 'Georgia, serif',
+                      color: '#F0B84E',
+                      fontFamily: 'var(--vp-font-sans)',
                     }}
                   >
                     Copy question
@@ -1758,8 +1758,8 @@ export function RoomPage() {
                         background: 'none',
                         cursor: 'pointer',
                         fontSize: 11,
-                        color: '#C4956A',
-                        fontFamily: 'Georgia, serif',
+                        color: '#F0B84E',
+                        fontFamily: 'var(--vp-font-sans)',
                       }}
                     >
                       Copy answer
@@ -1807,8 +1807,8 @@ export function RoomPage() {
                       background: 'none',
                       cursor: 'pointer',
                       fontSize: 11,
-                      color: '#C4956A',
-                      fontFamily: 'Georgia, serif',
+                      color: '#F0B84E',
+                      fontFamily: 'var(--vp-font-sans)',
                     }}
                   >
                     {isExpanded ? 'Show less' : 'Show full answer'}
@@ -1830,7 +1830,7 @@ export function RoomPage() {
                       cursor: 'pointer',
                       fontSize: 11,
                       color: '#8C7355',
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                     }}
                   >
                     Open in Agent →
@@ -1844,7 +1844,7 @@ export function RoomPage() {
               type="button"
               onClick={() => setShowTaskPicker(true)}
               style={{
-                border: '0.5px dashed #D4C4B0',
+                border: '0.5px dashed #35382F',
                 borderRadius: 10,
                 padding: 14,
                 display: 'flex',
@@ -1867,7 +1867,7 @@ export function RoomPage() {
           type="button"
           onClick={() => setShowTaskPicker(true)}
           style={{
-            border: '0.5px dashed #D4C4B0',
+            border: '0.5px dashed #35382F',
             borderRadius: 10,
             padding: 14,
             display: 'flex',
@@ -1918,7 +1918,7 @@ export function RoomPage() {
             fontSize: 12,
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
-            color: '#C4956A',
+            color: '#F0B84E',
             marginBottom: 12,
           }}
         >
@@ -1930,7 +1930,7 @@ export function RoomPage() {
             fontSize: 'clamp(24px, 4vw, 32px)',
             fontWeight: 500,
             color: '#1A1714',
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--vp-font-sans)',
           }}
         >
           Couldn’t open this room
@@ -1941,7 +1941,7 @@ export function RoomPage() {
             margin: '12px auto 0',
             maxWidth: 400,
             fontSize: 14,
-            color: '#6B6460',
+            color: '#A0A39A',
             lineHeight: 1.6,
           }}
         >
@@ -2007,13 +2007,13 @@ export function RoomPage() {
             }}
             style={{
               background: '#1A1714',
-              color: '#FAF7F4',
+              color: '#F3F0E7',
               border: 'none',
               borderRadius: 999,
               padding: '6px 14px',
               fontSize: 12,
               cursor: 'pointer',
-              fontFamily: 'Georgia, serif',
+              fontFamily: 'var(--vp-font-sans)',
             }}
           >
             Sign in
@@ -2064,7 +2064,7 @@ export function RoomPage() {
             transform: 'translateX(-50%)',
             zIndex: 200,
             background: '#1A1714',
-            color: '#FAF7F4',
+            color: '#F3F0E7',
             padding: '8px 16px',
             borderRadius: 8,
             fontSize: 12,
@@ -2095,15 +2095,15 @@ export function RoomPage() {
           <button
             type="button"
             onClick={() => navigate('/')}
-            style={{ background: 'none', border: 'none', color: '#2C1810', cursor: 'pointer', fontSize: 14, fontFamily: 'Georgia, serif', fontWeight: 500, flexShrink: 0 }}
+            style={{ background: 'none', border: 'none', color: '#F3F0E7', cursor: 'pointer', fontSize: 14, fontFamily: 'var(--vp-font-sans)', fontWeight: 500, flexShrink: 0 }}
           >
             ← Arena
           </button>
           <div style={{ minWidth: 0 }}>
-            <span style={{ fontSize: 16, fontFamily: 'Georgia, serif', fontWeight: 500, color: '#2C1810', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+            <span style={{ fontSize: 16, fontFamily: 'var(--vp-font-sans)', fontWeight: 500, color: '#F3F0E7', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
               {room.name}
             </span>
-            <span style={{ fontSize: 11, color: '#A89070' }}>
+            <span style={{ fontSize: 11, color: '#A0A39A' }}>
               {members.length} researcher{members.length !== 1 ? 's' : ''} · {tasks.length} task{tasks.length !== 1 ? 's' : ''}{contradictions.length > 0 ? ` · ${contradictions.length} contradiction${contradictions.length !== 1 ? 's' : ''} found` : ''}
             </span>
           </div>
@@ -2138,7 +2138,7 @@ export function RoomPage() {
                   width: 7,
                   height: 7,
                   borderRadius: '50%',
-                  background: roomMemberOnline(m.last_seen_at, nowMs) ? '#639922' : '#D4C4B0',
+                  background: roomMemberOnline(m.last_seen_at, nowMs) ? '#639922' : '#35382F',
                   border: '1px solid #F5F0E8',
                 }}
               />
@@ -2165,7 +2165,7 @@ export function RoomPage() {
                     ? '#F0997B'
                     : inviteShareStatus === 'shared'
                       ? '#A8C5A0'
-                      : '#C4956A',
+                      : '#F0B84E',
                 fontSize: 11,
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
@@ -2188,7 +2188,7 @@ export function RoomPage() {
             style={{
               background: nativeShareAvailable ? 'transparent' : 'rgba(196,149,106,0.15)',
               border: '0.5px solid rgba(196,149,106,0.4)',
-              color: '#C4956A',
+              color: '#F0B84E',
               fontSize: 11,
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
@@ -2290,7 +2290,7 @@ export function RoomPage() {
                 }}
               >
                 <div style={{ borderBottom: '0.5px solid #EDE4D8', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span id="room-task-picker-title" style={{ fontSize: 16, color: '#2C1810', fontWeight: 500 }}>
+                  <span id="room-task-picker-title" style={{ fontSize: 16, color: '#F3F0E7', fontWeight: 500 }}>
                     Add a task to this room
                   </span>
                   <button
@@ -2304,9 +2304,9 @@ export function RoomPage() {
                 </div>
                 <div style={{ padding: '16px 20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A89070' }}>From your history</div>
+                    <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A0A39A' }}>From your history</div>
                     {historyTasks.length > 0 ? (
-                      <span style={{ fontSize: 10, color: '#A89070' }}>
+                      <span style={{ fontSize: 10, color: '#A0A39A' }}>
                         {filteredHistoryTasks.length}
                         {pickerQuery.trim() ? ` / ${historyTasks.length}` : ''}
                       </span>
@@ -2326,8 +2326,8 @@ export function RoomPage() {
                           width: '100%',
                           boxSizing: 'border-box',
                           fontSize: 12,
-                          fontFamily: 'Georgia, serif',
-                          color: '#2C1810',
+                          fontFamily: 'var(--vp-font-sans)',
+                          color: '#F3F0E7',
                           background: '#FAF7F2',
                           border: '0.5px solid #E0D5C5',
                           borderRadius: 8,
@@ -2352,7 +2352,7 @@ export function RoomPage() {
                             border: 'none',
                             cursor: 'pointer',
                             fontSize: 14,
-                            color: '#A89070',
+                            color: '#A0A39A',
                             lineHeight: 1,
                             padding: 4,
                           }}
@@ -2363,11 +2363,11 @@ export function RoomPage() {
                     </div>
                   ) : null}
                   {historyLoading ? (
-                    <p style={{ fontSize: 12, color: '#A89070' }}>Loading…</p>
+                    <p style={{ fontSize: 12, color: '#A0A39A' }}>Loading…</p>
                   ) : historyTasks.length === 0 ? (
-                    <p style={{ fontSize: 12, color: '#A89070' }}>No tasks to add</p>
+                    <p style={{ fontSize: 12, color: '#A0A39A' }}>No tasks to add</p>
                   ) : filteredHistoryTasks.length === 0 ? (
-                    <p style={{ fontSize: 12, color: '#A89070', marginBottom: 20 }}>
+                    <p style={{ fontSize: 12, color: '#A0A39A', marginBottom: 20 }}>
                       No history matches “{pickerQuery.trim()}”
                       <button
                         type="button"
@@ -2380,7 +2380,7 @@ export function RoomPage() {
                           marginTop: 8,
                           background: 'none',
                           border: 'none',
-                          color: '#C4956A',
+                          color: '#F0B84E',
                           fontSize: 12,
                           cursor: 'pointer',
                           textDecoration: 'underline',
@@ -2410,7 +2410,7 @@ export function RoomPage() {
                       ))}
                     </div>
                   )}
-                  <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A89070', marginBottom: 8 }}>Run a new task</div>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#A0A39A', marginBottom: 8 }}>Run a new task</div>
                   <textarea
                     value={newTaskText}
                     onChange={(e) => setNewTaskText(e.target.value)}
@@ -2419,12 +2419,12 @@ export function RoomPage() {
                     style={{
                       width: '100%',
                       boxSizing: 'border-box',
-                      border: '0.5px solid #D4C4B0',
+                      border: '0.5px solid #35382F',
                       borderRadius: 8,
                       padding: '10px 12px',
                       fontSize: 13,
-                      fontFamily: 'Georgia, serif',
-                      color: '#2C1810',
+                      fontFamily: 'var(--vp-font-sans)',
+                      color: '#F3F0E7',
                       background: '#FDFAF6',
                       marginBottom: 12,
                     }}
@@ -2443,13 +2443,13 @@ export function RoomPage() {
                       navigate(q ? `/agent?q=${encodeURIComponent(q)}` : '/agent');
                     }}
                     style={{
-                      background: '#2C1810',
-                      color: '#C4956A',
+                      background: '#F3F0E7',
+                      color: '#F0B84E',
                       border: 'none',
                       borderRadius: 20,
                       padding: '9px 18px',
                       fontSize: 13,
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                       cursor: 'pointer',
                     }}
                   >
@@ -2498,9 +2498,9 @@ export function RoomPage() {
                   textTransform: 'uppercase',
                   letterSpacing: '0.06em',
                   border: 'none',
-                  borderTop: active ? '3px solid #C4956A' : '3px solid transparent',
+                  borderTop: active ? '3px solid #F0B84E' : '3px solid transparent',
                   background: 'transparent',
-                  color: active ? '#2C1810' : '#A89070',
+                  color: active ? '#F3F0E7' : '#A0A39A',
                   cursor: 'pointer',
                   padding: '8px 4px',
                 }}

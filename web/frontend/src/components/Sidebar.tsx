@@ -519,7 +519,7 @@ export function Sidebar({
   const usedPercent = dailyLimit > 0
     ? Math.min(((dailyLimit - messagesRemaining) / dailyLimit) * 100, 100)
     : 0;
-  const usageColor = messagesRemaining <= 2 ? '#E57373' : '#C4956A';
+  const usageColor = messagesRemaining <= 2 ? '#E57373' : '#F0B84E';
 
   useEffect(() => {
     if (!openMenuTurnId && !confirmDeleteTurnId) return;
@@ -616,7 +616,7 @@ export function Sidebar({
           </div>
           <div className="mb-5" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <MenuAction
-              icon={<Trophy style={{ width: '14px', height: '14px', color: '#C4956A' }} />}
+              icon={<Trophy style={{ width: '14px', height: '14px', color: '#F0B84E' }} />}
               label="Leaderboard"
               onClick={() => {
                 void track('leaderboard_viewed');
@@ -624,7 +624,7 @@ export function Sidebar({
               }}
             />
             <MenuAction
-              icon={<Sparkles style={{ width: '14px', height: '14px', color: '#9B8FAA' }} />}
+              icon={<Sparkles style={{ width: '14px', height: '14px', color: '#A98CF8' }} />}
               label="Agent Mode"
               onClick={() => {
                 void track('agent_nav_from_sidebar');
@@ -642,7 +642,7 @@ export function Sidebar({
               }}
             />
             <MenuAction
-              icon={<LayoutGrid style={{ width: '14px', height: '14px', color: '#9B8FAA' }} />}
+              icon={<LayoutGrid style={{ width: '14px', height: '14px', color: '#A98CF8' }} />}
               label="Personas"
               onClick={() => {
                 onClose();
@@ -651,8 +651,8 @@ export function Sidebar({
             />
             {!isDefaultPanel && (
               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px' }}>
-                <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#C4956A', flexShrink: 0 }} />
-                <span style={{ color: '#C4956A' }}>Custom panel active</span>
+                <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#F0B84E', flexShrink: 0 }} />
+                <span style={{ color: '#F0B84E' }}>Custom panel active</span>
                 <button type="button" onClick={resetPanel} className="sidebar-text-link">
                   Reset
                 </button>
@@ -662,9 +662,9 @@ export function Sidebar({
 
           <div style={{ margin: '1.2rem 0 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-              <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#6B6460', margin: 0 }}>Recents</p>
+              <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#A0A39A', margin: 0 }}>Recents</p>
               {reversedTurns.length > 0 ? (
-                <span style={{ fontSize: 10, color: '#A89070' }}>
+                <span style={{ fontSize: 10, color: '#A0A39A' }}>
                   {filteredTurns.length}
                   {searchQuery.trim() ||
                   activeFilter !== 'all' ||
@@ -698,12 +698,12 @@ export function Sidebar({
                         ? '#D85A30'
                         : copyRecentsStatus === 'copied'
                           ? '#5A8C6A'
-                          : '#C4956A',
+                          : '#F0B84E',
                     padding: '3px 8px',
                     fontSize: 10,
                     letterSpacing: '0.04em',
                     textTransform: 'uppercase',
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                   }}
                 >
                   {copyRecentsStatus === 'copied'
@@ -733,12 +733,12 @@ export function Sidebar({
                         ? '#D85A30'
                         : downloadRecentsStatus === 'done'
                           ? '#5A8C6A'
-                          : '#C4956A',
+                          : '#F0B84E',
                     padding: '3px 8px',
                     fontSize: 10,
                     letterSpacing: '0.04em',
                     textTransform: 'uppercase',
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                   }}
                 >
                   {downloadRecentsStatus === 'done'
@@ -827,15 +827,15 @@ export function Sidebar({
                         style={{
                           background: selected ? '#F0E6DA' : 'transparent',
                           border: selected
-                            ? '0.5px solid #C4956A'
+                            ? '0.5px solid #F0B84E'
                             : '0.5px solid #E0D8D0',
                           borderRadius: 999,
                           padding: '3px 9px',
                           fontSize: 10,
                           letterSpacing: '0.03em',
-                          color: selected ? '#4A3728' : '#A89070',
+                          color: selected ? '#4A3728' : '#A0A39A',
                           cursor: 'pointer',
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                           lineHeight: 1.35,
                         }}
                       >
@@ -868,15 +868,15 @@ export function Sidebar({
                         style={{
                           background: selected ? '#F0E6DA' : 'transparent',
                           border: selected
-                            ? '0.5px solid #C4956A'
+                            ? '0.5px solid #F0B84E'
                             : '0.5px solid #E0D8D0',
                           borderRadius: 999,
                           padding: '3px 9px',
                           fontSize: 10,
                           letterSpacing: '0.03em',
-                          color: selected ? '#4A3728' : '#A89070',
+                          color: selected ? '#4A3728' : '#A0A39A',
                           cursor: 'pointer',
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                           lineHeight: 1.35,
                         }}
                       >
@@ -895,9 +895,9 @@ export function Sidebar({
                   style={{
                     width: '100%',
                     fontSize: 11,
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                     color: '#4A3728',
-                    background: '#FAF7F4',
+                    background: '#0B0C0A',
                     border: '0.5px solid #E0D8D0',
                     borderRadius: 6,
                     padding: '5px 8px',
@@ -925,9 +925,9 @@ export function Sidebar({
                   width: '100%',
                   boxSizing: 'border-box',
                   fontSize: 12,
-                  fontFamily: 'Georgia, serif',
+                  fontFamily: 'var(--vp-font-sans)',
                   color: '#1A1714',
-                  background: '#FAF7F4',
+                  background: '#0B0C0A',
                   border: '0.5px solid #E0D8D0',
                   borderRadius: 8,
                   padding: '7px 28px 7px 10px',
@@ -957,7 +957,7 @@ export function Sidebar({
                     border: 'none',
                     cursor: 'pointer',
                     fontSize: 14,
-                    color: '#A89070',
+                    color: '#A0A39A',
                     lineHeight: 1,
                     padding: 4,
                   }}
@@ -1053,11 +1053,11 @@ export function Sidebar({
                               </p>
                               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <AgentDot agentId={turn.winner_id} size={5} />
-                                <span style={{ fontSize: '11px', color: '#6B6460', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{winner.name}</span>
+                                <span style={{ fontSize: '11px', color: '#A0A39A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{winner.name}</span>
                                 <span
                                   style={{
                                     fontSize: 11,
-                                    color: '#A89070',
+                                    color: '#A0A39A',
                                     marginLeft: 'auto',
                                     flexShrink: 0,
                                     whiteSpace: 'nowrap',
@@ -1090,7 +1090,7 @@ export function Sidebar({
                               height: '28px',
                               borderRadius: '6px',
                               background: isMenuOpen ? '#F0EBE3' : 'transparent',
-                              color: '#6B6460',
+                              color: '#A0A39A',
                               transition: 'all 150ms ease',
                             }}
                           >
@@ -1216,7 +1216,7 @@ export function Sidebar({
                                     padding: '6px 10px',
                                     fontSize: '12px',
                                     borderRadius: '6px',
-                                    color: '#6B6460',
+                                    color: '#A0A39A',
                                     background: '#F0EBE3',
                                     transition: 'all 150ms ease',
                                   }}
@@ -1248,7 +1248,7 @@ export function Sidebar({
               </div>
             ) : reversedTurns.length === 0 ? (
               <div style={{ padding: '1rem', textAlign: 'center' }}>
-                <p style={{ fontSize: '13px', color: '#6B6460' }}>
+                <p style={{ fontSize: '13px', color: '#A0A39A' }}>
                   Your history will appear here.
                 </p>
               </div>
@@ -1256,7 +1256,7 @@ export function Sidebar({
               recentsWinnerFilter !== SIDEBAR_RECENTS_WINNER_ALL ||
               recentsRecencyFilter !== 'all' ? (
               <div style={{ padding: '1.5rem 0.5rem', textAlign: 'center' }}>
-                <p style={{ fontSize: '13px', color: '#6B6460', margin: '0 0 8px' }}>
+                <p style={{ fontSize: '13px', color: '#A0A39A', margin: '0 0 8px' }}>
                   {searchQuery.trim()
                     ? `No recents match “${searchQuery.trim()}”${
                         recentsWinnerFilter !== SIDEBAR_RECENTS_WINNER_ALL
@@ -1282,11 +1282,11 @@ export function Sidebar({
                   }}
                   style={{
                     fontSize: 12,
-                    color: '#C4956A',
+                    color: '#F0B84E',
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                     textDecoration: 'underline',
                   }}
                 >
@@ -1299,7 +1299,7 @@ export function Sidebar({
               </div>
             ) : (
               <div style={{ padding: '2rem 0', textAlign: 'center' }}>
-                <p style={{ fontSize: '13px', color: '#6B6460', textTransform: 'capitalize' }}>
+                <p style={{ fontSize: '13px', color: '#A0A39A', textTransform: 'capitalize' }}>
                   No {activeFilter} prompts yet
                 </p>
               </div>
@@ -1323,13 +1323,13 @@ export function Sidebar({
                         fontWeight: 600,
                         textTransform: 'uppercase',
                         letterSpacing: '0.12em',
-                        color: '#6B6460',
+                        color: '#A0A39A',
                         margin: 0,
                       }}
                     >
                       Saved
                     </p>
-                    <span style={{ fontSize: 10, color: '#A89070' }}>
+                    <span style={{ fontSize: 10, color: '#A0A39A' }}>
                       {filteredSaved.length}
                       {savedSearchQuery.trim() ||
                       savedMindFilter !== SIDEBAR_SAVED_MIND_ALL ||
@@ -1361,12 +1361,12 @@ export function Sidebar({
                             ? '#D85A30'
                             : copyAllSavedStatus === 'copied'
                               ? '#5A8C6A'
-                              : '#C4956A',
+                              : '#F0B84E',
                         padding: '3px 8px',
                         fontSize: 10,
                         letterSpacing: '0.04em',
                         textTransform: 'uppercase',
-                        fontFamily: 'Georgia, serif',
+                        fontFamily: 'var(--vp-font-sans)',
                       }}
                     >
                       {copyAllSavedStatus === 'copied'
@@ -1396,12 +1396,12 @@ export function Sidebar({
                             ? '#D85A30'
                             : downloadAllSavedStatus === 'done'
                               ? '#5A8C6A'
-                              : '#C4956A',
+                              : '#F0B84E',
                         padding: '3px 8px',
                         fontSize: 10,
                         letterSpacing: '0.04em',
                         textTransform: 'uppercase',
-                        fontFamily: 'Georgia, serif',
+                        fontFamily: 'var(--vp-font-sans)',
                       }}
                     >
                       {downloadAllSavedStatus === 'done'
@@ -1463,15 +1463,15 @@ export function Sidebar({
                             style={{
                               background: selected ? '#F0E6DA' : 'transparent',
                               border: selected
-                                ? '0.5px solid #C4956A'
+                                ? '0.5px solid #F0B84E'
                                 : '0.5px solid #E0D8D0',
                               borderRadius: 999,
                               padding: '3px 9px',
                               fontSize: 10,
                               letterSpacing: '0.03em',
-                              color: selected ? '#4A3728' : '#A89070',
+                              color: selected ? '#4A3728' : '#A0A39A',
                               cursor: 'pointer',
-                              fontFamily: 'Georgia, serif',
+                              fontFamily: 'var(--vp-font-sans)',
                               lineHeight: 1.35,
                             }}
                           >
@@ -1504,15 +1504,15 @@ export function Sidebar({
                             style={{
                               background: selected ? '#F0E6DA' : 'transparent',
                               border: selected
-                                ? '0.5px solid #C4956A'
+                                ? '0.5px solid #F0B84E'
                                 : '0.5px solid #E0D8D0',
                               borderRadius: 999,
                               padding: '3px 9px',
                               fontSize: 10,
                               letterSpacing: '0.03em',
-                              color: selected ? '#4A3728' : '#A89070',
+                              color: selected ? '#4A3728' : '#A0A39A',
                               cursor: 'pointer',
-                              fontFamily: 'Georgia, serif',
+                              fontFamily: 'var(--vp-font-sans)',
                               lineHeight: 1.35,
                             }}
                           >
@@ -1545,15 +1545,15 @@ export function Sidebar({
                             style={{
                               background: selected ? '#F0E6DA' : 'transparent',
                               border: selected
-                                ? '0.5px solid #C4956A'
+                                ? '0.5px solid #F0B84E'
                                 : '0.5px solid #E0D8D0',
                               borderRadius: 999,
                               padding: '3px 9px',
                               fontSize: 10,
                               letterSpacing: '0.03em',
-                              color: selected ? '#4A3728' : '#A89070',
+                              color: selected ? '#4A3728' : '#A0A39A',
                               cursor: 'pointer',
-                              fontFamily: 'Georgia, serif',
+                              fontFamily: 'var(--vp-font-sans)',
                               lineHeight: 1.35,
                             }}
                           >
@@ -1571,9 +1571,9 @@ export function Sidebar({
                     style={{
                       width: '100%',
                       fontSize: 11,
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                       color: '#4A3728',
-                      background: '#FAF7F4',
+                      background: '#0B0C0A',
                       border: '0.5px solid #E0D8D0',
                       borderRadius: 6,
                       padding: '5px 8px',
@@ -1600,9 +1600,9 @@ export function Sidebar({
                       width: '100%',
                       boxSizing: 'border-box',
                       fontSize: 12,
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                       color: '#1A1714',
-                      background: '#FAF7F4',
+                      background: '#0B0C0A',
                       border: '0.5px solid #E0D8D0',
                       borderRadius: 8,
                       padding: '7px 28px 7px 10px',
@@ -1626,7 +1626,7 @@ export function Sidebar({
                         border: 'none',
                         cursor: 'pointer',
                         fontSize: 14,
-                        color: '#A89070',
+                        color: '#A0A39A',
                         lineHeight: 1,
                         padding: 4,
                       }}
@@ -1639,7 +1639,7 @@ export function Sidebar({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {filteredSaved.length === 0 ? (
                     <div style={{ padding: '0.75rem 0.25rem', textAlign: 'center' }}>
-                      <p style={{ fontSize: 12, color: '#6B6460', margin: '0 0 6px' }}>
+                      <p style={{ fontSize: 12, color: '#A0A39A', margin: '0 0 6px' }}>
                         {savedSearchQuery.trim()
                           ? `No saved takes match “${savedSearchQuery.trim()}”${
                               savedMindFilter !== SIDEBAR_SAVED_MIND_ALL
@@ -1676,11 +1676,11 @@ export function Sidebar({
                         }}
                         style={{
                           fontSize: 12,
-                          color: '#C4956A',
+                          color: '#F0B84E',
                           background: 'none',
                           border: 'none',
                           cursor: 'pointer',
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                           textDecoration: 'underline',
                         }}
                       >
@@ -1730,7 +1730,7 @@ export function Sidebar({
                                   width: '11px',
                                   height: '11px',
                                   flexShrink: 0,
-                                  color: '#C4956A',
+                                  color: '#F0B84E',
                                   fill: 'currentColor',
                                   marginLeft: 2,
                                 }}
@@ -1741,7 +1741,7 @@ export function Sidebar({
                                 marginTop: '4px',
                                 fontSize: '11px',
                                 lineHeight: '1.6',
-                                color: '#6B6460',
+                                color: '#A0A39A',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
@@ -1757,7 +1757,7 @@ export function Sidebar({
                                 style={{
                                   margin: '3px 0 0',
                                   fontSize: 10,
-                                  color: '#A89070',
+                                  color: '#A0A39A',
                                   lineHeight: 1.3,
                                 }}
                                 title={
@@ -1788,7 +1788,7 @@ export function Sidebar({
                               borderRadius: 6,
                               border: 'none',
                               background: justCopied ? 'rgba(196,149,106,0.15)' : 'transparent',
-                              color: justCopied ? '#C4956A' : '#A89070',
+                              color: justCopied ? '#F0B84E' : '#A0A39A',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
@@ -1833,8 +1833,8 @@ export function Sidebar({
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', color: '#6B6460' }}>Messages today</span>
-                <span style={{ fontSize: '11px', color: '#6B6460' }}>{messagesRemaining} left</span>
+                <span style={{ fontSize: '11px', color: '#A0A39A' }}>Messages today</span>
+                <span style={{ fontSize: '11px', color: '#A0A39A' }}>{messagesRemaining} left</span>
               </div>
               <div style={{ height: '3px', background: '#E0D8D0', borderRadius: '999px', margin: '6px 0' }}>
                 <div
@@ -1849,7 +1849,7 @@ export function Sidebar({
               </div>
               {messagesRemaining === 0 && (
                 <>
-                  <div style={{ fontSize: '11px', color: '#6B6460', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '11px', color: '#A0A39A', marginBottom: '6px' }}>
                     You've used all messages today
                   </div>
                   <button
@@ -1857,7 +1857,7 @@ export function Sidebar({
                     onClick={() => navigate('/pricing')}
                     style={{
                       fontSize: '11px',
-                      color: '#C4956A',
+                      color: '#F0B84E',
                       background: 'transparent',
                       border: 'none',
                       cursor: 'pointer',
@@ -1869,7 +1869,7 @@ export function Sidebar({
                 </>
               )}
               {isFree && (
-                <div style={{ fontSize: '10px', color: '#6B6460', letterSpacing: '.06em', marginTop: '4px' }}>
+                <div style={{ fontSize: '10px', color: '#A0A39A', letterSpacing: '.06em', marginTop: '4px' }}>
                   Free plan · resets daily
                 </div>
               )}
@@ -1890,7 +1890,7 @@ export function Sidebar({
                   width: 30,
                   height: 30,
                   borderRadius: '50%',
-                  background: '#C4956A',
+                  background: '#F0B84E',
                   color: '#FAF7F2',
                   fontSize: 11,
                   fontWeight: 600,
@@ -1914,7 +1914,7 @@ export function Sidebar({
                 style={{
                   fontSize: 12,
                   color: '#4A3728',
-                  fontFamily: 'Georgia, serif',
+                  fontFamily: 'var(--vp-font-sans)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',

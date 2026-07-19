@@ -246,4 +246,61 @@ describe('SignInPage', () => {
     });
     expect(container.querySelector('.auth-page__strength')).toBeTruthy();
   });
+
+  it('exposes an accessible buddy control and cycles its play scenes', () => {
+    const { container } = renderPage();
+    const buddy = screen.getByRole('button', { name: 'Play with the Prism Buddy' });
+    const stage = container.querySelector('.auth-page__buddy-stage') as HTMLElement;
+
+    expect(stage.dataset.action).toBe('none');
+    fireEvent.click(buddy);
+    expect(stage.dataset.action).toBe('boop');
+    fireEvent.click(buddy);
+    expect(stage.dataset.action).toBe('wave');
+    fireEvent.click(buddy);
+    expect(stage.dataset.action).toBe('dance');
+  });
+
+  it('keeps privacy mode dominant while allowing a safe match celebration', () => {
+    const { container } = renderPage('/signin?tab=signup');
+    const form = activeForm();
+    const stage = container.querySelector('.auth-page__buddy-stage') as HTMLElement;
+    const passwordInput = within(form).getByLabelText('Password');
+
+    fireEvent.change(within(form).getByLabelText('Name'), {
+      target: { value: 'Ada' },
+    });
+    expect(stage.dataset.action).toBe('approve');
+
+    fireEvent.focus(passwordInput);
+    expect(stage.dataset.mode).toBe('private');
+    expect(stage.dataset.action).toBe('none');
+
+    fireEvent.change(passwordInput, {
+      target: { value: 'a-very-strong-password' },
+    });
+    expect(stage.dataset.mode).toBe('private');
+    expect(stage.dataset.action).toBe('match');
+  });
+
+  it('switches the buddy to its concerned scene on a validation error', async () => {
+    const { container } = renderPage('/signin?tab=signup');
+    const form = activeForm();
+    const stage = container.querySelector('.auth-page__buddy-stage') as HTMLElement;
+
+    fireEvent.change(within(form).getByLabelText('Name'), {
+      target: { value: 'Ada' },
+    });
+    fireEvent.change(within(form).getByLabelText('Password'), {
+      target: { value: 'longenough123' },
+    });
+    fireEvent.change(within(form).getByLabelText('Confirm password'), {
+      target: { value: 'different123' },
+    });
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(stage.dataset.action).toBe('concerned');
+    });
+  });
 });

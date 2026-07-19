@@ -31,7 +31,7 @@ function DriftIcon() {
 
 function scoreColor(score: number): string {
   if (score >= 70) return '#D85A30';
-  if (score >= 40) return '#C4956A';
+  if (score >= 40) return '#F0B84E';
   if (score >= 15) return '#8B7355';
   return '#6B8F71';
 }
@@ -125,7 +125,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
   if (taskCount < 2) return null;
 
   const score = data?.drift_score ?? null;
-  const accent = score != null ? scoreColor(score) : '#C4956A';
+  const accent = score != null ? scoreColor(score) : '#F0B84E';
 
   return (
     <div
@@ -143,7 +143,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
         onClick={() => setOpen((v) => !v)}
         style={{
           width: '100%',
-          background: '#2C1810',
+          background: '#F3F0E7',
           padding: '12px 18px',
           display: 'flex',
           justifyContent: 'space-between',
@@ -154,7 +154,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
           textAlign: 'left',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#C4956A' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#F0B84E' }}>
           <DriftIcon />
           <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             Perspective drift
@@ -177,7 +177,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
               {score}/100 · {data?.label}
             </span>
           ) : null}
-          <span style={{ color: '#C4956A', fontSize: 12 }} aria-hidden>
+          <span style={{ color: '#F0B84E', fontSize: 12 }} aria-hidden>
             {open ? '▾' : '▸'}
           </span>
         </div>
@@ -186,7 +186,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
       {open ? (
         <div style={{ padding: '14px 16px 16px' }}>
           {loading && !data ? (
-            <div style={{ fontSize: 13, color: '#A89070', fontStyle: 'italic' }}>
+            <div style={{ fontSize: 13, color: '#A0A39A', fontStyle: 'italic' }}>
               Comparing viewpoints across room tasks…
             </div>
           ) : null}
@@ -209,11 +209,11 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                 onClick={() => void load()}
                 style={{
                   background: 'none',
-                  border: '0.5px solid #D4C4B0',
+                  border: '0.5px solid #35382F',
                   borderRadius: 6,
                   padding: '3px 10px',
                   fontSize: 11,
-                  color: '#C4956A',
+                  color: '#F0B84E',
                   cursor: 'pointer',
                 }}
               >
@@ -228,7 +228,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: 14,
-                  color: '#A89070',
+                  color: '#A0A39A',
                   padding: 0,
                 }}
               >
@@ -243,7 +243,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                 <div
                   style={{
                     fontSize: 28,
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                     color: accent,
                     lineHeight: 1,
                   }}
@@ -261,7 +261,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                   >
                     {data.label}
                   </div>
-                  <div style={{ fontSize: 12, color: '#A89070', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: '#A0A39A', marginTop: 2 }}>
                     Across {data.task_count} tasks
                     {data.mean_similarity != null
                       ? ` · mean overlap ${(data.mean_similarity * 100).toFixed(0)}%`
@@ -282,7 +282,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                     }
                     style={{
                       background: 'none',
-                      border: '0.5px solid #D4C4B0',
+                      border: '0.5px solid #35382F',
                       borderRadius: 6,
                       padding: '4px 10px',
                       fontSize: 10,
@@ -293,7 +293,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                           ? '#D85A30'
                           : copyStatus === 'copied'
                             ? '#5A8C6A'
-                            : '#C4956A',
+                            : '#F0B84E',
                       cursor: 'pointer',
                     }}
                   >
@@ -312,7 +312,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                     }
                     style={{
                       background: 'none',
-                      border: '0.5px solid #D4C4B0',
+                      border: '0.5px solid #35382F',
                       borderRadius: 6,
                       padding: '4px 10px',
                       fontSize: 10,
@@ -323,7 +323,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                           ? '#D85A30'
                           : downloadStatus === 'done'
                             ? '#5A8C6A'
-                            : '#C4956A',
+                            : '#F0B84E',
                       cursor: 'pointer',
                     }}
                   >
@@ -341,13 +341,13 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                     aria-label="Refresh drift analysis"
                     style={{
                       background: 'none',
-                      border: '0.5px solid #D4C4B0',
+                      border: '0.5px solid #35382F',
                       borderRadius: 6,
                       padding: '4px 10px',
                       fontSize: 10,
                       textTransform: 'uppercase',
                       letterSpacing: '0.04em',
-                      color: '#C4956A',
+                      color: '#F0B84E',
                       cursor: loading ? 'default' : 'pointer',
                       opacity: loading ? 0.5 : 1,
                     }}
@@ -380,7 +380,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
               ) : null}
 
               {data.message ? (
-                <div style={{ fontSize: 13, color: '#A89070', fontStyle: 'italic' }}>{data.message}</div>
+                <div style={{ fontSize: 13, color: '#A0A39A', fontStyle: 'italic' }}>{data.message}</div>
               ) : null}
 
               {data.perspective_clusters.length > 0 ? (
@@ -389,7 +389,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                     style={{
                       fontSize: 10,
                       textTransform: 'uppercase',
-                      color: '#A89070',
+                      color: '#A0A39A',
                       marginBottom: 6,
                       letterSpacing: '0.06em',
                     }}
@@ -411,12 +411,12 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                           style={{
                             fontSize: 12,
                             color: '#4A3728',
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                             marginBottom: 4,
                           }}
                         >
                           {c.theme}
-                          <span style={{ color: '#A89070', fontSize: 11, marginLeft: 8 }}>
+                          <span style={{ color: '#A0A39A', fontSize: 11, marginLeft: 8 }}>
                             {c.size} task{c.size === 1 ? '' : 's'}
                           </span>
                         </div>
@@ -435,7 +435,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                     style={{
                       fontSize: 10,
                       textTransform: 'uppercase',
-                      color: '#A89070',
+                      color: '#A0A39A',
                       marginBottom: 6,
                       letterSpacing: '0.06em',
                     }}
@@ -464,20 +464,20 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
                         {p.task_a.user} vs {p.task_b.user} ·{' '}
                         {(p.similarity * 100).toFixed(0)}% overlap
                       </div>
-                      <div style={{ fontSize: 12, color: '#2C1810', lineHeight: 1.45 }}>
+                      <div style={{ fontSize: 12, color: '#F3F0E7', lineHeight: 1.45 }}>
                         {p.task_a.snippet || '—'}
                       </div>
                       <div
                         style={{
                           fontSize: 10,
-                          color: '#A89070',
+                          color: '#A0A39A',
                           fontStyle: 'italic',
                           margin: '4px 0',
                         }}
                       >
                         vs
                       </div>
-                      <div style={{ fontSize: 12, color: '#2C1810', lineHeight: 1.45 }}>
+                      <div style={{ fontSize: 12, color: '#F3F0E7', lineHeight: 1.45 }}>
                         {p.task_b.snippet || '—'}
                       </div>
                     </div>
@@ -488,7 +488,7 @@ export function PerspectiveDriftPanel({ slug, taskCount, roomName }: Props) {
               {!data.message &&
               data.perspective_clusters.length === 0 &&
               data.divergent_pairs.length === 0 ? (
-                <div style={{ fontSize: 13, color: '#A89070', fontStyle: 'italic' }}>
+                <div style={{ fontSize: 13, color: '#A0A39A', fontStyle: 'italic' }}>
                   Not enough answer text yet to cluster viewpoints.
                 </div>
               ) : null}

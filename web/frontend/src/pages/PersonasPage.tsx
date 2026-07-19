@@ -64,7 +64,7 @@ const eyebrowStyle = {
   fontSize: '12px',
   letterSpacing: '.12em',
   textTransform: 'uppercase' as const,
-  color: '#6B6460',
+  color: '#A0A39A',
 };
 
 export function PersonasPage() {
@@ -218,7 +218,7 @@ export function PersonasPage() {
     setToast({
       message: 'Panel reset to the four default minds',
       color: '#1A1714',
-      iconColor: '#C4956A',
+      iconColor: '#F0B84E',
       kind: 'success',
     });
   };
@@ -263,7 +263,7 @@ export function PersonasPage() {
     setToast({
       message: ok ? 'Panel copied as markdown' : 'Could not copy panel — try again',
       color: ok ? '#1A1714' : '#E57373',
-      iconColor: ok ? '#C4956A' : '#FAF7F4',
+      iconColor: ok ? '#F0B84E' : '#0B0C0A',
       kind: ok ? 'success' : 'error',
     });
     if (ok) void track('panel_copied');
@@ -283,7 +283,7 @@ export function PersonasPage() {
     setToast({
       message: ok ? 'Panel downloaded as markdown' : 'Could not download panel — try Copy instead',
       color: ok ? '#1A1714' : '#E57373',
-      iconColor: ok ? '#C4956A' : '#FAF7F4',
+      iconColor: ok ? '#F0B84E' : '#0B0C0A',
       kind: ok ? 'success' : 'error',
     });
     const hold = motionDuration(ok ? 2200 : 3000);
@@ -381,7 +381,7 @@ export function PersonasPage() {
     setToast({
       message: ok ? 'Library copied as markdown' : 'Could not copy library — try again',
       color: ok ? '#1A1714' : '#E57373',
-      iconColor: ok ? '#C4956A' : '#FAF7F4',
+      iconColor: ok ? '#F0B84E' : '#0B0C0A',
       kind: ok ? 'success' : 'error',
     });
     const hold = motionDuration(ok ? 2200 : 3000);
@@ -414,7 +414,7 @@ export function PersonasPage() {
       setToast({
         message: 'Nothing to copy for this mind',
         color: '#E57373',
-        iconColor: '#FAF7F4',
+        iconColor: '#0B0C0A',
         kind: 'error',
       });
       return;
@@ -430,7 +430,7 @@ export function PersonasPage() {
         ? `${persona.name} copied as markdown`
         : 'Could not copy mind — try again',
       color: ok ? '#1A1714' : '#E57373',
-      iconColor: ok ? '#C4956A' : '#FAF7F4',
+      iconColor: ok ? '#F0B84E' : '#0B0C0A',
       kind: ok ? 'success' : 'error',
     });
     if (ok) void track('persona_mind_copied', undefined, persona.id);
@@ -453,7 +453,7 @@ export function PersonasPage() {
         ? 'Library downloaded as markdown'
         : 'Could not download library — try Copy instead',
       color: ok ? '#1A1714' : '#E57373',
-      iconColor: ok ? '#C4956A' : '#FAF7F4',
+      iconColor: ok ? '#F0B84E' : '#0B0C0A',
       kind: ok ? 'success' : 'error',
     });
     const hold = motionDuration(ok ? 2200 : 3000);
@@ -515,14 +515,14 @@ export function PersonasPage() {
       setToast({
         message: panelSaveSuccessMessage(),
         color: '#1A1714',
-        iconColor: '#C4956A',
+        iconColor: '#F0B84E',
         kind: 'success',
       });
     } catch (err) {
       setToast({
         message: panelSaveCaughtErrorMessage(err),
         color: '#E57373',
-        iconColor: '#FAF7F4',
+        iconColor: '#0B0C0A',
         kind: 'error',
       });
     } finally {
@@ -918,10 +918,10 @@ export function PersonasPage() {
                       <HighlightQuery text={persona.name} query={libraryQuery} />
                     </span>
                   </div>
-                  <p style={{ fontSize: '12px', color: '#6B6460', fontStyle: 'italic', marginTop: '.4rem', lineHeight: 1.6 }}>
+                  <p style={{ fontSize: '12px', color: '#A0A39A', fontStyle: 'italic', marginTop: '.4rem', lineHeight: 1.6 }}>
                     <HighlightQuery text={persona.quote} query={libraryQuery} />
                   </p>
-                  <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.6, marginTop: '.7rem' }}>
+                  <p style={{ fontSize: '12px', color: '#A0A39A', lineHeight: 1.6, marginTop: '.7rem' }}>
                     <HighlightQuery text={persona.description} query={libraryQuery} />
                   </p>
                   <div
@@ -938,7 +938,7 @@ export function PersonasPage() {
                       <span
                         style={{
                           background: '#F0EBE3',
-                          color: '#6B6460',
+                          color: '#A0A39A',
                           fontSize: '10px',
                           padding: '3px 8px',
                           borderRadius: '999px',
@@ -949,8 +949,8 @@ export function PersonasPage() {
                     ) : isLocked ? (
                       <span
                         style={{
-                          background: '#C4956A',
-                          color: '#FAF7F4',
+                          background: '#F0B84E',
+                          color: '#F3F0E7',
                           fontSize: '10px',
                           padding: '3px 8px',
                           borderRadius: '999px',
@@ -980,14 +980,14 @@ export function PersonasPage() {
                         border: 'none',
                         padding: 0,
                         fontSize: 11,
-                        fontFamily: 'Georgia, serif',
+                        fontFamily: 'var(--vp-font-sans)',
                         cursor: 'pointer',
                         color:
                           mindCopyId === persona.id && mindCopyStatus === 'failed'
                             ? '#993C1D'
                             : mindCopyId === persona.id && mindCopyStatus === 'copied'
                               ? '#3F6B4A'
-                              : '#C4956A',
+                              : '#F0B84E',
                       }}
                     >
                       {mindCopyId === persona.id && mindCopyStatus === 'copied'
@@ -1002,7 +1002,7 @@ export function PersonasPage() {
                       style={{
                         marginTop: 10,
                         background: '#1A1714',
-                        color: '#FAF7F4',
+                        color: '#F3F0E7',
                         fontSize: '11px',
                         padding: '5px 12px',
                         borderRadius: '999px',
@@ -1043,7 +1043,7 @@ export function PersonasPage() {
             aria-labelledby="swap-slot-title"
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#FAF7F4',
+              background: '#0B0C0A',
               borderRadius: '20px',
               padding: '2rem',
               maxWidth: '560px',
@@ -1060,7 +1060,7 @@ export function PersonasPage() {
                 <h2 id="swap-slot-title" style={{ fontSize: '18px', fontWeight: 500, color: '#1A1714', margin: 0 }}>
                   Swap slot {activeSlot + 1}
                 </h2>
-                <p style={{ fontSize: '13px', color: '#6B6460', marginTop: '.35rem' }}>
+                <p style={{ fontSize: '13px', color: '#A0A39A', marginTop: '.35rem' }}>
                   Currently: {activePersona.name}
                 </p>
               </div>
@@ -1216,13 +1216,13 @@ export function PersonasPage() {
                           <HighlightQuery text={persona.name} query={swapQuery} />
                         </span>
                       </div>
-                      <p style={{ fontSize: '12px', color: '#6B6460', lineHeight: 1.5, marginTop: '.4rem' }}>
+                      <p style={{ fontSize: '12px', color: '#A0A39A', lineHeight: 1.5, marginTop: '.4rem' }}>
                         <HighlightQuery text={persona.description} query={swapQuery} />
                       </p>
                       <p
                         style={{
                           fontSize: '11px',
-                          color: '#6B6460',
+                          color: '#A0A39A',
                           fontStyle: 'italic',
                           marginTop: '.4rem',
                         }}
@@ -1257,7 +1257,7 @@ export function PersonasPage() {
             transform: `translateX(-50%) translateY(${toastVisible ? '0' : '8px'})`,
             zIndex: 200,
             background: toast.color,
-            color: '#FAF7F4',
+            color: '#F3F0E7',
             fontSize: '13px',
             padding: '10px 20px',
             borderRadius: '999px',
@@ -1268,9 +1268,9 @@ export function PersonasPage() {
             transition: 'opacity 300ms ease, transform 300ms ease',
           }}
         >
-          <Sparkles style={{ width: '14px', height: '14px', color: toast.iconColor || '#FAF7F4' }} aria-hidden />
+          <Sparkles style={{ width: '14px', height: '14px', color: toast.iconColor || '#0B0C0A' }} aria-hidden />
           <span
-            style={{ width: '6px', height: '6px', borderRadius: '50%', background: toast.iconColor || '#FAF7F4' }}
+            style={{ width: '6px', height: '6px', borderRadius: '50%', background: toast.iconColor || '#0B0C0A' }}
             aria-hidden
           />
           <span>{toast.message}</span>

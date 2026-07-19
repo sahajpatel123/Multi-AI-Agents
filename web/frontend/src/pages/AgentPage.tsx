@@ -212,18 +212,18 @@ import {
 
 /** Agent result view — shared palette (mockup) */
 const AR = {
-  CREAM: '#F5F0E8',
-  SURFACE: '#FAF7F2',
-  SURFACE_ALT: '#FDFAF6',
-  BORDER: '#E0D5C5',
-  BORDER_INNER: '#EDE4D8',
-  GOLD: '#C4956A',
-  GOLD_MUTED: '#C4A882',
-  DARK: '#2C1810',
-  TEXT_PRIMARY: '#2C1810',
-  TEXT_MID: '#4A3728',
-  TEXT_MUTED: '#8C7355',
-  TEXT_FAINT: '#A89070',
+  CREAM: '#0B0C0A',
+  SURFACE: '#151713',
+  SURFACE_ALT: '#1D201B',
+  BORDER: '#35382F',
+  BORDER_INNER: '#272A25',
+  GOLD: '#F0B84E',
+  GOLD_MUTED: '#9A7A3C',
+  DARK: '#F3F0E7',
+  TEXT_PRIMARY: '#F3F0E7',
+  TEXT_MID: '#CDD0C8',
+  TEXT_MUTED: '#A0A39A',
+  TEXT_FAINT: '#74776F',
 } as const;
 
 /** localStorage keys for Agent compose drafts (parity with Arena prompt drafts). */
@@ -560,9 +560,9 @@ function intelligenceLabelFromTotal(score: number): string {
 }
 
 const CHALLENGER_CARD_STYLES: Record<string, { accent: string; dot: string }> = {
-  'The Analyst': { accent: '#8C9BAB', dot: '#8C9BAB' },
-  'The Contrarian': { accent: '#B0977E', dot: '#B0977E' },
-  'The Philosopher': { accent: '#9B8FAA', dot: '#9B8FAA' },
+  'The Analyst': { accent: '#5ED8FF', dot: '#5ED8FF' },
+  'The Contrarian': { accent: '#FF6652', dot: '#FF6652' },
+  'The Philosopher': { accent: '#A98CF8', dot: '#A98CF8' },
 };
 
 const AGENT_IDLE_SUGGESTIONS = [
@@ -591,7 +591,7 @@ function agentTemplatePreviewNodes(tpl: AgentTaskTemplate, slots: Record<string,
   while ((m = re.exec(s)) !== null) {
     if (m.index > last) {
       nodes.push(
-        <span key={`tp-${i++}`} style={{ color: '#2C1810' }}>
+        <span key={`tp-${i++}`} style={{ color: '#F3F0E7' }}>
           {s.slice(last, m.index)}
         </span>,
       );
@@ -602,7 +602,7 @@ function agentTemplatePreviewNodes(tpl: AgentTaskTemplate, slots: Record<string,
       <span
         key={`tp-${i++}`}
         style={{
-          color: val ? '#2C1810' : '#C4956A',
+          color: val ? '#F3F0E7' : '#F0B84E',
           fontStyle: val ? 'normal' : 'italic',
           fontWeight: val ? 500 : 400,
         }}
@@ -614,7 +614,7 @@ function agentTemplatePreviewNodes(tpl: AgentTaskTemplate, slots: Record<string,
   }
   if (last < s.length) {
     nodes.push(
-      <span key={`tp-${i++}`} style={{ color: '#2C1810' }}>
+      <span key={`tp-${i++}`} style={{ color: '#F3F0E7' }}>
         {s.slice(last)}
       </span>,
     );
@@ -652,7 +652,7 @@ function AgentProfileSidebarRow({ user }: { user: User | null }) {
           width: 30,
           height: 30,
           borderRadius: '50%',
-          background: '#C4956A',
+          background: '#F0B84E',
           color: '#FAF7F2',
           fontSize: 11,
           fontWeight: 600,
@@ -668,7 +668,7 @@ function AgentProfileSidebarRow({ user }: { user: User | null }) {
         style={{
           fontSize: 12,
           color: '#4A3728',
-          fontFamily: 'Georgia, serif',
+          fontFamily: 'var(--vp-font-sans)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -2800,7 +2800,7 @@ export function AgentPage() {
           borderRadius: '10px',
           padding: '8px 10px',
           background: active ? '#F0EBE3' : 'transparent',
-          borderLeft: active ? '2px solid #C4956A' : '2px solid transparent',
+          borderLeft: active ? '2px solid #F0B84E' : '2px solid transparent',
           transition: 'all 150ms ease',
           cursor: isEditing ? 'default' : 'pointer',
         }}
@@ -2893,7 +2893,7 @@ export function AgentPage() {
                       viewBox="0 0 24 24"
                       fill="none"
                       aria-hidden
-                      style={{ flexShrink: 0, color: '#C4956A' }}
+                      style={{ flexShrink: 0, color: '#F0B84E' }}
                     >
                       <path
                         d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
@@ -2992,7 +2992,7 @@ export function AgentPage() {
                     </span>
                   ) : null}
                   <span
-                    style={{ fontSize: 11, color: '#A89070' }}
+                    style={{ fontSize: 11, color: '#A0A39A' }}
                     title={historyRowTimeTitle(item.created_at) || undefined}
                   >
                     {formatRelativeShort(item.created_at, nowMs)}
@@ -3023,7 +3023,7 @@ export function AgentPage() {
                   height: '28px',
                   borderRadius: '6px',
                   background: isMenuOpen ? '#F0EBE3' : 'transparent',
-                  color: '#6B6460',
+                  color: '#A0A39A',
                   transition: 'all 150ms ease',
                 }}
               >
@@ -3109,7 +3109,7 @@ export function AgentPage() {
                       padding: '6px 10px',
                       fontSize: '12px',
                       borderRadius: '6px',
-                      color: '#6B6460',
+                      color: '#A0A39A',
                       background: '#F0EBE3',
                       transition: 'all 150ms ease',
                     }}
@@ -3162,7 +3162,7 @@ export function AgentPage() {
         height: '100dvh',
         minHeight: '100dvh',
         overflow: 'hidden',
-        background: '#FAF7F4',
+        background: '#0B0C0A',
       }}
       data-expertise-level={expertiseLevelForRun}
       data-expertise-domain={expertiseDomainForRun}
@@ -3224,12 +3224,12 @@ export function AgentPage() {
         .answer-text {
           font-size: 15px;
           line-height: 1.82;
-          color: #2C1810;
+          color: #F3F0E7;
           font-family: Georgia, 'Times New Roman', serif;
           margin-bottom: 8px;
         }
         .answer-text span {
-          color: #2C1810;
+          color: #F3F0E7;
           transition: color 0.45s ease;
         }
         @media (max-width: 768px) {
@@ -3347,7 +3347,7 @@ export function AgentPage() {
               <button
                 type="button"
                 onClick={closeSidebar}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6460' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A0A39A' }}
               >
                 <X style={{ width: 16, height: 16 }} />
               </button>
@@ -3356,7 +3356,7 @@ export function AgentPage() {
           <div style={{ height: '0.5px', background: '#E8E2DA', margin: '0 16px 12px' }} />
           <div style={{ padding: '0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 500, color: '#1A1714' }}>Agent</span>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C4956A', animation: 'breathe 2.4s infinite' }} />
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F0B84E', animation: 'breathe 2.4s infinite' }} />
           </div>
           <button
             type="button"
@@ -3366,7 +3366,7 @@ export function AgentPage() {
               width: 'calc(100% - 32px)',
               padding: '9px 16px',
               background: '#1A1714',
-              color: '#FAF7F4',
+              color: '#F3F0E7',
               borderRadius: 10,
               fontSize: 13,
               fontWeight: 500,
@@ -3405,7 +3405,7 @@ export function AgentPage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                fontFamily: 'Georgia, serif',
+                fontFamily: 'var(--vp-font-sans)',
               }}
             >
               <span style={{ position: 'relative', display: 'inline-flex' }}>
@@ -3428,7 +3428,7 @@ export function AgentPage() {
                       width: 6,
                       height: 6,
                       borderRadius: '50%',
-                      background: '#C4956A',
+                      background: '#F0B84E',
                     }}
                   />
                 ) : null}
@@ -3453,7 +3453,7 @@ export function AgentPage() {
                 </div>
                 {roomsBodyMode === 'list' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 10, color: '#A89070' }}>
+                    <span style={{ fontSize: 10, color: '#A0A39A' }}>
                       {filteredMyRooms.length}
                       {roomsSearchQuery.trim() ||
                       roomsActivityFilter !== 'all' ||
@@ -3486,9 +3486,9 @@ export function AgentPage() {
                             ? '#D85A30'
                             : roomsCopyStatus === 'copied'
                               ? '#5A8C6A'
-                              : '#A89070',
+                              : '#A0A39A',
                         cursor: 'pointer',
-                        fontFamily: 'Georgia, serif',
+                        fontFamily: 'var(--vp-font-sans)',
                         lineHeight: 1.4,
                       }}
                     >
@@ -3522,9 +3522,9 @@ export function AgentPage() {
                             ? '#D85A30'
                             : roomsDownloadStatus === 'done'
                               ? '#5A8C6A'
-                              : '#A89070',
+                              : '#A0A39A',
                         cursor: 'pointer',
-                        fontFamily: 'Georgia, serif',
+                        fontFamily: 'var(--vp-font-sans)',
                         lineHeight: 1.4,
                       }}
                     >
@@ -3586,11 +3586,11 @@ export function AgentPage() {
                             style={{
                               padding: '3px 9px',
                               borderRadius: 999,
-                              border: selected ? 'none' : '0.5px solid #D4C4B0',
-                              background: selected ? '#C4956A' : 'transparent',
+                              border: selected ? 'none' : '0.5px solid #35382F',
+                              background: selected ? '#F0B84E' : 'transparent',
                               color: selected ? '#FAF7F2' : '#8C7355',
                               fontSize: 10,
-                              fontFamily: 'Georgia, serif',
+                              fontFamily: 'var(--vp-font-sans)',
                               cursor: 'pointer',
                               lineHeight: 1.35,
                             }}
@@ -3625,12 +3625,12 @@ export function AgentPage() {
                               padding: '3px 9px',
                               borderRadius: 999,
                               border: selected
-                                ? '0.5px solid #C4956A'
-                                : '0.5px solid #D4C4B0',
+                                ? '0.5px solid #F0B84E'
+                                : '0.5px solid #35382F',
                               background: selected ? '#F0E6DA' : 'transparent',
                               color: selected ? '#4A3728' : '#8C7355',
                               fontSize: 10,
-                              fontFamily: 'Georgia, serif',
+                              fontFamily: 'var(--vp-font-sans)',
                               cursor: 'pointer',
                               lineHeight: 1.35,
                             }}
@@ -3665,12 +3665,12 @@ export function AgentPage() {
                               padding: '3px 9px',
                               borderRadius: 999,
                               border: selected
-                                ? '0.5px solid #C4956A'
-                                : '0.5px solid #D4C4B0',
+                                ? '0.5px solid #F0B84E'
+                                : '0.5px solid #35382F',
                               background: selected ? '#F0E6DA' : 'transparent',
                               color: selected ? '#4A3728' : '#8C7355',
                               fontSize: 10,
-                              fontFamily: 'Georgia, serif',
+                              fontFamily: 'var(--vp-font-sans)',
                               cursor: 'pointer',
                               lineHeight: 1.35,
                             }}
@@ -3690,9 +3690,9 @@ export function AgentPage() {
                         title="Sort rooms"
                         style={{
                           fontSize: 11,
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                           color: '#4A3728',
-                          background: '#FAF7F4',
+                          background: '#0B0C0A',
                           border: '0.5px solid #E0D5C5',
                           borderRadius: 6,
                           padding: '5px 8px',
@@ -3723,9 +3723,9 @@ export function AgentPage() {
                           width: '100%',
                           boxSizing: 'border-box',
                           fontSize: 12,
-                          fontFamily: 'Georgia, serif',
-                          color: '#2C1810',
-                          background: '#FAF7F4',
+                          fontFamily: 'var(--vp-font-sans)',
+                          color: '#F3F0E7',
+                          background: '#0B0C0A',
                           border: '0.5px solid #E0D5C5',
                           borderRadius: 8,
                           padding: '6px 26px 6px 10px',
@@ -3749,7 +3749,7 @@ export function AgentPage() {
                             border: 'none',
                             cursor: 'pointer',
                             fontSize: 14,
-                            color: '#A89070',
+                            color: '#A0A39A',
                             lineHeight: 1,
                             padding: 4,
                           }}
@@ -3876,7 +3876,7 @@ export function AgentPage() {
                                   title={rName}
                                   style={{
                                     fontSize: 13,
-                                    color: '#2C1810',
+                                    color: '#F3F0E7',
                                     fontWeight: 400,
                                     lineHeight: 1.3,
                                     overflow: 'hidden',
@@ -3887,7 +3887,7 @@ export function AgentPage() {
                                   <HighlightQuery text={rName} query={roomsSearchQuery} />
                                 </div>
                                 <div
-                                  style={{ fontSize: 10, color: '#A89070', marginTop: 1 }}
+                                  style={{ fontSize: 10, color: '#A0A39A', marginTop: 1 }}
                                   title={activityTitle || undefined}
                                 >
                                   {metaLine ||
@@ -3902,7 +3902,7 @@ export function AgentPage() {
                                     width: 6,
                                     height: 6,
                                     borderRadius: '50%',
-                                    background: '#C4956A',
+                                    background: '#F0B84E',
                                     flexShrink: 0,
                                     marginTop: 5,
                                   }}
@@ -3930,8 +3930,8 @@ export function AgentPage() {
                                     ? '#D85A30'
                                     : roomLinkCopyStatus === 'copied'
                                       ? '#5A8C6A'
-                                      : '#C4956A',
-                                fontFamily: 'Georgia, serif',
+                                      : '#F0B84E',
+                                fontFamily: 'var(--vp-font-sans)',
                                 padding: '4px 6px',
                                 borderRadius: 6,
                               }}
@@ -3959,7 +3959,7 @@ export function AgentPage() {
                   alignItems: 'center',
                   gap: '6px',
                   fontSize: '12px',
-                  color: '#C4956A',
+                  color: '#F0B84E',
                   cursor: 'pointer',
                   padding: '5px 8px',
                   borderRadius: '6px',
@@ -3968,7 +3968,7 @@ export function AgentPage() {
                   background: 'none',
                   border: 'none',
                   width: '100%',
-                  fontFamily: 'Georgia, serif',
+                  fontFamily: 'var(--vp-font-sans)',
                 }}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
@@ -4002,7 +4002,7 @@ export function AgentPage() {
               </div>
               {taskHistory.length > 0 ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 10, color: '#A89070' }}>
+                  <span style={{ fontSize: 10, color: '#A0A39A' }}>
                     {filteredTaskHistory.length}
                     {historySearchQuery.trim() ||
                     historyStatusFilter !== 'all' ||
@@ -4038,9 +4038,9 @@ export function AgentPage() {
                           ? '#D85A30'
                           : historyCopyStatus === 'copied'
                             ? '#5A8C6A'
-                            : '#A89070',
+                            : '#A0A39A',
                       cursor: 'pointer',
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                       lineHeight: 1.4,
                     }}
                   >
@@ -4074,9 +4074,9 @@ export function AgentPage() {
                           ? '#D85A30'
                           : historyDownloadStatus === 'done'
                             ? '#5A8C6A'
-                            : '#A89070',
+                            : '#A0A39A',
                       cursor: 'pointer',
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                       lineHeight: 1.4,
                     }}
                   >
@@ -4113,11 +4113,11 @@ export function AgentPage() {
                         style={{
                           padding: '3px 10px',
                           borderRadius: 999,
-                          border: selected ? 'none' : '0.5px solid #D4C4B0',
-                          background: selected ? '#C4956A' : 'transparent',
+                          border: selected ? 'none' : '0.5px solid #35382F',
+                          background: selected ? '#F0B84E' : 'transparent',
                           color: selected ? '#FAF7F2' : '#8C7355',
                           fontSize: 11,
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                           cursor: 'pointer',
                         }}
                       >
@@ -4149,11 +4149,11 @@ export function AgentPage() {
                           style={{
                             padding: '3px 10px',
                             borderRadius: 999,
-                            border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                            border: selected ? '0.5px solid #F0B84E' : '0.5px solid #35382F',
                             background: selected ? '#F0E6DA' : 'transparent',
                             color: selected ? '#4A3728' : '#8C7355',
                             fontSize: 11,
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                             cursor: 'pointer',
                           }}
                         >
@@ -4186,11 +4186,11 @@ export function AgentPage() {
                           style={{
                             padding: '3px 10px',
                             borderRadius: 999,
-                            border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                            border: selected ? '0.5px solid #F0B84E' : '0.5px solid #35382F',
                             background: selected ? '#F0E6DA' : 'transparent',
                             color: selected ? '#4A3728' : '#8C7355',
                             fontSize: 11,
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                             cursor: 'pointer',
                           }}
                         >
@@ -4223,11 +4223,11 @@ export function AgentPage() {
                           style={{
                             padding: '3px 10px',
                             borderRadius: 999,
-                            border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                            border: selected ? '0.5px solid #F0B84E' : '0.5px solid #35382F',
                             background: selected ? '#F0E6DA' : 'transparent',
                             color: selected ? '#4A3728' : '#8C7355',
                             fontSize: 11,
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                             cursor: 'pointer',
                           }}
                         >
@@ -4260,11 +4260,11 @@ export function AgentPage() {
                           style={{
                             padding: '3px 10px',
                             borderRadius: 999,
-                            border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                            border: selected ? '0.5px solid #F0B84E' : '0.5px solid #35382F',
                             background: selected ? '#F0E6DA' : 'transparent',
                             color: selected ? '#4A3728' : '#8C7355',
                             fontSize: 11,
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                             cursor: 'pointer',
                           }}
                         >
@@ -4297,11 +4297,11 @@ export function AgentPage() {
                           style={{
                             padding: '3px 10px',
                             borderRadius: 999,
-                            border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                            border: selected ? '0.5px solid #F0B84E' : '0.5px solid #35382F',
                             background: selected ? '#F0E6DA' : 'transparent',
                             color: selected ? '#4A3728' : '#8C7355',
                             fontSize: 11,
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                             cursor: 'pointer',
                           }}
                         >
@@ -4319,9 +4319,9 @@ export function AgentPage() {
                     title="Sort research history"
                     style={{
                       fontSize: 11,
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                       color: '#4A3728',
-                      background: '#FAF7F4',
+                      background: '#0B0C0A',
                       border: '0.5px solid #E0D5C5',
                       borderRadius: 6,
                       padding: '5px 8px',
@@ -4350,9 +4350,9 @@ export function AgentPage() {
                       width: '100%',
                       boxSizing: 'border-box',
                       fontSize: 12,
-                      fontFamily: 'Georgia, serif',
-                      color: '#2C1810',
-                      background: '#FAF7F4',
+                      fontFamily: 'var(--vp-font-sans)',
+                      color: '#F3F0E7',
+                      background: '#0B0C0A',
                       border: '0.5px solid #E0D5C5',
                       borderRadius: 8,
                       padding: '7px 28px 7px 10px',
@@ -4376,7 +4376,7 @@ export function AgentPage() {
                         border: 'none',
                         cursor: 'pointer',
                         fontSize: 14,
-                        color: '#A89070',
+                        color: '#A0A39A',
                         lineHeight: 1,
                         padding: 4,
                       }}
@@ -4555,7 +4555,7 @@ export function AgentPage() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: navToggleHovered ? '#2C1810' : '#8C7355',
+                color: navToggleHovered ? '#F3F0E7' : '#8C7355',
                 transition: 'background 0.15s',
                 outline: 'none',
               }}
@@ -4586,7 +4586,7 @@ export function AgentPage() {
               }}
             >
               <div
-                style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }}
+                style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#F0B84E' }}
                 className="breathe"
               />
               <button
@@ -4618,7 +4618,7 @@ export function AgentPage() {
                   width: 36,
                   height: 36,
                   borderRadius: '50%',
-                  background: '#C4956A',
+                  background: '#F0B84E',
                   color: '#FAF7F2',
                   fontSize: 12,
                   fontWeight: 600,
@@ -4635,7 +4635,7 @@ export function AgentPage() {
             ) : null}
             {isRunning || isRefining || isChallengingAnswer ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 12, color: '#C4956A' }}>
+                <span style={{ fontSize: 12, color: '#F0B84E' }}>
                   {isChallengingAnswer && !isRunning
                     ? 'Challenging…'
                     : isRefining && !isRunning
@@ -4649,7 +4649,7 @@ export function AgentPage() {
                   aria-label="Stop generating"
                   style={{
                     fontSize: 12,
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                     color: '#993C1D',
                     background: 'transparent',
                     border: '0.5px solid rgba(153, 60, 29, 0.35)',
@@ -4678,7 +4678,7 @@ export function AgentPage() {
                 right: 20,
                 zIndex: 80,
                 background: isError ? '#4A2A22' : '#1A1714',
-                color: '#FAF7F4',
+                color: '#F3F0E7',
                 padding: '10px 14px',
                 borderRadius: 10,
                 fontSize: 12,
@@ -4723,7 +4723,7 @@ export function AgentPage() {
                     width: 6,
                     height: 6,
                     borderRadius: '50%',
-                    background: '#C4956A',
+                    background: '#F0B84E',
                     marginTop: 5,
                     flexShrink: 0,
                   }}
@@ -4733,7 +4733,7 @@ export function AgentPage() {
                     Verifying Arena winner in Agent
                   </div>
                   {bridgeMeta.originalQuestion ? (
-                    <div style={{ fontSize: 12, color: '#6B6460', marginTop: 4 }}>
+                    <div style={{ fontSize: 12, color: '#A0A39A', marginTop: 4 }}>
                       Original question: {bridgeMeta.originalQuestion}
                     </div>
                   ) : null}
@@ -4765,7 +4765,7 @@ export function AgentPage() {
                     isPlus && user ? (
                       <div style={{ maxWidth: 640, margin: '0 auto', padding: '3rem 1.25rem', width: '100%' }}>
                         <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-                          <Lock style={{ width: 32, height: 32, color: '#C4956A' }} />
+                          <Lock style={{ width: 32, height: 32, color: '#F0B84E' }} />
                         </div>
                         <h1
                           style={{
@@ -4781,7 +4781,7 @@ export function AgentPage() {
                         <p
                           style={{
                             fontSize: 14,
-                            color: '#6B6460',
+                            color: '#A0A39A',
                             lineHeight: 1.7,
                             marginBottom: '1.5rem',
                             textAlign: 'center',
@@ -4824,15 +4824,15 @@ export function AgentPage() {
                                 fontSize: 10,
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.08em',
-                                color: '#A89070',
+                                color: '#A0A39A',
                                 marginBottom: 8,
                               }}
                             >
                               Add to Plus
                             </div>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 28, color: '#2C1810', fontWeight: 500 }}>₹599</span>
-                              <span style={{ fontSize: 14, color: '#A89070' }}>/month</span>
+                              <span style={{ fontSize: 28, color: '#F3F0E7', fontWeight: 500 }}>₹599</span>
+                              <span style={{ fontSize: 14, color: '#A0A39A' }}>/month</span>
                             </div>
                             <p style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
                               Agent Mode on your current plan
@@ -4847,12 +4847,12 @@ export function AgentPage() {
                               onClick={() => setAgentAddonCheckout(true)}
                               style={{
                                 width: '100%',
-                                background: '#2C1810',
-                                color: '#C4956A',
+                                background: '#F3F0E7',
+                                color: '#F0B84E',
                                 borderRadius: 20,
                                 padding: '9px 18px',
                                 fontSize: 13,
-                                fontFamily: 'Georgia, serif',
+                                fontFamily: 'var(--vp-font-sans)',
                                 border: 'none',
                                 cursor: 'pointer',
                                 marginTop: 12,
@@ -4867,15 +4867,15 @@ export function AgentPage() {
                                 fontSize: 10,
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.08em',
-                                color: '#A89070',
+                                color: '#A0A39A',
                                 marginBottom: 8,
                               }}
                             >
                               Upgrade to Pro
                             </div>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 28, color: '#2C1810', fontWeight: 500 }}>₹2,499</span>
-                              <span style={{ fontSize: 14, color: '#A89070' }}>/month</span>
+                              <span style={{ fontSize: 28, color: '#F3F0E7', fontWeight: 500 }}>₹2,499</span>
+                              <span style={{ fontSize: 14, color: '#A0A39A' }}>/month</span>
                             </div>
                             <p style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>
                               3× more credits + priority routing
@@ -4891,12 +4891,12 @@ export function AgentPage() {
                               style={{
                                 width: '100%',
                                 background: 'transparent',
-                                color: '#C4956A',
+                                color: '#F0B84E',
                                 borderRadius: 20,
                                 padding: '9px 18px',
                                 fontSize: 13,
-                                fontFamily: 'Georgia, serif',
-                                border: '0.5px solid #C4956A',
+                                fontFamily: 'var(--vp-font-sans)',
+                                border: '0.5px solid #F0B84E',
                                 cursor: 'pointer',
                                 marginTop: 12,
                               }}
@@ -4917,10 +4917,10 @@ export function AgentPage() {
                         }}
                       >
                         <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-                          <Lock style={{ width: 32, height: 32, color: '#C4956A' }} />
+                          <Lock style={{ width: 32, height: 32, color: '#F0B84E' }} />
                         </div>
                         <h1 style={{ fontSize: 28, fontWeight: 400, color: '#1A1714', marginBottom: '0.5rem' }}>Agent</h1>
-                        <p style={{ fontSize: 14, color: '#6B6460', lineHeight: 1.7, marginBottom: '2rem' }}>
+                        <p style={{ fontSize: 14, color: '#A0A39A', lineHeight: 1.7, marginBottom: '2rem' }}>
                           A 7-stage AI pipeline that researches, solves, critiques, verifies, and synthesises. Not just an
                           answer — a process.
                         </p>
@@ -4938,7 +4938,7 @@ export function AgentPage() {
                               key={label}
                               style={{
                                 background: '#F0EBE3',
-                                color: '#6B6460',
+                                color: '#A0A39A',
                                 borderRadius: 999,
                                 padding: '6px 14px',
                                 fontSize: 12,
@@ -4953,7 +4953,7 @@ export function AgentPage() {
                           onClick={() => navigate('/pricing')}
                           style={{
                             background: '#1A1714',
-                            color: '#FAF7F4',
+                            color: '#F3F0E7',
                             borderRadius: 999,
                             padding: '13px 32px',
                             fontSize: 14,
@@ -4987,7 +4987,7 @@ export function AgentPage() {
                       userSelect: 'none',
                       zIndex: 0,
                       whiteSpace: 'nowrap',
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                     }}
                   >
                     think.
@@ -5011,7 +5011,7 @@ export function AgentPage() {
                         marginBottom: 14,
                       }}
                     >
-                      <div style={{ width: 32, height: '0.5px', background: '#D4C4B0' }} />
+                      <div style={{ width: 32, height: '0.5px', background: '#35382F' }} />
                       <span
                         style={{
                           fontSize: 10,
@@ -5023,13 +5023,13 @@ export function AgentPage() {
                       >
                         Agent Mode
                       </span>
-                      <div style={{ width: 32, height: '0.5px', background: '#D4C4B0' }} />
+                      <div style={{ width: 32, height: '0.5px', background: '#35382F' }} />
                     </div>
                     <h1
                       style={{
                         fontSize: isMobile ? 28 : 42,
                         fontWeight: 500,
-                        color: '#2C1810',
+                        color: '#F3F0E7',
                         textAlign: 'center',
                         lineHeight: 1.1,
                         margin: '0 0 6px',
@@ -5037,7 +5037,7 @@ export function AgentPage() {
                       }}
                     >
                       What do you need to{' '}
-                      <span style={{ color: '#C4956A', fontStyle: 'italic' }}>truly</span> know?
+                      <span style={{ color: '#F0B84E', fontStyle: 'italic' }}>truly</span> know?
                     </h1>
                     <p
                       style={{
@@ -5083,7 +5083,7 @@ export function AgentPage() {
                               width: 5,
                               height: 5,
                               borderRadius: '50%',
-                              background: '#D4C4B0',
+                              background: '#35382F',
                               flexShrink: 0,
                             }}
                           />
@@ -5150,9 +5150,9 @@ export function AgentPage() {
                         }}
                         style={{
                           fontSize: 13,
-                          color: '#A89070',
+                          color: '#A0A39A',
                           fontStyle: 'italic',
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                           cursor: 'pointer',
                           textAlign: 'center',
                           maxWidth: 'min(100%, 520px)',
@@ -5227,12 +5227,12 @@ export function AgentPage() {
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
                                 fontSize: 12,
-                                color: '#6B6460',
+                                color: '#A0A39A',
                                 background: 'transparent',
                                 border: 'none',
                                 padding: '6px 4px 6px 12px',
                                 cursor: 'pointer',
-                                fontFamily: 'Georgia, serif',
+                                fontFamily: 'var(--vp-font-sans)',
                                 textAlign: 'left',
                               }}
                             >
@@ -5252,7 +5252,7 @@ export function AgentPage() {
                                 border: 'none',
                                 cursor: 'pointer',
                                 fontSize: 14,
-                                color: '#A89070',
+                                color: '#A0A39A',
                                 lineHeight: 1,
                                 padding: '6px 10px 6px 4px',
                               }}
@@ -5268,12 +5268,12 @@ export function AgentPage() {
                           onClick={() => setDismissedChipIds(clearDismissedAgentChips())}
                           style={{
                             fontSize: 11,
-                            color: '#A89070',
+                            color: '#A0A39A',
                             background: 'transparent',
                             border: 'none',
                             cursor: 'pointer',
                             padding: '4px 8px',
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                             textDecoration: 'underline',
                             textUnderlineOffset: 3,
                           }}
@@ -5321,8 +5321,8 @@ export function AgentPage() {
                           style={
                             multiMode
                               ? {
-                                  borderColor: '#C4956A',
-                                  color: '#C4956A',
+                                  borderColor: '#F0B84E',
+                                  color: '#F0B84E',
                                   background: '#FAF3EA',
                                 }
                               : undefined
@@ -5422,7 +5422,7 @@ export function AgentPage() {
                                   width: 28,
                                   height: 28,
                                   borderRadius: '50%',
-                                  border: '0.5px solid #D4C4B0',
+                                  border: '0.5px solid #35382F',
                                   background: '#FAF7F2',
                                   cursor: activeTaskCount <= 2 ? 'default' : 'pointer',
                                   fontSize: 16,
@@ -5442,7 +5442,7 @@ export function AgentPage() {
                                   width: 28,
                                   height: 28,
                                   borderRadius: '50%',
-                                  border: '0.5px solid #D4C4B0',
+                                  border: '0.5px solid #35382F',
                                   background: '#FAF7F2',
                                   cursor: activeTaskCount >= 4 ? 'default' : 'pointer',
                                   fontSize: 16,
@@ -5512,8 +5512,8 @@ export function AgentPage() {
                                       background: 'transparent',
                                       resize: 'vertical',
                                       fontSize: 14,
-                                      fontFamily: 'Georgia, serif',
-                                      color: '#2C1810',
+                                      fontFamily: 'var(--vp-font-sans)',
+                                      color: '#F3F0E7',
                                       outline: 'none',
                                     }}
                                   />
@@ -5527,7 +5527,7 @@ export function AgentPage() {
                                             ? '#D85A30'
                                             : charBudgetTone((multiTasks[i] ?? '').length) === 'warn'
                                               ? '#B07840'
-                                              : '#A89070',
+                                              : '#A0A39A',
                                       }}
                                     >
                                       {charBudgetLabel((multiTasks[i] ?? '').length)}
@@ -5538,7 +5538,7 @@ export function AgentPage() {
                             );
                           })}
                           {!multiTasks.slice(0, activeTaskCount).every((t) => t.trim().length >= 10) ? (
-                            <p style={{ fontSize: 11, color: '#A89070', margin: 0 }}>
+                            <p style={{ fontSize: 11, color: '#A0A39A', margin: 0 }}>
                               Each question needs at least 10 characters (max {AGENT_TASK_MAX_CHARS}).
                             </p>
                           ) : null}
@@ -5558,11 +5558,11 @@ export function AgentPage() {
                                   multiTasks.slice(0, activeTaskCount).every((t) => t.trim().length >= 10) &&
                                   !isRunning &&
                                   hasAgentAccess
-                                    ? '#C4956A'
-                                    : '#D4C4B0',
+                                    ? '#F0B84E'
+                                    : '#35382F',
                                 color: '#FDFAF6',
                                 fontSize: 13,
-                                fontFamily: 'Georgia, serif',
+                                fontFamily: 'var(--vp-font-sans)',
                                 cursor:
                                   multiTasks.slice(0, activeTaskCount).every((t) => t.trim().length >= 10) &&
                                   !isRunning &&
@@ -5588,12 +5588,12 @@ export function AgentPage() {
                           >
                             <span
                               style={{
-                                background: '#2C1810',
-                                color: '#C4956A',
+                                background: '#F3F0E7',
+                                color: '#F0B84E',
                                 borderRadius: 20,
                                 padding: '4px 12px',
                                 fontSize: 11,
-                                fontFamily: 'Georgia, serif',
+                                fontFamily: 'var(--vp-font-sans)',
                               }}
                             >
                               {selectedTemplate.title}
@@ -5609,8 +5609,8 @@ export function AgentPage() {
                                 background: 'none',
                                 cursor: 'pointer',
                                 fontSize: 12,
-                                color: '#A89070',
-                                fontFamily: 'Georgia, serif',
+                                color: '#A0A39A',
+                                fontFamily: 'var(--vp-font-sans)',
                                 padding: 0,
                               }}
                             >
@@ -5621,7 +5621,7 @@ export function AgentPage() {
                             style={{
                               fontSize: 13,
                               lineHeight: 1.55,
-                              fontFamily: 'Georgia, serif',
+                              fontFamily: 'var(--vp-font-sans)',
                               padding: '10px 12px',
                               background: '#FAF7F2',
                               border: '0.5px solid #E0D5C5',
@@ -5638,7 +5638,7 @@ export function AgentPage() {
                                   display: 'block',
                                   fontSize: 10,
                                   textTransform: 'uppercase',
-                                  color: '#A89070',
+                                  color: '#A0A39A',
                                   marginBottom: 4,
                                   letterSpacing: '0.04em',
                                 }}
@@ -5655,25 +5655,25 @@ export function AgentPage() {
                                 style={{
                                   width: '100%',
                                   boxSizing: 'border-box',
-                                  border: '0.5px solid #D4C4B0',
+                                  border: '0.5px solid #35382F',
                                   borderRadius: 6,
                                   padding: '7px 12px',
                                   fontSize: 13,
-                                  fontFamily: 'Georgia, serif',
+                                  fontFamily: 'var(--vp-font-sans)',
                                   outline: 'none',
                                   background: '#fff',
                                 }}
                                 onFocus={(e) => {
-                                  e.currentTarget.style.borderColor = '#C4956A';
+                                  e.currentTarget.style.borderColor = '#F0B84E';
                                 }}
                                 onBlur={(e) => {
-                                  e.currentTarget.style.borderColor = '#D4C4B0';
+                                  e.currentTarget.style.borderColor = '#35382F';
                                 }}
                               />
                             </div>
                           ))}
                           {!allTemplateSlotsFilled ? (
-                            <p style={{ fontSize: 11, color: '#A89070', margin: 0 }}>Fill all fields</p>
+                            <p style={{ fontSize: 11, color: '#A0A39A', margin: 0 }}>Fill all fields</p>
                           ) : null}
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
                             <button
@@ -5700,8 +5700,8 @@ export function AgentPage() {
                                   assembledTemplatePrompt.trim().length >= 10 &&
                                   !isRunning &&
                                   hasAgentAccess
-                                    ? '#C4956A'
-                                    : '#D4C4B0';
+                                    ? '#F0B84E'
+                                    : '#35382F';
                               }}
                               style={{
                                 width: 34,
@@ -5720,8 +5720,8 @@ export function AgentPage() {
                                   assembledTemplatePrompt.trim().length >= 10 &&
                                   !isRunning &&
                                   hasAgentAccess
-                                    ? '#C4956A'
-                                    : '#D4C4B0',
+                                    ? '#F0B84E'
+                                    : '#35382F',
                                 transition: 'background 0.2s ease',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -5805,7 +5805,7 @@ export function AgentPage() {
                                     border: 'none',
                                     cursor: 'pointer',
                                     fontSize: 14,
-                                    color: '#A89070',
+                                    color: '#A0A39A',
                                     lineHeight: 1,
                                     padding: 0,
                                     flexShrink: 0,
@@ -5835,7 +5835,7 @@ export function AgentPage() {
                                       padding: '4px 10px',
                                       marginRight: 4,
                                       background: '#F0E8DC',
-                                      border: '0.5px solid #D4C4B0',
+                                      border: '0.5px solid #35382F',
                                     }}
                                   >
                                     <span
@@ -5852,10 +5852,10 @@ export function AgentPage() {
                                       <svg width={11} height={11} viewBox="0 0 24 24" fill="none" aria-hidden>
                                         <path
                                           d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"
-                                          stroke="#C4956A"
+                                          stroke="#F0B84E"
                                           strokeWidth={1.2}
                                         />
-                                        <path d="M14 2v6h6" stroke="#C4956A" strokeWidth={1.2} />
+                                        <path d="M14 2v6h6" stroke="#F0B84E" strokeWidth={1.2} />
                                       </svg>
                                     </span>
                                     <span style={{ fontSize: 12, color: '#4A3728', maxWidth: 120 }} title={a.filename}>
@@ -5874,7 +5874,7 @@ export function AgentPage() {
                                         background: 'none',
                                         cursor: 'pointer',
                                         fontSize: 12,
-                                        color: '#A89070',
+                                        color: '#A0A39A',
                                         padding: 0,
                                         lineHeight: 1,
                                       }}
@@ -5888,7 +5888,7 @@ export function AgentPage() {
                                   const label = integ?.display_name || integ?.service || 'MCP';
                                   const svc = String(integ?.service || '');
                                   const bg =
-                                    svc === 'github' ? '#2C1810' : svc === 'google_drive' ? '#185FA5' : '#2C1810';
+                                    svc === 'github' ? '#F3F0E7' : svc === 'google_drive' ? '#185FA5' : '#F3F0E7';
                                   const fg = svc === 'github' ? '#FAF7F2' : '#FAF7F2';
                                   return (
                                     <span
@@ -5932,7 +5932,7 @@ export function AgentPage() {
                                           background: 'none',
                                           cursor: 'pointer',
                                           fontSize: 12,
-                                          color: '#A89070',
+                                          color: '#A0A39A',
                                           padding: 0,
                                         }}
                                       >
@@ -5960,8 +5960,8 @@ export function AgentPage() {
                                   width: isMobile ? 32 : 28,
                                   height: isMobile ? 32 : 28,
                                   borderRadius: '50%',
-                                  background: attachMenuOpen ? '#E8DDD0' : '#F0E8DC',
-                                  border: attachMenuOpen ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
+                                  background: attachMenuOpen ? '#30332D' : '#F0E8DC',
+                                  border: attachMenuOpen ? '0.5px solid #F0B84E' : '0.5px solid #35382F',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
@@ -5973,7 +5973,7 @@ export function AgentPage() {
                                 <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden>
                                   <path
                                     d="M12 5v14M5 12h14"
-                                    stroke={attachMenuOpen ? '#C4956A' : '#8C7355'}
+                                    stroke={attachMenuOpen ? '#F0B84E' : '#8C7355'}
                                     strokeWidth={2}
                                     strokeLinecap="round"
                                   />
@@ -5996,8 +5996,8 @@ export function AgentPage() {
                                   background: 'transparent',
                                   outline: 'none',
                                   fontSize: isMobile ? 16 : 14,
-                                  color: '#2C1810',
-                                  fontFamily: 'Georgia, serif',
+                                  color: '#F3F0E7',
+                                  fontFamily: 'var(--vp-font-sans)',
                                 }}
                               />
                               <span
@@ -6005,12 +6005,12 @@ export function AgentPage() {
                                 title="Character budget (server max 2000)"
                                 style={{
                                   fontSize: 10,
-                                  fontFamily: 'Georgia, serif',
+                                  fontFamily: 'var(--vp-font-sans)',
                                   color:
                                     charBudgetTone(task.length) === 'danger'
                                       ? '#993C1D'
                                       : charBudgetTone(task.length) === 'warn'
-                                        ? '#C4956A'
+                                        ? '#F0B84E'
                                         : charBudgetTone(task.length) === 'ready'
                                           ? '#8C7355'
                                           : '#C4B8AE',
@@ -6044,8 +6044,8 @@ export function AgentPage() {
                                 onMouseLeave={(e) => {
                                   e.currentTarget.style.background =
                                     task.trim().length >= 10 && !isRunning && hasAgentAccess
-                                      ? '#C4956A'
-                                      : '#D4C4B0';
+                                      ? '#F0B84E'
+                                      : '#35382F';
                                 }}
                                 style={{
                                   width: isMobile ? 32 : 34,
@@ -6055,7 +6055,7 @@ export function AgentPage() {
                                   cursor:
                                     task.trim().length >= 10 && !isRunning && hasAgentAccess ? 'pointer' : 'default',
                                   background:
-                                    task.trim().length >= 10 && !isRunning && hasAgentAccess ? '#C4956A' : '#D4C4B0',
+                                    task.trim().length >= 10 && !isRunning && hasAgentAccess ? '#F0B84E' : '#35382F',
                                   transition: 'background 0.2s ease',
                                   display: 'flex',
                                   alignItems: 'center',
@@ -6091,8 +6091,8 @@ export function AgentPage() {
                                 style={{
                                   margin: '8px 0 0',
                                   fontSize: 11,
-                                  color: '#A89070',
-                                  fontFamily: 'Georgia, serif',
+                                  color: '#A0A39A',
+                                  fontFamily: 'var(--vp-font-sans)',
                                   textAlign: 'center',
                                 }}
                               >
@@ -6148,10 +6148,10 @@ export function AgentPage() {
                                     </svg>
                                   </span>
                                   <span>
-                                    <span style={{ display: 'block', fontSize: 13, color: '#2C1810' }}>
+                                    <span style={{ display: 'block', fontSize: 13, color: '#F3F0E7' }}>
                                       Add files or photos
                                     </span>
-                                    <span style={{ fontSize: 10, color: '#A89070' }}>Images, PDFs, docs…</span>
+                                    <span style={{ fontSize: 10, color: '#A0A39A' }}>Images, PDFs, docs…</span>
                                   </span>
                                 </button>
                                 <div style={{ height: 0.5, background: '#EDE4D8', margin: '0 8px' }} />
@@ -6196,8 +6196,8 @@ export function AgentPage() {
                                       </svg>
                                     </span>
                                     <span style={{ flex: 1 }}>
-                                      <span style={{ display: 'block', fontSize: 13, color: '#2C1810' }}>MCP</span>
-                                      <span style={{ fontSize: 10, color: '#A89070' }}>
+                                      <span style={{ display: 'block', fontSize: 13, color: '#F3F0E7' }}>MCP</span>
+                                      <span style={{ fontSize: 10, color: '#A0A39A' }}>
                                         {integrations.length > 0
                                           ? `${integrations.length} connected`
                                           : 'Connect tools'}
@@ -6252,7 +6252,7 @@ export function AgentPage() {
                                                 borderRadius: 5,
                                                 background:
                                                   integ.service === 'github'
-                                                    ? '#2C1810'
+                                                    ? '#F3F0E7'
                                                     : integ.service === 'google_drive'
                                                       ? '#EAF0F7'
                                                       : '#F0E8DC',
@@ -6271,7 +6271,7 @@ export function AgentPage() {
                                                   ? 'gh'
                                                   : 'N'}
                                             </span>
-                                            <span style={{ fontSize: 12, color: '#2C1810', flex: 1 }}>
+                                            <span style={{ fontSize: 12, color: '#F3F0E7', flex: 1 }}>
                                               {integ.display_name || integ.service}
                                             </span>
                                             {sel ? (
@@ -6310,8 +6310,8 @@ export function AgentPage() {
                                           background: 'transparent',
                                           width: '100%',
                                           fontSize: 12,
-                                          color: '#C4956A',
-                                          fontFamily: 'Georgia, serif',
+                                          color: '#F0B84E',
+                                          fontFamily: 'var(--vp-font-sans)',
                                         }}
                                       >
                                         Manage MCP →
@@ -6370,8 +6370,8 @@ export function AgentPage() {
                                     </svg>
                                   </span>
                                   <span>
-                                    <span style={{ display: 'block', fontSize: 13, color: '#2C1810' }}>Add files or photos</span>
-                                    <span style={{ fontSize: 10, color: '#A89070' }}>Images, PDFs, docs…</span>
+                                    <span style={{ display: 'block', fontSize: 13, color: '#F3F0E7' }}>Add files or photos</span>
+                                    <span style={{ fontSize: 10, color: '#A0A39A' }}>Images, PDFs, docs…</span>
                                   </span>
                                 </button>
                                 <div style={{ height: 0.5, background: '#EDE4D8', margin: '4px 0' }} />
@@ -6412,8 +6412,8 @@ export function AgentPage() {
                                     border: 'none',
                                     background: 'none',
                                     fontSize: 12,
-                                    color: '#C4956A',
-                                    fontFamily: 'Georgia, serif',
+                                    color: '#F0B84E',
+                                    fontFamily: 'var(--vp-font-sans)',
                                   }}
                                 >
                                   Manage MCP →
@@ -6467,7 +6467,7 @@ export function AgentPage() {
                       border: 'none',
                       cursor: 'pointer',
                       fontSize: 16,
-                      color: '#A89070',
+                      color: '#A0A39A',
                       lineHeight: 1,
                       padding: 0,
                       flexShrink: 0,
@@ -6547,7 +6547,7 @@ export function AgentPage() {
                                   width: 6,
                                   height: 6,
                                   borderRadius: '50%',
-                                  background: i <= curIdx && c.status !== 'failed' ? '#C4956A' : '#E0D5C5',
+                                  background: i <= curIdx && c.status !== 'failed' ? '#F0B84E' : '#E0D5C5',
                                 }}
                               />
                             ))}
@@ -6576,8 +6576,8 @@ export function AgentPage() {
               <div style={{ maxWidth: 900, margin: '0 auto', paddingBottom: 48 }}>
                 <div
                   style={{
-                    background: '#2C1810',
-                    color: '#C4956A',
+                    background: '#F3F0E7',
+                    color: '#F0B84E',
                     padding: '14px 18px',
                     borderRadius: '10px 10px 0 0',
                     display: 'flex',
@@ -6610,9 +6610,9 @@ export function AgentPage() {
                   <p
                     style={{
                       fontSize: 15,
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                       lineHeight: 1.8,
-                      color: '#2C1810',
+                      color: '#F3F0E7',
                       margin: 0,
                       whiteSpace: 'pre-wrap',
                     }}
@@ -6637,7 +6637,7 @@ export function AgentPage() {
                           fontSize: 12,
                           letterSpacing: '0.12em',
                           textTransform: 'uppercase',
-                          color: '#A89070',
+                          color: '#A0A39A',
                           marginBottom: 10,
                         }}
                       >
@@ -6673,12 +6673,12 @@ export function AgentPage() {
                         alignItems: 'center',
                         gap: 8,
                         padding: '9px 18px',
-                        border: '0.5px solid #D4C4B0',
+                        border: '0.5px solid #35382F',
                         borderRadius: 6,
                         background: 'transparent',
                         color: '#6B5040',
                         fontSize: 13,
-                        fontFamily: 'Georgia, serif',
+                        fontFamily: 'var(--vp-font-sans)',
                         cursor: exportingPdf ? 'default' : 'pointer',
                         opacity: exportingPdf ? 0.85 : 1,
                       }}
@@ -6719,12 +6719,12 @@ export function AgentPage() {
                       }}
                       style={{
                         padding: '9px 18px',
-                        border: '0.5px solid #D4C4B0',
+                        border: '0.5px solid #35382F',
                         borderRadius: 6,
                         background: 'transparent',
                         color: '#6B5040',
                         fontSize: 13,
-                        fontFamily: 'Georgia, serif',
+                        fontFamily: 'var(--vp-font-sans)',
                         cursor: 'pointer',
                       }}
                     >
@@ -6765,8 +6765,8 @@ export function AgentPage() {
                             background: open ? '#F0E8DC' : '#FAF7F2',
                             cursor: 'pointer',
                             fontSize: 13,
-                            fontFamily: 'Georgia, serif',
-                            color: '#2C1810',
+                            fontFamily: 'var(--vp-font-sans)',
+                            color: '#F3F0E7',
                           }}
                         >
                           Task {ti + 1} — {q.length > 72 ? `${q.slice(0, 72)}…` : q || 'Untitled'}
@@ -6865,7 +6865,7 @@ export function AgentPage() {
                                 width: 6,
                                 height: 6,
                                 borderRadius: '50%',
-                                background: '#C4956A',
+                                background: '#F0B84E',
                                 marginTop: 8,
                                 flexShrink: 0,
                               }}
@@ -6896,7 +6896,7 @@ export function AgentPage() {
                                     background: 'none',
                                     border: 'none',
                                     padding: 0,
-                                    color: '#C4956A',
+                                    color: '#F0B84E',
                                     fontSize: 11,
                                     cursor: 'pointer',
                                   }}
@@ -6943,7 +6943,7 @@ export function AgentPage() {
                         padding: '10px 14px',
                         marginBottom: '1rem',
                         fontSize: 12,
-                        color: '#6B6460',
+                        color: '#A0A39A',
                       }}
                     >
                       This is Agent&apos;s verification of the Arena winner. Confidence and accuracy scores reflect
@@ -6980,7 +6980,7 @@ export function AgentPage() {
                         />
                       </svg>
                       <div style={{ flex: '1 1 140px' }}>
-                        <span style={{ fontSize: 13, color: '#2C1810', display: 'block' }}>
+                        <span style={{ fontSize: 13, color: '#F3F0E7', display: 'block' }}>
                           Arena found new information on this topic since your last run
                         </span>
                         {liveUpdatesList.length > 0 && liveUpdatesList[0]?.found_at ? (
@@ -7000,7 +7000,7 @@ export function AgentPage() {
                           fontSize: 12,
                           color: '#3B6D11',
                           fontWeight: 500,
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                           textDecoration: 'underline',
                         }}
                       >
@@ -7028,7 +7028,7 @@ export function AgentPage() {
                               ui < liveUpdatesList.length - 1 ? `0.5px solid ${AR.BORDER_INNER}` : 'none',
                           }}
                         >
-                          <div style={{ fontSize: 11, color: '#A89070', marginBottom: 6 }}>
+                          <div style={{ fontSize: 11, color: '#A0A39A', marginBottom: 6 }}>
                             {formatRelativeShort(String(u?.found_at ?? ''), nowMs)}
                           </div>
                           <div style={{ fontSize: 13, color: '#4A3728', lineHeight: 1.5 }}>
@@ -7047,7 +7047,7 @@ export function AgentPage() {
                                 cursor: 'pointer',
                                 padding: 0,
                                 textDecoration: 'underline',
-                                fontFamily: 'Georgia, serif',
+                                fontFamily: 'var(--vp-font-sans)',
                               }}
                             >
                               Mark as read
@@ -7066,7 +7066,7 @@ export function AgentPage() {
                           border: 'none',
                           cursor: 'pointer',
                           padding: 0,
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                         }}
                       >
                         Mark all read
@@ -7177,7 +7177,7 @@ export function AgentPage() {
                               <div
                                 style={{
                                   fontSize: 12,
-                                  color: '#2C1810',
+                                  color: '#F3F0E7',
                                   marginBottom: 10,
                                   lineHeight: 1.45,
                                 }}
@@ -7223,10 +7223,10 @@ export function AgentPage() {
                                         border: 'none',
                                         padding: 0,
                                         cursor: 'pointer',
-                                        color: '#C4956A',
+                                        color: '#F0B84E',
                                         fontSize: 12,
                                         textDecoration: 'underline',
-                                        fontFamily: 'Georgia, serif',
+                                        fontFamily: 'var(--vp-font-sans)',
                                       }}
                                     >
                                       {String(raw?.task_title || 'Open past task')}
@@ -7240,7 +7240,7 @@ export function AgentPage() {
                                     marginTop: 10,
                                     fontSize: 12,
                                     fontStyle: 'italic',
-                                    color: '#A89070',
+                                    color: '#A0A39A',
                                     lineHeight: 1.45,
                                   }}
                                 >
@@ -7266,7 +7266,7 @@ export function AgentPage() {
                           gap: 10,
                         }}
                       >
-                        <span style={{ color: '#C4956A', fontSize: 16, lineHeight: 1.2 }}>↺</span>
+                        <span style={{ color: '#F0B84E', fontSize: 16, lineHeight: 1.2 }}>↺</span>
                         <div>
                           <div
                             style={{
@@ -7277,7 +7277,7 @@ export function AgentPage() {
                           >
                             This answer may contradict a past conclusion
                           </div>
-                          <div style={{ fontSize: 12, color: '#6B6460', marginTop: 2 }}>
+                          <div style={{ fontSize: 12, color: '#A0A39A', marginTop: 2 }}>
                             {result.memory_contradictions
                               .map((c: ContradictionItem) => c.summary)
                               .filter(Boolean)
@@ -7430,9 +7430,9 @@ export function AgentPage() {
                                 marginTop: 5,
                               }}
                             >
-                              <span style={{ fontSize: 10, color: '#A89070' }}>Verified</span>
-                              <span style={{ fontSize: 10, color: '#A89070' }}>Supported</span>
-                              <span style={{ fontSize: 10, color: '#A89070' }}>Uncertain</span>
+                              <span style={{ fontSize: 10, color: '#A0A39A' }}>Verified</span>
+                              <span style={{ fontSize: 10, color: '#A0A39A' }}>Supported</span>
+                              <span style={{ fontSize: 10, color: '#A0A39A' }}>Uncertain</span>
                             </div>
                             {user?.feedback_calibration?.reliable &&
                             user.feedback_calibration.adjustment !== 0 ? (
@@ -7440,7 +7440,7 @@ export function AgentPage() {
                                 style={{
                                   fontSize: 11,
                                   fontStyle: 'italic',
-                                  color: '#A89070',
+                                  color: '#A0A39A',
                                   marginTop: 8,
                                   marginBottom: 0,
                                 }}
@@ -7461,7 +7461,7 @@ export function AgentPage() {
                                   border: 'none',
                                   cursor: 'pointer',
                                   padding: 0,
-                                  fontFamily: 'Georgia, serif',
+                                  fontFamily: 'var(--vp-font-sans)',
                                   textDecoration: 'underline',
                                   textDecorationStyle: 'dotted',
                                 }}
@@ -7510,7 +7510,7 @@ export function AgentPage() {
                                     key={`${si}-${src.title.slice(0, 20)}`}
                                     style={{
                                       background: '#F0E8DC',
-                                      border: '0.5px solid #D4C4B0',
+                                      border: '0.5px solid #35382F',
                                       borderRadius: 12,
                                       padding: '4px 10px',
                                       display: 'flex',
@@ -7522,7 +7522,7 @@ export function AgentPage() {
                                     <span
                                       style={{
                                         fontSize: 9,
-                                        color: '#A89070',
+                                        color: '#A0A39A',
                                         fontFamily: 'ui-monospace, monospace',
                                       }}
                                     >
@@ -7555,12 +7555,12 @@ export function AgentPage() {
                                 style={{
                                   marginTop: 8,
                                   fontSize: 11,
-                                  color: '#C4956A',
+                                  color: '#F0B84E',
                                   cursor: 'pointer',
                                   background: 'none',
                                   border: 'none',
                                   padding: 0,
-                                  fontFamily: 'Georgia, serif',
+                                  fontFamily: 'var(--vp-font-sans)',
                                 }}
                               >
                                 {showAllSourcePills
@@ -7610,7 +7610,7 @@ export function AgentPage() {
                             fontSize: 10,
                             background: '#F0E8DC',
                             color: '#8C7355',
-                            border: '0.5px solid #D4C4B0',
+                            border: '0.5px solid #35382F',
                             padding: '2px 8px',
                             borderRadius: 8,
                           }}
@@ -7622,7 +7622,7 @@ export function AgentPage() {
                         style={{
                           fontSize: 14,
                           fontStyle: 'italic',
-                          color: '#2C1810',
+                          color: '#F3F0E7',
                           lineHeight: 1.65,
                           marginBottom: 12,
                           paddingLeft: 2,
@@ -7631,11 +7631,11 @@ export function AgentPage() {
                         <span
                           style={{
                             fontSize: 32,
-                            color: '#D4C4B0',
+                            color: '#35382F',
                             lineHeight: 0,
                             verticalAlign: '-8px',
                             marginRight: 4,
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                           }}
                           aria-hidden
                         >
@@ -7656,7 +7656,7 @@ export function AgentPage() {
                           background: 'none',
                           border: 'none',
                           padding: 0,
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                         }}
                       >
                         {steelmanInnerExpanded ? 'Collapse ↑' : 'See full steelman ↓'}
@@ -7671,7 +7671,7 @@ export function AgentPage() {
                                   fontSize: 10,
                                   textTransform: 'uppercase',
                                   letterSpacing: '0.08em',
-                                  color: '#A89070',
+                                  color: '#A0A39A',
                                   marginBottom: 8,
                                 }}
                               >
@@ -7684,7 +7684,7 @@ export function AgentPage() {
                                       width: 5,
                                       height: 5,
                                       borderRadius: '50%',
-                                      background: '#C4956A',
+                                      background: '#F0B84E',
                                       flexShrink: 0,
                                       marginTop: 6,
                                     }}
@@ -7703,7 +7703,7 @@ export function AgentPage() {
                                   fontSize: 10,
                                   textTransform: 'uppercase',
                                   letterSpacing: '0.08em',
-                                  color: '#A89070',
+                                  color: '#A0A39A',
                                   marginBottom: 7,
                                 }}
                               >
@@ -7713,7 +7713,7 @@ export function AgentPage() {
                                 style={{
                                   background: '#F5EFE6',
                                   padding: '8px 12px',
-                                  borderLeft: '2px solid #C4956A',
+                                  borderLeft: '2px solid #F0B84E',
                                   fontSize: 13,
                                   color: '#4A3728',
                                   lineHeight: 1.55,
@@ -7730,7 +7730,7 @@ export function AgentPage() {
                                   fontSize: 10,
                                   textTransform: 'uppercase',
                                   letterSpacing: '0.08em',
-                                  color: '#A89070',
+                                  color: '#A0A39A',
                                   marginBottom: 7,
                                 }}
                               >
@@ -7755,8 +7755,8 @@ export function AgentPage() {
                           gap: 14,
                           padding: '10px 16px',
                           background: AR.SURFACE,
-                          borderTop: '1px solid #E8DDD0',
-                          borderBottom: '1px solid #E8DDD0',
+                          borderTop: '1px solid #30332D',
+                          borderBottom: '1px solid #30332D',
                           marginBottom: 0,
                         }}
                       >
@@ -7820,7 +7820,7 @@ export function AgentPage() {
                             gap: 5,
                             padding: '8px 16px 10px',
                             background: AR.SURFACE,
-                            borderBottom: '1px solid #E8DDD0',
+                            borderBottom: '1px solid #30332D',
                             marginBottom: 16,
                           }}
                         >
@@ -7981,7 +7981,7 @@ export function AgentPage() {
                               fontSize: 10,
                               padding: '2px 8px',
                               borderRadius: 8,
-                              border: '0.5px solid #D4C4B0',
+                              border: '0.5px solid #35382F',
                               color: AR.TEXT_MUTED,
                               background: '#F0E8DC',
                             }}
@@ -8183,7 +8183,7 @@ export function AgentPage() {
                               fontSize: 10,
                               padding: '2px 8px',
                               borderRadius: 8,
-                              border: '0.5px solid #D4C4B0',
+                              border: '0.5px solid #35382F',
                               color: AR.TEXT_MUTED,
                               background: '#F0E8DC',
                             }}
@@ -8363,7 +8363,7 @@ export function AgentPage() {
                               fontSize: 10,
                               padding: '2px 8px',
                               borderRadius: 8,
-                              border: '0.5px solid #D4C4B0',
+                              border: '0.5px solid #35382F',
                               color: AR.TEXT_MUTED,
                               background: '#F0E8DC',
                             }}
@@ -8618,12 +8618,12 @@ export function AgentPage() {
                           alignItems: 'center',
                           gap: 6,
                           padding: '9px 14px',
-                          border: result.is_live ? '0.5px solid #5A8C6A' : '0.5px solid #D4C4B0',
+                          border: result.is_live ? '0.5px solid #5A8C6A' : '0.5px solid #35382F',
                           borderRadius: 6,
                           background: result.is_live ? '#EAF3DE' : 'transparent',
                           color: result.is_live ? '#3B6D11' : '#6B5040',
                           fontSize: 13,
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                           cursor: liveToggleBusy ? 'default' : 'pointer',
                           opacity: liveToggleBusy ? 0.7 : 1,
                         }}
@@ -8712,8 +8712,8 @@ export function AgentPage() {
                                 border: 'none',
                                 cursor: watchlistBusy ? 'default' : 'pointer',
                                 fontSize: 12,
-                                fontFamily: 'Georgia, serif',
-                                background: selected ? '#C4956A' : '#F0E8DC',
+                                fontFamily: 'var(--vp-font-sans)',
+                                background: selected ? '#F0B84E' : '#F0E8DC',
                                 color: selected ? '#FAF7F2' : '#8C7355',
                                 opacity: watchlistBusy ? 0.75 : 1,
                               }}
@@ -8731,11 +8731,11 @@ export function AgentPage() {
                           style={{
                             padding: '7px 14px',
                             borderRadius: 20,
-                            border: '0.5px solid #D4C4B0',
+                            border: '0.5px solid #35382F',
                             background: 'transparent',
                             color: '#8C7355',
                             fontSize: 12,
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                             cursor: watchlistBusy ? 'default' : 'pointer',
                           }}
                         >
@@ -8779,7 +8779,7 @@ export function AgentPage() {
                       <span style={{ fontSize: 11, color: '#8C7355' }}>
                         Checking for updates every 24h
                       </span>
-                      <span style={{ fontSize: 11, color: '#A89070' }}>
+                      <span style={{ fontSize: 11, color: '#A0A39A' }}>
                         Last checked: {formatRelativeShort(result.live_last_checked, nowMs)}
                       </span>
                     </div>
@@ -8815,21 +8815,21 @@ export function AgentPage() {
                                   borderRadius: '50%',
                                   border:
                                     userRating === n
-                                      ? '0.5px solid #C4956A'
-                                      : '0.5px solid #D4C4B0',
-                                  background: userRating === n ? '#C4956A' : 'transparent',
+                                      ? '0.5px solid #F0B84E'
+                                      : '0.5px solid #35382F',
+                                  background: userRating === n ? '#F0B84E' : 'transparent',
                                   color: userRating === n ? '#FAF7F2' : '#8C7355',
                                   fontSize: 12,
                                   cursor: ratingSubmitBusy ? 'default' : 'pointer',
-                                  fontFamily: 'Georgia, serif',
+                                  fontFamily: 'var(--vp-font-sans)',
                                 }}
                                 onMouseEnter={(e) => {
                                   if (userRating === n || ratingSubmitBusy) return;
-                                  e.currentTarget.style.borderColor = '#C4956A';
+                                  e.currentTarget.style.borderColor = '#F0B84E';
                                 }}
                                 onMouseLeave={(e) => {
                                   if (userRating === n) return;
-                                  e.currentTarget.style.borderColor = '#D4C4B0';
+                                  e.currentTarget.style.borderColor = '#35382F';
                                 }}
                               >
                                 {n}
@@ -8851,7 +8851,7 @@ export function AgentPage() {
                             padding: '12px 16px',
                           }}
                         >
-                          <div style={{ fontSize: 13, fontWeight: 500, color: '#2C1810', marginBottom: 8 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: '#F3F0E7', marginBottom: 8 }}>
                             {String(ratingResult.verdict)}
                           </div>
                           <div style={{ fontSize: 12, color: '#6B5040', marginBottom: 6 }}>
@@ -8871,7 +8871,7 @@ export function AgentPage() {
                             <>
                               <div style={{ marginTop: 12, fontSize: 11, color: '#8C7355' }}>
                                 Your calibration score:{' '}
-                                <strong style={{ color: '#2C1810' }}>
+                                <strong style={{ color: '#F3F0E7' }}>
                                   {Number(
                                     (ratingResult.calibration_stats as { calibration_score?: number })
                                       ?.calibration_score ?? 0,
@@ -8898,7 +8898,7 @@ export function AgentPage() {
                                           ?.calibration_score ?? 0,
                                       ),
                                     )}%`,
-                                    background: '#C4956A',
+                                    background: '#F0B84E',
                                     borderRadius: 3,
                                   }}
                                 />
@@ -8918,8 +8918,8 @@ export function AgentPage() {
                               padding: 0,
                               cursor: 'pointer',
                               fontSize: 12,
-                              color: '#C4956A',
-                              fontFamily: 'Georgia, serif',
+                              color: '#F0B84E',
+                              fontFamily: 'var(--vp-font-sans)',
                               textDecoration: 'underline',
                             }}
                           >
@@ -8953,7 +8953,7 @@ export function AgentPage() {
                         >
                           <div
                             style={{
-                              background: '#2C1810',
+                              background: '#F3F0E7',
                               padding: '13px 20px',
                               display: 'flex',
                               alignItems: 'center',
@@ -8965,7 +8965,7 @@ export function AgentPage() {
                                 fontSize: 11,
                                 letterSpacing: '0.16em',
                                 textTransform: 'uppercase',
-                                color: '#C4956A',
+                                color: '#F0B84E',
                               }}
                             >
                               Across your research
@@ -8977,7 +8977,7 @@ export function AgentPage() {
                                 fontSize: 10,
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.12em',
-                                color: '#A89070',
+                                color: '#A0A39A',
                                 marginBottom: 8,
                               }}
                             >
@@ -8997,7 +8997,7 @@ export function AgentPage() {
                                     key={`ip-${pi}-${p.slice(0, 24)}`}
                                     style={{
                                       background: '#F0E8DC',
-                                      border: '0.5px solid #D4C4B0',
+                                      border: '0.5px solid #35382F',
                                       borderRadius: 12,
                                       fontSize: 12,
                                       color: '#4A3728',
@@ -9014,7 +9014,7 @@ export function AgentPage() {
                                   fontSize: 10,
                                   textTransform: 'uppercase',
                                   letterSpacing: '0.12em',
-                                  color: '#A89070',
+                                  color: '#A0A39A',
                                   marginBottom: 6,
                                 }}
                               >
@@ -9037,7 +9037,7 @@ export function AgentPage() {
                                   fontSize: 10,
                                   textTransform: 'uppercase',
                                   letterSpacing: '0.12em',
-                                  color: '#A89070',
+                                  color: '#A0A39A',
                                   marginBottom: 8,
                                 }}
                               >
@@ -9100,11 +9100,11 @@ export function AgentPage() {
                         style={{
                           padding: '7px 16px',
                           borderRadius: 20,
-                          border: '0.5px solid #D4C4B0',
+                          border: '0.5px solid #35382F',
                           background: 'transparent',
                           color: '#6B5040',
                           fontSize: 13,
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                           cursor: 'pointer',
                           transition: 'all 0.15s',
                         }}
@@ -9125,7 +9125,7 @@ export function AgentPage() {
                             style={{
                               display: 'flex',
                               alignItems: 'center',
-                              border: '0.5px solid #D4C4B0',
+                              border: '0.5px solid #35382F',
                               borderRadius: 12,
                               padding: '12px 16px',
                               background: AR.SURFACE_ALT,
@@ -9165,7 +9165,7 @@ export function AgentPage() {
                                 outline: 'none',
                                 fontSize: 14,
                                 color: AR.TEXT_PRIMARY,
-                                fontFamily: 'Georgia, serif',
+                                fontFamily: 'var(--vp-font-sans)',
                               }}
                             />
                             <button
@@ -9178,7 +9178,7 @@ export function AgentPage() {
                                 height: 36,
                                 borderRadius: '50%',
                                 border: 'none',
-                                background: followUp.trim() ? AR.GOLD : '#E8DDD0',
+                                background: followUp.trim() ? AR.GOLD : '#30332D',
                                 transition: 'background 0.2s, cursor 0.2s',
                                 cursor: followUp.trim() ? 'pointer' : 'default',
                                 display: 'flex',
@@ -9216,7 +9216,7 @@ export function AgentPage() {
                                     ? '#D85A30'
                                     : charBudgetTone(followUp.length, AGENT_REFINE_MAX_CHARS) === 'warn'
                                       ? '#B07840'
-                                      : '#A89070',
+                                      : '#A0A39A',
                               }}
                             >
                               {charBudgetLabel(followUp.length, AGENT_REFINE_MAX_CHARS)}
@@ -9259,12 +9259,12 @@ export function AgentPage() {
                           alignItems: 'center',
                           gap: 7,
                           padding: '9px 18px',
-                          border: '0.5px solid #D4C4B0',
+                          border: '0.5px solid #35382F',
                           borderRadius: 20,
                           background: 'transparent',
                           color: '#6B5040',
                           fontSize: 13,
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                           cursor: 'pointer',
                           transition: 'all 0.2s',
                         }}
@@ -9306,7 +9306,7 @@ export function AgentPage() {
                               fontSize: 12,
                               color: AR.GOLD,
                               cursor: 'pointer',
-                              fontFamily: 'Georgia, serif',
+                              fontFamily: 'var(--vp-font-sans)',
                               textDecoration: 'underline',
                             }}
                           >
@@ -9322,11 +9322,11 @@ export function AgentPage() {
                       role="status"
                       aria-live="polite"
                       aria-busy="true"
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#6B6460' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#A0A39A' }}
                     >
-                      <span className="agent-chal-dot" style={{ background: '#8C9BAB', animationDelay: '0ms' }} />
-                      <span className="agent-chal-dot" style={{ background: '#9B8FAA', animationDelay: '0.15s' }} />
-                      <span className="agent-chal-dot" style={{ background: '#B0977E', animationDelay: '0.3s' }} />
+                      <span className="agent-chal-dot" style={{ background: '#5ED8FF', animationDelay: '0ms' }} />
+                      <span className="agent-chal-dot" style={{ background: '#A98CF8', animationDelay: '0.15s' }} />
+                      <span className="agent-chal-dot" style={{ background: '#FF6652', animationDelay: '0.3s' }} />
                       <span>Three minds are challenging this answer...</span>
                     </div>
                   ) : null}
@@ -9366,8 +9366,8 @@ export function AgentPage() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         {challenges.map((ch, idx) => {
                           const styles = CHALLENGER_CARD_STYLES[ch.challenger] || {
-                            accent: '#C4956A',
-                            dot: '#C4956A',
+                            accent: '#F0B84E',
+                            dot: '#F0B84E',
                           };
                           const rebuttalText = rebuttals[ch.challenger];
                           const showRefined =
@@ -9433,7 +9433,7 @@ export function AgentPage() {
                                   style={{
                                     fontSize: 10,
                                     background: '#F0EBE3',
-                                    color: '#6B6460',
+                                    color: '#A0A39A',
                                     borderRadius: 999,
                                     padding: '2px 8px',
                                     marginLeft: 'auto',
@@ -9457,7 +9457,7 @@ export function AgentPage() {
                                   border: 'none',
                                   padding: 0,
                                   fontSize: 12,
-                                  color: '#C4956A',
+                                  color: '#F0B84E',
                                   cursor: 'pointer',
                                   display: 'inline-block',
                                 }}
@@ -9472,12 +9472,12 @@ export function AgentPage() {
                                     alignItems: 'center',
                                     gap: 8,
                                     fontSize: 13,
-                                    color: '#6B6460',
+                                    color: '#A0A39A',
                                   }}
                                 >
-                                  <span className="agent-chal-dot" style={{ background: '#C4956A' }} />
-                                  <span className="agent-chal-dot" style={{ background: '#C4956A', animationDelay: '0.15s' }} />
-                                  <span className="agent-chal-dot" style={{ background: '#C4956A', animationDelay: '0.3s' }} />
+                                  <span className="agent-chal-dot" style={{ background: '#F0B84E' }} />
+                                  <span className="agent-chal-dot" style={{ background: '#F0B84E', animationDelay: '0.15s' }} />
+                                  <span className="agent-chal-dot" style={{ background: '#F0B84E', animationDelay: '0.3s' }} />
                                   Agent is responding...
                                 </div>
                               ) : null}
@@ -9504,7 +9504,7 @@ export function AgentPage() {
                                         width: 6,
                                         height: 6,
                                         borderRadius: '50%',
-                                        background: '#C4956A',
+                                        background: '#F0B84E',
                                         flexShrink: 0,
                                       }}
                                     />
@@ -9513,7 +9513,7 @@ export function AgentPage() {
                                         fontSize: 11,
                                         textTransform: 'uppercase',
                                         letterSpacing: '0.1em',
-                                        color: '#C4956A',
+                                        color: '#F0B84E',
                                       }}
                                     >
                                       Agent responds
@@ -9571,7 +9571,7 @@ export function AgentPage() {
                               padding: '6px 14px',
                               borderRadius: 8,
                               fontSize: 12,
-                              fontFamily: 'Georgia, serif',
+                              fontFamily: 'var(--vp-font-sans)',
                               border: '0.5px solid',
                               ...(taskAnswerFeedback.verdict === 'correct'
                                 ? {
@@ -9605,7 +9605,7 @@ export function AgentPage() {
                                 : 'wrong'}
                           </span>
                         </div>
-                        <p style={{ fontSize: 11, color: '#A89070', marginTop: 8, marginBottom: 0 }}>
+                        <p style={{ fontSize: 11, color: '#A0A39A', marginTop: 8, marginBottom: 0 }}>
                           Thanks — this improves future calibration
                         </p>
                         <button
@@ -9621,9 +9621,9 @@ export function AgentPage() {
                             padding: 0,
                             marginTop: 6,
                             fontSize: 11,
-                            color: '#C4956A',
+                            color: '#F0B84E',
                             cursor: 'pointer',
-                            fontFamily: 'Georgia, serif',
+                            fontFamily: 'var(--vp-font-sans)',
                             textDecoration: 'underline',
                           }}
                         >
@@ -9662,7 +9662,7 @@ export function AgentPage() {
                                   borderRadius: 8,
                                   padding: '7px 16px',
                                   fontSize: 12,
-                                  fontFamily: 'Georgia, serif',
+                                  fontFamily: 'var(--vp-font-sans)',
                                   border: '0.5px solid #97C459',
                                   background: '#EAF3DE',
                                   color: '#3B6D11',
@@ -9696,7 +9696,7 @@ export function AgentPage() {
                                   borderRadius: 8,
                                   padding: '7px 16px',
                                   fontSize: 12,
-                                  fontFamily: 'Georgia, serif',
+                                  fontFamily: 'var(--vp-font-sans)',
                                   border: '0.5px solid #E8C87A',
                                   background: '#FDF6EC',
                                   color: '#854F0B',
@@ -9730,7 +9730,7 @@ export function AgentPage() {
                                   borderRadius: 8,
                                   padding: '7px 16px',
                                   fontSize: 12,
-                                  fontFamily: 'Georgia, serif',
+                                  fontFamily: 'var(--vp-font-sans)',
                                   border: '0.5px solid #F0997B',
                                   background: '#FCF0EE',
                                   color: '#993C1D',
@@ -9764,8 +9764,8 @@ export function AgentPage() {
                               placeholder="What was wrong or missing? (optional)"
                               style={{
                                 fontSize: 12,
-                                fontFamily: 'Georgia, serif',
-                                border: '0.5px solid #D4C4B0',
+                                fontFamily: 'var(--vp-font-sans)',
+                                border: '0.5px solid #35382F',
                                 borderRadius: 6,
                                 padding: '8px 12px',
                                 width: '100%',
@@ -9775,10 +9775,10 @@ export function AgentPage() {
                                 background: '#fff',
                               }}
                               onFocus={(e) => {
-                                e.currentTarget.style.borderColor = '#C4956A';
+                                e.currentTarget.style.borderColor = '#F0B84E';
                               }}
                               onBlur={(e) => {
-                                e.currentTarget.style.borderColor = '#D4C4B0';
+                                e.currentTarget.style.borderColor = '#35382F';
                               }}
                             />
                             <button
@@ -9810,10 +9810,10 @@ export function AgentPage() {
                                 padding: '8px 16px',
                                 borderRadius: 8,
                                 border: 'none',
-                                background: '#C4956A',
+                                background: '#F0B84E',
                                 color: '#FDFAF6',
                                 fontSize: 12,
-                                fontFamily: 'Georgia, serif',
+                                fontFamily: 'var(--vp-font-sans)',
                                 cursor: answerFeedbackSubmitBusy ? 'default' : 'pointer',
                                 opacity: answerFeedbackSubmitBusy ? 0.7 : 1,
                               }}
@@ -9834,7 +9834,7 @@ export function AgentPage() {
                                 color: '#8C7355',
                                 fontSize: 11,
                                 cursor: 'pointer',
-                                fontFamily: 'Georgia, serif',
+                                fontFamily: 'var(--vp-font-sans)',
                               }}
                             >
                               Back
@@ -9905,13 +9905,13 @@ export function AgentPage() {
                     margin: 0,
                     fontSize: 16,
                     fontWeight: 500,
-                    color: '#2C1810',
-                    fontFamily: 'Georgia, serif',
+                    color: '#F3F0E7',
+                    fontFamily: 'var(--vp-font-sans)',
                   }}
                 >
                   Create a research room
                 </h2>
-                <p style={{ fontSize: 12, color: '#A89070', fontStyle: 'italic', margin: '8px 0 0', lineHeight: 1.5 }}>
+                <p style={{ fontSize: 12, color: '#A0A39A', fontStyle: 'italic', margin: '8px 0 0', lineHeight: 1.5 }}>
                   {result?.status === 'complete' && result?.task_id
                     ? 'Collaborate on this topic. This completed task can be added to the room automatically.'
                     : 'Collaborate on a topic. Each member runs their own tasks — the room synthesises findings automatically.'}
@@ -9945,7 +9945,7 @@ export function AgentPage() {
                     fontSize: 10,
                     letterSpacing: '0.1em',
                     textTransform: 'uppercase',
-                    color: '#A89070',
+                    color: '#A0A39A',
                     marginBottom: 6,
                   }}
                 >
@@ -9974,12 +9974,12 @@ export function AgentPage() {
                   style={{
                     width: '100%',
                     boxSizing: 'border-box',
-                    border: roomNameError ? '0.5px solid #D85A30' : '0.5px solid #D4C4B0',
+                    border: roomNameError ? '0.5px solid #D85A30' : '0.5px solid #35382F',
                     borderRadius: 8,
                     padding: '10px 12px',
                     fontSize: 13,
-                    color: '#2C1810',
-                    fontFamily: 'Georgia, serif',
+                    color: '#F3F0E7',
+                    fontFamily: 'var(--vp-font-sans)',
                     background: '#FDFAF6',
                     outline: 'none',
                   }}
@@ -10000,12 +10000,12 @@ export function AgentPage() {
                     disabled={creatingRoom}
                     aria-busy={creatingRoom}
                     style={{
-                      background: '#2C1810',
-                      color: '#C4956A',
+                      background: '#F3F0E7',
+                      color: '#F0B84E',
                       borderRadius: 20,
                       padding: '9px 20px',
                       fontSize: 13,
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                       border: 'none',
                       cursor: creatingRoom ? 'wait' : 'pointer',
                       opacity: creatingRoom ? 0.75 : 1,
@@ -10019,12 +10019,12 @@ export function AgentPage() {
                     disabled={creatingRoom}
                     style={{
                       background: 'transparent',
-                      border: '0.5px solid #D4C4B0',
+                      border: '0.5px solid #35382F',
                       color: '#8C7355',
                       borderRadius: 20,
                       padding: '9px 20px',
                       fontSize: 13,
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                       cursor: creatingRoom ? 'default' : 'pointer',
                     }}
                   >
@@ -10040,7 +10040,7 @@ export function AgentPage() {
                 <div
                   style={{
                     background: '#F0E8DC',
-                    border: '0.5px solid #D4C4B0',
+                    border: '0.5px solid #35382F',
                     borderRadius: 8,
                     padding: '10px 12px',
                     display: 'flex',
@@ -10091,10 +10091,10 @@ export function AgentPage() {
                               ? '#D85A30'
                               : shareRoomInviteStatus === 'shared'
                                 ? '#5A8C6A'
-                                : '#C4956A',
+                                : '#F0B84E',
                           cursor: 'pointer',
                           fontSize: 12,
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                         }}
                       >
                         {shareRoomInviteStatus === 'shared'
@@ -10118,10 +10118,10 @@ export function AgentPage() {
                       style={{
                         background: 'none',
                         border: 'none',
-                        color: copyRoomLinkFeedback === 'failed' ? '#D85A30' : '#C4956A',
+                        color: copyRoomLinkFeedback === 'failed' ? '#D85A30' : '#F0B84E',
                         cursor: 'pointer',
                         fontSize: 12,
-                        fontFamily: 'Georgia, serif',
+                        fontFamily: 'var(--vp-font-sans)',
                       }}
                     >
                       {copyRoomLinkFeedback === 'copied'
@@ -10137,13 +10137,13 @@ export function AgentPage() {
                     type="button"
                     onClick={() => navigate(`/room/${encodeURIComponent(createdRoom.slug)}`)}
                     style={{
-                      background: '#2C1810',
-                      color: '#C4956A',
+                      background: '#F3F0E7',
+                      color: '#F0B84E',
                       border: 'none',
                       borderRadius: 20,
                       padding: '9px 18px',
                       fontSize: 13,
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                       cursor: 'pointer',
                     }}
                   >
@@ -10159,7 +10159,7 @@ export function AgentPage() {
                       fontSize: 13,
                       color: '#8C7355',
                       cursor: 'pointer',
-                      fontFamily: 'Georgia, serif',
+                      fontFamily: 'var(--vp-font-sans)',
                     }}
                   >
                     Done

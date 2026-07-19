@@ -571,7 +571,7 @@ function App() {
         agent_id: scoredAgent.response.agent_id,
         persona_id: persona?.id || scoredAgent.response.agent_id,
         persona_name: persona?.name || scoredAgent.response.agent_id,
-        persona_color: persona?.color || '#6B6460',
+        persona_color: persona?.color || '#A0A39A',
         prompt: response.prompt,
         one_liner: scoredAgent.response.one_liner,
         verdict: scoredAgent.response.verdict,
@@ -1246,7 +1246,7 @@ function App() {
     <div
       style={{
         minHeight: '100dvh',
-        background: '#FAF7F4',
+        background: '#0B0C0A',
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
@@ -1378,14 +1378,14 @@ function App() {
                 }}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ position: 'relative', zIndex: 1 }}>
-                  <rect x="2" y="4" width="12" height="1.5" rx="0.75" fill="#6B6460" />
-                  <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="#6B6460" />
-                  <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" fill="#6B6460" />
+                  <rect x="2" y="4" width="12" height="1.5" rx="0.75" fill="#A0A39A" />
+                  <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="#A0A39A" />
+                  <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" fill="#A0A39A" />
                 </svg>
               </button>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => navigate('/')}>
-                <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C4956A' }} className="breathe" />
+                <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#F0B84E' }} className="breathe" />
                 <span className="wordmark-text" style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714' }}>Arena</span>
               </div>
             </div>
@@ -1475,7 +1475,7 @@ function App() {
               padding: isMobile
                 ? '16px 0 calc(138px + env(safe-area-inset-bottom, 0px))'
                 : '24px 32px 138px 32px',
-              background: '#FAF7F4',
+              background: '#0B0C0A',
               minHeight: 0,
               position: 'relative',
               zIndex: 10,
@@ -1513,7 +1513,7 @@ function App() {
                       marginBottom: '0.25rem',
                     }}
                   >
-                    <p style={{ fontSize: '13px', fontWeight: 500, color: '#C4956A', margin: 0 }}>
+                    <p style={{ fontSize: '13px', fontWeight: 500, color: '#F0B84E', margin: 0 }}>
                       Cannot process
                     </p>
                     <button
@@ -1525,7 +1525,7 @@ function App() {
                         border: 'none',
                         cursor: 'pointer',
                         fontSize: 16,
-                        color: '#A89070',
+                        color: '#A0A39A',
                         lineHeight: 1,
                         padding: 0,
                       }}
@@ -1533,7 +1533,7 @@ function App() {
                       ×
                     </button>
                   </div>
-                  <p style={{ fontSize: '13px', color: '#6B6460', margin: '0 0 10px' }}>{error}</p>
+                  <p style={{ fontSize: '13px', color: '#A0A39A', margin: '0 0 10px' }}>{error}</p>
                   <button
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm"
@@ -1560,7 +1560,7 @@ function App() {
                     marginLeft: 'auto',
                     marginRight: 'auto',
                     fontSize: 13,
-                    color: '#C4956A',
+                    color: '#F0B84E',
                     textAlign: 'center',
                     display: 'flex',
                     alignItems: 'center',
@@ -1581,7 +1581,7 @@ function App() {
                       border: 'none',
                       cursor: 'pointer',
                       fontSize: 16,
-                      color: '#A89070',
+                      color: '#A0A39A',
                       lineHeight: 1,
                       padding: 0,
                     }}
@@ -1725,7 +1725,7 @@ function App() {
 
               {/* Scoring indicator */}
               {isStreaming && doneAgents.size === 4 && (
-                <p style={{ textAlign: 'center', fontSize: '13px', color: '#6B6460', animation: 'breathe 2.4s ease-in-out infinite', marginTop: '1rem' }}>
+                <p style={{ textAlign: 'center', fontSize: '13px', color: '#A0A39A', animation: 'breathe 2.4s ease-in-out infinite', marginTop: '1rem' }}>
                   Scoring responses...
                 </p>
               )}
@@ -1784,7 +1784,7 @@ function App() {
                       <div>
                         <p style={{ fontSize: '15px', fontWeight: 600, color: '#1A1714', letterSpacing: '0.01em' }}>{focusedAgentConfig.name}</p>
                         {focusedScored?.response.one_liner && (
-                          <p style={{ fontSize: '13px', color: '#6B6460', fontStyle: 'italic', marginTop: '4px', marginBottom: '1rem' }}>
+                          <p style={{ fontSize: '13px', color: '#A0A39A', fontStyle: 'italic', marginTop: '4px', marginBottom: '1rem' }}>
                             {focusedScored.response.one_liner}
                           </p>
                         )}
@@ -1816,7 +1816,7 @@ function App() {
                       <div key={idx} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                         {msg.role === 'user' ? (
                           <div style={{ maxWidth: '82%', borderRadius: '14px', padding: '16px 20px', background: '#1A1714' }}>
-                            <p style={{ fontSize: '14px', color: '#FAF7F4', lineHeight: '1.75', letterSpacing: '0.01em', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                            <p style={{ fontSize: '14px', color: '#F3F0E7', lineHeight: '1.75', letterSpacing: '0.01em', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
                           </div>
                         ) : (
                           <div style={{ maxWidth: '92%', borderRadius: '14px', padding: '16px 20px', border: '0.5px solid #E0D8D0', background: 'rgba(255,255,255,0.55)' }}>
@@ -1826,7 +1826,7 @@ function App() {
                                 {focusedAgentConfig.name}
                               </span>
                               {idx === 0 ? (
-                                <span style={{ fontSize: 11, color: '#A89070', fontStyle: 'italic', marginLeft: 4 }}>
+                                <span style={{ fontSize: 11, color: '#A0A39A', fontStyle: 'italic', marginLeft: 4 }}>
                                   Original take
                                 </span>
                               ) : null}
@@ -1852,7 +1852,7 @@ function App() {
                           {focusedStreamingText ? (
                             <AgentAnswerMarkdown markdown={focusedStreamingText} />
                           ) : (
-                            <p style={{ fontSize: '14px', color: '#6B6460', fontStyle: 'italic', margin: 0 }}>
+                            <p style={{ fontSize: '14px', color: '#A0A39A', fontStyle: 'italic', margin: 0 }}>
                               Thinking…
                             </p>
                           )}
@@ -1873,7 +1873,7 @@ function App() {
 
                     {focusedChatError && (
                       <div style={{ borderRadius: '10px', border: '0.5px solid rgba(196,149,106,0.3)', background: '#FFFFFF', padding: '0.75rem' }}>
-                        <p style={{ fontSize: '11px', color: '#6B6460' }}>{focusedChatError}</p>
+                        <p style={{ fontSize: '11px', color: '#A0A39A' }}>{focusedChatError}</p>
                       </div>
                     )}
 
@@ -1898,9 +1898,9 @@ function App() {
                         style={{
                           pointerEvents: 'auto',
                           fontSize: 12,
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                           color: '#FAF7F2',
-                          background: '#C4956A',
+                          background: '#F0B84E',
                           border: 'none',
                           borderRadius: 999,
                           padding: '6px 14px',
@@ -1990,14 +1990,14 @@ function App() {
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
                           fontSize: 12,
-                          color: '#6B6460',
+                          color: '#A0A39A',
                           background: 'transparent',
                           border: 'none',
                           borderRadius: 0,
                           padding: '6px 4px 6px 12px',
                           cursor: 'pointer',
                           textAlign: 'left',
-                          fontFamily: 'Georgia, serif',
+                          fontFamily: 'var(--vp-font-sans)',
                         }}
                       >
                         {label}
@@ -2016,7 +2016,7 @@ function App() {
                           border: 'none',
                           cursor: 'pointer',
                           fontSize: 14,
-                          color: '#A89070',
+                          color: '#A0A39A',
                           lineHeight: 1,
                           padding: '6px 10px 6px 4px',
                         }}
@@ -2036,12 +2036,12 @@ function App() {
                   aria-label="Clear all recent prompts"
                   style={{
                     fontSize: 11,
-                    color: '#A89070',
+                    color: '#A0A39A',
                     background: 'transparent',
                     border: 'none',
                     cursor: 'pointer',
                     padding: '4px 8px',
-                    fontFamily: 'Georgia, serif',
+                    fontFamily: 'var(--vp-font-sans)',
                     textDecoration: 'underline',
                     textUnderlineOffset: 3,
                   }}
@@ -2094,7 +2094,7 @@ function App() {
                   width: '4px',
                   height: '4px',
                   borderRadius: '50%',
-                  background: isExamplePromptHovered ? '#C4956A' : '#C0B4A8',
+                  background: isExamplePromptHovered ? '#F0B84E' : '#C0B4A8',
                   transition: 'background 150ms ease',
                   flexShrink: 0,
                   marginBottom: '1px',
@@ -2140,7 +2140,7 @@ function App() {
       )}
 
       {viewMode === 'leaderboard' && (
-        <div style={{ minHeight: '100vh', background: '#FAF7F4' }}>
+        <div style={{ minHeight: '100vh', background: '#0B0C0A' }}>
           <header style={{
             height: '52px',
             borderBottom: 'none',
@@ -2189,7 +2189,7 @@ function App() {
       )}
 
       {viewMode === 'discuss' && response && discussAgent && (
-        <div style={{ maxWidth: '1024px', margin: '0 auto', padding: '2rem 1rem 3rem', background: '#FAF7F4', minHeight: '100dvh' }}>
+        <div style={{ maxWidth: '1024px', margin: '0 auto', padding: '2rem 1rem 3rem', background: '#0B0C0A', minHeight: '100dvh' }}>
           <DiscussMode
             originalPrompt={response.prompt}
             activeAgent={discussAgent}
@@ -2230,7 +2230,7 @@ function App() {
             left: '50%',
             transform: 'translateX(-50%)',
             background: '#F0EBE3',
-            color: '#6B6460',
+            color: '#A0A39A',
             border: '0.5px solid #E0D8D0',
             borderRadius: '999px',
             padding: '8px 16px',

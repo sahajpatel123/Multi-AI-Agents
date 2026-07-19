@@ -25,7 +25,6 @@ import {
 import track from '../utils/track';
 import {
   agentCardLoadingAnimation,
-  agentCardLoadingBackgroundSize,
   shouldRotateThinkingPhrases,
 } from '../lib/agentCardMotion';
 import { prefersReducedMotion } from '../lib/motion';
@@ -135,12 +134,6 @@ export function AgentCard({
   };
   const [isShareDropdownOpen, setIsShareDropdownOpen] = useState(false);
   const shareButtonRef = useRef<HTMLButtonElement>(null);
-  const agentBackgrounds: Record<string, string> = {
-    agent_1: resolvedDisplay.bgTint || '#EEF0F2',
-    agent_2: resolvedDisplay.bgTint || '#F0EDF2',
-    agent_3: resolvedDisplay.bgTint || '#EDF2EF',
-    agent_4: resolvedDisplay.bgTint || '#F2EDE8',
-  };
   const response = scoredAgent?.response;
   const score = scoredAgent?.score;
   const isWinner = scoredAgent?.is_winner ?? false;
@@ -264,16 +257,11 @@ export function AgentCard({
       ref={cardRef}
       className="agent-card"
       style={{
-        background: isWinner ? '#FFFCF9' : (isLoadingState ? `linear-gradient(90deg, ${agentBackgrounds[agentId]} 0%, rgba(255,255,255,0.6) 50%, ${agentBackgrounds[agentId]} 100%)` : agentBackgrounds[agentId]),
-        backgroundSize: agentCardLoadingBackgroundSize(!!isLoadingState, reducedMotion),
+        backgroundColor: '#151713',
         animation: agentCardLoadingAnimation(!!isLoadingState, isWinner, reducedMotion),
-        border: isWinner ? '1px solid #C4956A' : '0.5px solid #E0D8D0',
-        borderRadius: '16px',
-        boxShadow: hoverLift
-          ? '0 14px 36px rgba(26,23,20,0.1), 0 0 0 1px rgba(196,149,106,0.08)'
-          : isHighlighted
-            ? '0 12px 30px rgba(196, 149, 106, 0.2)'
-            : 'none',
+        border: isWinner ? '1px solid #F0B84E' : isHighlighted ? '1px solid #5ED8FF' : '1px solid #35382F',
+        borderRadius: '6px',
+        boxShadow: 'none',
         transition: cardTransition,
         transform: hoverLift ? 'translateY(-4px) scale(1.01)' : 'translateY(0) scale(1)',
         position: 'relative',
@@ -316,7 +304,7 @@ export function AgentCard({
               </span>
             )}
             {isWinner && (
-              <Trophy style={{ width: '14px', height: '14px', color: '#C4956A' }} />
+              <Trophy style={{ width: '14px', height: '14px', color: '#F0B84E' }} />
             )}
             {isStreaming && (
               <span
@@ -333,7 +321,7 @@ export function AgentCard({
           </div>
           {score != null && !isIdle && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="agent-score" style={{ fontSize: '11px', color: '#1A1714', background: isWinner ? '#C4956A' : '#F0EBE3', padding: '3px 10px', borderRadius: '999px', fontWeight: isWinner ? 500 : 400 }}>
+              <span className="agent-score" style={{ fontSize: '11px', color: '#1A1714', background: isWinner ? '#F0B84E' : '#F0EBE3', padding: '3px 10px', borderRadius: '999px', fontWeight: isWinner ? 500 : 400 }}>
                 {isWinner ? `Winner · ${score}` : score}
               </span>
             </div>
@@ -353,7 +341,7 @@ export function AgentCard({
           }}
         >
           {isIdle ? (
-            <p style={{ fontSize: '13px', color: '#6B6460', fontStyle: 'italic', marginTop: '0.4rem' }}>
+            <p style={{ fontSize: '13px', color: '#A0A39A', fontStyle: 'italic', marginTop: '0.4rem' }}>
               {agentConfig.oneLiner || 'Ready to respond...'}
             </p>
           ) : showThinkingPhrase ? (
@@ -369,7 +357,7 @@ export function AgentCard({
             >
               <p
                 style={{
-                  color: '#6B6460',
+                  color: '#A0A39A',
                   fontStyle: 'italic',
                   fontSize: '13px',
                   opacity: reducedMotion ? 1 : thinkingPhrasePhase === 'exiting' ? 0 : 1,
@@ -418,15 +406,15 @@ export function AgentCard({
                     padding: '7px 12px',
                     marginBottom: '10px',
                     fontSize: '12px',
-                    color: '#6B6460',
+                    color: '#A0A39A',
                     opacity: showContradictionBanner ? 1 : 0,
                     transform: showContradictionBanner ? 'translateY(0)' : 'translateY(-4px)',
                     transition: 'opacity 300ms ease, transform 300ms ease',
                     position: 'relative',
                   }}
                 >
-                  <RotateCcw style={{ width: '13px', height: '13px', color: '#C4956A', flexShrink: 0 }} />
-                  <span style={{ fontSize: '12px', color: '#6B6460' }}>Changed stance since last session</span>
+                  <RotateCcw style={{ width: '13px', height: '13px', color: '#F0B84E', flexShrink: 0 }} />
+                  <span style={{ fontSize: '12px', color: '#A0A39A' }}>Changed stance since last session</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -452,7 +440,7 @@ export function AgentCard({
                         borderRadius: '8px',
                         padding: '10px 12px',
                         fontSize: '12px',
-                        color: '#6B6460',
+                        color: '#A0A39A',
                         lineHeight: 1.6,
                         boxShadow: '0 4px 12px rgba(26,23,20,0.08)',
                         zIndex: 10,
@@ -497,13 +485,13 @@ export function AgentCard({
                           fontSize: 10,
                           letterSpacing: '0.1em',
                           textTransform: 'uppercase',
-                          color: '#A89070',
+                          color: '#A0A39A',
                           marginBottom: 3,
                         }}
                       >
                         Key assumption
                       </div>
-                      <p style={{ fontSize: 12, color: '#6B6460', lineHeight: 1.55, margin: 0, fontStyle: 'italic' }}>
+                      <p style={{ fontSize: 12, color: '#A0A39A', lineHeight: 1.55, margin: 0, fontStyle: 'italic' }}>
                         {keyAssumption}
                       </p>
                     </div>
@@ -526,8 +514,8 @@ export function AgentCard({
                     background: 'none',
                     cursor: 'pointer',
                     fontSize: 12,
-                    color: '#C4956A',
-                    fontFamily: 'Georgia, serif',
+                    color: '#F0B84E',
+                    fontFamily: 'var(--vp-font-sans)',
                     letterSpacing: '0.02em',
                   }}
                 >
@@ -537,7 +525,7 @@ export function AgentCard({
             </div>
           ) : !isStreaming ? (
             <div>
-              <p style={{ fontSize: '13px', color: '#6B6460', fontStyle: 'italic' }}>
+              <p style={{ fontSize: '13px', color: '#A0A39A', fontStyle: 'italic' }}>
                 Waiting for response...
               </p>
             </div>
@@ -563,7 +551,7 @@ export function AgentCard({
                 onCopy?.();
               }}
               active={copyFeedbackActive}
-              activeColor="#C4956A"
+              activeColor="#F0B84E"
               ariaLabel="Copy full take as markdown"
             />
             <ActionButton
@@ -573,7 +561,7 @@ export function AgentCard({
                 onLike?.();
               }}
               active={isLiked}
-              activeColor="#C4956A"
+              activeColor="#F0B84E"
             />
             <ActionButton
               icon={<ThumbsDown style={{ width: '15px', height: '15px', fill: isDisliked ? 'currentColor' : 'none' }} />}
@@ -582,7 +570,7 @@ export function AgentCard({
                 onDislike?.();
               }}
               active={isDisliked}
-              activeColor="#6B6460"
+              activeColor="#A0A39A"
             />
             <ActionButton
               ref={shareButtonRef}
@@ -592,7 +580,7 @@ export function AgentCard({
                 setIsShareDropdownOpen(!isShareDropdownOpen);
               }}
               active={isShareDropdownOpen}
-              activeColor="#C4956A"
+              activeColor="#F0B84E"
               ariaLabel="Share this take"
               ariaHaspopup="menu"
               ariaExpanded={isShareDropdownOpen}
@@ -604,7 +592,7 @@ export function AgentCard({
                 onSave?.();
               }}
               active={isSaved}
-              activeColor="#C4956A"
+              activeColor="#F0B84E"
               ariaLabel="Save this take"
             />
             {onDiscuss ? (
@@ -669,7 +657,7 @@ export function AgentCard({
               </button>
             )}
             {!isIdle && !onDiscuss && !onChallenge ? (
-              <div style={{ marginLeft: 'auto', fontSize: '11px', color: '#6B6460', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div style={{ marginLeft: 'auto', fontSize: '11px', color: '#A0A39A', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span>Click</span>
                 <span style={{ fontSize: '14px', color: agentConfig.color }}>•</span>
                 <span>to go deeper</span>
@@ -762,7 +750,7 @@ const ActionButton = ({
         height: '28px',
         borderRadius: '6px',
         background: isHovered ? '#F0EBE3' : 'transparent',
-        color: active ? activeColor : (isHovered ? '#1A1714' : '#6B6460'),
+        color: active ? activeColor : (isHovered ? '#1A1714' : '#A0A39A'),
         transition:
           'transform 280ms cubic-bezier(0.34, 1.4, 0.64, 1), background 200ms cubic-bezier(0.16, 1, 0.3, 1), color 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1)',
         transform: isHovered ? 'scale(1.18) translateY(-1px)' : isClicked ? 'scale(0.9)' : 'scale(1)',

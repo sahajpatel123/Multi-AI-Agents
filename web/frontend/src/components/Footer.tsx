@@ -154,6 +154,15 @@ export function Footer() {
                   <button
                     type="button"
                     className="site-footer__link"
+                    onClick={() => navigate('/docs')}
+                  >
+                    Documentation
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="site-footer__link"
                     onClick={() => navigate('/changelog')}
                   >
                     Changelog
