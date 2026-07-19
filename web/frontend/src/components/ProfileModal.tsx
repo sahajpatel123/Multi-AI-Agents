@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import '../styles/profile-modal.css';
 import {
   ApiError,
   cancelAgentAddon,
@@ -633,14 +634,7 @@ export function ProfileModal() {
             <div style={{ marginBottom: 18 }}>
               <label
                 htmlFor="profile-full-name"
-                style={{
-                  display: 'block',
-                  fontSize: 10,
-                  letterSpacing: '0.13em',
-                  textTransform: 'uppercase',
-                  color: '#A89070',
-                  marginBottom: 6,
-                }}
+                className="profile-modal__field-label"
               >
                 Full name
               </label>
@@ -653,69 +647,35 @@ export function ProfileModal() {
                   setFullName(e.target.value);
                   if (saveError) setSaveError(null);
                 }}
-                style={{
-                  width: '100%',
-                  border: '0.5px solid #DDD0BC',
-                  borderRadius: 6,
-                  padding: '8px 12px',
-                  fontSize: 13,
-                  color: '#2C1810',
-                  background: '#FDFAF6',
-                  fontFamily: 'Georgia, serif',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = '#C4956A')}
-                onBlur={(e) => (e.currentTarget.style.borderColor = '#DDD0BC')}
+                className="profile-modal__input"
               />
             </div>
             <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.13em', textTransform: 'uppercase', color: '#A89070', marginBottom: 6 }}>
-                Email address
-              </div>
+              <div className="profile-modal__field-label">Email address</div>
               <input
                 value={user.email}
                 disabled
-                style={{
-                  width: '100%',
-                  border: '0.5px solid #DDD0BC',
-                  borderRadius: 6,
-                  padding: '8px 12px',
-                  fontSize: 13,
-                  color: '#8C7355',
-                  background: '#EDE4D8',
-                  fontFamily: 'Georgia, serif',
-                  boxSizing: 'border-box',
-                }}
+                readOnly
+                className="profile-modal__input profile-modal__input--readonly"
               />
             </div>
             <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.13em', textTransform: 'uppercase', color: '#A89070', marginBottom: 6 }}>Password</div>
+              <div className="profile-modal__field-label">Password</div>
               <input
                 type="password"
                 value="••••••••••"
                 readOnly
                 placeholder="Change password"
-                style={{
-                  width: '100%',
-                  border: '0.5px solid #DDD0BC',
-                  borderRadius: 6,
-                  padding: '8px 12px',
-                  fontSize: 13,
-                  color: '#2C1810',
-                  background: '#FDFAF6',
-                  fontFamily: 'Georgia, serif',
-                  boxSizing: 'border-box',
-                }}
+                className="profile-modal__input"
               />
             </div>
 
             <div style={{ borderTop: '0.5px solid #EDE4D8', margin: '20px 0' }} />
 
-            <div style={{ fontSize: 10, letterSpacing: '0.13em', textTransform: 'uppercase', color: '#A89070', marginBottom: 6 }}>
+            <div className="profile-modal__field-label">
               Your expertise background
             </div>
-            <p style={{ fontSize: 12, color: '#A89070', margin: '4px 0 10px' }}>
+            <p className="profile-modal__section-sub" style={{ margin: '4px 0 10px' }}>
               Arena calibrates response depth and terminology to match your background across all tasks.
             </p>
             <div style={{ marginBottom: 18 }}>
@@ -767,7 +727,7 @@ export function ProfileModal() {
           </div>
 
           <div style={{ display: activeTab === 'plan' ? 'block' : 'none' }}>
-            <h2 style={{ fontSize: 18, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>Your plan</h2>
+            <h2 className="profile-modal__section-heading">Your plan</h2>
             <p style={{ fontSize: 14, color: '#A89070', marginBottom: 16 }}>Current subscription and billing details</p>
             {subLoading ? (
               <div style={{ padding: 24, display: 'flex', justifyContent: 'center' }}>
@@ -783,8 +743,8 @@ export function ProfileModal() {
                     marginBottom: 16,
                   }}
                 >
-                  <div style={{ fontSize: 18, color: '#C4956A', fontWeight: 500, letterSpacing: '0.02em', fontFamily: 'Georgia, serif' }}>{planLabel}</div>
-                  <div style={{ fontSize: 11, color: '#6B5040', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 3 }}>{billingLine}</div>
+                  <div className="profile-modal__plan-heading">{planLabel}</div>
+                  <div className="profile-modal__plan-billing">{billingLine}</div>
                   <div style={{ borderTop: '0.5px solid #3D2820', margin: '14px 0' }} />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
                     {planFeatures(user.tier).map((f) => (
@@ -1135,8 +1095,8 @@ export function ProfileModal() {
           </div>
 
           <div style={{ display: activeTab === 'usage' ? 'block' : 'none' }}>
-            <h2 style={{ fontSize: 18, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>Usage</h2>
-            <p style={{ fontSize: 12, color: '#A89070', marginBottom: 16 }}>Your activity across Arena and Agent Mode</p>
+            <h2 className="profile-modal__section-heading">Usage</h2>
+            <p className="profile-modal__section-sub">Your activity across Arena and Agent Mode</p>
             {usageLoading ? (
               <div style={{ padding: 32, display: 'flex', justifyContent: 'center' }}>
                 <MicroLoader />
@@ -1503,7 +1463,7 @@ export function ProfileModal() {
           </div>
 
           <div style={{ display: activeTab === 'integrations' ? 'block' : 'none', maxHeight: mobile ? undefined : 'min(72vh, 640px)' }}>
-            <h2 style={{ fontSize: 18, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>Integrations</h2>
+            <h2 className="profile-modal__section-heading">Integrations</h2>
             <p style={{ fontSize: 12, color: '#A89070', marginBottom: 16 }}>
               Connect your tools to include personal context in Agent research.
             </p>
@@ -1891,8 +1851,8 @@ export function ProfileModal() {
           </div>
 
           <div style={{ display: activeTab === 'help' ? 'block' : 'none' }}>
-            <h2 style={{ fontSize: 18, color: '#2C1810', fontFamily: 'Georgia, serif', fontWeight: 500 }}>Get help</h2>
-            <p style={{ fontSize: 12, color: '#A89070', marginBottom: 8 }}>Resources, legal, and support</p>
+            <h2 className="profile-modal__section-heading">Get help</h2>
+            <p className="profile-modal__section-sub" style={{ marginBottom: 8 }}>Resources, legal, and support</p>
             {(
               [
                 {
