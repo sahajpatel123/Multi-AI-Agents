@@ -10878,3 +10878,208 @@ canvas {
     transform: none !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   Watchlist — gate shell, pause toggle, remove control
+   ------------------------------------------------------------------ */
+.watchlist-gate {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse 70% 40% at 50% 0%, rgba(196, 149, 106, 0.1), transparent 55%),
+    #f5f0e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(48px, env(safe-area-inset-top, 0px)) 20px max(48px, env(safe-area-inset-bottom, 0px));
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.watchlist-gate__card {
+  width: 100%;
+  max-width: 440px;
+  text-align: center;
+  padding: 2rem 1.75rem;
+  background: linear-gradient(180deg, #fffdfb 0%, #faf7f4 100%);
+  border: 0.5px solid #e0d8d0;
+  border-radius: 18px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 16px 40px rgba(44, 24, 16, 0.07);
+  animation: watchlist-gate-in 360ms var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+@keyframes watchlist-gate-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.watchlist-gate__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 0.85rem;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8c7355;
+}
+
+.watchlist-gate__kicker-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c4956a;
+  animation: watchlist-dot-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes watchlist-dot-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(196, 149, 106, 0.3);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 6px rgba(196, 149, 106, 0);
+  }
+}
+
+.watchlist-gate__title {
+  margin: 0 0 0.65rem;
+  font-size: clamp(1.6rem, 4vw, 2rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: #1a1714;
+}
+
+.watchlist-gate__body {
+  margin: 0 0 1.35rem;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #6b6460;
+}
+
+.watchlist-gate__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.watchlist-toggle {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  background: #d4c4b0;
+  position: relative;
+  flex-shrink: 0;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+.watchlist-toggle__knob {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #faf7f2;
+  box-shadow: 0 1px 3px rgba(44, 24, 16, 0.15);
+  transform: translateX(0);
+  transition: transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+.watchlist-toggle--on {
+  background: #c4956a;
+  box-shadow: 0 0 0 3px rgba(196, 149, 106, 0.18);
+}
+
+.watchlist-toggle--on .watchlist-toggle__knob {
+  transform: translateX(16px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .watchlist-toggle:hover {
+    transform: scale(1.06);
+  }
+}
+
+.watchlist-toggle:active {
+  transform: scale(0.96);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+.watchlist-toggle--static,
+.watchlist-toggle--static .watchlist-toggle__knob {
+  transition: none !important;
+}
+
+.watchlist-remove {
+  background: none;
+  border: 0.5px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #c4a882;
+  padding: 4px 6px;
+  line-height: 1;
+  font-family: Georgia, 'Times New Roman', serif;
+  min-width: 28px;
+  min-height: 28px;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .watchlist-remove:hover {
+    color: #d85a30;
+    transform: scale(1.08);
+  }
+}
+
+.watchlist-remove:active {
+  transform: scale(0.94);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+.watchlist-remove--confirm {
+  background: rgba(216, 90, 48, 0.1);
+  border-color: rgba(216, 90, 48, 0.45);
+  color: #d85a30;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .watchlist-gate__card,
+  .watchlist-gate__kicker-dot {
+    animation: none !important;
+  }
+
+  .watchlist-toggle,
+  .watchlist-toggle__knob,
+  .watchlist-remove {
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease !important;
+  }
+
+  .watchlist-toggle:hover,
+  .watchlist-toggle:active,
+  .watchlist-remove:hover,
+  .watchlist-remove:active {
+    transform: none !important;
+  }
+}

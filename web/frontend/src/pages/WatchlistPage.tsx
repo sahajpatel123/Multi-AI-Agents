@@ -589,33 +589,35 @@ export function WatchlistPage() {
 
   if (!canWatchlist) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          background: '#F5F0E8',
-          padding: '48px 20px',
-          fontFamily: 'Georgia, serif',
-        }}
-      >
-        <div style={{ maxWidth: 520, margin: '0 auto', textAlign: 'center' }}>
-          <p style={{ fontSize: 15, color: '#4A3728' }}>Watchlist is available on Arena Plus and Pro.</p>
-          <MotionButton
-            type="button"
-            variant="primary"
-            size="md"
-            style={{ marginTop: 16 }}
-            onClick={() => navigate('/pricing')}
-          >
-            View plans →
-          </MotionButton>
-          <button
-            type="button"
-            className="arena-btn arena-btn--ghost arena-btn--md"
-            style={{ marginTop: 8 }}
-            onClick={() => navigate('/agent')}
-          >
-            Back to Agent
-          </button>
+      <div className="watchlist-gate">
+        <div className="watchlist-gate__card">
+          <p className="watchlist-gate__kicker">
+            <span className="watchlist-gate__kicker-dot" aria-hidden="true" />
+            Plus feature
+          </p>
+          <h1 className="watchlist-gate__title">Watchlist</h1>
+          <p className="watchlist-gate__body">
+            Recurring research checks are available on Arena Plus and Pro. Upgrade to pin questions
+            and get notified when findings actually change.
+          </p>
+          <div className="watchlist-gate__actions">
+            <MotionButton
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={() => navigate('/pricing')}
+            >
+              View plans →
+            </MotionButton>
+            <MotionButton
+              type="button"
+              variant="ghost"
+              size="md"
+              onClick={() => navigate('/agent')}
+            >
+              Back to Agent
+            </MotionButton>
+          </div>
         </div>
       </div>
     );
@@ -1711,28 +1713,15 @@ export function WatchlistPage() {
                       aria-checked={item.is_active}
                       aria-label={item.is_active ? 'Pause watch' : 'Resume watch'}
                       onClick={() => void onToggle(item)}
-                      style={{
-                        width: 32,
-                        height: 18,
-                        borderRadius: 9,
-                        border: 'none',
-                        padding: 2,
-                        cursor: 'pointer',
-                        background: item.is_active ? '#C4956A' : '#D4C4B0',
-                        position: 'relative',
-                      }}
+                      className={[
+                        'watchlist-toggle',
+                        item.is_active ? 'watchlist-toggle--on' : '',
+                        reducedMotion ? 'watchlist-toggle--static' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
                     >
-                      <span
-                        style={{
-                          display: 'block',
-                          width: 14,
-                          height: 14,
-                          borderRadius: '50%',
-                          background: '#FAF7F2',
-                          marginLeft: item.is_active ? 14 : 0,
-                          transition: reducedMotion ? 'none' : 'margin 0.15s ease',
-                        }}
-                      />
+                      <span className="watchlist-toggle__knob" />
                     </button>
                     <button
                       type="button"
@@ -1748,26 +1737,12 @@ export function WatchlistPage() {
                           ? 'Confirm remove from watchlist'
                           : 'Remove from watchlist'
                       }
-                      style={{
-                        background: pendingDeleteId === item.id ? 'rgba(216, 90, 48, 0.1)' : 'none',
-                        border:
-                          pendingDeleteId === item.id
-                            ? '0.5px solid rgba(216, 90, 48, 0.45)'
-                            : 'none',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        fontSize: pendingDeleteId === item.id ? 11 : 14,
-                        color: pendingDeleteId === item.id ? '#D85A30' : '#C4A882',
-                        padding: pendingDeleteId === item.id ? '3px 8px' : 0,
-                        lineHeight: 1,
-                        fontFamily: 'Georgia, serif',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (pendingDeleteId !== item.id) e.currentTarget.style.color = '#D85A30';
-                      }}
-                      onMouseLeave={(e) => {
-                        if (pendingDeleteId !== item.id) e.currentTarget.style.color = '#C4A882';
-                      }}
+                      className={[
+                        'watchlist-remove',
+                        pendingDeleteId === item.id ? 'watchlist-remove--confirm' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
                     >
                       {pendingDeleteId === item.id ? 'Remove?' : '×'}
                     </button>
