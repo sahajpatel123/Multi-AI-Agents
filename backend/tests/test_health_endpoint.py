@@ -207,9 +207,36 @@ class TestPublicHealthRateLimit:
     """
 
     @pytest.mark.asyncio
-    async def test_health_route_declares_the_300_per_minute_ip_cap(
-        self, app_client, isolated_db
+    async def test_health_detailed_route_declares_the_60_per_minute_user_cap(
+        self, app_client, isolated_db, admin_email
     ):
+        """Read main.py and assert the detailed health route declares
+        an `enforce_user_rate_limit` call with limit=60, window=60s.
+
+        The detailed endpoint is admin-gated and returns operational
+        details (version, uptime). 60/min/user matches the metrics
+        endpoint cap (cycle 51) — a polling admin dashboard refreshes
+        at most once per second, so 60/min is a comfortable ceiling.
+        """
+        from pathlib import Path
+
+        main_src = (Path(__file__).resolve().parent.parent / "main.py").read_text()
+
+        assert '@app.get("/api/health/detailed"' in main_src, (
+            "Expected the admin /api/health/detailed route to be declared in main.py"
+        )
+        assert 'scope="health_detailed"' in main_src, (
+            "Expected scope='health_detailed' for the /api/health/detailed limiter"
+        )
+        assert "limit=60" in main_src, (
+            "Expected the /api/health/detailed cap to remain at 60/min. "
+            "The 60/min ceiling matches the metrics endpoint cap (cycle 51) "
+            "and accommodates a dashboard polling at 1/sec. Lower values break "
+            "operational dashboards; higher values weaken the throttle."
+        )
+        assert "window_seconds=60" in main_src, (
+            "Expected the /api/health/detailed cap to roll on a 60-second window"
+        )
         """Read the source of main.py and assert the public health route
         has an `enforce_ip_rate_limit` call with limit=300, window=60s.
 
