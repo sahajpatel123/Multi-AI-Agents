@@ -11751,3 +11751,37 @@ canvas {
     transform: none !important;
   }
 }
+
+.app-panel-close-link {
+  font-size: 13px;
+  color: #6b6460;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 0;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .app-panel-close-link:hover {
+    color: #1a1714;
+  }
+}
+
+.app-panel-close-link:active {
+  transform: scale(0.98);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-panel-close-link {
+    transition: color 0.12s ease !important;
+  }
+
+  .app-panel-close-link:active {
+    transform: none !important;
+  }
+}

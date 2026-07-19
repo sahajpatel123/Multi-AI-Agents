@@ -1791,17 +1791,9 @@ function App() {
                       </div>
                     </div>
                     <button
+                      type="button"
                       onClick={closeFocusedAgent}
-                      style={{
-                        fontSize: '13px',
-                        color: '#6B6460',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        transition: 'color 150ms ease',
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'}
-                      onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}
+                      className="app-panel-close-link"
                     >
                       Close
                     </button>
