@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
+from arena.core.errors import ErrorCodes
 from arena.core.cost_tracker import (
     RateLimitExceeded,
     check_and_increment_user,
@@ -203,15 +204,24 @@ async def run_debate_round(
     try:
         active_agents = get_all_agents(request.persona_ids)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail="Invalid agent configuration") from e
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Invalid agent configuration"},
+        ) from e
 
     active_agent_map = {agent.agent_id: agent for agent in active_agents}
 
     if request.challenged_agent_id not in active_agent_map:
-        raise HTTPException(status_code=400, detail="Invalid challenged agent ID")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.INVALID_AGENT_ID, "message": "Invalid challenged agent ID"},
+        )
 
     if request.round_number > 4:
-        raise HTTPException(status_code=400, detail="Maximum 4 debate rounds")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Maximum 4 debate rounds"},
+        )
 
     session_id = request.session_id or str(uuid.uuid4())
 
@@ -256,7 +266,10 @@ async def run_debate_round(
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=500, detail="Debate request failed")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Debate request failed"},
+        )
 
 
 # ──────────────────────────────────────────────────────────────
@@ -300,12 +313,18 @@ async def stream_debate_round(
     try:
         active_agents = get_all_agents(request.persona_ids)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail="Invalid agent configuration") from e
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Invalid agent configuration"},
+        ) from e
 
     active_agent_map = {agent.agent_id: agent for agent in active_agents}
 
     if request.challenged_agent_id not in active_agent_map:
-        raise HTTPException(status_code=400, detail="Invalid challenged agent ID")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.INVALID_AGENT_ID, "message": "Invalid challenged agent ID"},
+        )
 
     session_id = request.session_id or str(uuid.uuid4())
 
