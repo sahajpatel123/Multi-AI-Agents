@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import '../styles/watchlist-page.css';
 import MicroLoader from '../components/MicroLoader';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
@@ -624,48 +625,26 @@ export function WatchlistPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F5F0E8', display: 'flex', flexDirection: 'column' }}>
-      <header
-        style={{
-          height: '52px',
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
-          backdropFilter: 'blur(14px)',
-          WebkitBackdropFilter: 'blur(14px)',
-          background: 'rgba(245, 240, 232, 0.72)',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 20px',
-          gap: 12,
-          flexShrink: 0,
-        }}
-      >
+    <div className="watchlist-page">
+      <header className="watchlist-page__header">
         <button
           type="button"
           onClick={() => navigate('/agent')}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 13,
-            color: '#8C7355',
-            fontFamily: 'Georgia, serif',
-          }}
+          className="watchlist-page__back"
         >
           ← Agent
         </button>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 15, fontWeight: 500, color: '#1A1714' }}>Watchlist</span>
-            <span style={{ fontSize: 11, color: '#A89070' }}>
+        <div className="watchlist-page__title-block">
+          <div className="watchlist-page__title-row">
+            <span className="watchlist-page__title">Watchlist</span>
+            <span className="watchlist-page__title-count">
               {activeCount}/{activeCap} active
             </span>
           </div>
-          <span style={{ fontSize: 12, color: '#8C7355' }}>Tasks that research themselves.</span>
+          <span className="watchlist-page__lede">Tasks that research themselves.</span>
         </div>
         {bodyMode === 'list' && items.length > 0 ? (
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+          <div className="watchlist-page__header-actions">
             <button
               type="button"
               onClick={() => void copyWatchlist()}
@@ -677,23 +656,13 @@ export function WatchlistPage() {
                     ? 'Copy failed'
                     : 'Copy watchlist as markdown'
               }
-              style={{
-                background: 'none',
-                border: '0.5px solid #D4C4B0',
-                borderRadius: 8,
-                padding: '6px 12px',
-                fontSize: 11,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-                color:
-                  copyStatus === 'failed'
-                    ? '#D85A30'
-                    : copyStatus === 'copied'
-                      ? '#5A8C6A'
-                      : '#8C7355',
-                cursor: 'pointer',
-                fontFamily: 'Georgia, serif',
-              }}
+              className={[
+                'watchlist-header-btn',
+                copyStatus === 'copied' ? 'watchlist-header-btn--ok' : '',
+                copyStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
             >
               {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy'}
             </button>
@@ -708,23 +677,13 @@ export function WatchlistPage() {
                     ? 'Download failed'
                     : 'Download watchlist as markdown'
               }
-              style={{
-                background: 'none',
-                border: '0.5px solid #D4C4B0',
-                borderRadius: 8,
-                padding: '6px 12px',
-                fontSize: 11,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-                color:
-                  downloadStatus === 'failed'
-                    ? '#D85A30'
-                    : downloadStatus === 'done'
-                      ? '#5A8C6A'
-                      : '#8C7355',
-                cursor: 'pointer',
-                fontFamily: 'Georgia, serif',
-              }}
+              className={[
+                'watchlist-header-btn',
+                downloadStatus === 'done' ? 'watchlist-header-btn--ok' : '',
+                downloadStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
             >
               {downloadStatus === 'done'
                 ? 'Downloaded'
@@ -736,16 +695,8 @@ export function WatchlistPage() {
         ) : null}
       </header>
 
-      <main style={{ flex: 1, padding: '24px 16px 48px', overflowY: 'auto' }}>
-        <p style={{
-          fontSize: '14px',
-          color: '#8C7355',
-          fontStyle: 'italic',
-          marginBottom: '24px',
-          lineHeight: '1.6',
-          maxWidth: 680,
-          margin: '0 auto 24px',
-        }}>
+      <main className="watchlist-page__main">
+        <p className="watchlist-page__intro">
           Watched tasks re-run automatically on your chosen schedule. Arena compares new findings to the original answer and notifies you when something meaningful changes.
         </p>
         {error && bodyMode !== 'load_error' ? (
@@ -753,20 +704,14 @@ export function WatchlistPage() {
             ref={errorRef}
             role="alert"
             tabIndex={-1}
-            style={{
-              color: '#D85A30',
-              fontSize: 13,
-              textAlign: 'center',
-              marginBottom: 16,
-              outline: 'none',
-            }}
+            className="watchlist-page__error"
           >
             {error}
           </div>
         ) : null}
 
         {bodyMode === 'loading' ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem 0' }}>
+          <div className="watchlist-page__loader">
             <MicroLoader label="Loading watchlist" />
           </div>
         ) : bodyMode === 'load_error' ? (
@@ -836,24 +781,9 @@ export function WatchlistPage() {
               margin: '0 auto',
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-                marginBottom: 4,
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 10,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} role="group" aria-label="Filter by status">
+            <div className="watchlist-page__filters">
+              <div className="watchlist-page__filters-head">
+                <div className="watchlist-pill-row" role="group" aria-label="Filter by status">
                   {(
                     [
                       { id: 'all' as const, label: 'All' },
@@ -868,38 +798,25 @@ export function WatchlistPage() {
                         type="button"
                         onClick={() => setStatusFilter(opt.id)}
                         aria-pressed={selected}
-                        style={{
-                          padding: '4px 12px',
-                          borderRadius: 999,
-                          border: selected ? 'none' : '0.5px solid #D4C4B0',
-                          background: selected ? '#C4956A' : 'transparent',
-                          color: selected ? '#FAF7F2' : '#8C7355',
-                          fontSize: 12,
-                          fontFamily: 'Georgia, serif',
-                          cursor: 'pointer',
-                        }}
+                        className={[
+                          'watchlist-pill',
+                          selected ? 'watchlist-pill--active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                       >
                         {opt.label}
                       </button>
                     );
                   })}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <div className="watchlist-page__filters-controls">
                   <select
                     value={listSort}
                     onChange={(e) => setListSort(e.target.value as WatchlistSort)}
                     aria-label="Sort watchlist"
                     title="Sort watchlist"
-                    style={{
-                      fontSize: 12,
-                      fontFamily: 'Georgia, serif',
-                      color: '#4A3728',
-                      background: '#FAF7F2',
-                      border: '0.5px solid #D4C4B0',
-                      borderRadius: 8,
-                      padding: '5px 10px',
-                      cursor: 'pointer',
-                    }}
+                    className="watchlist-page__sort-select"
                   >
                     {WATCHLIST_SORT_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -907,7 +824,7 @@ export function WatchlistPage() {
                       </option>
                     ))}
                   </select>
-                  <span style={{ fontSize: 11, color: '#A89070' }}>
+                  <span className="watchlist-page__count">
                     {filteredItems.length}
                     {searchQuery.trim() ||
                     statusFilter !== 'all' ||
@@ -923,9 +840,9 @@ export function WatchlistPage() {
               </div>
               {urgencyFilterUseful ? (
                 <div
+                  className="watchlist-pill-row"
                   role="group"
                   aria-label="Filter by due timing"
-                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
                 >
                   {WATCHLIST_URGENCY_OPTIONS.map((opt) => {
                     const selected = urgencyFilter === opt.value;
@@ -935,20 +852,13 @@ export function WatchlistPage() {
                         type="button"
                         onClick={() => setUrgencyFilter(opt.value)}
                         aria-pressed={selected}
-                        style={{
-                          padding: '4px 12px',
-                          borderRadius: 999,
-                          border: selected ? 'none' : '0.5px solid #D4C4B0',
-                          background: selected
-                            ? opt.value === 'overdue'
-                              ? '#B85C38'
-                              : '#C4956A'
-                            : 'transparent',
-                          color: selected ? '#FAF7F2' : '#8C7355',
-                          fontSize: 12,
-                          fontFamily: 'Georgia, serif',
-                          cursor: 'pointer',
-                        }}
+                        className={[
+                          'watchlist-pill',
+                          selected ? 'watchlist-pill--active' : '',
+                          opt.value === 'overdue' ? 'watchlist-pill--overdue' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                       >
                         {opt.label}
                       </button>
@@ -958,9 +868,9 @@ export function WatchlistPage() {
               ) : null}
               {cadenceFilterUseful ? (
                 <div
+                  className="watchlist-pill-row"
                   role="group"
                   aria-label="Filter by re-check cadence"
-                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
                 >
                   {WATCHLIST_CADENCE_OPTIONS.map((opt) => {
                     const selected = cadenceFilter === opt.value;
@@ -970,16 +880,12 @@ export function WatchlistPage() {
                         type="button"
                         onClick={() => setCadenceFilter(opt.value)}
                         aria-pressed={selected}
-                        style={{
-                          padding: '4px 12px',
-                          borderRadius: 999,
-                          border: selected ? 'none' : '0.5px solid #D4C4B0',
-                          background: selected ? '#C4956A' : 'transparent',
-                          color: selected ? '#FAF7F2' : '#8C7355',
-                          fontSize: 12,
-                          fontFamily: 'Georgia, serif',
-                          cursor: 'pointer',
-                        }}
+                        className={[
+                          'watchlist-pill',
+                          selected ? 'watchlist-pill--active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                       >
                         {opt.label}
                       </button>
@@ -989,9 +895,9 @@ export function WatchlistPage() {
               ) : null}
               {scoreFilterUseful ? (
                 <div
+                  className="watchlist-pill-row"
                   role="group"
                   aria-label="Filter by latest score"
-                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
                 >
                   {AGENT_HISTORY_SCORE_OPTIONS.map((opt) => {
                     const selected = scoreFilter === opt.value;
@@ -1001,16 +907,13 @@ export function WatchlistPage() {
                         type="button"
                         onClick={() => setScoreFilter(opt.value)}
                         aria-pressed={selected}
-                        style={{
-                          padding: '3px 10px',
-                          borderRadius: 999,
-                          border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
-                          background: selected ? '#F0E6DA' : 'transparent',
-                          color: selected ? '#4A3728' : '#8C7355',
-                          fontSize: 11,
-                          fontFamily: 'Georgia, serif',
-                          cursor: 'pointer',
-                        }}
+                        className={[
+                          'watchlist-pill',
+                          'watchlist-pill--score',
+                          selected ? 'watchlist-pill--active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                       >
                         {opt.label}
                       </button>
@@ -1020,9 +923,9 @@ export function WatchlistPage() {
               ) : null}
               {expertiseFilterUseful ? (
                 <div
+                  className="watchlist-pill-row"
                   role="group"
                   aria-label="Filter by expertise level"
-                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
                 >
                   {expertiseOptions.map((opt) => {
                     const selected = expertiseFilter === opt.value;
@@ -1032,16 +935,13 @@ export function WatchlistPage() {
                         type="button"
                         onClick={() => setExpertiseFilter(opt.value)}
                         aria-pressed={selected}
-                        style={{
-                          padding: '3px 10px',
-                          borderRadius: 999,
-                          border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
-                          background: selected ? '#F0E6DA' : 'transparent',
-                          color: selected ? '#4A3728' : '#8C7355',
-                          fontSize: 11,
-                          fontFamily: 'Georgia, serif',
-                          cursor: 'pointer',
-                        }}
+                        className={[
+                          'watchlist-pill',
+                          'watchlist-pill--score',
+                          selected ? 'watchlist-pill--active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                       >
                         {opt.label}
                       </button>
@@ -1051,9 +951,9 @@ export function WatchlistPage() {
               ) : null}
               {domainFilterUseful ? (
                 <div
+                  className="watchlist-pill-row"
                   role="group"
                   aria-label="Filter by expertise domain"
-                  style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
                 >
                   {domainOptions.map((opt) => {
                     const selected = domainFilter === opt.value;
@@ -1063,16 +963,13 @@ export function WatchlistPage() {
                         type="button"
                         onClick={() => setDomainFilter(opt.value)}
                         aria-pressed={selected}
-                        style={{
-                          padding: '3px 10px',
-                          borderRadius: 999,
-                          border: selected ? '0.5px solid #C4956A' : '0.5px solid #D4C4B0',
-                          background: selected ? '#F0E6DA' : 'transparent',
-                          color: selected ? '#4A3728' : '#8C7355',
-                          fontSize: 11,
-                          fontFamily: 'Georgia, serif',
-                          cursor: 'pointer',
-                        }}
+                        className={[
+                          'watchlist-pill',
+                          'watchlist-pill--score',
+                          selected ? 'watchlist-pill--active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                       >
                         {opt.label}
                       </button>
@@ -1207,106 +1104,56 @@ export function WatchlistPage() {
             filteredItems.map((item) => {
               const badge = intervalBadge(item.interval_hours);
               const urgency = watchlistUrgencyBucket(item);
-              const urgencyBorder =
-                urgency === 'overdue'
-                  ? '#B85C38'
-                  : urgency === 'due_soon'
-                    ? '#C4956A'
-                    : '#E0D5C5';
               return (
                 <div
                   key={item.id}
-                  style={{
-                    background: '#FAF7F2',
-                    border: `0.5px solid ${urgencyBorder}`,
-                    borderLeft:
-                      urgency === 'overdue' || urgency === 'due_soon'
-                        ? `3px solid ${urgencyBorder}`
-                        : `0.5px solid ${urgencyBorder}`,
-                    borderRadius: 10,
-                    padding: '16px 18px',
-                    display: 'flex',
-                    gap: 16,
-                    alignItems: 'flex-start',
-                  }}
+                  className={[
+                    'watchlist-item',
+                    urgency === 'overdue' ? 'watchlist-item--overdue' : '',
+                    urgency === 'due_soon' ? 'watchlist-item--due-soon' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                 >
-                  <div
-                    style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 10,
-                      background: '#F0E8DC',
-                      border: '0.5px solid #D4C4B0',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span style={{ fontSize: 18, fontWeight: 500, color: '#C4956A' }}>{badge.num}</span>
-                    <span style={{ fontSize: 9, color: '#A89070', textTransform: 'uppercase' }}>{badge.unit}</span>
+                  <div className="watchlist-item__badge">
+                    <span className="watchlist-item__badge-num">{badge.num}</span>
+                    <span className="watchlist-item__badge-unit">{badge.unit}</span>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'baseline',
-                        gap: 8,
-                        flexWrap: 'wrap',
-                        marginBottom: 5,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 500,
-                          color: '#2C1810',
-                          lineHeight: 1.4,
-                        }}
-                      >
+                  <div className="watchlist-item__body">
+                    <div className="watchlist-item__title-row">
+                      <span className="watchlist-item__title">
                         <HighlightQuery text={item.question} query={searchQuery} />
                       </span>
                       {item.latest_task?.final_score != null ? (
                         <span
                           title={`Latest run scored ${item.latest_task.final_score}/100`}
                           aria-label={`Latest score ${item.latest_task.final_score} out of 100`}
-                          style={{
-                            fontSize: 11,
-                            borderRadius: 999,
-                            padding: '1px 7px',
-                            background:
-                              item.latest_task.final_score >= 80
-                                ? 'rgba(138,168,153,0.18)'
-                                : item.latest_task.final_score >= 60
-                                  ? 'rgba(196,149,106,0.18)'
-                                  : 'rgba(229,115,115,0.15)',
-                            color:
-                              item.latest_task.final_score >= 80
-                                ? '#3F6B4A'
-                                : item.latest_task.final_score >= 60
-                                  ? '#8C5A2C'
-                                  : '#9C2F2A',
-                            flexShrink: 0,
-                          }}
+                          className={[
+                            'watchlist-score-chip',
+                            item.latest_task.final_score >= 80
+                              ? 'watchlist-score-chip--high'
+                              : item.latest_task.final_score >= 60
+                                ? 'watchlist-score-chip--mid'
+                                : 'watchlist-score-chip--low',
+                          ].join(' ')}
                         >
                           {item.latest_task.final_score}/100
                         </span>
                       ) : null}
                     </div>
-                    <div style={{ fontSize: 12, color: '#8C7355', lineHeight: 1.5 }}>
+                    <div className="watchlist-item__meta">
                       Run {item.run_count} times · Last ran {watchRelativePast(item.last_run_at)} · Next:{' '}
                       {item.is_active ? watchRelativeFuture(item.next_run_at) : 'paused'}
                       {urgency === 'overdue' ? (
-                        <span style={{ color: '#B85C38', fontWeight: 500 }}> · Overdue</span>
+                        <span className="watchlist-item__meta--overdue"> · Overdue</span>
                       ) : urgency === 'due_soon' ? (
-                        <span style={{ color: '#A67C52', fontWeight: 500 }}> · Due soon</span>
+                        <span className="watchlist-item__meta--due-soon"> · Due soon</span>
                       ) : null}
                     </div>
                     <div
+                      className="watchlist-item__cadence-row"
                       role="radiogroup"
                       aria-label="Re-check cadence"
-                      style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}
                     >
                       {WATCHLIST_INTERVALS.map(({ hours, label, short }) => {
                         const selected = item.interval_hours === hours;
@@ -1320,32 +1167,20 @@ export function WatchlistPage() {
                             aria-label={short}
                             disabled={busy}
                             onClick={() => void onCadence(item, hours)}
-                            style={{
-                              padding: '4px 10px',
-                              borderRadius: 999,
-                              border: selected ? 'none' : '0.5px solid #D4C4B0',
-                              cursor: busy ? 'wait' : 'pointer',
-                              fontSize: 11,
-                              fontFamily: 'Georgia, serif',
-                              background: selected ? '#C4956A' : 'transparent',
-                              color: selected ? '#FAF7F2' : '#8C7355',
-                              opacity: busy && !selected ? 0.55 : 1,
-                            }}
+                            className={[
+                              'watchlist-item__cadence-pill',
+                              selected ? 'watchlist-item__cadence-pill--active' : '',
+                              busy && !selected ? 'watchlist-item__cadence-pill--busy' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
                           >
                             {label}
                           </button>
                         );
                       })}
                     </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: 12,
-                        alignItems: 'center',
-                        marginTop: 8,
-                      }}
-                    >
+                    <div className="watchlist-item__actions">
                       {item.latest_task_id && item.latest_task ? (
                         <button
                           type="button"
@@ -1354,15 +1189,7 @@ export function WatchlistPage() {
                               `/agent?task_id=${encodeURIComponent(item.latest_task!.task_id)}`,
                             )
                           }
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            padding: 0,
-                            fontSize: 11,
-                            color: '#C4956A',
-                            cursor: 'pointer',
-                            fontFamily: 'Georgia, serif',
-                          }}
+                          className="watchlist-link watchlist-link--accent"
                         >
                           Latest result →
                         </button>
@@ -1372,15 +1199,7 @@ export function WatchlistPage() {
                           type="button"
                           onClick={() => toggleWatchHistory(item.id)}
                           aria-expanded={historyOpenId === item.id}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            padding: 0,
-                            fontSize: 11,
-                            color: '#8C7355',
-                            cursor: 'pointer',
-                            fontFamily: 'Georgia, serif',
-                          }}
+                          className="watchlist-link"
                         >
                           {historyOpenId === item.id ? 'Hide run history' : 'Run history'}
                         </button>
@@ -1390,24 +1209,22 @@ export function WatchlistPage() {
                         onClick={() => void copyWatchItem(item, 'watch')}
                         title="Copy this watch as markdown"
                         aria-label={`Copy watch: ${item.question.slice(0, 80) || 'watched question'}`}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          fontSize: 11,
-                          color:
-                            itemCopyId === item.id &&
-                            itemCopyKind === 'watch' &&
-                            itemCopyStatus === 'failed'
-                              ? '#993C1D'
-                              : itemCopyId === item.id &&
-                                  itemCopyKind === 'watch' &&
-                                  itemCopyStatus === 'copied'
-                                ? '#3F6B4A'
-                                : '#C4956A',
-                          cursor: 'pointer',
-                          fontFamily: 'Georgia, serif',
-                        }}
+                        className={[
+                          'watchlist-link',
+                          'watchlist-link--accent',
+                          itemCopyId === item.id &&
+                          itemCopyKind === 'watch' &&
+                          itemCopyStatus === 'copied'
+                            ? 'watchlist-link--ok'
+                            : '',
+                          itemCopyId === item.id &&
+                          itemCopyKind === 'watch' &&
+                          itemCopyStatus === 'failed'
+                            ? 'watchlist-link--err'
+                            : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                       >
                         {itemCopyId === item.id &&
                         itemCopyKind === 'watch' &&
@@ -1424,24 +1241,21 @@ export function WatchlistPage() {
                         onClick={() => void copyWatchItem(item, 'question')}
                         title="Copy the watched question only"
                         aria-label={`Copy question: ${item.question.slice(0, 80) || 'watched question'}`}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          fontSize: 11,
-                          color:
-                            itemCopyId === item.id &&
-                            itemCopyKind === 'question' &&
-                            itemCopyStatus === 'failed'
-                              ? '#993C1D'
-                              : itemCopyId === item.id &&
-                                  itemCopyKind === 'question' &&
-                                  itemCopyStatus === 'copied'
-                                ? '#3F6B4A'
-                                : '#8C7355',
-                          cursor: 'pointer',
-                          fontFamily: 'Georgia, serif',
-                        }}
+                        className={[
+                          'watchlist-link',
+                          itemCopyId === item.id &&
+                          itemCopyKind === 'question' &&
+                          itemCopyStatus === 'copied'
+                            ? 'watchlist-link--ok'
+                            : '',
+                          itemCopyId === item.id &&
+                          itemCopyKind === 'question' &&
+                          itemCopyStatus === 'failed'
+                            ? 'watchlist-link--err'
+                            : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                       >
                         {itemCopyId === item.id &&
                         itemCopyKind === 'question' &&
@@ -1455,43 +1269,25 @@ export function WatchlistPage() {
                       </button>
                     </div>
                     {historyOpenId === item.id ? (
-                      <div
-                        style={{
-                          marginTop: 10,
-                          padding: '10px 12px',
-                          background: '#F7F1E8',
-                          border: '0.5px solid #E0D5C5',
-                          borderRadius: 10,
-                        }}
-                      >
+                      <div className="watchlist-history">
                         {(() => {
                           const hist = historyCache[item.id];
                           if (!hist || hist.status === 'loading') {
                             return (
-                              <p style={{ margin: 0, fontSize: 12, color: '#A89070' }}>
-                                Loading run history…
-                              </p>
+                              <p className="watchlist-history__empty">Loading run history…</p>
                             );
                           }
                           if (hist.status === 'error') {
                             return (
                               <div>
-                                <p style={{ margin: 0, fontSize: 12, color: '#993C1D' }}>
+                                <p className="watchlist-history__empty" style={{ color: '#993C1D' }}>
                                   {hist.message}
                                 </p>
                                 <button
                                   type="button"
                                   onClick={() => void loadWatchHistory(item.id, true)}
-                                  style={{
-                                    marginTop: 6,
-                                    background: 'none',
-                                    border: 'none',
-                                    padding: 0,
-                                    fontSize: 11,
-                                    color: '#C4956A',
-                                    cursor: 'pointer',
-                                    fontFamily: 'Georgia, serif',
-                                  }}
+                                  className="watchlist-link watchlist-link--accent"
+                                  style={{ marginTop: 6 }}
                                 >
                                   Retry
                                 </button>
@@ -1501,72 +1297,45 @@ export function WatchlistPage() {
                           const { data } = hist;
                           const statsLabel = formatWatchlistHistoryStats(data.stats);
                           const trend = watchlistScoreTrend(data.items);
-                          const trendColor =
-                            !trend
-                              ? '#8C7355'
-                              : trend.delta > 0
-                                ? '#3F6B4A'
-                                : trend.delta < 0
-                                  ? '#9C2F2A'
-                                  : '#8C7355';
                           return (
                             <div>
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  flexWrap: 'wrap',
-                                  gap: 8,
-                                  alignItems: 'center',
-                                  marginBottom: 8,
-                                  justifyContent: 'space-between',
-                                }}
-                              >
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                              <div className="watchlist-history__head">
+                                <div className="watchlist-history__stats">
                                   {statsLabel ? (
-                                    <span
-                                      style={{
-                                        fontSize: 11,
-                                        color: '#8C7355',
-                                        letterSpacing: '0.02em',
-                                      }}
-                                    >
+                                    <span className="watchlist-history__stats-label">
                                       {statsLabel}
                                     </span>
                                   ) : null}
                                   {trend ? (
                                     <span
                                       title={`Latest ${trend.latest} vs prior ${trend.previous}`}
-                                      style={{
-                                        fontSize: 11,
-                                        fontWeight: 500,
-                                        color: trendColor,
-                                        fontFamily: 'Georgia, serif',
-                                      }}
+                                      className={[
+                                        'watchlist-history__trend',
+                                        trend.delta > 0
+                                          ? 'watchlist-history__trend--up'
+                                          : trend.delta < 0
+                                            ? 'watchlist-history__trend--down'
+                                            : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ')}
                                     >
                                       {trend.label}
                                     </span>
                                   ) : null}
                                 </div>
                                 {data.items.length > 0 ? (
-                                  <div style={{ display: 'flex', gap: 8 }}>
+                                  <div className="watchlist-history__actions">
                                     <button
                                       type="button"
                                       onClick={() => void exportOpenWatchHistory('copy', item.question, item.id)}
-                                      style={{
-                                        background: 'none',
-                                        border: '0.5px solid #D4C4B0',
-                                        borderRadius: 999,
-                                        padding: '2px 10px',
-                                        fontSize: 11,
-                                        color:
-                                          historyCopyStatus === 'failed'
-                                            ? '#993C1D'
-                                            : historyCopyStatus === 'copied'
-                                              ? '#3F6B4A'
-                                              : '#8C7355',
-                                        cursor: 'pointer',
-                                        fontFamily: 'Georgia, serif',
-                                      }}
+                                      className={[
+                                        'watchlist-history-btn',
+                                        historyCopyStatus === 'copied' ? 'watchlist-history-btn--ok' : '',
+                                        historyCopyStatus === 'failed' ? 'watchlist-history-btn--err' : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ')}
                                     >
                                       {historyCopyStatus === 'copied'
                                         ? 'Copied'
@@ -1579,21 +1348,13 @@ export function WatchlistPage() {
                                       onClick={() =>
                                         void exportOpenWatchHistory('download', item.question, item.id)
                                       }
-                                      style={{
-                                        background: 'none',
-                                        border: '0.5px solid #D4C4B0',
-                                        borderRadius: 999,
-                                        padding: '2px 10px',
-                                        fontSize: 11,
-                                        color:
-                                          historyDownloadStatus === 'failed'
-                                            ? '#993C1D'
-                                            : historyDownloadStatus === 'done'
-                                              ? '#3F6B4A'
-                                              : '#8C7355',
-                                        cursor: 'pointer',
-                                        fontFamily: 'Georgia, serif',
-                                      }}
+                                      className={[
+                                        'watchlist-history-btn',
+                                        historyDownloadStatus === 'done' ? 'watchlist-history-btn--ok' : '',
+                                        historyDownloadStatus === 'failed' ? 'watchlist-history-btn--err' : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ')}
                                     >
                                       {historyDownloadStatus === 'done'
                                         ? 'Downloaded'
@@ -1605,30 +1366,11 @@ export function WatchlistPage() {
                                 ) : null}
                               </div>
                               {data.items.length === 0 ? (
-                                <p style={{ margin: 0, fontSize: 12, color: '#A89070' }}>
-                                  No runs recorded yet.
-                                </p>
+                                <p className="watchlist-history__empty">No runs recorded yet.</p>
                               ) : (
-                                <ul
-                                  style={{
-                                    listStyle: 'none',
-                                    margin: 0,
-                                    padding: 0,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: 6,
-                                  }}
-                                >
+                                <ul className="watchlist-history__list">
                                   {data.items.map((run) => {
                                     const score = run.final_score;
-                                    const tone =
-                                      score == null
-                                        ? { bg: 'rgba(168,144,112,0.18)', fg: '#6B6460' }
-                                        : score >= 80
-                                          ? { bg: 'rgba(138,168,153,0.18)', fg: '#3F6B4A' }
-                                          : score >= 60
-                                            ? { bg: 'rgba(196,149,106,0.18)', fg: '#8C5A2C' }
-                                            : { bg: 'rgba(217,83,79,0.15)', fg: '#9C2F2A' };
                                     return (
                                       <li key={run.task_id}>
                                         <button
@@ -1638,64 +1380,35 @@ export function WatchlistPage() {
                                               `/agent?task_id=${encodeURIComponent(run.task_id)}`,
                                             )
                                           }
-                                          style={{
-                                            width: '100%',
-                                            textAlign: 'left',
-                                            background: 'transparent',
-                                            border: '0.5px solid #E0D5C5',
-                                            borderRadius: 8,
-                                            padding: '8px 10px',
-                                            cursor: 'pointer',
-                                            fontFamily: 'Georgia, serif',
-                                          }}
+                                          className="watchlist-history__run"
                                         >
-                                          <div
-                                            style={{
-                                              display: 'flex',
-                                              justifyContent: 'space-between',
-                                              gap: 8,
-                                              alignItems: 'baseline',
-                                            }}
-                                          >
-                                            <span
-                                              style={{
-                                                fontSize: 12,
-                                                color: '#2C1810',
-                                                fontWeight: 500,
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                              }}
-                                            >
+                                          <div className="watchlist-history__run-row">
+                                            <span className="watchlist-history__run-title">
                                               {run.title?.trim() || 'Research run'}
                                             </span>
                                             <span
-                                              style={{
-                                                fontSize: 11,
-                                                borderRadius: 999,
-                                                padding: '1px 7px',
-                                                background: tone.bg,
-                                                color: tone.fg,
-                                                flexShrink: 0,
-                                              }}
+                                              className={[
+                                                'watchlist-score-chip',
+                                                score == null
+                                                  ? 'watchlist-score-chip--neutral'
+                                                  : score >= 80
+                                                    ? 'watchlist-score-chip--high'
+                                                    : score >= 60
+                                                      ? 'watchlist-score-chip--mid'
+                                                      : 'watchlist-score-chip--low',
+                                              ].join(' ')}
                                             >
                                               {score != null ? `${score}/100` : '—'}
                                             </span>
                                           </div>
-                                        <div
-                                          style={{
-                                            fontSize: 11,
-                                            color: '#A89070',
-                                            marginTop: 2,
-                                          }}
-                                        >
-                                          {watchRelativePast(run.created_at)}
-                                          {run.user_feedback
-                                            ? ` · ${String(run.user_feedback)}`
-                                            : ''}
-                                        </div>
-                                      </button>
-                                    </li>
+                                          <div className="watchlist-history__run-meta">
+                                            {watchRelativePast(run.created_at)}
+                                            {run.user_feedback
+                                              ? ` · ${String(run.user_feedback)}`
+                                              : ''}
+                                          </div>
+                                        </button>
+                                      </li>
                                     );
                                   })}
                                 </ul>
@@ -1706,7 +1419,7 @@ export function WatchlistPage() {
                       </div>
                     ) : null}
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+                  <div className="watchlist-item__controls">
                     <button
                       type="button"
                       role="switch"
