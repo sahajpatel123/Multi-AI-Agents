@@ -23,6 +23,9 @@ class InMemoryRateLimiter:
                 bucket.popleft()
             if len(bucket) >= limit:
                 retry_after = max(1, int(window_seconds - (now - bucket[0])))
+                # Header + body: well-behaved clients (fetch wrappers, SDKs)
+                # read Retry-After; our JSON detail still carries retry_after
+                # for UI that only inspects the response body.
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail={
@@ -30,6 +33,7 @@ class InMemoryRateLimiter:
                         "message": message,
                         "retry_after": retry_after,
                     },
+                    headers={"Retry-After": str(retry_after)},
                 )
             bucket.append(now)
 

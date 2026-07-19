@@ -83,6 +83,10 @@ def test_hit_error_includes_message_and_retry_after():
     assert detail["error"] == "rate_limit_exceeded"
     assert detail["message"] == "rate limit hit"
     assert detail["retry_after"] >= 1
+    # HTTP Retry-After must match the body field so clients that only
+    # read headers (or only read JSON) get the same cooldown.
+    assert exc_info.value.headers is not None
+    assert exc_info.value.headers.get("Retry-After") == str(detail["retry_after"])
 
 
 def test_hit_keys_are_independent():
