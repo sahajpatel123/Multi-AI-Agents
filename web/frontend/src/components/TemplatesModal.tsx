@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { LayoutTemplate } from 'lucide-react';
 import type { AgentTaskTemplate } from '../api';
 import { ConduraBadge } from './ConduraBadge';
 import { EmptyState } from './EmptyState';
@@ -43,6 +44,7 @@ import {
   recordRecentTemplateId,
   templatesRecentUseful,
 } from '../lib/templatesRecent';
+import '../styles/templates-modal.css';
 
 const TAB_ORDER = [
   'All',
@@ -340,93 +342,46 @@ export function TemplatesModal({
 
   if (!visible) return null;
 
-  const overlayAnim = reducedMotion
-    ? 'none'
-    : closing
-      ? 'templatesModalOverlayOut 0.22s ease forwards'
-      : 'templatesModalOverlayIn 0.2s ease forwards';
-  const panelAnim = reducedMotion
-    ? 'none'
-    : closing
-      ? 'templatesModalPanelOut 0.22s ease-in forwards'
-      : 'templatesModalPanelIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+  const overlayClass = [
+    'templates-modal-overlay',
+    reducedMotion
+      ? 'templates-modal-overlay--static'
+      : closing
+        ? 'templates-modal-overlay--out'
+        : 'templates-modal-overlay--in',
+  ].join(' ');
+  const panelClass = [
+    'templates-modal-panel',
+    reducedMotion
+      ? 'templates-modal-panel--static'
+      : closing
+        ? 'templates-modal-panel--out'
+        : 'templates-modal-panel--in',
+  ].join(' ');
 
   return createPortal(
     <div
       role="presentation"
+      className={overlayClass}
       onMouseDown={handleOverlayPointerDown}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 10000,
-        background: 'rgba(30, 18, 10, 0.55)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-        animation: overlayAnim,
-        opacity: reducedMotion ? 1 : undefined,
-      }}
     >
-      {!reducedMotion ? (
-        <style>{`
-        @keyframes templatesModalOverlayIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes templatesModalOverlayOut { from { opacity: 1; } to { opacity: 0; } }
-        @keyframes templatesModalPanelIn {
-          from { opacity: 0; transform: scale(0.96) translateY(12px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        @keyframes templatesModalPanelOut {
-          from { opacity: 1; transform: scale(1) translateY(0); }
-          to { opacity: 0; transform: scale(0.96) translateY(12px); }
-        }
-      `}</style>
-      ) : null}
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="templates-modal-title"
+        className={panelClass}
         onMouseDown={(e) => e.stopPropagation()}
-        style={{
-          width: '100%',
-          maxWidth: 640,
-          maxHeight: '80vh',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          background: '#FDFAF6',
-          border: '0.5px solid #DDD0BC',
-          borderRadius: 14,
-          animation: panelAnim,
-          boxShadow: '0 16px 48px rgba(26, 23, 20, 0.12)',
-          opacity: reducedMotion ? 1 : undefined,
-          transform: reducedMotion ? 'none' : undefined,
-        }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '16px 18px',
-            borderBottom: '0.5px solid #EDE4D8',
-            flexShrink: 0,
-            gap: 12,
-          }}
-        >
-          <h2
-            id="templates-modal-title"
-            style={{
-              margin: 0,
-              fontSize: 18,
-              fontWeight: 500,
-              color: '#2C1810',
-              fontFamily: 'Georgia, serif',
-            }}
-          >
-            Task templates
-          </h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div className="templates-modal__header">
+          <div className="templates-modal__title-wrap">
+            <span className="templates-modal__mark" aria-hidden>
+              <LayoutTemplate strokeWidth={1.75} />
+            </span>
+            <h2 id="templates-modal-title" className="templates-modal__title">
+              Task templates
+            </h2>
+          </div>
+          <div className="templates-modal__header-actions">
             {catalogMode === 'list' && flatTemplates.length > 0 ? (
               <>
                 <button
@@ -499,25 +454,16 @@ export function TemplatesModal({
           </div>
         </div>
         {copyStatus === 'failed' || downloadStatus === 'failed' ? (
-          <p
-            role="alert"
-            style={{
-              margin: 0,
-              padding: '0 18px 8px',
-              fontSize: 12,
-              color: '#993C1D',
-              lineHeight: 1.4,
-            }}
-          >
+          <p role="alert" className="templates-modal__alert">
             {copyStatus === 'failed'
               ? 'Could not copy templates — try Download instead.'
               : 'Could not download templates — try Copy instead.'}
           </p>
         ) : null}
 
-        <div style={{ padding: '12px 16px 0', flexShrink: 0 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+        <div className="templates-modal__toolbar">
+          <div className="templates-modal__search-row">
+            <div className="templates-modal__search-wrap">
               <input
                 ref={searchRef}
                 type="search"
@@ -526,39 +472,16 @@ export function TemplatesModal({
                 placeholder="Search templates…"
                 aria-label="Search task templates"
                 autoComplete="off"
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  fontSize: 13,
-                  fontFamily: 'Georgia, serif',
-                  color: '#2C1810',
-                  background: '#FAF7F2',
-                  border: '0.5px solid #E0D5C5',
-                  borderRadius: 10,
-                  padding: '10px 32px 10px 12px',
-                  outline: 'none',
-                }}
+                className="templates-modal__search"
               />
               {searchQuery ? (
                 <button
                   type="button"
+                  className="templates-modal__search-clear"
                   aria-label="Clear template search"
                   onClick={() => {
                     setSearchQuery('');
                     searchRef.current?.focus();
-                  }}
-                  style={{
-                    position: 'absolute',
-                    right: 8,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: 16,
-                    color: '#A89070',
-                    lineHeight: 1,
-                    padding: 4,
                   }}
                 >
                   ×
@@ -571,18 +494,7 @@ export function TemplatesModal({
                 onChange={(e) => setTemplatesSort(e.target.value as TemplatesSort)}
                 aria-label="Sort templates"
                 title="Sort templates"
-                style={{
-                  fontSize: 12,
-                  fontFamily: 'Georgia, serif',
-                  color: '#4A3728',
-                  background: '#FAF7F2',
-                  border: '0.5px solid #E0D5C5',
-                  borderRadius: 10,
-                  padding: '10px 10px',
-                  cursor: 'pointer',
-                  flex: '0 0 auto',
-                  maxWidth: 148,
-                }}
+                className="templates-modal__sort"
               >
                 {TEMPLATES_SORT_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -596,13 +508,7 @@ export function TemplatesModal({
             <div
               role="group"
               aria-label="Filter templates by availability"
-              style={{
-                display: 'flex',
-                gap: 6,
-                marginTop: 10,
-                flexWrap: 'wrap',
-                alignItems: 'center',
-              }}
+              className="templates-modal__chips"
             >
               {TEMPLATES_AVAILABILITY_OPTIONS.map((opt) => {
                 const selected = availabilityFilter === opt.value;
@@ -612,20 +518,7 @@ export function TemplatesModal({
                     type="button"
                     onClick={() => setAvailabilityFilter(opt.value)}
                     aria-pressed={selected}
-                    style={{
-                      background: selected ? '#F0E6DA' : 'transparent',
-                      border: selected
-                        ? '0.5px solid #C4956A'
-                        : '0.5px solid #E0D5C5',
-                      borderRadius: 999,
-                      padding: '3px 9px',
-                      fontSize: 10,
-                      letterSpacing: '0.03em',
-                      color: selected ? '#4A3728' : '#A89070',
-                      cursor: 'pointer',
-                      fontFamily: 'Georgia, serif',
-                      lineHeight: 1.35,
-                    }}
+                    className={`templates-modal__chip${selected ? ' templates-modal__chip--active' : ''}`}
                   >
                     {opt.label}
                   </button>
@@ -637,13 +530,7 @@ export function TemplatesModal({
             <div
               role="group"
               aria-label="Filter templates by expertise"
-              style={{
-                display: 'flex',
-                gap: 6,
-                marginTop: 10,
-                flexWrap: 'wrap',
-                alignItems: 'center',
-              }}
+              className="templates-modal__chips"
             >
               {expertiseOptions.map((opt) => {
                 const selected = expertiseFilter === opt.value;
@@ -653,20 +540,7 @@ export function TemplatesModal({
                     type="button"
                     onClick={() => setExpertiseFilter(opt.value)}
                     aria-pressed={selected}
-                    style={{
-                      background: selected ? '#F0E6DA' : 'transparent',
-                      border: selected
-                        ? '0.5px solid #C4956A'
-                        : '0.5px solid #E0D5C5',
-                      borderRadius: 999,
-                      padding: '3px 9px',
-                      fontSize: 10,
-                      letterSpacing: '0.03em',
-                      color: selected ? '#4A3728' : '#A89070',
-                      cursor: 'pointer',
-                      fontFamily: 'Georgia, serif',
-                      lineHeight: 1.35,
-                    }}
+                    className={`templates-modal__chip${selected ? ' templates-modal__chip--active' : ''}`}
                   >
                     {opt.label}
                   </button>
@@ -679,7 +553,7 @@ export function TemplatesModal({
             templatesSort !== 'default' ||
             availabilityFilter !== 'all' ||
             expertiseFilter !== TEMPLATES_EXPERTISE_ALL) && (
-            <p style={{ margin: '8px 0 0', fontSize: 11, color: '#A89070' }}>
+            <p className="templates-modal__match">
               {visibleTemplates.length} match
               {visibleTemplates.length === 1 ? '' : 'es'}
               {activeTab !== 'All' ? ` in ${activeTab}` : ''}
@@ -698,16 +572,7 @@ export function TemplatesModal({
         </div>
 
         <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 0,
-            borderBottom: '0.5px solid #EDE4D8',
-            padding: '0 8px',
-            flexShrink: 0,
-            overflowX: 'auto',
-            marginTop: 8,
-          }}
+          className="templates-modal__tabs"
           role="tablist"
           aria-label="Template categories"
         >
@@ -718,72 +583,26 @@ export function TemplatesModal({
               role="tab"
               aria-selected={activeTab === tab}
               onClick={() => setActiveTab(tab)}
-              style={{
-                border: 'none',
-                background: 'none',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontFamily: 'Georgia, serif',
-                padding: '10px 12px',
-                color: activeTab === tab ? '#2C1810' : '#8C7355',
-                borderBottom: activeTab === tab ? '2px solid #C4956A' : '2px solid transparent',
-                marginBottom: -1,
-                whiteSpace: 'nowrap',
-              }}
+              className={`templates-modal__tab${activeTab === tab ? ' templates-modal__tab--active' : ''}`}
             >
               {tab}
             </button>
           ))}
         </div>
-        <div style={{ overflowY: 'auto', padding: 16, flex: 1 }}>
+        <div className="templates-modal__body">
           {showRecentStrip ? (
-            <div
-              style={{ marginBottom: 16 }}
-              aria-label="Recently used templates"
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 10,
-                  marginBottom: 8,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 10,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                    color: '#A89070',
-                  }}
-                >
-                  Recently used
-                </div>
+            <div className="templates-modal__recent" aria-label="Recently used templates">
+              <div className="templates-modal__recent-head">
+                <div className="templates-modal__recent-label">Recently used</div>
                 <button
                   type="button"
+                  className="templates-modal__text-btn"
                   onClick={() => setRecentIds(clearRecentTemplateIds())}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: 11,
-                    color: '#C4956A',
-                    fontFamily: 'Georgia, serif',
-                    textDecoration: 'underline',
-                    padding: 0,
-                  }}
                 >
                   Clear
                 </button>
               </div>
-              <div
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 8,
-                }}
-              >
+              <div className="templates-modal__recent-list">
                 {recentStrip.map((t) => (
                   <button
                     key={`recent-${t.id}`}
@@ -791,22 +610,7 @@ export function TemplatesModal({
                     disabled={!!t.disabled}
                     onClick={() => selectTemplate(t)}
                     title={t.title}
-                    style={{
-                      maxWidth: '100%',
-                      textAlign: 'left',
-                      background: t.disabled ? '#F5F0E8' : '#FAF3EA',
-                      border: '0.5px solid #E0D5C5',
-                      borderRadius: 999,
-                      padding: '6px 12px',
-                      cursor: t.disabled ? 'not-allowed' : 'pointer',
-                      opacity: t.disabled ? 0.65 : 1,
-                      fontSize: 12,
-                      color: '#4A3728',
-                      fontFamily: 'Georgia, serif',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                    className="templates-modal__recent-chip"
                   >
                     {t.title}
                   </button>
@@ -815,8 +619,17 @@ export function TemplatesModal({
             </div>
           ) : null}
           {catalogMode === 'loading' ? (
-            <div style={{ textAlign: 'center', padding: '2.5rem 1rem' }}>
-              <p style={{ margin: 0, fontSize: 14, color: '#8C7355' }}>Loading templates…</p>
+            <div className="templates-modal__loading">
+              <p>
+                {!reducedMotion ? (
+                  <>
+                    <span className="templates-modal__loading-dot" aria-hidden />
+                    <span className="templates-modal__loading-dot" aria-hidden />
+                    <span className="templates-modal__loading-dot" aria-hidden />{' '}
+                  </>
+                ) : null}
+                Loading templates…
+              </p>
             </div>
           ) : catalogMode === 'load_error' ? (
             <EmptyState
@@ -879,155 +692,101 @@ export function TemplatesModal({
               }
             />
           ) : (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: 10,
-              }}
-            >
-              {visibleTemplates.map((t) => (
-                <div
-                  key={t.id}
-                  className={[
-                    'templates-card',
-                    t.disabled ? 'templates-card--disabled' : '',
-                    reducedMotion ? 'templates-card--static' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  <button
-                    type="button"
-                    disabled={!!t.disabled}
-                    onClick={() => selectTemplate(t)}
-                    style={{
-                      textAlign: 'left',
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      cursor: t.disabled ? 'not-allowed' : 'pointer',
-                      fontFamily: 'Georgia, serif',
-                      width: '100%',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span
-                        style={{
-                          fontSize: 9,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.06em',
-                          background: '#F0E8DC',
-                          color: '#8C7355',
-                          borderRadius: 6,
-                          padding: '2px 8px',
-                          display: 'inline-block',
-                        }}
-                      >
-                        {t.category}
-                      </span>
-                      <ConduraBadge execution={t.execution} compact />
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: '#2C1810', marginTop: 6 }}>
-                      <HighlightQuery text={t.title} query={searchQuery} />
-                    </div>
-                    <div style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', marginTop: 3, lineHeight: 1.4 }}>
-                      <HighlightQuery text={t.description} query={searchQuery} />
-                    </div>
-                    {t.disabled && t.disabled_reason ? (
-                      <div style={{ fontSize: 11, color: '#a89070', marginTop: 6 }}>{t.disabled_reason}</div>
-                    ) : (
-                      <div style={{ fontSize: 11, color: '#C4A882', marginTop: 6 }}>
-                        e.g. {t.example}
-                      </div>
-                    )}
-                  </button>
+            <div className="templates-modal__grid">
+              {visibleTemplates.map((t) => {
+                const fullCopyState =
+                  itemCopyId === t.id && itemCopyKind === 'full' ? itemCopyStatus : 'idle';
+                const promptCopyState =
+                  itemCopyId === t.id && itemCopyKind === 'prompt' ? itemCopyStatus : 'idle';
+                return (
                   <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 10,
-                      marginTop: 10,
-                      alignItems: 'center',
-                    }}
+                    key={t.id}
+                    className={[
+                      'templates-card',
+                      t.disabled ? 'templates-card--disabled' : '',
+                      reducedMotion ? 'templates-card--static' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                   >
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void copyTemplateItem(t, 'full');
-                      }}
-                      title="Copy this template as markdown"
-                      aria-label={`Copy template ${t.title}`}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        padding: 0,
-                        fontSize: 11,
-                        fontFamily: 'Georgia, serif',
-                        cursor: 'pointer',
-                        color:
-                          itemCopyId === t.id &&
-                          itemCopyKind === 'full' &&
-                          itemCopyStatus === 'failed'
-                            ? '#993C1D'
-                            : itemCopyId === t.id &&
-                                itemCopyKind === 'full' &&
-                                itemCopyStatus === 'copied'
-                              ? '#3F6B4A'
-                              : '#C4956A',
-                      }}
+                      disabled={!!t.disabled}
+                      onClick={() => selectTemplate(t)}
+                      className="templates-card__select"
                     >
-                      {itemCopyId === t.id &&
-                      itemCopyKind === 'full' &&
-                      itemCopyStatus === 'copied'
-                        ? 'Copied'
-                        : itemCopyId === t.id &&
-                            itemCopyKind === 'full' &&
-                            itemCopyStatus === 'failed'
-                          ? 'Failed'
-                          : 'Copy template'}
+                      <div className="templates-card__meta">
+                        <span className="templates-card__cat">{t.category}</span>
+                        <ConduraBadge execution={t.execution} compact />
+                      </div>
+                      <div className="templates-card__title">
+                        <HighlightQuery text={t.title} query={searchQuery} />
+                      </div>
+                      <div className="templates-card__desc">
+                        <HighlightQuery text={t.description} query={searchQuery} />
+                      </div>
+                      {t.disabled && t.disabled_reason ? (
+                        <div className="templates-card__disabled-reason">{t.disabled_reason}</div>
+                      ) : (
+                        <div className="templates-card__example">e.g. {t.example}</div>
+                      )}
                     </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void copyTemplateItem(t, 'prompt');
-                      }}
-                      title="Copy prompt text only"
-                      aria-label={`Copy prompt for ${t.title}`}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        padding: 0,
-                        fontSize: 11,
-                        fontFamily: 'Georgia, serif',
-                        cursor: 'pointer',
-                        color:
-                          itemCopyId === t.id &&
-                          itemCopyKind === 'prompt' &&
-                          itemCopyStatus === 'failed'
-                            ? '#993C1D'
-                            : itemCopyId === t.id &&
-                                itemCopyKind === 'prompt' &&
-                                itemCopyStatus === 'copied'
-                              ? '#3F6B4A'
-                              : '#8C7355',
-                      }}
-                    >
-                      {itemCopyId === t.id &&
-                      itemCopyKind === 'prompt' &&
-                      itemCopyStatus === 'copied'
-                        ? 'Copied prompt'
-                        : itemCopyId === t.id &&
-                            itemCopyKind === 'prompt' &&
-                            itemCopyStatus === 'failed'
-                          ? 'Failed'
-                          : 'Copy prompt'}
-                    </button>
+                    <div className="templates-card__actions">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void copyTemplateItem(t, 'full');
+                        }}
+                        title="Copy this template as markdown"
+                        aria-label={`Copy template ${t.title}`}
+                        className={[
+                          'templates-card__link',
+                          fullCopyState === 'failed'
+                            ? 'templates-card__link--err'
+                            : fullCopyState === 'copied'
+                              ? 'templates-card__link--ok'
+                              : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
+                        {fullCopyState === 'copied'
+                          ? 'Copied'
+                          : fullCopyState === 'failed'
+                            ? 'Failed'
+                            : 'Copy template'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void copyTemplateItem(t, 'prompt');
+                        }}
+                        title="Copy prompt text only"
+                        aria-label={`Copy prompt for ${t.title}`}
+                        className={[
+                          'templates-card__link',
+                          'templates-card__link--muted',
+                          promptCopyState === 'failed'
+                            ? 'templates-card__link--err'
+                            : promptCopyState === 'copied'
+                              ? 'templates-card__link--ok'
+                              : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
+                        {promptCopyState === 'copied'
+                          ? 'Copied prompt'
+                          : promptCopyState === 'failed'
+                            ? 'Failed'
+                            : 'Copy prompt'}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
