@@ -36,12 +36,12 @@ const API_GROUPS = [
   ['Payments', 'POST /api/payments/subscribe · verify · cancel · webhook'],
 ] as const;
 
-const PIPELINE = ['PLAN', 'RESEARCH', 'STEELMAN', 'SOLVE', 'CRITIQUE', 'VERIFY', 'SYNTHESIZE', 'JUDGE'];
+const PIPELINE = ['PLAN', 'RESEARCH', 'SOLVE', 'CRITIQUE', 'VERIFY', 'SYNTHESIZE', 'JUDGE'];
 
 function CodeBlock({ label, value, onCopy, copied }: { label: string; value: string; onCopy: () => void; copied: boolean }) {
   return (
     <div className="docs-code">
-      <header><span>{label}</span><button type="button" onClick={onCopy}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'COPIED' : 'COPY'}</button></header>
+      <header><span>{label}</span><button type="button" onClick={onCopy} aria-label={`${copied ? 'Copied' : 'Copy'} ${label}`}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'COPIED' : 'COPY'}</button></header>
       <pre><code>{value}</code></pre>
     </div>
   );
@@ -76,7 +76,8 @@ export function DocsPage() {
           <div className="docs-hero__brief">
             <p>The complete operating guide for Arena, Agent Mode, personas, scoring, APIs, deployment, and security.</p>
             <div className="docs-search"><Search size={17} aria-hidden="true"/><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search documentation" placeholder="Search documentation"/>{query ? <button type="button" onClick={() => setQuery('')} aria-label="Clear documentation search"><X size={16}/></button> : null}</div>
-            <dl><div><dt>16</dt><dd>PERSONAS</dd></div><div><dt>08</dt><dd>AGENT STAGES</dd></div><div><dt>04</dt><dd>MODEL PROVIDERS</dd></div></dl>
+            <div className="docs-hero__actions"><button type="button" onClick={() => navigate('/signin?tab=signup')}>OPEN ARENA FREE <ArrowRight size={14}/></button><button type="button" onClick={() => navigate('/product')}>PRODUCT OVERVIEW</button></div>
+            <dl><div><dt>16</dt><dd>PERSONAS</dd></div><div><dt>07</dt><dd>AGENT STAGES</dd></div><div><dt>04</dt><dd>MODEL PROVIDERS</dd></div></dl>
           </div>
         </header>
 
@@ -124,7 +125,8 @@ export function DocsPage() {
 
             {visible.has('tiers') ? <section id="tiers" className="docs-chapter">
               <header><small>06 / PLANS & LIMITS</small><h2>Capacity scales with the work.</h2><p>Limits are enforced server-side and surfaced in product before a run begins.</p></header>
-              <div className="docs-table" role="table" aria-label="Plan limits"><div role="row"><b>PLAN</b><b>DAILY MESSAGES</b><b>DAILY TOKENS</b><b>PERSONAS</b></div>{[['Guest','3','25k','6'],['Free','5','25k','6'],['Plus','15','100k','16'],['Pro','35 + rolling window','300k','16']].map(row=><div role="row" key={row[0]}>{row.map(cell=><span role="cell" key={cell}>{cell}</span>)}</div>)}</div>
+              <p className="docs-table-hint">SWIPE / SCROLL TO COMPARE ALL COLUMNS →</p>
+              <div className="docs-table" role="table" aria-label="Plan limits. Scroll horizontally to compare all columns." tabIndex={0}><div role="row"><b>PLAN</b><b>DAILY MESSAGES</b><b>DAILY TOKENS</b><b>PERSONAS</b></div>{[['Guest','3','25k','6'],['Free','5','25k','6'],['Plus','15','100k','16'],['Pro','35 + rolling window','300k','16']].map(row=><div role="row" key={row[0]}>{row.map(cell=><span role="cell" key={cell}>{cell}</span>)}</div>)}</div>
               <button className="docs-inline-cta" type="button" onClick={() => navigate('/pricing')}>COMPARE FULL PRICING <ArrowRight size={15}/></button>
             </section> : null}
 

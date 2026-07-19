@@ -39,7 +39,7 @@ const faqs = [
   {
     question: 'What is Agent Mode?',
     answer:
-      'Agent Mode is a 7-stage research pipeline (planner → researcher → steelman → solver → critic → verifier → synthesizer → judge) that returns a single best-supported take with assumptions surfaced, sources attached, and a confidence score. Pro unlocks it fully; Plus can add it as an in-app add-on.',
+      'Agent Mode is a 7-stage research pipeline (planner → researcher → solver → critic → verifier → synthesizer → judge) that returns a single best-supported take with assumptions surfaced, sources attached, and a confidence score. Pro unlocks it fully; Plus can add it as an in-app add-on.',
   },
   {
     question: 'What is Watchlist?',
@@ -431,7 +431,7 @@ export function PricingPage() {
             </p>
             <div className="pricing-plan-card__divider" />
             <FeatureList items={explorerFeatures} dotColor="#D4CCC4" textColor="#1A1714" subColor="#8B8480" />
-            {isCurrentPlan('free') ? (
+            {isAuthenticated && isCurrentPlan('free') ? (
               <div
                 style={{
                   width: '100%',
@@ -450,7 +450,19 @@ export function PricingPage() {
               </div>
             ) : (
               <div style={{ marginTop: 'auto', width: '100%' }}>
-                <Button variant="secondary" size="lg" fullWidth onClick={() => navigate('/app')}>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  onClick={() => {
+                    if (isAuthenticated) {
+                      navigate('/app');
+                      return;
+                    }
+                    setRedirectIntent('/app');
+                    navigate('/signin?tab=signup');
+                  }}
+                >
                   Start for free
                 </Button>
               </div>
@@ -719,21 +731,13 @@ export function PricingPage() {
           </div>
         </section>
 
-        <section ref={mindsSectionRef} style={{ maxWidth: '760px', margin: '2.5rem auto 0', textAlign: 'center' }}>
-          <p
-            style={{
-              fontSize: '10px',
-              letterSpacing: '.18em',
-              textTransform: 'uppercase',
-              color: '#B0A9A2',
-              marginBottom: '0.5rem',
-            }}
-          >
-            THE MINDS
-          </p>
-          <p style={{ fontSize: '13px', color: '#C4B8AE', marginBottom: '2rem' }}>Your panel. Your perspective.</p>
+        <section ref={mindsSectionRef} className="pricing-minds-section">
+          <p className="pricing-minds-section__eyebrow">THE MINDS / 16 REASONING STYLES</p>
+          <h2 className="pricing-minds-section__title">Sixteen ways to challenge the obvious.</h2>
+          <p className="pricing-minds-section__lede">Build a panel that disagrees on purpose.</p>
 
           <div
+            className="pricing-minds-grid"
             onMouseEnter={() => setSectionHovered(true)}
             onMouseLeave={() => {
               setSectionHovered(false);
@@ -777,6 +781,7 @@ export function PricingPage() {
               return (
                 <Fragment key={mind.name}>
                   <div
+                    className={`pricing-mind-chip${locked ? ' pricing-mind-chip--locked' : ''}`}
                     onMouseEnter={() => setHoveredMind(index)}
                     onMouseLeave={() => setHoveredMind((current) => (current === index ? null : current))}
                     style={{
@@ -906,9 +911,10 @@ export function PricingPage() {
           </div>
         </section>
 
-        <section style={{ marginBottom: '3rem', marginTop: '1.5rem' }}>
-          <h2 style={{ fontSize: '22px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>Compare plans</h2>
-          <div className="comparison-table-wrapper" style={{ border: '0.5px solid #E0D8D0', borderRadius: '12px', overflow: 'hidden' }}>
+        <section className="pricing-comparison-section">
+          <div className="pricing-section-heading"><span>PLAN MATRIX / 01</span><h2>Compare plans</h2><p>Every limit and capability, side by side.</p></div>
+          <p className="pricing-comparison-hint">SWIPE / SCROLL TO COMPARE ALL COLUMNS →</p>
+          <div className="comparison-table-wrapper" tabIndex={0} aria-label="Plan comparison table. Scroll horizontally on small screens." style={{ overflowX: 'auto' }}>
             <div className="comparison-table" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', background: '#F0EBE3' }}>
               {['Feature', 'Explorer', 'Plus', 'Pro'].map((label) => (
                 <div key={label} style={{ padding: '14px 16px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.08em', color: '#A0A39A' }}>
@@ -945,8 +951,8 @@ export function PricingPage() {
           </div>
         </section>
 
-        <section style={{ maxWidth: '760px', marginTop: '1.5rem' }} aria-label="Common questions">
-          <h2 style={{ fontSize: '20px', fontWeight: 500, color: '#1A1714', marginBottom: '1rem' }}>Common questions</h2>
+        <section className="pricing-faq-section" aria-label="Common questions">
+          <div className="pricing-section-heading"><span>DECISION SUPPORT / 02</span><h2>Common questions</h2><p>The details that should never be hidden behind checkout.</p></div>
           {faqs.map((faq, index) => {
             const open = isFaqOpen(openFaqIndex, index);
             const panelId = `pricing-faq-panel-${index}`;

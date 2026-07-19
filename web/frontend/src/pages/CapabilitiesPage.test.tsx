@@ -52,7 +52,7 @@ describe('CapabilitiesPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /debate mode/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /focus mode/i })).toBeInTheDocument();
-    expect(screen.getByText(/8-stage research matrix/i)).toBeInTheDocument();
+    expect(screen.getByText(/7-stage research matrix/i)).toBeInTheDocument();
     expect(screen.getByText(/planner/i)).toBeInTheDocument();
   });
 

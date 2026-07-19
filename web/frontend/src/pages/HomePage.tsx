@@ -13,16 +13,16 @@ const SCENES: Scene[] = [
   {
     question: 'Should advanced AI be treated as critical infrastructure?', winner: 3,
     answers: [
-      { name: 'Analyst', model: 'DeepSeek V3', copy: 'Without measurable thresholds, “critical infrastructure” becomes a moat for incumbents.', score: 84, reason: 'DEFINITION TOO BLUNT', color: '#5ED8FF' },
+      { name: 'Analyst', model: 'DeepSeek V4 Flash', copy: 'Without measurable thresholds, “critical infrastructure” becomes a moat for incumbents.', score: 84, reason: 'DEFINITION TOO BLUNT', color: '#5ED8FF' },
       { name: 'Philosopher', model: 'GPT-4o', copy: 'The trigger is not capability alone, but the degree to which society depends on it.', score: 87, reason: 'REFRAMES THE THRESHOLD', color: '#A98CF8' },
       { name: 'Contrarian', model: 'Grok', copy: 'Safety rules may freeze today’s leaders in place while pretending to restrain them.', score: 82, reason: 'EXPOSES THE INCENTIVE', color: '#FF6652' },
-      { name: 'Engineer', model: 'DeepSeek V3', copy: 'Regulate deployment choke points: compute, access, and incident reporting—not weights.', score: 91, reason: 'MOST ACTIONABLE', color: '#D7F64A' },
+      { name: 'Engineer', model: 'DeepSeek V4 Flash', copy: 'Regulate deployment choke points: compute, access, and incident reporting—not weights.', score: 91, reason: 'MOST ACTIONABLE', color: '#D7F64A' },
     ],
   },
   {
     question: 'Should a startup raise big now or stay lean?', winner: 0,
     answers: [
-      { name: 'Analyst', model: 'DeepSeek V3', copy: 'Capital before proven unit economics funds assumptions, not growth.', score: 92, reason: 'NAMES THE HIDDEN RISK', color: '#5ED8FF' },
+      { name: 'Analyst', model: 'DeepSeek V4 Flash', copy: 'Capital before proven unit economics funds assumptions, not growth.', score: 92, reason: 'NAMES THE HIDDEN RISK', color: '#5ED8FF' },
       { name: 'Philosopher', model: 'GPT-4o', copy: 'The real question is what kind of company the founders intend to become.', score: 86, reason: 'QUESTIONS THE PREMISE', color: '#A98CF8' },
       { name: 'Pragmatist', model: 'GPT-4o mini', copy: 'Raise only when one unit of spend reliably returns more than one in durable revenue.', score: 90, reason: 'CLEAR DECISION RULE', color: '#D7F64A' },
       { name: 'Contrarian', model: 'Grok', copy: 'In a winner-take-most market, staying lean can be under-ambition with better PR.', score: 80, reason: 'CHALLENGES CONSENSUS', color: '#FF6652' },
@@ -31,8 +31,8 @@ const SCENES: Scene[] = [
   {
     question: 'Is a four-day work week actually better?', winner: 2,
     answers: [
-      { name: 'Scientist', model: 'DeepSeek V3', copy: 'Evidence supports retained output in some knowledge teams, not a universal effect.', score: 89, reason: 'HONEST ABOUT EVIDENCE', color: '#5ED8FF' },
-      { name: 'Economist', model: 'DeepSeek V3', copy: 'The policy works when coordination costs fall faster than available hours.', score: 85, reason: 'TRACES THE INCENTIVE', color: '#A98CF8' },
+      { name: 'Scientist', model: 'DeepSeek V4 Flash', copy: 'Evidence supports retained output in some knowledge teams, not a universal effect.', score: 89, reason: 'HONEST ABOUT EVIDENCE', color: '#5ED8FF' },
+      { name: 'Economist', model: 'DeepSeek V4 Flash', copy: 'The policy works when coordination costs fall faster than available hours.', score: 85, reason: 'TRACES THE INCENTIVE', color: '#A98CF8' },
       { name: 'Pragmatist', model: 'GPT-4o mini', copy: 'Run it for six weeks and keep it only if cycle time and defects hold.', score: 93, reason: 'TESTABLE IN PRACTICE', color: '#D7F64A' },
       { name: 'Empath', model: 'Claude Sonnet', copy: 'Predictable time changes who can remain in the workforce.', score: 88, reason: 'SEES HUMAN IMPACT', color: '#FF6652' },
     ],
@@ -180,7 +180,7 @@ export function HomePage() {
 
         <section className="vp-tape"><header><span>LIVE DECISION TAPE / QUESTION TYPES</span><span>FOUR MINDS → ONE VERDICT</span></header><div>{[0,1].flatMap(group=>[['STRATEGY','Should we enter the market now or wait for certainty?','STRATEGIST','92'],['CAREER','Is leaving a safe role brave—or impulsive?','PRAGMATIST','89'],['PRODUCT','Does this feature solve a problem or decorate it?','ANALYST','94'],['POLICY','Who carries the cost if this decision scales?','ETHICIST','91']].map((item,i)=><article key={`${group}-${i}`} aria-hidden={group===1}><small>{item[0]}</small><p>“{item[1]}”</p><span>WINNER / {item[2]} <b>{item[3]}</b></span></article>))}</div></section>
 
-        <section className="vp-dark vp-section" id="agent-mode"><div className="vp-wrap"><header className="vp-section-head vp-reveal"><div><small>05 / AGENT MODE</small><h2>For questions that cannot end in one pass.</h2></div><p>A multi-stage pipeline plans, investigates, attacks its own logic, verifies what survives, and refines what does not.</p></header><div className="vp-pipeline vp-reveal">{[['PLAN','Break the question into evidence-bearing tasks.'],['RESEARCH','Gather sources and preserve disagreement.'],['SOLVE','Build the strongest supported answer.'],['CRITIQUE','Find hidden assumptions and weak links.'],['VERIFY','Recheck every load-bearing claim.'],['SYNTHESIZE','Merge only what survives scrutiny.'],['JUDGE','Calibrate evidence and uncertainty.'],['DELIVER','One defensible report with its limits intact.']].map((step,i)=><article key={step[0]}><small>0{i+1}</small><i/><h3>{step[0]}</h3><p>{step[1]}</p></article>)}<footer>VERIFICATION FAILED <span>← RETURN TO SOLVE / REFINE / RECHECK →</span></footer></div><div className="vp-pipeline-cta"><p>Not a longer answer. A harder-to-fool process.</p><button onClick={()=>navigate(isAuthenticated?'/agent':'/signin?tab=signup')}>RUN AN INVESTIGATION <ArrowRight/></button></div></div></section>
+        <section className="vp-dark vp-section" id="agent-mode"><div className="vp-wrap"><header className="vp-section-head vp-reveal"><div><small>05 / AGENT MODE</small><h2>For questions that cannot end in one pass.</h2></div><p>A multi-stage pipeline plans, investigates, attacks its own logic, verifies what survives, and refines what does not.</p></header><div className="vp-pipeline vp-reveal">{[['PLAN','Break the question into evidence-bearing tasks.'],['RESEARCH','Gather sources and preserve disagreement.'],['SOLVE','Build the strongest supported answer.'],['CRITIQUE','Find hidden assumptions and weak links.'],['VERIFY','Check load-bearing claims against sources.'],['SYNTHESIZE','Merge the strongest supported findings.'],['JUDGE','Calibrate evidence and uncertainty into one report.']].map((step,i)=><article key={step[0]}><small>0{i+1}</small><i/><h3>{step[0]}</h3><p>{step[1]}</p></article>)}<footer>VERIFICATION FAILED <span>← RETURN TO SOLVE / REFINE / RECHECK →</span></footer></div><div className="vp-pipeline-cta"><p>Not a longer answer. A harder-to-fool process.</p><button onClick={()=>navigate(isAuthenticated?'/agent':'/signin?tab=signup')}>RUN AN INVESTIGATION <ArrowRight/></button></div></div></section>
 
         <section className="vp-close"><div className="vp-wrap"><small>YOUR QUESTION / NEXT</small><h2 className="vp-reveal">WHAT DESERVES MORE THAN ONE ANSWER?</h2><form onSubmit={(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();enterArena()}}><input aria-label="Your question" placeholder="Put it in the arena…"/><button aria-label="Enter Arena"><ArrowRight/></button></form><footer><span>3 RUNS FREE · NO CARD REQUIRED</span><span>ARENA © 2026 · MULTIPLE MINDS. ONE VERDICT.</span></footer></div></section>
       </main>

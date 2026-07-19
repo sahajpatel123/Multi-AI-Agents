@@ -29,6 +29,13 @@ describe('DocsPage', () => {
     expect(screen.getByRole('heading', { name: /defence is part/i })).toBeInTheDocument();
   });
 
+  it('shows seven public Agent stages without the internal Steelman step', () => {
+    const { container } = renderPage();
+    expect(container.querySelectorAll('.docs-pipeline article')).toHaveLength(7);
+    expect(container.querySelector('.docs-pipeline')?.textContent).not.toMatch(/steelman/i);
+    expect(container.querySelector('.docs-hero__brief dl')?.textContent).toContain('07AGENT STAGES');
+  });
+
   it('filters chapters with documentation search', () => {
     renderPage();
     fireEvent.change(screen.getByLabelText('Search documentation'), { target: { value: 'security' } });

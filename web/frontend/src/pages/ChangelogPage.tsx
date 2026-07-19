@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import '../styles/changelog.css';
@@ -332,6 +333,8 @@ function parseChangelogItem(raw: string): { kind: ItemKind; label: string; text:
 }
 
 export function ChangelogPage() {
+  const [latestExpanded, setLatestExpanded] = useState(false);
+
   return (
     <div className="changelog-page">
       <Navbar />
@@ -348,13 +351,21 @@ export function ChangelogPage() {
           </p>
         </header>
 
+        <nav className="changelog-jump" aria-label="Jump to release">
+          <span>RELEASE INDEX</span>
+          <div>{CHANGELOG_ENTRIES.map((entry) => <a key={entry.version} href={`#release-${entry.version.replace('.', '-')}`}>{entry.version}</a>)}</div>
+        </nav>
+
         <div className="changelog-timeline">
           <div className="changelog-timeline__rail" aria-hidden="true" />
 
           {CHANGELOG_ENTRIES.map((entry) => {
             const isLatest = Boolean(entry.badge?.label?.toLowerCase().includes('latest'));
+            const isExpanded = !isLatest || latestExpanded;
+            const visibleItems = isExpanded ? entry.items : entry.items.slice(0, 12);
             return (
               <article
+                id={`release-${entry.version.replace('.', '-')}`}
                 key={`${entry.version}-${entry.date}`}
                 className={`changelog-entry${isLatest ? ' changelog-entry--latest' : ''}`}
               >
@@ -381,7 +392,7 @@ export function ChangelogPage() {
                 <div className="changelog-card">
                   <h2 className="changelog-card__title">{entry.title}</h2>
                   <ul className="changelog-card__list">
-                    {entry.items.map((item) => {
+                    {visibleItems.map((item) => {
                       const parsed = parseChangelogItem(item);
                       return (
                         <li key={item} className="changelog-item">
@@ -395,6 +406,17 @@ export function ChangelogPage() {
                       );
                     })}
                   </ul>
+                  {isLatest && entry.items.length > 12 ? (
+                    <button
+                      type="button"
+                      className="changelog-card__toggle"
+                      aria-expanded={latestExpanded}
+                      onClick={() => setLatestExpanded((expanded) => !expanded)}
+                    >
+                      <span>{latestExpanded ? 'SHOW HIGHLIGHTS' : `SHOW ALL ${entry.items.length} CHANGES`}</span>
+                      <span aria-hidden="true">{latestExpanded ? '−' : '+'}</span>
+                    </button>
+                  ) : null}
                 </div>
               </article>
             );

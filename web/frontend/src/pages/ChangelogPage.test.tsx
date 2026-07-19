@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ChangelogPage } from './ChangelogPage';
 
@@ -88,6 +88,23 @@ describe('ChangelogPage', () => {
     // The visible label is the human form ("New", "Improved").
     expect(newTags[0].textContent).toBe('New');
     expect(improvedTags[0].textContent).toBe('Improved');
+  });
+
+  it('collapses the exhaustive latest ledger behind an accessible disclosure', () => {
+    const { container } = renderPage();
+    const latest = container.querySelector('.changelog-entry--latest');
+    expect(latest?.querySelectorAll('.changelog-item')).toHaveLength(12);
+    const toggle = screen.getByRole('button', { name: /show all .* changes/i });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(latest?.querySelectorAll('.changelog-item').length).toBeGreaterThan(12);
+  });
+
+  it('renders a release jump index', () => {
+    renderPage();
+    expect(screen.getByRole('navigation', { name: /jump to release/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'v0.7' })).toHaveAttribute('href', '#release-v0-7');
   });
 
   it('uses the BEM class tree on the page shell', () => {

@@ -11,7 +11,7 @@ const STORY_CARDS = [
     index: '01',
     title: 'The problem',
     variant: 'beige' as const,
-    body: "Single AI tools are optimized to be agreeable. They tell you what you want to hear. Arena is built around the opposite principle — disagreement produces better answers.",
+    body: 'Single-answer AI experiences can optimize for agreement and echo your framing. Arena is built around a different principle — structured disagreement can surface stronger alternatives.',
   },
   {
     index: '02',
@@ -96,6 +96,18 @@ export function AboutPage() {
               <span className="about-hero__minds-dot" />
               <span className="about-hero__minds-dot" />
             </div>
+          </div>
+          <div className="about-hero__actions">
+            <MotionButton type="button" variant="primary" size="md" onClick={goArena}>
+              Start with four minds →
+            </MotionButton>
+            <button
+              type="button"
+              className="arena-btn arena-btn--ghost arena-btn--md"
+              onClick={() => navigate('/product')}
+            >
+              Explore product
+            </button>
           </div>
         </section>
 

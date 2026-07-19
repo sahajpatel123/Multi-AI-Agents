@@ -10,3 +10,20 @@
 @media(max-width:1000px){.docs-hero{grid-template-columns:1fr;gap:36px}.docs-layout{grid-template-columns:190px minmax(0,1fr);gap:34px}.docs-chapter>header{grid-template-columns:1fr}.docs-concepts{grid-template-columns:1fr 1fr}.docs-pipeline{grid-template-columns:repeat(4,1fr)}.docs-pipeline article:nth-child(4){border-right:0}.docs-score{grid-template-columns:1fr 1fr}.docs-code-grid{grid-template-columns:1fr}}
 @media(max-width:720px){.docs-main{padding:42px 18px 65px}.docs-hero{padding-bottom:35px}.docs-hero h1{font-size:55px}.docs-hero__brief>p{font-size:14px}.docs-layout{display:block}.docs-toc{position:static;padding:24px 0 0}.docs-toc nav{display:grid;grid-template-columns:1fr 1fr}.docs-toc a:nth-child(odd){border-right:1px solid rgba(243,240,231,.13)}.docs-content{margin-top:10px}.docs-chapter{padding:44px 0 50px}.docs-chapter>header{gap:17px}.docs-chapter>header h2{font-size:38px}.docs-callout{display:grid;grid-template-columns:1fr 1fr}.docs-callout>*{border-bottom:1px solid rgba(243,240,231,.15)}.docs-concepts,.docs-api,.docs-architecture{grid-template-columns:1fr}.docs-score{grid-template-columns:1fr}.docs-pipeline{grid-template-columns:repeat(2,1fr)}.docs-note{grid-template-columns:1fr}.docs-table{overflow-x:auto}.docs-table>div{min-width:620px}.docs-final{display:block}.docs-final>div:last-child{margin-top:20px;flex-direction:column}.docs-final button{justify-content:center}.docs-hero__brief dl dt{font-size:22px}}
 @media(prefers-reduced-motion:reduce){.docs-page *{scroll-behavior:auto!important;transition:none!important}}
+
+
+/* Documentation polish: visible entry actions and accessible technical controls. */
+.docs-hero__actions { display:flex;flex-wrap:wrap;gap:8px;margin-top:16px }
+.docs-hero__actions button { min-height:42px;padding:0 14px;border:1px solid rgba(243,240,231,.24);border-radius:0;background:transparent;color:#f3f0e7;font:800 9px/1 var(--vp-font-mono) }
+.docs-hero__actions button:first-child { background:#d7f64a;color:#0b0c0a;border-color:#d7f64a }
+.docs-hero__actions button:hover,.docs-hero__actions button:focus-visible { background:#f3f0e7;color:#0b0c0a;border-color:#f3f0e7 }
+.docs-code header { min-height:46px;height:auto }
+.docs-code header button { min-width:88px;min-height:44px;padding:0 12px;justify-content:center }
+.docs-table-hint { display:none;margin:0 0 10px;color:#5ed8ff;font:9px/1.3 var(--vp-font-mono) }
+.docs-table:focus-visible { outline:2px solid #d7f64a;outline-offset:3px }
+@media(max-width:720px){
+  .docs-hero__actions{display:grid;grid-template-columns:1fr 1fr}
+  .docs-table-hint{display:block}
+  .docs-toc nav a:last-child{grid-column:1/-1}
+}
+@media(max-width:480px){.docs-hero__actions{grid-template-columns:1fr}.docs-hero__actions button{width:100%}}

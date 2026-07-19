@@ -18,7 +18,8 @@ describe('shared public Prism navigation (source structure)', () => {
     expect(src).toContain('firstMenuLinkRef.current?.focus()');
     expect(src).toContain('menuButtonRef.current?.focus()');
     expect(src).toContain("{ label: 'PRODUCT', path: '/product' }");
-    expect(src).toContain("{ number: '06', label: 'Changelog', path: '/changelog' }");
+    expect(src).toContain("{ number: '06', label: 'About', path: '/about' }");
+    expect(src).toContain("{ number: '07', label: 'Changelog', path: '/changelog' }");
     expect(src).not.toContain('navbar-inner-container');
   });
 

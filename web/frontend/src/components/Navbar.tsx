@@ -18,7 +18,8 @@ const MENU_LINKS = [
   { number: '03', label: 'Personas', path: '/personas' },
   { number: '04', label: 'Pricing', path: '/pricing' },
   { number: '05', label: 'Documentation', path: '/docs' },
-  { number: '06', label: 'Changelog', path: '/changelog' },
+  { number: '06', label: 'About', path: '/about' },
+  { number: '07', label: 'Changelog', path: '/changelog' },
 ] as const;
 
 export function Navbar() {

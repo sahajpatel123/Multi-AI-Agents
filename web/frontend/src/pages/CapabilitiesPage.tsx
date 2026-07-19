@@ -10,7 +10,7 @@ const TOPOLOGIES = [
   {
     num: 'M-01',
     title: 'Debate Mode',
-    body: 'Force competing reasoning personas to cross-examine each other across multiple turns, surfacing hidden premise gaps no single model would find.',
+    body: 'Force competing reasoning personas to cross-examine each other across multiple turns; the exchange can surface premise gaps a single pass might miss.',
     points: [
       'Adversarial multi-turn reactions',
       'Stance and logic under pressure',
@@ -30,7 +30,7 @@ const TOPOLOGIES = [
   {
     num: 'M-03',
     title: 'Agent Mode',
-    body: 'Trigger an 8-stage research pipeline that converts a broad question into a verified, judged, production-grade brief.',
+    body: 'Trigger a 7-stage research pipeline designed to turn a broad question into a sourced, judged, structured brief.',
     points: [
       'Autonomous objective parsing',
       'Continuous multi-stage synthesis',
@@ -42,12 +42,11 @@ const TOPOLOGIES = [
 const PIPELINE = [
   { num: '01', name: 'Planner', body: 'Deconstructs the prompt into architectural task limits.' },
   { num: '02', name: 'Researcher', body: 'Gathers and cross-checks core parameters from the field.' },
-  { num: '03', name: 'Steelman', body: 'Builds the strongest opposing case before drafting.' },
-  { num: '04', name: 'Solver', body: 'Runs multi-provider generation across concurrent lanes.' },
-  { num: '05', name: 'Critic', body: 'Attacks the draft for gaps, weak evidence, and drift.' },
-  { num: '06', name: 'Verifier', body: 'Validates claims against sources before they can ship.' },
-  { num: '07', name: 'Synthesizer', body: 'Combines tracks into one coherent brief.' },
-  { num: '08', name: 'Judge', body: 'Scores the output across structural quality vectors.' },
+  { num: '03', name: 'Solver', body: 'Runs multi-provider generation across concurrent lanes.' },
+  { num: '04', name: 'Critic', body: 'Attacks the draft for gaps, weak evidence, and drift.' },
+  { num: '05', name: 'Verifier', body: 'Checks load-bearing claims against cited sources.' },
+  { num: '06', name: 'Synthesizer', body: 'Combines tracks into one coherent brief.' },
+  { num: '07', name: 'Judge', body: 'Scores the output across structural quality vectors.' },
 ] as const;
 
 const SURFACE_FEATURES = [
@@ -115,9 +114,21 @@ export function CapabilitiesPage() {
           </p>
           <ul className="mkt-hero__proof" aria-hidden="true">
             <li className="mkt-hero__proof-item">3 run modes</li>
-            <li className="mkt-hero__proof-item">8-stage pipeline</li>
+            <li className="mkt-hero__proof-item">7-stage pipeline</li>
             <li className="mkt-hero__proof-item">16 personas</li>
           </ul>
+          <div className="mkt-hero__actions">
+            <MotionButton type="button" variant="primary" size="md" onClick={goArena}>
+              Try Arena →
+            </MotionButton>
+            <button
+              type="button"
+              className="arena-btn arena-btn--ghost arena-btn--md"
+              onClick={() => navigate('/pricing')}
+            >
+              Compare plans
+            </button>
+          </div>
         </section>
 
         <section className="cap-section" aria-labelledby="cap-topo-heading">
@@ -153,11 +164,11 @@ export function CapabilitiesPage() {
           <div className="cap-section__head">
             <span className="mkt-eyebrow">Agent Mode internals</span>
             <h2 id="cap-pipe-heading" className="cap-section__title">
-              The 8-stage research matrix
+              The 7-stage research matrix
             </h2>
             <p className="cap-section__lede">
-              One question triggers plan, research, opposition, solve, critique, verify, synthesise,
-              and judge — so the brief is stress-tested before you ship it.
+              One question triggers plan, research, solve, critique, verify, synthesise, and judge —
+              so the brief is stress-tested before you use it.
             </p>
           </div>
           <div className="cap-pipeline-grid">

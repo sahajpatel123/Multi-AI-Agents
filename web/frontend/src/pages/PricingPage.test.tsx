@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { PricingPage } from './PricingPage';
 
@@ -99,12 +99,30 @@ describe('PricingPage', () => {
     setRedirectIntentMock.mockReset();
   });
 
+  it('offers guests a functional Start for free CTA', () => {
+    const { container } = renderPage();
+    const start = screen.getByRole('button', { name: /start for free/i });
+    expect(start.querySelector('.arena-btn__label')).toHaveTextContent('Start for free');
+    expect(container.querySelector('.pricing-plan-card')?.textContent).not.toContain('Current plan');
+    fireEvent.click(start);
+    expect(setRedirectIntentMock).toHaveBeenCalledWith('/app');
+    expect(navigateMock).toHaveBeenCalledWith('/signin?tab=signup');
+  });
+
   it('renders three plan cards with their tier names', () => {
     const { container } = renderPage();
     const names = Array.from(
       container.querySelectorAll('.pricing-plan-card__name'),
     ).map((el) => el.textContent?.trim() ?? '');
     expect(names).toEqual(['Explorer', 'Plus', 'Pro']);
+  });
+
+  it('keeps paid CTA icons inside the inheriting button wrappers', () => {
+    renderPage();
+    for (const name of [/get plus/i, /get pro/i]) {
+      const button = screen.getByRole('button', { name });
+      expect(button.querySelector('.arena-btn__icon svg')).toBeInTheDocument();
+    }
   });
 
   it('renders the comparison matrix header', () => {

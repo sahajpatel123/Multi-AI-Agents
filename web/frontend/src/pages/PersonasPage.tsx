@@ -914,7 +914,7 @@ export function PersonasPage() {
                         flexShrink: 0,
                       }}
                     />
-                    <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>
+                    <span className="personas-swap-option__name">
                       <HighlightQuery text={persona.name} query={libraryQuery} />
                     </span>
                   </div>
@@ -1009,7 +1009,7 @@ export function PersonasPage() {
                         display: 'inline-block',
                       }}
                     >
-                      Unlock with Plus — $12/month
+                      View Plus pricing
                     </div>
                   )}
                 </div>
@@ -1022,6 +1022,7 @@ export function PersonasPage() {
 
       {activeSlot !== null && activePersona && (
         <div
+          className="personas-modal-backdrop"
           role="presentation"
           onClick={closeModal}
           style={{
@@ -1057,10 +1058,10 @@ export function PersonasPage() {
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
               <div>
-                <h2 id="swap-slot-title" style={{ fontSize: '18px', fontWeight: 500, color: '#1A1714', margin: 0 }}>
+                <h2 id="swap-slot-title" className="personas-modal-title">
                   Swap slot {activeSlot + 1}
                 </h2>
-                <p style={{ fontSize: '13px', color: '#A0A39A', marginTop: '.35rem' }}>
+                <p className="personas-modal-current">
                   Currently: {activePersona.name}
                 </p>
               </div>
@@ -1079,7 +1080,7 @@ export function PersonasPage() {
               </button>
             </div>
 
-            <div style={{ height: '0.5px', background: '#E0D8D0', margin: '1rem 0' }} />
+            <div className="personas-modal-rule" />
 
             <div className="personas-search__row personas-search__row--modal">
               <PersonasSearchInput
@@ -1133,7 +1134,7 @@ export function PersonasPage() {
             </p>
             {filteredSwapOptions.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '1.5rem 0.5rem' }}>
-                <p style={{ margin: 0, fontSize: 14, color: '#1A1714', fontWeight: 500 }}>
+                <p className="personas-swap-empty__title">
                   {swapQuery.trim()
                     ? `No minds match “${swapQuery.trim()}”${
                         swapAvailability !== 'all'
@@ -1164,10 +1165,7 @@ export function PersonasPage() {
                 </button>
               </div>
             ) : (
-              <div
-                className="current-panel-grid"
-                style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}
-              >
+              <div className="personas-swap-grid">
                 {filteredSwapOptions.map((persona) => {
                   const isLocked = !canUsePersona(persona.id);
 
@@ -1191,14 +1189,12 @@ export function PersonasPage() {
                         .join(' ')}
                       style={
                         {
-                          background: persona.bgTint,
                           ['--persona-color' as string]: persona.color,
-                          opacity: isLocked ? 0.65 : 1,
                         } as CSSProperties
                       }
                     >
                       {isLocked && (
-                        <div style={{ position: 'absolute', top: '10px', right: '10px', color: '#1A1714' }}>
+                        <div className="personas-swap-option__lock">
                           <Lock style={{ width: '13px', height: '13px' }} />
                         </div>
                       )}
@@ -1216,7 +1212,7 @@ export function PersonasPage() {
                           <HighlightQuery text={persona.name} query={swapQuery} />
                         </span>
                       </div>
-                      <p style={{ fontSize: '12px', color: '#A0A39A', lineHeight: 1.5, marginTop: '.4rem' }}>
+                      <p className="personas-swap-option__description">
                         <HighlightQuery text={persona.description} query={swapQuery} />
                       </p>
                       <p
@@ -1231,7 +1227,7 @@ export function PersonasPage() {
                       </p>
                       {isLocked && (
                         <div style={{ marginTop: '.6rem', fontSize: '11px', color: '#1A1714' }}>
-                          Unlock with Plus — $12/month
+                          View Plus pricing
                         </div>
                       )}
                     </button>
@@ -1240,7 +1236,7 @@ export function PersonasPage() {
               </div>
             )}
 
-            <div style={{ height: '0.5px', background: '#E0D8D0', margin: '1rem 0' }} />
+            <div className="personas-modal-rule" />
           </div>
         </div>
       )}
