@@ -11256,3 +11256,166 @@ canvas {
     transform: none !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   Debate mode — reaction cards, chips, CTAs
+   ------------------------------------------------------------------ */
+.debate-reaction-card {
+  background: #ffffff;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem;
+  transform: translateZ(0);
+  transition:
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1)),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .debate-reaction-card:hover {
+    transform: translateX(4px);
+    border-color: var(--debate-agent-color, #c4956a);
+    box-shadow: 0 4px 16px rgba(26, 23, 20, 0.06);
+  }
+}
+
+.debate-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f0ebe3;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: #6b6460;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .debate-back-btn:hover {
+    background: #e0d8d0;
+    color: #1a1714;
+    transform: translateX(-1px);
+  }
+}
+
+.debate-back-btn:active {
+  transform: scale(0.98);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+.debate-start-btn {
+  width: 100%;
+  max-width: 260px;
+  padding: 14px 24px;
+  border-radius: 999px;
+  background: #1a1714;
+  color: #faf7f4;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  border: none;
+  font-family: inherit;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .debate-start-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(26, 23, 20, 0.2);
+    background: #2a2724;
+  }
+}
+
+.debate-start-btn:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+.debate-round-chip {
+  background: #f0ebe3;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: #6b6460;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .debate-round-chip:hover {
+    background: #e0d8d0;
+    color: #1a1714;
+    transform: scale(1.02);
+  }
+}
+
+.debate-next-btn {
+  min-width: 280px;
+  padding: 14px 32px;
+  border-radius: 999px;
+  background: #f0ebe3;
+  color: #1a1714;
+  border: 0.5px solid #e0d8d0;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  font-family: inherit;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .debate-next-btn:hover {
+    background: #e0d8d0;
+    transform: translateY(-1.5px);
+    box-shadow: 0 6px 18px rgba(44, 24, 16, 0.08);
+  }
+}
+
+.debate-next-btn:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .debate-reaction-card,
+  .debate-back-btn,
+  .debate-start-btn,
+  .debate-round-chip,
+  .debate-next-btn {
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease !important;
+  }
+
+  .debate-reaction-card:hover,
+  .debate-back-btn:hover,
+  .debate-start-btn:hover,
+  .debate-round-chip:hover,
+  .debate-next-btn:hover,
+  .debate-back-btn:active,
+  .debate-start-btn:active,
+  .debate-next-btn:active {
+    transform: none !important;
+  }
+}

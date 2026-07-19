@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { streamDebateRound } from '../api';
 import {
@@ -496,23 +503,12 @@ export function DebateMode({
           }}
         />
         <div
-          style={{
-            background: '#FFFFFF',
-            border: '0.5px solid #E0D8D0',
-            borderRadius: '16px',
-            padding: '1.25rem 1.5rem',
-            transition: 'all 200ms ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateX(4px)';
-            e.currentTarget.style.borderColor = agent.color;
-            e.currentTarget.style.boxShadow = '0 4px 16px rgba(26,23,20,0.06)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateX(0)';
-            e.currentTarget.style.borderColor = '#E0D8D0';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
+          className="debate-reaction-card"
+          style={
+            {
+              ['--debate-agent-color' as string]: agent.color,
+            } as CSSProperties
+          }
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
             <AgentDot agentId={reaction.agent_id} size={7} />
@@ -765,27 +761,7 @@ export function DebateMode({
               abortRef.current?.abort();
               onExit();
             }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: '#F0EBE3',
-              border: '0.5px solid #E0D8D0',
-              borderRadius: '999px',
-              padding: '6px 14px',
-              fontSize: '13px',
-              color: '#6B6460',
-              cursor: 'pointer',
-              transition: 'background 150ms ease, color 150ms ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#E0D8D0';
-              e.currentTarget.style.color = '#1A1714';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#F0EBE3';
-              e.currentTarget.style.color = '#6B6460';
-            }}
+            className="debate-back-btn"
           >
             <ArrowLeft style={{ width: '14px', height: '14px' }} />
             Back to Arena
@@ -957,32 +933,7 @@ export function DebateMode({
                   </div>
                   <button
                     onClick={() => runRound()}
-                    className="debate-shimmer-button"
-                    style={{
-                      width: '100%',
-                      maxWidth: '260px',
-                      padding: '14px 24px',
-                      borderRadius: '999px',
-                      background: '#1A1714',
-                      color: '#FAF7F4',
-                      fontSize: '14px',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      transition: 'all 200ms ease',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      border: 'none',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 8px 24px rgba(26,23,20,0.2)';
-                      e.currentTarget.style.background = '#2A2724';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'none';
-                      e.currentTarget.style.background = '#1A1714';
-                    }}
+                    className="debate-shimmer-button debate-start-btn"
                   >
                     Start the debate
                   </button>
@@ -1060,19 +1011,9 @@ export function DebateMode({
                   return (
                     <div key={round.roundNumber}>
                       <button
+                        type="button"
                         onClick={() => toggleRound(round.roundNumber)}
-                        style={{
-                          background: '#F0EBE3',
-                          border: '0.5px solid #E0D8D0',
-                          borderRadius: '999px',
-                          padding: '6px 16px',
-                          fontSize: '12px',
-                          color: '#6B6460',
-                          cursor: 'pointer',
-                          transition: 'background 150ms ease',
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = '#E0D8D0'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = '#F0EBE3'}
+                        className="debate-round-chip"
                       >
                         {getRoundSummary(round)}
                       </button>
@@ -1331,30 +1272,9 @@ export function DebateMode({
                   </span>
                   <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
                     <button
-                      className="debate-action-btn debate-shimmer-button debate-shimmer-button-light"
+                      type="button"
+                      className="debate-action-btn debate-shimmer-button debate-shimmer-button-light debate-next-btn"
                       onClick={() => runRound()}
-                      style={{
-                        minWidth: '280px',
-                        padding: '14px 32px',
-                        borderRadius: '999px',
-                        background: '#F0EBE3',
-                        color: '#1A1714',
-                        border: '0.5px solid #E0D8D0',
-                        fontSize: '14px',
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        transition: 'background 150ms ease, transform 150ms ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#E0D8D0';
-                        e.currentTarget.style.transform = 'translateY(-1px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#F0EBE3';
-                        e.currentTarget.style.transform = 'translateY(0)';
-                      }}
                     >
                       {followUpUnlocked && currentRound === DEBATE_STANDARD_ROUNDS
                         ? 'Bonus round — final push'
