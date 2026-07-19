@@ -11,6 +11,9 @@ export type ShareTakeInput = {
 };
 
 function clip(value: string, max: number): string {
+  // Strip embedded NUL bytes — they break URL parsers downstream and aren't
+  // a legitimate character in any user-authored share text.
+  // eslint-disable-next-line no-control-regex
   return (value || '').replace(/\u0000/g, '').slice(0, max).trim();
 }
 

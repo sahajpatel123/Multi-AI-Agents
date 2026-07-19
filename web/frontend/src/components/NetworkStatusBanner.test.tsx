@@ -8,7 +8,7 @@ import { NetworkStatusBanner } from './NetworkStatusBanner';
  * navigator state and event dispatch.
  */
 
-let onlineRef = { value: true };
+const onlineRef = { value: true };
 
 function installNavigator(online: boolean) {
   onlineRef.value = online;

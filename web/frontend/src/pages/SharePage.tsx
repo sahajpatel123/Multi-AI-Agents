@@ -39,6 +39,9 @@ function sanitizeParam(raw: string | null, max = MAX_PARAM_LEN): string {
         /* keep as-is */
       }
     }
+    // Strip embedded NUL bytes — they break URL parsers downstream and aren't
+    // a legitimate character in any user-authored share text.
+    // eslint-disable-next-line no-control-regex
     return value.replace(/\u0000/g, '').slice(0, max).trim();
   } catch {
     return '';

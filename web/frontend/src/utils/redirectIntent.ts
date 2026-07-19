@@ -14,6 +14,10 @@ export function isSafeRedirectPath(path: string): boolean {
   if (p.startsWith('//')) return false;
   if (p.includes('\\')) return false;
   if (p.includes('://')) return false;
+  // Block ASCII control chars (incl. NUL, tab, CR/LF) and DEL — none are
+  // legitimate in a path component, and several are interpreted as
+  // whitespace/separators by URL parsers in ways that smuggle redirects.
+  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001F\u007F]/.test(p)) return false;
   // Block encoded tricks that still resolve off-site in some browsers
   const lower = p.toLowerCase();
