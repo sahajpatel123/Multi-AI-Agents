@@ -23,6 +23,7 @@ from arena.core.file_ingest import process_upload
 from arena.core.http_headers import content_disposition_attachment
 from arena.core.upload_store import UPLOAD_DIR, ensure_upload_dir, register_upload, resolve_attachments
 from arena.core.dependencies import get_current_user_required
+from arena.core.errors import ErrorCodes
 from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard, remove_blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
@@ -566,7 +567,10 @@ def _stage_status_value(status) -> str:
 def _ensure_agent_access(user: UserResponse, db: Session) -> None:
     u = db.query(User).filter(User.id == user.id).first()
     if not u:
-        raise HTTPException(status_code=401, detail="User not found")
+        raise HTTPException(
+            status_code=401,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
+        )
     tier = normalize_tier(get_tier_str(u))
     if tier == UserTier.PRO:
         return
@@ -742,7 +746,10 @@ async def run_orchestration_watcher(orch_id: str, user_id: int, task_ids: list[s
 
 def _ensure_task_owner(bb: Blackboard, user: UserResponse) -> None:
     if bb.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
 
 
 async def run_agent_pipeline_background(
@@ -967,7 +974,7 @@ async def upload_agent_attachment(
     if len(data) > max_bytes:
         raise HTTPException(
             status_code=413,
-            detail="File too large (max 10MB)",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "File too large (max 10MB)"},
         )
     orig = (file.filename or "upload").strip() or "upload"
     file_id = str(uuid.uuid4())
@@ -1284,7 +1291,10 @@ async def get_task_answer_feedback(
         .first()
     )
     if not owned:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
     fb = (
         db.query(AnswerFeedback)
         .filter(AnswerFeedback.user_id == user.id, AnswerFeedback.task_id == tid)
@@ -1323,10 +1333,16 @@ async def get_agent_task_detail(
     )
     tid = task_id.strip()
     if not tid:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
     payload = get_task_detail(db=db, user_id=user.id, task_id=tid)
     if payload is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
     return JSONResponse(content=payload)
 
 
@@ -1352,10 +1368,16 @@ async def post_task_answer_feedback(
         .first()
     )
     if not owned:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
     v = body.verdict.strip().lower()
     if v not in ("correct", "partial", "wrong"):
-        raise HTTPException(status_code=400, detail="Invalid verdict")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Invalid verdict"},
+        )
     note_val = sanitize_model_optional_text(body.note, max_length=1000, field_name="note")
     existing = (
         db.query(AnswerFeedback)
@@ -1405,13 +1427,13 @@ async def start_orchestration(
     if not (2 <= len(raw_qs) <= 4):
         raise HTTPException(
             status_code=400,
-            detail="Provide between 2 and 4 non-empty questions",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Provide between 2 and 4 non-empty questions"},
         )
     for q in raw_qs:
         if len(q) > 2000:
             raise HTTPException(
                 status_code=400,
-                detail="Each question may be at most 2000 characters",
+                detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Each question may be at most 2000 characters"},
             )
 
     el = (body.expertise_level or "curious").strip().lower() or "curious"
@@ -1471,7 +1493,10 @@ async def get_orchestration_status(
 
     orch = db.query(Orchestration).filter(Orchestration.id == orch_id.strip()).first()
     if not orch or orch.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Orchestration not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Orchestration not found"},
+        )
 
     child_tasks = []
     for tid in orch.task_ids or []:
@@ -1550,9 +1575,15 @@ async def export_orchestration_pdf(
         .first()
     )
     if not orch:
-        raise HTTPException(status_code=404, detail="Orchestration not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Orchestration not found"},
+        )
     if orch.status != "complete":
-        raise HTTPException(status_code=400, detail="Orchestration is not complete yet")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.FEATURE_NOT_ALLOWED, "message": "Orchestration is not complete yet"},
+        )
 
     tids = list(orch.task_ids or [])
     rows = (
@@ -1563,7 +1594,10 @@ async def export_orchestration_pdf(
     by_id = {r.task_id: r for r in rows}
     ordered = [by_id[i] for i in tids if i in by_id]
     if len(ordered) != len(tids):
-        raise HTTPException(status_code=400, detail="Missing saved tasks for orchestration")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Missing saved tasks for orchestration"},
+        )
 
     overlays = [_export_overlay_from_bb(get_blackboard(tid)) for tid in tids]
     html_str = generate_orchestration_report_html(
@@ -1605,9 +1639,15 @@ async def export_task_pdf(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
     if not (row.final_answer or "").strip():
-        raise HTTPException(status_code=400, detail="Nothing to export yet for this task")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Nothing to export yet for this task"},
+        )
 
     bb = get_blackboard(tid)
     overlay = _export_overlay_from_bb(bb)
@@ -1729,7 +1769,10 @@ async def get_agent_status(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
 
     complete = "complete"
     return JSONResponse(
@@ -1785,7 +1828,10 @@ async def get_agent_result(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
 
     contra = _load_task_contradictions(db, task_id, user.id)
     return JSONResponse(content=_persisted_agent_task_result_dict(row, contra))
@@ -1824,12 +1870,15 @@ async def challenge_agent_answer(
                 .first()
             )
             if not row:
-                raise HTTPException(status_code=404, detail="Task not found")
+                raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
             task_text = row.task_text
     if not task_text:
         raise HTTPException(
             status_code=400,
-            detail="Original task required (provide task_id or task)",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Original task required (provide task_id or task)"},
         )
 
     challenges = await asyncio.gather(
@@ -1912,7 +1961,10 @@ Respond to this challenge now.
         )
         return JSONResponse(content={"rebuttal": response, "status": "complete"})
     except Exception:
-        raise HTTPException(status_code=500, detail="Rebuttal generation failed")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Rebuttal generation failed"},
+        )
 
 
 @router.post("/watchlist")
@@ -1933,7 +1985,10 @@ async def create_watchlist_item(
     q = sanitize_text(body.question, max_length=2000, field_name="question")
     _enforce_capability_gate(capability_id="watchlist.create", task_text=q)
     if body.interval_hours not in WATCHLIST_INTERVALS:
-        raise HTTPException(status_code=400, detail="interval_hours must be 24, 72, or 168")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "interval_hours must be 24, 72, or 168"},
+        )
 
     active_n = (
         db.query(WatchlistItem)
@@ -1941,7 +1996,10 @@ async def create_watchlist_item(
         .count()
     )
     if active_n >= WATCHLIST_MAX_ACTIVE:
-        raise HTTPException(status_code=400, detail="Watchlist limit reached")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.FEATURE_NOT_ALLOWED, "message": "Watchlist limit reached"},
+        )
 
     el = (body.expertise_level or "curious").strip().lower() or "curious"
     ed = (body.expertise_domain or "").strip()[:100]
@@ -2021,12 +2079,18 @@ async def patch_watchlist_item(
         .first()
     )
     if not item:
-        raise HTTPException(status_code=404, detail="Watchlist item not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
 
     now = utcnow_naive()
     if body.interval_hours is not None:
         if body.interval_hours not in WATCHLIST_INTERVALS:
-            raise HTTPException(status_code=400, detail="interval_hours must be 24, 72, or 168")
+            raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "interval_hours must be 24, 72, or 168"},
+        )
         item.interval_hours = int(body.interval_hours)
         if item.is_active:
             item.next_run_at = now + timedelta(hours=item.interval_hours)
@@ -2065,7 +2129,10 @@ async def delete_watchlist_item(
         .first()
     )
     if not item:
-        raise HTTPException(status_code=404, detail="Watchlist item not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
     db.delete(item)
     db.commit()
     return JSONResponse(content={"success": True})
@@ -2099,7 +2166,10 @@ async def get_watchlist_item_history(
         .first()
     )
     if not item:
-        raise HTTPException(status_code=404, detail="Watchlist item not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
     payload = get_watchlist_history(db, user.id, item.id, limit=limit)
     return JSONResponse(content={"success": True, **payload})
 
@@ -2130,7 +2200,10 @@ async def get_agent_metrics(
 
     orm_user = db.query(User).filter(User.id == user.id).first()
     if orm_user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
+        )
     payload = compute_user_agent_metrics(
         db=db,
         user=orm_user,
@@ -2162,7 +2235,10 @@ async def get_feedback_summary(
     )
     orm_user = db.query(User).filter(User.id == user.id).first()
     if orm_user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
+        )
     payload = compute_user_feedback_summary(
         db=db,
         user=orm_user,
@@ -2324,7 +2400,10 @@ async def rename_agent_task(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
     row.title = sanitize_html(body.title, max_length=100, field_name="title")
     db.commit()
     db.refresh(row)
@@ -2352,7 +2431,10 @@ async def delete_agent_task(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
     db.delete(row)
     db.commit()
     return JSONResponse(content={"success": True})
@@ -2379,7 +2461,10 @@ async def toggle_agent_task_live(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
     _enforce_capability_gate(
         capability_id="watchlist.toggle",
         task_text=row.task_text or "",
@@ -2449,7 +2534,10 @@ async def get_agent_task_live_updates(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
     return JSONResponse(content={"live_updates": _live_updates_from_row(row)})
 
 
@@ -2474,7 +2562,10 @@ async def mark_agent_live_updates_read(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
     updates = list(_live_updates_from_row(row))
     uid = (body.update_id or "").strip()
     changed = False
@@ -2541,7 +2632,10 @@ async def get_saved_agent_task(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
     memory_contradictions = _load_task_contradictions(db, task_id, user.id)
     pipe_contra = _pipeline_contradictions_from_row(row)
     insight_saved = _insight_report_from_row(row)
@@ -2597,11 +2691,17 @@ async def submit_task_feedback(
         .first()
     )
     if not task_record:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
 
     valid_feedback = ("accurate", "inaccurate", "partial")
     if body.feedback not in valid_feedback:
-        raise HTTPException(status_code=400, detail="Invalid feedback value")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Invalid feedback value"},
+        )
 
     task_record.user_feedback = body.feedback
     task_record.feedback_note = sanitize_model_optional_text(
@@ -2651,7 +2751,10 @@ async def refine_agent_answer(
         )
 
     if bb.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
 
     if bb.refinement_count >= 10:
         raise HTTPException(
@@ -2704,7 +2807,7 @@ async def verify_arena_answer(
     if not arena_answer or not original_question:
         raise HTTPException(
             status_code=400,
-            detail="Answer and question required",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Answer and question required"},
         )
 
     persona = body.winning_persona.strip() or "Arena winner"
@@ -2788,7 +2891,10 @@ async def cross_pollinate_agent_answer(
 
     tid = body.task_id.strip()
     if not tid:
-        raise HTTPException(status_code=400, detail="task_id required")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "task_id required"},
+        )
 
     # Load the completed task
     bb = get_blackboard(tid)
@@ -2829,7 +2935,10 @@ async def cross_pollinate_agent_answer(
         original_task = row.task_text or ""
         intel_score = _intel_total(row.intelligence_score)
     else:
-        raise HTTPException(status_code=404, detail="Task not found or not complete")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found or not complete"},
+        )
 
     # Extract one_liner if answer is JSON-structured
     if isinstance(answer_text, str) and answer_text.strip().startswith("{"):
@@ -2894,7 +3003,10 @@ async def get_temporal_evolution(
         .first()
     )
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
 
     question_prefix = (task.task_text or "").strip()[:30]
     if len(question_prefix) < 8:

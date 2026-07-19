@@ -37,6 +37,7 @@ COVERED_FILES = [
     "mcp.py",
     "session.py",
     "payments.py",
+    "agent.py",
 ]
 
 
