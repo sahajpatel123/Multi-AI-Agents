@@ -124,6 +124,70 @@ def test_optional_secret_warnings_emit_via_logger_not_stdout(caplog):
     )
 
 
+def test_recover_frontend_url_warning_routes_through_logger(caplog):
+    """Cycle 47 follow-up: `recover_frontend_public_url_from_cors()` was
+    missed by the cycle-45 cleanup — it still called `print("[WARNING] ...")`
+    when production started with a localhost FRONTEND_PUBLIC_URL but
+    ALLOWED_ORIGINS had a public HTTPS entry to recover from. Same anti-pattern,
+    same fix: route through `logger.warning(...)`.
+
+    This test exercises the recovery path by building a Settings with
+    is_production-style inputs and asserting the warning surfaces via the
+    logger, not stdout.
+    """
+    from arena import config as arena_config
+
+    captured = []
+
+    class _CaptureHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            captured.append(record)
+
+    handler = _CaptureHandler(level=logging.WARNING)
+    original_propagate = arena_config.logger.propagate
+    arena_config.logger.addHandler(handler)
+    arena_config.logger.propagate = True
+
+    stdout_buf = io.StringIO()
+    try:
+        with caplog.at_level(logging.WARNING, logger="arena.config"):
+            original_stdout = sys.stdout
+            try:
+                sys.stdout = stdout_buf
+                s = _make_settings(
+                    environment="production",
+                    secret_key="prod-secret-key-" + "x" * 24,
+                    database_url="postgresql://user:pass@db/arena",
+                    encryption_key="x" * 44,  # invalid Fernet — recovery runs first
+                    allowed_origins="https://arena.example.com",
+                    frontend_public_url="http://localhost:5173",
+                )
+                s.recover_frontend_public_url_from_cors()
+            finally:
+                sys.stdout = original_stdout
+    finally:
+        arena_config.logger.removeHandler(handler)
+        arena_config.logger.propagate = original_propagate
+
+    captured_stdout = stdout_buf.getvalue()
+    captured_messages = " | ".join(r.getMessage() for r in captured)
+
+    assert "FRONTEND_PUBLIC_URL was unset or localhost" in captured_messages, (
+        f"Expected recovery warning via logger; got: {captured_messages!r}. "
+        f"The model_validator regressed to print() — fix with logger.warning(...)."
+    )
+    assert captured_stdout == "", (
+        f"recover_frontend_public_url_from_cors() wrote "
+        f"{len(captured_stdout)} chars to stdout (expected empty). "
+        f"Snippet: {captured_stdout[:200]!r}"
+    )
+    assert captured_stdout == "", (
+        f"validate_secrets() wrote {len(captured_stdout)} chars to stdout "
+        f"(expected empty). Use logger.warning(...) so warnings route "
+        f"through the logging system. Snippet: {captured_stdout[:200]!r}"
+    )
+
+
 def test_logger_name_matches_module(monkeypatch):
     """The module logger name must be `arena.config` so tests / external
     tools can target it. This guards against an accidental rename that

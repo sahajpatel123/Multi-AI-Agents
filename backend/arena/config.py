@@ -218,8 +218,8 @@ class Settings(BaseSettings):
                 continue
             if not candidate.lower().startswith("https://"):
                 continue
-            print(
-                "[WARNING] FRONTEND_PUBLIC_URL was unset or localhost; "
+            logger.warning(
+                "FRONTEND_PUBLIC_URL was unset or localhost; "
                 f"using first public ALLOWED_ORIGINS entry: {candidate}"
             )
             object.__setattr__(self, "frontend_public_url", candidate)
