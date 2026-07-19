@@ -358,12 +358,12 @@ class Settings(BaseSettings):
 
         # Exit if any critical errors
         if errors:
-            print("\n" + "="*60)
-            print("[SECURITY ERROR] Configuration validation failed:")
-            print("="*60)
+            # logger.error still reaches stderr via LastResort before setup_logging.
+            logger.error("=" * 60)
+            logger.error("SECURITY ERROR: Configuration validation failed:")
             for i, err in enumerate(errors, 1):
-                print(f"{i}. {err}")
-            print("="*60 + "\n")
+                logger.error("%s. %s", i, err)
+            logger.error("=" * 60)
             sys.exit(1)
 
     def validate_api_keys(self) -> None:
@@ -375,8 +375,9 @@ class Settings(BaseSettings):
 
         for key_name, key_value in optional_keys.items():
             if not key_value:
-                print(
-                    f"[WARNING] {key_name} not set. Related personas will fall back to Claude."
+                logger.warning(
+                    "%s not set. Related personas will fall back to Claude.",
+                    key_name,
                 )
 
     @property
