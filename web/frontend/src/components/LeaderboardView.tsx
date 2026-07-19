@@ -20,6 +20,7 @@ import {
   leaderboardMindFilterUseful,
   type LeaderboardMindFilter,
 } from '../lib/leaderboardMindFilter';
+import '../styles/leaderboard-view.css';
 
 interface LeaderboardViewProps {
   turns: SessionTurn[];
@@ -243,65 +244,45 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
     setExpandedTurnId(null);
   };
 
+  const reduceMotion = prefersReducedMotion();
+
   return (
     <div
-      className="leaderboard-container"
-      style={{
-        maxWidth: '680px',
-        margin: '0 auto',
-        padding: '32px 24px 64px',
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(10px)',
-        transition: prefersReducedMotion() ? 'none' : 'opacity 300ms ease, transform 300ms ease',
-      }}
+      className={[
+        'leaderboard-container',
+        reduceMotion ? 'leaderboard-container--static' : 'leaderboard-container--enter',
+        visible || reduceMotion ? 'leaderboard-container--visible' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
-      <button
-        type="button"
-        onClick={onBack}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: 'transparent',
-          border: 'none',
-          padding: '4px 0',
-          fontSize: '13px',
-          color: '#8A8078',
-          cursor: 'pointer',
-          marginBottom: '28px',
-          transition: 'color 150ms ease',
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = '#1A1714')}
-        onMouseLeave={(e) => (e.currentTarget.style.color = '#8A8078')}
-      >
-        <ArrowLeft style={{ width: '14px', height: '14px' }} aria-hidden />
+      <button type="button" onClick={onBack} className="lb-back">
+        <ArrowLeft className="lb-back__icon" aria-hidden />
         Back to Arena
       </button>
 
-      <div style={{ marginBottom: '36px' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            marginBottom: '6px',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Trophy style={{ width: '20px', height: '20px', color: '#C4956A', flexShrink: 0 }} aria-hidden />
-            <h1 style={{ fontSize: '22px', fontWeight: 500, color: '#1A1714', letterSpacing: '-0.02em', margin: 0 }}>
-              Agent Leaderboard
-            </h1>
+      <header className="lb-hero">
+        <div className="lb-hero__row">
+          <div className="lb-hero__title-wrap">
+            <span className="lb-hero__trophy" aria-hidden>
+              <Trophy />
+            </span>
+            <h1 className="lb-hero__title">Agent Leaderboard</h1>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div className="lb-hero__actions">
             <button
               type="button"
               onClick={() => {
                 void handleCopy();
               }}
               disabled={!hasData}
+              className={`lb-ghost-btn${
+                copyFeedback === 'copied'
+                  ? ' lb-ghost-btn--ok'
+                  : copyFeedback === 'failed'
+                    ? ' lb-ghost-btn--err'
+                    : ''
+              }`}
               title={hasData ? 'Copy rankings and session prompts as markdown' : 'Prompt first to build rankings'}
               aria-label={
                 copyFeedback === 'copied'
@@ -310,22 +291,6 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                     ? 'Copy failed'
                     : 'Copy rankings and session prompts as markdown'
               }
-              style={{
-                fontSize: 12,
-                fontFamily: 'Georgia, serif',
-                color:
-                  copyFeedback === 'failed'
-                    ? '#993C1D'
-                    : !hasData
-                      ? '#A89070'
-                      : '#C4956A',
-                background: 'none',
-                border: '0.5px solid #E0D8D0',
-                borderRadius: 999,
-                padding: '5px 12px',
-                cursor: hasData ? 'pointer' : 'not-allowed',
-                opacity: hasData ? 1 : 0.7,
-              }}
             >
               {copyFeedback === 'copied'
                 ? 'Copied'
@@ -337,6 +302,13 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
               type="button"
               onClick={handleDownload}
               disabled={!hasData}
+              className={`lb-ghost-btn${
+                downloadFeedback === 'done'
+                  ? ' lb-ghost-btn--ok'
+                  : downloadFeedback === 'failed'
+                    ? ' lb-ghost-btn--err'
+                    : ''
+              }`}
               title={hasData ? 'Download rankings and session prompts as markdown' : 'Prompt first to build rankings'}
               aria-label={
                 downloadFeedback === 'done'
@@ -345,22 +317,6 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                     ? 'Download failed'
                     : 'Download rankings and session prompts as markdown'
               }
-              style={{
-                fontSize: 12,
-                fontFamily: 'Georgia, serif',
-                color:
-                  downloadFeedback === 'failed'
-                    ? '#993C1D'
-                    : !hasData
-                      ? '#A89070'
-                      : '#C4956A',
-                background: 'none',
-                border: '0.5px solid #E0D8D0',
-                borderRadius: 999,
-                padding: '5px 12px',
-                cursor: hasData ? 'pointer' : 'not-allowed',
-                opacity: hasData ? 1 : 0.7,
-              }}
             >
               {downloadFeedback === 'done'
                 ? 'Downloaded'
@@ -370,7 +326,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
             </button>
           </div>
         </div>
-        <p style={{ fontSize: '13px', color: '#9A9088', margin: 0 }}>
+        <p className="lb-hero__lede">
           {hasData
             ? mindFilter !== LEADERBOARD_MIND_ALL
               ? `Showing wins by ${mindFilterName} · ${filteredTurnSummaries.length} of ${totalPrompts} ${totalPrompts === 1 ? 'prompt' : 'prompts'}`
@@ -380,7 +336,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
             : 'Win rates will appear once you start prompting'}
         </p>
         {copyFeedback === 'failed' || downloadFeedback === 'failed' || rowCopyStatus === 'failed' ? (
-          <p role="alert" style={{ fontSize: 12, color: '#993C1D', margin: '8px 0 0' }}>
+          <p role="alert" className="lb-alert">
             Could not{' '}
             {copyFeedback === 'failed'
               ? 'copy session'
@@ -391,24 +347,32 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
           </p>
         ) : null}
         {rowCopyStatus === 'copied' ? (
-          <p role="status" aria-live="polite" style={{ fontSize: 12, color: '#5A8A5A', margin: '8px 0 0' }}>
+          <p role="status" aria-live="polite" className="lb-status">
             Prompt copied.
           </p>
         ) : null}
-      </div>
+      </header>
 
-      <div style={{ height: '0.5px', background: '#E8E0D8', marginBottom: '32px' }} />
+      <div className="lb-rule" role="separator" />
 
       {hasData ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+        <div className="lb-ranks">
           {leaderboard.map((row, index) => {
             const isFirst = index === 0;
             const width = animatedWidths[row.agent_id] ?? 0;
-
             const isFiltered = mindFilter === row.agent_id;
             return (
               <div
-                className="agent-row"
+                className={[
+                  'agent-row',
+                  isFirst ? 'agent-row--first' : '',
+                  isFiltered ? 'agent-row--filtered' : '',
+                  mindFilterUseful ? 'agent-row--interactive' : '',
+                  reduceMotion ? 'agent-row--visible' : 'agent-row--enter',
+                  visible || reduceMotion ? 'agent-row--visible' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 key={row.agent_id}
                 role={mindFilterUseful ? 'button' : undefined}
                 tabIndex={mindFilterUseful ? 0 : undefined}
@@ -431,103 +395,42 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                   }
                 }}
                 style={{
-                  padding: '18px 20px',
-                  borderRadius: '14px',
-                  background: isFiltered || isFirst ? '#FFFFFF' : 'transparent',
-                  border: isFiltered
-                    ? '0.5px solid rgba(196,149,106,0.65)'
-                    : isFirst
-                      ? '0.5px solid #E0D8D0'
-                      : '0.5px solid transparent',
-                  marginBottom: '8px',
-                  opacity: visible ? 1 : 0,
-                  transform: visible ? 'translateY(0)' : 'translateY(6px)',
-                  transition: prefersReducedMotion()
+                  ['--row-accent' as string]: row.color,
+                  transition: reduceMotion
                     ? 'none'
-                    : `opacity 300ms ease ${index * 70}ms, transform 300ms ease ${index * 70}ms, background 150ms ease`,
-                  boxShadow:
-                    isFiltered || isFirst ? '0 2px 12px rgba(26,23,20,0.06)' : 'none',
-                  cursor: mindFilterUseful ? 'pointer' : 'default',
+                    : `opacity 300ms ease ${index * 70}ms, transform 300ms ease ${index * 70}ms, background 150ms ease, border-color 150ms ease, box-shadow 180ms ease`,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        color: isFirst ? '#C4956A' : '#B0A898',
-                        letterSpacing: '0.05em',
-                        width: '20px',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {RANK_LABELS[index]}
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="agent-row__head">
+                  <div className="agent-row__identity">
+                    <span className="agent-row__rank">{RANK_LABELS[index]}</span>
+                    <div className="agent-row__mind">
                       <AgentDot agentId={row.agent_id} size={isFirst ? 9 : 7} />
-                      <span
-                        style={{
-                          fontSize: isFirst ? '15px' : '14px',
-                          fontWeight: isFirst ? 500 : 400,
-                          color: '#1A1714',
-                        }}
-                      >
-                        {row.name}
-                      </span>
+                      <span className="agent-row__name">{row.name}</span>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div className="agent-row__stats">
                     <span
-                      style={{
-                        opacity: showNumbers ? 1 : 0,
-                        transition: prefersReducedMotion() ? 'none' : 'opacity 200ms ease',
-                        fontSize: '12px',
-                        color: row.color,
-                        fontWeight: 500,
-                        minWidth: '32px',
-                        textAlign: 'right',
-                      }}
+                      className={`agent-row__pct${showNumbers ? ' agent-row__pct--show' : ''}`}
+                      style={{ color: row.color, transition: reduceMotion ? 'none' : undefined }}
                     >
                       {Math.round(row.percentage)}%
                     </span>
-                    <span
-                      className="win-badge"
-                      style={{
-                        background: isFirst ? '#F5EEE6' : '#F0EBE3',
-                        border: `0.5px solid ${isFirst ? 'rgba(196,149,106,0.2)' : '#E0D8D0'}`,
-                        borderRadius: '999px',
-                        padding: '3px 10px',
-                        fontSize: '12px',
-                        color: isFirst ? '#C4956A' : '#6B6460',
-                        fontWeight: isFirst ? 500 : 400,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
+                    <span className={`win-badge${isFirst ? ' win-badge--lead' : ''}`}>
                       {row.wins} {row.wins === 1 ? 'win' : 'wins'}
                     </span>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div
-                    style={{
-                      flex: 1,
-                      height: isFirst ? '4px' : '3px',
-                      background: '#F0EBE3',
-                      borderRadius: '999px',
-                      overflow: 'hidden',
-                    }}
-                  >
+                <div className="agent-row__bar-row">
+                  <div className="agent-row__bar-track">
                     <div
+                      className="agent-row__bar-fill"
                       style={{
                         width: `${width}%`,
-                        height: '100%',
                         background: row.color,
-                        borderRadius: '999px',
                         transition: barTransition,
-                        opacity: isFirst ? 1 : 0.7,
                       }}
                     />
                   </div>
@@ -539,25 +442,9 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
       ) : null}
 
       {hasData && turnSummaries.length > 0 ? (
-        <div style={{ marginTop: 28 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 10,
-              marginBottom: 12,
-              flexWrap: 'wrap',
-            }}
-          >
-            <div
-              style={{
-                fontSize: 11,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: '#A89070',
-              }}
-            >
+        <section className="lb-prompts">
+          <div className="lb-prompts__head">
+            <div className="lb-prompts__label">
               Session prompts
               {mindFilter !== LEADERBOARD_MIND_ALL
                 ? ` · ${filteredTurnSummaries.length}/${turnSummaries.length}`
@@ -566,258 +453,108 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
             {mindFilter !== LEADERBOARD_MIND_ALL ? (
               <button
                 type="button"
+                className="lb-text-btn"
                 onClick={() => setMindFilter(LEADERBOARD_MIND_ALL)}
-                style={{
-                  fontSize: 12,
-                  fontFamily: 'Georgia, serif',
-                  color: '#C4956A',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                  padding: 0,
-                }}
               >
                 Show all minds
               </button>
             ) : null}
           </div>
           {filteredTurnSummaries.length === 0 ? (
-            <div
-              style={{
-                background: '#FAF7F4',
-                border: '0.5px solid #E8E0D8',
-                borderRadius: 12,
-                padding: '20px 16px',
-                textAlign: 'center',
-                fontSize: 13,
-                color: '#6B6460',
-                fontFamily: 'Georgia, serif',
-              }}
-            >
+            <div className="lb-prompts__empty">
               No prompts won by {mindFilterName} in this session.
               <button
                 type="button"
+                className="lb-text-btn"
                 onClick={() => setMindFilter(LEADERBOARD_MIND_ALL)}
-                style={{
-                  display: 'block',
-                  margin: '10px auto 0',
-                  fontSize: 12,
-                  color: '#C4956A',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontFamily: 'Georgia, serif',
-                  textDecoration: 'underline',
-                }}
               >
                 Show all prompts
               </button>
             </div>
           ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {filteredTurnSummaries.map((t, index) => {
-              const turnKey = t.turnId || `turn-${index}`;
-              const isExpanded = expandedTurnId === turnKey;
-              const showFull = isExpanded && t.canExpand && Boolean(t.fullTake);
-              return (
-              <div
-                key={turnKey}
-                style={{
-                  background: '#FFFFFF',
-                  border: isExpanded ? '0.5px solid rgba(196,149,106,0.55)' : '0.5px solid #E8E0D8',
-                  borderRadius: 12,
-                  padding: '12px 14px',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: '#1A1714',
-                    lineHeight: 1.45,
-                    marginBottom: 8,
-                    fontFamily: 'Georgia, serif',
-                  }}
-                >
-                  {t.prompt || '(no prompt)'}
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                    marginBottom: t.oneLiner || t.fullTake ? 6 : 0,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 10,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                      color: '#A89070',
-                    }}
+            <div className="lb-prompts__list">
+              {filteredTurnSummaries.map((t, index) => {
+                const turnKey = t.turnId || `turn-${index}`;
+                const isExpanded = expandedTurnId === turnKey;
+                const showFull = isExpanded && t.canExpand && Boolean(t.fullTake);
+                return (
+                  <article
+                    key={turnKey}
+                    className={`lb-prompt-card${isExpanded ? ' lb-prompt-card--open' : ''}`}
                   >
-                    Winner
-                  </span>
-                  <AgentDot agentId={t.winnerId} size={7} />
-                  <span style={{ fontSize: 12, color: '#4A3728', fontWeight: 500 }}>{t.winnerName}</span>
-                </div>
-                {showFull ? (
-                  <AgentAnswerMarkdown markdown={t.fullTake} question={t.prompt || undefined} />
-                ) : t.oneLiner || t.fullTake ? (
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 12,
-                      color: '#6B6460',
-                      fontStyle: 'italic',
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    “{t.oneLiner || t.fullTake}”
-                  </p>
-                ) : null}
-                <div
-                  style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: 12,
-                    marginTop: 8,
-                    alignItems: 'center',
-                  }}
-                >
-                  {t.canExpand ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedTurnId((id) => (id === turnKey ? null : turnKey))
-                      }
-                      aria-expanded={isExpanded}
-                      style={{
-                        padding: 0,
-                        border: 'none',
-                        background: 'none',
-                        cursor: 'pointer',
-                        fontSize: 12,
-                        color: '#C4956A',
-                        fontFamily: 'Georgia, serif',
-                      }}
+                    <div className="lb-prompt-card__q">{t.prompt || '(no prompt)'}</div>
+                    <div
+                      className="lb-prompt-card__winner"
+                      style={{ marginBottom: t.oneLiner || t.fullTake ? 6 : 0 }}
                     >
-                      {isExpanded ? 'Show less' : 'Show full take'}
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => void copyPromptRow(t)}
-                    style={{
-                      padding: 0,
-                      border: 'none',
-                      background: 'none',
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      color: '#C4956A',
-                      fontFamily: 'Georgia, serif',
-                    }}
-                  >
-                    Copy prompt
-                  </button>
-                </div>
-              </div>
-              );
-            })}
-          </div>
+                      <span className="lb-prompt-card__winner-label">Winner</span>
+                      <AgentDot agentId={t.winnerId} size={7} />
+                      <span className="lb-prompt-card__winner-name">{t.winnerName}</span>
+                    </div>
+                    {showFull ? (
+                      <AgentAnswerMarkdown markdown={t.fullTake} question={t.prompt || undefined} />
+                    ) : t.oneLiner || t.fullTake ? (
+                      <p className="lb-prompt-card__blurb">
+                        “{t.oneLiner || t.fullTake}”
+                      </p>
+                    ) : null}
+                    <div className="lb-prompt-card__actions">
+                      {t.canExpand ? (
+                        <button
+                          type="button"
+                          className="lb-text-btn"
+                          onClick={() =>
+                            setExpandedTurnId((id) => (id === turnKey ? null : turnKey))
+                          }
+                          aria-expanded={isExpanded}
+                        >
+                          {isExpanded ? 'Show less' : 'Show full take'}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="lb-text-btn"
+                        onClick={() => void copyPromptRow(t)}
+                      >
+                        Copy prompt
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           )}
-        </div>
+        </section>
       ) : null}
 
       {!hasData ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            padding: '60px 24px',
-            background: '#FFFFFF',
-            borderRadius: '16px',
-            border: '0.5px solid #E8E0D8',
-          }}
-        >
-          <div
-            style={{
-              width: '52px',
-              height: '52px',
-              borderRadius: '14px',
-              background: '#F5EEE6',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '16px',
-            }}
-          >
-            <Trophy style={{ width: '22px', height: '22px', color: '#C4956A' }} aria-hidden />
+        <div className="lb-empty">
+          <div className="lb-empty__icon" aria-hidden>
+            <Trophy />
           </div>
-          <p style={{ fontSize: '15px', fontWeight: 500, color: '#1A1714', margin: '0 0 6px' }}>
-            No data yet
-          </p>
-          <p
-            style={{
-              fontSize: '13px',
-              color: '#9A9088',
-              textAlign: 'center',
-              margin: 0,
-              maxWidth: '260px',
-              lineHeight: '1.6',
-            }}
-          >
+          <p className="lb-empty__title">No data yet</p>
+          <p className="lb-empty__body">
             Ask your first question in the Arena and this leaderboard will start tracking who wins.
           </p>
-          <button
-            type="button"
-            onClick={onBack}
-            style={{
-              marginTop: '24px',
-              padding: '8px 20px',
-              borderRadius: '999px',
-              background: '#1A1714',
-              color: '#FAF7F4',
-              border: 'none',
-              fontSize: '13px',
-              cursor: 'pointer',
-              transition: 'opacity 150ms ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-          >
+          <button type="button" onClick={onBack} className="lb-empty__cta">
             Go to Arena
           </button>
         </div>
       ) : null}
 
-      {hasData && topAgent && topAgent.wins > 0 && (
-        <div
-          style={{
-            marginTop: '28px',
-            padding: '14px 18px',
-            borderRadius: '10px',
-            background: 'transparent',
-            border: '0.5px solid #E8E0D8',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
+      {hasData && topAgent && topAgent.wins > 0 ? (
+        <div className="lb-lead-chip">
           <AgentDot agentId={topAgent.agent_id} size={6} />
-          <p style={{ fontSize: '12px', color: '#9A9088', margin: 0 }}>
-            <span style={{ color: '#1A1714', fontWeight: 500 }}>{topAgent.name}</span>
+          <p>
+            <span className="lb-lead-chip__name">{topAgent.name}</span>
             {' '}is currently leading with{' '}
-            <span style={{ color: '#C4956A', fontWeight: 500 }}>
+            <span className="lb-lead-chip__rate">
               {Math.round(topAgent.percentage)}% win rate
             </span>
             {' '}across {totalPrompts} {totalPrompts === 1 ? 'prompt' : 'prompts'}.
           </p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
