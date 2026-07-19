@@ -26,6 +26,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required_orm
+from arena.core.rate_limits import enforce_user_rate_limit
 from arena.database import get_db
 from arena.db_models import ScoringAudit, UsageRecord, User, UserTier
 from arena.core.datetime_utils import utcnow_naive
@@ -56,6 +57,14 @@ async def get_metrics(
     db: Session = Depends(get_db),
 ) -> dict:
     _admin_only(user)
+    # Even admins are capped — heavy aggregates should not be free to hammer.
+    enforce_user_rate_limit(
+        user.id,
+        scope="metrics_admin",
+        limit=30,
+        window_seconds=60,
+        message="Too many metrics polls. Limit is 30 per minute.",
+    )
 
     # Cache-Control: ops dashboards re-hit this on a fixed cadence (typically
     # 30s), and the underlying UsageRecord scan is the heaviest query in the
