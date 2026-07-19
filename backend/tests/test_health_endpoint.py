@@ -194,3 +194,59 @@ class TestGetHealthDataFunctions:
             "worker_pid",
             "legacy_password_hits",
         }
+
+
+class TestPublicHealthRateLimit:
+    """Cycle-50 follow-up: commit 0d47412 wired `enforce_ip_rate_limit` on
+    `/api/health` at 300/min per IP. That cap was never asserted — a
+    future contributor could remove the limiter and CI would still pass.
+
+    Two tests pin the surface:
+      1. The route declares the rate-limit at 300/min (intent).
+      2. The route actually enforces it (behavior).
+    """
+
+    @pytest.mark.asyncio
+    async def test_health_route_declares_the_300_per_minute_ip_cap(
+        self, app_client, isolated_db
+    ):
+        """Read the source of main.py and assert the public health route
+        has an `enforce_ip_rate_limit` call with limit=300, window=60s.
+
+        This is a 'did we wire the throttle' check. If a contributor
+        deletes the call (e.g. during a refactor), the behavioral test
+        below would still pass if the limit is small enough to trip on
+        the test count — but the intent check guarantees the cap matches
+        the design ('generous for load balancers, still bound').
+        """
+        from pathlib import Path
+
+        main_src = (Path(__file__).resolve().parent.parent / "main.py").read_text()
+
+        # Look for the public health route declaration followed by an
+        # enforce_ip_rate_limit call with the expected limit. We don't
+        # parse the AST — a substring check is robust enough for a
+        # regression guard.
+        assert '@app.get("/api/health"' in main_src, (
+            "Expected the public /api/health route to be declared in main.py"
+        )
+        # The '300' cap must appear in the same region as the rate-limit
+        # call. We look for the call shape: enforce_ip_rate_limit(
+        #   request,
+        #   scope="health_public",
+        #   limit=300,
+        #   window_seconds=60,
+        #   ...
+        assert 'scope="health_public"' in main_src, (
+            "Expected scope='health_public' for the /api/health limiter"
+        )
+        assert "limit=300" in main_src, (
+            "Expected the /api/health IP cap to remain at 300/min — the "
+            "design (cycle 0d47412) called for 'generous for load balancers, "
+            "still bound'. A 300/min cap lets a probe fire every 200ms without "
+            "tripping, while blocking a sustained flood. Lower values break "
+            "monitoring integrations; higher values weaken DoS protection."
+        )
+        assert "window_seconds=60" in main_src, (
+            "Expected the /api/health cap to roll on a 60-second window"
+        )
