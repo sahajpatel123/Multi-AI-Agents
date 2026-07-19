@@ -17,7 +17,7 @@ from arena.core.client_ip import get_request_client_ip
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.datetime_utils import utcnow_naive
 
-from arena.core.errors import ErrorCodes
+from arena.core.errors import ErrorCodes, error_response
 from arena.core.auth import (
     authenticate_user,
     create_access_token,
@@ -215,7 +215,10 @@ async def register(
             registration_limiter.record_failure(request)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="An account with that email already exists",
+                detail={
+                    "error": ErrorCodes.EMAIL_EXISTS,
+                    "message": "An account with that email already exists",
+                },
             )
 
         user = create_user(db, body.email, body.password, body.name)
@@ -243,7 +246,10 @@ async def register(
             pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration failed",
+            detail={
+                "error": ErrorCodes.REQUEST_FAILED,
+                "message": "Registration failed",
+            },
         )
 
 
@@ -300,7 +306,10 @@ async def login(
         logger.exception("Login failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Login failed",
+            detail={
+                "error": ErrorCodes.REQUEST_FAILED,
+                "message": "Login failed",
+            },
         )
 
 
@@ -408,7 +417,10 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
     if token_blacklist.is_blacklisted(refresh_token, db):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has been revoked",
+            detail={
+                "error": ErrorCodes.TOKEN_REVOKED,
+                "message": "Refresh token has been revoked",
+            },
         )
 
     payload = decode_token(refresh_token)
@@ -422,14 +434,20 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
     if uid is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload",
+            detail={
+                "error": ErrorCodes.INVALID_TOKEN,
+                "message": "Invalid token payload",
+            },
         )
 
     user = db.query(User).filter(User.id == uid).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
+            detail={
+                "error": ErrorCodes.INVALID_TOKEN,
+                "message": "User not found",
+            },
         )
 
     # Refresh-token rotation (single-use refresh tokens).
