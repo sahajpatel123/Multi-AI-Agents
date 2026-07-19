@@ -22,7 +22,7 @@ from arena.core.request_size import (
 )
 from arena.core.seed_personas import seed_persona_library
 from arena.core.observability import get_health_data, get_health_data_detailed, setup_logging
-from arena.core.rate_limits import client_ip, rate_limiter
+from arena.core.rate_limits import client_ip, enforce_ip_rate_limit, enforce_user_rate_limit, rate_limiter
 from arena.database import SessionLocal, dispose_engine, get_db, init_db, is_db_connectivity_error
 from arena.models.schemas import UserResponse
 from arena.routes.auth import router as auth_router, user_router
@@ -383,9 +383,17 @@ def create_app() -> FastAPI:
 
     # ── Health check ──────────────────────────────────────────
     @app.get("/api/health", tags=["health"])
-    async def health_check(db: Session = Depends(get_db)):
+    async def health_check(request: Request, db: Session = Depends(get_db)):
         # Public, unauthenticated. Returns only status + database. Use
         # /api/health/detailed (authenticated) for operational detail.
+        # Generous IP cap — load balancers probe often; still block floods.
+        enforce_ip_rate_limit(
+            request,
+            scope="health_public",
+            limit=300,
+            window_seconds=60,
+            message="Too many health probes. Please slow down.",
+        )
         db_ok = False
         try:
             db.execute(text("SELECT 1"))
@@ -396,6 +404,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health/detailed", tags=["health"])
     async def health_check_detailed(
+        request: Request,
         db: Session = Depends(get_db),
         user: UserResponse = Depends(get_current_user_required),
     ):
@@ -407,6 +416,14 @@ def create_app() -> FastAPI:
         from arena.core.admin_gate import require_admin_email
 
         require_admin_email(getattr(user, "email", None))
+        # Admin-only but still aggregated; cap accidental dashboard thrash.
+        enforce_user_rate_limit(
+            user.id,
+            scope="health_detailed",
+            limit=60,
+            window_seconds=60,
+            message="Too many detailed health reads. Please slow down.",
+        )
         db_ok = False
         try:
             db.execute(text("SELECT 1"))
