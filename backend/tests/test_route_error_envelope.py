@@ -30,6 +30,7 @@ COVERED_FILES = [
     "auth.py",
     "rooms.py",
     "debate.py",
+    "discuss.py",
 ]
 
 

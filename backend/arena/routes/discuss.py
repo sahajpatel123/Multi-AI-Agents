@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
 from arena.core.datetime_utils import utcnow_naive
+from arena.core.errors import ErrorCodes
 from arena.core.cost_tracker import (
     RateLimitExceeded,
     check_and_increment_user,
@@ -142,9 +143,15 @@ async def discuss_with_agent(
     try:
         agent = get_agent_config(request.agent_id, request.persona_ids)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail="Invalid agent configuration") from e
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Invalid agent configuration"},
+        ) from e
     if not agent:
-        raise HTTPException(status_code=400, detail="Invalid agent ID")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.INVALID_AGENT_ID, "message": "Invalid agent ID"},
+        )
 
     session_id = request.session_id or str(uuid.uuid4())
 
@@ -203,7 +210,10 @@ async def discuss_with_agent(
         )
 
     except Exception:
-        raise HTTPException(status_code=500, detail="Discuss request failed")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Discuss request failed"},
+        )
 
 
 # ──────────────────────────────────────────────────────────────
@@ -245,9 +255,15 @@ async def stream_discuss(
     try:
         agent = get_agent_config(request.agent_id, request.persona_ids)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail="Invalid agent configuration") from e
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Invalid agent configuration"},
+        ) from e
     if not agent:
-        raise HTTPException(status_code=400, detail="Invalid agent ID")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.INVALID_AGENT_ID, "message": "Invalid agent ID"},
+        )
 
     session_id = request.session_id or str(uuid.uuid4())
 
