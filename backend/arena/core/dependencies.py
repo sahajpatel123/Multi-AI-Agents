@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from arena.core.auth import decode_token, orm_user_to_response
+from arena.core.errors import ErrorCodes
 from arena.core.token_blacklist import token_blacklist
 from arena.database import get_db
 from arena.db_models import User
@@ -20,30 +21,45 @@ async def get_current_user(
     # Accept "Bearer <token>" with optional extra whitespace; reject bare
     # "Bearer" / empty token so we never hash or decode an empty string.
     if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": ErrorCodes.INVALID_TOKEN, "message": "Not authenticated"},
+        )
 
     token = auth_header[7:].strip()
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": ErrorCodes.INVALID_TOKEN, "message": "Not authenticated"},
+        )
 
     # Check token blacklist for revoked JWTs. The DB-backed blacklist
     # is process- and restart-safe (iter-12 hardening): a logout in one
     # worker is honored by every other worker in the deployment.
     if token_blacklist.is_blacklisted(token, db):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": ErrorCodes.TOKEN_REVOKED, "message": "Token has been revoked"},
+        )
 
     payload = decode_token(token)
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired or invalid",
+            detail={"error": ErrorCodes.TOKEN_EXPIRED, "message": "Token expired or invalid"},
         )
     if payload.get("type") != "access":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": ErrorCodes.INVALID_TOKEN, "message": "Invalid token type"},
+        )
 
     user_id = payload.get("sub") or str(payload.get("user_id", ""))
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": ErrorCodes.INVALID_TOKEN, "message": "Invalid token"},
+        )
 
     # The subject is expected to be a numeric user id. A non-numeric value (a
     # malformed, legacy, or forged token) must fail authentication cleanly (401)
@@ -51,11 +67,17 @@ async def get_current_user(
     try:
         uid = int(user_id)
     except (ValueError, TypeError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": ErrorCodes.INVALID_TOKEN, "message": "Invalid token"},
+        )
 
     user = db.query(User).filter(User.id == uid).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": ErrorCodes.INVALID_TOKEN, "message": "User not found"},
+        )
     return user
 
 
