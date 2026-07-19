@@ -8,6 +8,7 @@ import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { motionDuration } from '../lib/motion';
 import { formatTemporalEvolutionExport } from '../lib/temporalEvolutionExport';
+import '../styles/temporal-evolution.css';
 
 function formatRunDate(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -124,112 +125,63 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
 
   return (
     <div
-      style={{
-        background: '#FAF7F2',
-        border: '0.5px solid #E0D5C5',
-        borderRadius: 12,
-        overflow: 'hidden',
-        margin: '0 0 20px',
-      }}
+      className="te-panel"
+      style={{ ['--te-accent' as string]: accent }}
     >
       <button
         type="button"
+        className="te-header"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        style={{
-          width: '100%',
-          background: '#2C1810',
-          padding: '12px 18px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 12,
-          border: 'none',
-          cursor: 'pointer',
-          textAlign: 'left',
-        }}
       >
-        <span
-          style={{
-            fontSize: 11,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            color: '#C4956A',
-          }}
-        >
+        <span className="te-header__label">
+          <span className="te-header__dot" aria-hidden />
           Answer evolution
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="te-header__right">
           {open && evo && typeof score === 'number' ? (
             <span
-              style={{
-                fontSize: 10,
-                background: 'rgba(196,149,106,0.15)',
-                color: accent,
-                border: `0.5px solid ${accent}`,
-                borderRadius: 8,
-                padding: '4px 10px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-              }}
+              className="te-header__badge"
+              style={{ color: accent, borderColor: accent }}
             >
               {score}/100 · {evo.trend_label}
             </span>
           ) : null}
-          <span style={{ color: '#C4956A', fontSize: 12 }} aria-hidden>
+          <span
+            className={`te-header__chevron${open ? ' te-header__chevron--open' : ''}`}
+            aria-hidden
+          >
             {open ? '▾' : '▸'}
           </span>
         </div>
       </button>
 
       {open ? (
-        <div style={{ padding: '14px 16px 16px' }}>
+        <div className="te-body">
           {loading && !data ? (
-            <div style={{ fontSize: 13, color: '#A89070', fontStyle: 'italic' }}>
+            <div className="te-loading">
+              <span className="te-loading__dot" aria-hidden />
+              <span className="te-loading__dot" aria-hidden />
+              <span className="te-loading__dot" aria-hidden />
               Comparing related research runs…
             </div>
           ) : null}
 
           {error ? (
-            <div
-              role="alert"
-              style={{
-                fontSize: 13,
-                color: '#993C1D',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                flexWrap: 'wrap',
-              }}
-            >
-              <span style={{ flex: 1, minWidth: 140 }}>{error}</span>
+            <div role="alert" className="te-error">
+              <span className="te-error__msg">{error}</span>
               <button
                 type="button"
+                className="te-error__retry"
                 onClick={() => void load()}
-                style={{
-                  background: 'none',
-                  border: '0.5px solid #D4C4B0',
-                  borderRadius: 6,
-                  padding: '3px 10px',
-                  fontSize: 11,
-                  color: '#C4956A',
-                  cursor: 'pointer',
-                }}
               >
                 Retry
               </button>
               <button
                 type="button"
+                className="te-error__dismiss"
                 aria-label="Dismiss error"
                 onClick={() => setError(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  color: '#A89070',
-                  padding: 0,
-                }}
               >
                 ×
               </button>
@@ -238,52 +190,27 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
 
           {evo && !error ? (
             <>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'baseline',
-                  gap: 12,
-                  marginBottom: 10,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 28,
-                    fontFamily: 'Georgia, serif',
-                    color: accent,
-                    lineHeight: 1,
-                  }}
-                >
+              <div className="te-score-row">
+                <div className="te-score" style={{ color: accent }}>
                   {evo.evolution_score}
                 </div>
-                <div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      color: '#8B7355',
-                    }}
-                  >
-                    {evo.trend_label}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#A89070', marginTop: 2 }}>
+                <div className="te-score-meta">
+                  <div className="te-score-meta__trend">{evo.trend_label}</div>
+                  <div className="te-score-meta__sub">
                     Stability {evo.stability}/100
                     {related > 0 ? ` · ${related} related run${related === 1 ? '' : 's'}` : ''}
                   </div>
                 </div>
-                <div
-                  style={{
-                    marginLeft: 'auto',
-                    display: 'flex',
-                    gap: 8,
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                  }}
-                >
+                <div className="te-actions">
                   <button
                     type="button"
+                    className={`te-ghost-btn${
+                      copyStatus === 'copied'
+                        ? ' te-ghost-btn--ok'
+                        : copyStatus === 'failed'
+                          ? ' te-ghost-btn--err'
+                          : ''
+                    }`}
                     onClick={handleCopy}
                     title="Copy evolution analysis as markdown"
                     aria-label={
@@ -293,27 +220,18 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
                           ? 'Copy failed'
                           : 'Copy evolution analysis as markdown'
                     }
-                    style={{
-                      background: 'none',
-                      border: '0.5px solid #D4C4B0',
-                      borderRadius: 6,
-                      padding: '4px 10px',
-                      fontSize: 10,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      color:
-                        copyStatus === 'failed'
-                          ? '#D85A30'
-                          : copyStatus === 'copied'
-                            ? '#5A8C6A'
-                            : '#C4956A',
-                      cursor: 'pointer',
-                    }}
                   >
                     {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Failed' : 'Copy'}
                   </button>
                   <button
                     type="button"
+                    className={`te-ghost-btn${
+                      downloadStatus === 'done'
+                        ? ' te-ghost-btn--ok'
+                        : downloadStatus === 'failed'
+                          ? ' te-ghost-btn--err'
+                          : ''
+                    }`}
                     onClick={handleDownload}
                     title="Download evolution analysis as markdown"
                     aria-label={
@@ -323,22 +241,6 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
                           ? 'Download failed'
                           : 'Download evolution analysis as markdown'
                     }
-                    style={{
-                      background: 'none',
-                      border: '0.5px solid #D4C4B0',
-                      borderRadius: 6,
-                      padding: '4px 10px',
-                      fontSize: 10,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      color:
-                        downloadStatus === 'failed'
-                          ? '#D85A30'
-                          : downloadStatus === 'done'
-                            ? '#5A8C6A'
-                            : '#C4956A',
-                      cursor: 'pointer',
-                    }}
                   >
                     {downloadStatus === 'done'
                       ? 'Downloaded'
@@ -348,22 +250,11 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
                   </button>
                   <button
                     type="button"
+                    className="te-ghost-btn"
                     onClick={() => void load()}
                     disabled={loading}
                     title="Refresh evolution analysis"
                     aria-label="Refresh evolution analysis"
-                    style={{
-                      background: 'none',
-                      border: '0.5px solid #D4C4B0',
-                      borderRadius: 6,
-                      padding: '4px 10px',
-                      fontSize: 10,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      color: '#C4956A',
-                      cursor: loading ? 'default' : 'pointer',
-                      opacity: loading ? 0.5 : 1,
-                    }}
                   >
                     Refresh
                   </button>
@@ -371,21 +262,7 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
               </div>
 
               {copyStatus !== 'idle' || downloadStatus !== 'idle' ? (
-                <div
-                  role="status"
-                  aria-live="polite"
-                  style={{
-                    position: 'absolute',
-                    width: 1,
-                    height: 1,
-                    padding: 0,
-                    margin: -1,
-                    overflow: 'hidden',
-                    clip: 'rect(0, 0, 0, 0)',
-                    whiteSpace: 'nowrap',
-                    border: 0,
-                  }}
-                >
+                <div role="status" aria-live="polite" className="te-sr-only">
                   {copyStatus === 'copied'
                     ? 'Evolution analysis copied to clipboard'
                     : copyStatus === 'failed'
@@ -399,23 +276,13 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
               ) : null}
 
               {evo.message ? (
-                <div style={{ fontSize: 13, color: '#A89070', fontStyle: 'italic' }}>{evo.message}</div>
+                <div className="te-message">{evo.message}</div>
               ) : null}
 
               {timeline.length > 0 ? (
-                <div style={{ marginTop: 10 }}>
-                  <div
-                    style={{
-                      fontSize: 10,
-                      textTransform: 'uppercase',
-                      color: '#A89070',
-                      marginBottom: 6,
-                      letterSpacing: '0.06em',
-                    }}
-                  >
-                    Related runs
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="te-section">
+                  <div className="te-section__label">Related runs</div>
+                  <div className="te-timeline">
                     {timeline.map((item, i) => {
                       const isCurrent = item.task_id === taskId;
                       const when = formatRunDate(item.created_at);
@@ -428,6 +295,7 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
                         <button
                           key={item.task_id || `run-${i}`}
                           type="button"
+                          className={`te-run${isCurrent ? ' te-run--current' : ''}`}
                           onClick={() => {
                             if (!item.task_id || isCurrent) return;
                             navigate(`/agent?task_id=${encodeURIComponent(item.task_id)}`);
@@ -440,57 +308,22 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
                                 ? 'Open this research run'
                                 : undefined
                           }
-                          style={{
-                            textAlign: 'left',
-                            background: isCurrent ? '#F5EDE3' : '#FAF7F2',
-                            border: isCurrent ? '0.5px solid #C4956A' : '0.5px solid #E0D5C5',
-                            borderRadius: 8,
-                            padding: '10px 12px',
-                            cursor: isCurrent || !item.task_id ? 'default' : 'pointer',
-                            fontFamily: 'inherit',
-                          }}
                         >
                           <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 8,
-                              marginBottom: snippet ? 6 : 0,
-                              flexWrap: 'wrap',
-                            }}
+                            className={`te-run__head${snippet ? ' te-run__head--has-snippet' : ''}`}
                           >
-                            <span
-                              style={{
-                                fontSize: 10,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.04em',
-                                color: isCurrent ? '#C4956A' : '#A89070',
-                              }}
-                            >
+                            <span className="te-run__when">
                               {when || `Run ${i + 1}`}
                               {isCurrent ? ' · current' : ''}
                             </span>
                             {runScore != null ? (
-                              <span style={{ fontSize: 10, color: '#8B7355', marginLeft: 'auto' }}>
-                                {runScore}/100
-                              </span>
+                              <span className="te-run__score">{runScore}/100</span>
                             ) : null}
                           </div>
                           {snippet ? (
-                            <div
-                              style={{
-                                fontSize: 12,
-                                color: '#2C1810',
-                                lineHeight: 1.45,
-                                fontFamily: 'Georgia, serif',
-                              }}
-                            >
-                              {snippet}
-                            </div>
+                            <div className="te-run__snippet">{snippet}</div>
                           ) : (
-                            <div style={{ fontSize: 12, color: '#A89070', fontStyle: 'italic' }}>
-                              No answer snippet available
-                            </div>
+                            <div className="te-run__empty">No answer snippet available</div>
                           )}
                         </button>
                       );
@@ -500,55 +333,30 @@ export function TemporalEvolutionPanel({ taskId, question }: Props) {
               ) : null}
 
               {evo.key_shifts.length > 0 ? (
-                <div style={{ marginTop: 14 }}>
-                  <div
-                    style={{
-                      fontSize: 10,
-                      textTransform: 'uppercase',
-                      color: '#A89070',
-                      marginBottom: 6,
-                      letterSpacing: '0.06em',
-                    }}
-                  >
-                    Key shifts between runs
-                  </div>
+                <div className="te-section">
+                  <div className="te-section__label">Key shifts between runs</div>
                   {evo.key_shifts.map((s, i) => (
-                    <div
-                      key={`${s.from_task}-${s.to_task}-${i}`}
-                      style={{
-                        background: '#FDF5F0',
-                        borderLeft: '3px solid #D85A30',
-                        borderRadius: 6,
-                        padding: '10px 12px',
-                        marginBottom: 8,
-                      }}
-                    >
+                    <div key={`${s.from_task}-${s.to_task}-${i}`} className="te-shift">
                       {s.gained_terms.length > 0 ? (
-                        <div style={{ fontSize: 12, color: '#2C1810', marginBottom: 4 }}>
-                          <span style={{ color: '#6B8F71', fontSize: 10, textTransform: 'uppercase' }}>
-                            Gained{' '}
-                          </span>
+                        <div className="te-shift__gained">
+                          <span className="te-shift__tag te-shift__tag--gain">Gained </span>
                           {s.gained_terms.join(' · ')}
                         </div>
                       ) : null}
                       {s.lost_terms.length > 0 ? (
-                        <div style={{ fontSize: 12, color: '#2C1810' }}>
-                          <span style={{ color: '#D85A30', fontSize: 10, textTransform: 'uppercase' }}>
-                            Faded{' '}
-                          </span>
+                        <div className="te-shift__lost">
+                          <span className="te-shift__tag te-shift__tag--fade">Faded </span>
                           {s.lost_terms.join(' · ')}
                         </div>
                       ) : null}
                       {s.gained_terms.length === 0 && s.lost_terms.length === 0 ? (
-                        <div style={{ fontSize: 12, color: '#A89070', fontStyle: 'italic' }}>
-                          No term-level shift recorded
-                        </div>
+                        <div className="te-shift__empty">No term-level shift recorded</div>
                       ) : null}
                     </div>
                   ))}
                 </div>
               ) : !evo.message && timeline.length === 0 ? (
-                <div style={{ fontSize: 13, color: '#A89070', fontStyle: 'italic' }}>
+                <div className="te-quiet">
                   Related runs stay close in vocabulary — little drift detected yet.
                 </div>
               ) : null}
