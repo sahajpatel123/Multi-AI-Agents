@@ -6,9 +6,11 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
-import { Lock, Sparkles, X } from 'lucide-react';
+import { ArrowRight, Lock, Sparkles, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
+import { Footer } from '../components/Footer';
 import { AgentDot } from '../components/AgentDot';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
@@ -17,10 +19,11 @@ import { PersonasSearchInput } from '../components/PersonasSearchInput';
 import { PersonasAvailabilityFilters } from '../components/PersonasAvailabilityFilters';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
+import { useAuth } from '../hooks/useAuth';
 import { type Persona } from '../data/personas';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
-import { motionDuration, prefersReducedMotion } from '../lib/motion';
+import { motionDuration } from '../lib/motion';
 import { formatPanelExport } from '../lib/panelExport';
 import {
   formatPersonasLibraryExport,
@@ -49,6 +52,7 @@ import {
 } from '../lib/personasLibrarySort';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import track from '../utils/track';
+import { setRedirectIntent } from '../utils/redirectIntent';
 import '../styles/personas-page.css';
 
 type SlotIndex = 0 | 1 | 2 | 3;
@@ -60,17 +64,78 @@ interface ToastState {
   kind?: PanelSaveToastKind;
 }
 
-const eyebrowStyle = {
-  fontSize: '12px',
-  letterSpacing: '.12em',
-  textTransform: 'uppercase' as const,
-  color: '#A0A39A',
+const SHOWCASE_PROMPTS = [
+  {
+    label: 'DECISION',
+    prompt: 'Should we launch before the evidence is complete?',
+    note: 'A useful panel does not agree faster. It exposes a decision from different failure modes.',
+  },
+  {
+    label: 'PRODUCT',
+    prompt: 'Is this feature solving a problem—or decorating one?',
+    note: 'Each lens changes what gets inspected before the team commits engineering time.',
+  },
+  {
+    label: 'STRATEGY',
+    prompt: 'Where should a small team place its next asymmetric bet?',
+    note: 'The panel turns one broad prompt into four different tests of leverage, evidence, and consequence.',
+  },
+] as const;
+
+const PERSONA_LENSES: Record<string, string> = {
+  analyst: 'Which assumption breaks the case first?',
+  philosopher: 'What if the question is framed incorrectly?',
+  pragmatist: 'What can we test this week with real users?',
+  contrarian: 'What does the current consensus refuse to admit?',
+  scientist: 'What evidence would change the decision?',
+  historian: 'Where has this pattern appeared before?',
+  economist: 'Which incentives shape the second-order outcome?',
+  ethicist: 'Who benefits, who pays, and who lacks a voice?',
+  stoic: 'Which part of this decision is actually controllable?',
+  futurist: 'What does this compound into over ten years?',
+  strategist: 'Where is the leverage, timing, or asymmetric move?',
+  engineer: 'Which constraint or failure mode arrives first?',
+  optimist: 'What mechanism could make the upside real?',
+  empath: 'Who experiences the cost most directly?',
+  firstprinciples: 'What remains true after every assumption is removed?',
+  devilsadvocate: 'What is the strongest case against this direction?',
 };
+
+const PANEL_RECIPES = [
+  {
+    id: 'launch',
+    index: 'R-01',
+    label: 'Launch room',
+    use: 'For consequential go / no-go decisions.',
+    description: 'Pressure-test demand, execution, leverage, and the case nobody wants to hear.',
+    personaIds: ['strategist', 'analyst', 'pragmatist', 'contrarian'],
+    tone: '#D7F64A',
+  },
+  {
+    id: 'research',
+    index: 'R-02',
+    label: 'Evidence room',
+    use: 'For research that must survive scrutiny.',
+    description: 'Balance empirical proof, precedent, incentives, and the people affected by the conclusion.',
+    personaIds: ['scientist', 'historian', 'economist', 'ethicist'],
+    tone: '#5ED8FF',
+  },
+  {
+    id: 'systems',
+    index: 'R-03',
+    label: 'Systems room',
+    use: 'For product and architecture direction.',
+    description: 'Rebuild from fundamentals, find constraints, project consequences, and preserve human context.',
+    personaIds: ['engineer', 'firstprinciples', 'futurist', 'empath'],
+    tone: '#A98CF8',
+  },
+] as const;
 
 export function PersonasPage() {
   const navigate = useNavigate();
   const { panel, personas, swapAgent, resetPanel, savePanel, isDefaultPanel } = usePanel();
   const { canUsePersona } = useTier();
+  const { isAuthenticated } = useAuth();
   const [pageVisible, setPageVisible] = useState(false);
   const [activeSlot, setActiveSlot] = useState<SlotIndex | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -90,7 +155,6 @@ export function PersonasPage() {
   const libraryCopyTimerRef = useRef<number | null>(null);
   const libraryDownloadTimerRef = useRef<number | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [revealedLibraryIds, setRevealedLibraryIds] = useState<Record<string, boolean>>({});
   const [libraryQuery, setLibraryQuery] = useState('');
   const [librarySort, setLibrarySort] = useState<PersonasLibrarySort>('default');
   const [libraryAvailability, setLibraryAvailability] =
@@ -99,18 +163,38 @@ export function PersonasPage() {
   const [swapSort, setSwapSort] = useState<PersonasLibrarySort>('default');
   const [swapAvailability, setSwapAvailability] =
     useState<PersonasLibraryAvailability>('all');
-  const libraryRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [showcaseIndex, setShowcaseIndex] = useState(0);
+  const [selectedRecipeId, setSelectedRecipeId] = useState<string>(PANEL_RECIPES[0].id);
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
+  const [showAllLibrary, setShowAllLibrary] = useState(false);
   const librarySearchRef = useRef<HTMLInputElement | null>(null);
   const swapSearchRef = useRef<HTMLInputElement | null>(null);
-  const reducedMotion = prefersReducedMotion();
-
+  const swapDialogRef = useRef<HTMLDivElement | null>(null);
+  const lastSwapTriggerRef = useRef<HTMLElement | null>(null);
   const slotLabels = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'] as const;
   const activePersona = activeSlot !== null ? panel[activeSlot] : null;
+  const showcase = SHOWCASE_PROMPTS[showcaseIndex];
+  const selectedRecipe = PANEL_RECIPES.find((recipe) => recipe.id === selectedRecipeId) ?? PANEL_RECIPES[0];
+  const panelTemperature = panel.length
+    ? panel.reduce((total, persona) => total + persona.temperature, 0) / panel.length
+    : 0;
+  const panelFloor = panel.length ? Math.min(...panel.map((persona) => persona.temperature)) : 0;
+  const panelCeiling = panel.length ? Math.max(...panel.map((persona) => persona.temperature)) : 0;
+  const panelSignal = panelTemperature < 0.4
+    ? 'Measured precision'
+    : panelTemperature < 0.7
+      ? 'Productive tension'
+      : 'High divergence';
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => setPageVisible(true));
     void track('personas_viewed');
     return () => window.cancelAnimationFrame(frameId);
+  }, []);
+
+  const openSwap = useCallback((slot: SlotIndex, trigger?: HTMLElement) => {
+    lastSwapTriggerRef.current = trigger ?? document.activeElement as HTMLElement | null;
+    setActiveSlot(slot);
   }, []);
 
   const closeModal = useCallback(() => {
@@ -119,7 +203,10 @@ export function PersonasPage() {
     setSwapSort('default');
     setSwapAvailability('all');
     const delay = motionDuration(220);
-    window.setTimeout(() => setActiveSlot(null), delay > 0 ? delay : 0);
+    window.setTimeout(() => {
+      setActiveSlot(null);
+      lastSwapTriggerRef.current?.focus();
+    }, delay > 0 ? delay : 0);
   }, []);
 
   useEffect(() => {
@@ -146,6 +233,23 @@ export function PersonasPage() {
       if (e.key === 'Escape') {
         e.preventDefault();
         closeModal();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusable = Array.from(
+        swapDialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
     };
     const prevOverflow = document.body.style.overflow;
@@ -345,6 +449,22 @@ export function PersonasPage() {
     return sortPersonasLibrary(searched, librarySort);
   }, [personas, libraryQuery, librarySort, libraryAvailability, unlockedSlotMap, canUsePersona]);
 
+  const libraryIsFiltered = Boolean(libraryQuery.trim()) || libraryAvailability !== 'all' || librarySort !== 'default';
+  const displayedLibrary = showAllLibrary || libraryIsFiltered
+    ? filteredLibrary
+    : filteredLibrary.slice(0, 8);
+
+  const requestedPersona = personas.find((persona) => persona.id === selectedPersonaId);
+  const selectedPersona =
+    (requestedPersona && displayedLibrary.some((persona) => persona.id === requestedPersona.id)
+      ? requestedPersona
+      : displayedLibrary[0]) ??
+    null;
+
+  const selectedRecipePersonas = selectedRecipe.personaIds
+    .map((id) => personas.find((persona) => persona.id === id))
+    .filter((persona): persona is Persona => Boolean(persona));
+
   const buildFilteredLibraryMarkdown = () => {
     const q = libraryQuery.trim();
     const filterBits: string[] = [];
@@ -463,34 +583,6 @@ export function PersonasPage() {
     }, hold > 0 ? hold : 0);
   };
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        setRevealedLibraryIds((prev) => {
-          const next = { ...prev };
-          let changed = false;
-
-          for (const entry of entries) {
-            const id = entry.target.getAttribute('data-persona-id');
-            if (entry.isIntersecting && id && !next[id]) {
-              next[id] = true;
-              changed = true;
-            }
-          }
-
-          return changed ? next : prev;
-        });
-      },
-      { threshold: 0.16 },
-    );
-
-    Object.values(libraryRefs.current).forEach((node) => {
-      if (node) observer.observe(node);
-    });
-
-    return () => observer.disconnect();
-  }, [filteredLibrary.length, libraryQuery, librarySort, libraryAvailability]);
-
   const handleSwap = (slotIndex: SlotIndex, persona: Persona) => {
     if (!canUsePersona(persona.id)) {
       navigate('/pricing');
@@ -506,7 +598,38 @@ export function PersonasPage() {
     closeModal();
   };
 
+  const applyRecipe = () => {
+    if (selectedRecipePersonas.length !== 4) {
+      setToast({
+        message: 'This recipe is unavailable in the current persona catalog',
+        color: '#E57373',
+        iconColor: '#0B0C0A',
+        kind: 'error',
+      });
+      return;
+    }
+    if (selectedRecipePersonas.some((persona) => !canUsePersona(persona.id))) {
+      navigate('/pricing');
+      return;
+    }
+    selectedRecipePersonas.forEach((persona, index) => {
+      swapAgent(index as SlotIndex, persona);
+    });
+    setToast({
+      message: `${selectedRecipe.label} loaded into your panel`,
+      color: '#1A1714',
+      iconColor: selectedRecipe.tone,
+      kind: 'success',
+    });
+    void track('persona_recipe_loaded', undefined, selectedRecipe.id);
+  };
+
   const handleSavePanel = async () => {
+    if (!isAuthenticated) {
+      setRedirectIntent('/personas');
+      navigate('/signin?tab=signin');
+      return;
+    }
     if (savingPanel) return;
     setSavingPanel(true);
     try {
@@ -532,12 +655,6 @@ export function PersonasPage() {
 
   return (
     <div className="personas-page">
-      <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(14px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
       <Navbar />
 
       <main
@@ -546,249 +663,280 @@ export function PersonasPage() {
         tabIndex={-1}
         aria-labelledby="personas-title"
       >
-        <button type="button" onClick={() => navigate('/app')} className="personas-back-btn">
-          ← Back to Arena
-        </button>
-
         <section
-          className="personas-page__hero"
-          style={{
-            opacity: pageVisible ? 1 : 0,
-            transform: pageVisible ? 'translateY(0)' : 'translateY(12px)',
-            transition: reducedMotion
-              ? 'none'
-              : 'opacity 450ms ease, transform 450ms ease',
-          }}
+          className={`personas-studio-hero${pageVisible ? ' is-visible' : ''}`}
+          aria-labelledby="personas-title"
         >
-          <p className="personas-page__kicker">
-            <span className="personas-page__kicker-dot" aria-hidden="true" />
-            Your panel
-          </p>
-          <h1 id="personas-title" className="personas-page__title">
-            <span className="personas-page__title-line">Build your</span>
-            <span className="personas-page__title-line personas-page__title-accent">four minds.</span>
-          </h1>
-          <p className="personas-page__lede">
-            Your current panel loads by default. Swap any agent with another from the library for this session.
-          </p>
+          <div className="personas-studio-hero__copy">
+            <p className="personas-studio-kicker">
+              <span aria-hidden="true" />
+              The persona system
+            </p>
+            <h1 id="personas-title">
+              Build useful <em>disagreement.</em>
+            </h1>
+            <p>
+              Four distinct reasoning styles examine the same question. Choose the tension you
+              need—not four versions of the same agreeable answer.
+            </p>
+            <div className="personas-studio-hero__actions">
+              <a href="#panel-studio">Tune your panel <ArrowRight aria-hidden="true" /></a>
+              <button type="button" onClick={() => navigate('/app')}>Enter Arena</button>
+            </div>
+            <dl className="personas-studio-proof">
+              <div><dt>16</dt><dd>reasoning styles</dd></div>
+              <div><dt>04</dt><dd>panel slots</dd></div>
+              <div><dt>01</dt><dd>independent judge</dd></div>
+            </dl>
+          </div>
+
+          <div className="personas-hero-instrument" aria-hidden="true">
+            <header><span>YOUR QUESTION</span><b>INPUT / 01</b></header>
+            <div className="personas-hero-instrument__question">?</div>
+            <div className="personas-hero-instrument__minds">
+              {panel.map((persona, index) => (
+                <div key={`${persona.id}-hero`} style={{ '--tone': persona.color } as CSSProperties}>
+                  <small>0{index + 1}</small>
+                  <strong>{persona.name.replace('The ', '')}</strong>
+                  <i />
+                </div>
+              ))}
+            </div>
+            <footer><span>INDEPENDENT RESPONSES</span><span>→ JUDGE 05</span></footer>
+          </div>
         </section>
 
-        <section className="personas-page__section">
-          <p className="personas-page__section-label">Your current panel</p>
-          <div className="current-panel-grid">
-            {panel.map((persona, index) => (
-              <div
-                key={`${persona.id}-${index}`}
-                className="personas-panel-card"
-                style={{
-                  background: persona.bgTint,
-                  ['--slot-color' as string]: persona.color,
-                  opacity: pageVisible ? 1 : 0,
-                  transform: pageVisible ? 'translateY(0)' : 'translateY(12px)',
-                  transition: reducedMotion
-                    ? 'none'
-                    : `opacity 420ms ease ${index * 60}ms, transform 420ms ease ${index * 60}ms, box-shadow 220ms ease, border-color 180ms ease`,
-                }}
-              >
-                <div className="personas-panel-card__rail" />
-                <div className="personas-panel-card__head">
-                  <AgentDot agentId={`agent_${index + 1}`} size={7} color={persona.color} />
-                  <span className="personas-panel-card__name">{persona.name}</span>
-                </div>
-                <p className="personas-panel-card__quote">{persona.quote}</p>
-                <div className="personas-panel-card__slot">{slotLabels[index]}</div>
-                <button
-                  type="button"
-                  onClick={() => setActiveSlot(index as SlotIndex)}
-                  className="personas-swap-btn"
+        <section id="panel-studio" className="personas-studio-section personas-panel-studio" aria-labelledby="panel-studio-title">
+          <header className="personas-studio-section__head">
+            <div>
+              <span className="personas-studio-eyebrow">01 / Your panel</span>
+              <h2 id="panel-studio-title">Shape the room before asking the question.</h2>
+            </div>
+            <p>
+              Each slot contributes a different failure mode. Swap a mind, watch the panel
+              fingerprint change, then save the combination that fits your work.
+            </p>
+          </header>
+
+          <div className="personas-panel-stage">
+            <div className="current-panel-grid">
+              {panel.map((persona, index) => (
+                <article
+                  key={`${persona.id}-${index}`}
+                  className="personas-panel-card"
+                  style={{ '--slot-color': persona.color } as CSSProperties}
                 >
-                  Swap →
-                </button>
+                  <div className="personas-panel-card__rail" />
+                  <header>
+                    <small>0{index + 1} / SLOT</small>
+                    <AgentDot agentId={`agent_${index + 1}`} size={7} color={persona.color} />
+                  </header>
+                  <h3 className="personas-panel-card__name">{persona.name}</h3>
+                  <p className="personas-panel-card__quote">“{persona.quote}”</p>
+                  <p className="personas-panel-card__function">{PERSONA_LENSES[persona.id] ?? persona.description}</p>
+                  <button
+                    type="button"
+                    onClick={(event) => openSwap(index as SlotIndex, event.currentTarget)}
+                    className="personas-swap-btn"
+                    aria-label={`Swap ${persona.name} in slot ${index + 1}`}
+                  >
+                    Swap mind <ArrowRight aria-hidden="true" />
+                  </button>
+                </article>
+              ))}
+            </div>
+
+            <aside className="personas-panel-signature" aria-label="Current panel fingerprint">
+              <header><span>LIVE PANEL FINGERPRINT</span><i /></header>
+              <div className="personas-panel-signature__signal">
+                <small>CURRENT SIGNAL</small>
+                <strong>{panelSignal}</strong>
               </div>
-            ))}
+              <dl>
+                <div><dt>{panelTemperature.toFixed(2)}</dt><dd>average divergence</dd></div>
+                <div><dt>{panelFloor.toFixed(1)}—{panelCeiling.toFixed(1)}</dt><dd>reasoning range</dd></div>
+                <div><dt>{new Set(panel.map((persona) => persona.id)).size}/4</dt><dd>distinct lenses</dd></div>
+              </dl>
+              <div className="personas-panel-signature__spectrum" aria-hidden="true">
+                {panel.map((persona) => <span key={persona.id} style={{ background: persona.color }} />)}
+              </div>
+              <p>Configuration indicators describe persona settings—not answer quality or certainty.</p>
+            </aside>
           </div>
 
           <div className="personas-panel-actions">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div className="personas-panel-actions__primary">
               <button
                 type="button"
-                onClick={() => {
-                  void handleSavePanel();
-                }}
+                onClick={() => void handleSavePanel()}
                 className="save-panel-btn"
                 disabled={savingPanel}
                 aria-busy={savingPanel}
-                aria-label={panelSaveButtonLabel(savingPanel)}
-                style={{
-                  cursor: savingPanel ? 'wait' : 'pointer',
-                }}
+                aria-label={isAuthenticated ? panelSaveButtonLabel(savingPanel) : 'Sign in to save panel'}
               >
-                {panelSaveButtonLabel(savingPanel)}
+                {isAuthenticated ? panelSaveButtonLabel(savingPanel) : 'Sign in to save panel'}
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  void copyPanelMarkdown();
-                }}
-                className={`personas-ghost-btn${
-                  panelCopyStatus === 'copied'
-                    ? ' personas-ghost-btn--ok'
-                    : panelCopyStatus === 'failed'
-                      ? ' personas-ghost-btn--err'
-                      : ''
-                }`}
-                title="Copy this panel as markdown"
-                aria-label={
-                  panelCopyStatus === 'copied'
-                    ? 'Panel copied'
-                    : panelCopyStatus === 'failed'
-                      ? 'Copy failed'
-                      : 'Copy panel as markdown'
-                }
+                onClick={() => void copyPanelMarkdown()}
+                className={`personas-ghost-btn${panelCopyStatus === 'copied' ? ' personas-ghost-btn--ok' : panelCopyStatus === 'failed' ? ' personas-ghost-btn--err' : ''}`}
+                aria-label={panelCopyStatus === 'copied' ? 'Panel copied' : panelCopyStatus === 'failed' ? 'Copy failed' : 'Copy panel as markdown'}
               >
-                {panelCopyStatus === 'copied'
-                  ? 'Copied'
-                  : panelCopyStatus === 'failed'
-                    ? 'Copy failed'
-                    : 'Copy panel'}
+                {panelCopyStatus === 'copied' ? 'Copied' : panelCopyStatus === 'failed' ? 'Copy failed' : 'Copy panel'}
               </button>
               <button
                 type="button"
                 onClick={downloadPanelMarkdown}
-                className={`personas-ghost-btn${
-                  panelDownloadStatus === 'done'
-                    ? ' personas-ghost-btn--ok'
-                    : panelDownloadStatus === 'failed'
-                      ? ' personas-ghost-btn--err'
-                      : ''
-                }`}
-                title="Download this panel as markdown"
-                aria-label={
-                  panelDownloadStatus === 'done'
-                    ? 'Panel downloaded'
-                    : panelDownloadStatus === 'failed'
-                      ? 'Download failed'
-                      : 'Download panel as markdown'
-                }
+                className={`personas-ghost-btn${panelDownloadStatus === 'done' ? ' personas-ghost-btn--ok' : panelDownloadStatus === 'failed' ? ' personas-ghost-btn--err' : ''}`}
+                aria-label={panelDownloadStatus === 'done' ? 'Panel downloaded' : panelDownloadStatus === 'failed' ? 'Download failed' : 'Download panel as markdown'}
               >
-                {panelDownloadStatus === 'done'
-                  ? 'Downloaded'
-                  : panelDownloadStatus === 'failed'
-                    ? 'Download failed'
-                    : 'Download .md'}
+                {panelDownloadStatus === 'done' ? 'Downloaded' : panelDownloadStatus === 'failed' ? 'Download failed' : 'Download .md'}
               </button>
             </div>
-            {!isDefaultPanel && (
+            {!isDefaultPanel ? (
               <button
                 type="button"
                 onClick={handleResetPanel}
-                aria-label={
-                  pendingReset
-                    ? 'Confirm reset panel to default minds'
-                    : 'Reset panel to default minds'
-                }
-                className={[
-                  'personas-reset-btn',
-                  pendingReset ? 'personas-reset-btn--confirm' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
+                aria-label={pendingReset ? 'Confirm reset panel to default minds' : 'Reset panel to default minds'}
+                className={`personas-reset-btn${pendingReset ? ' personas-reset-btn--confirm' : ''}`}
               >
-                {pendingReset ? 'Reset panel? Confirm' : 'Reset to default'}
+                {pendingReset ? 'Confirm reset' : 'Reset default'}
               </button>
-            )}
+            ) : <span className="personas-panel-actions__status">DEFAULT PANEL / UNSAVED CHANGES: NONE</span>}
           </div>
         </section>
 
-        <section className="personas-page__section personas-page__library">
-          <div className="personas-page__library-head">
-            <div className="personas-library-head__row">
-              <p className="personas-page__section-label">
-                Full library · {filteredLibrary.length}
-                {libraryQuery.trim() || libraryAvailability !== 'all'
-                  ? ` / ${personas.length}`
-                  : ' personas'}
-              </p>
-              {personas.length > 0 ? (
-                <div className="personas-library-actions">
-                  <button
-                    type="button"
-                    onClick={() => void copyFilteredLibrary()}
-                    title="Copy current library view as markdown"
-                    aria-label={
-                      libraryCopyStatus === 'copied'
-                        ? 'Library copied'
-                        : libraryCopyStatus === 'failed'
-                          ? 'Copy failed'
-                          : 'Copy persona library as markdown'
-                    }
-                    className={[
-                      'personas-library-action',
-                      libraryCopyStatus === 'copied' ? 'personas-library-action--ok' : '',
-                      libraryCopyStatus === 'failed' ? 'personas-library-action--err' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                  >
-                    {libraryCopyStatus === 'copied'
-                      ? 'Copied'
-                      : libraryCopyStatus === 'failed'
-                        ? 'Failed'
-                        : 'Copy'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => downloadFilteredLibrary()}
-                    title="Download current library view as markdown"
-                    aria-label={
-                      libraryDownloadStatus === 'done'
-                        ? 'Library downloaded'
-                        : libraryDownloadStatus === 'failed'
-                          ? 'Download failed'
-                          : 'Download persona library as markdown'
-                    }
-                    className={[
-                      'personas-library-action',
-                      libraryDownloadStatus === 'done' ? 'personas-library-action--ok' : '',
-                      libraryDownloadStatus === 'failed' ? 'personas-library-action--err' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                  >
-                    {libraryDownloadStatus === 'done'
-                      ? 'Downloaded'
-                      : libraryDownloadStatus === 'failed'
-                        ? 'Failed'
-                        : 'Download'}
-                  </button>
-                </div>
-              ) : null}
+        <section className="personas-studio-section personas-lens-lab" aria-labelledby="lens-lab-title">
+          <header className="personas-studio-section__head">
+            <div>
+              <span className="personas-studio-eyebrow">02 / Lens preview</span>
+              <h2 id="lens-lab-title">One question. Four different inspections.</h2>
             </div>
+            <p>
+              Persona choice changes what gets examined—not merely the tone of the response.
+              Preview the question each current mind is designed to ask first.
+            </p>
+          </header>
+
+          <div className="personas-lens-scenarios" role="group" aria-label="Lens preview scenario">
+            {SHOWCASE_PROMPTS.map((scenario, index) => (
+              <button
+                key={scenario.label}
+                type="button"
+                aria-pressed={showcaseIndex === index}
+                className={showcaseIndex === index ? 'is-active' : ''}
+                onClick={() => setShowcaseIndex(index)}
+              >
+                <small>0{index + 1}</small><strong>{scenario.label}</strong><span aria-hidden="true">{showcaseIndex === index ? '●' : '○'}</span>
+              </button>
+            ))}
+          </div>
+          <div className="personas-lens-question">
+            <small>ILLUSTRATIVE LENS PREVIEW · NOT A LIVE RUN</small>
+            <h3>{showcase.prompt}</h3>
+            <p>{showcase.note}</p>
+          </div>
+          <div className="personas-lens-grid">
+            {panel.map((persona, index) => (
+              <article key={`${persona.id}-lens`} style={{ '--tone': persona.color } as CSSProperties}>
+                <header><small>0{index + 1}</small><span>{persona.name}</span></header>
+                <blockquote>“{PERSONA_LENSES[persona.id] ?? persona.quote}”</blockquote>
+                <footer>DESIGNED LENS / {persona.temperature.toFixed(1)}</footer>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="personas-studio-section personas-recipes" aria-labelledby="recipes-title">
+          <header className="personas-studio-section__head">
+            <div>
+              <span className="personas-studio-eyebrow">03 / Panel recipes</span>
+              <h2 id="recipes-title">Start with the work, not a favorite mind.</h2>
+            </div>
+            <p>
+              Curated combinations give each question evidence, friction, consequence, and a
+              practical route forward. Preview one, then load it into all four slots.
+            </p>
+          </header>
+
+          <div className="personas-recipe-layout">
+            <div className="personas-recipe-tabs" role="group" aria-label="Panel recipe">
+              {PANEL_RECIPES.map((recipe) => (
+                <button
+                  key={recipe.id}
+                  type="button"
+                  aria-pressed={selectedRecipe.id === recipe.id}
+                  className={selectedRecipe.id === recipe.id ? 'is-active' : ''}
+                  style={{ '--tone': recipe.tone } as CSSProperties}
+                  onClick={() => setSelectedRecipeId(recipe.id)}
+                >
+                  <small>{recipe.index}</small>
+                  <strong>{recipe.label}</strong>
+                  <span>{recipe.use}</span>
+                </button>
+              ))}
+            </div>
+            <div className="personas-recipe-preview" style={{ '--tone': selectedRecipe.tone } as CSSProperties}>
+              <header><small>{selectedRecipe.index} / CURATED CONFIGURATION</small><span>04 MINDS</span></header>
+              <h3>{selectedRecipe.label}</h3>
+              <p>{selectedRecipe.description}</p>
+              <ol>
+                {selectedRecipe.personaIds.map((id, index) => {
+                  const persona = personas.find((candidate) => candidate.id === id);
+                  return <li key={id}><small>0{index + 1}</small><span>{persona?.name ?? id}</span><i style={{ background: persona?.color ?? selectedRecipe.tone }} /></li>;
+                })}
+              </ol>
+              <button type="button" onClick={applyRecipe} disabled={selectedRecipePersonas.length !== 4}>
+                {selectedRecipePersonas.some((persona) => !canUsePersona(persona.id)) ? 'View plan to unlock' : 'Load this panel'}
+                <ArrowRight aria-hidden="true" />
+              </button>
+              <small className="personas-recipe-preview__note">Loading changes the local panel. Save explicitly to persist it.</small>
+            </div>
+          </div>
+        </section>
+
+        <section className="personas-studio-section personas-page__library" aria-labelledby="library-title">
+          <header className="personas-studio-section__head personas-library-title-row">
+            <div>
+              <span className="personas-studio-eyebrow">04 / Mind index</span>
+              <h2 id="library-title">Inspect every reasoning style.</h2>
+            </div>
+            <p>
+              Search by trait, compare each lens, then place a mind directly into any slot.
+              Six starter personas are available on Free; paid plans unlock the full catalog.
+            </p>
+          </header>
+
+          <div className="personas-library-toolbar">
             <div className="personas-search__row">
               <PersonasSearchInput
                 inputRef={librarySearchRef}
                 value={libraryQuery}
                 onChange={setLibraryQuery}
                 onClear={() => setLibraryQuery('')}
-                placeholder="Search minds…"
+                placeholder="Search name, trait, or question…"
                 ariaLabel="Search persona library"
                 clearAriaLabel="Clear persona search"
               />
               {personas.length > 1 ? (
                 <select
                   value={librarySort}
-                  onChange={(e) => setLibrarySort(e.target.value as PersonasLibrarySort)}
+                  onChange={(event) => setLibrarySort(event.target.value as PersonasLibrarySort)}
                   aria-label="Sort persona library"
-                  title="Sort persona library"
                   className="personas-sort-select"
                 >
-                  {PERSONAS_LIBRARY_SORT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
+                  {PERSONAS_LIBRARY_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               ) : null}
+            </div>
+            <div className="personas-library-toolbar__meta">
+              <span>{String(displayedLibrary.length).padStart(2, '0')} / {String(filteredLibrary.length).padStart(2, '0')} VISIBLE</span>
+              <button type="button" onClick={() => void copyFilteredLibrary()} aria-label="Copy persona library as markdown">
+                {libraryCopyStatus === 'copied' ? 'Copied' : libraryCopyStatus === 'failed' ? 'Failed' : 'Copy view'}
+              </button>
+              <button type="button" onClick={downloadFilteredLibrary} aria-label="Download persona library as markdown">
+                {libraryDownloadStatus === 'done' ? 'Downloaded' : libraryDownloadStatus === 'failed' ? 'Failed' : 'Download .md'}
+              </button>
             </div>
           </div>
 
@@ -805,473 +953,145 @@ export function PersonasPage() {
             <EmptyState
               variant="filter"
               icon={<Sparkles width={24} height={24} strokeWidth={1.5} aria-hidden />}
-              title={
-                libraryQuery.trim()
-                  ? `No minds match “${libraryQuery.trim()}”${
-                      libraryAvailability !== 'all'
-                        ? ` in ${personasLibraryAvailabilityLabel(libraryAvailability).toLowerCase()}`
-                        : ''
-                    }`
-                  : libraryAvailability === 'on_panel'
-                    ? 'No minds currently on your panel in this view.'
-                    : libraryAvailability === 'unlocked'
-                      ? 'No unlocked minds match this view.'
-                      : libraryAvailability === 'locked'
-                        ? 'No locked minds — your tier unlocks the full library.'
-                        : 'No minds in this view.'
-              }
-              description={
-                libraryQuery.trim()
-                  ? 'Try a name, quote fragment, or trait — for example “analyst” or “what works”.'
-                  : 'Clear the availability filter to browse every mind again.'
-              }
-              actions={
-                <button
-                  type="button"
-                  className="arena-btn arena-btn--ghost arena-btn--md"
-                  onClick={() => {
-                    setLibraryQuery('');
-                    setLibraryAvailability('all');
-                    librarySearchRef.current?.focus();
-                  }}
-                >
-                  {libraryAvailability !== 'all' && !libraryQuery.trim()
-                    ? 'Show all minds'
-                    : 'Clear filters'}
-                </button>
-              }
+              title={libraryQuery.trim() ? `No minds match “${libraryQuery.trim()}”` : 'No minds in this view.'}
+              description="Try a name, quote fragment, or trait—or return to the complete catalog."
+              actions={<button type="button" className="arena-btn arena-btn--ghost arena-btn--md" onClick={() => { setLibraryQuery(''); setLibraryAvailability('all'); librarySearchRef.current?.focus(); }}>Clear filters</button>}
             />
           ) : (
-          <div
-            className="persona-library-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '10px',
-            }}
-          >
-            {filteredLibrary.map((persona, index) => {
-              const inSlot = unlockedSlotMap[persona.id];
-              const isVisible = revealedLibraryIds[persona.id] || index < 4 || Boolean(libraryQuery.trim());
-              const isLocked = !canUsePersona(persona.id);
-              const cardTransition = reducedMotion
-                ? 'none'
-                : `opacity 300ms ease ${index * 30}ms, transform 300ms ease ${index * 30}ms, box-shadow 200ms ease, background 150ms ease`;
+            <div className="personas-library-workbench">
+              {selectedPersona ? (
+                <aside className="personas-profile" style={{ '--tone': selectedPersona.color } as CSSProperties} aria-label={`Selected mind: ${selectedPersona.name}`}>
+                  <header><span>SELECTED MIND</span><b>{canUsePersona(selectedPersona.id) ? 'AVAILABLE' : 'PLUS'}</b></header>
+                  <div className="personas-profile__number">{String(personas.findIndex((persona) => persona.id === selectedPersona.id) + 1).padStart(2, '0')}</div>
+                  <h3>{selectedPersona.name}</h3>
+                  <blockquote>“{selectedPersona.quote}”</blockquote>
+                  <p>{selectedPersona.description}</p>
+                  <div className="personas-profile__lens"><small>FIRST INSPECTION</small><strong>{PERSONA_LENSES[selectedPersona.id] ?? selectedPersona.quote}</strong></div>
+                  <dl><div><dt>{selectedPersona.temperature.toFixed(1)}</dt><dd>configured divergence</dd></div><div><dt>{unlockedSlotMap[selectedPersona.id] ? `0${unlockedSlotMap[selectedPersona.id]}` : '—'}</dt><dd>current slot</dd></div></dl>
+                  <div className="personas-profile__slots" role="group" aria-label={`Place ${selectedPersona.name} in panel slot`}>
+                    {slotLabels.map((label, index) => (
+                      <button key={label} type="button" onClick={() => handleSwap(index as SlotIndex, selectedPersona)} aria-label={`Place ${selectedPersona.name} in ${label.toLowerCase()}`}>
+                        0{index + 1}
+                      </button>
+                    ))}
+                  </div>
+                  {!canUsePersona(selectedPersona.id) ? <button type="button" className="personas-profile__unlock" onClick={() => navigate('/pricing')}>View Plus pricing <ArrowRight aria-hidden="true" /></button> : null}
+                </aside>
+              ) : null}
 
-              return (
-                <div
-                  key={persona.id}
-                  ref={(node) => {
-                    libraryRefs.current[persona.id] = node;
-                  }}
-                  data-persona-id={persona.id}
-                  className={[
-                    'personas-lib-card',
-                    isLocked ? 'personas-lib-card--locked' : '',
-                    reducedMotion ? 'personas-lib-card--static' : '',
-                    isVisible ? 'personas-lib-card--visible' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  style={{
-                    background: persona.bgTint,
-                    opacity: isVisible ? (isLocked ? 0.65 : 1) : 0,
-                    transform: isVisible ? 'translateY(0)' : reducedMotion ? 'none' : 'translateY(16px)',
-                    transition: cardTransition,
-                    cursor: isLocked ? 'pointer' : 'default',
-                  }}
-                  onClick={() => {
-                    if (isLocked) navigate('/pricing');
-                  }}
-                >
-                  <div style={{ height: '2px', background: persona.color, borderRadius: '999px', marginBottom: '1rem' }} />
-                  {isLocked && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '12px',
-                        right: '12px',
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: '50%',
-                        background: 'rgba(26,23,20,0.08)',
-                        color: '#1A1714',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
+              <div className="persona-library-grid">
+                {displayedLibrary.map((persona, index) => {
+                  const inSlot = unlockedSlotMap[persona.id];
+                  const isLocked = !canUsePersona(persona.id);
+                  const isSelected = selectedPersona?.id === persona.id;
+                  return (
+                    <article
+                      key={persona.id}
+                      className={`personas-lib-card${isLocked ? ' personas-lib-card--locked' : ''}${isSelected ? ' is-selected' : ''}`}
+                      style={{ '--persona-color': persona.color } as CSSProperties}
                     >
-                      <Lock style={{ width: '14px', height: '14px' }} />
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span
-                      style={{
-                        width: '7px',
-                        height: '7px',
-                        borderRadius: '50%',
-                        background: persona.color,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span className="personas-swap-option__name">
-                      <HighlightQuery text={persona.name} query={libraryQuery} />
-                    </span>
-                  </div>
-                  <p style={{ fontSize: '12px', color: '#A0A39A', fontStyle: 'italic', marginTop: '.4rem', lineHeight: 1.6 }}>
-                    <HighlightQuery text={persona.quote} query={libraryQuery} />
-                  </p>
-                  <p style={{ fontSize: '12px', color: '#A0A39A', lineHeight: 1.6, marginTop: '.7rem' }}>
-                    <HighlightQuery text={persona.description} query={libraryQuery} />
-                  </p>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 8,
-                      alignItems: 'center',
-                      marginTop: '0.85rem',
-                      minHeight: 22,
-                    }}
-                  >
-                    {inSlot ? (
-                      <span
-                        style={{
-                          background: '#F0EBE3',
-                          color: '#A0A39A',
-                          fontSize: '10px',
-                          padding: '3px 8px',
-                          borderRadius: '999px',
-                        }}
-                      >
-                        In slot {inSlot}
-                      </span>
-                    ) : isLocked ? (
-                      <span
-                        style={{
-                          background: '#F0B84E',
-                          color: '#F3F0E7',
-                          fontSize: '10px',
-                          padding: '3px 8px',
-                          borderRadius: '999px',
-                        }}
-                      >
-                        Plus
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void copyLibraryMind({
-                          id: persona.id,
-                          name: persona.name,
-                          quote: persona.quote,
-                          description: persona.description,
-                          onPanel: inSlot != null,
-                          unlocked: !isLocked,
-                        });
-                      }}
-                      title={`Copy ${persona.name} as markdown`}
-                      aria-label={`Copy ${persona.name} as markdown`}
-                      style={{
-                        marginLeft: 'auto',
-                        background: 'none',
-                        border: 'none',
-                        padding: 0,
-                        fontSize: 11,
-                        fontFamily: 'var(--vp-font-sans)',
-                        cursor: 'pointer',
-                        color:
-                          mindCopyId === persona.id && mindCopyStatus === 'failed'
-                            ? '#993C1D'
-                            : mindCopyId === persona.id && mindCopyStatus === 'copied'
-                              ? '#3F6B4A'
-                              : '#F0B84E',
-                      }}
-                    >
-                      {mindCopyId === persona.id && mindCopyStatus === 'copied'
-                        ? 'Copied'
-                        : mindCopyId === persona.id && mindCopyStatus === 'failed'
-                          ? 'Failed'
-                          : 'Copy mind'}
-                    </button>
-                  </div>
-                  {isLocked && (
-                    <div
-                      style={{
-                        marginTop: 10,
-                        background: '#1A1714',
-                        color: '#F3F0E7',
-                        fontSize: '11px',
-                        padding: '5px 12px',
-                        borderRadius: '999px',
-                        display: 'inline-block',
-                      }}
-                    >
-                      View Plus pricing
-                    </div>
-                  )}
+                      <button type="button" className="personas-lib-card__inspect" aria-pressed={isSelected} onClick={() => setSelectedPersonaId(persona.id)}>
+                        <header><small>{String(index + 1).padStart(2, '0')}</small><i /><span>{isLocked ? <Lock aria-hidden="true" /> : null}</span></header>
+                        <h3><HighlightQuery text={persona.name} query={libraryQuery} /></h3>
+                        <blockquote>“<HighlightQuery text={persona.quote} query={libraryQuery} />”</blockquote>
+                        <p><HighlightQuery text={persona.description} query={libraryQuery} /></p>
+                      </button>
+                      <footer>
+                        <span>{inSlot ? `SLOT 0${inSlot}` : isLocked ? 'PLUS' : 'AVAILABLE'}</span>
+                        <button
+                          type="button"
+                          onClick={() => void copyLibraryMind({ id: persona.id, name: persona.name, quote: persona.quote, description: persona.description, onPanel: inSlot != null, unlocked: !isLocked })}
+                          aria-label={`Copy ${persona.name} as markdown`}
+                        >
+                          {mindCopyId === persona.id && mindCopyStatus === 'copied' ? 'Copied' : mindCopyId === persona.id && mindCopyStatus === 'failed' ? 'Failed' : 'Copy'}
+                        </button>
+                      </footer>
+                    </article>
+                  );
+                })}
+              </div>
+              {displayedLibrary.length < filteredLibrary.length ? (
+                <div className="personas-library-disclosure">
+                  <span>{filteredLibrary.length - displayedLibrary.length} more reasoning styles remain in the index.</span>
+                  <button type="button" onClick={() => setShowAllLibrary(true)}>Show all {filteredLibrary.length} minds <ArrowRight aria-hidden="true" /></button>
                 </div>
-              );
-            })}
-          </div>
+              ) : showAllLibrary && !libraryIsFiltered && filteredLibrary.length > 8 ? (
+                <div className="personas-library-disclosure">
+                  <span>Complete persona index is visible.</span>
+                  <button type="button" onClick={() => setShowAllLibrary(false)}>Show fewer minds</button>
+                </div>
+              ) : null}
+            </div>
           )}
+        </section>
+
+        <section className="personas-studio-close" aria-labelledby="personas-close-title">
+          <small>THE ROOM IS THE INSTRUMENT</small>
+          <h2 id="personas-close-title">Choose minds that fail differently.</h2>
+          <p>Then give all four the question you cannot afford to examine from one angle.</p>
+          <button type="button" onClick={() => navigate('/app')}>Enter Arena <ArrowRight aria-hidden="true" /></button>
         </section>
       </main>
 
-      {activeSlot !== null && activePersona && (
-        <div
-          className="personas-modal-backdrop"
-          role="presentation"
-          onClick={closeModal}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 100,
-            background: 'rgba(26,23,20,0.4)',
-            backdropFilter: reducedMotion ? 'none' : 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '24px',
-          }}
-        >
+      <Footer />
+
+      {activeSlot !== null && activePersona ? createPortal(
+        <div className="personas-modal-backdrop" role="presentation" onClick={closeModal}>
           <div
-            className="swap-modal"
+            ref={swapDialogRef}
+            className={`swap-modal${modalVisible ? ' is-visible' : ''}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="swap-slot-title"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: '#0B0C0A',
-              borderRadius: '20px',
-              padding: '2rem',
-              maxWidth: '560px',
-              width: '90%',
-              maxHeight: '80vh',
-              overflowY: 'auto',
-              opacity: modalVisible ? 1 : 0,
-              transform: modalVisible || reducedMotion ? 'scale(1)' : 'scale(0.95)',
-              transition: reducedMotion ? 'none' : 'opacity 250ms ease, transform 250ms ease',
-            }}
+            aria-describedby="swap-slot-description"
+            onClick={(event) => event.stopPropagation()}
           >
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
-              <div>
-                <h2 id="swap-slot-title" className="personas-modal-title">
-                  Swap slot {activeSlot + 1}
-                </h2>
-                <p className="personas-modal-current">
-                  Currently: {activePersona.name}
-                </p>
+            <header className="personas-modal-head">
+              <div><small>SLOT 0{activeSlot + 1} / RECONFIGURE</small><h2 id="swap-slot-title">Choose a counterweight.</h2><p id="swap-slot-description">Replacing {activePersona.name}</p></div>
+              <button type="button" onClick={closeModal} aria-label="Close swap dialog" className="personas-modal-close"><X aria-hidden="true" /></button>
+            </header>
+
+            <div className="personas-modal-controls">
+              <div className="personas-search__row personas-search__row--modal">
+                <PersonasSearchInput inputRef={swapSearchRef} value={swapQuery} onChange={setSwapQuery} onClear={() => setSwapQuery('')} placeholder="Search minds to swap…" ariaLabel="Search minds to swap into this slot" clearAriaLabel="Clear swap search" variant="swap" />
+                {modalOptions.length > 1 ? (
+                  <select value={swapSort} onChange={(event) => setSwapSort(event.target.value as PersonasLibrarySort)} aria-label="Sort minds to swap" className="personas-sort-select personas-sort-select--swap">
+                    {PERSONAS_LIBRARY_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                ) : null}
               </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                aria-label="Close swap dialog"
-                className={[
-                  'personas-modal-close',
-                  reducedMotion ? 'personas-modal-close--static' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                <X style={{ width: '14px', height: '14px' }} />
-              </button>
+              {modalOptions.length > 0 ? <PersonasAvailabilityFilters<PersonasLibraryAvailability> options={PERSONAS_LIBRARY_AVAILABILITY_OPTIONS} value={swapAvailability} onChange={setSwapAvailability} ariaLabel="Filter swap candidates by availability" variant="compact" /> : null}
+              <p className="personas-modal-count">{String(filteredSwapOptions.length).padStart(2, '0')} / {String(modalOptions.length).padStart(2, '0')} CANDIDATES</p>
             </div>
 
-            <div className="personas-modal-rule" />
-
-            <div className="personas-search__row personas-search__row--modal">
-              <PersonasSearchInput
-                inputRef={swapSearchRef}
-                value={swapQuery}
-                onChange={setSwapQuery}
-                onClear={() => setSwapQuery('')}
-                placeholder="Search minds to swap…"
-                ariaLabel="Search minds to swap into this slot"
-                clearAriaLabel="Clear swap search"
-                variant="swap"
-              />
-              {modalOptions.length > 1 ? (
-                <select
-                  value={swapSort}
-                  onChange={(e) => setSwapSort(e.target.value as PersonasLibrarySort)}
-                  aria-label="Sort minds to swap"
-                  title="Sort minds to swap"
-                  className="personas-sort-select personas-sort-select--swap"
-                >
-                  {PERSONAS_LIBRARY_SORT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-            </div>
-
-            {modalOptions.length > 0 ? (
-              <PersonasAvailabilityFilters<PersonasLibraryAvailability>
-                options={PERSONAS_LIBRARY_AVAILABILITY_OPTIONS}
-                value={swapAvailability}
-                onChange={setSwapAvailability}
-                ariaLabel="Filter swap candidates by availability"
-                variant="compact"
-              />
-            ) : null}
-
-            <p style={{ ...eyebrowStyle, marginBottom: '.8rem' }}>
-              Available to swap
-              {swapQuery.trim() || swapSort !== 'default' || swapAvailability !== 'all'
-                ? ` · ${filteredSwapOptions.length} / ${modalOptions.length}`
-                : ` · ${modalOptions.length}`}
-              {swapAvailability !== 'all'
-                ? ` · ${personasLibraryAvailabilityLabel(swapAvailability)}`
-                : ''}
-              {swapSort !== 'default'
-                ? ` · ${PERSONAS_LIBRARY_SORT_OPTIONS.find((o) => o.value === swapSort)?.label}`
-                : ''}
-            </p>
             {filteredSwapOptions.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '1.5rem 0.5rem' }}>
-                <p className="personas-swap-empty__title">
-                  {swapQuery.trim()
-                    ? `No minds match “${swapQuery.trim()}”${
-                        swapAvailability !== 'all'
-                          ? ` in ${personasLibraryAvailabilityLabel(swapAvailability).toLowerCase()}`
-                          : ''
-                      }`
-                    : swapAvailability === 'on_panel'
-                      ? 'No other panel minds to swap with.'
-                      : swapAvailability === 'unlocked'
-                        ? 'No unlocked minds available for this slot.'
-                        : swapAvailability === 'locked'
-                          ? 'No locked minds in this view.'
-                          : 'No minds available to swap.'}
-                </p>
-                <button
-                  type="button"
-                  className="arena-btn arena-btn--ghost arena-btn--sm"
-                  style={{ marginTop: 12 }}
-                  onClick={() => {
-                    setSwapQuery('');
-                    setSwapAvailability('all');
-                    swapSearchRef.current?.focus();
-                  }}
-                >
-                  {swapAvailability !== 'all' && !swapQuery.trim()
-                    ? 'Show all minds'
-                    : 'Clear filters'}
-                </button>
-              </div>
+              <div className="personas-swap-empty"><p>No minds match this view.</p><button type="button" onClick={() => { setSwapQuery(''); setSwapAvailability('all'); swapSearchRef.current?.focus(); }}>Clear filters</button></div>
             ) : (
               <div className="personas-swap-grid">
                 {filteredSwapOptions.map((persona) => {
                   const isLocked = !canUsePersona(persona.id);
-
                   return (
-                    <button
-                      key={persona.id}
-                      type="button"
-                      onClick={() => {
-                        if (isLocked) {
-                          navigate('/pricing');
-                          return;
-                        }
-                        handleSwap(activeSlot, persona);
-                      }}
-                      className={[
-                        'personas-swap-option',
-                        isLocked ? 'personas-swap-option--locked' : '',
-                        reducedMotion ? 'personas-swap-option--static' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      style={
-                        {
-                          ['--persona-color' as string]: persona.color,
-                        } as CSSProperties
-                      }
-                    >
-                      {isLocked && (
-                        <div className="personas-swap-option__lock">
-                          <Lock style={{ width: '13px', height: '13px' }} />
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span
-                          style={{
-                            width: '7px',
-                            height: '7px',
-                            borderRadius: '50%',
-                            background: persona.color,
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>
-                          <HighlightQuery text={persona.name} query={swapQuery} />
-                        </span>
-                      </div>
-                      <p className="personas-swap-option__description">
-                        <HighlightQuery text={persona.description} query={swapQuery} />
-                      </p>
-                      <p
-                        style={{
-                          fontSize: '11px',
-                          color: '#A0A39A',
-                          fontStyle: 'italic',
-                          marginTop: '.4rem',
-                        }}
-                      >
-                        <HighlightQuery text={persona.quote} query={swapQuery} />
-                      </p>
-                      {isLocked && (
-                        <div style={{ marginTop: '.6rem', fontSize: '11px', color: '#1A1714' }}>
-                          View Plus pricing
-                        </div>
-                      )}
+                    <button key={persona.id} type="button" onClick={() => isLocked ? navigate('/pricing') : handleSwap(activeSlot, persona)} className={`personas-swap-option${isLocked ? ' personas-swap-option--locked' : ''}`} style={{ '--persona-color': persona.color } as CSSProperties}>
+                      <header><i /><span>{persona.name}</span>{isLocked ? <Lock aria-hidden="true" /> : null}</header>
+                      <strong>{PERSONA_LENSES[persona.id] ?? persona.quote}</strong>
+                      <p>{persona.description}</p>
+                      <footer>{isLocked ? 'VIEW PLUS PRICING' : 'PLACE IN SLOT'} <ArrowRight aria-hidden="true" /></footer>
                     </button>
                   );
                 })}
               </div>
             )}
-
-            <div className="personas-modal-rule" />
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+      ) : null}
 
-      {toast && (
-        <div
-          role={panelSaveToastRole(toast.kind ?? 'success')}
-          aria-live={panelSaveToastAriaLive(toast.kind ?? 'success')}
-          aria-atomic="true"
-          style={{
-            position: 'fixed',
-            bottom: '90px',
-            left: '50%',
-            transform: `translateX(-50%) translateY(${toastVisible ? '0' : '8px'})`,
-            zIndex: 200,
-            background: toast.color,
-            color: '#F3F0E7',
-            fontSize: '13px',
-            padding: '10px 20px',
-            borderRadius: '999px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            opacity: toastVisible ? 1 : 0,
-            transition: 'opacity 300ms ease, transform 300ms ease',
-          }}
-        >
-          <Sparkles style={{ width: '14px', height: '14px', color: toast.iconColor || '#0B0C0A' }} aria-hidden />
-          <span
-            style={{ width: '6px', height: '6px', borderRadius: '50%', background: toast.iconColor || '#0B0C0A' }}
-            aria-hidden
-          />
-          <span>{toast.message}</span>
-        </div>
-      )}
+      {toast ? createPortal(
+        <div className={`personas-toast${toastVisible ? ' is-visible' : ''}`} role={panelSaveToastRole(toast.kind ?? 'success')} aria-live={panelSaveToastAriaLive(toast.kind ?? 'success')} aria-atomic="true" style={{ '--toast-tone': toast.iconColor ?? '#D7F64A' } as CSSProperties}>
+          <Sparkles aria-hidden="true" /><span>{toast.message}</span>
+        </div>,
+        document.body,
+      ) : null}
 
       <KeyboardShortcutsHelp surface="personas" />
     </div>

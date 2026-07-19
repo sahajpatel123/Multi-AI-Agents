@@ -1,5 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { PersonasPage } from './PersonasPage';
 import type { Persona } from '../data/personas';
@@ -22,7 +21,7 @@ const defaultPanel: Persona[] = [
     color: '#9B8FAA',
     bgTint: '#F0EDF2',
     quote: 'I question the premise first.',
-    temperature: 0.3,
+    temperature: 0.7,
     description: 'Frames the deeper question.',
     locked: false,
     slot: 2,
@@ -33,37 +32,53 @@ const defaultPanel: Persona[] = [
     color: '#8AA899',
     bgTint: '#EFF2F0',
     quote: 'What actually works?',
-    temperature: 0.4,
+    temperature: 0.5,
     description: 'Trade-off focused.',
     locked: false,
     slot: 3,
   },
   {
-    id: 'futurist',
-    name: 'The Futurist',
-    color: '#9B8FAA',
-    bgTint: '#F0EDF2',
-    quote: 'What is the long arc?',
-    temperature: 0.5,
-    description: 'Projects the trajectory.',
+    id: 'contrarian',
+    name: 'The Contrarian',
+    color: '#B0977E',
+    bgTint: '#F2EDE8',
+    quote: 'I say what no one else will.',
+    temperature: 1,
+    description: 'Challenges consensus.',
     locked: false,
     slot: 4,
   },
 ];
 
-const lockedPersona: Persona = {
-  id: 'scientist',
-  name: 'The Scientist',
-  color: '#8C9BAB',
-  bgTint: '#EEF0F2',
-  quote: 'Run the experiment.',
-  temperature: 0.2,
-  description: 'Empirical method.',
-  locked: true,
-  slot: null,
-};
+const catalogPersonas: Persona[] = [
+  {
+    id: 'scientist', name: 'The Scientist', color: '#7A9BAB', bgTint: '#EEF2F4',
+    quote: 'Evidence, methodology, data.', temperature: 0.2,
+    description: 'Empirical method.', locked: true, slot: null,
+  },
+  {
+    id: 'strategist', name: 'The Strategist', color: '#AA957A', bgTint: '#F2F0EE',
+    quote: 'Where is the leverage?', temperature: 0.5,
+    description: 'Finds asymmetric moves.', locked: false, slot: null,
+  },
+  {
+    id: 'historian', name: 'The Historian', color: '#9B8A7A', bgTint: '#F2EEE8',
+    quote: 'Every pattern has a precedent.', temperature: 0.3,
+    description: 'Finds useful precedent.', locked: false, slot: null,
+  },
+  {
+    id: 'economist', name: 'The Economist', color: '#7A9B8A', bgTint: '#EEF2EE',
+    quote: 'Incentives explain everything.', temperature: 0.4,
+    description: 'Maps incentives.', locked: false, slot: null,
+  },
+  {
+    id: 'ethicist', name: 'The Ethicist', color: '#AA8F9B', bgTint: '#F2EEF0',
+    quote: 'What are the moral stakes?', temperature: 0.5,
+    description: 'Names who bears the cost.', locked: false, slot: null,
+  },
+];
 
-const allPersonas: Persona[] = [...defaultPanel, lockedPersona];
+const allPersonas: Persona[] = [...defaultPanel, ...catalogPersonas];
 
 const panelState: {
   panel: Persona[];
@@ -81,73 +96,39 @@ const panelState: {
   isDefaultPanel: true,
 };
 
-const tierState: {
-  canUsePersona: ReturnType<typeof vi.fn>;
-} = {
+const tierState = {
   canUsePersona: vi.fn().mockImplementation((id: string) => {
-    const found = allPersonas.find((p) => p.id === id);
+    const found = allPersonas.find((persona) => persona.id === id);
     return found ? !found.locked : false;
   }),
 };
 
 const navigateMock = vi.fn();
+const setRedirectIntentMock = vi.fn();
+const authState = { isAuthenticated: false };
 
-vi.mock('../context/PanelContext', () => ({
-  usePanel: () => panelState,
+vi.mock('../context/PanelContext', () => ({ usePanel: () => panelState }));
+vi.mock('../context/TierContext', () => ({ useTier: () => tierState }));
+vi.mock('../hooks/useAuth', () => ({ useAuth: () => authState }));
+vi.mock('../utils/redirectIntent', () => ({
+  setRedirectIntent: (...args: unknown[]) => setRedirectIntentMock(...args),
 }));
-
-vi.mock('../context/TierContext', () => ({
-  useTier: () => tierState,
-}));
-
 vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>(
-    'react-router-dom',
-  );
-  return {
-    ...actual,
-    useNavigate: () => navigateMock,
-  };
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return { ...actual, useNavigate: () => navigateMock };
 });
-
-vi.mock('../utils/track', () => ({
-  default: vi.fn(),
-}));
-
-vi.mock('../lib/clipboard', () => ({
-  copyToClipboard: vi.fn().mockResolvedValue(true),
-}));
-
-vi.mock('../lib/downloadTextFile', () => ({
-  downloadMarkdownFile: vi.fn().mockReturnValue(true),
-}));
-
-vi.mock('../components/Navbar', () => ({
-  Navbar: () => <header data-testid="navbar" />,
-}));
-
-vi.mock('../components/KeyboardShortcutsHelp', () => ({
-  KeyboardShortcutsHelp: () => null,
-}));
-
-vi.mock('../components/HighlightQuery', () => ({
-  HighlightQuery: ({ text }: { text: string }) => <>{text}</>,
-}));
-
-vi.mock('../components/EmptyState', () => ({
-  EmptyState: () => <div data-testid="empty-state" />,
-}));
-
-vi.mock('../components/AgentDot', () => ({
-  AgentDot: () => <span data-testid="agent-dot" />,
-}));
+vi.mock('../utils/track', () => ({ default: vi.fn() }));
+vi.mock('../lib/clipboard', () => ({ copyToClipboard: vi.fn().mockResolvedValue(true) }));
+vi.mock('../lib/downloadTextFile', () => ({ downloadMarkdownFile: vi.fn().mockReturnValue(true) }));
+vi.mock('../components/Navbar', () => ({ Navbar: () => <header data-testid="navbar" /> }));
+vi.mock('../components/Footer', () => ({ Footer: () => <footer data-testid="footer" /> }));
+vi.mock('../components/KeyboardShortcutsHelp', () => ({ KeyboardShortcutsHelp: () => null }));
+vi.mock('../components/HighlightQuery', () => ({ HighlightQuery: ({ text }: { text: string }) => <>{text}</> }));
+vi.mock('../components/EmptyState', () => ({ EmptyState: () => <div data-testid="empty-state" /> }));
+vi.mock('../components/AgentDot', () => ({ AgentDot: () => <span data-testid="agent-dot" /> }));
 
 function renderPage() {
-  return render(
-    <MemoryRouter>
-      <PersonasPage />
-    </MemoryRouter>,
-  );
+  return render(<MemoryRouter><PersonasPage /></MemoryRouter>);
 }
 
 describe('PersonasPage', () => {
@@ -155,90 +136,143 @@ describe('PersonasPage', () => {
     navigateMock.mockReset();
     panelState.swapAgent.mockReset();
     panelState.resetPanel.mockReset();
-    panelState.savePanel.mockClear();
+    panelState.savePanel.mockReset().mockResolvedValue(undefined);
     tierState.canUsePersona.mockClear();
+    setRedirectIntentMock.mockReset();
+    authState.isAuthenticated = false;
   });
 
-  it('renders the four default panel cards', () => {
+  it('renders the complete panel studio and shared public shell', () => {
     const { container } = renderPage();
-    const panelNames = Array.from(
-      container.querySelectorAll('.personas-panel-card__name'),
-    ).map((el) => el.textContent?.trim() ?? '');
-    expect(panelNames).toEqual([
-      'The Analyst',
-      'The Philosopher',
-      'The Pragmatist',
-      'The Futurist',
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content');
+    expect(screen.getByRole('heading', { name: /build useful disagreement/i })).toBeInTheDocument();
+    expect(container.querySelectorAll('.personas-studio-section')).toHaveLength(4);
+    expect(screen.getByTestId('navbar')).toBeInTheDocument();
+    expect(screen.getByTestId('footer')).toBeInTheDocument();
+  });
+
+  it('renders all four current panel slots with their actual minds', () => {
+    const { container } = renderPage();
+    const names = Array.from(container.querySelectorAll('.personas-panel-card__name'))
+      .map((element) => element.textContent?.trim());
+    expect(names).toEqual(['The Analyst', 'The Philosopher', 'The Pragmatist', 'The Contrarian']);
+    expect(screen.getByText(/productive tension/i)).toBeInTheDocument();
+  });
+
+  it('switches the illustrative lens preview with pressed-button semantics', () => {
+    renderPage();
+    const group = screen.getByRole('group', { name: /lens preview scenario/i });
+    const decision = within(group).getByRole('button', { name: /decision/i });
+    const product = within(group).getByRole('button', { name: /product/i });
+    expect(decision).toHaveAttribute('aria-pressed', 'true');
+    expect(product).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(product);
+    expect(decision).toHaveAttribute('aria-pressed', 'false');
+    expect(product).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/solving a problem—or decorating one/i)).toBeInTheDocument();
+    expect(screen.getByText(/not a live run/i)).toBeInTheDocument();
+  });
+
+  it('loads an available curated panel recipe into all four slots', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /load this panel/i }));
+    expect(panelState.swapAgent).toHaveBeenCalledTimes(4);
+    expect(panelState.swapAgent.mock.calls.map(([slot, persona]) => [slot, persona.id])).toEqual([
+      [0, 'strategist'], [1, 'analyst'], [2, 'pragmatist'], [3, 'contrarian'],
     ]);
   });
 
-  it('exposes the main landmark with id="main-content"', () => {
+  it('shows a concise initial index and discloses the complete catalog on demand', () => {
+    const { container } = renderPage();
+    expect(container.querySelectorAll('.personas-lib-card')).toHaveLength(8);
+    fireEvent.click(screen.getByRole('button', { name: /show all 9 minds/i }));
+    expect(container.querySelectorAll('.personas-lib-card')).toHaveLength(9);
+    expect(screen.getByRole('button', { name: /show fewer minds/i })).toBeInTheDocument();
+  });
+
+  it('inspects an unlocked mind and places it directly into a chosen slot', () => {
     renderPage();
-    const main = screen.getByRole('main');
-    expect(main).toHaveAttribute('id', 'main-content');
+    const strategistCard = screen.getByRole('button', { name: /the strategist.*where is the leverage/i });
+    fireEvent.click(strategistCard);
+    const profile = screen.getByLabelText(/selected mind: the strategist/i);
+    fireEvent.click(within(profile).getByRole('button', { name: /place the strategist in slot 2/i }));
+    expect(panelState.swapAgent).toHaveBeenCalledWith(1, expect.objectContaining({ id: 'strategist' }));
   });
 
-  it('renders the library head with BEM classes', () => {
-    const { container } = renderPage();
-    expect(container.querySelector('.personas-library-head__row')).toBeTruthy();
-    expect(container.querySelector('.personas-library-actions')).toBeTruthy();
-    expect(container.querySelectorAll('.personas-library-action').length).toBe(2);
+  it('opens the accessible swap dialog and swaps an unlocked candidate', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /swap the analyst in slot 1/i }));
+    const dialog = screen.getByRole('dialog', { name: /choose a counterweight/i });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    fireEvent.click(within(dialog).getByRole('button', { name: /the strategist/i }));
+    expect(panelState.swapAgent).toHaveBeenCalledWith(0, expect.objectContaining({ id: 'strategist' }));
   });
 
-  it('renders the search input with BEM class', () => {
-    const { container } = renderPage();
-    const searchEl = container.querySelector('.personas-search');
-    expect(searchEl).toBeTruthy();
-    const input = container.querySelector('.personas-search__input');
-    expect(input).toBeTruthy();
-    expect(input).toHaveAttribute('placeholder', 'Search minds…');
+  it('routes guests through sign-in before saving and preserves the Personas return intent', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /sign in to save panel/i }));
+    expect(panelState.savePanel).not.toHaveBeenCalled();
+    expect(setRedirectIntentMock).toHaveBeenCalledWith('/personas');
+    expect(navigateMock).toHaveBeenCalledWith('/signin?tab=signin');
   });
 
-  it('shows a clear button only when the search has a value', () => {
-    const { container } = renderPage();
-    expect(container.querySelector('.personas-search__clear')).toBeNull();
-    const input = container.querySelector<HTMLInputElement>('.personas-search__input');
-    expect(input).toBeTruthy();
-    fireEvent.change(input!, { target: { value: 'analyst' } });
-    const clear = container.querySelector('.personas-search__clear');
-    expect(clear).toBeTruthy();
-    fireEvent.click(clear!);
-    expect(container.querySelector('.personas-search__clear')).toBeNull();
+  it('saves directly for authenticated visitors and reports save failures', async () => {
+    authState.isAuthenticated = true;
+    panelState.savePanel.mockRejectedValueOnce(new Error('Save unavailable'));
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /save this panel/i }));
+    expect(panelState.savePanel).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/save unavailable/i);
   });
 
-  it('renders the availability filter pills with BEM class', () => {
-    const { container } = renderPage();
-    const filters = container.querySelector('.personas-availability');
-    expect(filters).toBeTruthy();
-    const pills = container.querySelectorAll('.personas-availability__pill');
-    expect(pills.length).toBe(4);
-    const active = container.querySelector('.personas-availability__pill--active');
-    expect(active).toBeTruthy();
-    expect(active?.textContent).toBe('All');
+  it('routes a locked recipe to pricing before changing any panel slot', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /evidence room/i }));
+    fireEvent.click(screen.getByRole('button', { name: /view plan to unlock/i }));
+    expect(navigateMock).toHaveBeenCalledWith('/pricing');
+    expect(panelState.swapAgent).not.toHaveBeenCalled();
   });
 
-  it('marks the selected availability pill with aria-pressed and the --active modifier', () => {
-    const { container } = renderPage();
-    const pills = container.querySelectorAll<HTMLButtonElement>(
-      '.personas-availability__pill',
-    );
-    const lockedPill = Array.from(pills).find((p) => p.textContent === 'Locked');
-    expect(lockedPill).toBeTruthy();
-    fireEvent.click(lockedPill!);
-    expect(lockedPill!.getAttribute('aria-pressed')).toBe('true');
-    expect(lockedPill!.className).toContain('personas-availability__pill--active');
+  it('keeps the selected profile consistent when availability filters remove a mind', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /the pragmatist.*what actually works/i }));
+    expect(screen.getByLabelText(/selected mind: the pragmatist/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Locked' }));
+    expect(screen.getByLabelText(/selected mind: the scientist/i)).toBeInTheDocument();
+    expect(document.querySelectorAll('.personas-lib-card.is-selected')).toHaveLength(1);
   });
 
-  it('renders the sort select with the BEM class', () => {
-    const { container } = renderPage();
-    const select = container.querySelector('.personas-sort-select');
-    expect(select).toBeTruthy();
-    expect(select).toHaveAttribute('aria-label', 'Sort persona library');
+  it('portals the modal, traps focus, unlocks body scroll, and restores its trigger', async () => {
+    renderPage();
+    const trigger = screen.getByRole('button', { name: /swap the analyst in slot 1/i });
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole('dialog', { name: /choose a counterweight/i });
+    const backdrop = dialog.parentElement;
+    expect(backdrop).toHaveClass('personas-modal-backdrop');
+    expect(backdrop?.parentElement).toBe(document.body);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    const close = within(dialog).getByRole('button', { name: /close swap dialog/i });
+    close.focus();
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toHaveClass('personas-swap-option');
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    await waitFor(() => expect(document.querySelector('.personas-modal-backdrop')).toBeNull());
+    expect(document.body.style.overflow).toBe('');
+    expect(trigger).toHaveFocus();
   });
 
-  it('renders at least one library card with the --locked modifier when a persona is locked', () => {
+  it('searches, clears, sorts, and filters the mind index', () => {
     const { container } = renderPage();
-    const lockedCards = container.querySelectorAll('.personas-lib-card--locked');
-    expect(lockedCards.length).toBeGreaterThan(0);
+    const input = screen.getByLabelText('Search persona library');
+    fireEvent.change(input, { target: { value: 'scientist' } });
+    expect(container.querySelectorAll('.personas-lib-card')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /clear persona search/i }));
+    expect(container.querySelector('.personas-sort-select')).toHaveAttribute('aria-label', 'Sort persona library');
+    const locked = screen.getByRole('button', { name: 'Locked' });
+    fireEvent.click(locked);
+    expect(locked).toHaveAttribute('aria-pressed', 'true');
+    expect(container.querySelectorAll('.personas-lib-card--locked')).toHaveLength(1);
   });
 });

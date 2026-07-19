@@ -171,11 +171,22 @@ if (!rootElement) {
                 <ProfileModal />
                 <NetworkStatusBanner />
                 <BackToTopButton />
-                <a href="#main-content" className="skip-to-content">
+                <a
+                  href="#route-content"
+                  className="skip-to-content"
+                  onClick={(event) => {
+                    const target = document.querySelector<HTMLElement>('main')
+                      ?? document.getElementById('route-content');
+                    if (!target) return;
+                    event.preventDefault();
+                    target.focus({ preventScroll: true });
+                    target.scrollIntoView({ block: 'start' });
+                  }}
+                >
                   Skip to content
                 </a>
                 <Suspense fallback={<RouteChunkFallback />}>
-                <div id="main-content" className="page-enter" tabIndex={-1} style={{ outline: 'none' }}>
+                <div id="route-content" className="page-enter" tabIndex={-1} style={{ outline: 'none' }}>
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/arena" element={
