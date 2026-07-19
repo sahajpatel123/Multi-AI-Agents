@@ -11627,3 +11627,127 @@ canvas {
     transform: none !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   Personas page — reset, library cards, modal close, swap options
+   ------------------------------------------------------------------ */
+.personas-reset-btn {
+  font-size: 12px;
+  color: #6b6460;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .personas-reset-btn:hover:not(.personas-reset-btn--confirm) {
+    color: #1a1714;
+  }
+}
+
+.personas-reset-btn--confirm {
+  color: #d85a30;
+  background: rgba(216, 90, 48, 0.08);
+  border: 0.5px solid rgba(216, 90, 48, 0.35);
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+
+.personas-lib-card {
+  border: 0.5px solid #e0d8d0;
+  border-radius: 14px;
+  padding: 1.2rem;
+  min-height: 168px;
+  position: relative;
+  box-shadow: none;
+  transform: translateZ(0);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .personas-lib-card--visible:not(.personas-lib-card--locked):not(.personas-lib-card--static):hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 8px 20px rgba(26, 23, 20, 0.07);
+  }
+}
+
+.personas-modal-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #f0ebe3;
+  color: #6b6460;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1)),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .personas-modal-close:hover {
+    background: #e0d8d0;
+    color: #1a1714;
+    transform: scale(1.06);
+  }
+}
+
+.personas-modal-close:active {
+  transform: scale(0.94);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+.personas-modal-close--static {
+  transition: none !important;
+}
+
+.personas-swap-option {
+  border: 0.5px solid #e0d8d0;
+  border-radius: 12px;
+  padding: 1rem;
+  cursor: pointer;
+  text-align: left;
+  position: relative;
+  font-family: inherit;
+  transform: translateZ(0);
+  transition:
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .personas-swap-option:not(.personas-swap-option--locked):not(.personas-swap-option--static):hover {
+    border-color: var(--persona-color, #c4956a);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(44, 24, 16, 0.07);
+  }
+}
+
+.personas-swap-option--static {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .personas-reset-btn,
+  .personas-lib-card,
+  .personas-modal-close,
+  .personas-swap-option {
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease !important;
+  }
+
+  .personas-lib-card:hover,
+  .personas-modal-close:hover,
+  .personas-swap-option:hover {
+    transform: none !important;
+  }
+}

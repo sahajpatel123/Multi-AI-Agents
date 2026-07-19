@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { Lock, Sparkles, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
@@ -678,22 +685,12 @@ export function PersonasPage() {
                     ? 'Confirm reset panel to default minds'
                     : 'Reset panel to default minds'
                 }
-                style={{
-                  fontSize: '12px',
-                  color: pendingReset ? '#D85A30' : '#6B6460',
-                  background: pendingReset ? 'rgba(216, 90, 48, 0.08)' : 'none',
-                  border: pendingReset ? '0.5px solid rgba(216, 90, 48, 0.35)' : 'none',
-                  borderRadius: pendingReset ? 999 : 0,
-                  cursor: 'pointer',
-                  padding: pendingReset ? '6px 12px' : 0,
-                  transition: 'color 150ms ease, background 150ms ease',
-                }}
-                onMouseEnter={(e) => {
-                  if (!pendingReset) e.currentTarget.style.color = '#1A1714';
-                }}
-                onMouseLeave={(e) => {
-                  if (!pendingReset) e.currentTarget.style.color = '#6B6460';
-                }}
+                className={[
+                  'personas-reset-btn',
+                  pendingReset ? 'personas-reset-btn--confirm' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               >
                 {pendingReset ? 'Reset panel? Confirm' : 'Reset to default'}
               </button>
@@ -983,28 +980,20 @@ export function PersonasPage() {
                     libraryRefs.current[persona.id] = node;
                   }}
                   data-persona-id={persona.id}
+                  className={[
+                    'personas-lib-card',
+                    isLocked ? 'personas-lib-card--locked' : '',
+                    reducedMotion ? 'personas-lib-card--static' : '',
+                    isVisible ? 'personas-lib-card--visible' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   style={{
                     background: persona.bgTint,
                     opacity: isVisible ? (isLocked ? 0.65 : 1) : 0,
-                    border: '0.5px solid #E0D8D0',
-                    borderRadius: '14px',
-                    padding: '1.2rem',
-                    minHeight: '168px',
-                    position: 'relative',
                     transform: isVisible ? 'translateY(0)' : reducedMotion ? 'none' : 'translateY(16px)',
                     transition: cardTransition,
-                    boxShadow: 'none',
                     cursor: isLocked ? 'pointer' : 'default',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (reducedMotion) return;
-                    e.currentTarget.style.transform = isLocked ? 'translateY(0)' : 'translateY(-3px)';
-                    e.currentTarget.style.boxShadow = '0 8px 20px rgba(26,23,20,0.07)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = 'none';
-                    e.currentTarget.style.opacity = isLocked ? '0.65' : '1';
                   }}
                   onClick={() => {
                     if (isLocked) navigate('/pricing');
@@ -1194,25 +1183,12 @@ export function PersonasPage() {
                 type="button"
                 onClick={closeModal}
                 aria-label="Close swap dialog"
-                style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  background: '#F0EBE3',
-                  color: '#6B6460',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: reducedMotion ? 'none' : 'background 150ms ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#E0D8D0';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#F0EBE3';
-                }}
+                className={[
+                  'personas-modal-close',
+                  reducedMotion ? 'personas-modal-close--static' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               >
                 <X style={{ width: '14px', height: '14px' }} />
               </button>
@@ -1405,26 +1381,20 @@ export function PersonasPage() {
                         }
                         handleSwap(activeSlot, persona);
                       }}
-                      style={{
-                        background: persona.bgTint,
-                        border: '0.5px solid #E0D8D0',
-                        borderRadius: '12px',
-                        padding: '1rem',
-                        cursor: 'pointer',
-                        transition: reducedMotion ? 'none' : 'all 150ms ease',
-                        textAlign: 'left',
-                        opacity: isLocked ? 0.65 : 1,
-                        position: 'relative',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (isLocked || reducedMotion) return;
-                        e.currentTarget.style.borderColor = persona.color;
-                        e.currentTarget.style.transform = 'translateY(-2px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = '#E0D8D0';
-                        e.currentTarget.style.transform = 'translateY(0)';
-                      }}
+                      className={[
+                        'personas-swap-option',
+                        isLocked ? 'personas-swap-option--locked' : '',
+                        reducedMotion ? 'personas-swap-option--static' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      style={
+                        {
+                          background: persona.bgTint,
+                          ['--persona-color' as string]: persona.color,
+                          opacity: isLocked ? 0.65 : 1,
+                        } as CSSProperties
+                      }
                     >
                       {isLocked && (
                         <div style={{ position: 'absolute', top: '10px', right: '10px', color: '#1A1714' }}>
