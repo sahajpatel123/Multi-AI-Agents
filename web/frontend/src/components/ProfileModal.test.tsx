@@ -162,7 +162,10 @@ describe('ProfileModal', () => {
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
-    const email = screen.getByDisplayValue('sahaj@example.com') as HTMLInputElement;
+    // findByDisplayValue auto-waits for the value attribute to be set;
+    // the email input's value comes from `user.email` (synchronous on
+    // the auth state object), so it should be present on first paint.
+    const email = (await screen.findByDisplayValue('sahaj@example.com')) as HTMLInputElement;
     expect(email.disabled).toBe(true);
     expect(email.className).toContain('profile-modal__input');
     expect(email.className).toContain('profile-modal__input--readonly');
@@ -173,7 +176,10 @@ describe('ProfileModal', () => {
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
-    const fullName = screen.getByDisplayValue('Sahaj Patel') as HTMLInputElement;
+    // The full-name input's value is set from `user.name` via a useEffect
+    // after the dialog mounts. In CI's slower event loop the effect can
+    // lag the first paint, so use the async findBy* query to wait.
+    const fullName = (await screen.findByDisplayValue('Sahaj Patel')) as HTMLInputElement;
     expect(fullName.disabled).toBe(false);
     expect(fullName.className).toBe('profile-modal__input');
   });
