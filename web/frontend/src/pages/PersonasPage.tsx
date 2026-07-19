@@ -40,6 +40,7 @@ import {
 } from '../lib/personasLibrarySort';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import track from '../utils/track';
+import '../styles/personas-page.css';
 
 type SlotIndex = 0 | 1 | 2 | 3;
 
@@ -521,7 +522,7 @@ export function PersonasPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#FAF7F4' }}>
+    <div className="personas-page">
       <style>{`
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(14px); }
@@ -530,63 +531,63 @@ export function PersonasPage() {
       `}</style>
       <Navbar />
 
-      <main style={{ maxWidth: '1180px', margin: '0 auto', padding: '4rem 24px 5rem' }}>
+      <main
+        id="main-content"
+        className="personas-page__main"
+        tabIndex={-1}
+        aria-labelledby="personas-title"
+      >
         <button type="button" onClick={() => navigate('/app')} className="personas-back-btn">
           ← Back to Arena
         </button>
 
         <section
+          className="personas-page__hero"
           style={{
             opacity: pageVisible ? 1 : 0,
             transform: pageVisible ? 'translateY(0)' : 'translateY(12px)',
-            transition: 'opacity 450ms ease, transform 450ms ease',
-            marginBottom: '3rem',
+            transition: reducedMotion
+              ? 'none'
+              : 'opacity 450ms ease, transform 450ms ease',
           }}
         >
-          <p style={eyebrowStyle}>Your panel</p>
-          <h1 style={{ marginTop: '1rem', fontSize: '48px', fontWeight: 500, letterSpacing: '-.03em', lineHeight: 1.02, color: '#1A1714' }}>
-            <span style={{ display: 'block' }}>Build your</span>
-            <span style={{ display: 'block', color: '#C4956A', fontStyle: 'italic' }}>four minds.</span>
+          <p className="personas-page__kicker">
+            <span className="personas-page__kicker-dot" aria-hidden="true" />
+            Your panel
+          </p>
+          <h1 id="personas-title" className="personas-page__title">
+            <span className="personas-page__title-line">Build your</span>
+            <span className="personas-page__title-line personas-page__title-accent">four minds.</span>
           </h1>
-          <p style={{ marginTop: '1rem', fontSize: '14px', color: '#6B6460', lineHeight: 1.75, maxWidth: '460px' }}>
+          <p className="personas-page__lede">
             Your current panel loads by default. Swap any agent with another from the library for this session.
           </p>
         </section>
 
-        <section style={{ marginBottom: '3rem' }}>
-          <p style={{ ...eyebrowStyle, marginBottom: '1rem' }}>Your current panel</p>
-          <div
-            className="current-panel-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '10px',
-            }}
-          >
+        <section className="personas-page__section">
+          <p className="personas-page__section-label">Your current panel</p>
+          <div className="current-panel-grid">
             {panel.map((persona, index) => (
               <div
                 key={`${persona.id}-${index}`}
+                className="personas-panel-card"
                 style={{
                   background: persona.bgTint,
-                  border: '0.5px solid #E0D8D0',
-                  borderRadius: '14px',
-                  padding: '1.2rem',
-                  position: 'relative',
-                  minHeight: '140px',
+                  ['--slot-color' as string]: persona.color,
                   opacity: pageVisible ? 1 : 0,
                   transform: pageVisible ? 'translateY(0)' : 'translateY(12px)',
-                  transition: `opacity 420ms ease ${index * 60}ms, transform 420ms ease ${index * 60}ms`,
+                  transition: reducedMotion
+                    ? 'none'
+                    : `opacity 420ms ease ${index * 60}ms, transform 420ms ease ${index * 60}ms, box-shadow 220ms ease, border-color 180ms ease`,
                 }}
               >
-                <div style={{ height: '2px', background: persona.color, borderRadius: '999px', marginBottom: '1rem' }} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="personas-panel-card__rail" />
+                <div className="personas-panel-card__head">
                   <AgentDot agentId={`agent_${index + 1}`} size={7} color={persona.color} />
-                  <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>{persona.name}</span>
+                  <span className="personas-panel-card__name">{persona.name}</span>
                 </div>
-                <p style={{ fontSize: '12px', color: '#6B6460', fontStyle: 'italic', marginTop: '.4rem', lineHeight: 1.6 }}>{persona.quote}</p>
-                <div style={{ position: 'absolute', left: '1.2rem', bottom: '1.1rem', fontSize: '10px', color: '#6B6460', letterSpacing: '.08em', textTransform: 'uppercase' }}>
-                  {slotLabels[index]}
-                </div>
+                <p className="personas-panel-card__quote">{persona.quote}</p>
+                <div className="personas-panel-card__slot">{slotLabels[index]}</div>
                 <button
                   type="button"
                   onClick={() => setActiveSlot(index as SlotIndex)}
@@ -598,7 +599,7 @@ export function PersonasPage() {
             ))}
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.9rem', gap: '12px', flexWrap: 'wrap' }}>
+          <div className="personas-panel-actions">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <button
                 type="button"
@@ -610,14 +611,7 @@ export function PersonasPage() {
                 aria-busy={savingPanel}
                 aria-label={panelSaveButtonLabel(savingPanel)}
                 style={{
-                  background: '#1A1714',
-                  color: '#FAF7F4',
-                  border: 'none',
-                  borderRadius: '999px',
-                  padding: '10px 24px',
-                  fontSize: '13px',
                   cursor: savingPanel ? 'wait' : 'pointer',
-                  opacity: savingPanel ? 0.72 : 1,
                 }}
               >
                 {panelSaveButtonLabel(savingPanel)}
@@ -627,6 +621,13 @@ export function PersonasPage() {
                 onClick={() => {
                   void copyPanelMarkdown();
                 }}
+                className={`personas-ghost-btn${
+                  panelCopyStatus === 'copied'
+                    ? ' personas-ghost-btn--ok'
+                    : panelCopyStatus === 'failed'
+                      ? ' personas-ghost-btn--err'
+                      : ''
+                }`}
                 title="Copy this panel as markdown"
                 aria-label={
                   panelCopyStatus === 'copied'
@@ -635,21 +636,6 @@ export function PersonasPage() {
                       ? 'Copy failed'
                       : 'Copy panel as markdown'
                 }
-                style={{
-                  background: 'none',
-                  border: '0.5px solid #E0D8D0',
-                  borderRadius: 999,
-                  padding: '9px 16px',
-                  fontSize: 12,
-                  color:
-                    panelCopyStatus === 'failed'
-                      ? '#D85A30'
-                      : panelCopyStatus === 'copied'
-                        ? '#5A8C6A'
-                        : '#6B6460',
-                  cursor: 'pointer',
-                  fontFamily: 'Georgia, serif',
-                }}
               >
                 {panelCopyStatus === 'copied'
                   ? 'Copied'
@@ -660,6 +646,13 @@ export function PersonasPage() {
               <button
                 type="button"
                 onClick={downloadPanelMarkdown}
+                className={`personas-ghost-btn${
+                  panelDownloadStatus === 'done'
+                    ? ' personas-ghost-btn--ok'
+                    : panelDownloadStatus === 'failed'
+                      ? ' personas-ghost-btn--err'
+                      : ''
+                }`}
                 title="Download this panel as markdown"
                 aria-label={
                   panelDownloadStatus === 'done'
@@ -668,21 +661,6 @@ export function PersonasPage() {
                       ? 'Download failed'
                       : 'Download panel as markdown'
                 }
-                style={{
-                  background: 'none',
-                  border: '0.5px solid #E0D8D0',
-                  borderRadius: 999,
-                  padding: '9px 16px',
-                  fontSize: 12,
-                  color:
-                    panelDownloadStatus === 'failed'
-                      ? '#D85A30'
-                      : panelDownloadStatus === 'done'
-                        ? '#5A8C6A'
-                        : '#6B6460',
-                  cursor: 'pointer',
-                  fontFamily: 'Georgia, serif',
-                }}
               >
                 {panelDownloadStatus === 'done'
                   ? 'Downloaded'
@@ -723,17 +701,8 @@ export function PersonasPage() {
           </div>
         </section>
 
-        <section>
-          <div
-            style={{
-              margin: '3rem 0 1rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              flexWrap: 'wrap',
-            }}
-          >
+        <section className="personas-page__section personas-page__library">
+          <div className="personas-page__library-head">
             <div
               style={{
                 display: 'flex',
@@ -742,7 +711,7 @@ export function PersonasPage() {
                 flexWrap: 'wrap',
               }}
             >
-              <p style={{ ...eyebrowStyle, margin: 0 }}>
+              <p className="personas-page__section-label" style={{ marginBottom: 0 }}>
                 Full library · {filteredLibrary.length}
                 {libraryQuery.trim() || libraryAvailability !== 'all'
                   ? ` / ${personas.length}`
