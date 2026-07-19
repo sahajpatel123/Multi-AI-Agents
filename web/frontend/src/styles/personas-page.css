@@ -364,3 +364,134 @@
     font-size: clamp(1.9rem, 8vw, 2.5rem);
   }
 }
+
+/* ============================================================================
+   Cycle 64 — extracted inline-style patterns
+   ========================================================================== */
+
+/* Search input with inline clear button (used in library header + swap modal) */
+.personas-search {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.personas-search__input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 13px;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+  color: #1a1714;
+  background: #faf7f4;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 10px;
+  padding: 9px 32px 9px 12px;
+  outline: none;
+}
+
+.personas-search--swap .personas-search__input {
+  background: #ffffff;
+}
+
+.personas-search__clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: #a89070;
+  line-height: 1;
+  padding: 4px;
+}
+
+.personas-search__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 1 1 280px;
+  max-width: 420px;
+  min-width: 200px;
+}
+
+.personas-search__row--modal {
+  margin-bottom: 12px;
+  max-width: none;
+}
+
+/* Availability filter pill row (used in library header + swap modal) */
+.personas-availability {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  align-items: center;
+}
+
+.personas-availability--compact {
+  margin-bottom: 12px;
+}
+
+.personas-availability__pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 0.5px solid #e0d8d0;
+  background: transparent;
+  color: #6b6460;
+  font-size: 12px;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+  cursor: pointer;
+}
+
+.personas-availability__pill--active {
+  border: none;
+  background: #c4956a;
+  color: #faf7f4;
+}
+
+.personas-availability--compact .personas-availability__pill {
+  padding: 4px 11px;
+  font-size: 11px;
+}
+
+/* Library header action button (Copy / Download with status color) */
+.personas-library-action {
+  background: none;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #a89070;
+  cursor: pointer;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+  line-height: 1.4;
+}
+
+.personas-library-action--ok {
+  color: #5a8c6a;
+}
+
+.personas-library-action--err {
+  color: #d85a30;
+}
+
+.personas-library-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.personas-library-head__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.personas-library-head__row > .personas-page__section-label {
+  margin-bottom: 0;
+}

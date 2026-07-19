@@ -13,6 +13,8 @@ import { AgentDot } from '../components/AgentDot';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
 import { EmptyState } from '../components/EmptyState';
+import { PersonasSearchInput } from '../components/PersonasSearchInput';
+import { PersonasAvailabilityFilters } from '../components/PersonasAvailabilityFilters';
 import { usePanel } from '../context/PanelContext';
 import { useTier } from '../context/TierContext';
 import { type Persona } from '../data/personas';
@@ -700,22 +702,15 @@ export function PersonasPage() {
 
         <section className="personas-page__section personas-page__library">
           <div className="personas-page__library-head">
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                flexWrap: 'wrap',
-              }}
-            >
-              <p className="personas-page__section-label" style={{ marginBottom: 0 }}>
+            <div className="personas-library-head__row">
+              <p className="personas-page__section-label">
                 Full library · {filteredLibrary.length}
                 {libraryQuery.trim() || libraryAvailability !== 'all'
                   ? ` / ${personas.length}`
                   : ' personas'}
               </p>
               {personas.length > 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div className="personas-library-actions">
                   <button
                     type="button"
                     onClick={() => void copyFilteredLibrary()}
@@ -727,24 +722,13 @@ export function PersonasPage() {
                           ? 'Copy failed'
                           : 'Copy persona library as markdown'
                     }
-                    style={{
-                      background: 'none',
-                      border: '0.5px solid #E0D8D0',
-                      borderRadius: 6,
-                      padding: '2px 7px',
-                      fontSize: 10,
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                      color:
-                        libraryCopyStatus === 'failed'
-                          ? '#D85A30'
-                          : libraryCopyStatus === 'copied'
-                            ? '#5A8C6A'
-                            : '#A89070',
-                      cursor: 'pointer',
-                      fontFamily: 'Georgia, serif',
-                      lineHeight: 1.4,
-                    }}
+                    className={[
+                      'personas-library-action',
+                      libraryCopyStatus === 'copied' ? 'personas-library-action--ok' : '',
+                      libraryCopyStatus === 'failed' ? 'personas-library-action--err' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                   >
                     {libraryCopyStatus === 'copied'
                       ? 'Copied'
@@ -763,24 +747,13 @@ export function PersonasPage() {
                           ? 'Download failed'
                           : 'Download persona library as markdown'
                     }
-                    style={{
-                      background: 'none',
-                      border: '0.5px solid #E0D8D0',
-                      borderRadius: 6,
-                      padding: '2px 7px',
-                      fontSize: 10,
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                      color:
-                        libraryDownloadStatus === 'failed'
-                          ? '#D85A30'
-                          : libraryDownloadStatus === 'done'
-                            ? '#5A8C6A'
-                            : '#A89070',
-                      cursor: 'pointer',
-                      fontFamily: 'Georgia, serif',
-                      lineHeight: 1.4,
-                    }}
+                    className={[
+                      'personas-library-action',
+                      libraryDownloadStatus === 'done' ? 'personas-library-action--ok' : '',
+                      libraryDownloadStatus === 'failed' ? 'personas-library-action--err' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                   >
                     {libraryDownloadStatus === 'done'
                       ? 'Downloaded'
@@ -791,82 +764,23 @@ export function PersonasPage() {
                 </div>
               ) : null}
             </div>
-            <div
-              style={{
-                display: 'flex',
-                gap: 8,
-                alignItems: 'center',
-                flex: '1 1 280px',
-                maxWidth: 420,
-                minWidth: 200,
-              }}
-            >
-              <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-                <input
-                  ref={librarySearchRef}
-                  type="search"
-                  value={libraryQuery}
-                  onChange={(e) => setLibraryQuery(e.target.value)}
-                  placeholder="Search minds…"
-                  aria-label="Search persona library"
-                  autoComplete="off"
-                  style={{
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    fontSize: 13,
-                    fontFamily: 'Georgia, serif',
-                    color: '#1A1714',
-                    background: '#FAF7F4',
-                    border: '0.5px solid #E0D8D0',
-                    borderRadius: 10,
-                    padding: '9px 32px 9px 12px',
-                    outline: 'none',
-                  }}
-                />
-                {libraryQuery ? (
-                  <button
-                    type="button"
-                    aria-label="Clear persona search"
-                    onClick={() => {
-                      setLibraryQuery('');
-                      librarySearchRef.current?.focus();
-                    }}
-                    style={{
-                      position: 'absolute',
-                      right: 8,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: 16,
-                      color: '#A89070',
-                      lineHeight: 1,
-                      padding: 4,
-                    }}
-                  >
-                    ×
-                  </button>
-                ) : null}
-              </div>
+            <div className="personas-search__row">
+              <PersonasSearchInput
+                inputRef={librarySearchRef}
+                value={libraryQuery}
+                onChange={setLibraryQuery}
+                onClear={() => setLibraryQuery('')}
+                placeholder="Search minds…"
+                ariaLabel="Search persona library"
+                clearAriaLabel="Clear persona search"
+              />
               {personas.length > 1 ? (
                 <select
                   value={librarySort}
                   onChange={(e) => setLibrarySort(e.target.value as PersonasLibrarySort)}
                   aria-label="Sort persona library"
                   title="Sort persona library"
-                  style={{
-                    fontSize: 12,
-                    fontFamily: 'Georgia, serif',
-                    color: '#4A3728',
-                    background: '#FAF7F4',
-                    border: '0.5px solid #E0D8D0',
-                    borderRadius: 10,
-                    padding: '9px 10px',
-                    cursor: 'pointer',
-                    flex: '0 0 auto',
-                    maxWidth: 150,
-                  }}
+                  className="personas-sort-select"
                 >
                   {PERSONAS_LIBRARY_SORT_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -879,41 +793,12 @@ export function PersonasPage() {
           </div>
 
           {personas.length > 0 ? (
-            <div
-              role="group"
-              aria-label="Filter persona library by availability"
-              style={{
-                display: 'flex',
-                gap: 6,
-                flexWrap: 'wrap',
-                marginBottom: 14,
-                alignItems: 'center',
-              }}
-            >
-              {PERSONAS_LIBRARY_AVAILABILITY_OPTIONS.map((opt) => {
-                const selected = libraryAvailability === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setLibraryAvailability(opt.value)}
-                    aria-pressed={selected}
-                    style={{
-                      padding: '4px 12px',
-                      borderRadius: 999,
-                      border: selected ? 'none' : '0.5px solid #E0D8D0',
-                      background: selected ? '#C4956A' : 'transparent',
-                      color: selected ? '#FAF7F4' : '#6B6460',
-                      fontSize: 12,
-                      fontFamily: 'Georgia, serif',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
+            <PersonasAvailabilityFilters<PersonasLibraryAvailability>
+              options={PERSONAS_LIBRARY_AVAILABILITY_OPTIONS}
+              value={libraryAvailability}
+              onChange={setLibraryAvailability}
+              ariaLabel="Filter persona library by availability"
+            />
           ) : null}
 
           {filteredLibrary.length === 0 ? (
@@ -1196,80 +1081,24 @@ export function PersonasPage() {
 
             <div style={{ height: '0.5px', background: '#E0D8D0', margin: '1rem 0' }} />
 
-            <div
-              style={{
-                display: 'flex',
-                gap: 8,
-                alignItems: 'center',
-                marginBottom: 12,
-              }}
-            >
-              <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-                <input
-                  ref={swapSearchRef}
-                  type="search"
-                  value={swapQuery}
-                  onChange={(e) => setSwapQuery(e.target.value)}
-                  placeholder="Search minds to swap…"
-                  aria-label="Search minds to swap into this slot"
-                  autoComplete="off"
-                  style={{
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    fontSize: 13,
-                    fontFamily: 'Georgia, serif',
-                    color: '#1A1714',
-                    background: '#FFFFFF',
-                    border: '0.5px solid #E0D8D0',
-                    borderRadius: 10,
-                    padding: '9px 32px 9px 12px',
-                    outline: 'none',
-                  }}
-                />
-                {swapQuery ? (
-                  <button
-                    type="button"
-                    aria-label="Clear swap search"
-                    onClick={() => {
-                      setSwapQuery('');
-                      swapSearchRef.current?.focus();
-                    }}
-                    style={{
-                      position: 'absolute',
-                      right: 8,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: 16,
-                      color: '#A89070',
-                      lineHeight: 1,
-                      padding: 4,
-                    }}
-                  >
-                    ×
-                  </button>
-                ) : null}
-              </div>
+            <div className="personas-search__row personas-search__row--modal">
+              <PersonasSearchInput
+                inputRef={swapSearchRef}
+                value={swapQuery}
+                onChange={setSwapQuery}
+                onClear={() => setSwapQuery('')}
+                placeholder="Search minds to swap…"
+                ariaLabel="Search minds to swap into this slot"
+                clearAriaLabel="Clear swap search"
+                variant="swap"
+              />
               {modalOptions.length > 1 ? (
                 <select
                   value={swapSort}
                   onChange={(e) => setSwapSort(e.target.value as PersonasLibrarySort)}
                   aria-label="Sort minds to swap"
                   title="Sort minds to swap"
-                  style={{
-                    fontSize: 12,
-                    fontFamily: 'Georgia, serif',
-                    color: '#4A3728',
-                    background: '#FFFFFF',
-                    border: '0.5px solid #E0D8D0',
-                    borderRadius: 10,
-                    padding: '9px 10px',
-                    cursor: 'pointer',
-                    flex: '0 0 auto',
-                    maxWidth: 150,
-                  }}
+                  className="personas-sort-select personas-sort-select--swap"
                 >
                   {PERSONAS_LIBRARY_SORT_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -1281,41 +1110,13 @@ export function PersonasPage() {
             </div>
 
             {modalOptions.length > 0 ? (
-              <div
-                role="group"
-                aria-label="Filter swap candidates by availability"
-                style={{
-                  display: 'flex',
-                  gap: 6,
-                  flexWrap: 'wrap',
-                  marginBottom: 12,
-                  alignItems: 'center',
-                }}
-              >
-                {PERSONAS_LIBRARY_AVAILABILITY_OPTIONS.map((opt) => {
-                  const selected = swapAvailability === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setSwapAvailability(opt.value)}
-                      aria-pressed={selected}
-                      style={{
-                        padding: '4px 11px',
-                        borderRadius: 999,
-                        border: selected ? 'none' : '0.5px solid #E0D8D0',
-                        background: selected ? '#C4956A' : 'transparent',
-                        color: selected ? '#FAF7F4' : '#6B6460',
-                        fontSize: 11,
-                        fontFamily: 'Georgia, serif',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
+              <PersonasAvailabilityFilters<PersonasLibraryAvailability>
+                options={PERSONAS_LIBRARY_AVAILABILITY_OPTIONS}
+                value={swapAvailability}
+                onChange={setSwapAvailability}
+                ariaLabel="Filter swap candidates by availability"
+                variant="compact"
+              />
             ) : null}
 
             <p style={{ ...eyebrowStyle, marginBottom: '.8rem' }}>
