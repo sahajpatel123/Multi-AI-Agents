@@ -11525,3 +11525,105 @@ canvas {
     transform: none !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   Sidebar — list rows, text links, profile foot
+   ------------------------------------------------------------------ */
+.sidebar-text-link {
+  color: #6b6460;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 11px;
+  font-family: inherit;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-text-link:hover {
+    color: #1a1714;
+  }
+}
+
+.sidebar-list-row {
+  position: relative;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: transparent;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  transform: translateZ(0);
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+.sidebar-list-row--saved {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  cursor: default;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-list-row:hover:not(.sidebar-list-row--active) {
+    background: #f0ebe3;
+  }
+
+  .sidebar-list-row--saved:hover {
+    background: #f0ebe3;
+  }
+}
+
+.sidebar-list-row--active {
+  background: #f0ebe3;
+  border-left-color: #c4956a;
+}
+
+.sidebar-profile-row {
+  padding: 12px 16px;
+  border-top: 0.5px solid #e0d5c5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-profile-row:hover {
+    background: #ede4d8;
+  }
+}
+
+.sidebar-profile-row:active {
+  transform: scale(0.99);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-text-link,
+  .sidebar-list-row,
+  .sidebar-profile-row {
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease !important;
+  }
+
+  .sidebar-profile-row:active {
+    transform: none !important;
+  }
+}

@@ -653,25 +653,7 @@ export function Sidebar({
               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px' }}>
                 <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#C4956A', flexShrink: 0 }} />
                 <span style={{ color: '#C4956A' }}>Custom panel active</span>
-                <button
-                  type="button"
-                  onClick={resetPanel}
-                  style={{
-                    color: '#6B6460',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: 0,
-                    fontSize: '11px',
-                    transition: 'color 150ms ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#1A1714';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '#6B6460';
-                  }}
-                >
+                <button type="button" onClick={resetPanel} className="sidebar-text-link">
                   Reset
                 </button>
               </div>
@@ -1001,21 +983,12 @@ export function Sidebar({
                   return (
                     <div
                       key={turn.turn_id}
-                      style={{
-                        position: 'relative',
-                        borderRadius: '10px',
-                        padding: '8px 10px',
-                        background: isActive ? '#F0EBE3' : 'transparent',
-                        borderLeft: isActive ? '2px solid #C4956A' : '2px solid transparent',
-                        transition: 'all 150ms ease',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isActive) e.currentTarget.style.background = '#F0EBE3';
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) e.currentTarget.style.background = 'transparent';
-                      }}
+                      className={[
+                        'sidebar-list-row',
+                        isActive ? 'sidebar-list-row--active' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
@@ -1727,21 +1700,7 @@ export function Sidebar({
                       const line = (item.one_liner || '').trim();
                       const justCopied = copiedSavedId === item.id;
                       return (
-                        <div
-                          key={item.id}
-                          style={{
-                            width: '100%',
-                            borderRadius: '10px',
-                            padding: '8px 10px',
-                            transition: 'background 150ms ease',
-                            background: 'transparent',
-                            display: 'flex',
-                            alignItems: 'start',
-                            gap: '6px',
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = '#F0EBE3')}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                        >
+                        <div key={item.id} className="sidebar-list-row sidebar-list-row--saved">
                           <button
                             type="button"
                             onClick={() => onSavedItemClick(item)}
@@ -1924,28 +1883,7 @@ export function Sidebar({
                 onClose();
                 openModal('bottom-left');
               }}
-              style={{
-                padding: '12px 16px',
-                borderTop: '0.5px solid #E0D5C5',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                cursor: 'pointer',
-                transition: 'background 0.15s',
-                background: 'transparent',
-                border: 'none',
-                borderLeft: 'none',
-                borderRight: 'none',
-                borderBottom: 'none',
-                width: '100%',
-                textAlign: 'left',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#EDE4D8';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
+              className="sidebar-profile-row"
             >
               <div
                 style={{
