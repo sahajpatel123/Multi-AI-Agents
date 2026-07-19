@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { GitCompareArrows } from 'lucide-react';
 import { AgentAnswerMarkdown } from './AgentAnswerMarkdown';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
@@ -9,6 +10,7 @@ import {
   type PerspectiveRowInput,
 } from '../lib/perspectiveComparison';
 import { motionDuration } from '../lib/motion';
+import '../styles/perspective-comparison.css';
 
 export type PerspectiveComparisonProps = {
   responses: PerspectiveRowInput[];
@@ -29,17 +31,7 @@ function KeywordChips({
       {words.map((k) => (
         <span
           key={k}
-          style={{
-            display: 'inline-block',
-            background: muted ? '#F5F0E8' : 'rgba(196,149,106,0.14)',
-            border: muted ? '0.5px solid transparent' : '0.5px solid rgba(196,149,106,0.35)',
-            borderRadius: 4,
-            padding: '2px 6px',
-            marginRight: 4,
-            marginBottom: 4,
-            fontSize: 11,
-            color: muted ? '#8A7355' : '#6B4E32',
-          }}
+          className={`pc-chip${muted ? ' pc-chip--muted' : ' pc-chip--accent'}`}
         >
           {k}
         </span>
@@ -114,258 +106,144 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
   };
 
   return (
-    <div
-      role="presentation"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(26, 23, 20, 0.4)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 200,
-        padding: 16,
-      }}
-      onClick={onClose}
-    >
+    <div role="presentation" className="pc-overlay" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="perspective-comparison-title"
+        className="pc-panel"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          background: '#FAF7F2',
-          borderRadius: 14,
-          padding: 24,
-          width: 'min(560px, 100%)',
-          maxHeight: '80vh',
-          overflow: 'auto',
-          boxShadow: '0 24px 48px rgba(26, 23, 20, 0.15)',
-        }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            marginBottom: 8,
-          }}
-        >
-          <h2
-            id="perspective-comparison-title"
-            style={{ margin: 0, fontSize: 16, fontWeight: 500, color: '#1A1714', fontFamily: 'Georgia, serif' }}
-          >
-            Perspective comparison
-          </h2>
+        <div className="pc-header">
+          <div className="pc-header__title-wrap">
+            <span className="pc-header__mark" aria-hidden>
+              <GitCompareArrows strokeWidth={1.75} />
+            </span>
+            <h2 id="perspective-comparison-title" className="pc-title">
+              Perspective comparison
+            </h2>
+          </div>
           <button
             ref={closeBtnRef}
             type="button"
             onClick={onClose}
             aria-label="Close comparison"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 20,
-              color: '#A89070',
-              lineHeight: 1,
-              padding: 0,
-            }}
+            className="pc-close"
           >
             ×
           </button>
         </div>
 
         {question?.trim() ? (
-          <p
-            style={{
-              margin: '0 0 14px',
-              fontSize: 12,
-              color: '#8C7355',
-              fontStyle: 'italic',
-              lineHeight: 1.5,
-            }}
-          >
-            {question.trim()}
-          </p>
+          <p className="pc-question">{question.trim()}</p>
         ) : null}
 
         {shared.length > 0 ? (
-          <div
-            style={{
-              background: '#F5F0E8',
-              borderRadius: 8,
-              padding: '10px 12px',
-              marginBottom: 14,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 10,
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                color: '#A89070',
-                marginBottom: 6,
-              }}
-            >
-              Shared across minds
-            </div>
+          <div className="pc-shared">
+            <div className="pc-shared__label">Shared across minds</div>
             <div>
               <KeywordChips words={shared} muted />
             </div>
           </div>
         ) : null}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="pc-rows">
           {rows.map((t) => {
             const isExpanded = expandedAgentId === t.agentId;
             const showFull = isExpanded && t.canExpand && Boolean(t.fullTake);
             return (
-            <div
-              key={t.agentId}
-              style={{
-                background: '#FFFFFF',
-                border: t.isWinner || isExpanded
-                  ? '0.5px solid rgba(196,149,106,0.55)'
-                  : '0.5px solid #E0D8D0',
-                borderRadius: 10,
-                padding: '12px 14px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                <div
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    background: t.color,
-                    flexShrink: 0,
-                  }}
-                />
-                <span style={{ fontSize: 13, fontWeight: 500, color: '#2C1810' }}>{t.name}</span>
-                {t.isWinner ? (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      color: '#C4956A',
-                    }}
-                  >
-                    Winner
+              <div
+                key={t.agentId}
+                className={[
+                  'pc-row',
+                  t.isWinner ? 'pc-row--winner' : '',
+                  isExpanded ? 'pc-row--open' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                style={{ ['--row-accent' as string]: t.color }}
+              >
+                <div className="pc-row__head">
+                  <div
+                    className="pc-row__dot"
+                    style={{ background: t.color }}
+                    aria-hidden
+                  />
+                  <span className="pc-row__name">{t.name}</span>
+                  {t.isWinner ? (
+                    <span className="pc-row__winner-badge">Winner</span>
+                  ) : null}
+                  <span className="pc-row__meta">
+                    {[
+                      t.scoreLabel ? `Score ${t.scoreLabel}` : null,
+                      t.confidenceLabel ? `Conf. ${t.confidenceLabel}%` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || '—'}
                   </span>
-                ) : null}
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: '#A89070' }}>
-                  {[
-                    t.scoreLabel ? `Score ${t.scoreLabel}` : null,
-                    t.confidenceLabel ? `Conf. ${t.confidenceLabel}%` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ') || '—'}
-                </span>
-              </div>
-              {showFull ? (
-                <div style={{ marginBottom: 8 }}>
-                  <AgentAnswerMarkdown markdown={t.fullTake} question={question} />
                 </div>
-              ) : t.oneLiner || t.fullTake ? (
-                <p
-                  style={{
-                    margin: '0 0 8px',
-                    fontSize: 13,
-                    color: '#4A3728',
-                    lineHeight: 1.5,
-                    fontStyle: 'italic',
-                  }}
-                >
-                  “{t.oneLiner || t.fullTake}”
-                </p>
-              ) : null}
-              {t.canExpand ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setExpandedAgentId((id) => (id === t.agentId ? null : t.agentId))
-                  }
-                  aria-expanded={isExpanded}
-                  style={{
-                    margin: '0 0 8px',
-                    padding: 0,
-                    border: 'none',
-                    background: 'none',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    color: '#C4956A',
-                    fontFamily: 'Georgia, serif',
-                  }}
-                >
-                  {isExpanded ? 'Show less' : 'Show full take'}
-                </button>
-              ) : null}
-              <div style={{ fontSize: 12, color: '#4A3728' }}>
-                {t.distinctive.length > 0 ? (
-                  <>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        color: '#A89070',
-                        marginBottom: 4,
-                      }}
-                    >
-                      Distinctive
-                    </div>
-                    <KeywordChips words={t.distinctive} />
-                  </>
-                ) : t.keywords.length > 0 ? (
-                  <KeywordChips words={t.keywords} muted />
-                ) : (
-                  <span style={{ color: '#A89070', fontStyle: 'italic' }}>No key terms</span>
-                )}
+                {showFull ? (
+                  <div className="pc-row__full">
+                    <AgentAnswerMarkdown markdown={t.fullTake} question={question} />
+                  </div>
+                ) : t.oneLiner || t.fullTake ? (
+                  <p className="pc-row__blurb">
+                    “{t.oneLiner || t.fullTake}”
+                  </p>
+                ) : null}
+                {t.canExpand ? (
+                  <button
+                    type="button"
+                    className="pc-text-btn"
+                    onClick={() =>
+                      setExpandedAgentId((id) => (id === t.agentId ? null : t.agentId))
+                    }
+                    aria-expanded={isExpanded}
+                  >
+                    {isExpanded ? 'Show less' : 'Show full take'}
+                  </button>
+                ) : null}
+                <div className="pc-row__terms">
+                  {t.distinctive.length > 0 ? (
+                    <>
+                      <div className="pc-row__terms-label">Distinctive</div>
+                      <KeywordChips words={t.distinctive} />
+                    </>
+                  ) : t.keywords.length > 0 ? (
+                    <KeywordChips words={t.keywords} muted />
+                  ) : (
+                    <span className="pc-row__empty-terms">No key terms</span>
+                  )}
+                </div>
               </div>
-            </div>
             );
           })}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+        <div className="pc-footer">
           <button
             type="button"
             onClick={() => void copyMarkdown()}
-            style={{
-              background: 'none',
-              border: '0.5px solid #E0D8D0',
-              borderRadius: 999,
-              padding: '7px 14px',
-              fontSize: 12,
-              color:
-                copyStatus === 'failed' ? '#D85A30' : copyStatus === 'copied' ? '#5A8C6A' : '#6B6460',
-              cursor: 'pointer',
-              fontFamily: 'Georgia, serif',
-            }}
+            className={`pc-ghost-btn${
+              copyStatus === 'copied'
+                ? ' pc-ghost-btn--ok'
+                : copyStatus === 'failed'
+                  ? ' pc-ghost-btn--err'
+                  : ''
+            }`}
           >
             {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy markdown'}
           </button>
           <button
             type="button"
             onClick={downloadMarkdown}
-            style={{
-              background: 'none',
-              border: '0.5px solid #E0D8D0',
-              borderRadius: 999,
-              padding: '7px 14px',
-              fontSize: 12,
-              color:
-                downloadStatus === 'failed'
-                  ? '#D85A30'
-                  : downloadStatus === 'done'
-                    ? '#5A8C6A'
-                    : '#6B6460',
-              cursor: 'pointer',
-              fontFamily: 'Georgia, serif',
-            }}
+            className={`pc-ghost-btn${
+              downloadStatus === 'done'
+                ? ' pc-ghost-btn--ok'
+                : downloadStatus === 'failed'
+                  ? ' pc-ghost-btn--err'
+                  : ''
+            }`}
           >
             {downloadStatus === 'done'
               ? 'Downloaded'
@@ -373,20 +251,7 @@ export function PerspectiveComparison({ responses, question, onClose }: Perspect
                 ? 'Download failed'
                 : 'Download .md'}
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: '#1A1714',
-              border: 'none',
-              borderRadius: 999,
-              padding: '7px 16px',
-              fontSize: 12,
-              color: '#FAF7F4',
-              cursor: 'pointer',
-              fontFamily: 'Georgia, serif',
-            }}
-          >
+          <button type="button" onClick={onClose} className="pc-done-btn">
             Done
           </button>
         </div>
