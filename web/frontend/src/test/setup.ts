@@ -49,3 +49,37 @@ if (typeof globalThis.fetch === 'undefined') {
   // minimal stub for unit tests; integration tests should mock properly.
   globalThis.fetch = (() => Promise.reject(new Error('fetch not mocked'))) as typeof fetch;
 }
+
+// jsdom doesn't implement IntersectionObserver; pages use it for reveal-on-scroll
+// (PricingPage, HomePage, PersonasPage). Provide a no-op stub that satisfies the
+// constructor signature so useEffect blocks don't throw ReferenceError.
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  class MockIntersectionObserver implements IntersectionObserver {
+    readonly root: Element | Document | null = null;
+    readonly rootMargin = '0px';
+    readonly thresholds: ReadonlyArray<number> = [0];
+    private readonly callback: IntersectionObserverCallback;
+
+    constructor(callback: IntersectionObserverCallback) {
+      this.callback = callback;
+    }
+
+    observe(target: Element): void {
+      // Immediately fire once with isIntersecting=false so entrance animations
+      // stay at their initial state rather than animating on mount.
+      this.callback(
+        [{ isIntersecting: false, intersectionRatio: 0, target } as IntersectionObserverEntry],
+        this,
+      );
+    }
+
+    unobserve(): void {}
+    disconnect(): void {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+
+  globalThis.IntersectionObserver =
+    MockIntersectionObserver as unknown as typeof IntersectionObserver;
+}

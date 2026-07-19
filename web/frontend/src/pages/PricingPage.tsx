@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Check, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getSubscriptionStatus } from '../api';
@@ -179,46 +179,32 @@ function FeatureList({
   subColor: string;
 }) {
   return (
-    <div className="pricing-feature-list">
+    <div
+      className="pricing-feature-list"
+      style={
+        {
+          '--fl-dot-color': dotColor,
+          '--fl-text-color': textColor,
+          '--fl-sub-color': subColor,
+        } as CSSProperties
+      }
+    >
       {items.map((item) => {
         const sub = isSubFeature(item);
         return (
           <div
             key={item}
             className={`pricing-feature-list__row${sub ? ' pricing-feature-list__row--sub' : ''}`}
-            style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '7px',
-              marginBottom: '7px',
-              marginLeft: sub ? '15px' : 0,
-              marginTop: sub ? '2px' : 0,
-            }}
           >
-            {!sub ? (
-              <span
-                style={{
-                  width: '5px',
-                  height: '5px',
-                  borderRadius: '50%',
-                  background: dotColor,
-                  flexShrink: 0,
-                  marginTop: '6px',
-                }}
-              />
+            {sub ? (
+              <span className="pricing-feature-list__spacer" aria-hidden="true" />
             ) : (
-              <span style={{ width: '5px', flexShrink: 0 }} />
+              <span
+                className="pricing-feature-list__dot"
+                aria-hidden="true"
+              />
             )}
-            <span
-              style={{
-                fontSize: sub ? '11px' : '15px',
-                color: sub ? subColor : textColor,
-                lineHeight: 1.5,
-                fontWeight: 400,
-              }}
-            >
-              {item}
-            </span>
+            <span className="pricing-feature-list__text">{item}</span>
           </div>
         );
       })}

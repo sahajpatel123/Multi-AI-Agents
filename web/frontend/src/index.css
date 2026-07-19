@@ -9651,6 +9651,46 @@ canvas {
   flex: 1;
 }
 
+.pricing-feature-list__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-bottom: 7px;
+  margin-left: 0;
+  margin-top: 0;
+}
+
+.pricing-feature-list__row--sub {
+  margin-left: 15px;
+  margin-top: 2px;
+}
+
+.pricing-feature-list__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fl-dot-color, #c4956a);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.pricing-feature-list__spacer {
+  width: 5px;
+  flex-shrink: 0;
+}
+
+.pricing-feature-list__text {
+  font-size: 15px;
+  color: var(--fl-text-color, #2c1810);
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.pricing-feature-list__row--sub .pricing-feature-list__text {
+  font-size: 11px;
+  color: var(--fl-sub-color, #8c7355);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pricing-hero__kicker-dot,
   .pricing-plan-card {
