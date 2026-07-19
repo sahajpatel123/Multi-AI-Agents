@@ -16,6 +16,7 @@ import { ScrollToTop } from './components/ScrollToTop'
 import { MotionButton } from './components/MotionButton'
 import './index.css'
 import './styles/verdict-prism.css'
+import './styles/verdict-public-pages.css'
 
 // Lazy-load each page so they're split into separate chunks. The Suspense
 // fallback below renders MicroLoader while a chunk loads, giving a

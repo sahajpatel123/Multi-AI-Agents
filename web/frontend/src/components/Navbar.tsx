@@ -1,64 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { ArrowRight, Menu, X } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { useProfileModal } from '../context/ProfileModalContext';
-import { Button } from './Button';
 import { setRedirectIntent } from '../utils/redirectIntent';
+import '../styles/verdict-public-nav.css';
 
-function HamburgerIcon() {
-  return (
-    <svg
-      className="navbar-hamburger-icon"
-      width={24}
-      height={24}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden
-    >
-      <path d="M4 7h16M4 12h16M4 17h16" stroke="#2C1810" strokeWidth={1.5} strokeLinecap="round" />
-    </svg>
-  );
-}
+const PRIMARY_LINKS = [
+  { label: 'PRODUCT', path: '/product' },
+  { label: 'PERSONAS', path: '/personas' },
+  { label: 'PRICING', path: '/pricing' },
+  { label: 'DOCS', path: '/docs' },
+] as const;
+
+const MENU_LINKS = [
+  { number: '01', label: 'Product', path: '/product' },
+  { number: '02', label: 'Capabilities', path: '/capabilities' },
+  { number: '03', label: 'Personas', path: '/personas' },
+  { number: '04', label: 'Pricing', path: '/pricing' },
+  { number: '05', label: 'Documentation', path: '/docs' },
+  { number: '06', label: 'Changelog', path: '/changelog' },
+] as const;
 
 export function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, user, logout } = useAuth();
-  const { openModal } = useProfileModal();
-  const [scrolled, setScrolled] = useState(false);
+  const { isAuthenticated } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const mobilePanelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 40);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-
-    const handleOutsideClick = (event: MouseEvent) => {
-      const t = event.target as Node;
-      if (menuRef.current?.contains(t)) return;
-      if (mobilePanelRef.current?.contains(t)) return;
-      setMenuOpen(false);
-    };
-
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [menuOpen]);
-
-  useEffect(() => {
-    document.body.style.overflow = menuOpen ? 'hidden' : '';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [menuOpen]);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const firstMenuLinkRef = useRef<HTMLAnchorElement>(null);
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -66,331 +36,121 @@ export function Navbar() {
 
   useEffect(() => {
     if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuOpen(false);
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = window.setTimeout(() => firstMenuLinkRef.current?.focus(), 0);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMenuOpen(false);
+      }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (wasOpenRef.current && !menuOpen) menuButtonRef.current?.focus();
+    wasOpenRef.current = menuOpen;
   }, [menuOpen]);
 
   const isActive = (path: string) => location.pathname === path;
-  const isChatPage =
-    location.pathname === '/app' ||
-    location.pathname === '/arena' ||
-    location.pathname === '/agent' ||
-    location.pathname.startsWith('/agent');
-  const profileInitials = (() => {
-    const email = user?.email || '';
-    const n = (user?.name || '').trim();
-    if (n) {
-      const parts = n.split(/\s+/).filter(Boolean);
-      if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-      return n.slice(0, 2).toUpperCase();
-    }
-    return (email.split('@')[0] || 'A').slice(0, 2).toUpperCase();
-  })();
 
-  const shellClass = `navbar-shell${scrolled ? ' navbar-shell--scrolled' : ''}`;
+  const enterArena = () => {
+    if (isAuthenticated) {
+      navigate('/app');
+      return;
+    }
+    setRedirectIntent('/app');
+    navigate('/signin?tab=signup');
+  };
+
+  const goHome = () => {
+    if (location.pathname !== '/') {
+      navigate('/');
+      return;
+    }
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+  };
 
   return (
     <>
-      <nav className={shellClass}>
-        <div className="navbar-inner-container">
-          <div className="navbar-row">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-              {isAuthenticated ? (
-                <button
-                  type="button"
-                  className="mobile-only navbar-hamburger navbar-hamburger--leading"
-                  onClick={() => setMenuOpen(true)}
-                  aria-label="Open navigation menu"
-                >
-                  <HamburgerIcon />
-                </button>
-              ) : null}
-              <button type="button" className="navbar-brand" onClick={() => navigate('/')}>
-                <span className="navbar-brand-dot" aria-hidden />
-                <span className="navbar-brand-text">Arena</span>
-              </button>
-            </div>
+      <header className="vp-mast vp-public-nav" data-public-prism-nav>
+        <button type="button" className="vp-brand" onClick={goHome} aria-label="Arena home">
+          <i aria-hidden="true" />
+          ARENA
+        </button>
 
-            <div className="navbar-nav-links" aria-label="Primary navigation">
-              {isAuthenticated ? (
-                <>
-                  <button
-                    type="button"
-                    className={`navbar-nav-link${isActive('/app') ? ' navbar-nav-link--active' : ''}`}
-                    onClick={() => navigate('/app')}
-                  >
-                    Arena
-                  </button>
-                  <button
-                    type="button"
-                    className={`navbar-nav-link${location.pathname.startsWith('/agent') ? ' navbar-nav-link--active' : ''}`}
-                    onClick={() => navigate('/agent')}
-                  >
-                    Agent
-                  </button>
-                  <button
-                    type="button"
-                    className={`navbar-nav-link${isActive('/pricing') ? ' navbar-nav-link--active' : ''}`}
-                    onClick={() => navigate('/pricing')}
-                  >
-                    Pricing
-                  </button>
-                  <button
-                    type="button"
-                    className={`navbar-nav-link${isActive('/docs') ? ' navbar-nav-link--active' : ''}`}
-                    onClick={() => navigate('/docs')}
-                  >
-                    Docs
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className={`navbar-nav-link${isActive('/product') ? ' navbar-nav-link--active' : ''}`}
-                    onClick={() => navigate('/product')}
-                  >
-                    Product
-                  </button>
-                  <button
-                    type="button"
-                    className={`navbar-nav-link${isActive('/personas') ? ' navbar-nav-link--active' : ''}`}
-                    onClick={() => navigate('/personas')}
-                  >
-                    Personas
-                  </button>
-                  <button
-                    type="button"
-                    className={`navbar-nav-link${isActive('/pricing') ? ' navbar-nav-link--active' : ''}`}
-                    onClick={() => navigate('/pricing')}
-                  >
-                    Pricing
-                  </button>
-                  <button
-                    type="button"
-                    className={`navbar-nav-link${isActive('/docs') ? ' navbar-nav-link--active' : ''}`}
-                    onClick={() => navigate('/docs')}
-                  >
-                    Docs
-                  </button>
-                </>
-              )}
-            </div>
-
-            <div className="navbar-right-cluster">
-              {!isAuthenticated ? (
-                <div className="navbar-auth">
-                  <button
-                    type="button"
-                    className="navbar-hamburger"
-                    onClick={() => setMenuOpen(true)}
-                    aria-label="Open navigation menu"
-                  >
-                    <HamburgerIcon />
-                  </button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="navbar-signin-link"
-                    onClick={() => {
-                      setRedirectIntent('/');
-                      navigate('/signin?tab=signin');
-                    }}
-                  >
-                    Sign in
-                  </Button>
-                  <button
-                    type="button"
-                    className="navbar-cta-pill"
-                    onClick={() => {
-                      if (isAuthenticated) {
-                        navigate('/app');
-                        return;
-                      }
-                      setRedirectIntent('/app');
-                      navigate('/signin?tab=signup');
-                    }}
-                  >
-                    Sign up →
-                  </button>
-                </div>
-              ) : (
-                <div ref={menuRef} className="navbar-auth navbar-auth--session">
-                  <button
-                    type="button"
-                    className="mobile-only navbar-mobile-profile-avatar"
-                    onClick={() => {
-                      openModal('top-right');
-                    }}
-                    aria-label="Profile and settings"
-                  >
-                    {profileInitials}
-                  </button>
-                  {!isChatPage && (
-                    <button
-                      type="button"
-                      className="desktop-only navbar-desktop-avatar"
-                      onClick={() => openModal('top-right')}
-                      aria-label="Profile and settings"
-                    >
-                      {profileInitials}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="navbar-divider-line" aria-hidden />
-      </nav>
-
-      {menuOpen && (
-        <div
-          className="mobile-only navbar-mobile-overlay"
-          onClick={() => setMenuOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-      <div
-        ref={mobilePanelRef}
-        className={`mobile-only navbar-mobile-panel${menuOpen ? ' open' : ''}`}
-        role="dialog"
-        aria-modal={menuOpen}
-        aria-label="Navigation menu"
-        aria-hidden={!menuOpen}
-      >
-        <div className="navbar-mobile-panel__head">
-          <button
-            type="button"
-            className="navbar-mobile-panel__brand"
-            onClick={() => {
-              setMenuOpen(false);
-              navigate('/');
-            }}
-          >
-            <span className="navbar-brand-dot" aria-hidden />
-            <span className="navbar-brand-text">Arena</span>
-          </button>
-          <button
-            type="button"
-            className="navbar-mobile-panel__close"
-            onClick={() => setMenuOpen(false)}
-            aria-label="Close navigation menu"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="navbar-mobile-panel__links">
-          {(isAuthenticated
-            ? [
-                { label: 'Arena', path: '/app' },
-                { label: 'Agent', path: '/agent' },
-                { label: 'Watchlist', path: '/agent/watchlist' },
-                { label: 'Pricing', path: '/pricing' },
-                { label: 'Documentation', path: '/docs' },
-                { label: 'Changelog', path: '/changelog' },
-              ]
-            : [
-                { label: 'Product', path: '/product' },
-                { label: 'Capabilities', path: '/capabilities' },
-                { label: 'Personas', path: '/personas' },
-                { label: 'Pricing', path: '/pricing' },
-                { label: 'Documentation', path: '/docs' },
-                { label: 'Changelog', path: '/changelog' },
-              ]
-          ).map((item) => (
-            <button
+        <nav aria-label="Primary navigation">
+          {PRIMARY_LINKS.map((item) => (
+            <Link
               key={item.path}
-              type="button"
-              className={`navbar-mobile-link${isActive(item.path) || (item.path === '/agent' && location.pathname.startsWith('/agent')) ? ' navbar-nav-link--active' : ''}`}
-              onClick={() => {
-                setMenuOpen(false);
-                navigate(item.path);
-              }}
+              to={item.path}
+              className={isActive(item.path) ? 'is-active' : undefined}
+              aria-current={isActive(item.path) ? 'page' : undefined}
             >
               {item.label}
-            </button>
+            </Link>
           ))}
-          {!isAuthenticated ? (
-            <>
-              <button
-                type="button"
-                className="navbar-mobile-link"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setRedirectIntent('/');
-                  navigate('/signin?tab=signin');
-                }}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                className="navbar-mobile-link"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setRedirectIntent('/app');
-                  navigate('/signin?tab=signup');
-                }}
-              >
-                Sign up free
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="navbar-mobile-link"
-                onClick={() => {
-                  setMenuOpen(false);
-                  navigate('/personas');
-                }}
-              >
-                My Panel
-              </button>
-              <button
-                type="button"
-                className="navbar-mobile-link"
-                onClick={() => {
-                  setMenuOpen(false);
-                  openModal('top-right', 'plan');
-                }}
-              >
-                Subscription
-              </button>
-              <button
-                type="button"
-                className="navbar-mobile-link"
-                onClick={async () => {
-                  setMenuOpen(false);
-                  await logout();
-                  navigate('/');
-                }}
-              >
-                Sign out
-              </button>
-            </>
-          )}
-        </div>
+        </nav>
 
-        {!isAuthenticated && (
-          <button
-            type="button"
-            className="navbar-mobile-cta"
-            onClick={() => {
-              setMenuOpen(false);
-              setRedirectIntent('/app');
-              navigate('/signin');
-            }}
-          >
-            Try Arena →
-          </button>
-        )}
+        <button type="button" className="vp-enter" onClick={enterArena}>
+          {isAuthenticated ? 'OPEN ARENA' : 'ENTER ARENA'}
+          <ArrowRight aria-hidden="true" />
+        </button>
+        <button
+          ref={menuButtonRef}
+          type="button"
+          className="vp-menu-button"
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          aria-controls="public-prism-menu"
+        >
+          {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+        </button>
+      </header>
+
+      <div className="vp-nav-spacer" aria-hidden="true" />
+
+      <div
+        id="public-prism-menu"
+        className={`vp-menu vp-public-menu${menuOpen ? ' open' : ''}`}
+        role="dialog"
+        aria-modal={menuOpen}
+        aria-label="Site navigation"
+        aria-hidden={!menuOpen}
+      >
+        <nav aria-label="Expanded navigation">
+          {MENU_LINKS.map((item, index) => (
+            <Link
+              ref={index === 0 ? firstMenuLinkRef : undefined}
+              key={item.number}
+              to={item.path}
+              className={isActive(item.path) ? 'is-active' : undefined}
+              aria-current={isActive(item.path) ? 'page' : undefined}
+              tabIndex={menuOpen ? 0 : -1}
+              onClick={() => setMenuOpen(false)}
+            >
+              <small>{item.number}</small>
+              <strong>{item.label}</strong>
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          ))}
+        </nav>
+        <p aria-hidden="true">
+          ONE QUESTION.<br />
+          FOUR TRUTHS.<br />
+          ONE VERDICT.
+        </p>
       </div>
     </>
   );

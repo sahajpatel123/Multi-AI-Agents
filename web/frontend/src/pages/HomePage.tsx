@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Navbar } from '../components/Navbar';
 import { useAuth } from '../hooks/useAuth';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import '../styles/verdict-home.css';
@@ -74,7 +75,6 @@ export function HomePage() {
   const [sceneIndex, setSceneIndex] = useState(0);
   const [selected, setSelected] = useState(3);
   const [locked, setLocked] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [auditIndex, setAuditIndex] = useState(0);
   const [claimIndex, setClaimIndex] = useState(0);
   const [panel, setPanel] = useState([0, 1, 2, 3]);
@@ -96,7 +96,6 @@ export function HomePage() {
   };
 
   useEffect(() => { const id = window.setInterval(() => setSeconds((v) => (v + 1) % 60), 1000); return () => clearInterval(id); }, []);
-  useEffect(() => { document.body.style.overflow = menuOpen ? 'hidden' : ''; return () => { document.body.style.overflow = ''; }; }, [menuOpen]);
   useEffect(() => {
     const root = rootRef.current; if (!root) return;
     const io = new IntersectionObserver((entries) => entries.forEach((entry) => { if (entry.isIntersecting) { entry.target.classList.add('is-visible'); io.unobserve(entry.target); } }), { threshold: 0.14 });
@@ -142,17 +141,7 @@ export function HomePage() {
 
   return (
     <div className="vp-home" ref={rootRef}>
-      <header className="vp-mast">
-        <button className="vp-brand" onClick={() => window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' })}><i />ARENA</button>
-        <nav aria-label="Primary navigation"><Link to="/product">PRODUCT</Link><Link to="/personas">PERSONAS</Link><Link to="/pricing">PRICING</Link><Link to="/docs">DOCS</Link></nav>
-        <button className="vp-enter" onClick={enterArena}>ENTER ARENA <ArrowRight size={15} /></button>
-        <button className="vp-menu-button" onClick={() => setMenuOpen((v) => !v)} aria-label={menuOpen ? 'Close menu' : 'Open menu'}>{menuOpen ? <X /> : <Menu />}</button>
-      </header>
-
-      <div className={`vp-menu ${menuOpen ? 'open' : ''}`} aria-hidden={!menuOpen}>
-        <nav aria-label="Expanded navigation">{[['01','Product','/product'],['02','Capabilities','/capabilities'],['03','Personas','/personas'],['04','Pricing','/pricing'],['05','Documentation','/docs'],['06','Changelog','/changelog']].map(([n,label,href])=><Link key={n} to={href} onClick={()=>setMenuOpen(false)}><small>{n}</small><strong>{label}</strong><ArrowRight /></Link>)}</nav>
-        <p>ONE QUESTION.<br/>FOUR TRUTHS.<br/>ONE VERDICT.</p>
-      </div>
+      <Navbar />
 
       <main>
         <section className="vp-hero" ref={heroRef}>
