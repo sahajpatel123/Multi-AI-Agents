@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from arena.config import get_settings
 from arena.core.dependencies import get_current_user_optional_orm, get_current_user_required_orm
+from arena.core.errors import ErrorCodes
 from arena.core.input_validation import sanitize_html, sanitize_model_html
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.room_synthesiser import synthesise_room
@@ -154,7 +155,10 @@ def _ensure_unique_slug(db: Session, base_slug: str) -> str:
         candidate = f"{base_slug}-{suffix}"
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Could not allocate unique room slug",
+        detail={
+            "error": ErrorCodes.INTERNAL_ERROR,
+            "message": "Could not allocate unique room slug",
+        },
     )
 
 
@@ -193,7 +197,13 @@ async def create_room(
             .first()
         )
         if not task_row:
-            raise HTTPException(status_code=400, detail="Task not found or not owned by you")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": ErrorCodes.NOT_FOUND,
+                    "message": "Task not found or not owned by you",
+                },
+            )
 
     db.add(room)
     db.flush()
@@ -426,7 +436,10 @@ async def get_synthesis(
 ) -> dict[str, Any]:
     room = db.query(Room).filter(Room.slug == slug).first()
     if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
     if force:
         # Regenerating synthesis triggers an expensive LLM call (synthesise_room).
         # Reading the cached synthesis stays open to match the shareable-link room
@@ -436,7 +449,10 @@ async def get_synthesis(
         if current is None:
             raise HTTPException(
                 status_code=401,
-                detail="Authentication required to refresh synthesis",
+                detail={
+                    "error": ErrorCodes.TOKEN_REVOKED,
+                    "message": "Authentication required to refresh synthesis",
+                },
             )
         is_member = (
             db.query(RoomMember)
@@ -449,7 +465,10 @@ async def get_synthesis(
         if not is_member:
             raise HTTPException(
                 status_code=403,
-                detail="Only room members can refresh synthesis",
+                detail={
+                    "error": ErrorCodes.FEATURE_NOT_ALLOWED,
+                    "message": "Only room members can refresh synthesis",
+                },
             )
         # Expensive LLM re-synthesis — bound per-user force refreshes.
         enforce_user_rate_limit(
@@ -494,7 +513,10 @@ async def get_room(
     """
     room = db.query(Room).filter(Room.slug == slug).first()
     if not room or not room.is_active:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
 
     if current:
         rm = (
@@ -567,7 +589,10 @@ async def join_room(
 ) -> dict[str, Any]:
     room = db.query(Room).filter(Room.slug == slug, Room.is_active.is_(True)).first()
     if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
 
     existing = (
         db.query(RoomMember)
@@ -593,7 +618,10 @@ async def join_room(
             db.query(func.count(RoomMember.id)).filter(RoomMember.room_id == room.id).scalar() or 0
         )
         if int(n) >= MAX_ROOM_MEMBERS:
-            raise HTTPException(status_code=400, detail="Room is full")
+            raise HTTPException(
+                status_code=400,
+                detail={"error": ErrorCodes.NOT_FOUND, "message": "Room is full"},
+            )
         now = utcnow_naive()
         db.add(RoomMember(room_id=room.id, user_id=user.id, joined_at=now, last_seen_at=now))
         db.commit()
@@ -628,7 +656,10 @@ async def add_task_to_room(
 ) -> dict[str, Any]:
     room = db.query(Room).filter(Room.slug == slug, Room.is_active.is_(True)).first()
     if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
 
     is_member = (
         db.query(RoomMember)
@@ -636,7 +667,10 @@ async def add_task_to_room(
         .first()
     )
     if not is_member:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
 
     at = (
         db.query(AgentTask)
@@ -644,7 +678,10 @@ async def add_task_to_room(
         .first()
     )
     if not at:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
 
     dup = (
         db.query(RoomTask)
@@ -689,7 +726,10 @@ async def remove_task_from_room(
 ) -> dict[str, Any]:
     room = db.query(Room).filter(Room.slug == slug, Room.is_active.is_(True)).first()
     if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
 
     rt = (
         db.query(RoomTask)
@@ -697,10 +737,16 @@ async def remove_task_from_room(
         .first()
     )
     if not rt:
-        raise HTTPException(status_code=404, detail="Task not in room")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not in room"},
+        )
 
     if rt.user_id != user.id and room.creator_id != user.id:
-        raise HTTPException(status_code=404, detail="Task not in room")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not in room"},
+        )
 
     # Removing a task also re-runs synthesis — share the room_synthesis budget.
     enforce_user_rate_limit(
@@ -738,9 +784,15 @@ async def delete_room(
     )
     room = db.query(Room).filter(Room.slug == slug).first()
     if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
     if room.creator_id != user.id:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
 
     room.is_active = False
     db.add(room)
@@ -927,7 +979,10 @@ async def get_perspective_drift(
     """
     room = db.query(Room).filter(Room.slug == slug, Room.is_active.is_(True)).first()
     if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
 
     is_member = (
         db.query(RoomMember)
@@ -936,7 +991,10 @@ async def get_perspective_drift(
     )
     # Same status as missing room — avoid membership oracle (403 vs 404).
     if not is_member and room.creator_id != user.id:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
 
     rts = (
         db.query(RoomTask, AgentTask, User)
