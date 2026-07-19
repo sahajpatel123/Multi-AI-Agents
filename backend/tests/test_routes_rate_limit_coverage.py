@@ -31,10 +31,11 @@ Files checked:
   * prompt.py   (cycle 47: _check_rate_limit + health/readiness IP caps)
   * debate.py   (cycle 48: cost_tracker on POST /debate and stream)
   * agent.py    (cycle 48: all 42 routes already defended; suite pins them)
+  * auth.py     (cycle 49: login_limiter + user/* rates; dual router/user_router)
+  * metrics.py  (cycle 49: admin gate on empty-path GET "")
 
 Other route files use different throttling mechanisms:
-  * auth.py → mix of IP+user+login_limiter; covered by separate tests
-  * metrics.py → single admin endpoint
+  * (none remaining in arena/routes — suite covers the full set)
 """
 
 from __future__ import annotations
@@ -67,6 +68,8 @@ COVERED_FILES = [
     "prompt.py",
     "debate.py",
     "agent.py",
+    "auth.py",
+    "metrics.py",
 ]
 
 # Acceptable defenses inside a handler body. Match each as a regex.
@@ -75,6 +78,7 @@ DEFENSES = {
     "ip_rate_limit": re.compile(r"\benforce_ip_rate_limit\b"),
     "limiter_decorator": re.compile(r"@limiter\.limit\b"),
     "admin_gate": re.compile(r"\brequire_admin_email\b"),
+    "admin_only_wrapper": re.compile(r"\b_admin_only\b"),
     "razorpay_sig": re.compile(r"\bverify_razorpay_signature\b"),
     "stripe_sig": re.compile(r"\bverify_stripe_signature\b"),
     # LLM spend throttle used by discuss/debate/prompt stream handlers.
@@ -86,13 +90,15 @@ DEFENSES = {
     "prompt_rate_limit": re.compile(r"\b_check_rate_limit\b"),
     # Razorpay webhook HMAC (payments.py uses hmac_sha256_hex_equal directly).
     "razorpay_hmac": re.compile(r"\bhmac_sha256_hex_equal\b"),
+    # Auth brute-force lockouts (login/register).
+    "login_limiter": re.compile(r"\blogin_limiter\b"),
+    "registration_limiter": re.compile(r"\bregistration_limiter\b"),
 }
 
-# `@router.<method>("<path>")` and aliases like `@memory_router.get(...)`.
-# Multi-line decorators OK (open paren on the same line; the test only
-# needs the method + path).
+# `@router.<method>("<path>")` and aliases (`memory_router`, `user_router`).
+# Empty path `""` is valid (metrics GET ""). Multi-line decorators OK.
 _DECORATOR_RE = re.compile(
-    r'@(?:router|memory_router)\.(get|post|patch|delete|put)\(\s*\n?\s*[\'"]([^\'"]+)[\'"]',
+    r'@(?:router|memory_router|user_router)\.(get|post|patch|delete|put)\(\s*\n?\s*[\'"]([^\'"]*)[\'"]',
     re.MULTILINE,
 )
 
@@ -116,10 +122,10 @@ def _iter_route_decorators(py_file: Path) -> list[tuple[str, str, int]]:
 def _function_body(py_file: Path, start_line: int) -> str:
     """Walk forward from the decorator to capture the decorated function body.
 
-    Captures from the next ``async def`` / ``def`` line until the next
-    ``@router.`` decorator (or EOF). Caps at 120 lines so a long handler
-    still fits without swallowing a later route's rate-limit call
-    (which would create a false-positive "protected" verdict).
+    Captures from the ``@router…`` line (so stacked decorators like
+    ``@limiter.limit(...)`` above ``async def`` count as defenses) until
+    the next route decorator (or EOF). Caps at 120 lines after the def
+    so a long handler still fits without swallowing a later route.
 
     Multi-line decorators (``@router.post(\\n  "/path",\\n  responses=...)``)
     need a wider look-ahead than 6 lines — 24 covers responses= dicts without
@@ -138,10 +144,14 @@ def _function_body(py_file: Path, start_line: int) -> str:
         return ""
     end = min(func_start + 120, len(lines))
     for j in range(func_start + 1, end):
-        if re.match(r"@(?:router|memory_router)\.(get|post|patch|delete|put)\b", lines[j]):
+        if re.match(
+            r"@(?:router|memory_router|user_router)\.(get|post|patch|delete|put)\b",
+            lines[j],
+        ):
             end = j
             break
-    return "\n".join(lines[func_start:end])
+    # Include the route decorator stack (limiter, etc.) that sits above def.
+    return "\n".join(lines[start_idx:end])
 
 
 def _route_is_protected(method: str, path: str, py_file: Path, line_no: int) -> tuple[bool, list[str]]:

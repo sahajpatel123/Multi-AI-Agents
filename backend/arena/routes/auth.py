@@ -572,6 +572,14 @@ async def patch_user_profile(
     user: User = Depends(get_current_user_required_orm),
     db: Session = Depends(get_db),
 ) -> UserResponse:
+    # 30/min/user — profile saves from the account panel.
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_profile_patch",
+        limit=30,
+        window_seconds=60,
+        message="Too many profile updates. Please slow down.",
+    )
     if body.name is not None:
         user.name = sanitize_html(body.name, max_length=100, field_name="name")
     if body.expertise_level is not None:
@@ -600,6 +608,14 @@ async def user_answer_feedback_stats(
     user: User = Depends(get_current_user_required_orm),
     db: Session = Depends(get_db),
 ) -> dict:
+    # 60/min/user — account panel chart; light aggregation.
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_feedback_stats",
+        limit=60,
+        window_seconds=60,
+        message="Too many feedback stats reads. Please slow down.",
+    )
     return get_answer_feedback_distribution(user.id, db)
 
 
@@ -608,6 +624,14 @@ async def get_user_usage(
     user: User = Depends(get_current_user_required_orm),
     db: Session = Depends(get_db),
 ) -> dict:
+    # 60/min/user — multi-aggregate usage dashboard; cap polling.
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_usage",
+        limit=60,
+        window_seconds=60,
+        message="Too many usage stats reads. Please slow down.",
+    )
     normalized = normalize_tier(get_tier_str(user))
     daily_limit = get_credit_budget(normalized)
     weekly_limit = daily_limit * 7
@@ -686,6 +710,14 @@ async def get_user_usage(
 async def get_user_tier_summary(
     user: User = Depends(get_current_user_required_orm),
 ) -> dict:
+    # 120/min/user — feature gates hydrate often across shells.
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_tier",
+        limit=120,
+        window_seconds=60,
+        message="Too many tier summary reads. Please slow down.",
+    )
     normalized_tier = normalize_tier(get_tier_str(user))
     daily_limit = get_daily_limit(normalized_tier)
     messages_used_today = min(int(user.prompt_count_today or 0), daily_limit)
