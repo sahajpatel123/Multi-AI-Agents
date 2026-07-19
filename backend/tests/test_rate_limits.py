@@ -182,6 +182,47 @@ def test_enforce_ip_uses_different_keyspace_than_enforce_user():
     enforce_ip_rate_limit(_FakeRequest("1.1.1.1"), scope="twin", limit=1, window_seconds=60, message="x")
 
 
+def test_enforce_ip_rate_limit_preserves_retry_after_header():
+    """Wrapper must let the Retry-After header from hit() reach the caller.
+
+    A naive refactor that wraps hit() in try/except or a custom
+    HTTPException would silently strip the header and every client that
+    reads Retry-After (fetch wrappers, SDKs) would stop backing off.
+    Pin the header on the IP-scoped path.
+    """
+    req = _FakeRequest("9.9.9.9")
+    for _ in range(3):
+        enforce_ip_rate_limit(
+            req, scope="ip_retry_after", limit=3, window_seconds=60, message="x"
+        )
+    with pytest.raises(HTTPException) as exc_info:
+        enforce_ip_rate_limit(
+            req, scope="ip_retry_after", limit=3, window_seconds=60, message="x"
+        )
+    assert exc_info.value.status_code == 429
+    detail = exc_info.value.detail
+    assert detail["error"] == "rate_limit_exceeded"
+    assert detail["retry_after"] >= 1
+    assert exc_info.value.headers.get("Retry-After") == str(detail["retry_after"])
+
+
+def test_enforce_user_rate_limit_preserves_retry_after_header():
+    """Same invariant on the user-scoped wrapper path."""
+    for _ in range(3):
+        enforce_user_rate_limit(
+            4242, scope="user_retry_after", limit=3, window_seconds=60, message="x"
+        )
+    with pytest.raises(HTTPException) as exc_info:
+        enforce_user_rate_limit(
+            4242, scope="user_retry_after", limit=3, window_seconds=60, message="x"
+        )
+    assert exc_info.value.status_code == 429
+    detail = exc_info.value.detail
+    assert detail["error"] == "rate_limit_exceeded"
+    assert detail["retry_after"] >= 1
+    assert exc_info.value.headers.get("Retry-After") == str(detail["retry_after"])
+
+
 # ─── Module-level singleton sanity ──────────────────────────────────────
 
 
