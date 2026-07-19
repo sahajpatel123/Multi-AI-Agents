@@ -3,6 +3,9 @@
 from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
+import re
+from pathlib import Path
+
 import pytest
 
 from arena.db_models import UserTier
@@ -157,3 +160,39 @@ async def test_security_last_active_at_reflects_recent_prompt(
 async def test_security_requires_auth(app_client):
     res = await app_client.get("/api/auth/security")
     assert res.status_code == 401
+
+
+def test_registration_route_declares_the_5_per_hour_ip_cap():
+    """Cycle-60 intent pin: `POST /api/auth/register` declares an
+    `enforce_ip_rate_limit` at 5/hour per IP. The behavioral test
+    (test_api_endpoints.py::test_rate_limited_register_does_not_create_user)
+    covers the user-record side; this pins the cap design.
+
+    Why this matters: 5/hour per IP is calibrated to block mass-signup
+    spam from a single network while leaving room for legitimate
+    re-tries (typos, password reset flows). Lower values break
+    password-recovery sign-up flows; higher values let a single
+    attacker create dozens of accounts/hour for free-tier abuse.
+    """
+    auth_src = (
+        Path(__file__).resolve().parent.parent / "arena" / "routes" / "auth.py"
+    ).read_text()
+
+    assert 'scope="registration_create"' in auth_src, (
+        "Expected the registration route to declare scope='registration_create' "
+        "on its IP rate-limit call. Without this scope, log entries can't "
+        "identify which endpoint tripped a 429."
+    )
+    assert "limit=5" in auth_src, (
+        "Expected the registration IP cap to remain at 5/hour. The 5/hour "
+        "ceiling is calibrated to block mass-signup spam from a single "
+        "network while leaving room for legitimate password-recovery "
+        "flows. Lower values break onboarding; higher values weaken the "
+        "spam cap."
+    )
+    assert "window_seconds=3600" in auth_src, (
+        "Expected the registration IP cap to roll on a 3600-second (1 hour) "
+        "window. The 1-hour window is what makes 5/hour a meaningful cap — "
+        "a shorter window would make 5 too restrictive for re-tries, a "
+        "longer window would make 5 too lenient against sustained spam."
+    )
