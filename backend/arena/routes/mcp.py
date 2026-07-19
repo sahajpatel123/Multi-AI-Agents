@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
+from arena.core.errors import ErrorCodes
 from arena.core.input_validation import sanitize_model_html, sanitize_model_text
 from arena.core.mcp_runtime import search_integration_api
 from arena.core.rate_limits import enforce_user_rate_limit
@@ -65,7 +66,10 @@ def _ensure_encryption() -> None:
     if get_fernet() is None:
         raise HTTPException(
             status_code=503,
-            detail="Server encryption is not configured (ENCRYPTION_KEY). Cannot save tokens.",
+            detail={
+                "error": ErrorCodes.SERVICE_UNAVAILABLE,
+                "message": "Server encryption is not configured (ENCRYPTION_KEY). Cannot save tokens.",
+            },
         )
 
 
@@ -400,7 +404,10 @@ async def disconnect_integration(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Integration not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Integration not found"},
+        )
     row.is_active = False
     db.commit()
     return {"success": True}
@@ -431,7 +438,10 @@ async def search_integration(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Integration not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Integration not found"},
+        )
 
     results = await search_integration_api(row, body.query)
     return {"results": results}

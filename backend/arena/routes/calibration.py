@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
+from arena.core.errors import ErrorCodes
 from arena.core.rate_limits import enforce_user_rate_limit
 from arena.database import get_db
 from arena.db_models import AgentTask, ConfidenceRating
@@ -135,7 +136,10 @@ async def post_calibration_rate(
         .first()
     )
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
 
     existing = (
         db.query(ConfidenceRating)
@@ -184,7 +188,10 @@ async def post_calibration_rate(
             .first()
         )
         if not existing:
-            raise HTTPException(status_code=500, detail="Could not save rating") from None
+            raise HTTPException(
+                status_code=500,
+                detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Could not save rating"},
+            ) from None
         stats = build_calibration_stats(db, user.id)
         return JSONResponse(
             content={
@@ -375,7 +382,10 @@ async def retract_and_rerate(
     )
     if not task:
         # Foreign-or-missing: same shape as the existing rate endpoint.
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
 
     existing = (
         db.query(ConfidenceRating)

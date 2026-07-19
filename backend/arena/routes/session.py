@@ -7,6 +7,7 @@ from arena.models.schemas import SessionData, ErrorResponse, UserResponse
 from arena.core.memory import get_memory_manager
 from arena.core.persona_integrity import clear_session_history
 from arena.core.dependencies import get_current_user_required
+from arena.core.errors import ErrorCodes
 from arena.core.rate_limits import enforce_user_rate_limit
 from arena.database import get_db
 
@@ -66,7 +67,10 @@ async def get_session(
     # Uniform 404 for missing *and* foreign sessions so session_id cannot be
     # enumerated via 403 vs 404 (existence / ownership oracle).
     if not session or str(session.user_id or "").strip() != str(user.id):
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Session not found"},
+        )
 
     return session
 

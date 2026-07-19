@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from arena.core.datetime_utils import utcnow_naive
 from arena.core.dependencies import get_current_user_required
+from arena.core.errors import ErrorCodes
 from arena.core.contradiction_detector import get_contradiction_detector
 from arena.core.cost_tracker import (
     RateLimitExceeded,
@@ -166,7 +167,10 @@ async def submit_prompt(
         try:
             active_agents = get_all_agents(body.persona_ids)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail="Invalid persona selection") from e
+            raise HTTPException(
+                status_code=400,
+                detail={"error": ErrorCodes.INVALID_PERSONA, "message": "Invalid persona selection"},
+            ) from e
 
         pipeline_result = await run_input_pipeline(body.prompt)
         tracker.mark("input_pipeline_done")
@@ -216,7 +220,10 @@ async def submit_prompt(
 
         winner = scorer.get_winner(scored_responses)
         if not winner:
-            raise HTTPException(status_code=500, detail="Failed to determine winner")
+            raise HTTPException(
+                status_code=500,
+                detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Failed to determine winner"},
+            )
 
         detector = get_contradiction_detector()
         contradiction_reports = await detector.check_all_agents(responses, session_id)
@@ -316,7 +323,10 @@ async def submit_prompt(
         raise
     except Exception as e:
         log_unhandled_exception(request_id, user_label, e)
-        raise HTTPException(status_code=500, detail="Prompt request failed")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Prompt request failed"},
+        )
 
 
 @router.post("/prompt/stream")

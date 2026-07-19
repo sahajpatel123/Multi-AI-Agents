@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from arena.core.admin_gate import require_admin_email
 from arena.core.dependencies import get_current_user_required
+from arena.core.errors import ErrorCodes
 from arena.core.handoff_status import (
     ALL_KNOWN_STATUSES,
     ALLOWED_EVENT_KINDS,
@@ -176,7 +177,10 @@ async def append_handoff_event(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Handoff not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Handoff not found"},
+        )
     kind = body.event_kind.lower().strip()
     # Defense-in-depth: validate kind against the known set before persisting
     # it as a status value. Browser-mediated, but we don't trust arbitrary
@@ -449,7 +453,10 @@ async def delete_handoff_draft(
         .first()
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Draft not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Draft not found"},
+        )
     db.delete(row)
     db.commit()
     return {"ok": True}
@@ -516,7 +523,10 @@ async def resolve_migration_flag(
     )
     ok = resolve_flag(db, user.id, flag_id, body.decision)
     if not ok:
-        raise HTTPException(status_code=404, detail="Flag not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Flag not found"},
+        )
     return {"ok": True}
 
 

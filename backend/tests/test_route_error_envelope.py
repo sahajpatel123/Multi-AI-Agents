@@ -31,6 +31,11 @@ COVERED_FILES = [
     "rooms.py",
     "debate.py",
     "discuss.py",
+    "condura.py",
+    "calibration.py",
+    "prompt.py",
+    "mcp.py",
+    "session.py",
 ]
 
 
