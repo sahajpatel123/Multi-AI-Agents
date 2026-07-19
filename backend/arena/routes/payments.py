@@ -16,6 +16,7 @@ from arena.config import get_settings
 from arena.core.hmac_verify import hmac_sha256_hex_equal
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.entitlements import compute_user_entitlements
+from arena.core.errors import ErrorCodes
 from arena.core.tier_config import get_tier_str
 from arena.core.dependencies import get_current_user_required_orm
 from arena.database import get_db
@@ -69,7 +70,7 @@ def _get_razorpay_client() -> razorpay.Client:
     if not settings.razorpay_api_key or not settings.razorpay_key_secret:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Payments are not configured",
+            detail={"error": ErrorCodes.SERVICE_UNAVAILABLE, "message": "Payments are not configured"},
         )
     return razorpay.Client(auth=(settings.razorpay_api_key, settings.razorpay_key_secret))
 
@@ -163,13 +164,13 @@ def _ensure_razorpay_customer(
         logger.exception("Razorpay customer create failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not start checkout. Please try again.",
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Could not start checkout. Please try again."},
         ) from exc
     cid = created.get("id")
     if not cid:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not start checkout. Please try again.",
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Could not start checkout. Please try again."},
         )
     user.razorpay_customer_id = cid
     db.add(user)
@@ -327,13 +328,13 @@ async def create_subscription(
     if plan_key not in plans:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid plan_key",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "Invalid plan_key"},
         )
     plan = plans[plan_key]
     if not plan["plan_id"]:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Plan is not configured",
+            detail={"error": ErrorCodes.SERVICE_UNAVAILABLE, "message": "Plan is not configured"},
         )
 
     client = _get_razorpay_client()
@@ -361,14 +362,14 @@ async def create_subscription(
         logger.exception("Razorpay subscription create failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not create subscription. Please try again.",
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Could not create subscription. Please try again."},
         ) from exc
 
     sub_id = rzp_sub.get("id")
     if not sub_id:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not create subscription. Please try again.",
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Could not create subscription. Please try again."},
         )
 
     ent = rzp_sub
@@ -432,17 +433,17 @@ async def subscribe_agent_addon(
     if not _user_is_plus_tier(user):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Agent add-on is only available for Plus plan users",
+            detail={"error": ErrorCodes.FEATURE_NOT_ALLOWED, "message": "Agent add-on is only available for Plus plan users"},
         )
     if getattr(user, "agent_addon_active", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Agent add-on is already active on your account",
+            detail={"error": ErrorCodes.FEATURE_NOT_ALLOWED, "message": "Agent add-on is already active on your account"},
         )
     if getattr(user, "agent_addon_cancelling", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Add-on is scheduled to cancel; use reactivate or wait until it ends.",
+            detail={"error": ErrorCodes.FEATURE_NOT_ALLOWED, "message": "Add-on is scheduled to cancel; use reactivate or wait until it ends."},
         )
 
     settings = get_settings()
@@ -454,7 +455,7 @@ async def subscribe_agent_addon(
     if not addon_plan_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Agent add-on plan not configured. Contact support.",
+            detail={"error": ErrorCodes.SERVICE_UNAVAILABLE, "message": "Agent add-on plan not configured. Contact support."},
         )
 
     client = _get_razorpay_client()
@@ -483,14 +484,14 @@ async def subscribe_agent_addon(
         logger.exception("Addon subscribe error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not create add-on subscription. Please try again.",
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Could not create add-on subscription. Please try again."},
         ) from exc
 
     sub_id = rzp_sub.get("id")
     if not sub_id:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not create add-on subscription. Please try again.",
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Could not create add-on subscription. Please try again."},
         )
 
     ent = rzp_sub
@@ -535,13 +536,13 @@ async def cancel_agent_addon(
     if not getattr(user, "agent_addon_active", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active add-on to cancel",
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "No active add-on to cancel"},
         )
     sid = getattr(user, "addon_subscription_id", None)
     if not sid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active add-on to cancel",
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "No active add-on to cancel"},
         )
     client = _get_razorpay_client()
     try:
@@ -550,7 +551,7 @@ async def cancel_agent_addon(
         logger.exception("Razorpay agent add-on cancel failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not cancel add-on. Please try again.",
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Could not cancel add-on. Please try again."},
         ) from exc
 
     user.agent_addon_active = False
@@ -573,13 +574,13 @@ async def reactivate_agent_addon(
     if not getattr(user, "agent_addon_cancelling", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Add-on is not scheduled for cancellation",
+            detail={"error": ErrorCodes.FEATURE_NOT_ALLOWED, "message": "Add-on is not scheduled for cancellation"},
         )
     sid = getattr(user, "addon_subscription_id", None)
     if not sid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No add-on subscription to resume",
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "No add-on subscription to resume"},
         )
     client = _get_razorpay_client()
     try:
@@ -588,7 +589,7 @@ async def reactivate_agent_addon(
         logger.exception("Razorpay agent add-on resume failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not reactivate add-on. Please try again.",
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Could not reactivate add-on. Please try again."},
         ) from exc
 
     user.agent_addon_cancelling = False
@@ -610,7 +611,7 @@ async def verify_payment(
     if not settings.razorpay_key_secret:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Payments are not configured",
+            detail={"error": ErrorCodes.SERVICE_UNAVAILABLE, "message": "Payments are not configured"},
         )
 
     message = f"{body.razorpay_payment_id}|{body.razorpay_subscription_id}"
@@ -621,7 +622,7 @@ async def verify_payment(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid signature",
+            detail={"error": ErrorCodes.INVALID_TOKEN, "message": "Invalid signature"},
         )
 
     row = (
@@ -632,7 +633,7 @@ async def verify_payment(
     if not row or row.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Subscription not found",
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Subscription not found"},
         )
 
     row.status = "authenticated"
@@ -770,13 +771,16 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
             if settings.is_production:
                 raise HTTPException(
                     status_code=503,
-                    detail="Webhook endpoint is not configured",
+                    detail={"error": ErrorCodes.SERVICE_UNAVAILABLE, "message": "Webhook endpoint is not configured"},
                 )
             return JSONResponse(status_code=200, content={"status": "ok"})
 
         if not hmac_sha256_hex_equal(secret, raw_body, sig_header):
             logger.warning("Invalid Razorpay webhook signature")
-            raise HTTPException(status_code=400, detail="Invalid signature")
+            raise HTTPException(
+                status_code=400,
+                detail={"error": ErrorCodes.INVALID_TOKEN, "message": "Invalid signature"},
+            )
 
         payload = json.loads(raw_body.decode("utf-8"))
         event = payload.get("event")
@@ -1029,7 +1033,7 @@ async def cancel_subscription(
     if not row or row.status not in ("active", "authenticated", "created"):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active subscription found",
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "No active subscription found"},
         )
 
     client = _get_razorpay_client()
@@ -1042,7 +1046,7 @@ async def cancel_subscription(
         logger.exception("Razorpay subscription cancel failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not cancel subscription. Please try again.",
+            detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Could not cancel subscription. Please try again."},
         ) from exc
 
     row.status = "cancelled"

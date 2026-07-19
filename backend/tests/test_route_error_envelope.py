@@ -36,6 +36,7 @@ COVERED_FILES = [
     "prompt.py",
     "mcp.py",
     "session.py",
+    "payments.py",
 ]
 
 

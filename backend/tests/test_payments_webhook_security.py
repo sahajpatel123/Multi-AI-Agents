@@ -101,9 +101,12 @@ class TestWebhookHmac:
         assert res.status_code == 400, res.text
         # The rejected signature must NOT have been processed — verify
         # the response detail names signature failure explicitly.
+        # Cycle 58: detail is now the standard {error, message} envelope.
         body_json = res.json()
-        assert body_json.get("detail", "").lower().startswith("invalid signature") or \
-               body_json.get("detail") == "Invalid signature"
+        detail = body_json.get("detail", {})
+        assert detail.get("message") == "Invalid signature", (
+            f"expected {{error, message: 'Invalid signature'}}, got {detail}"
+        )
 
     @pytest.mark.asyncio
     async def test_tampered_body_rejected(self, app_client, secret_env):
