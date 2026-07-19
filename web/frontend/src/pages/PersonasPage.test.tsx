@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 import { PersonasPage } from './PersonasPage';
 import type { Persona } from '../data/personas';
+import { copyToClipboard } from '../lib/clipboard';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 
 const defaultPanel: Persona[] = [
   {
@@ -140,6 +142,9 @@ describe('PersonasPage', () => {
     tierState.canUsePersona.mockClear();
     setRedirectIntentMock.mockReset();
     authState.isAuthenticated = false;
+    panelState.isDefaultPanel = true;
+    vi.mocked(copyToClipboard).mockReset().mockResolvedValue(true);
+    vi.mocked(downloadMarkdownFile).mockReset().mockReturnValue(true);
   });
 
   it('renders the complete panel studio and shared public shell', () => {
@@ -151,12 +156,36 @@ describe('PersonasPage', () => {
     expect(screen.getByTestId('footer')).toBeInTheDocument();
   });
 
-  it('renders all four current panel slots with their actual minds', () => {
+  it('renders all four current panel slots as one live council composition', () => {
     const { container } = renderPage();
+    const council = container.querySelector('.personas-council');
+    const slotList = screen.getByRole('list', { name: /current panel slots/i });
     const names = Array.from(container.querySelectorAll('.personas-panel-card__name'))
       .map((element) => element.textContent?.trim());
+    expect(council).toHaveStyle('--focus-color: #8C9BAB');
+    expect(within(slotList).getAllByRole('listitem')).toHaveLength(4);
     expect(names).toEqual(['The Analyst', 'The Philosopher', 'The Pragmatist', 'The Contrarian']);
-    expect(screen.getByText(/productive tension/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/current panel fingerprint/i)).toHaveTextContent(/productive tension/i);
+    expect(screen.getByText(/configuration indicators describe persona settings—not answer quality/i)).toBeInTheDocument();
+  });
+
+  it('moves the shared inspection lens between slots without changing the panel', () => {
+    const { container } = renderPage();
+    const analyst = screen.getByRole('button', { name: /inspect the analyst lens in slot 1/i });
+    const philosopher = screen.getByRole('button', { name: /inspect the philosopher lens in slot 2/i });
+    const lens = screen.getByLabelText(/inspected panel lens/i);
+
+    expect(analyst).toHaveAttribute('aria-pressed', 'true');
+    expect(philosopher).toHaveAttribute('aria-pressed', 'false');
+    expect(lens).toHaveTextContent(/which assumption breaks the case first/i);
+
+    fireEvent.click(philosopher);
+
+    expect(analyst).toHaveAttribute('aria-pressed', 'false');
+    expect(philosopher).toHaveAttribute('aria-pressed', 'true');
+    expect(lens).toHaveTextContent(/what if the question is framed incorrectly/i);
+    expect(container.querySelector('.personas-council')).toHaveStyle('--focus-color: #9B8FAA');
+    expect(panelState.swapAgent).not.toHaveBeenCalled();
   });
 
   it('switches the illustrative lens preview with pressed-button semantics', () => {
@@ -223,6 +252,25 @@ describe('PersonasPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /save this panel/i }));
     expect(panelState.savePanel).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole('alert')).toHaveTextContent(/save unavailable/i);
+  });
+
+  it('preserves panel copy, download, and two-step reset actions inside the council', async () => {
+    panelState.isDefaultPanel = false;
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /copy panel as markdown/i }));
+    await waitFor(() => expect(copyToClipboard).toHaveBeenCalledWith(expect.stringContaining('The Analyst')));
+
+    fireEvent.click(screen.getByRole('button', { name: /download panel as markdown/i }));
+    expect(downloadMarkdownFile).toHaveBeenCalledWith(
+      expect.stringContaining('The Contrarian'),
+      'arena-personas-panel',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /reset panel to default minds/i }));
+    expect(panelState.resetPanel).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /confirm reset panel to default minds/i }));
+    expect(panelState.resetPanel).toHaveBeenCalledTimes(1);
   });
 
   it('routes a locked recipe to pricing before changing any panel slot', () => {

@@ -167,6 +167,7 @@ export function PersonasPage() {
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>(PANEL_RECIPES[0].id);
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [showAllLibrary, setShowAllLibrary] = useState(false);
+  const [inspectedSlot, setInspectedSlot] = useState<SlotIndex>(0);
   const librarySearchRef = useRef<HTMLInputElement | null>(null);
   const swapSearchRef = useRef<HTMLInputElement | null>(null);
   const swapDialogRef = useRef<HTMLDivElement | null>(null);
@@ -185,6 +186,7 @@ export function PersonasPage() {
     : panelTemperature < 0.7
       ? 'Productive tension'
       : 'High divergence';
+  const inspectedPersona = panel[inspectedSlot] ?? panel[0];
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => setPageVisible(true));
@@ -718,91 +720,178 @@ export function PersonasPage() {
             </p>
           </header>
 
-          <div className="personas-panel-stage">
-            <div className="current-panel-grid">
-              {panel.map((persona, index) => (
-                <article
-                  key={`${persona.id}-${index}`}
-                  className="personas-panel-card"
-                  style={{ '--slot-color': persona.color } as CSSProperties}
+          <div
+            className="personas-council"
+            style={{ '--focus-color': inspectedPersona?.color ?? '#A98CF8' } as CSSProperties}
+          >
+            <header className="personas-council__bar">
+              <div><i aria-hidden="true" /><strong>Live composition</strong></div>
+              <span>{isDefaultPanel ? 'Default panel' : 'Custom panel'}</span>
+              <span>04 minds / 01 shared question</span>
+            </header>
+
+            <div className="personas-council__field">
+              {inspectedPersona && (
+                <aside
+                  className="personas-council__lens"
+                  aria-label="Inspected panel lens"
+                  aria-live="polite"
                 >
-                  <div className="personas-panel-card__rail" />
                   <header>
-                    <small>0{index + 1} / SLOT</small>
-                    <AgentDot agentId={`agent_${index + 1}`} size={7} color={persona.color} />
+                    <span>Shared question / inspected by</span>
+                    <strong>0{inspectedSlot + 1}</strong>
                   </header>
-                  <h3 className="personas-panel-card__name">{persona.name}</h3>
-                  <p className="personas-panel-card__quote">“{persona.quote}”</p>
-                  <p className="personas-panel-card__function">{PERSONA_LENSES[persona.id] ?? persona.description}</p>
-                  <button
-                    type="button"
-                    onClick={(event) => openSwap(index as SlotIndex, event.currentTarget)}
-                    className="personas-swap-btn"
-                    aria-label={`Swap ${persona.name} in slot ${index + 1}`}
-                  >
-                    Swap mind <ArrowRight aria-hidden="true" />
-                  </button>
-                </article>
-              ))}
+                  <div>
+                    <small>{inspectedPersona.name}</small>
+                    <p>“{PERSONA_LENSES[inspectedPersona.id] ?? inspectedPersona.description}”</p>
+                  </div>
+                  <footer>
+                    <span>Choose lens</span>
+                    <div role="group" aria-label="Inspect panel slot">
+                      {panel.map((persona, index) => (
+                        <button
+                          key={`${persona.id}-inspect-control`}
+                          type="button"
+                          aria-pressed={inspectedSlot === index}
+                          aria-label={`Inspect slot ${index + 1}: ${persona.name}`}
+                          onClick={() => setInspectedSlot(index as SlotIndex)}
+                        >
+                          0{index + 1}
+                        </button>
+                      ))}
+                    </div>
+                  </footer>
+                </aside>
+              )}
+
+              <div className="current-panel-grid" role="list" aria-label="Current panel slots">
+                {panel.map((persona, index) => {
+                  const slot = index as SlotIndex;
+                  const isInspected = inspectedSlot === slot;
+                  return (
+                    <article
+                      key={`${persona.id}-${index}`}
+                      role="listitem"
+                      className={`personas-panel-card${isInspected ? ' is-inspected' : ''}`}
+                      style={{
+                        '--slot-color': persona.color,
+                        '--slot-level': `${Math.max(10, persona.temperature * 100)}%`,
+                      } as CSSProperties}
+                    >
+                      <div className="personas-panel-card__rail" aria-hidden="true" />
+                      <header className="personas-panel-card__meta">
+                        <span><b>0{index + 1}</b> / SLOT</span>
+                        <span>
+                          <AgentDot agentId={`agent_${index + 1}`} size={7} color={persona.color} />
+                          DIVERGENCE {persona.temperature.toFixed(1)}
+                        </span>
+                      </header>
+                      <div className="personas-panel-card__identity">
+                        <h3 className="personas-panel-card__name">{persona.name}</h3>
+                        <p className="personas-panel-card__quote">“{persona.quote}”</p>
+                      </div>
+                      <p className="personas-panel-card__function">
+                        {PERSONA_LENSES[persona.id] ?? persona.description}
+                      </p>
+                      <div className="personas-panel-card__pressure" aria-hidden="true">
+                        <span>Reasoning pressure</span>
+                        <i><b /></i>
+                      </div>
+                      <footer className="personas-panel-card__controls">
+                        <button
+                          type="button"
+                          className="personas-inspect-btn"
+                          aria-pressed={isInspected}
+                          aria-label={`Inspect ${persona.name} lens in slot ${index + 1}`}
+                          onClick={() => setInspectedSlot(slot)}
+                        >
+                          <span>{isInspected ? 'Lens in focus' : 'Inspect lens'}</span>
+                          <b aria-hidden="true">0{index + 1}</b>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => openSwap(slot, event.currentTarget)}
+                          className="personas-swap-btn"
+                          aria-label={`Swap ${persona.name} in slot ${index + 1}`}
+                        >
+                          Swap <ArrowRight aria-hidden="true" />
+                        </button>
+                      </footer>
+                    </article>
+                  );
+                })}
+              </div>
+
             </div>
 
-            <aside className="personas-panel-signature" aria-label="Current panel fingerprint">
-              <header><span>LIVE PANEL FINGERPRINT</span><i /></header>
-              <div className="personas-panel-signature__signal">
-                <small>CURRENT SIGNAL</small>
-                <strong>{panelSignal}</strong>
-              </div>
-              <dl>
-                <div><dt>{panelTemperature.toFixed(2)}</dt><dd>average divergence</dd></div>
-                <div><dt>{panelFloor.toFixed(1)}—{panelCeiling.toFixed(1)}</dt><dd>reasoning range</dd></div>
-                <div><dt>{new Set(panel.map((persona) => persona.id)).size}/4</dt><dd>distinct lenses</dd></div>
-              </dl>
-              <div className="personas-panel-signature__spectrum" aria-hidden="true">
-                {panel.map((persona) => <span key={persona.id} style={{ background: persona.color }} />)}
+            <aside className="personas-panel-signature personas-council__reading" aria-label="Current panel fingerprint">
+              <header>
+                <span><i aria-hidden="true" /> Live panel reading</span>
+                <b>Configuration / not outcome</b>
+              </header>
+              <div className="personas-council__reading-body">
+                <div className="personas-panel-signature__signal">
+                  <small>Current signal</small>
+                  <strong>{panelSignal}<em>.</em></strong>
+                  <p>Four persona settings, read as one composition.</p>
+                </div>
+                <dl>
+                  <div><dt>{panelTemperature.toFixed(2)}</dt><dd>average divergence</dd></div>
+                  <div><dt>{panelFloor.toFixed(1)}—{panelCeiling.toFixed(1)}</dt><dd>reasoning range</dd></div>
+                  <div><dt>{new Set(panel.map((persona) => persona.id)).size}/4</dt><dd>distinct lenses</dd></div>
+                </dl>
+                <div className="personas-panel-signature__spectrum" aria-hidden="true">
+                  {panel.map((persona, index) => (
+                    <div key={`${persona.id}-reading`}>
+                      <header><small>0{index + 1}</small><span>{persona.name.replace('The ', '')}</span><b>{persona.temperature.toFixed(1)}</b></header>
+                      <i><span style={{ width: `${Math.max(10, persona.temperature * 100)}%`, background: persona.color }} /></i>
+                    </div>
+                  ))}
+                </div>
               </div>
               <p>Configuration indicators describe persona settings—not answer quality or certainty.</p>
             </aside>
-          </div>
 
-          <div className="personas-panel-actions">
-            <div className="personas-panel-actions__primary">
-              <button
-                type="button"
-                onClick={() => void handleSavePanel()}
-                className="save-panel-btn"
-                disabled={savingPanel}
-                aria-busy={savingPanel}
-                aria-label={isAuthenticated ? panelSaveButtonLabel(savingPanel) : 'Sign in to save panel'}
-              >
-                {isAuthenticated ? panelSaveButtonLabel(savingPanel) : 'Sign in to save panel'}
-              </button>
-              <button
-                type="button"
-                onClick={() => void copyPanelMarkdown()}
-                className={`personas-ghost-btn${panelCopyStatus === 'copied' ? ' personas-ghost-btn--ok' : panelCopyStatus === 'failed' ? ' personas-ghost-btn--err' : ''}`}
-                aria-label={panelCopyStatus === 'copied' ? 'Panel copied' : panelCopyStatus === 'failed' ? 'Copy failed' : 'Copy panel as markdown'}
-              >
-                {panelCopyStatus === 'copied' ? 'Copied' : panelCopyStatus === 'failed' ? 'Copy failed' : 'Copy panel'}
-              </button>
-              <button
-                type="button"
-                onClick={downloadPanelMarkdown}
-                className={`personas-ghost-btn${panelDownloadStatus === 'done' ? ' personas-ghost-btn--ok' : panelDownloadStatus === 'failed' ? ' personas-ghost-btn--err' : ''}`}
-                aria-label={panelDownloadStatus === 'done' ? 'Panel downloaded' : panelDownloadStatus === 'failed' ? 'Download failed' : 'Download panel as markdown'}
-              >
-                {panelDownloadStatus === 'done' ? 'Downloaded' : panelDownloadStatus === 'failed' ? 'Download failed' : 'Download .md'}
-              </button>
+            <div className="personas-panel-actions personas-council__actions">
+              <div className="personas-panel-actions__primary">
+                <button
+                  type="button"
+                  onClick={() => void handleSavePanel()}
+                  className="save-panel-btn"
+                  disabled={savingPanel}
+                  aria-busy={savingPanel}
+                  aria-label={isAuthenticated ? panelSaveButtonLabel(savingPanel) : 'Sign in to save panel'}
+                >
+                  {isAuthenticated ? panelSaveButtonLabel(savingPanel) : 'Sign in to save panel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyPanelMarkdown()}
+                  className={`personas-ghost-btn${panelCopyStatus === 'copied' ? ' personas-ghost-btn--ok' : panelCopyStatus === 'failed' ? ' personas-ghost-btn--err' : ''}`}
+                  aria-label={panelCopyStatus === 'copied' ? 'Panel copied' : panelCopyStatus === 'failed' ? 'Copy failed' : 'Copy panel as markdown'}
+                >
+                  {panelCopyStatus === 'copied' ? 'Copied' : panelCopyStatus === 'failed' ? 'Copy failed' : 'Copy panel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadPanelMarkdown}
+                  className={`personas-ghost-btn${panelDownloadStatus === 'done' ? ' personas-ghost-btn--ok' : panelDownloadStatus === 'failed' ? ' personas-ghost-btn--err' : ''}`}
+                  aria-label={panelDownloadStatus === 'done' ? 'Panel downloaded' : panelDownloadStatus === 'failed' ? 'Download failed' : 'Download panel as markdown'}
+                >
+                  {panelDownloadStatus === 'done' ? 'Downloaded' : panelDownloadStatus === 'failed' ? 'Download failed' : 'Download .md'}
+                </button>
+              </div>
+              {!isDefaultPanel ? (
+                <button
+                  type="button"
+                  onClick={handleResetPanel}
+                  aria-label={pendingReset ? 'Confirm reset panel to default minds' : 'Reset panel to default minds'}
+                  className={`personas-reset-btn${pendingReset ? ' personas-reset-btn--confirm' : ''}`}
+                >
+                  {pendingReset ? 'Confirm reset' : 'Reset default'}
+                </button>
+              ) : <span className="personas-panel-actions__status">DEFAULT PANEL / UNSAVED CHANGES: NONE</span>}
             </div>
-            {!isDefaultPanel ? (
-              <button
-                type="button"
-                onClick={handleResetPanel}
-                aria-label={pendingReset ? 'Confirm reset panel to default minds' : 'Reset panel to default minds'}
-                className={`personas-reset-btn${pendingReset ? ' personas-reset-btn--confirm' : ''}`}
-              >
-                {pendingReset ? 'Confirm reset' : 'Reset default'}
-              </button>
-            ) : <span className="personas-panel-actions__status">DEFAULT PANEL / UNSAVED CHANGES: NONE</span>}
           </div>
         </section>
 
