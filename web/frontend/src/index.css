@@ -11083,3 +11083,53 @@ canvas {
     transform: none !important;
   }
 }
+
+/* Room task picker — history row hover/press */
+.room-history-pick {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: #2c1810;
+  font-family: inherit;
+  transform: translateZ(0);
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.room-history-pick__score {
+  color: #c4956a;
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .room-history-pick:hover {
+    background: #f5efe6;
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(44, 24, 16, 0.04);
+  }
+}
+
+.room-history-pick:active {
+  transform: scale(0.99);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-history-pick {
+    transition: background 0.12s ease !important;
+  }
+
+  .room-history-pick:hover,
+  .room-history-pick:active {
+    transform: none !important;
+  }
+}

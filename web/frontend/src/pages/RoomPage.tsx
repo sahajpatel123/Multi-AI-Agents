@@ -2397,30 +2397,15 @@ export function RoomPage() {
                           key={ht.task_id}
                           type="button"
                           onClick={() => void handleAddExisting(ht.task_id)}
-                          style={{
-                            display: 'block',
-                            width: '100%',
-                            textAlign: 'left',
-                            padding: '10px 12px',
-                            border: 'none',
-                            borderRadius: 6,
-                            background: 'transparent',
-                            cursor: 'pointer',
-                            fontSize: 13,
-                            color: '#2C1810',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#F5EFE6';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent';
-                          }}
+                          className="room-history-pick"
                         >
                           <HighlightQuery
                             text={`${(ht.task_text || '').slice(0, 80)}${(ht.task_text || '').length > 80 ? '…' : ''}`}
                             query={pickerQuery}
                           />
-                          <span style={{ color: '#C4956A', marginLeft: 8 }}>{ht.final_score != null ? `${ht.final_score}/100` : ''}</span>
+                          <span className="room-history-pick__score">
+                            {ht.final_score != null ? `${ht.final_score}/100` : ''}
+                          </span>
                         </button>
                       ))}
                     </div>
