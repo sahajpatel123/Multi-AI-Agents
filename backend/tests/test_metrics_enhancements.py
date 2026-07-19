@@ -97,7 +97,39 @@ async def test_metrics_emits_short_cache_control(app_client, make_user):
     assert res.status_code == 200
     cc = res.headers.get("cache-control", "")
     assert "max-age=15" in cc
-    assert "private" in cc
+
+
+def test_metrics_route_declares_the_30_per_minute_admin_cap():
+    """Cycle-51 follow-up: commit 7ea9e86 wired `enforce_user_rate_limit`
+    on `/api/metrics` at 30/min per admin. Same drift pattern cycle 50
+    pinned for `/api/health` — the cap was never asserted, so a future
+    contributor could remove or weaken the limit without CI noticing.
+
+    Pin the design intent: the metrics aggregate scan is the heaviest
+    read in the admin surface, and a 30/min ceiling matches the
+    dashboard's typical 30s refresh interval (so a single admin polling
+    doesn't trip it, but a runaway script does).
+    """
+    from pathlib import Path
+
+    metrics_src = (
+        Path(__file__).resolve().parent.parent / "arena" / "routes" / "metrics.py"
+    ).read_text()
+
+    assert 'scope="metrics_admin"' in metrics_src, (
+        "Expected scope='metrics_admin' for the /api/metrics limiter. "
+        "Without this scope the cap is wired but not identifiable in logs."
+    )
+    assert "limit=30" in metrics_src, (
+        "Expected the /api/metrics admin cap to remain at 30/min. The "
+        "30/min ceiling is calibrated to a typical 30s dashboard refresh "
+        "(so a polling admin doesn't trip it) while still bounding the "
+        "heavy UsageRecord aggregate scan from a runaway script. Lower "
+        "values break dashboard UX; higher values weaken DoS protection."
+    )
+    assert "window_seconds=60" in metrics_src, (
+        "Expected the /api/metrics cap to roll on a 60-second window"
+    )
 
 
 @pytest.mark.asyncio
