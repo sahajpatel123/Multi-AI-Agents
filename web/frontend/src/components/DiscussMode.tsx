@@ -460,24 +460,7 @@ export function DiscussMode({
                 onClick={() => onSwitchAgent(scored.response.agent_id)}
                 disabled={isStreaming}
                 title={scored.response.one_liner}
-                style={{
-                  textAlign: 'left',
-                  background: '#FFFFFF',
-                  border: '0.5px solid #E0D8D0',
-                  borderRadius: '12px',
-                  padding: '0.65rem 0.75rem',
-                  cursor: isStreaming ? 'not-allowed' : 'pointer',
-                  opacity: isStreaming ? 0.5 : 1,
-                  transition: 'all 200ms ease',
-                  minWidth: '140px',
-                  flexShrink: 0,
-                }}
-                onMouseEnter={(e) => {
-                  if (!isStreaming) e.currentTarget.style.borderColor = 'rgba(107,100,96,0.35)';
-                }}
-                onMouseLeave={(e) => {
-                  if (!isStreaming) e.currentTarget.style.borderColor = '#E0D8D0';
-                }}
+                className="discuss-switch-card"
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.25rem' }}>
                   <AgentDot agentId={scored.response.agent_id} size={8} />
@@ -520,19 +503,7 @@ export function DiscussMode({
               abortRef.current?.abort();
               onExit();
             }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '13px',
-              color: '#6B6460',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'color 150ms ease',
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.color = '#1A1714'}
-            onMouseLeave={(e) => e.currentTarget.style.color = '#6B6460'}
+            className="discuss-back-btn"
           >
             <ArrowLeft style={{ width: '14px', height: '14px' }} />
             Back to Arena
@@ -857,25 +828,7 @@ export function DiscussMode({
             onClick={handleSend}
             disabled={isStreaming || !input.trim()}
             aria-label={`Send message to ${agentConfig.name}`}
-            style={{
-              padding: '12px 16px',
-              background: '#1A1714',
-              border: 'none',
-              borderRadius: '999px',
-              color: '#FAF7F4',
-              cursor: (isStreaming || !input.trim()) ? 'not-allowed' : 'pointer',
-              opacity: (isStreaming || !input.trim()) ? 0.4 : 1,
-              transition: 'all 150ms ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onMouseEnter={(e) => {
-              if (!isStreaming && input.trim()) e.currentTarget.style.opacity = '0.85';
-            }}
-            onMouseLeave={(e) => {
-              if (!isStreaming && input.trim()) e.currentTarget.style.opacity = '1';
-            }}
+            className="discuss-send-btn"
           >
             <Send style={{ width: '16px', height: '16px' }} aria-hidden />
           </button>

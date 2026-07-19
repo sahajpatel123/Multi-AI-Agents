@@ -11419,3 +11419,109 @@ canvas {
     transform: none !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   Discuss mode — back, switch cards, send
+   ------------------------------------------------------------------ */
+.discuss-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6b6460;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 0;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .discuss-back-btn:hover {
+    color: #1a1714;
+    transform: translateX(-1px);
+  }
+}
+
+.discuss-switch-card {
+  text-align: left;
+  background: #ffffff;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+  cursor: pointer;
+  min-width: 140px;
+  flex-shrink: 0;
+  font-family: inherit;
+  transition:
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.discuss-switch-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .discuss-switch-card:hover:not(:disabled) {
+    border-color: rgba(107, 100, 96, 0.35);
+    transform: translateY(-1.5px);
+    box-shadow: 0 4px 14px rgba(44, 24, 16, 0.06);
+  }
+}
+
+.discuss-send-btn {
+  padding: 12px 16px;
+  background: #1a1714;
+  border: none;
+  border-radius: 999px;
+  color: #faf7f4;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  transition:
+    opacity var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1)),
+    filter var(--motion-hover-ms, 240ms) var(--ease-btn, ease);
+}
+
+.discuss-send-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .discuss-send-btn:hover:not(:disabled) {
+    filter: brightness(1.08);
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 0 6px 16px rgba(26, 23, 20, 0.18);
+  }
+}
+
+.discuss-send-btn:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discuss-back-btn,
+  .discuss-switch-card,
+  .discuss-send-btn {
+    transition: color 0.12s ease, border-color 0.12s ease, opacity 0.12s ease !important;
+  }
+
+  .discuss-back-btn:hover,
+  .discuss-switch-card:hover,
+  .discuss-send-btn:hover,
+  .discuss-send-btn:active {
+    transform: none !important;
+  }
+}
