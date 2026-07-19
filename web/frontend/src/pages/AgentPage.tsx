@@ -645,29 +645,7 @@ function AgentProfileSidebarRow({ user }: { user: User | null }) {
     <button
       type="button"
       onClick={() => openModal('bottom-left')}
-      style={{
-        marginTop: 'auto',
-        padding: '12px 16px',
-        borderTop: '0.5px solid #E0D5C5',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        cursor: 'pointer',
-        transition: 'background 0.15s',
-        background: 'transparent',
-        borderLeft: 'none',
-        borderRight: 'none',
-        borderBottom: 'none',
-        width: '100%',
-        textAlign: 'left',
-        font: 'inherit',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = '#EDE4D8';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'transparent';
-      }}
+      className="agent-profile-row"
     >
       <div
         style={{
@@ -3864,17 +3842,12 @@ export function AgentPage() {
                         return (
                           <div
                             key={r.id}
+                            className="agent-hover-surface agent-hover-surface--row"
                             style={{
                               display: 'flex',
                               alignItems: 'flex-start',
                               gap: 4,
                               borderRadius: 6,
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = '#F5EFE6';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = 'transparent';
                             }}
                           >
                             <button
@@ -3996,12 +3969,6 @@ export function AgentPage() {
                   border: 'none',
                   width: '100%',
                   fontFamily: 'Georgia, serif',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#F5EFE6';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
                 }}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
@@ -4637,12 +4604,6 @@ export function AgentPage() {
                   textDecoration: 'none',
                   transition: 'color 0.15s ease',
                   fontFamily: 'inherit',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = '#C4956A';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = '#1A1714';
                 }}
               >
                 Agent
@@ -6169,8 +6130,6 @@ export function AgentPage() {
                                     textAlign: 'left',
                                     font: 'inherit',
                                   }}
-                                  onMouseEnter={e => (e.currentTarget.style.background = '#F5EFE6')}
-                                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                                 >
                                   <span
                                     style={{
@@ -7559,12 +7518,6 @@ export function AgentPage() {
                                       alignItems: 'center',
                                       transition: 'border-color 0.15s ease',
                                     }}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.borderColor = '#C4956A';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.borderColor = '#D4C4B0';
-                                    }}
                                   >
                                     <span
                                       style={{
@@ -7999,24 +7952,17 @@ export function AgentPage() {
                       <button
                         type="button"
                         onClick={() => setPanelIntelOpen((o) => !o)}
+                        className="agent-hover-surface agent-hover-surface--pad"
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           width: '100%',
                           padding: '11px 16px',
-                          cursor: 'pointer',
-                          transition: 'background 0.12s',
                           background: 'transparent',
                           border: 'none',
                           textAlign: 'left',
                           font: 'inherit',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#F5EFE6';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -8208,24 +8154,17 @@ export function AgentPage() {
                       <button
                         type="button"
                         onClick={() => setPanelAssumptionsOpen((o) => !o)}
+                        className="agent-hover-surface agent-hover-surface--pad"
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           width: '100%',
                           padding: '11px 16px',
-                          cursor: 'pointer',
-                          transition: 'background 0.12s',
                           background: 'transparent',
                           border: 'none',
                           textAlign: 'left',
                           font: 'inherit',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#F5EFE6';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -8395,24 +8334,17 @@ export function AgentPage() {
                       <button
                         type="button"
                         onClick={() => setPanelDissentOpen((o) => !o)}
+                        className="agent-hover-surface agent-hover-surface--pad"
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           width: '100%',
                           padding: '11px 16px',
-                          cursor: 'pointer',
-                          transition: 'background 0.12s',
                           background: 'transparent',
                           border: 'none',
                           textAlign: 'left',
                           font: 'inherit',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#F5EFE6';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -9176,16 +9108,6 @@ export function AgentPage() {
                           cursor: 'pointer',
                           transition: 'all 0.15s',
                         }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = AR.GOLD;
-                          e.currentTarget.style.color = AR.GOLD;
-                          e.currentTarget.style.background = '#FAF3EA';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = '#D4C4B0';
-                          e.currentTarget.style.color = '#6B5040';
-                          e.currentTarget.style.background = 'transparent';
-                        }}
                       >
                         {s}
                       </button>
@@ -9345,14 +9267,6 @@ export function AgentPage() {
                           fontFamily: 'Georgia, serif',
                           cursor: 'pointer',
                           transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = AR.GOLD;
-                          e.currentTarget.style.color = AR.GOLD;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = '#D4C4B0';
-                          e.currentTarget.style.color = '#6B5040';
                         }}
                       >
                         <svg

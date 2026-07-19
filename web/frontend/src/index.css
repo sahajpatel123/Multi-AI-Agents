@@ -11133,3 +11133,126 @@ canvas {
     transform: none !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   Agent shell — shared hover surfaces (replaces inline onMouseEnter)
+   ------------------------------------------------------------------ */
+.agent-hover-surface {
+  cursor: pointer;
+  transform: translateZ(0);
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .agent-hover-surface:hover {
+    background: #f5efe6 !important;
+  }
+
+  .agent-hover-surface--row:hover {
+    background: #f5efe6 !important;
+  }
+}
+
+.agent-hover-surface:active {
+  transform: scale(0.995);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+.agent-profile-row {
+  margin-top: auto;
+  padding: 12px 16px;
+  border-top: 0.5px solid #e0d5c5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  transform: translateZ(0);
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .agent-profile-row:hover {
+    background: #ede4d8;
+  }
+}
+
+.agent-profile-row:active {
+  transform: scale(0.99);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+.agent-title-link {
+  cursor: pointer;
+  color: #1a1714;
+  background: none;
+  border: none;
+  font: inherit;
+  padding: 0;
+  transition: color var(--motion-hover-ms, 240ms) var(--ease-btn, ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .agent-title-link:hover {
+    color: #c4956a;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-hover-surface,
+  .agent-profile-row,
+  .agent-title-link {
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease !important;
+  }
+
+  .agent-hover-surface:active,
+  .agent-profile-row:active {
+    transform: none !important;
+  }
+}
+
+.agent-border-chip {
+  border: 0.5px solid #d4c4b0;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, ease),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, cubic-bezier(0.34, 1.4, 0.64, 1)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .agent-border-chip:hover:not(:disabled) {
+    border-color: #c4956a;
+    color: #c4956a;
+  }
+}
+
+.agent-border-chip:active:not(:disabled) {
+  transform: scale(0.98);
+  transition-duration: var(--motion-press-ms, 95ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-border-chip {
+    transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease !important;
+  }
+
+  .agent-border-chip:active {
+    transform: none !important;
+  }
+}
