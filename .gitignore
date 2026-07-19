@@ -85,6 +85,12 @@ Thumbs.db
 # Separate project (not part of this repo's web/ monorepo)
 arena-video/
 
+# Design exploration scratch (HTML/JS prototypes, screenshots, exploratory
+# redesigns). Not part of the shipping codebase. Files in design/ are
+# useful locally for the designer to iterate on visual ideas, but they
+# never go through code review and pollute the working tree.
+design/
+
 # Accidental duplicates from macOS "Save As" and Windows "Save a Copy":
 # catches the "<name> 2.<ext>" / "<name> - Copy.<ext>" / "<name> (1).<ext>"
 # pattern that produced four orphan files (memory 2.py, DebateMode 2.tsx,
