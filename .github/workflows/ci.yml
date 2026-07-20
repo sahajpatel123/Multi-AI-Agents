@@ -159,22 +159,26 @@ jobs:
               # iteration is bounded — only a few hundred entries on a
               # typical venv — and runs once per forbidden name.
               def _dep_name(raw: str) -> str:
-                  # Requires-Dist strings are "name[extras] ==version" or
-                  # "name>=version,..." — strip extras and version specifiers
-                  # to get the bare distribution name we need to compare.
-                  head = raw.split("[", 1)[0]
-                  for sep in (" ", "<", ">", "=", "!", "~", ";"):
+                  # Requires-Dist strings look like 'name[extras] ==version'
+                  # or 'name>=version,...' — strip extras and version
+                  # specifiers to get the bare distribution name we need.
+                  # Use single quotes here because the surrounding bash
+                  # heredoc uses double quotes; an inner double quote
+                  # would prematurely close the python -c argument and
+                  # bash would parse the rest as a subshell.
+                  head = raw.split('[', 1)[0]
+                  for sep in (' ', '<', '>', '=', '!', '~', ';'):
                       head = head.split(sep, 1)[0]
                   return head.strip()
 
-              required_by = ",".join(
+              required_by = ','.join(
                   sorted(
-                      d.metadata["Name"]
+                      d.metadata['Name']
                       for d in _md.distributions()
                       for r in (d.requires or [])
                       if r and _dep_name(r) == pkg
                   )
-              ) or "(unknown)"
+              ) or '(unknown)'
               resolved_hits.append(
                   f'FORBIDDEN (resolved): {pkg} {version} | '
                   f'Required-by: {required_by} — {why}'
