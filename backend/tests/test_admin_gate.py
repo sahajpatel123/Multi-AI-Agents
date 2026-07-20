@@ -31,6 +31,10 @@ def test_require_admin_email_403_for_non_admin(monkeypatch):
     with pytest.raises(HTTPException) as ei:
         admin_gate.require_admin_email("user@example.com")
     assert ei.value.status_code == 403
+    # Behavior-level envelope pin (cycle-89 pattern).
+    detail = ei.value.detail
+    assert isinstance(detail, dict)
+    assert detail["error"] == "admin_required"
 
 
 def test_require_admin_email_allows_admin(monkeypatch):
@@ -104,6 +108,10 @@ def test_condura_metrics_route_rejects_non_admin(isolated_db, monkeypatch):
         headers={"Authorization": f"Bearer {user_tok}"},
     )
     assert r_user.status_code == 403, r_user.text
+    # Behavior-level envelope pin (cycle-89 pattern).
+    detail = r_user.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "admin_required"
 
     r_admin = client.get(
         "/api/condura/metrics",
@@ -174,6 +182,10 @@ def test_analytics_admin_routes_uses_shared_gate(isolated_db, monkeypatch):
         headers={"Authorization": f"Bearer {user_tok}"},
     )
     assert r_user.status_code == 403, r_user.text
+    # Behavior-level envelope pin (cycle-89 pattern).
+    detail = r_user.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "admin_required"
 
     r_admin = client.get(
         "/api/admin/routes",
