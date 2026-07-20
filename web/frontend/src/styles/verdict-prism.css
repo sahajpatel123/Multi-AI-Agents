@@ -1027,39 +1027,42 @@ body .auth-page:not(.auth-page--portal) .auth-page__continue * {
   color: var(--vp-ivory) !important;
 }
 
-/* Pricing is an all-dark product ledger, with light action slabs. */
-body .pricing-page,
-body .pricing-page * {
+/* Pricing legacy ledger. The rebuilt `.pricing-studio-page` owns its complete
+   visual system in verdict-pricing.css; excluding it here prevents broad
+   substring selectors such as `[class*="card"]` from darkening nested card
+   regions and destroying contrast. */
+body .pricing-page:not(.pricing-studio-page),
+body .pricing-page:not(.pricing-studio-page) * {
   color: var(--vp-ivory) !important;
   font-family: var(--vp-font-sans) !important;
 }
-body .pricing-page [class*="eyebrow"],
-body .pricing-page [class*="badge"],
-body .pricing-page [class*="saving"],
-body .pricing-page .pricing-page__title em {
+body .pricing-page:not(.pricing-studio-page) [class*="eyebrow"],
+body .pricing-page:not(.pricing-studio-page) [class*="badge"],
+body .pricing-page:not(.pricing-studio-page) [class*="saving"],
+body .pricing-page:not(.pricing-studio-page) .pricing-page__title em {
   color: var(--vp-amber) !important;
 }
-body .pricing-page button[class*="cta"],
-body .pricing-page .arena-btn--primary,
-body .pricing-page .motion-btn--primary,
-body .pricing-page table thead *,
-body .pricing-page [class*="billing"] button[aria-pressed="true"] {
+body .pricing-page:not(.pricing-studio-page) button[class*="cta"],
+body .pricing-page:not(.pricing-studio-page) .arena-btn--primary,
+body .pricing-page:not(.pricing-studio-page) .motion-btn--primary,
+body .pricing-page:not(.pricing-studio-page) table thead *,
+body .pricing-page:not(.pricing-studio-page) [class*="billing"] button[aria-pressed="true"] {
   background-color: var(--vp-ivory) !important;
   color: var(--vp-carbon) !important;
 }
-body .pricing-page [class*="plan"],
-body .pricing-page [class*="card"],
-body .pricing-page [class*="faq"],
-body .pricing-page [class*="comparison"] {
+body .pricing-page:not(.pricing-studio-page) [class*="plan"],
+body .pricing-page:not(.pricing-studio-page) [class*="card"],
+body .pricing-page:not(.pricing-studio-page) [class*="faq"],
+body .pricing-page:not(.pricing-studio-page) [class*="comparison"] {
   background-color: var(--vp-carbon-2) !important;
   border-color: var(--vp-rule-dark) !important;
   box-shadow: none !important;
 }
-body .pricing-page [class*="featured"] {
+body .pricing-page:not(.pricing-studio-page) [class*="featured"] {
   border-color: var(--vp-acid) !important;
 }
-body .pricing-page table tbody tr,
-body .pricing-page table tbody td {
+body .pricing-page:not(.pricing-studio-page) table tbody tr,
+body .pricing-page:not(.pricing-studio-page) table tbody td {
   background-color: var(--vp-carbon) !important;
   color: var(--vp-ivory) !important;
 }
