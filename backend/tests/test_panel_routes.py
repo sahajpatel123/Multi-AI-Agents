@@ -107,14 +107,17 @@ async def test_save_strips_overlong_slot(app_client, make_user):
         },
         headers=_pro_headers(user),
     )
-    # Pydantic ValidationError surfaces as 422.
+    # Pydantic ValidationError surfaces as 422. The detail in this case
+    # is a LIST of error objects (FastAPI default ValidationError envelope),
+    # NOT our {error, message} dict — that dict envelope only fires when
+    # the route handler itself raises HTTPException. Pin the list shape.
     assert res.status_code == 422
     detail = res.json().get("detail")
-    assert isinstance(detail, dict)
-    # FastAPI/Pydantic ValidationError envelope (not ErrorCodes.X).
-    # Pin shape only — exact error string is a Pydantic internal.
-    assert "error" in detail
-    assert "message" in detail or "detail" in detail
+    assert isinstance(detail, list)
+    assert len(detail) >= 1
+    first = detail[0]
+    assert first["loc"] == ["body", "slot_1"]
+    assert "slot" in first["msg"].lower() or "exceeds" in first["msg"].lower()
 
 
 # ─── Presets ────────────────────────────────────────────────────────────────
