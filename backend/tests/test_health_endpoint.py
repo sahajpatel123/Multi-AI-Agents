@@ -72,6 +72,12 @@ class TestDetailedHealth:
     async def test_detailed_requires_auth(self, app_client, isolated_db):
         res = await app_client.get("/api/health/detailed")
         assert res.status_code == 401
+        # Behavior-level envelope pin (cycle-89 pattern). The auth
+        # dependency raises from dependencies.py with the standard
+        # dict envelope.
+        detail = res.json().get("detail")
+        assert isinstance(detail, dict)
+        assert detail["error"] == "invalid_token"
 
     @pytest.mark.asyncio
     async def test_detailed_rejects_non_admin(
@@ -88,6 +94,11 @@ class TestDetailedHealth:
             f"non-admin authenticated caller must get 403; got {res.status_code} "
             f"body={res.text[:200]}"
         )
+        # Behavior-level envelope pin (cycle-89 pattern). admin_gate.py
+        # raises with the standard dict envelope.
+        detail = res.json().get("detail")
+        assert isinstance(detail, dict)
+        assert detail["error"] == "admin_required"
 
     @pytest.mark.asyncio
     async def test_detailed_with_admin_exposes_operational_fields(
