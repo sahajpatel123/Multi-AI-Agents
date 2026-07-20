@@ -127,12 +127,47 @@ jobs:
           for pkg, why in FORBIDDEN.items():
               pattern = rf'^{re.escape(pkg)}(?:\[.*?\])?(?:==|>=|~=|@)'
               if re.search(pattern, text, re.MULTILINE):
-                  forbidden_hits.append(f'FORBIDDEN: {pkg} — {why}')
-          if failures or forbidden_hits:
+                  forbidden_hits.append(f'FORBIDDEN (direct): {pkg} — {why}')
+          # Resolved-tree guard: a future transitive reintroducer (someone
+          # adds a library that pulls python-jose, or someone forgets to
+          # uninstall an old jose after migrating) would slip past the
+          # file-text grep above. pip-audit also covers this in the broader
+          # scan, but pip-audit's vulnerability DB depends on PyPI metadata
+          # being current; this guard does not. We resolve the full tree via
+          # `pip show` on each forbidden name and fail if any are installed.
+          # The why-message distinguishes 'direct vs transitive' so the
+          # committer knows whether to remove a direct pin or chase a
+          # transitive reintroducer.
+          import subprocess
+          resolved_hits = []
+          for pkg, why in FORBIDDEN.items():
+              probe = subprocess.run(
+                  ['python', '-m', 'pip', 'show', pkg],
+                  capture_output=True, text=True
+              )
+              if probe.returncode == 0:
+                  # Pip emits "Name: <pkg>\nVersion: <v>\n...\nRequired-by: ...".
+                  # Surface the version + who requires it (if known) so the
+                  # offending reintroducer is named in the failure message.
+                  version_line = next(
+                      (l for l in probe.stdout.splitlines() if l.startswith('Version:')),
+                      'Version: ?'
+                  )
+                  required_by = next(
+                      (l for l in probe.stdout.splitlines() if l.startswith('Required-by:')),
+                      'Required-by: (unknown)'
+                  )
+                  resolved_hits.append(
+                      f'FORBIDDEN (resolved): {pkg} {version_line.strip()} | '
+                      f'{required_by.strip()} — {why}'
+                  )
+          if failures or forbidden_hits or resolved_hits:
               print('Security floor violations:')
               for f in failures:
                   print(f'  - {f}')
               for f in forbidden_hits:
+                  print(f'  - {f}')
+              for f in resolved_hits:
                   print(f'  - {f}')
               sys.exit(1)
           print('Security floor OK')

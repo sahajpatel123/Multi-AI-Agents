@@ -92,6 +92,16 @@ def _is_local_url(url: str) -> bool:
 
 DATABASE_URL = _normalize_postgres_url(os.getenv("DATABASE_URL", ""))
 
+# Optional Render Internal Database URL — when set, takes precedence over
+# DATABASE_URL for the actual SQLAlchemy engine connection. This lets
+# operators keep DATABASE_URL (external, required by validate_secrets)
+# for tooling/inspection while routing runtime traffic through the
+# same-region internal network, avoiding the "SSL connection has been
+# closed unexpectedly" mid-handshake failures common on external IPs.
+DATABASE_INTERNAL_URL = _normalize_postgres_url(
+    os.getenv("DATABASE_INTERNAL_URL", "")
+)
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
@@ -118,6 +128,9 @@ class Settings(BaseSettings):
 
     # Database
     database_url: Optional[str] = DATABASE_URL
+    # Optional internal URL (Render same-region). When set, database.py
+    # prefers this over database_url for the engine connection.
+    database_internal_url: Optional[str] = DATABASE_INTERNAL_URL
     database_url_fallback: Optional[str] = "sqlite:///./arena.db"
 
     # Auth / JWT
@@ -144,6 +157,7 @@ class Settings(BaseSettings):
 
     # App
     app_version: str = "1.0.0"
+    condura_honest_rejection_enabled: bool = False
 
     # Razorpay (subscriptions) — set in .env; optional until you enable billing
     razorpay_api_key: str = ""
@@ -173,6 +187,15 @@ class Settings(BaseSettings):
     def normalize_database_url(cls, value):
         if value in (None, ""):
             return DATABASE_URL
+        if isinstance(value, str):
+            return _normalize_postgres_url(value)
+        return value
+
+    @field_validator("database_internal_url", mode="before")
+    @classmethod
+    def normalize_database_internal_url(cls, value):
+        if value in (None, ""):
+            return DATABASE_INTERNAL_URL
         if isinstance(value, str):
             return _normalize_postgres_url(value)
         return value

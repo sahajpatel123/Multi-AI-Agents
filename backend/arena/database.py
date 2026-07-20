@@ -59,6 +59,48 @@ class Base(DeclarativeBase):
 
 _engine: Optional[Engine] = None
 
+# ── DB unreachability backoff cache ──────────────────────────────
+# When the DB is known unreachable (all retries exhausted in _build_engine
+# or a connectivity error surfaced during a request), we record a backoff
+# window. Components (init_db, seed_persona_library, background schedulers)
+# call is_db_known_unreachable() before touching the DB so a known outage
+# does not trigger a retry storm — each component independently retrying
+# the full connect cascade is what floods the logs and delays port binding.
+#
+# The flag expires after _DB_UNREACHABLE_BACKOFF_SECONDS so we re-check
+# periodically (the DB may have woken from suspend or the network may
+# have recovered).
+_db_unreachable_until: float = 0.0
+_DB_UNREACHABLE_BACKOFF_SECONDS = 60.0
+
+
+def mark_db_unreachable(duration: float = _DB_UNREACHABLE_BACKOFF_SECONDS) -> None:
+    """Record that the DB is currently unreachable.
+
+    Sets a backoff window during which is_db_known_unreachable() returns
+    True so callers skip DB operations instead of each independently
+    retrying the full connect cascade.
+    """
+    global _db_unreachable_until
+    _db_unreachable_until = time.monotonic() + max(0.0, duration)
+
+
+def clear_db_unreachable() -> None:
+    """Clear the unreachable flag after a successful connection."""
+    global _db_unreachable_until
+    _db_unreachable_until = 0.0
+
+
+def is_db_known_unreachable() -> bool:
+    """True if the DB was recently unreachable and the backoff window hasn't expired.
+
+    Components should check this before attempting DB operations to avoid
+    a retry storm during a known outage. Returns False if the DB was
+    recently reachable or the backoff window has expired (so the caller
+    should try — and re-mark unreachable if it fails again).
+    """
+    return time.monotonic() < _db_unreachable_until
+
 
 def _safe_db_host(url: str) -> str:
     """Return host:port for logs without leaking credentials."""
@@ -118,7 +160,9 @@ def _make_retrying_pg_creator(url: str, max_attempts: int = 3) -> Callable[[], A
 
         for attempt in range(1, max_attempts + 1):
             try:
-                return psycopg.connect(**kwargs)
+                connection = psycopg.connect(**kwargs)
+                clear_db_unreachable()
+                return connection
             except Exception as exc:  # noqa: BLE001 — surface after retries
                 last_error = exc
                 retryable = _is_retryable_connect_error(exc)
@@ -178,7 +222,7 @@ def _create_pg_engine(url: str) -> Engine:
 
 def _build_engine() -> Engine:
     settings = get_settings()
-    primary_url = settings.database_url
+    primary_url = settings.database_internal_url or settings.database_url
 
     # Try PostgreSQL first (postgresql+psycopg:// via psycopg 3 driver)
     if primary_url and "postgresql" in primary_url:
@@ -193,6 +237,7 @@ def _build_engine() -> Engine:
                 engine = _create_pg_engine(primary_url)
                 with engine.connect() as conn:
                     conn.execute(text("SELECT 1"))
+                clear_db_unreachable()
                 logger.info(
                     "Connected to PostgreSQL (psycopg 3) at %s",
                     host,
@@ -221,6 +266,8 @@ def _build_engine() -> Engine:
                     time.sleep(wait)
                     continue
 
+        if settings.is_production:
+            mark_db_unreachable()
         logger.error(
             "[CRITICAL] PostgreSQL unavailable at %s (%s). "
             "The application will start in degraded mode — "
@@ -332,6 +379,13 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     """Create all tables. Called on app startup."""
     from arena import db_models  # noqa: F401 — registers models with Base
+
+    if is_db_known_unreachable():
+        logger.warning(
+            "init_db skipped while PostgreSQL is in connectivity backoff; "
+            "the next request will retry the connection"
+        )
+        return
 
     try:
         Base.metadata.create_all(bind=get_engine())

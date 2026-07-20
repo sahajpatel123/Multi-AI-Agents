@@ -192,6 +192,7 @@ async def submit_prompt(
             db=db if memory_enabled else None,
             session_id=session_id,
             tracker=tracker,
+            cost=cost,
         )
         agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
 
@@ -322,6 +323,7 @@ async def submit_prompt(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Prompt request failed for user %s: %s", user_label, e)
         log_unhandled_exception(request_id, user_label, e)
         raise HTTPException(
             status_code=500,
@@ -387,6 +389,7 @@ async def stream_prompt(
                 db=db if memory_enabled else None,
                 session_id=session_id,
                 tracker=tracker,
+                cost=cost,
             )
 
             while True:
@@ -516,6 +519,7 @@ async def stream_prompt(
             )
 
         except Exception as e:
+            logger.exception("Stream event generator failed for user %s: %s", user_label, e)
             log_unhandled_exception(request_id, user_label, e)
             yield _sse_event("error", {"detail": "Prompt request failed"})
         finally:
@@ -605,6 +609,7 @@ async def prompt_readiness(
         db.execute(text("SELECT 1"))
         checks["db"] = "ok"
     except Exception as exc:  # noqa: BLE001 — surface any failure mode
+        logger.warning("Readiness DB probe failed: %s", exc)
         checks["db"] = f"fail: {type(exc).__name__}"
         ok = False
 
@@ -619,6 +624,7 @@ async def prompt_readiness(
         if mm is None:
             ok = False
     except Exception as exc:  # noqa: BLE001
+        logger.warning("Readiness memory probe failed: %s", exc)
         checks["memory"] = f"fail: {type(exc).__name__}"
         ok = False
 
