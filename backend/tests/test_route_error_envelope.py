@@ -45,6 +45,12 @@ COVERED_FILES = [
     ("routes", "session.py"),
     ("routes", "payments.py"),
     ("routes", "agent.py"),
+    ("routes", "analytics.py"),
+    ("routes", "memory.py"),
+    ("routes", "metrics.py"),
+    ("routes", "panels.py"),
+    ("routes", "personas.py"),
+    ("routes", "saved.py"),
     ("core", "dependencies.py"),
     ("core", "input_validation.py"),
 ]
