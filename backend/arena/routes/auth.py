@@ -986,10 +986,8 @@ async def forgot_password(
             db.rollback()
         else:
             logger.info(
-                "password_reset_issued user_id=%s email=%s token_hash=%s",
+                "password_reset_issued user_id=%s",
                 user.id,
-                user.email,
-                token_hash,
             )
 
     return {"status": "received"}
