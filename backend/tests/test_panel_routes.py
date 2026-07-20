@@ -44,6 +44,13 @@ async def test_save_rejects_duplicates(app_client, make_user):
         headers=_pro_headers(user),
     )
     assert res.status_code == 422
+    # Behavior-level envelope pin (cycle-89 pattern): if the route ever
+    # regresses to detail='string', this fails before the AST detector
+    # even has to.
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "validation_error"
+    assert "duplicate" in detail["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -60,6 +67,10 @@ async def test_save_rejects_invalid_persona(app_client, make_user):
         headers=_pro_headers(user),
     )
     assert res.status_code == 422
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "validation_error"
+    assert "invalid persona" in detail["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -76,6 +87,10 @@ async def test_save_rejects_paywalled_for_free_tier(app_client, make_user):
         headers=_pro_headers(user),
     )
     assert res.status_code == 403
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "persona_not_allowed"
+    assert "blocked_personas" in detail
 
 
 @pytest.mark.asyncio
@@ -94,6 +109,12 @@ async def test_save_strips_overlong_slot(app_client, make_user):
     )
     # Pydantic ValidationError surfaces as 422.
     assert res.status_code == 422
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    # FastAPI/Pydantic ValidationError envelope (not ErrorCodes.X).
+    # Pin shape only — exact error string is a Pydantic internal.
+    assert "error" in detail
+    assert "message" in detail or "detail" in detail
 
 
 # ─── Presets ────────────────────────────────────────────────────────────────
