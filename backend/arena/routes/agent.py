@@ -985,7 +985,10 @@ async def upload_agent_attachment(
     try:
         record = process_upload(filename=orig, content_type=ct, data=data, dest_path=dest_path)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_upload", "message": str(e)},
+        ) from e
     record["file_id"] = file_id
     # Bind to the uploader so resolve_attachments cannot be used for IDOR.
     register_upload(file_id, record, user_id=user.id)

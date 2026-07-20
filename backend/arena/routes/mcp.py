@@ -348,7 +348,10 @@ async def connect_manual(
     _ensure_encryption()
     svc = body.service.strip().lower()
     if svc not in VALID_SERVICES:
-        raise HTTPException(status_code=400, detail=f"Unsupported service: {svc}")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "unsupported_service", "message": f"Unsupported service: {svc}"},
+        )
 
     enc = encrypt_token(body.access_token.strip())
 

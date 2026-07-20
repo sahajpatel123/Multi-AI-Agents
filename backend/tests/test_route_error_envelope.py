@@ -53,8 +53,45 @@ def _arena_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "arena"
 
 
+def _is_string_like_detail(value: ast.AST) -> bool:
+    """True when the AST node is a string-like detail that would
+    serialize as FastAPI's legacy {'detail': '...'} envelope instead
+    of the standard {'error', 'message'} shape.
+
+    Catches:
+      - plain string literals: `detail="..."`
+      - f-strings: `detail=f"...{var}..."`
+      - implicit concatenations of any of the above
+      - runtime coercions: `detail=str(e)`, `detail=repr(e)`,
+        `detail=format(...)`, `detail="...".format(...)`
+
+    Does NOT catch dict literals (`detail={"error": ..., "message": ...}`),
+    which are the only acceptable shape.
+    """
+    if isinstance(value, ast.Constant) and isinstance(value.value, str):
+        return True
+    if isinstance(value, ast.JoinedStr):  # f-string
+        return True
+    if isinstance(value, ast.BinOp) and isinstance(value.op, ast.Add):
+        # `"a" + var + f"b"` — string-concat operator on either side
+        return _is_string_like_detail(value.left) or _is_string_like_detail(value.right)
+    if isinstance(value, ast.Call):
+        # str(...), repr(...), format(...), "...".format(...), Variable.format(...)
+        fname = getattr(value.func, "id", None) or (
+            getattr(value.func, "attr", None) if hasattr(value.func, "attr") else None
+        )
+        if fname in {"str", "repr", "format"}:
+            return True
+    return False
+
+
 def _string_detail_httpexception_raises(source: str) -> list[tuple[int, str]]:
-    """AST-walk `source` for `raise HTTPException(... detail="literal" ...)`."""
+    """AST-walk `source` for `raise HTTPException(... detail=<string-like> ...)`.
+
+    See `_is_string_like_detail` for the full set of shapes caught.
+    Cycle 81 strengthened this from constant-strings-only to include
+    f-strings, string-concat, and str()/repr()/format() coercions.
+    """
     tree = ast.parse(source)
     hits: list[tuple[int, str]] = []
     for node in ast.walk(tree):
@@ -69,8 +106,8 @@ def _string_detail_httpexception_raises(source: str) -> list[tuple[int, str]]:
         for kw in exc.keywords:
             if kw.arg != "detail":
                 continue
-            if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-                hits.append((node.lineno, kw.value.value))
+            if _is_string_like_detail(kw.value):
+                hits.append((node.lineno, ast.unparse(kw.value)))
     return hits
 
 
@@ -82,13 +119,39 @@ def test_routes_no_string_detail_raises(subdir: str, filename: str) -> None:
     source = path.read_text(encoding="utf-8")
     hits = _string_detail_httpexception_raises(source)
     assert not hits, (
-        f"arena/{subdir}/{filename} has HTTPException raises with string detail, which "
+        f"arena/{subdir}/{filename} has HTTPException raises with string-like detail "
+        f"(plain string, f-string, str()/repr()/format(), or string concat), which "
         f"produces FastAPI's legacy envelope {{detail: 'string'}} instead of the standard "
-        f"{{error, message}} shape. Frontend api.ts reads detail.message and "
-        f"would show a fallback. Replace with:\n"
+        f"{{error, message}} shape. Frontend api.ts reads detail.message and would show a "
+        f"fallback. Replace with:\n"
         f"    raise HTTPException(\n"
         f"        status_code=...,\n"
         f"        detail={{'error': ErrorCodes.X, 'message': '...'}},\n"
         f"    )\n"
         f"Offending lines: {hits}"
     )
+
+
+def test_detector_catches_string_like_shapes():
+    """Pins the AST detector itself. Cycle 81 widened it from
+    `ast.Constant`-only to also catch f-strings, string-concat,
+    and runtime coercions; this test guards against future
+    narrowing that would re-open the gap."""
+    cases = [
+        # (code fragment, expected_hit)
+        ('raise HTTPException(status_code=400, detail="plain string")', True),
+        ('raise HTTPException(status_code=400, detail=f"f-string {x}")', True),
+        ('raise HTTPException(status_code=400, detail=str(e))', True),
+        ('raise HTTPException(status_code=400, detail=repr(e))', True),
+        ('raise HTTPException(status_code=400, detail="x" + name)', True),
+        ('raise HTTPException(status_code=400, detail=format(x))', True),
+        ('raise HTTPException(status_code=400, detail="prefix: " + str(e))', True),
+        # Acceptable shapes
+        ('raise HTTPException(status_code=400, detail={"error": "x", "message": "m"})', False),
+        ('raise HTTPException(status_code=400, detail=None)', False),
+    ]
+    for snippet, expect_hit in cases:
+        hits = _string_detail_httpexception_raises(snippet)
+        assert bool(hits) == expect_hit, (
+            f"{snippet!r}: expected hit={expect_hit}, got {hits}"
+        )
