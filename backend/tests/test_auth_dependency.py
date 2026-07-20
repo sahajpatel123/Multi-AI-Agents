@@ -38,6 +38,12 @@ async def test_non_numeric_subject_yields_401_not_500(db_session):
         # raises 401. Pass a real session — passing None crashes the DB query.
         await get_current_user(_request_with_token(token), db=db_session)
     assert ei.value.status_code == 401
+    # Pin the {error, message} envelope shape so a regression to the legacy
+    # `detail='string'` form fails this test (cycle-81 widening catches AST
+    # patterns, but a behavior assertion pins the public contract).
+    assert isinstance(ei.value.detail, dict)
+    assert "error" in ei.value.detail
+    assert "message" in ei.value.detail
 
 
 @pytest.mark.asyncio
@@ -50,6 +56,8 @@ async def test_missing_bearer_yields_401(db_session):
         # pipeline, so it needs a real DB session.
         await get_current_user(Request(scope), db=db_session)
     assert ei.value.status_code == 401
+    assert isinstance(ei.value.detail, dict)
+    assert ei.value.detail["error"] == "invalid_token"
 
 
 @pytest.mark.asyncio
@@ -67,3 +75,5 @@ async def test_empty_bearer_token_yields_401(db_session):
     with pytest.raises(HTTPException) as ei:
         await get_current_user(Request(scope), db=db_session)
     assert ei.value.status_code == 401
+    assert isinstance(ei.value.detail, dict)
+    assert ei.value.detail["error"] == "invalid_token"
