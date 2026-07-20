@@ -147,21 +147,47 @@ _TOLERATED: dict[tuple[str, int], str] = {
 }
 
 
+_LOG_METHOD_NAMES = frozenset({
+    "debug", "info", "warning", "error", "critical", "exception", "log",
+})
+
+
+def _is_log_call(node: ast.Call) -> bool:
+    """True if `node` is a call to a logger method, e.g. `<anything>.error(...)`,
+    `<anything>.exception(...)`, `logging.info(...)`, etc.
+
+    Cycle 82 widened this from "must call `logger.<method>(...)`" to "must call
+    any receiver's standard logging method." This catches:
+      - logger.error(...), _logger.error(...), LOG.error(...)
+      - LOGGER.error(...), _LOGGER.error(...)
+      - self.logger.error(...)        (attribute chain — receiver is `self.logger`)
+      - logging.getLogger(__name__).error(...)
+      - logging.error(...), logging.exception(...)
+
+    It still does NOT match `<anything>.print(...)` or arbitrary
+    user-defined methods.
+    """
+    func = node.func
+    if not isinstance(func, ast.Attribute):
+        return False
+    if func.attr not in _LOG_METHOD_NAMES:
+        return False
+    # Receiver can be anything — `logger`, `_logger`, `logging`, or a chain
+    # like `self.logger` / `logging.getLogger(...)`. The method name alone
+    # is the strongest signal that this is a logging call.
+    return True
+
+
 def _is_silent_swallow(handler: ast.stmt | list[ast.stmt]) -> bool:
     """Return True if the except handler is a silent swallow (no log call)."""
     body = handler if isinstance(handler, list) else [handler]
     if not body:
         return True  # bare `except: pass` (no body)
     for node in body:
-        # Accept any handler that mentions `logger.` in a call expression.
-        # Walk recursively because the call may be wrapped in `if ...:`.
+        # Accept any handler that calls a logger method. Walk recursively
+        # because the call may be wrapped in `if ...:`.
         for sub in ast.walk(node):
-            if (
-                isinstance(sub, ast.Call)
-                and isinstance(sub.func, ast.Attribute)
-                and isinstance(sub.func.value, ast.Name)
-                and sub.func.value.id == "logger"
-            ):
+            if isinstance(sub, ast.Call) and _is_log_call(sub):
                 return False
     return True
 
@@ -250,3 +276,62 @@ def test_no_silent_exception_swallows() -> None:
             f"to `_TOLERATED` in tests/test_no_silent_exception_swallows.py "
             f"with a one-line rationale (and reviewer sign-off).\n{message}",
         )
+
+
+def test_detector_recognizes_all_logger_method_shapes() -> None:
+    """Cycle 82 widened `_is_silent_swallow` from a hard-coded
+    `logger.<method>(...)` shape to a generic "any receiver with a
+    standard logging method" shape. This test pins the widened
+    coverage so future narrowing is caught locally."""
+    cases = [
+        # (code, expected_silent)
+        # Logging calls of any shape — must NOT be flagged as silent.
+        ('logger.exception("x")', False),
+        ('logger.error("x")', False),
+        ('logger.info("x")', False),
+        ('logger.warning("x")', False),
+        ('logger.debug("x", exc_info=True)', False),
+        ('logger.critical("x")', False),
+        ('logger.log(logging.WARN, "x")', False),
+        ('_logger.exception("x")', False),
+        ('LOG.error("x")', False),
+        ('LOGGER.warning("x")', False),
+        ('_LOGGER.info("x")', False),
+        ('self.logger.exception("x")', False),
+        ('logging.getLogger(__name__).error("x")', False),
+        ('logging.error("x")', False),
+        ('logging.exception("x")', False),
+        # Genuinely silent — must be flagged.
+        ('pass', True),
+        ('return None', True),
+        ('x = 1', True),
+        ('print("oh no")', True),  # print is NOT a logger method
+        ('self.helper_cleanup()', True),
+    ]
+    for snippet, expect_silent in cases:
+        # Build a fake `except Exception:` handler wrapping the snippet.
+        src = f"try:\n    pass\nexcept Exception:\n    {snippet}\n"
+        tree = ast.parse(src)
+        # tree.body[0] is the ast.Try; its first handler is the except clause.
+        handler = tree.body[0].handlers[0]
+        result = _is_silent_swallow(handler.body)
+        assert result == expect_silent, (
+            f"{snippet!r}: expected silent={expect_silent}, got {result}"
+        )
+
+
+def test_log_call_recognizes_standard_methods() -> None:
+    """Pins the `_LOG_METHOD_NAMES` allowlist against accidental edits
+    that drop a level (e.g. removing `exception` would mis-flag every
+    current `logger.exception(...)` call as silent)."""
+    for method in ("debug", "info", "warning", "error", "critical", "exception", "log"):
+        src = f"logger.{method}('x')"
+        tree = ast.parse(src)
+        call = tree.body[0].value
+        assert _is_log_call(call), f"logger.{method} should be recognized as a log call"
+    # Negative cases
+    for method in ("print", "warn", "fatal", "trace", "log_to_db"):
+        src = f"obj.{method}('x')"
+        tree = ast.parse(src)
+        call = tree.body[0].value
+        assert not _is_log_call(call), f"obj.{method} must not be recognized as a log call"

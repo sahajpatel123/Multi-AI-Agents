@@ -1964,10 +1964,11 @@ Respond to this challenge now.
         )
         return JSONResponse(content={"rebuttal": response, "status": "complete"})
     except Exception:
+        logger.exception("rebuttal generation failed")
         raise HTTPException(
             status_code=500,
             detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Rebuttal generation failed"},
-        )
+        ) from None
 
 
 @router.post("/watchlist")
@@ -2918,6 +2919,7 @@ async def cross_pollinate_agent_answer(
             try:
                 data = json.loads(raw)
             except Exception:
+                logger.debug("intel total_score JSON parse failed", exc_info=True)
                 return None
         if not isinstance(data, dict):
             return None
