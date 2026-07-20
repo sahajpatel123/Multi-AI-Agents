@@ -15,9 +15,12 @@ test.describe('Arena prompt flow (mocked)', () => {
   test('home page renders, login link visible', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/Arena/);
-    // Classic cream landing hero CTA ("Begin thinking") and related entry points.
+    // Verdict Prism entry points: navbar "ENTER ARENA" (routes to /signin when
+    // unauthenticated), hero "PUT A QUESTION IN", agent CTA "RUN AN
+    // INVESTIGATION", and the close-form submit (aria-label "Enter Arena").
+    // Keep `sign in` as a defensive fallback in case future copy drifts.
     await expect(
-      page.getByRole('button', { name: /begin thinking|try arena|watch it work|sign in/i }).first(),
+      page.getByRole('button', { name: /enter arena|put a question|run an investigation|sign in/i }).first(),
     ).toBeVisible();
   });
 
