@@ -82,7 +82,7 @@ async def synthesize_insights(
     if len(tasks) < 3:
         return None
 
-    model = MODEL_REGISTRY.get("deepseek_v3") or MODEL_REGISTRY.get("gpt_4o")
+    model = MODEL_REGISTRY.get("deepseek_v4_flash") or MODEL_REGISTRY.get("gpt_4o")
     client = model["client"]
     provider = str(model.get("provider", "deepseek"))
 

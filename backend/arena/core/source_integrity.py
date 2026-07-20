@@ -84,7 +84,7 @@ async def analyze_source_integrity(
         }
 
     try:
-        model = MODEL_REGISTRY.get("deepseek_v3", MODEL_REGISTRY["claude_sonnet"])
+        model = MODEL_REGISTRY.get("deepseek_v4_flash", MODEL_REGISTRY["claude_sonnet"])
         provider = str(model.get("provider", "deepseek"))
 
         user_prompt = f"""

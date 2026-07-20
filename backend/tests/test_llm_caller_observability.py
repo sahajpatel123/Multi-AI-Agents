@@ -149,3 +149,64 @@ async def test_streaming_provider_fallback_is_logged(caplog, capsys, monkeypatch
     assert record.fallback_model_id == "claude-stream-test"
     assert record.streaming is True
     assert capsys.readouterr().out == ""
+
+@pytest.mark.asyncio
+async def test_deepseek_disables_thinking_mode():
+    captured = {}
+
+    async def create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="answer"))],
+            usage=SimpleNamespace(prompt_tokens=2, completion_tokens=1),
+        )
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    result = await llm_caller.call_llm(
+        client=client,
+        provider="deepseek",
+        model_id="deepseek-v4-flash",
+        system_prompt="system",
+        user_prompt="prompt",
+        temperature=0.2,
+    )
+
+    assert result == ("answer", 2, 1)
+    assert captured["extra_body"] == {"thinking": {"type": "disabled"}}
+
+
+@pytest.mark.asyncio
+async def test_streaming_deepseek_disables_thinking_mode():
+    captured = {}
+
+    class Stream:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if getattr(self, "sent", False):
+                raise StopAsyncIteration
+            self.sent = True
+            return SimpleNamespace(
+                choices=[SimpleNamespace(delta=SimpleNamespace(content="chunk"))]
+            )
+
+    async def create(**kwargs):
+        captured.update(kwargs)
+        return Stream()
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    chunks = [
+        chunk
+        async for chunk in llm_caller.call_llm_streaming(
+            client=client,
+            provider="deepseek",
+            model_id="deepseek-v4-flash",
+            system_prompt="system",
+            user_prompt="prompt",
+            temperature=0.2,
+        )
+    ]
+
+    assert chunks == ["chunk"]
+    assert captured["extra_body"] == {"thinking": {"type": "disabled"}}

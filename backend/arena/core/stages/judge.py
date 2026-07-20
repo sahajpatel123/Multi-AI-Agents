@@ -154,7 +154,7 @@ async def run_judge(bb: Blackboard) -> Blackboard:
     bb.judgment.status = StageStatus.RUNNING
 
     try:
-        model = MODEL_REGISTRY.get("deepseek_v3", MODEL_REGISTRY["claude_sonnet"])
+        model = MODEL_REGISTRY.get("deepseek_v4_flash", MODEL_REGISTRY["claude_sonnet"])
         provider = str(model.get("provider", "deepseek"))
 
         user_prompt = f"""

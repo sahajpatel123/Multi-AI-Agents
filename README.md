@@ -16,21 +16,21 @@ Sixteen reasoning styles, each routed to a different LLM provider based on fit:
 
 | Persona | Style | Provider | Temp |
 |---|---|---|---|
-| The Analyst | Cold, finds the flaw in everything | DeepSeek V3 | 0.2 |
+| The Analyst | Cold, finds the flaw in everything | DeepSeek V4 Flash | 0.2 |
 | The Philosopher | First-principles, reframes the premise | GPT-4o | 0.7 |
 | The Pragmatist | Street-smart, only what works | GPT-4o mini | 0.5 |
 | The Contrarian | Says what others won't | Grok-3 mini | 1.0 |
-| The Scientist | Evidence-only, distinguishes data from inference | DeepSeek V3 | 0.2 |
+| The Scientist | Evidence-only, distinguishes data from inference | DeepSeek V4 Flash | 0.2 |
 | The Historian | Names a specific precedent before any broader point | GPT-4o | 0.3 |
-| The Economist | Traces incentives before reaching a conclusion | DeepSeek V3 | 0.4 |
+| The Economist | Traces incentives before reaching a conclusion | DeepSeek V4 Flash | 0.4 |
 | The Ethicist | Applies multiple frameworks, names who bears the cost | Claude Sonnet | 0.5 |
-| The Stoic | Distinguishes what's within your control from what isn't | DeepSeek V3 | 0.3 |
+| The Stoic | Distinguishes what's within your control from what isn't | DeepSeek V4 Flash | 0.3 |
 | The Futurist | Extrapolates trajectories, names second-order effects | Grok-3 mini | 0.9 |
 | The Strategist | Asymmetric moves, leverage, positioning | Grok-3 | 0.5 |
-| The Engineer | Constraints, failure modes, bottlenecks | DeepSeek V3 | 0.2 |
+| The Engineer | Constraints, failure modes, bottlenecks | DeepSeek V4 Flash | 0.2 |
 | The Optimist | Evidence-based, names the mechanism of good outcomes | GPT-4o mini | 0.7 |
 | The Empath | Names the people most affected by the dominant framing | Claude Sonnet | 0.6 |
-| First Principles | Tears assumptions down to bedrock | DeepSeek V3 | 0.7 |
+| First Principles | Tears assumptions down to bedrock | DeepSeek V4 Flash | 0.7 |
 | Devil's Advocate | Steelmans the contrary position | Grok-3 mini | 1.0 |
 
 Each prompt picks 4 of these 16 for the panel. The panel is fully editable.

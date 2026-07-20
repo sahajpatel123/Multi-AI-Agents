@@ -45,6 +45,14 @@ class TestPersonaRouting:
         for key in ("model_id", "client", "provider", "max_tokens", "cost_per_1k_input", "cost_per_1k_output"):
             assert key in route, f"missing {key}"
 
+    def test_deepseek_personas_use_v4_flash_with_current_pricing(self):
+        route = get_route_for_persona("analyst")
+        assert route["model_key"] == "deepseek_v4_flash"
+        assert route["model_id"] == "deepseek-v4-flash"
+        assert route["provider"] == "deepseek"
+        assert route["cost_per_1k_input"] == pytest.approx(0.00014)
+        assert route["cost_per_1k_output"] == pytest.approx(0.00028)
+
 
 class TestTaskRouting:
     def test_every_task_has_route(self):

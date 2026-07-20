@@ -121,10 +121,6 @@ export function ProductPage() {
         aria-labelledby="product-title"
       >
         <section className="mkt-hero product-hero">
-          <p className="mkt-hero__kicker">
-            <span className="mkt-hero__kicker-dot" aria-hidden="true" />
-            Choose your mode
-          </p>
           <h1 id="product-title" className="mkt-hero__title">
             Two ways to <span className="mkt-hero__accent">think.</span>
           </h1>
@@ -200,7 +196,6 @@ export function ProductPage() {
         <section id="product-showcase" className="product-showcase" aria-labelledby="product-showcase-title">
           <header className="product-section-head">
             <div>
-              <span>03 / ONE INPUT · TWO ENGINES</span>
               <h2 id="product-showcase-title">See the difference in the output.</h2>
             </div>
             <p>
@@ -286,8 +281,7 @@ export function ProductPage() {
 
         <section className="product-routing" aria-labelledby="product-routing-title">
           <header className="product-section-head">
-            <div><span>04 / ROUTING LOGIC</span><h2 id="product-routing-title">Choose by the work—not the hype.</h2></div>
-            <p>The right engine is determined by the artifact you need at the end.</p>
+            <div><h2 id="product-routing-title">Choose by the work—not the hype.</h2></div>
           </header>
           <div className="product-routing-table">
             <div className="product-routing-table__head"><span>SIGNAL</span><span>ROUTE</span><span>WHAT COMES BACK</span><span>ACTION</span></div>
@@ -304,8 +298,7 @@ export function ProductPage() {
 
         <section className="product-surface" aria-labelledby="product-surface-title">
           <header className="product-section-head">
-            <div><span>05 / THE COMPLETE SURFACE</span><h2 id="product-surface-title">The verdict is only the beginning.</h2></div>
-            <p>Keep pressure-testing, preserve what matters, and move from individual thought to shared work.</p>
+            <div><h2 id="product-surface-title">The verdict is only the beginning.</h2></div>
           </header>
           <div className="product-surface-grid">
             {PRODUCT_SURFACES.map((surface) => (

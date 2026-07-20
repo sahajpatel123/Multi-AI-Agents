@@ -1,214 +1,274 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Check, CheckCircle } from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
+import { ArrowRight, Check, CheckCircle, Lock, Sparkles, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getSubscriptionStatus } from '../api';
-import { Button } from '../components/Button';
 import { Footer } from '../components/Footer';
-import { Icons } from '../components/Icons';
 import { Navbar } from '../components/Navbar';
 import { RazorpayCheckout } from '../components/RazorpayCheckout';
-import { useAuth } from '../hooks/useAuth';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
-import { setRedirectIntent } from '../utils/redirectIntent';
+import { useAuth } from '../hooks/useAuth';
 import { isFaqOpen, toggleFaqOpen } from '../lib/faqAccordion';
+import { setRedirectIntent } from '../utils/redirectIntent';
 
-const comparisonRows = [
-  ['Credits per day', '25K', '100K', '300K'],
-  ['Questions per day', '5', '15', '35'],
-  ['Personas available', '6', '16', '16'],
-  ['Debate mode', '✕', '✓', '✓'],
-  ['Memory', '✕', '✓', '✓'],
-  ['Focused chat', '✕', '✓', '✓'],
-  ['Saved responses', '✕', '✓', '✓'],
-  ['Agent mode', '✕', '✕', '✓'],
-  ['Scoring audit', '✕', '✕', '✓'],
-  ['Priority speed', '✕', '✕', '✓'],
-];
+type BillingPeriod = 'monthly' | 'annual';
+type PlanId = 'explorer' | 'plus' | 'pro';
+type MatrixValue = 'yes' | 'no' | string;
 
-const faqs = [
+type PlanDefinition = {
+  id: PlanId;
+  index: string;
+  name: string;
+  verb: string;
+  fit: string;
+  tone: string;
+  monthly: string;
+  annualEffective: string;
+  annualTotal: string;
+  annualSaving: string;
+  metrics: readonly { value: string; label: string }[];
+  features: readonly string[];
+};
+
+const DEPTH_OPTIONS: readonly {
+  plan: PlanId;
+  index: string;
+  verb: string;
+  label: string;
+  prompt: string;
+  tone: string;
+}[] = [
   {
-    question: 'Which minds do I get for free?',
-    answer: 'The Explorer plan includes 6 minds: The Analyst, Philosopher, Pragmatist, Contrarian, Futurist, and Empath. These cover analytical, philosophical, practical, contrarian, future-focused, and empathetic perspectives. Upgrade to Plus to unlock all 16.',
+    plan: 'explorer',
+    index: '01',
+    verb: 'Orient',
+    label: 'Explorer',
+    prompt: 'I need distinct perspectives on everyday questions.',
+    tone: '#5ED8FF',
   },
   {
-    question: 'What is the difference between Plus and Pro?',
+    plan: 'plus',
+    index: '02',
+    verb: 'Decide',
+    label: 'Plus',
+    prompt: 'I need a thinking system that remembers and pushes back.',
+    tone: '#D7F64A',
+  },
+  {
+    plan: 'pro',
+    index: '03',
+    verb: 'Investigate',
+    label: 'Pro',
+    prompt: 'I need a structured research pipeline for consequential work.',
+    tone: '#A98CF8',
+  },
+];
+
+const PLANS: readonly PlanDefinition[] = [
+  {
+    id: 'explorer',
+    index: 'P-01',
+    name: 'Explorer',
+    verb: 'Orient',
+    fit: 'For learning how useful four genuinely different lenses can be.',
+    tone: '#5ED8FF',
+    monthly: '0',
+    annualEffective: '0',
+    annualTotal: '₹0',
+    annualSaving: 'Free forever',
+    metrics: [
+      { value: '05', label: 'questions / day' },
+      { value: '25K', label: 'credits / day' },
+      { value: '06', label: 'reasoning styles' },
+    ],
+    features: [
+      'Four parallel persona responses',
+      'Independent judge selects a winner',
+      'Copy and share responses',
+      'Six starter personas',
+    ],
+  },
+  {
+    id: 'plus',
+    index: 'P-02',
+    name: 'Plus',
+    verb: 'Decide',
+    fit: 'For recurring decisions that benefit from memory, challenge, and a wider room.',
+    tone: '#D7F64A',
+    monthly: '999',
+    annualEffective: '742',
+    annualTotal: '₹8,899',
+    annualSaving: 'Save 26%',
+    metrics: [
+      { value: '15', label: 'questions / day' },
+      { value: '100K', label: 'credits / day' },
+      { value: '16', label: 'reasoning styles' },
+    ],
+    features: [
+      'Everything in Explorer',
+      'Debate and focused chat',
+      'Memory, saved responses, and full history',
+      'Watchlist and collaborative rooms',
+      'Build panels from all 16 minds',
+    ],
+  },
+  {
+    id: 'pro',
+    index: 'P-03',
+    name: 'Pro',
+    verb: 'Investigate',
+    fit: 'For complex questions that need a research pipeline, audit trail, and more room.',
+    tone: '#A98CF8',
+    monthly: '2,499',
+    annualEffective: '1,650',
+    annualTotal: '₹19,800',
+    annualSaving: 'Save 34%',
+    metrics: [
+      { value: '35', label: 'questions / day' },
+      { value: '300K', label: 'credits / day' },
+      { value: '16', label: 'reasoning styles' },
+    ],
+    features: [
+      'Everything in Plus',
+      'Agent Mode included',
+      'Unlimited debates',
+      'Scoring audit and calibration',
+      'Higher Pro rate limits',
+    ],
+  },
+];
+
+const MINDS = [
+  { name: 'The Analyst', starter: true, color: '#8C9BAB' },
+  { name: 'The Philosopher', starter: true, color: '#9B8FAA' },
+  { name: 'The Pragmatist', starter: true, color: '#8AA899' },
+  { name: 'The Contrarian', starter: true, color: '#B0977E' },
+  { name: 'The Futurist', starter: true, color: '#9BAA7A' },
+  { name: 'The Empath', starter: true, color: '#AA8A9B' },
+  { name: 'The Scientist', starter: false, color: '#7A9BAB' },
+  { name: 'The Historian', starter: false, color: '#9B8A7A' },
+  { name: 'The Economist', starter: false, color: '#7A9B8A' },
+  { name: 'The Ethicist', starter: false, color: '#AA8F9B' },
+  { name: 'The Stoic', starter: false, color: '#8A8A9B' },
+  { name: 'The Strategist', starter: false, color: '#AA957A' },
+  { name: 'The Engineer', starter: false, color: '#7A8A9B' },
+  { name: 'The Optimist', starter: false, color: '#9BAA8A' },
+  { name: 'First Principles', starter: false, color: '#9B9BAA' },
+  { name: "Devil's Advocate", starter: false, color: '#AA7A7A' },
+] as const;
+
+const AGENT_STAGES = [
+  'Plan',
+  'Research',
+  'Solve',
+  'Critique',
+  'Verify',
+  'Synthesize',
+  'Judge',
+] as const;
+
+const COMPARISON_ROWS: readonly {
+  label: string;
+  explorer: MatrixValue;
+  plus: MatrixValue;
+  pro: MatrixValue;
+}[] = [
+  { label: 'Daily credits', explorer: '25K', plus: '100K', pro: '300K' },
+  { label: 'Arena questions / day', explorer: '5', plus: '15', pro: '35' },
+  { label: 'Personas available', explorer: '6', plus: '16', pro: '16' },
+  { label: 'Debate mode', explorer: 'no', plus: 'yes', pro: 'yes' },
+  { label: 'Focused chat', explorer: 'no', plus: 'yes', pro: 'yes' },
+  { label: 'Memory', explorer: 'no', plus: 'yes', pro: 'yes' },
+  { label: 'Saved responses + full history', explorer: 'no', plus: 'yes', pro: 'yes' },
+  { label: 'Watchlist', explorer: 'no', plus: 'yes', pro: 'yes' },
+  { label: 'Agent Mode', explorer: 'no', plus: '₹599 add-on', pro: 'Included' },
+  { label: 'Unlimited debates', explorer: 'no', plus: 'no', pro: 'yes' },
+  { label: 'Scoring audit', explorer: 'no', plus: 'no', pro: 'yes' },
+  { label: 'Calibration', explorer: 'no', plus: 'no', pro: 'yes' },
+];
+
+const FAQS = [
+  {
+    question: 'Which minds are included with Explorer?',
     answer:
-      'Plus unlocks all 16 minds, debate mode, memory, and focused chat. Pro adds full Agent Mode (7-stage pipeline), unlimited debates, scoring audit visibility, and priority response speed. Plus users can add Agent Mode as an optional in-app add-on.',
+      'Explorer includes The Analyst, Philosopher, Pragmatist, Contrarian, Futurist, and Empath. Plus and Pro unlock all 16 reasoning styles.',
+  },
+  {
+    question: 'What changes between Plus and Pro?',
+    answer:
+      'Plus adds all 16 minds, Debate, focused chat, memory, saved responses, full history, Watchlist, and rooms. Pro includes everything in Plus, then adds Agent Mode, unlimited debates, scoring audit, calibration, and higher Pro rate limits.',
+  },
+  {
+    question: 'Can Plus use Agent Mode?',
+    answer:
+      'Yes. An active Plus subscriber can add Agent Mode for ₹599 per month. The add-on uses Plus plan limits. Pro includes Agent Mode without a separate add-on.',
   },
   {
     question: 'What is Agent Mode?',
     answer:
-      'Agent Mode is a 7-stage research pipeline (planner → researcher → solver → critic → verifier → synthesizer → judge) that returns a single best-supported take with assumptions surfaced, sources attached, and a confidence score. Pro unlocks it fully; Plus can add it as an in-app add-on.',
+      'Agent Mode runs the seven visible research stages—planner, researcher, solver, critic, verifier, synthesizer, and judge—to produce a structured investigation. It is included with Pro or available as a Plus add-on.',
   },
   {
-    question: 'What is Watchlist?',
+    question: 'How does annual billing work?',
     answer:
-      'Watchlist lets you turn any research question into a recurring task. Arena re-runs it on your schedule (daily / every 3 days / weekly) and only surfaces a new finding when the latest answer actually changes — so you stay current without polling.',
+      'Annual prices are charged once for the year. The monthly number shown is the annual total divided by 12: ₹8,899 per year for Plus and ₹19,800 per year for Pro.',
   },
   {
-    question: 'What is the difference between Saved and Watchlist?',
+    question: 'Can I cancel a paid plan?',
     answer:
-      'Saved takes are one-off bookmarks of past Arena or Agent answers you want to revisit. Watchlist is recurring — Arena re-checks the question on a schedule and notifies you when findings change.',
-  },
-  {
-    question: 'How does calibration work?',
-    answer:
-      'When you rate an Agent answer as Accurate, Partial, or Inaccurate, Arena updates your calibration profile. After enough ratings, Arena uses your history to gently adjust the displayed confidence so it matches how you actually evaluate answers.',
-  },
-  {
-    question: 'Can I change plans anytime?',
-    answer: 'Yes. Upgrade or downgrade at any time. Changes take effect immediately.',
+      'Yes. You can schedule cancellation from your account. Billing stops at the end of the current cycle, and paid access remains available through that period.',
   },
   {
     question: 'Does Agent Mode control my computer?',
     answer:
-      'No. Arena is web-only. On-device actions need Condura (free, local-first) on your machine. The browser never fakes local control.',
+      'No. Arena is web-only. Local or on-device actions require Condura, a separate local-first companion. The browser never pretends to control your machine.',
   },
-];
-
-const explorerFeatures = [
-  '25,000 credits per day',
-  'Arena mode',
-  '5 questions per day',
-  '6 minds to explore:',
-  '· The Analyst',
-  '· The Philosopher',
-  '· The Pragmatist',
-  '· The Contrarian',
-  '· The Futurist',
-  '· The Empath',
-  'Copy and share responses',
-  'Session history',
-];
-
-const thinkerFeatures = [
-  '15 questions per day',
-  'All 16 minds unlocked',
-  'Build your own panel of 4',
-  'Debate mode',
-  'Challenge any mind, watch the others react',
-  '1-on-1 focused chat',
-  'Memory across sessions',
-  'Minds remember your history',
-  'Full session history',
-  'Save your best responses',
-];
-
-const architectFeatures = [
-  '35 questions per day',
-  'Everything in Plus',
-  'Agent mode access',
-  '7-stage AI pipeline for complex tasks',
-  'Watchlist (recurring research)',
-  'Saved takes + Rooms (collaboration)',
-  'Calibration learns how you evaluate answers',
-  'Unlimited debates per day',
-  'Scoring audit',
-  'See exactly why a mind won',
-  'Priority response speed',
-  'Early access to new minds',
-];
-
-const MINDS = [
-  { name: 'The Analyst', locked: false, color: '#5ED8FF' },
-  { name: 'The Philosopher', locked: false, color: '#A98CF8' },
-  { name: 'The Pragmatist', locked: false, color: '#D7F64A' },
-  { name: 'The Contrarian', locked: false, color: '#FF6652' },
-  { name: 'The Futurist', locked: false, color: '#A98CF8' },
-  { name: 'The Empath', locked: false, color: '#AA8F8F' },
-  { name: 'The Scientist', locked: true, color: '#5ED8FF' },
-  { name: 'The Historian', locked: true, color: '#A89B8C' },
-  { name: 'The Economist', locked: true, color: '#D7F64A' },
-  { name: 'The Ethicist', locked: true, color: '#A98CF8' },
-  { name: 'The Stoic', locked: true, color: '#5ED8FF' },
-  { name: 'The Strategist', locked: true, color: '#FF6652' },
-  { name: 'The Engineer', locked: true, color: '#5ED8FF' },
-  { name: 'The Optimist', locked: true, color: '#D7F64A' },
-  { name: 'First Principles', locked: true, color: '#A98CF8' },
-  { name: "Devil's Advocate", locked: true, color: '#FF6652' },
 ] as const;
 
-const unlockedPillTimings = [
-  '3.2s 0s',
-  '2.8s 0.3s',
-  '3.5s 0.6s',
-  '2.6s 0.9s',
-  '3.0s 0.2s',
-  '2.4s 0.7s',
-];
-
-function hexToRgba(hex: string, alpha: number) {
-  const normalized = hex.replace('#', '');
-  const bigint = Number.parseInt(normalized, 16);
-  const r = (bigint >> 16) & 255;
-  const g = (bigint >> 8) & 255;
-  const b = bigint & 255;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+function MatrixCell({ value }: { value: MatrixValue }) {
+  if (value === 'yes') {
+    return (
+      <span className="pricing-matrix__mark pricing-matrix__mark--yes">
+        <Check aria-hidden="true" />
+        <span className="pricing-sr-only">Included</span>
+      </span>
+    );
+  }
+  if (value === 'no') {
+    return (
+      <span className="pricing-matrix__mark pricing-matrix__mark--no">
+        <X aria-hidden="true" />
+        <span className="pricing-sr-only">Not included</span>
+      </span>
+    );
+  }
+  return <span>{value}</span>;
 }
 
-function PriceDisplay({ amount, period = '/mo' }: { amount: string; period?: string }) {
-  return (
-    <div className="price-display">
-      <span className="currency">₹</span>
-      <span className="amount">{amount}</span>
-      {period ? <span className="period">{period}</span> : null}
-    </div>
-  );
-}
-
-function isSubFeature(item: string) {
-  return (
-    item.startsWith('· ') ||
-    item === 'Challenge any mind, watch the others react' ||
-    item === 'Minds remember your history' ||
-    item === '7-stage AI pipeline for complex tasks' ||
-    item === 'See exactly why a mind won'
-  );
-}
-
-function FeatureList({
-  items,
-  dotColor,
-  textColor,
-  subColor,
+function SectionHeading({
+  eyebrow,
+  title,
+  body,
 }: {
-  items: string[];
-  dotColor: string;
-  textColor: string;
-  subColor: string;
+  eyebrow: string;
+  title: string;
+  body: string;
 }) {
   return (
-    <div
-      className="pricing-feature-list"
-      style={
-        {
-          '--fl-dot-color': dotColor,
-          '--fl-text-color': textColor,
-          '--fl-sub-color': subColor,
-        } as CSSProperties
-      }
-    >
-      {items.map((item) => {
-        const sub = isSubFeature(item);
-        return (
-          <div
-            key={item}
-            className={`pricing-feature-list__row${sub ? ' pricing-feature-list__row--sub' : ''}`}
-          >
-            {sub ? (
-              <span className="pricing-feature-list__spacer" aria-hidden="true" />
-            ) : (
-              <span
-                className="pricing-feature-list__dot"
-                aria-hidden="true"
-              />
-            )}
-            <span className="pricing-feature-list__text">{item}</span>
-          </div>
-        );
-      })}
-    </div>
+    <header className="pricing-studio-section__head">
+      <div>
+        <span>{eyebrow}</span>
+        <h2>{title}</h2>
+      </div>
+      <p>{body}</p>
+    </header>
   );
 }
 
@@ -217,81 +277,80 @@ export function PricingPage() {
   const { openModal } = useProfileModal();
   const { isAuthenticated, refreshUser, user } = useAuth();
   const { tier, isPlus, isPro, refreshTier } = useTier();
-  const userTierLc = (user?.tier ?? '').toString().toLowerCase();
-  const isPlusUser = isAuthenticated && (userTierLc === 'plus' || isPlus);
-  const hasAgentAddon = user?.agent_addon_active === true;
-  const addonCancelling = user?.agent_addon_cancelling === true;
-  const showAddonUpsell = isPlusUser && !hasAgentAddon && !addonCancelling;
-  const showAddonActiveBanner = isPlusUser && hasAgentAddon;
-  const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
+  const [billing, setBilling] = useState<BillingPeriod>('monthly');
+  const [focusedPlan, setFocusedPlan] = useState<PlanId>('plus');
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
   const [upgradeSuccessLabel, setUpgradeSuccessLabel] = useState('');
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
-  const [sectionHovered, setSectionHovered] = useState(false);
-  const [hoveredMind, setHoveredMind] = useState<number | null>(null);
-  const [mindsInView, setMindsInView] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
-  const mindsSectionRef = useRef<HTMLElement | null>(null);
+  const navigateTimerRef = useRef<number | null>(null);
+  const noticeTimerRef = useRef<number | null>(null);
+
+  const tierName = String(user?.tier ?? tier ?? '').toLowerCase();
+  const isPlusUser = isAuthenticated && (tierName === 'plus' || isPlus);
+  const hasAgentAddon = user?.agent_addon_active === true;
+  const addonCancelling = user?.agent_addon_cancelling === true;
+  const selectedDepth = DEPTH_OPTIONS.find((option) => option.plan === focusedPlan) ?? DEPTH_OPTIONS[1];
+  const visibleMindCount = focusedPlan === 'explorer' ? 6 : 16;
 
   useEffect(() => {
-    if (isAuthenticated) {
-      getSubscriptionStatus()
-        .then((data) => {
-          setSubscriptionStatus(data.status || null);
-        })
-        .catch(() => {});
+    if (!isAuthenticated) {
+      setSubscriptionStatus(null);
       return;
     }
 
-    setSubscriptionStatus(null);
+    let active = true;
+    getSubscriptionStatus()
+      .then((data) => {
+        if (active) setSubscriptionStatus(data.status || null);
+      })
+      .catch(() => {
+        if (active) setSubscriptionStatus(null);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [isAuthenticated]);
 
   useEffect(() => {
-    const node = mindsSectionRef.current;
-    if (!node) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setMindsInView(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.2 },
-    );
-
-    observer.observe(node);
-
-    return () => observer.disconnect();
+    return () => {
+      if (navigateTimerRef.current != null) window.clearTimeout(navigateTimerRef.current);
+      if (noticeTimerRef.current != null) window.clearTimeout(noticeTimerRef.current);
+    };
   }, []);
 
-  const getCurrentPlanKey = () => {
-    if (isPro) return 'pro';
-    if (isPlus) return 'plus';
-    if (tier === 'FREE' || tier === 'GUEST') return 'free';
-    return 'free';
-  };
-
-  const isCurrentPlan = (planName: string) => {
-    const current = getCurrentPlanKey();
-    return current === planName;
-  };
+  const currentPlan: PlanId = isPro
+    ? 'pro'
+    : isPlus
+      ? 'plus'
+      : 'explorer';
 
   const hasActiveSubscription =
     isAuthenticated &&
     (isPlus || isPro) &&
-    (subscriptionStatus == null || ['created', 'authenticated', 'active', 'halted'].includes(subscriptionStatus));
+    (subscriptionStatus == null ||
+      ['created', 'authenticated', 'active', 'halted'].includes(subscriptionStatus));
 
-  const handleUpgrade = (planKey: string) => {
+  const beginCheckout = (planKey: string) => {
     if (!isAuthenticated) {
       setRedirectIntent('/pricing');
       navigate('/signin?tab=signup');
       return;
     }
-    setCheckoutPlan(planKey);
     setCheckoutError(null);
+    setCheckoutPlan(planKey);
+  };
+
+  const startFree = () => {
+    if (isAuthenticated) {
+      navigate('/app');
+      return;
+    }
+    setRedirectIntent('/app');
+    navigate('/signin?tab=signup');
   };
 
   const handleCheckoutSuccess = async (planKey: string) => {
@@ -300,9 +359,16 @@ export function PricingPage() {
     setUpgradeSuccess(true);
     await refreshTier();
     await refreshUser();
-    window.setTimeout(() => {
-      navigate('/app');
-    }, 2000);
+    navigateTimerRef.current = window.setTimeout(() => navigate('/app'), 2000);
+  };
+
+  const handleAddonSuccess = async () => {
+    setCheckoutPlan(null);
+    await refreshTier();
+    await refreshUser();
+    setUpgradeSuccessLabel('Agent Mode');
+    setUpgradeSuccess(true);
+    noticeTimerRef.current = window.setTimeout(() => setUpgradeSuccess(false), 2500);
   };
 
   const onCheckoutError = useCallback((error: string) => {
@@ -314,29 +380,72 @@ export function PricingPage() {
     setCheckoutPlan(null);
   }, []);
 
+  const priceFor = (plan: PlanDefinition) =>
+    billing === 'monthly' ? plan.monthly : plan.annualEffective;
+
+  const checkoutKeyFor = (plan: PlanId) =>
+    `${plan}_${billing === 'monthly' ? 'monthly' : 'annual'}`;
+
+  const planAction = (plan: PlanDefinition): ReactNode => {
+    const rank: Record<PlanId, number> = { explorer: 0, plus: 1, pro: 2 };
+    const currentRank = rank[currentPlan];
+    const planRank = rank[plan.id];
+
+    if (isAuthenticated && currentPlan === plan.id) {
+      return (
+        <div className="pricing-tier-card__state" role="status">
+          <CheckCircle aria-hidden="true" />
+          Current plan
+        </div>
+      );
+    }
+
+    if (isAuthenticated && currentRank > planRank) {
+      return <div className="pricing-tier-card__state">Included in {currentPlan === 'pro' ? 'Pro' : 'your plan'}</div>;
+    }
+
+    if (plan.id === 'explorer') {
+      return (
+        <button type="button" className="pricing-tier-card__cta" onClick={startFree}>
+          <span>{isAuthenticated ? 'Open Arena' : 'Start for free'}</span>
+          <ArrowRight aria-hidden="true" />
+        </button>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        className="pricing-tier-card__cta"
+        onClick={() => beginCheckout(checkoutKeyFor(plan.id))}
+      >
+        <span>Get {plan.name}</span>
+        <ArrowRight aria-hidden="true" />
+      </button>
+    );
+  };
+
   return (
-    <div className="pricing-page">
+    <div className="pricing-page pricing-studio-page">
       <Navbar />
 
-      <main id="main-content" className="pricing-page__main" tabIndex={-1}>
+      <main id="main-content" className="pricing-page__main" tabIndex={-1} aria-labelledby="pricing-title">
         {upgradeSuccess && (
-          <div className="pricing-banner pricing-banner--success" role="status" aria-live="polite">
-            {upgradeSuccessLabel === 'Agent Mode'
-              ? 'Agent Mode add-on activated. Your Plus plan now includes the research pipeline.'
-              : `Welcome to ${upgradeSuccessLabel}! Your account has been upgraded.`}
+          <div className="pricing-studio-notice pricing-studio-notice--success" role="status" aria-live="polite">
+            <CheckCircle aria-hidden="true" />
+            <span>
+              {upgradeSuccessLabel === 'Agent Mode'
+                ? 'Agent Mode add-on activated. Plus plan limits continue to apply.'
+                : `Welcome to ${upgradeSuccessLabel}. Your account has been upgraded.`}
+            </span>
           </div>
         )}
 
         {checkoutError && (
-          <div className="pricing-banner pricing-banner--error" role="alert">
-            <span className="pricing-banner__text">{checkoutError}</span>
-            <button
-              type="button"
-              className="pricing-banner__dismiss"
-              aria-label="Dismiss"
-              onClick={() => setCheckoutError(null)}
-            >
-              ×
+          <div className="pricing-studio-notice pricing-studio-notice--error" role="alert">
+            <span>{checkoutError}</span>
+            <button type="button" aria-label="Dismiss checkout error" onClick={() => setCheckoutError(null)}>
+              <X aria-hidden="true" />
             </button>
           </div>
         )}
@@ -349,12 +458,7 @@ export function PricingPage() {
             prefillEmail={user?.email}
             onSuccess={() => {
               if (checkoutPlan === 'agent_addon') {
-                setCheckoutPlan(null);
-                void refreshTier();
-                void refreshUser();
-                setUpgradeSuccessLabel('Agent Mode');
-                setUpgradeSuccess(true);
-                window.setTimeout(() => setUpgradeSuccess(false), 2500);
+                void handleAddonSuccess();
               } else {
                 void handleCheckoutSuccess(checkoutPlan);
               }
@@ -364,648 +468,358 @@ export function PricingPage() {
           />
         )}
 
-        <section className="pricing-hero" aria-labelledby="pricing-title">
-          <p className="pricing-hero__kicker">
-            <span className="pricing-hero__kicker-dot" aria-hidden="true" />
-            Simple, honest pricing
-          </p>
-          <h1 id="pricing-title" className="pricing-hero__title">
-            Start <span className="pricing-hero__accent">free.</span>
-          </h1>
-          <p className="pricing-hero__lede">
-            Upgrade when Arena becomes part of how you think. Cancel anytime — no lock-in.
-          </p>
-          <ul className="pricing-hero__proof" aria-hidden="true">
-            <li className="pricing-hero__proof-item">Cancel anytime</li>
-            <li className="pricing-hero__proof-item">No lock-in</li>
-            <li className="pricing-hero__proof-item">Free tier forever</li>
-          </ul>
+        <section className="pricing-studio-hero" aria-labelledby="pricing-title">
+          <div className="pricing-studio-hero__copy">
+            <p className="pricing-studio-kicker"><span aria-hidden="true" /> Pricing / decision depth</p>
+            <h1 id="pricing-title">Choose how far <em>the question goes.</em></h1>
+            <p>
+              Arena starts with four minds and an independent judge. Pay only when you need
+              more lenses, persistent context, or a structured research pipeline.
+            </p>
+            <div className="pricing-studio-hero__actions">
+              <a href="#pricing-plans">Compare plans <ArrowRight aria-hidden="true" /></a>
+              <button type="button" onClick={startFree}>Start at ₹0</button>
+            </div>
+            <dl className="pricing-studio-proof">
+              <div><dt>₹0</dt><dd>registered free tier</dd></div>
+              <div><dt>06–16</dt><dd>reasoning styles</dd></div>
+              <div><dt>07</dt><dd>visible Agent stages</dd></div>
+            </dl>
+          </div>
+
+          <aside className="pricing-depth-instrument" aria-label="Choose the depth of work">
+            <header><span>Depth selector</span><b>01 / 03</b></header>
+            <div className="pricing-depth-instrument__options">
+              {DEPTH_OPTIONS.map((option) => (
+                <button
+                  key={option.plan}
+                  type="button"
+                  aria-pressed={focusedPlan === option.plan}
+                  className={focusedPlan === option.plan ? 'is-active' : ''}
+                  style={{ '--depth-tone': option.tone } as CSSProperties}
+                  onClick={() => setFocusedPlan(option.plan)}
+                >
+                  <small>{option.index}</small>
+                  <span><strong>{option.verb}</strong><em>{option.label}</em></span>
+                  <b aria-hidden="true">{focusedPlan === option.plan ? '●' : '○'}</b>
+                </button>
+              ))}
+            </div>
+            <footer>
+              <span>Current fit / {selectedDepth.label}</span>
+              <p>{selectedDepth.prompt}</p>
+            </footer>
+          </aside>
         </section>
 
         {hasActiveSubscription && (
-          <div className="pricing-active-banner" role="status">
-            <CheckCircle size={16} color="#5A8A5A" aria-hidden />
-            <span>
-              You are on the <strong>{isPro ? 'Pro' : 'Plus'}</strong> plan.
-            </span>
-            <button
-              type="button"
-              className="pricing-active-banner__manage"
-              onClick={() => openModal('top-right', 'plan')}
-            >
-              Manage subscription →
+          <div className="pricing-active-strip" role="status">
+            <CheckCircle aria-hidden="true" />
+            <span>You are on <strong>{isPro ? 'Pro' : 'Plus'}</strong>.</span>
+            <button type="button" onClick={() => openModal('top-right', 'plan')}>
+              Manage subscription <ArrowRight aria-hidden="true" />
             </button>
           </div>
         )}
 
-        <div className="pricing-billing-wrap">
-          <div className="billing-toggle-v2" role="group" aria-label="Billing period">
-            <button
-              type="button"
-              className={`billing-toggle-option${billing === 'monthly' ? ' billing-toggle-option--active' : ''}`}
-              onClick={() => setBilling('monthly')}
-            >
-              Monthly
-            </button>
-            <button
-              type="button"
-              className={`billing-toggle-option${billing === 'annual' ? ' billing-toggle-option--active' : ''}`}
-              onClick={() => setBilling('annual')}
-            >
-              Annual
-              {billing === 'monthly' ? <span className="billing-toggle-save-badge">· save 26%</span> : null}
-            </button>
-          </div>
-        </div>
-
-        <section className="pricing-grid" aria-label="Pricing plans">
-          <div className="pricing-plan-card">
-            {isAuthenticated && isCurrentPlan('free') ? (
-              <span className="pricing-plan-card__badge">Your plan</span>
-            ) : null}
-            <div className="pricing-plan-card__pill">Free forever</div>
-            <p className="pricing-plan-card__name">Explorer</p>
-            <PriceDisplay amount="0" period="" />
-            <p className="pricing-price-sub" style={{ marginBottom: '1rem' }}>
-              forever
+        <section id="pricing-plans" className="pricing-studio-section pricing-plan-studio" aria-labelledby="pricing-plans-title">
+          <header className="pricing-studio-section__head">
+            <div>
+              <span>01 / Decision deck</span>
+              <h2 id="pricing-plans-title">Match the plan to the work.</h2>
+            </div>
+            <p>
+              Focus a plan to carry it through the page. Prices are in INR. Annual amounts are
+              charged yearly; effective monthly figures are shown for comparison.
             </p>
-            <div className="pricing-plan-card__divider" />
-            <FeatureList items={explorerFeatures} dotColor="#D4CCC4" textColor="#1A1714" subColor="#8B8480" />
-            {isAuthenticated && isCurrentPlan('free') ? (
-              <div
-                style={{
-                  width: '100%',
-                  padding: '11px',
-                  borderRadius: '999px',
-                  border: '0.5px solid #E0D8D0',
-                  background: '#F0EBE3',
-                  color: '#A0A39A',
-                  fontSize: '14px',
-                  cursor: 'default',
-                  marginTop: 'auto',
-                  textAlign: 'center',
-                }}
+          </header>
+
+          <div className="pricing-plan-toolbar">
+            <div aria-live="polite">
+              <small>Current focus</small>
+              <strong>{selectedDepth.label} / {selectedDepth.verb}</strong>
+              <span>{selectedDepth.prompt}</span>
+            </div>
+            <div className="pricing-billing-control" role="group" aria-label="Billing period">
+              <button
+                type="button"
+                aria-pressed={billing === 'monthly'}
+                className={billing === 'monthly' ? 'is-active' : ''}
+                onClick={() => setBilling('monthly')}
               >
-                Current plan
-              </div>
-            ) : (
-              <div style={{ marginTop: 'auto', width: '100%' }}>
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  fullWidth
-                  onClick={() => {
-                    if (isAuthenticated) {
-                      navigate('/app');
-                      return;
-                    }
-                    setRedirectIntent('/app');
-                    navigate('/signin?tab=signup');
-                  }}
-                >
-                  Start for free
-                </Button>
-              </div>
-            )}
+                Monthly
+              </button>
+              <button
+                type="button"
+                aria-pressed={billing === 'annual'}
+                className={billing === 'annual' ? 'is-active' : ''}
+                onClick={() => setBilling('annual')}
+              >
+                Annual <span>save 26–34%</span>
+              </button>
+            </div>
           </div>
 
-          <div className="pricing-plan-card pricing-plan-card--featured">
-            <div className="pricing-plan-card__ribbon">Most popular</div>
-            {isAuthenticated && isCurrentPlan('plus') ? (
-              <span className="pricing-plan-card__badge">Your plan</span>
-            ) : null}
-            <div className="pricing-plan-card__pill">Best value</div>
-            <p className="pricing-plan-card__name">Plus</p>
-
-            {billing === 'monthly' ? (
-              <>
-                <PriceDisplay amount="999" />
-                <p className="pricing-price-sub" style={{ marginBottom: '1rem' }}>
-                  per month, billed monthly
-                </p>
-              </>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '8px', marginBottom: 0 }}>
-                  <PriceDisplay amount="742" />
-                  <span
-                    style={{
-                      background: '#EFF4EF',
-                      color: '#7A9B7A',
-                      fontSize: '11px',
-                      fontWeight: 400,
-                      padding: '3px 9px',
-                      borderRadius: '999px',
-                      verticalAlign: 'middle',
-                    }}
-                  >
-                    Save 26%
-                  </span>
-                </div>
-                <p className="pricing-price-sub" style={{ marginBottom: '4px' }}>
-                  per month, billed annually
-                </p>
-                <p style={{ fontSize: '16px', color: '#8C7355', marginBottom: '4px' }}>Billed as ₹8,899/year</p>
-                <p style={{ fontSize: '12px', color: '#C4B8AE', textDecoration: 'line-through', marginBottom: '1rem' }}>vs ₹11,988 if paid monthly</p>
-              </>
-            )}
-
-            <div className="pricing-plan-card__divider" />
-            <FeatureList items={thinkerFeatures} dotColor="rgba(196,149,106,0.5)" textColor="#1A1714" subColor="#8B8480" />
-            {isCurrentPlan('plus') ? (
-              <div
-                style={{
-                  width: '100%',
-                  padding: '11px',
-                  borderRadius: '999px',
-                  background: '#EDF2EF',
-                  color: '#5A8A5A',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  cursor: 'default',
-                  border: '0.5px solid rgba(90,138,90,0.2)',
-                  textAlign: 'center',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  marginTop: 'auto',
-                }}
-              >
-                <Check size={16} color="#5A8A5A" />
-                <span>Current plan</span>
-              </div>
-            ) : isPro ? (
-              <div
-                style={{
-                  width: '100%',
-                  padding: '11px',
-                  borderRadius: '999px',
-                  background: '#F0EBE3',
-                  color: '#A0A39A',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  cursor: 'default',
-                  border: '0.5px solid rgba(90,138,90,0.2)',
-                  textAlign: 'center',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  marginTop: 'auto',
-                }}
-              >
-                Included in your plan
-              </div>
-            ) : (
-              <div style={{ marginTop: 'auto', width: '100%' }}>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="lg"
-                  fullWidth
-                  icon={Icons.lightning(18)}
-                  onClick={() => handleUpgrade(billing === 'monthly' ? 'plus_monthly' : 'plus_annual')}
-                >
-                  Get Plus
-                </Button>
-              </div>
-            )}
-            {showAddonUpsell ? (
-              <div
-                style={{
-                  background: '#FAF3EA',
-                  border: '0.5px solid #F0B84E',
-                  borderRadius: 10,
-                  padding: '14px 16px',
-                  marginTop: 10,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: '#F3F0E7' }}>⚡ Add Agent Mode</span>
-                  <div className="price-display price-display--compact" style={{ marginLeft: 'auto' }}>
-                    <span className="currency">₹</span>
-                    <span className="amount">599</span>
-                    <span className="period">/month</span>
-                  </div>
-                </div>
-                <p style={{ fontSize: 11, color: '#8C7355', fontStyle: 'italic', margin: '6px 0 10px' }}>
-                  Unlock the 7-stage research pipeline on your Plus plan. Plus limits apply.
-                </p>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="md"
-                  fullWidth
-                  onClick={() => {
-                    setCheckoutError(null);
-                    setCheckoutPlan('agent_addon');
-                  }}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
-                    Add Agent Mode —
-                    <span className="price-display price-display--compact">
-                      <span className="currency">₹</span>
-                      <span className="amount">599</span>
-                      <span className="period">/mo</span>
-                    </span>
-                  </span>
-                </Button>
-              </div>
-            ) : null}
-            {showAddonActiveBanner ? (
-              <div
-                style={{
-                  background: '#EAF3DE',
-                  border: '0.5px solid #97C459',
-                  borderRadius: 10,
-                  padding: '10px 14px',
-                  marginTop: 10,
-                  fontSize: 12,
-                  color: '#3B6D11',
-                  textAlign: 'center',
-                }}
-              >
-                ✓ Agent Mode active on your plan
-              </div>
-            ) : null}
-          </div>
-
-          <div className="pricing-plan-card">
-            {isAuthenticated && isCurrentPlan('pro') ? (
-              <span className="pricing-plan-card__badge">Your plan</span>
-            ) : null}
-            <div className="pricing-plan-card__pill">Full power</div>
-            <p className="pricing-plan-card__name">Pro</p>
-
-            {billing === 'monthly' ? (
-              <>
-                <PriceDisplay amount="2,499" />
-                <p className="pricing-price-sub" style={{ marginBottom: '1rem' }}>
-                  per month, billed monthly
-                </p>
-              </>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '8px', marginBottom: 0 }}>
-                  <PriceDisplay amount="1,650" />
-                  <span
-                    style={{
-                      background: '#EFF4EF',
-                      color: '#7A9B7A',
-                      fontSize: '11px',
-                      fontWeight: 400,
-                      padding: '3px 9px',
-                      borderRadius: '999px',
-                    }}
-                  >
-                    Save 34%
-                  </span>
-                </div>
-                <p className="pricing-price-sub" style={{ marginBottom: '4px' }}>
-                  per month, billed annually
-                </p>
-                <p style={{ fontSize: '16px', color: '#8C7355', marginBottom: '4px' }}>billed ₹19,800/year</p>
-                <p
-                  style={{
-                    fontSize: '12px',
-                    color: '#C4B8AE',
-                    textDecoration: 'line-through',
-                    marginBottom: '1rem',
-                  }}
-                >
-                  vs ₹29,988 if paid monthly
-                </p>
-              </>
-            )}
-
-            <div className="pricing-plan-card__divider" />
-            <FeatureList items={architectFeatures} dotColor="rgba(196,149,106,0.5)" textColor="#1A1714" subColor="#A0A39A" />
-            {isAuthenticated && isCurrentPlan('pro') ? (
-              <p style={{ fontSize: 11, color: '#5A8C6A', fontStyle: 'italic', margin: '0 0 10px' }}>Agent Mode included</p>
-            ) : null}
-            {isCurrentPlan('pro') ? (
-              <div
-                style={{
-                  width: '100%',
-                  padding: '11px',
-                  borderRadius: '999px',
-                  background: 'rgba(196,149,106,0.15)',
-                  color: '#F0B84E',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  cursor: 'default',
-                  border: '0.5px solid rgba(196,149,106,0.3)',
-                  textAlign: 'center',
-                  marginTop: 'auto',
-                }}
-              >
-                ✓ Current plan
-              </div>
-            ) : (
-              <div style={{ marginTop: 'auto', width: '100%' }}>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="lg"
-                  fullWidth
-                  icon={Icons.star(18)}
-                  onClick={() => handleUpgrade(billing === 'monthly' ? 'pro_monthly' : 'pro_annual')}
-                >
-                  Get Pro
-                </Button>
-              </div>
-            )}
-            <p
-              style={{
-                fontSize: '11px',
-                color: '#A0A39A',
-                fontStyle: 'italic',
-                textAlign: 'center',
-                marginTop: '8px',
-                marginBottom: 0,
-              }}
-            >
-              Stay 10 months, get months 11 &amp; 12 free
-            </p>
-          </div>
-        </section>
-
-        <section ref={mindsSectionRef} className="pricing-minds-section">
-          <p className="pricing-minds-section__eyebrow">THE MINDS / 16 REASONING STYLES</p>
-          <h2 className="pricing-minds-section__title">Sixteen ways to challenge the obvious.</h2>
-          <p className="pricing-minds-section__lede">Build a panel that disagrees on purpose.</p>
-
-          <div
-            className="pricing-minds-grid"
-            onMouseEnter={() => setSectionHovered(true)}
-            onMouseLeave={() => {
-              setSectionHovered(false);
-              setHoveredMind(null);
-            }}
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '10px',
-              justifyContent: 'center',
-              padding: '2rem 2.5rem',
-              background: 'rgba(26,23,20,0.02)',
-              border: '0.5px solid rgba(26,23,20,0.05)',
-              borderRadius: '24px',
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              aria-hidden
-              style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: '300px',
-                height: '200px',
-                background: 'radial-gradient(ellipse, rgba(196,149,106,0.06) 0%, transparent 70%)',
-                pointerEvents: 'none',
-                zIndex: 0,
-              }}
-            />
-
-            {MINDS.map((mind, index) => {
-              const locked = (isPlus || isPro) ? false : mind.locked;
-              const isWaveLit = locked && sectionHovered;
-              const isUnlockedHover = !locked && hoveredMind === index;
-              const enterDelay = `${index * 40}ms`;
-              const lockedDelay = `${Math.max(index - 6, 0) * 50}ms`;
-
+          <div className="pricing-deck" aria-label="Pricing plans">
+            {PLANS.map((plan) => {
+              const focused = focusedPlan === plan.id;
+              const free = plan.id === 'explorer';
               return (
-                <Fragment key={mind.name}>
-                  <div
-                    className={`pricing-mind-chip${locked ? ' pricing-mind-chip--locked' : ''}`}
-                    onMouseEnter={() => setHoveredMind(index)}
-                    onMouseLeave={() => setHoveredMind((current) => (current === index ? null : current))}
-                    style={{
-                      position: 'relative',
-                      zIndex: 1,
-                      padding: '7px 14px',
-                      borderRadius: '999px',
-                      cursor: 'default',
-                      transition: 'all 400ms ease',
-                      transitionDelay: locked ? (sectionHovered ? lockedDelay : '0ms') : '0ms',
-                      border: locked
-                        ? isWaveLit
-                          ? `1px solid ${hexToRgba(mind.color, 0.2)}`
-                          : '1px solid rgba(26,23,20,0.08)'
-                        : `1px solid ${hexToRgba(mind.color, isUnlockedHover ? 0.5 : 0.35)}`,
-                      background: locked
-                        ? isWaveLit
-                          ? hexToRgba(mind.color, 0.05)
-                          : 'transparent'
-                        : hexToRgba(mind.color, isUnlockedHover ? 0.12 : 0.07),
-                      transform: isUnlockedHover ? 'translateY(-1px)' : 'translateY(0)',
-                      boxShadow: locked
-                        ? 'none'
-                        : isUnlockedHover
-                          ? `0 4px 12px ${hexToRgba(mind.color, 0.15)}`
-                          : undefined,
-                      animation: `${mindsInView ? 'mindEnter 400ms cubic-bezier(0.16,1,0.3,1) both' : 'none'}${!locked ? `, pillBreathe ${unlockedPillTimings[Math.min(index, 5)]} ease-in-out infinite` : ''}`,
-                      animationDelay: mindsInView ? `${enterDelay}${!locked ? ', 0s' : ''}` : undefined,
-                      opacity: mindsInView ? 1 : 0,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: '5px',
-                        height: '5px',
-                        borderRadius: '50%',
-                        background: mind.color,
-                        opacity: locked ? (isWaveLit ? 0.35 : 0.15) : 0.7,
-                        display: 'inline-block',
-                        marginRight: '6px',
-                        verticalAlign: 'middle',
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontSize: '12px',
-                        fontWeight: 400,
-                        color: locked ? (isWaveLit ? 'rgba(26,23,20,0.5)' : 'rgba(26,23,20,0.2)') : '#1A1714',
-                        letterSpacing: '0.01em',
-                        whiteSpace: 'nowrap',
-                      }}
+                <article
+                  key={plan.id}
+                  className={`pricing-tier-card pricing-tier-card--${plan.id}${focused ? ' is-focused' : ''}`}
+                  style={{ '--plan-tone': plan.tone } as CSSProperties}
+                >
+                  <div className="pricing-tier-card__rail" aria-hidden="true" />
+                  <header>
+                    <span>{plan.index} / {plan.verb}</span>
+                    <button
+                      type="button"
+                      aria-pressed={focused}
+                      aria-label={`Focus ${plan.name} plan`}
+                      onClick={() => setFocusedPlan(plan.id)}
                     >
-                      {mind.name}
-                    </span>
+                      {focused ? 'In focus' : 'Focus plan'}
+                    </button>
+                  </header>
+                  <div className="pricing-tier-card__intro">
+                    <h3>{plan.name}</h3>
+                    <p>{plan.fit}</p>
                   </div>
-
-                  {!isPlus && !isPro && index === 5 ? (
-                    <Fragment>
-                      <div
-                        style={{
-                          width: '100%',
-                          height: 0,
-                          margin: '2px 0',
-                          opacity: mindsInView ? 1 : 0,
-                          animation: mindsInView ? 'mindEnter 400ms cubic-bezier(0.16,1,0.3,1) both' : 'none',
-                          animationDelay: '240ms',
-                        }}
-                      />
-                      <div
-                        style={{
-                          width: '100%',
-                          textAlign: 'center',
-                          fontSize: '10px',
-                          letterSpacing: '.12em',
-                          textTransform: 'uppercase',
-                          color: 'rgba(26,23,20,0.15)',
-                          margin: '4px 0 6px',
-                          opacity: mindsInView ? 1 : 0,
-                          animation: mindsInView ? 'mindEnter 400ms cubic-bezier(0.16,1,0.3,1) both' : 'none',
-                          animationDelay: '280ms',
-                        }}
-                      >
-                        · · · Plus · · ·
-                      </div>
-                    </Fragment>
-                  ) : null}
-                </Fragment>
+                  <div className="pricing-tier-card__price" aria-label={`${plan.name} price ${free ? 'free' : `₹${priceFor(plan)} per month`}`}>
+                    <span>₹</span><strong>{priceFor(plan)}</strong>{free ? <em>forever</em> : <em>/ month</em>}
+                  </div>
+                  <div className="pricing-tier-card__billing-note">
+                    {free ? (
+                      <><strong>No card required</strong><span>Free registered account</span></>
+                    ) : billing === 'annual' ? (
+                      <><strong>{plan.annualTotal} charged yearly</strong><span>{plan.annualSaving} against monthly billing</span></>
+                    ) : (
+                      <><strong>Charged monthly</strong><span>Switch or schedule cancellation from your account</span></>
+                    )}
+                  </div>
+                  <dl className="pricing-tier-card__metrics">
+                    {plan.metrics.map((metric) => (
+                      <div key={metric.label}><dt>{metric.value}</dt><dd>{metric.label}</dd></div>
+                    ))}
+                  </dl>
+                  <ul className="pricing-tier-card__features">
+                    {plan.features.map((feature) => (
+                      <li key={feature}><Check aria-hidden="true" /><span>{feature}</span></li>
+                    ))}
+                  </ul>
+                  <footer>
+                    {planAction(plan)}
+                    {plan.id === 'pro' && billing === 'monthly' ? (
+                      <p>Monthly loyalty: after 10 paid months, the next 2 months are free.</p>
+                    ) : null}
+                  </footer>
+                </article>
               );
             })}
           </div>
-
-          <div style={{ marginTop: '1.2rem' }}>
-            {isPlus || isPro ? (
-              <p style={{ fontSize: '12px', color: '#D7F64A' }}>All 16 minds available in your panel</p>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <span
-                    style={{
-                      background: 'rgba(196,149,106,0.1)',
-                      border: '0.5px solid rgba(196,149,106,0.25)',
-                      color: '#F0B84E',
-                      fontSize: '11px',
-                      padding: '4px 12px',
-                      borderRadius: '999px',
-                    }}
-                  >
-                    6 unlocked
-                  </span>
-                  <span style={{ color: '#C4B8AE' }}>·</span>
-                  <span
-                    style={{
-                      background: 'rgba(26,23,20,0.04)',
-                      border: '0.5px solid rgba(26,23,20,0.08)',
-                      color: '#A0A39A',
-                      fontSize: '11px',
-                      padding: '4px 12px',
-                      borderRadius: '999px',
-                    }}
-                  >
-                    10 with Plus
-                  </span>
-                </div>
-                <p style={{ marginTop: '0.5rem', fontSize: '11px', color: '#B0A9A2' }}>Hover to preview the locked minds</p>
-              </>
-            )}
-          </div>
         </section>
 
-        <section className="pricing-comparison-section">
-          <div className="pricing-section-heading"><span>PLAN MATRIX / 01</span><h2>Compare plans</h2><p>Every limit and capability, side by side.</p></div>
-          <p className="pricing-comparison-hint">SWIPE / SCROLL TO COMPARE ALL COLUMNS →</p>
-          <div className="comparison-table-wrapper" tabIndex={0} aria-label="Plan comparison table. Scroll horizontally on small screens." style={{ overflowX: 'auto' }}>
-            <div className="comparison-table" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', background: '#F0EBE3' }}>
-              {['Feature', 'Explorer', 'Plus', 'Pro'].map((label) => (
-                <div key={label} style={{ padding: '14px 16px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.08em', color: '#A0A39A' }}>
-                  {label}
-                </div>
-              ))}
-            </div>
-            {comparisonRows.map((row, index) => (
-              <div
-                key={row[0]}
-                className="comparison-table"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
-                  background: index % 2 === 0 ? '#151713' : '#0B0C0A',
-                  borderTop: '0.5px solid #E0D8D0',
-                }}
-              >
-                {row.map((cell, cellIndex) => (
-                  <div
-                    key={`${row[0]}-${cellIndex}`}
-                    style={{
-                      padding: '14px 16px',
-                      fontSize: '13px',
-                      color: cell === '✓' || cell === '✓ Soon' ? '#D7F64A' : cell === '✕' ? '#777B72' : '#F3F0E7',
-                      fontWeight: cell === '✓' || cell === '✓ Soon' ? 500 : 400,
-                    }}
+        <section className="pricing-studio-section pricing-mind-access" aria-labelledby="pricing-minds-title">
+          <SectionHeading
+            eyebrow="02 / Mind access"
+            title="Six minds to begin. Sixteen when the room matters."
+            body="Preview the persona access attached to each plan. The focused plan controls this map; it does not change your account."
+          />
+
+          <div className="pricing-mind-access__console">
+            <header>
+              <div>
+                <small>Access preview</small>
+                <strong>{String(visibleMindCount).padStart(2, '0')} / 16 minds</strong>
+              </div>
+              <div role="group" aria-label="Preview persona access by plan">
+                {PLANS.map((plan) => (
+                  <button
+                    key={`${plan.id}-mind-preview`}
+                    type="button"
+                    aria-pressed={focusedPlan === plan.id}
+                    className={focusedPlan === plan.id ? 'is-active' : ''}
+                    onClick={() => setFocusedPlan(plan.id)}
                   >
-                    {cell}
-                  </div>
+                    {plan.name}
+                  </button>
                 ))}
               </div>
-            ))}
+            </header>
+
+            <div className="pricing-mind-access__grid" role="list" aria-label={`${selectedDepth.label} persona access preview`}>
+              {MINDS.map((mind, index) => {
+                const included = focusedPlan !== 'explorer' || mind.starter;
+                return (
+                  <article
+                    key={mind.name}
+                    role="listitem"
+                    className={included ? 'is-included' : 'is-locked'}
+                    style={{ '--mind-tone': mind.color } as CSSProperties}
+                  >
+                    <header><small>{String(index + 1).padStart(2, '0')}</small>{included ? <Check aria-hidden="true" /> : <Lock aria-hidden="true" />}</header>
+                    <strong>{mind.name}</strong>
+                    <footer>{included ? 'Included' : 'Plus / Pro'}</footer>
+                  </article>
+                );
+              })}
+            </div>
+            <p>Access preview only. Actual availability follows the tier on your account.</p>
           </div>
         </section>
 
-        <section className="pricing-faq-section" aria-label="Common questions">
-          <div className="pricing-section-heading"><span>DECISION SUPPORT / 02</span><h2>Common questions</h2><p>The details that should never be hidden behind checkout.</p></div>
-          {faqs.map((faq, index) => {
-            const open = isFaqOpen(openFaqIndex, index);
-            const panelId = `pricing-faq-panel-${index}`;
-            const buttonId = `pricing-faq-button-${index}`;
-            return (
-              <div
-                key={faq.question}
-                className="faq-item"
-                style={{ borderBottom: '0.5px solid rgba(26,23,20,0.06)', padding: '0.35rem 0' }}
-              >
-                <button
-                  id={buttonId}
-                  type="button"
-                  aria-expanded={open}
-                  aria-controls={panelId}
-                  onClick={() => setOpenFaqIndex((prev) => toggleFaqOpen(prev, index))}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    background: 'none',
-                    border: 'none',
-                    padding: '0.75rem 0',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontFamily: 'var(--vp-font-sans)',
-                  }}
-                >
-                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#1A1714' }}>{faq.question}</span>
-                  <span
-                    aria-hidden
-                    style={{
-                      flexShrink: 0,
-                      fontSize: 18,
-                      color: '#F0B84E',
-                      lineHeight: 1,
-                      transform: open ? 'rotate(45deg)' : 'none',
-                      transition: 'transform 160ms ease',
-                    }}
-                  >
-                    +
-                  </span>
-                </button>
-                {open ? (
-                  <div id={panelId} role="region" aria-labelledby={buttonId} style={{ padding: '0 0 0.85rem' }}>
-                    <p style={{ fontSize: '13px', color: '#8B8480', lineHeight: 1.7, margin: 0 }}>{faq.answer}</p>
-                  </div>
-                ) : null}
+        <section className="pricing-studio-section pricing-agent-bridge" aria-labelledby="agent-access-title">
+          <SectionHeading
+            eyebrow="03 / Agent access"
+            title="When four perspectives are not enough."
+            body="Agent Mode moves from parallel opinions to a structured investigation. Choose Pro for inclusion, or add it to an active Plus subscription."
+          />
+
+          <div className="pricing-agent-bridge__instrument">
+            <div className="pricing-agent-bridge__pipeline">
+              <header><span>Agent Mode / visible pipeline</span><b>07 stages</b></header>
+              <div>
+                {AGENT_STAGES.map((stage, index) => (
+                  <span key={stage}><small>{String(index + 1).padStart(2, '0')}</small><strong>{stage}</strong></span>
+                ))}
               </div>
-            );
-          })}
+              <blockquote>
+                A structured investigation with explicit planning, critique, verification, synthesis, and judgment.
+              </blockquote>
+              <footer>Arena remains web-only. Local actions require Condura.</footer>
+            </div>
+
+            <div className="pricing-agent-bridge__routes">
+              <article className="pricing-agent-route pricing-agent-route--plus">
+                <header><span>Route A</span><b>Plus add-on</b></header>
+                <div><span>₹</span><strong>599</strong><em>/ month</em></div>
+                <p>Available only to active Plus subscribers. Plus usage limits continue to apply.</p>
+                {isPlusUser ? (
+                  hasAgentAddon ? (
+                    <div className="pricing-agent-route__state"><CheckCircle aria-hidden="true" /> Active on Plus</div>
+                  ) : addonCancelling ? (
+                    <button type="button" className="pricing-agent-route__state" onClick={() => openModal('top-right', 'plan')}>
+                      Active through paid period · Manage
+                    </button>
+                  ) : (
+                    <button type="button" className="pricing-agent-route__cta" onClick={() => beginCheckout('agent_addon')}>
+                      Add Agent Mode <ArrowRight aria-hidden="true" />
+                    </button>
+                  )
+                ) : (
+                  <a href="#pricing-plans" onClick={() => setFocusedPlan('plus')}>View Plus <ArrowRight aria-hidden="true" /></a>
+                )}
+              </article>
+
+              <article className="pricing-agent-route pricing-agent-route--pro">
+                <header><span>Route B</span><b>Pro inclusion</b></header>
+                <div><Sparkles aria-hidden="true" /><strong>Included</strong></div>
+                <p>Agent Mode is part of Pro—no separate add-on checkout or add-on fee.</p>
+                {isPro ? (
+                  <div className="pricing-agent-route__state"><CheckCircle aria-hidden="true" /> Included in your plan</div>
+                ) : (
+                  <button type="button" className="pricing-agent-route__cta" onClick={() => beginCheckout(checkoutKeyFor('pro'))}>
+                    Get Pro <ArrowRight aria-hidden="true" />
+                  </button>
+                )}
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section className="pricing-studio-section pricing-comparison-ledger" aria-labelledby="pricing-comparison-title">
+          <SectionHeading
+            eyebrow="04 / Plan ledger"
+            title="Nothing important hidden behind checkout."
+            body="Focus a plan to highlight its column. On small screens, this control keeps the full feature ledger readable without horizontal scrolling."
+          />
+
+          <div className="pricing-comparison-ledger__focus" role="group" aria-label="Focus comparison plan">
+            {PLANS.map((plan) => (
+              <button
+                key={`${plan.id}-matrix`}
+                type="button"
+                aria-pressed={focusedPlan === plan.id}
+                className={focusedPlan === plan.id ? 'is-active' : ''}
+                onClick={() => setFocusedPlan(plan.id)}
+              >
+                <span>{plan.index}</span>{plan.name}
+              </button>
+            ))}
+          </div>
+
+          <div className="pricing-matrix-wrap">
+            <table className="pricing-matrix">
+              <caption className="pricing-sr-only">Explorer, Plus, and Pro feature comparison</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Capability</th>
+                  {PLANS.map((plan) => (
+                    <th key={plan.id} scope="col" data-plan={plan.id} className={focusedPlan === plan.id ? 'is-focused' : ''}>{plan.name}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARISON_ROWS.map((row) => (
+                  <tr key={row.label}>
+                    <th scope="row">{row.label}</th>
+                    {PLANS.map((plan) => (
+                      <td key={`${row.label}-${plan.id}`} data-plan={plan.id} className={focusedPlan === plan.id ? 'is-focused' : ''}>
+                        <MatrixCell value={row[plan.id]} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="pricing-studio-section pricing-faq-studio" aria-labelledby="pricing-faq-title">
+          <SectionHeading
+            eyebrow="05 / Decision support"
+            title="Read the terms before the card form."
+            body="Billing behavior, add-on boundaries, and local-execution limits should be clear before you choose a paid plan."
+          />
+
+          <div className="pricing-faq-studio__list">
+            {FAQS.map((faq, index) => {
+              const open = isFaqOpen(openFaqIndex, index);
+              const panelId = `pricing-faq-panel-${index}`;
+              const buttonId = `pricing-faq-button-${index}`;
+              return (
+                <article key={faq.question} className={open ? 'is-open' : ''}>
+                  <button
+                    id={buttonId}
+                    type="button"
+                    aria-expanded={open}
+                    aria-controls={panelId}
+                    onClick={() => setOpenFaqIndex((previous) => toggleFaqOpen(previous, index))}
+                  >
+                    <small>{String(index + 1).padStart(2, '0')}</small>
+                    <span>{faq.question}</span>
+                    <b aria-hidden="true">{open ? '×' : '+'}</b>
+                  </button>
+                  {open ? (
+                    <div id={panelId} role="region" aria-labelledby={buttonId}>
+                      <p>{faq.answer}</p>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="pricing-studio-close" aria-labelledby="pricing-close-title">
+          <small>START / NO CARD REQUIRED</small>
+          <h2 id="pricing-close-title">Begin with one real question.</h2>
+          <p>Explorer costs ₹0 for registered users and includes five Arena questions each day.</p>
+          <div>
+            <button type="button" onClick={startFree}>{isAuthenticated ? 'Open Arena' : 'Start for free'} <ArrowRight aria-hidden="true" /></button>
+            <button type="button" onClick={() => navigate('/personas')}>Meet the minds</button>
+          </div>
         </section>
       </main>
 

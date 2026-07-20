@@ -39,7 +39,7 @@ async def test_parses_llm_json_and_tracks_tokens(monkeypatch):
     monkeypatch.setattr(si, "call_llm", _ok)
     monkeypatch.setitem(
         si.MODEL_REGISTRY,
-        "deepseek_v3",
+        "deepseek_v4_flash",
         {"client": object(), "provider": "deepseek", "model_id": "deepseek"},
     )
     bb = SimpleNamespace(total_input_tokens=1, total_output_tokens=2)
@@ -58,7 +58,7 @@ async def test_llm_failure_returns_unavailable_fallback(monkeypatch):
     monkeypatch.setattr(si, "call_llm", _boom)
     monkeypatch.setitem(
         si.MODEL_REGISTRY,
-        "deepseek_v3",
+        "deepseek_v4_flash",
         {"client": object(), "provider": "deepseek", "model_id": "deepseek"},
     )
     out = await si.analyze_source_integrity("some research text", "task")

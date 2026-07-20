@@ -127,14 +127,14 @@ MODEL_REGISTRY = {
         "max_tokens": 1000,
         "strengths": ["contrarian", "fast", "real_time", "cheap"],
     },
-    "deepseek_v3": {
-        "model_id": "deepseek-chat",
+    "deepseek_v4_flash": {
+        "model_id": "deepseek-v4-flash",
         "provider": "deepseek",
         "client": deepseek_client,
-        "cost_per_1k_input": 0.00027,
-        "cost_per_1k_output": 0.0011,
+        "cost_per_1k_input": 0.00014,
+        "cost_per_1k_output": 0.00028,
         "max_tokens": 1000,
-        "strengths": ["analytical", "mathematical", "systematic", "cheap"],
+        "strengths": ["fast", "analytical", "mathematical", "systematic", "large_context", "cheap"],
     },
 }
 
@@ -156,21 +156,21 @@ TASK_ROUTES = {
 }
 
 PERSONA_ROUTES = {
-    "analyst": "deepseek_v3",
+    "analyst": "deepseek_v4_flash",
     "philosopher": "gpt_4o",
     "pragmatist": "gpt_4o_mini",
     "contrarian": "grok_3_mini",
-    "scientist": "deepseek_v3",
+    "scientist": "deepseek_v4_flash",
     "historian": "gpt_4o",
-    "economist": "deepseek_v3",
+    "economist": "deepseek_v4_flash",
     "ethicist": "claude_sonnet",
-    "stoic": "deepseek_v3",
+    "stoic": "deepseek_v4_flash",
     "futurist": "grok_3_mini",
     "strategist": "grok_3",
-    "engineer": "deepseek_v3",
+    "engineer": "deepseek_v4_flash",
     "optimist": "gpt_4o_mini",
     "empath": "claude_sonnet",
-    "firstprinciples": "deepseek_v3",
+    "firstprinciples": "deepseek_v4_flash",
     "devilsadvocate": "grok_3_mini",
 }
 

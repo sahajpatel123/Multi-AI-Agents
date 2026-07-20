@@ -94,3 +94,12 @@
   .vp-home .vp-judge { top: 75%; }
   .vp-home .vp-judge-links { top: calc(75% + 69px); }
 }
+
+/* Pipeline: the removed status footer used to close the grid (grid-column:1/-1).
+   With 7 step cards in a 4-col (and 2-col) grid, the last row would leave an open,
+   borderless cell. Let the final JUDGE card span the remaining track so the grid
+   closes as a complete rectangle at every breakpoint. Reset at 1-col (mobile). */
+.vp-home .vp-pipeline article:last-child { grid-column: span 2; }
+@media (max-width: 520px) {
+  .vp-home .vp-pipeline article:last-child { grid-column: auto; }
+}

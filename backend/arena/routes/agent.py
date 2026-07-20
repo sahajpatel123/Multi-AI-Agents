@@ -1887,7 +1887,7 @@ async def challenge_agent_answer(
             answer,
             "The Analyst",
             ANALYST_CHALLENGE_PROMPT,
-            "deepseek_v3",
+            "deepseek_v4_flash",
             0.2,
         ),
         run_challenge(

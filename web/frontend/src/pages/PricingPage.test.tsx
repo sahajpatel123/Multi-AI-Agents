@@ -101,9 +101,13 @@ describe('PricingPage', () => {
 
   it('offers guests a functional Start for free CTA', () => {
     const { container } = renderPage();
-    const start = screen.getByRole('button', { name: /start for free/i });
-    expect(start.querySelector('.arena-btn__label')).toHaveTextContent('Start for free');
-    expect(container.querySelector('.pricing-plan-card')?.textContent).not.toContain('Current plan');
+    const start = container.querySelector(
+      '.pricing-tier-card--explorer .pricing-tier-card__cta',
+    ) as HTMLButtonElement;
+    expect(start).toHaveTextContent('Start for free');
+    expect(container.querySelector('.pricing-tier-card--explorer')?.textContent).not.toContain(
+      'Current plan',
+    );
     fireEvent.click(start);
     expect(setRedirectIntentMock).toHaveBeenCalledWith('/app');
     expect(navigateMock).toHaveBeenCalledWith('/signin?tab=signup');
@@ -112,43 +116,53 @@ describe('PricingPage', () => {
   it('renders three plan cards with their tier names', () => {
     const { container } = renderPage();
     const names = Array.from(
-      container.querySelectorAll('.pricing-plan-card__name'),
+      container.querySelectorAll('.pricing-tier-card__intro h3'),
     ).map((el) => el.textContent?.trim() ?? '');
     expect(names).toEqual(['Explorer', 'Plus', 'Pro']);
   });
 
-  it('keeps paid CTA icons inside the inheriting button wrappers', () => {
-    renderPage();
-    for (const name of [/get plus/i, /get pro/i]) {
-      const button = screen.getByRole('button', { name });
-      expect(button.querySelector('.arena-btn__icon svg')).toBeInTheDocument();
+  it('keeps paid CTA icons inside the plan action buttons', () => {
+    const { container } = renderPage();
+    for (const [plan, name] of [
+      ['plus', 'Plus'],
+      ['pro', 'Pro'],
+    ] as const) {
+      const button = container.querySelector(
+        `.pricing-tier-card--${plan} .pricing-tier-card__cta`,
+      );
+      expect(button).toHaveTextContent(`Get ${name}`);
+      expect(button?.querySelector('svg')).toBeInTheDocument();
     }
   });
 
-  it('renders the comparison matrix header', () => {
+  it('renders the comparison matrix heading', () => {
     renderPage();
-    expect(screen.getByRole('heading', { name: /compare/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /nothing important hidden behind checkout/i }),
+    ).toBeInTheDocument();
   });
 
   it('renders at least one FAQ item', () => {
     renderPage();
-    expect(screen.getByText(/which minds do i get for free/i)).toBeInTheDocument();
+    expect(screen.getByText(/which minds are included with explorer/i)).toBeInTheDocument();
   });
 
-  it('renders feature lists with BEM classes', () => {
+  it('renders plan feature lists with the current BEM classes', () => {
     const { container } = renderPage();
-    const lists = container.querySelectorAll('.pricing-feature-list');
-    expect(lists.length).toBeGreaterThanOrEqual(3); // one per plan card
-    const rows = container.querySelectorAll('.pricing-feature-list__row');
+    const lists = container.querySelectorAll('.pricing-tier-card__features');
+    expect(lists).toHaveLength(3);
+    const rows = container.querySelectorAll('.pricing-tier-card__features li');
     expect(rows.length).toBeGreaterThan(0);
-    const dots = container.querySelectorAll('.pricing-feature-list__dot');
-    expect(dots.length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('.pricing-tier-card__features svg').length).toBeGreaterThan(0);
   });
 
-  it('renders sub-feature rows with the --sub modifier', () => {
+  it('updates the access preview when a different depth is focused', () => {
     const { container } = renderPage();
-    const subRows = container.querySelectorAll('.pricing-feature-list__row--sub');
-    expect(subRows.length).toBeGreaterThan(0);
+    const options = container.querySelectorAll('.pricing-depth-instrument__options button');
+    expect(options).toHaveLength(3);
+    fireEvent.click(options[0]);
+    expect(screen.getByText('06 / 16 minds')).toBeInTheDocument();
+    expect(screen.getByText(/current fit \/ explorer/i)).toBeInTheDocument();
   });
 
   it('exposes the main landmark with id="main-content"', () => {

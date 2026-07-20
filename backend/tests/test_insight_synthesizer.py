@@ -63,7 +63,7 @@ async def test_synthesize_returns_parsed_report(monkeypatch):
     monkeypatch.setattr(ins, "call_llm", _ok)
     monkeypatch.setitem(
         ins.MODEL_REGISTRY,
-        "deepseek_v3",
+        "deepseek_v4_flash",
         {"client": object(), "provider": "deepseek", "model_id": "x"},
     )
     bb = SimpleNamespace(total_input_tokens=0, total_output_tokens=0)
@@ -87,7 +87,7 @@ async def test_synthesize_returns_none_on_llm_failure(monkeypatch):
     monkeypatch.setattr(ins, "call_llm", _boom)
     monkeypatch.setitem(
         ins.MODEL_REGISTRY,
-        "deepseek_v3",
+        "deepseek_v4_flash",
         {"client": object(), "provider": "deepseek", "model_id": "x"},
     )
     tasks = [{"question": f"q{i}"} for i in range(3)]

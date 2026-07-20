@@ -54,7 +54,7 @@ async def test_check_if_update_meaningful_yes(monkeypatch):
 
     monkeypatch.setitem(
         ltc.MODEL_REGISTRY,
-        "deepseek_v3",
+        "deepseek_v4_flash",
         {"client": object(), "provider": "deepseek", "model_id": "x"},
     )
     assert (
@@ -73,7 +73,7 @@ async def test_check_if_update_meaningful_no_and_failure(monkeypatch):
     monkeypatch.setattr(ltc, "call_llm", _no)
     monkeypatch.setitem(
         ltc.MODEL_REGISTRY,
-        "deepseek_v3",
+        "deepseek_v4_flash",
         {"client": object(), "provider": "deepseek", "model_id": "x"},
     )
     assert (

@@ -106,7 +106,7 @@ async def calculate_intelligence_score(
         pass
 
     try:
-        model = MODEL_REGISTRY.get("deepseek_v3", MODEL_REGISTRY["claude_sonnet"])
+        model = MODEL_REGISTRY.get("deepseek_v4_flash", MODEL_REGISTRY["claude_sonnet"])
 
         user_prompt = f"""
 Task: {task}

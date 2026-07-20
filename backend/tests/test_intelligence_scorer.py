@@ -17,7 +17,7 @@ async def test_fallback_when_llm_fails(monkeypatch):
     monkeypatch.setattr(scorer, "call_llm", _boom)
     monkeypatch.setitem(
         scorer.MODEL_REGISTRY,
-        "deepseek_v3",
+        "deepseek_v4_flash",
         {"client": object(), "provider": "deepseek", "model_id": "x"},
     )
     out = await scorer.calculate_intelligence_score("task", "answer body")
@@ -42,7 +42,7 @@ async def test_clamps_dimension_scores_and_recomputes_total(monkeypatch):
     monkeypatch.setattr(scorer, "call_llm", _ok)
     monkeypatch.setitem(
         scorer.MODEL_REGISTRY,
-        "deepseek_v3",
+        "deepseek_v4_flash",
         {"client": object(), "provider": "deepseek", "model_id": "x"},
     )
     bb = SimpleNamespace(total_input_tokens=0, total_output_tokens=0)
@@ -69,7 +69,7 @@ async def test_unwraps_sentence_json_answer(monkeypatch):
     monkeypatch.setattr(scorer, "call_llm", _capture)
     monkeypatch.setitem(
         scorer.MODEL_REGISTRY,
-        "deepseek_v3",
+        "deepseek_v4_flash",
         {"client": object(), "provider": "deepseek", "model_id": "x"},
     )
     answer = json_dumps_sentences()

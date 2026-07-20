@@ -49,7 +49,7 @@ async def run_critic(bb: Blackboard) -> Blackboard:
     bb.critique.status = StageStatus.RUNNING
 
     try:
-        model = MODEL_REGISTRY.get("deepseek_v3", MODEL_REGISTRY["claude_sonnet"])
+        model = MODEL_REGISTRY.get("deepseek_v4_flash", MODEL_REGISTRY["claude_sonnet"])
         provider = str(model.get("provider", "deepseek"))
 
         user_prompt = f"""

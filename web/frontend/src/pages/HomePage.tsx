@@ -148,14 +148,11 @@ export function HomePage() {
           <canvas ref={canvasRef} aria-hidden="true" />
           <div className="vp-hero-copy">
             <div className="vp-hero-title">
-              <small>THE VERDICT PRISM / LIVE</small>
               <h1>ASK ONCE.<br/><span>THINK FOUR WAYS.</span></h1>
             </div>
             <div className="vp-hero-intro">
               <p>One question enters. Four distinct minds expose what a single answer would miss. A fifth judges the evidence.</p>
               <button onClick={enterArena}>PUT A QUESTION IN <ArrowRight /></button>
-              <small>3 RUNS FREE · NO CARD</small>
-              <dl><div><dt>04</dt><dd>REASONING LENSES</dd></div><div><dt>01</dt><dd>VISIBLE VERDICT</dd></div></dl>
             </div>
           </div>
           <div className="vp-instrument" ref={instrumentRef}>
@@ -180,7 +177,7 @@ export function HomePage() {
 
         <section className="vp-tape"><header><span>LIVE DECISION TAPE / QUESTION TYPES</span><span>FOUR MINDS → ONE VERDICT</span></header><div>{[0,1].flatMap(group=>[['STRATEGY','Should we enter the market now or wait for certainty?','STRATEGIST','92'],['CAREER','Is leaving a safe role brave—or impulsive?','PRAGMATIST','89'],['PRODUCT','Does this feature solve a problem or decorate it?','ANALYST','94'],['POLICY','Who carries the cost if this decision scales?','ETHICIST','91']].map((item,i)=><article key={`${group}-${i}`} aria-hidden={group===1}><small>{item[0]}</small><p>“{item[1]}”</p><span>WINNER / {item[2]} <b>{item[3]}</b></span></article>))}</div></section>
 
-        <section className="vp-dark vp-section" id="agent-mode"><div className="vp-wrap"><header className="vp-section-head vp-reveal"><div><small>05 / AGENT MODE</small><h2>For questions that cannot end in one pass.</h2></div><p>A multi-stage pipeline plans, investigates, attacks its own logic, verifies what survives, and refines what does not.</p></header><div className="vp-pipeline vp-reveal">{[['PLAN','Break the question into evidence-bearing tasks.'],['RESEARCH','Gather sources and preserve disagreement.'],['SOLVE','Build the strongest supported answer.'],['CRITIQUE','Find hidden assumptions and weak links.'],['VERIFY','Check load-bearing claims against sources.'],['SYNTHESIZE','Merge the strongest supported findings.'],['JUDGE','Calibrate evidence and uncertainty into one report.']].map((step,i)=><article key={step[0]}><small>0{i+1}</small><i/><h3>{step[0]}</h3><p>{step[1]}</p></article>)}<footer>VERIFICATION FAILED <span>← RETURN TO SOLVE / REFINE / RECHECK →</span></footer></div><div className="vp-pipeline-cta"><p>Not a longer answer. A harder-to-fool process.</p><button onClick={()=>navigate(isAuthenticated?'/agent':'/signin?tab=signup')}>RUN AN INVESTIGATION <ArrowRight/></button></div></div></section>
+        <section className="vp-dark vp-section" id="agent-mode"><div className="vp-wrap"><header className="vp-section-head vp-reveal"><div><small>05 / AGENT MODE</small><h2>For questions that cannot end in one pass.</h2></div><p>A multi-stage pipeline plans, investigates, attacks its own logic, verifies what survives, and refines what does not.</p></header><div className="vp-pipeline vp-reveal">{[['PLAN','Break the question into evidence-bearing tasks.'],['RESEARCH','Gather sources and preserve disagreement.'],['SOLVE','Build the strongest supported answer.'],['CRITIQUE','Find hidden assumptions and weak links.'],['VERIFY','Check load-bearing claims against sources.'],['SYNTHESIZE','Merge the strongest supported findings.'],['JUDGE','Calibrate evidence and uncertainty into one report.']].map((step,i)=><article key={step[0]}><small>0{i+1}</small><i/><h3>{step[0]}</h3><p>{step[1]}</p></article>)}</div><div className="vp-pipeline-cta"><p>Not a longer answer. A harder-to-fool process.</p><button onClick={()=>navigate(isAuthenticated?'/agent':'/signin?tab=signup')}>RUN AN INVESTIGATION <ArrowRight/></button></div></div></section>
 
         <section className="vp-close"><div className="vp-wrap"><small>YOUR QUESTION / NEXT</small><h2 className="vp-reveal">WHAT DESERVES MORE THAN ONE ANSWER?</h2><form onSubmit={(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();enterArena()}}><input aria-label="Your question" placeholder="Put it in the arena…"/><button aria-label="Enter Arena"><ArrowRight/></button></form><footer><span>3 RUNS FREE · NO CARD REQUIRED</span><span>ARENA © 2026 · MULTIPLE MINDS. ONE VERDICT.</span></footer></div></section>
       </main>

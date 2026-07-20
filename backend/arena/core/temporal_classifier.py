@@ -4,6 +4,9 @@ from dateutil.relativedelta import relativedelta
 from arena.core.datetime_utils import utcnow_naive
 import json
 from asyncio import wait_for
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TemporalProfile(TypedDict):
     decay_class: str
@@ -16,7 +19,7 @@ async def classify_temporal(
     question: str,
     final_answer: str
 ) -> TemporalProfile:
-    """Classify how quickly this answer will become outdated using DeepSeek V3."""
+    """Classify how quickly this answer will become outdated using DeepSeek V4 Flash."""
     from openai import AsyncOpenAI
     from arena.config import get_settings
     
@@ -46,19 +49,20 @@ Return ONLY valid JSON:
     try:
         response = await wait_for(
             client.chat.completions.create(
-                model="deepseek-chat",
+                model="deepseek-v4-flash",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.15,
+                extra_body={"thinking": {"type": "disabled"}},
             ),
             timeout=25
         )
         
         content = response.choices[0].message.content
         if not content:
-            raise ValueError("Empty response from DeepSeek V3")
+            raise ValueError("Empty response from DeepSeek V4 Flash")
         
         result = json.loads(content)
         
@@ -97,7 +101,12 @@ Return ONLY valid JSON:
             "time_sensitive_claims": time_sensitive_claims
         }
         
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Temporal classification failed; returning durable fallback: %s",
+            exc,
+            exc_info=True,
+        )
         return {
             "decay_class": "durable",
             "half_life": "2–5 years",

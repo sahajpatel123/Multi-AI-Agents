@@ -54,6 +54,9 @@ async def test_parses_decay_classes_and_half_life(monkeypatch):
     monkeypatch.setattr("arena.config.get_settings", lambda: _S())
 
     out = await tc.classify_temporal("price now?", "answer")
+    request = client.chat.completions.create.await_args.kwargs
+    assert request["model"] == "deepseek-v4-flash"
+    assert request["extra_body"] == {"thinking": {"type": "disabled"}}
     assert out["decay_class"] == "perishable"
     assert out["half_life"] == "Days to weeks"
     assert out["recheck_by"] is not None  # +14 days formatted

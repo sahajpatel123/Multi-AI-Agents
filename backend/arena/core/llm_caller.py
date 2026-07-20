@@ -194,6 +194,12 @@ async def call_llm(
                     max_tokens=max_tokens,
                 )
 
+            request_options = (
+                {"extra_body": {"thinking": {"type": "disabled"}}}
+                if provider == "deepseek"
+                else {}
+            )
+
             async def _do_openai():
                 return await client.chat.completions.create(
                     model=model_id,
@@ -203,6 +209,7 @@ async def call_llm(
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
+                    **request_options,
                 )
 
             response = await _retry_call(_do_openai, _retryable_openai_errors())
@@ -218,6 +225,11 @@ async def call_llm(
             f"Unknown provider: {provider}. Must be claude, grok, openai, or deepseek."
         )
     except Exception as exc:
+        logger.debug(
+            "LLM provider failure traceback",
+            extra={"provider": provider, "model_id": model_id},
+            exc_info=True,
+        )
         _log_provider_failure(provider, model_id, exc)
         return "", 0, 0
 
@@ -278,7 +290,15 @@ async def call_llm_streaming(
             ):
                 yield text
             return
-        # OpenAI-compatible streaming format
+        # OpenAI-compatible streaming format. V4 Flash defaults to thinking,
+        # which would ignore persona temperatures and emit separate reasoning
+        # chunks, so Arena explicitly uses non-thinking mode for this path.
+        request_options = (
+            {"extra_body": {"thinking": {"type": "disabled"}}}
+            if provider == "deepseek"
+            else {}
+        )
+
         async def _do_openai_stream():
             return await client.chat.completions.create(
                 model=model_id,
@@ -289,6 +309,7 @@ async def call_llm_streaming(
                     {"role": "user", "content": user_prompt},
                 ],
                 stream=True,
+                **request_options,
             )
 
         stream = await _retry_call(_do_openai_stream, _retryable_openai_errors())

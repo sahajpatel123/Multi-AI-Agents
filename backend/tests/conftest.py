@@ -195,7 +195,7 @@ def stub_openai(monkeypatch):
     monkeypatch.setattr("arena.core.model_router.grok_client", client, raising=False)
     monkeypatch.setattr("arena.core.model_router.deepseek_client", client, raising=False)
     # Patch OpenAI/Grok/DeepSeek model registry entries too
-    for key in ("gpt_4o", "gpt_4o_mini", "grok_3", "grok_3_mini", "grok", "deepseek_v3"):
+    for key in ("gpt_4o", "gpt_4o_mini", "grok_3", "grok_3_mini", "grok", "deepseek_v4_flash"):
         if key in model_router.MODEL_REGISTRY:
             monkeypatch.setitem(model_router.MODEL_REGISTRY[key], "client", client)
     yield client
