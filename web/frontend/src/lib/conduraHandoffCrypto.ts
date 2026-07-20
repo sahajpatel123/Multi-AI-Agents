@@ -30,8 +30,12 @@ export async function getOrCreateSigningKey(): Promise<{
         true,
         ['sign'],
       );
-      // Strip the private exponent to produce the public JWK.
-      const publicJwk: JsonWebKey = { ...jwk };
+      // Strip the private exponent to produce the public JWK. The stored
+      // JWK is the *private* key (it must include `d` so we can re-import
+      // it), so the inherited `key_ops: ["sign"]` is wrong for the public
+      // form — a public key may only `["verify"]`, otherwise Condura's
+      // signature-verification step rejects it as a malformed JWK.
+      const publicJwk: JsonWebKey = { ...jwk, key_ops: ['verify'] };
       delete publicJwk.d;
       return { publicKeyJwk: publicJwk, privateKey };
     } catch {
