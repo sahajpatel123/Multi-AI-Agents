@@ -15,7 +15,10 @@ describe('shared public Prism navigation (source structure)', () => {
     expect(src).toContain('aria-controls="public-prism-menu"');
     expect(src).toContain("event.key === 'Escape'");
     expect(src).toContain("document.body.style.overflow = 'hidden'");
-    expect(src).toContain('firstMenuLinkRef.current?.focus()');
+    expect(src).toContain('closeMenuButtonRef.current?.focus()');
+    expect(src).toContain("element.setAttribute('inert', '')");
+    expect(src).toContain('dialog.querySelectorAll<HTMLElement>');
+    expect(src).toContain('className="vp-menu-close"');
     expect(src).toContain('menuButtonRef.current?.focus()');
     expect(src).toContain("{ label: 'PRODUCT', path: '/product' }");
     expect(src).toContain("{ number: '06', label: 'About', path: '/about' }");

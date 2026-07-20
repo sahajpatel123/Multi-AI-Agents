@@ -28,6 +28,8 @@ export function Navbar() {
   const { isAuthenticated } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuDialogRef = useRef<HTMLDivElement>(null);
+  const closeMenuButtonRef = useRef<HTMLButtonElement>(null);
   const firstMenuLinkRef = useRef<HTMLAnchorElement>(null);
   const wasOpenRef = useRef(false);
 
@@ -39,13 +41,52 @@ export function Navbar() {
     if (!menuOpen) return;
 
     const previousOverflow = document.body.style.overflow;
+    const inertTargets = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-public-prism-nav], #route-content main, #route-content .site-footer',
+      ),
+    ).map((element) => ({
+      element,
+      alreadyInert: element.hasAttribute('inert'),
+    }));
+
     document.body.style.overflow = 'hidden';
-    const focusTimer = window.setTimeout(() => firstMenuLinkRef.current?.focus(), 0);
+    inertTargets.forEach(({ element }) => element.setAttribute('inert', ''));
+    const focusTimer = window.setTimeout(
+      () => closeMenuButtonRef.current?.focus(),
+      0,
+    );
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
         setMenuOpen(false);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const dialog = menuDialogRef.current;
+      if (!dialog) return;
+
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]):not([tabindex="-1"]), a[href]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
@@ -54,6 +95,9 @@ export function Navbar() {
       window.clearTimeout(focusTimer);
       window.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = previousOverflow;
+      inertTargets.forEach(({ element, alreadyInert }) => {
+        if (!alreadyInert) element.removeAttribute('inert');
+      });
     };
   }, [menuOpen]);
 
@@ -115,6 +159,7 @@ export function Navbar() {
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={menuOpen}
           aria-controls="public-prism-menu"
+          tabIndex={menuOpen ? -1 : 0}
         >
           {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
         </button>
@@ -123,6 +168,7 @@ export function Navbar() {
       <div className="vp-nav-spacer" aria-hidden="true" />
 
       <div
+        ref={menuDialogRef}
         id="public-prism-menu"
         className={`vp-menu vp-public-menu${menuOpen ? ' open' : ''}`}
         role="dialog"
@@ -130,6 +176,16 @@ export function Navbar() {
         aria-label="Site navigation"
         aria-hidden={!menuOpen}
       >
+        <button
+          ref={closeMenuButtonRef}
+          type="button"
+          className="vp-menu-close"
+          aria-label="Close menu"
+          tabIndex={menuOpen ? 0 : -1}
+          onClick={() => setMenuOpen(false)}
+        >
+          <X aria-hidden="true" />
+        </button>
         <nav aria-label="Expanded navigation">
           {MENU_LINKS.map((item, index) => (
             <Link
