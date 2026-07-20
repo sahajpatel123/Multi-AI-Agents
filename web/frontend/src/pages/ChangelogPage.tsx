@@ -341,10 +341,6 @@ export function ChangelogPage() {
 
       <main id="main-content" className="changelog-page__main" tabIndex={-1}>
         <header className="changelog-page__hero">
-          <p className="changelog-page__kicker">
-            <span className="changelog-page__kicker-dot" aria-hidden="true" />
-            What&apos;s new
-          </p>
           <h1 className="changelog-page__title">Changelog</h1>
           <p className="changelog-page__lede">
             Every update, improvement, and fix — documented.

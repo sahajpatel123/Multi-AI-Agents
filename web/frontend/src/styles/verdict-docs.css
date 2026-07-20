@@ -174,11 +174,11 @@
 .docs-security-grid p { margin: 12px 0 0; color: #969A91; font-size: 11px; line-height: 1.5; }
 .docs-condura-boundary { margin-top: 16px; padding: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; color: #0B0C0A; background: #FF6652; }
 .docs-condura-boundary small { font: 900 8px/1 var(--vp-font-mono); }
-.docs-condura-boundary h3 { max-width: 520px; margin: 38px 0 0; color: #0B0C0A; font-size: 38px; line-height: .95; }
+.docs-condura-boundary h3 { max-width: 520px; margin: 0; color: #0B0C0A; font-size: 38px; line-height: .95; }
 .docs-condura-boundary > p { align-self: end; margin: 0; color: #0B0C0A; font-size: 13px; font-weight: 650; line-height: 1.55; }
 .docs-field-close { min-height: 300px; margin-top: 16px; padding: 34px; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 30px; color: #0B0C0A; background: #D7F64A; }
 .docs-field-close small { font: 900 8px/1 var(--vp-font-mono); }
-.docs-field-close h3 { max-width: 690px; margin: 42px 0 0; color: #0B0C0A; font-size: 52px; line-height: .92; }
+.docs-field-close h3 { max-width: 690px; margin: 0; color: #0B0C0A; font-size: 52px; line-height: .92; }
 .docs-field-close > div:last-child { display: flex; gap: 8px; }
 .docs-field-close button { min-height: 48px; padding: 0 13px; display: inline-flex; align-items: center; gap: 24px; color: #0B0C0A; background: transparent; border: 1px solid #0B0C0A; font: 850 8px/1 var(--vp-font-mono); text-transform: uppercase; }
 .docs-field-close button:last-child { color: #F3F0E7; background: #0B0C0A; }

@@ -242,7 +242,6 @@ export function DocsPage() {
       <main id="main-content" className="docs-main" tabIndex={-1} aria-labelledby="docs-title">
         <section className="docs-field-hero" aria-labelledby="docs-title">
           <div className="docs-field-hero__copy">
-            <p className="docs-field-kicker"><i aria-hidden="true" /> Arena / technical field manual</p>
             <h1 id="docs-title">Understand the system. <em>Then change it.</em></h1>
             <p>Architecture, runtime behavior, public APIs, limits, and security boundaries—explained as one inspectable system.</p>
             <div className="docs-field-hero__actions">
@@ -404,10 +403,10 @@ export function DocsPage() {
                   {SECURITY_CONTROLS.map(([n,label,body]) => <article key={n}><header><small>{n}</small><ShieldCheck aria-hidden="true" /></header><strong>{label}</strong><p>{body}</p></article>)}
                 </div>
                 <div className="docs-condura-boundary">
-                  <div><small>LOCAL EXECUTION BOUNDARY</small><h3>The browser does not control your machine.</h3></div>
+                  <div><h3>The browser does not control your machine.</h3></div>
                   <p>Arena handles web research. Opening desktop apps, writing local files, or running shell commands requires Condura—a separate local-first daemon. Never report local work as completed without that handoff.</p>
                 </div>
-                <div className="docs-field-close"><div><small>END / FIELD MANUAL</small><h3>Choose the surface. Inspect the result.</h3></div><div><button type="button" onClick={() => navigate('/product')}>Explore product</button><button type="button" onClick={() => navigate('/signin?tab=signup')}>Start free <ArrowRight aria-hidden="true" /></button></div></div>
+                <div className="docs-field-close"><div><h3>Choose the surface. Inspect the result.</h3></div><div><button type="button" onClick={() => navigate('/product')}>Explore product</button><button type="button" onClick={() => navigate('/signin?tab=signup')}>Start free <ArrowRight aria-hidden="true" /></button></div></div>
               </section>
             ) : null}
           </div>
