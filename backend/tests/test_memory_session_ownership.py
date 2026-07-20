@@ -82,6 +82,11 @@ async def test_save_rejects_other_users_live_session(app_client, make_user):
     )
     # 404 (not 403) so foreign session_ids are not distinguishable from missing.
     assert res.status_code == 404, res.text
+    # Behavior-level envelope pin (cycle-89 pattern).
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert "error" in detail
+    assert "message" in detail
 
     # Victim session must still be intact (not cleared on forbidden).
     still = memory.get_session_state("victim-sess-1")

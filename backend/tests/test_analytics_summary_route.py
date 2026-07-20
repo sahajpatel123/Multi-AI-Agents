@@ -32,3 +32,9 @@ async def test_summary_returns_empty_array_for_new_user(app_client, make_user):
 async def test_summary_requires_auth(app_client):
     res = await app_client.get("/api/analytics/summary")
     assert res.status_code == 401
+    # Behavior-level envelope pin (cycle-89 pattern): the auth dependency
+    # raises dict-shape detail via dependencies.py.
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert "error" in detail
+    assert "message" in detail
