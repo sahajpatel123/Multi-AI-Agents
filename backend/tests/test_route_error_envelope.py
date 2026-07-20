@@ -46,6 +46,7 @@ COVERED_FILES = [
     ("routes", "payments.py"),
     ("routes", "agent.py"),
     ("core", "dependencies.py"),
+    ("core", "input_validation.py"),
 ]
 
 
