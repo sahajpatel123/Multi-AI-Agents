@@ -94,4 +94,22 @@ test.describe('Not Found page (mocked)', () => {
       page.getByRole('button', { name: /copy requested path/i }),
     ).toBeVisible();
   });
+
+  test('main landmark has the documented a11y attributes', async ({ page }) => {
+    await page.goto('/404');
+
+    // The <main> landmark must:
+    //   - carry id="main-content" (the skip-link + global landmark)
+    //   - have tabindex=-1 (so the skip-to-content anchor can focus it)
+    //   - have aria-labelledby pointing at the h1 (so screen readers
+    //     announce the page name when entering the landmark)
+    const main = page.locator('main#main-content');
+    await expect(main).toBeVisible();
+    await expect(main).toHaveAttribute('tabindex', '-1');
+    await expect(main).toHaveAttribute('aria-labelledby', 'not-found-title');
+
+    // And the labelled element exists + is the h1.
+    const heading = page.locator('#not-found-title');
+    await expect(heading).toHaveRole('heading');
+  });
 });
