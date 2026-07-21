@@ -227,4 +227,29 @@ test.describe('Sign-in page (mocked)', () => {
     await expect(footer).toContainText('PRIVATE BY DEFAULT');
     await expect(footer).toContainText('3 FREE RUNS');
   });
+
+  test('renders the redirect-intent destination line in both forms', async ({
+    page,
+  }) => {
+    await page.goto('/signin');
+
+    // The "Next: <destination>" line is read from getRedirectIntent()
+    // on mount and shown in both forms. With no intent set, the
+    // default is /app → "Arena" label.
+    //
+    // Pin: in the sign-in form, the line reads "Next: Arena".
+    // This is the user-visible reassurance that "after sign-in,
+    // you'll land on X".
+    const signinForm = page.locator('form.auth-page__form--signin');
+    await expect(signinForm.getByText(/Next:/i)).toBeVisible();
+    await expect(signinForm.getByText(/^Arena$/)).toBeVisible();
+
+    // The same line is rendered in the sign-up form (the marketing
+    // pitch is consistent across both — "after you sign up, you'll
+    // land on X").
+    await page.getByRole('tab', { name: 'Sign up' }).click();
+    const signupForm = page.locator('form.auth-page__form--signup');
+    await expect(signupForm.getByText(/First stop:/i)).toBeVisible();
+    await expect(signupForm.getByText(/^Arena$/)).toBeVisible();
+  });
 });
