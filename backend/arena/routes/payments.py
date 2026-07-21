@@ -929,8 +929,15 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                             db.commit()
                         else:
                             logger.warning("payment.captured: no subscription found for %s", subscription_id)
-            except Exception as exc:
-                logger.error("payment.captured handler error: %s", exc)
+            except Exception:
+                # Re-raise so the outer except (cycle-155 fix) returns 500
+                # and Razorpay retries. Previously this swallowed the
+                # error, fell through to the outer 200, and silently
+                # dropped the payment.captured event. See
+                # backend/docs/HOT-PATH-ANALYSIS.md — "Webhook returns 200
+                # on failure" (HIGH).
+                logger.exception("payment.captured handler error")
+                raise
 
         elif event == "payment.failed":
             ent = _payment_entity_from_payload(payload)

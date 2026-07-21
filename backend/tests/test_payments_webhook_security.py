@@ -245,6 +245,54 @@ class TestWebhookHmac:
         payload = res.json()
         assert payload.get("error") == "webhook_handler_error", payload
 
+    @pytest.mark.asyncio
+    async def test_payment_captured_inner_handler_raises_500_not_200(
+        self, app_client, secret_env
+    ):
+        """Regression: a non-HTTPException raised inside the
+        `payment.captured` inner try/except MUST propagate to the outer
+        handler and produce a 500 response.
+
+        Cycle 155 fixed the outer `except Exception` to return 500.
+        Cycle 156 closes the inner swallow at `payments.py:932-933` —
+        before that fix the inner handler logged the exception,
+        fell through, and the outer 200 was returned. Razorpay
+        interprets that 200 as "we got it, don't retry" — silently
+        dropping payment.captured events on any DB blip or downstream
+        failure (HIGH severity, see backend/docs/HOT-PATH-ANALYSIS.md).
+        """
+        body = json.dumps({
+            "event": "payment.captured",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": "pay_test_1",
+                        "subscription_id": "sub_test_1",
+                    },
+                },
+            },
+        }, separators=(",", ":")).encode()
+        sig = _sign(secret_env.razorpay_webhook_secret, body)
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("simulated payment.captured inner failure")
+
+        with patch(
+            "arena.routes.payments._find_subscription_by_rzp_id",
+            side_effect=_boom,
+        ):
+            res = await app_client.post(
+                "/api/payments/webhook",
+                content=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Razorpay-Signature": sig,
+                },
+            )
+        assert res.status_code == 500, res.text
+        payload = res.json()
+        assert payload.get("error") == "webhook_handler_error", payload
+
 
 class TestVerifyHmac:
     """POST /api/payments/verify uses the same HMAC primitive but
