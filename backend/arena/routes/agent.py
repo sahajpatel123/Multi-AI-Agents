@@ -20,6 +20,7 @@ from arena.core.agent_pipeline import (
     run_refinement_pipeline,
 )
 from arena.core.file_ingest import process_upload
+from arena.core.bounded_read import UploadTooLargeError, read_upload_capped
 from arena.core.http_headers import content_disposition_attachment
 from arena.core.upload_store import UPLOAD_DIR, ensure_upload_dir, register_upload, resolve_attachments
 from arena.core.dependencies import get_current_user_required
@@ -992,13 +993,22 @@ async def upload_agent_attachment(
         message="Too many file uploads. Limit is 30 per hour.",
     )
     ensure_upload_dir()
-    data = await file.read()
     max_bytes = 10 * 1024 * 1024
-    if len(data) > max_bytes:
+    # Fast-reject when the client declared an oversize Content-Length so we
+    # never start buffering chunks for a doomed upload.
+    declared = getattr(file, "size", None)
+    if isinstance(declared, int) and declared > max_bytes:
         raise HTTPException(
             status_code=413,
             detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "File too large (max 10MB)"},
         )
+    try:
+        data = await read_upload_capped(file, max_bytes)
+    except UploadTooLargeError:
+        raise HTTPException(
+            status_code=413,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "File too large (max 10MB)"},
+        ) from None
     orig = (file.filename or "upload").strip() or "upload"
     file_id = str(uuid.uuid4())
     safe_name = "".join(c for c in orig if c.isalnum() or c in "._- ")[:180] or "file"
