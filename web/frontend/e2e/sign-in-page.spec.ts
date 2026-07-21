@@ -252,4 +252,21 @@ test.describe('Sign-in page (mocked)', () => {
     await expect(signupForm.getByText(/First stop:/i)).toBeVisible();
     await expect(signupForm.getByText(/^Arena$/)).toBeVisible();
   });
+
+  test('renders the form-index eyebrow + label in both forms', async ({ page }) => {
+    await page.goto('/signin');
+
+    // Each form has an "ACCESS / NN" eyebrow with a "STAGE NAME" label.
+    // Pin both pairs:
+    //   - sign-in: "ACCESS / 01" + "IDENTITY CHECK"
+    //   - sign-up: "ACCESS / 02" + "CREATE YOUR PANEL"
+    const signinForm = page.locator('form.auth-page__form--signin');
+    await expect(signinForm.getByText(/ACCESS\s*\/\s*01/i)).toBeVisible();
+    await expect(signinForm.getByText(/IDENTITY CHECK/i)).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Sign up' }).click();
+    const signupForm = page.locator('form.auth-page__form--signup');
+    await expect(signupForm.getByText(/ACCESS\s*\/\s*02/i)).toBeVisible();
+    await expect(signupForm.getByText(/CREATE YOUR PANEL/i)).toBeVisible();
+  });
 });
