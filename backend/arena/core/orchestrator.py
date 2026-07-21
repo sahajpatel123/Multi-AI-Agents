@@ -21,6 +21,28 @@ from arena.core.tools.tool_router import ToolRouter
 
 logger = logging.getLogger(__name__)
 
+# Bound the streaming SSE queue so a slow client cannot grow process memory
+# unboundedly. Token puts await when full (backpressure); the all_done
+# sentinel is force-inserted even if the queue is saturated.
+STREAM_QUEUE_MAXSIZE = 1024
+
+
+def _force_queue_put(queue: asyncio.Queue, item: dict[str, Any]) -> None:
+    """Ensure ``item`` lands on ``queue``, dropping oldest events if needed.
+
+    Used only for the ``all_done`` sentinel — the SSE consumer must never
+    hang forever waiting for a completion signal.
+    """
+    while True:
+        try:
+            queue.put_nowait(item)
+            return
+        except asyncio.QueueFull:
+            try:
+                queue.get_nowait()
+            except asyncio.QueueEmpty:
+                continue
+
 
 class Orchestrator:
     """Manages parallel calls to all agents"""
@@ -160,12 +182,37 @@ class Orchestrator:
             return self._create_error_response(agent, "Request timed out")
         except json.JSONDecodeError as e:
             return self._create_error_response(agent, f"Invalid JSON response: {e}")
-        except asyncio.CancelledError:
-            return self._create_error_response(agent, "Request cancelled")
+        # Do NOT catch CancelledError here — let it propagate so gather(
+        # return_exceptions=True) can isolate one cancelled agent without
+        # converting cancellation into a silent success path.
         except Exception as e:
             logger.warning("Agent call failed for %s: %s", agent.name, e, exc_info=True)
-            return self._create_error_response(agent, f"Error: {str(e)}")
-    
+            return self._create_error_response(agent, "Agent call failed")
+
+    def _normalize_gather_results(
+        self,
+        agents: list[AgentConfig],
+        raw: list[Any],
+    ) -> list[AgentResponse]:
+        """Map gather(return_exceptions=True) outcomes to AgentResponse rows."""
+        responses: list[AgentResponse] = []
+        for agent, result in zip(agents, raw):
+            if isinstance(result, AgentResponse):
+                responses.append(result)
+            elif isinstance(result, asyncio.CancelledError):
+                responses.append(self._create_error_response(agent, "Request cancelled"))
+            elif isinstance(result, BaseException):
+                logger.warning(
+                    "Agent gather exception for %s: %s",
+                    agent.agent_id,
+                    result,
+                    exc_info=result,
+                )
+                responses.append(self._create_error_response(agent, "Agent failed"))
+            else:
+                responses.append(self._create_error_response(agent, "Unexpected agent result"))
+        return responses
+
     def _parse_agent_response(self, content: str, agent: AgentConfig) -> AgentResponse:
         """Parse JSON response from agent"""
         # Try to extract JSON from the response
@@ -253,17 +300,26 @@ class Orchestrator:
             for agent in active_agents
         ]
 
-        # Run all tasks concurrently
-        responses = await asyncio.gather(*tasks, return_exceptions=False)
+        # Run all tasks concurrently. return_exceptions=True so one
+        # CancelledError / unexpected BaseException cannot cancel the
+        # remaining agents mid-flight.
+        raw = await asyncio.gather(*tasks, return_exceptions=True)
+        responses = self._normalize_gather_results(active_agents, list(raw))
         if tracker:
             tracker.mark("agents_done")
 
         duration_ms = int((time.monotonic() - start_time) * 1000)
+        logged_personas: list[str] = []
+        for r in responses:
+            try:
+                logged_personas.append(get_persona_id_for_agent(r.agent_id, persona_ids))
+            except ValueError:
+                logged_personas.append(r.agent_id)
         logger.info(
             "[ORCHESTRATOR] Parallel agents completed",
             extra={
                 "agent_count": len(responses),
-                "persona_ids": [get_persona_id_for_agent(r.agent_id, persona_ids) for r in responses],
+                "persona_ids": logged_personas,
                 "tools_used": tools_used,
                 "duration_ms": duration_ms,
                 "session_id": session_id,
@@ -374,20 +430,25 @@ class Orchestrator:
             return self._parse_agent_response(full_text, agent)
 
         except asyncio.CancelledError:
-            await output_queue.put({
-                "type": "agent_error",
-                "agent_id": agent.agent_id,
-                "error": "Request cancelled",
-            })
-            return self._create_error_response(agent, "Request cancelled")
+            try:
+                await output_queue.put({
+                    "type": "agent_error",
+                    "agent_id": agent.agent_id,
+                    "error": "Request cancelled",
+                })
+            except Exception:
+                logger.debug("failed to enqueue cancel notice for %s", agent.agent_id, exc_info=True)
+            # Re-raise so gather(return_exceptions=True) records CancelledError
+            # while sibling stream tasks keep running.
+            raise
         except Exception as e:
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.error(
                 "[ORCHESTRATOR] Agent streaming failed",
                 extra={
                     "agent_id": agent.agent_id,
-                    "persona_id": persona_id,
-                    "provider": model_type,
+                    "persona_id": persona_id if "persona_id" in locals() else None,
+                    "provider": model_type if "model_type" in locals() else None,
                     "duration_ms": duration_ms,
                     "error": str(e),
                 },
@@ -395,9 +456,9 @@ class Orchestrator:
             await output_queue.put({
                 "type": "agent_error",
                 "agent_id": agent.agent_id,
-                "error": str(e),
+                "error": "Agent streaming failed",
             })
-            return self._create_error_response(agent, str(e))
+            return self._create_error_response(agent, "Agent streaming failed")
 
     async def stream_all_agents(
         self,
@@ -416,7 +477,7 @@ class Orchestrator:
         a sentinel {"type": "all_done"} is pushed.
         Tools are executed first and results injected into agent context.
         """
-        queue: asyncio.Queue = asyncio.Queue()
+        queue: asyncio.Queue = asyncio.Queue(maxsize=STREAM_QUEUE_MAXSIZE)
         
         # Execute tools first (in parallel)
         tool_results = await self.tool_router.execute_tools(prompt)
@@ -457,7 +518,8 @@ class Orchestrator:
                     )
                     for agent in active_agents
                 ]
-                responses = await asyncio.gather(*tasks)
+                raw = await asyncio.gather(*tasks, return_exceptions=True)
+                responses = self._normalize_gather_results(active_agents, list(raw))
                 if tracker:
                     tracker.mark("agents_done")
                 await self._archive_stances(
@@ -471,9 +533,7 @@ class Orchestrator:
             finally:
                 # Always emit the completion sentinel so the SSE consumer never
                 # blocks forever on queue.get() if a post-streaming step raised.
-                # put_nowait is synchronous and safe during cancellation (the
-                # queue is unbounded, so it never raises QueueFull).
-                queue.put_nowait({"type": "all_done", "responses": None})
+                _force_queue_put(queue, {"type": "all_done", "responses": None})
             return list(responses)
 
         gather_task = asyncio.create_task(_run_all())

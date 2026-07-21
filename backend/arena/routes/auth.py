@@ -823,7 +823,10 @@ async def change_password(
         # correct via 401 vs 422.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "current_password_invalid"},
+            detail={
+                "error": "current_password_invalid",
+                "message": "Current password is incorrect.",
+            },
         )
 
     if matched and verify_password(body.new_password, user.password_hash)[0]:
@@ -832,7 +835,10 @@ async def change_password(
         # a separate password field.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "new_password_must_differ"},
+            detail={
+                "error": ErrorCodes.PASSWORD_SAME,
+                "message": "New password must differ from the current password.",
+            },
         )
 
     user.password_hash = hash_password(body.new_password)
@@ -1050,7 +1056,10 @@ async def reset_password(
     if verify_password(body.new_password, user.password_hash)[0]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "new_password_must_differ"},
+            detail={
+                "error": ErrorCodes.PASSWORD_SAME,
+                "message": "New password must differ from the current password.",
+            },
         )
 
     user.password_hash = hash_password(body.new_password)

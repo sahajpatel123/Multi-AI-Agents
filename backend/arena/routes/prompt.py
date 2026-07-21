@@ -360,7 +360,11 @@ async def stream_prompt(
             try:
                 active_agents = get_all_agents(body.persona_ids)
             except ValueError as e:
-                yield _sse_event("error", {"detail": "Prompt request failed"})
+                yield _sse_event("error", {
+                    "error": ErrorCodes.INVALID_PERSONA,
+                    "message": "Invalid persona selection",
+                    "detail": "Invalid persona selection",
+                })
                 return
 
             pipeline_result = await run_input_pipeline(body.prompt)
@@ -374,8 +378,11 @@ async def stream_prompt(
 
             if not pipeline_result.passed:
                 log_toxicity_rejection(request_id, user_label, pipeline_result.rejection_reason or "")
+                reason = pipeline_result.rejection_reason or "Prompt rejected by content policy"
                 yield _sse_event("error", {
-                    "detail": pipeline_result.rejection_reason or "Prompt rejected",
+                    "error": "prompt_rejected",
+                    "message": reason,
+                    "detail": reason,
                 })
                 return
 
@@ -431,7 +438,11 @@ async def stream_prompt(
             tracker.mark("scoring_done")
             winner = scorer.get_winner(scored_responses)
             if not winner:
-                yield _sse_event("error", {"detail": "Failed to determine winner"})
+                yield _sse_event("error", {
+                    "error": ErrorCodes.REQUEST_FAILED,
+                    "message": "Failed to determine winner",
+                    "detail": "Failed to determine winner",
+                })
                 return
 
             final = await assemble_payload(
@@ -517,7 +528,11 @@ async def stream_prompt(
 
         except Exception as e:
             log_unhandled_exception(request_id, user_label, e)
-            yield _sse_event("error", {"detail": "Prompt request failed"})
+            yield _sse_event("error", {
+                "error": ErrorCodes.REQUEST_FAILED,
+                "message": "Prompt request failed",
+                "detail": "Prompt request failed",
+            })
         finally:
             # If the stream ends early — client disconnect (GeneratorExit) or a
             # mid-stream error — the background agent task may still be running.

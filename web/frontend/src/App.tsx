@@ -849,7 +849,7 @@ function App() {
           if (abortController.signal.aborted) return;
           if (flushTimer.current) clearInterval(flushTimer.current);
           setStreamPreviews({});
-          setError(data.detail);
+          setError(data.message || data.detail || 'Something went wrong');
           setPhase('idle');
         },
       }, existingSessionId, personaIds, abortController.signal);
@@ -1148,7 +1148,7 @@ function App() {
           onError: (data) => {
             if (abortController.signal.aborted) return;
             if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
-            setFocusedChatError(data.detail);
+            setFocusedChatError(data.message || data.detail || 'Something went wrong');
             setIsFocusedChatStreaming(false);
           },
         },

@@ -136,7 +136,7 @@ async def test_reset_password_rejects_same_as_current(app_client, make_user, db_
         json={"token": raw_token, "new_password": "Strong1Pass"},
     )
     assert res.status_code == 400
-    assert res.json()["detail"]["error"] == "new_password_must_differ"
+    assert res.json()["detail"]["error"] == "password_same"
 
 
 @pytest.mark.asyncio
