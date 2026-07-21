@@ -1,0 +1,140 @@
+/**
+ * Smoke-test the /signin auth portal.
+ * Pure presentational — no backend hits.
+ *
+ * The auth portal exposes two tabbed forms:
+ *   - Sign-in tab (default): email + password → "Sign in to Arena"
+ *   - Sign-up tab (?tab=signup): name + email + password + confirm
+ *     → "Create free account"
+ *
+ * Each form has a headline + sub-headline, the "Next: <destination>"
+ * line driven by `getRedirectIntent()`, and a tablist with
+ * aria-selected mirroring the active form. We pin tab count,
+ * headline strings, CTA text, and field counts so accidental
+ * removal of any form field surfaces in CI.
+ *
+ * Follows the cycle-118 / cycle-134 / cycle-135 / cycle-152 /
+ * cycle-153 / cycle-158 / cycle-159 pattern of light
+ * presentational smoke tests for public surfaces.
+ */
+
+import { expect, test } from '@playwright/test';
+
+test.describe('Sign-in page (mocked)', () => {
+  test('render the sign-in tab by default with documented fields and CTA', async ({
+    page,
+  }) => {
+    await page.goto('/signin');
+
+    // Tablist with two tabs.
+    const tablist = page.getByRole('tablist', { name: 'Auth mode' });
+    await expect(tablist).toBeVisible();
+    await expect(tablist.getByRole('tab', { name: 'Sign in' })).toBeVisible();
+    await expect(tablist.getByRole('tab', { name: 'Sign up' })).toBeVisible();
+
+    // Default tab is "Sign in" — `aria-selected="true"` on the Sign-in tab.
+    await expect(tablist.getByRole('tab', { name: 'Sign in' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(tablist.getByRole('tab', { name: 'Sign up' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+
+    // Page headline + form heading — pinned strings, not selectors.
+    await expect(page.getByText(/Return to\s*the room\./i)).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Sign in', level: 2 }),
+    ).toBeVisible();
+
+    // Sign-in form has exactly 2 fields (email + password). Match by
+    // <label>↔<input> link via `htmlFor`/`id` so this stays stable
+    // across BEM renames.
+    const signinForm = page.locator('form.auth-page__form--signin');
+    await expect(signinForm).toBeVisible();
+    await expect(signinForm.locator('input#signin-email')).toHaveCount(1);
+    await expect(signinForm.locator('input#signin-password')).toHaveCount(1);
+
+    // CTA copy.
+    await expect(
+      signinForm.getByRole('button', { name: /sign in to arena/i }),
+    ).toBeVisible();
+
+    // Cross-tab link copy inside the sign-in form.
+    await expect(
+      signinForm.getByRole('button', { name: /create an account/i }),
+    ).toBeVisible();
+
+    // Footer band — the "3 free runs" + copyright line is the visible
+    // public assertion that this is the marketing/auth-portal surface.
+    await expect(page.locator('footer.auth-page__footer')).toContainText(
+      '3 FREE RUNS',
+    );
+  });
+
+  test('?tab=signup switches to the sign-up tab with the four-field form', async ({
+    page,
+  }) => {
+    await page.goto('/signin?tab=signup');
+
+    // Tab selection flipped.
+    const tablist = page.getByRole('tablist', { name: 'Auth mode' });
+    await expect(tablist.getByRole('tab', { name: 'Sign up' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(tablist.getByRole('tab', { name: 'Sign in' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+
+    // Sign-up headline + form heading.
+    await expect(page.getByText(/Make room for\s*better answers\./i)).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Create your panel', level: 2 }),
+    ).toBeVisible();
+
+    // Sign-up form has 4 fields: name + email + password + confirm.
+    const signupForm = page.locator('form.auth-page__form--signup');
+    await expect(signupForm).toBeVisible();
+    await expect(signupForm.locator('input#signup-name')).toHaveCount(1);
+    await expect(signupForm.locator('input#signup-email')).toHaveCount(1);
+    await expect(signupForm.locator('input#signup-password')).toHaveCount(1);
+    await expect(signupForm.locator('input#signup-confirm')).toHaveCount(1);
+
+    // Sign-up hint about password length.
+    await expect(signupForm.getByText(/use at least 8 characters/i)).toBeVisible();
+
+    // CTA copy.
+    await expect(
+      signupForm.getByRole('button', { name: /create free account/i }),
+    ).toBeVisible();
+
+    // Cross-tab link copy inside the sign-up form.
+    await expect(
+      signupForm.getByRole('button', { name: /^sign in$/i }),
+    ).toBeVisible();
+  });
+
+  test('clicking the Sign up tab flips the active tab and shows the signup form', async ({
+    page,
+  }) => {
+    await page.goto('/signin');
+
+    await page.getByRole('tab', { name: 'Sign up' }).click();
+    // Tab selection flipped via click — same assertions as the
+    // ?tab=signup direct-link case.
+    const tablist = page.getByRole('tablist', { name: 'Auth mode' });
+    await expect(tablist.getByRole('tab', { name: 'Sign up' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    // Form swap happened — sign-up CTA visible, sign-in form gone.
+    await expect(
+      page.getByRole('button', { name: /create free account/i }),
+    ).toBeVisible();
+    await expect(page.locator('form.auth-page__form--signin')).toHaveCount(0);
+  });
+});
