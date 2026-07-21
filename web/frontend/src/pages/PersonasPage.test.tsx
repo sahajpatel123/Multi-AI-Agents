@@ -151,7 +151,7 @@ describe('PersonasPage', () => {
     const { container } = renderPage();
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content');
     expect(screen.getByRole('heading', { name: /build useful disagreement/i })).toBeInTheDocument();
-    expect(container.querySelectorAll('.personas-studio-section')).toHaveLength(4);
+    expect(container.querySelectorAll('.personas-studio-section')).toHaveLength(3);
     expect(screen.getByTestId('navbar')).toBeInTheDocument();
     expect(screen.getByTestId('footer')).toBeInTheDocument();
   });
@@ -202,14 +202,6 @@ describe('PersonasPage', () => {
     expect(screen.getByText(/not a live run/i)).toBeInTheDocument();
   });
 
-  it('loads an available curated panel recipe into all four slots', () => {
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /load this panel/i }));
-    expect(panelState.swapAgent).toHaveBeenCalledTimes(4);
-    expect(panelState.swapAgent.mock.calls.map(([slot, persona]) => [slot, persona.id])).toEqual([
-      [0, 'strategist'], [1, 'analyst'], [2, 'pragmatist'], [3, 'contrarian'],
-    ]);
-  });
 
   it('shows a concise initial index and discloses the complete catalog on demand', () => {
     const { container } = renderPage();
@@ -273,13 +265,6 @@ describe('PersonasPage', () => {
     expect(panelState.resetPanel).toHaveBeenCalledTimes(1);
   });
 
-  it('routes a locked recipe to pricing before changing any panel slot', () => {
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /evidence room/i }));
-    fireEvent.click(screen.getByRole('button', { name: /view plan to unlock/i }));
-    expect(navigateMock).toHaveBeenCalledWith('/pricing');
-    expect(panelState.swapAgent).not.toHaveBeenCalled();
-  });
 
   it('keeps the selected profile consistent when availability filters remove a mind', () => {
     renderPage();

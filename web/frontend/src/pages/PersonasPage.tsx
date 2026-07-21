@@ -101,35 +101,6 @@ const PERSONA_LENSES: Record<string, string> = {
   devilsadvocate: 'What is the strongest case against this direction?',
 };
 
-const PANEL_RECIPES = [
-  {
-    id: 'launch',
-    index: 'R-01',
-    label: 'Launch room',
-    use: 'For consequential go / no-go decisions.',
-    description: 'Pressure-test demand, execution, leverage, and the case nobody wants to hear.',
-    personaIds: ['strategist', 'analyst', 'pragmatist', 'contrarian'],
-    tone: '#D7F64A',
-  },
-  {
-    id: 'research',
-    index: 'R-02',
-    label: 'Evidence room',
-    use: 'For research that must survive scrutiny.',
-    description: 'Balance empirical proof, precedent, incentives, and the people affected by the conclusion.',
-    personaIds: ['scientist', 'historian', 'economist', 'ethicist'],
-    tone: '#5ED8FF',
-  },
-  {
-    id: 'systems',
-    index: 'R-03',
-    label: 'Systems room',
-    use: 'For product and architecture direction.',
-    description: 'Rebuild from fundamentals, find constraints, project consequences, and preserve human context.',
-    personaIds: ['engineer', 'firstprinciples', 'futurist', 'empath'],
-    tone: '#A98CF8',
-  },
-] as const;
 
 export function PersonasPage() {
   const navigate = useNavigate();
@@ -164,7 +135,6 @@ export function PersonasPage() {
   const [swapAvailability, setSwapAvailability] =
     useState<PersonasLibraryAvailability>('all');
   const [showcaseIndex, setShowcaseIndex] = useState(0);
-  const [selectedRecipeId, setSelectedRecipeId] = useState<string>(PANEL_RECIPES[0].id);
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [showAllLibrary, setShowAllLibrary] = useState(false);
   const [inspectedSlot, setInspectedSlot] = useState<SlotIndex>(0);
@@ -175,7 +145,6 @@ export function PersonasPage() {
   const slotLabels = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'] as const;
   const activePersona = activeSlot !== null ? panel[activeSlot] : null;
   const showcase = SHOWCASE_PROMPTS[showcaseIndex];
-  const selectedRecipe = PANEL_RECIPES.find((recipe) => recipe.id === selectedRecipeId) ?? PANEL_RECIPES[0];
   const panelTemperature = panel.length
     ? panel.reduce((total, persona) => total + persona.temperature, 0) / panel.length
     : 0;
@@ -463,9 +432,6 @@ export function PersonasPage() {
       : displayedLibrary[0]) ??
     null;
 
-  const selectedRecipePersonas = selectedRecipe.personaIds
-    .map((id) => personas.find((persona) => persona.id === id))
-    .filter((persona): persona is Persona => Boolean(persona));
 
   const buildFilteredLibraryMarkdown = () => {
     const q = libraryQuery.trim();
@@ -936,58 +902,10 @@ export function PersonasPage() {
           </div>
         </section>
 
-        <section className="personas-studio-section personas-recipes" aria-labelledby="recipes-title">
-          <header className="personas-studio-section__head">
-            <div>
-              <span className="personas-studio-eyebrow">03 / Panel recipes</span>
-              <h2 id="recipes-title">Start with the work, not a favorite mind.</h2>
-            </div>
-            <p>
-              Curated combinations give each question evidence, friction, consequence, and a
-              practical route forward. Preview one, then load it into all four slots.
-            </p>
-          </header>
-
-          <div className="personas-recipe-layout">
-            <div className="personas-recipe-tabs" role="group" aria-label="Panel recipe">
-              {PANEL_RECIPES.map((recipe) => (
-                <button
-                  key={recipe.id}
-                  type="button"
-                  aria-pressed={selectedRecipe.id === recipe.id}
-                  className={selectedRecipe.id === recipe.id ? 'is-active' : ''}
-                  style={{ '--tone': recipe.tone } as CSSProperties}
-                  onClick={() => setSelectedRecipeId(recipe.id)}
-                >
-                  <small>{recipe.index}</small>
-                  <strong>{recipe.label}</strong>
-                  <span>{recipe.use}</span>
-                </button>
-              ))}
-            </div>
-            <div className="personas-recipe-preview" style={{ '--tone': selectedRecipe.tone } as CSSProperties}>
-              <header><small>{selectedRecipe.index} / CURATED CONFIGURATION</small><span>04 MINDS</span></header>
-              <h3>{selectedRecipe.label}</h3>
-              <p>{selectedRecipe.description}</p>
-              <ol>
-                {selectedRecipe.personaIds.map((id, index) => {
-                  const persona = personas.find((candidate) => candidate.id === id);
-                  return <li key={id}><small>0{index + 1}</small><span>{persona?.name ?? id}</span><i style={{ background: persona?.color ?? selectedRecipe.tone }} /></li>;
-                })}
-              </ol>
-              <button type="button" onClick={applyRecipe} disabled={selectedRecipePersonas.length !== 4}>
-                {selectedRecipePersonas.some((persona) => !canUsePersona(persona.id)) ? 'View plan to unlock' : 'Load this panel'}
-                <ArrowRight aria-hidden="true" />
-              </button>
-              <small className="personas-recipe-preview__note">Loading changes the local panel. Save explicitly to persist it.</small>
-            </div>
-          </div>
-        </section>
-
         <section className="personas-studio-section personas-page__library" aria-labelledby="library-title">
           <header className="personas-studio-section__head personas-library-title-row">
             <div>
-              <span className="personas-studio-eyebrow">04 / Mind index</span>
+              <span className="personas-studio-eyebrow">03 / Mind index</span>
               <h2 id="library-title">Inspect every reasoning style.</h2>
             </div>
             <p>
