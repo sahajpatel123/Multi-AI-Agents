@@ -515,7 +515,7 @@ export function DebateMode({
             <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>
               {agent.name}
             </span>
-            <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#A0A39A', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+            <span style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--vp-muted)', letterSpacing: '.05em', textTransform: 'uppercase', fontWeight: 500 }}>
               Reaction {index + 1}
             </span>
           </div>
@@ -669,7 +669,7 @@ export function DebateMode({
               challenged
             </span>
           </div>
-          <span style={{ fontSize: '10px', letterSpacing: '.2em', textTransform: 'uppercase', color: '#A0A39A' }}>
+          <span style={{ fontSize: '12px', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--vp-muted)', fontWeight: 500 }}>
             In the arena
           </span>
         </div>
@@ -687,7 +687,7 @@ export function DebateMode({
             borderLeft: `2px solid ${challengedConfig.color}`,
           }}
         >
-          <div style={{ fontSize: '10px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#A0A39A', marginBottom: '4px' }}>
+          <div style={{ fontSize: '12px', letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--vp-muted)', marginBottom: '4px', fontWeight: 500 }}>
             Key assumption
           </div>
           <p style={{ fontSize: '13px', color: '#A0A39A', lineHeight: 1.6, fontStyle: 'italic' }}>
