@@ -1,6 +1,31 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Documentation field manual', () => {
+  test('renders the hero + 7 chapters + documentation navigation at desktop', async ({
+    page,
+  }) => {
+    // Companion to the cycle 140 tablet-edge test: at default desktop
+    // viewport, pin the high-level shape the user sees on first visit.
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto('/docs');
+
+    // Hero heading + 7 chapters + the documentation navigation landmark.
+    await expect(
+      page.getByRole('heading', { name: /understand the system/i }),
+    ).toBeVisible();
+    await expect(page.locator('.docs-field-chapter')).toHaveCount(7);
+
+    // The "Documentation chapters" nav landmark is the per-chapter
+    // anchor list — pin its 7 links so a future chapter rename /
+    // reorder surfaces in CI.
+    const chaptersNav = page.getByLabel('Documentation chapters');
+    await expect(chaptersNav).toBeVisible();
+    await expect(chaptersNav.getByRole('link')).toHaveCount(7);
+
+    // No leftover interactive console from an old design (defensive).
+    await expect(page.locator('.docs-query-console')).toHaveCount(0);
+  });
+
   test('is inspectable and keyboard-safe at the 834px tablet edge', async ({ page }) => {
     await page.setViewportSize({ width: 834, height: 1000 });
     const errors: string[] = [];
