@@ -112,4 +112,17 @@ test.describe('Not Found page (mocked)', () => {
     const heading = page.locator('#not-found-title');
     await expect(heading).toHaveRole('heading');
   });
+
+  test('h1 id="not-found-title" matches the aria-labelledby target', async ({ page }) => {
+    await page.goto('/404');
+
+    // The aria-labelledby on <main> points at an id that must exist as
+    // the labelled element. A regression that broke the linkage (e.g.,
+    // renamed the h1 id without updating aria-labelledby) would orphan
+    // the a11y label — pin both the labelled element's id and its role.
+    const labelled = page.locator('#not-found-title');
+    await expect(labelled).toBeVisible();
+    await expect(labelled).toHaveRole('heading');
+    await expect(labelled).toHaveText(/this page isn'?t in the arena/i);
+  });
 });
