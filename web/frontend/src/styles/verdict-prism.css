@@ -1253,26 +1253,21 @@ html {
   background: var(--vp-amber);
 }
 
-/* 3. Smooth Click & Hover Physics (Tactile Feedback) */
-html body button:not(.unstyled-btn),
+/* 3. Butter-Smooth Button & Interactive Surface Physics (Zero Jitter) */
+html body button,
 html body a[class*="btn"],
 html body a[class*="button"] {
-  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
-              background-color 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-              box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1) !important;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  transition: background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.18s ease;
 }
 
-html body button:not(.unstyled-btn):hover,
-html body a[class*="btn"]:hover,
-html body a[class*="button"]:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-
-html body button:not(.unstyled-btn):active,
+html body button:active,
 html body a[class*="btn"]:active,
 html body a[class*="button"]:active {
-  transform: translateY(0) scale(0.975);
-  transition-duration: 0.08s;
+  transform: scale(0.985);
+  opacity: 0.92;
 }
