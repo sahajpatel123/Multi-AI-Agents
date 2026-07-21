@@ -47,7 +47,7 @@ describe('DocsPage', () => {
     expect(stageButtons).toHaveLength(7);
     expect(pipeline).not.toHaveTextContent(/steelman/i);
     const proof = container.querySelector('.docs-field-proof');
-    expect(proof).toHaveTextContent(/7visible Agent stages/i);
+    expect(proof).toHaveTextContent(/7\s*visible Agent stages/i);
 
     const plan = within(pipeline as HTMLElement).getByRole('button', { name: /stage 01: plan/i });
     const verify = within(pipeline as HTMLElement).getByRole('button', { name: /stage 05: verify/i });
