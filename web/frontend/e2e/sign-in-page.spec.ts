@@ -204,4 +204,27 @@ test.describe('Sign-in page (mocked)', () => {
       page.getByRole('button', { name: 'Show password' }),
     ).toBeVisible();
   });
+
+  test('auth footer band pins the four marketing-mark strings', async ({ page }) => {
+    await page.goto('/signin');
+
+    // The footer is a 4-cell marketing band that repeats on both sign-in
+    // and sign-up tabs (it lives outside the form columns). Pin all
+    // four strings — they are user-visible contracts (the "3 FREE RUNS"
+    // cell in particular is referenced from /pricing copy).
+    const footer = page.locator('footer.auth-page__footer');
+    await expect(footer).toBeVisible();
+    await expect(footer).toContainText('PRIVATE BY DEFAULT');
+    await expect(footer).toContainText('SAVED CONTEXT');
+    await expect(footer).toContainText('3 FREE RUNS');
+    await expect(footer).toContainText('ARENA © 2026');
+
+    // Switching tabs doesn't unmount the footer (it's outside both
+    // form columns) — verify the strings are still pinned from the
+    // sign-up state too.
+    await page.getByRole('tab', { name: 'Sign up' }).click();
+    await expect(footer).toBeVisible();
+    await expect(footer).toContainText('PRIVATE BY DEFAULT');
+    await expect(footer).toContainText('3 FREE RUNS');
+  });
 });
