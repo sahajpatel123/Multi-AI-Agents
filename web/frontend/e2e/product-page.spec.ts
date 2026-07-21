@@ -78,4 +78,23 @@ test.describe('Product page (mocked)', () => {
       .click();
     await expect(page).toHaveURL(/\/pricing$/);
   });
+
+  test('four anchored section ids + EXPLORE EVERY CAPABILITY CTA', async ({ page }) => {
+    await page.goto('/product');
+
+    // Pin the 4 stable section anchors used by deep-links + analytics.
+    // Refactors that drop or rename any of these break every shared
+    // link to the page.
+    await expect(page.locator('#product-showcase')).toBeVisible();
+    await expect(page.locator('#product-routing-title')).toBeVisible();
+    await expect(page.locator('#product-surface-title')).toBeVisible();
+    await expect(page.locator('#product-compare-heading')).toBeVisible();
+
+    // Closing CTA → /capabilities (public deep-link into the verified
+    // capabilities surface from cycle 152's spec).
+    await page
+      .getByRole('button', { name: /explore every capability/i })
+      .click();
+    await expect(page).toHaveURL(/\/capabilities$/);
+  });
 });
