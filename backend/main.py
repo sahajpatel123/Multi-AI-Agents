@@ -46,6 +46,7 @@ from arena.core.live_scheduler import schedule_live_checks
 from arena.core.loyalty_scheduler import schedule_loyalty_checks
 from arena.core.watchlist_runner import schedule_watchlist_checks
 from arena.core.condura_scheduler import schedule_condura_reconciler
+from arena.core.subscription_expiry_scheduler import schedule_subscription_expiry_checks
 
 logger = logging.getLogger(__name__)
 
@@ -352,6 +353,7 @@ def create_app() -> FastAPI:
         asyncio.create_task(schedule_watchlist_checks())
         asyncio.create_task(schedule_loyalty_checks())
         asyncio.create_task(schedule_condura_reconciler())
+        asyncio.create_task(schedule_subscription_expiry_checks())
 
     # ── Startup self-test: verify global exception handler is wired ──────
     # Earlier versions of this block raised a local RuntimeError, caught

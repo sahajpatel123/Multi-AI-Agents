@@ -799,6 +799,116 @@ def _mark_subscription_payment_failed(
     return True
 
 
+def _period_still_paid(end: Optional[datetime], *, now: Optional[datetime] = None) -> bool:
+    """True when the billed period end is strictly in the future."""
+    if end is None:
+        return False
+    anchor = now or utcnow_naive()
+    # Normalize tz-aware Razorpay timestamps to naive UTC for comparison.
+    if getattr(end, "tzinfo", None) is not None:
+        end = end.astimezone(timezone.utc).replace(tzinfo=None)
+    return end > anchor
+
+
+def _apply_primary_subscription_ended(
+    db: Session,
+    user: User,
+    row: Subscription,
+    entity: dict[str, Any],
+    *,
+    event: str,
+) -> None:
+    """Mark a primary Plus/Pro subscription cancelled/completed without
+    stealing paid access mid-period.
+
+    Product contract (matches POST /api/payments/cancel): the user keeps
+    their paid tier until ``current_end``. Immediate FREE downgrade on
+    ``subscription.cancelled`` was a billing-honesty bug.
+    """
+    status_value = "cancelled" if event == "subscription.cancelled" else "completed"
+    row.status = status_value
+    period_end = _razorpay_ts_to_naive_utc(entity.get("current_end")) or row.current_end
+    if period_end is not None:
+        row.current_end = period_end
+    db.add(row)
+
+    user.subscription_status = status_value
+    user.subscription_end_date = period_end
+    db.add(user)
+
+    if _period_still_paid(period_end):
+        logger.info(
+            "%s: retaining tier=%s for user_id=%s until %s (sub=%s)",
+            event,
+            get_tier_str(user) or user.tier,
+            user.id,
+            period_end.isoformat() if period_end else None,
+            row.razorpay_subscription_id,
+        )
+        return
+
+    old_tier = user.tier
+    if get_tier_str(user) in ("free", "guest", ""):
+        return
+    user.tier = UserTier.FREE
+    db.add(user)
+    _log_tier_change(
+        user_id=user.id,
+        old_tier=old_tier,
+        new_tier=user.tier,
+        trigger=event,
+        subscription_id=row.razorpay_subscription_id,
+    )
+    logger.info(
+        "%s: period already ended — downgraded user_id=%s to FREE (sub=%s)",
+        event,
+        user.id,
+        row.razorpay_subscription_id,
+    )
+
+
+def _apply_agent_addon_subscription_ended(
+    db: Session,
+    user: User,
+    row: Subscription,
+    entity: dict[str, Any],
+    *,
+    event: str,
+) -> None:
+    """End an agent-addon subscription with paid-through grace when possible."""
+    status_value = "cancelled" if event == "subscription.cancelled" else "completed"
+    row.status = status_value
+    period_end = _razorpay_ts_to_naive_utc(entity.get("current_end")) or row.current_end
+    if period_end is not None:
+        row.current_end = period_end
+    db.add(row)
+
+    if _period_still_paid(period_end):
+        # Mirror POST /addon/agent/cancel: still entitled until period end.
+        user.agent_addon_active = True
+        user.agent_addon_cancelling = True
+        user.addon_subscription_id = row.razorpay_subscription_id
+        db.add(user)
+        logger.info(
+            "%s: agent addon cancelling — access retained user_id=%s until %s",
+            event,
+            user.id,
+            period_end.isoformat() if period_end else None,
+        )
+        return
+
+    user.agent_addon_active = False
+    user.agent_addon_cancelling = False
+    user.addon_subscription_id = None
+    db.add(user)
+    logger.info(
+        "%s: agent addon fully ended for user_id=%s (sub=%s)",
+        event,
+        user.id,
+        row.razorpay_subscription_id,
+    )
+
+
 def _apply_subscription_event(
     db: Session,
     entity: dict[str, Any],
@@ -943,49 +1053,53 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                     db.commit()
 
         elif event in ("subscription.cancelled", "subscription.completed"):
-            ent = _subscription_entity_from_payload(payload)
-            if ent and ent.get("id"):
-                row = (
-                    db.query(Subscription)
-                    .filter(Subscription.razorpay_subscription_id == ent["id"])
-                    .first()
-                )
-                if row:
-                    row.status = "cancelled" if event == "subscription.cancelled" else "completed"
-                    db.add(row)
-                    u = db.query(User).filter(User.id == row.user_id).first()
-                    if u and get_tier_str(row) == "agent_addon":
-                        plan_id_ent = (ent.get("plan_id") or "").strip()
-                        expected_addon = (get_settings().razorpay_agent_addon_plan_id or "").strip()
-                        if expected_addon and plan_id_ent and plan_id_ent != expected_addon:
-                            logger.warning(
-                                "subscription.cancelled: addon plan_id mismatch entity=%s expected=%s",
-                                plan_id_ent,
-                                expected_addon,
-                            )
-                            db.commit()
-                        else:
-                            u.agent_addon_active = False
-                            u.agent_addon_cancelling = False
-                            u.addon_subscription_id = None
-                            db.add(u)
-                            db.commit()
-                    elif u:
-                        old_tier = u.tier
-                        u.tier = UserTier.FREE
-                        u.subscription_status = row.status
-                        u.subscription_end_date = _razorpay_ts_to_naive_utc(
-                            ent.get("current_end")
-                        ) or row.current_end
-                        db.add(u)
-                        _log_tier_change(
-                            user_id=u.id,
-                            old_tier=old_tier,
-                            new_tier=u.tier,
-                            trigger="subscription.cancelled",
-                            subscription_id=row.razorpay_subscription_id,
+            try:
+                ent = _subscription_entity_from_payload(payload)
+                if ent and ent.get("id"):
+                    row = (
+                        db.query(Subscription)
+                        .filter(Subscription.razorpay_subscription_id == ent["id"])
+                        .with_for_update()
+                        .first()
+                    )
+                    if row:
+                        u = (
+                            db.query(User)
+                            .filter(User.id == row.user_id)
+                            .with_for_update()
+                            .first()
                         )
+                        if u and get_tier_str(row) == "agent_addon":
+                            plan_id_ent = (ent.get("plan_id") or "").strip()
+                            expected_addon = (
+                                get_settings().razorpay_agent_addon_plan_id or ""
+                            ).strip()
+                            if expected_addon and plan_id_ent and plan_id_ent != expected_addon:
+                                logger.warning(
+                                    "%s: addon plan_id mismatch entity=%s expected=%s",
+                                    event,
+                                    plan_id_ent,
+                                    expected_addon,
+                                )
+                            else:
+                                _apply_agent_addon_subscription_ended(
+                                    db, u, row, ent, event=event
+                                )
+                        elif u:
+                            _apply_primary_subscription_ended(
+                                db, u, row, ent, event=event
+                            )
+                        else:
+                            row.status = (
+                                "cancelled"
+                                if event == "subscription.cancelled"
+                                else "completed"
+                            )
+                            db.add(row)
                         db.commit()
+            except Exception:
+                logger.exception("%s handler error", event)
+                raise
 
         elif event == "payment.captured":
             try:
@@ -1169,6 +1283,7 @@ async def cancel_subscription(
 
     row.status = "cancelled"
     user.subscription_status = "cancelled"
+    user.subscription_end_date = row.current_end
     db.add(row)
     db.add(user)
     db.commit()
