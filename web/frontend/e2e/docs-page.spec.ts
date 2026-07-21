@@ -42,6 +42,27 @@ test.describe('Documentation field manual', () => {
     expect(new URL(page.url()).hash).toBe(href);
   });
 
+  test('renders the 7 documented chapter anchors', async ({ page }) => {
+    await page.goto('/docs');
+
+    // Pin all 7 chapter anchor ids — these are the stable URL targets
+    // users + search engines deep-link to. A rename of any of these
+    // breaks every shared chapter link.
+    const chapterIds = [
+      'start',
+      'concepts',
+      'agent',
+      'api',
+      'architecture',
+      'tiers',
+      'security',
+    ];
+    for (const id of chapterIds) {
+      await expect(page.locator(`#${id}`)).toBeVisible();
+    }
+    expect(await page.locator('.docs-field-chapter').count()).toBe(7);
+  });
+
   test('is inspectable and keyboard-safe at the 834px tablet edge', async ({ page }) => {
     await page.setViewportSize({ width: 834, height: 1000 });
     const errors: string[] = [];
