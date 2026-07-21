@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { Reveal } from '../components/Reveal';
 import '../styles/changelog.css';
 
 const CHANGELOG_ENTRIES = [
@@ -360,7 +361,8 @@ export function ChangelogPage() {
             const isExpanded = !isLatest || latestExpanded;
             const visibleItems = isExpanded ? entry.items : entry.items.slice(0, 12);
             return (
-              <article
+              <Reveal
+                as="article"
                 id={`release-${entry.version.replace('.', '-')}`}
                 key={`${entry.version}-${entry.date}`}
                 className={`changelog-entry${isLatest ? ' changelog-entry--latest' : ''}`}
@@ -414,7 +416,7 @@ export function ChangelogPage() {
                     </button>
                   ) : null}
                 </div>
-              </article>
+              </Reveal>
             );
           })}
         </div>

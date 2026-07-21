@@ -9,9 +9,12 @@ malicious ``9**9**9`` from hanging a worker.
 from __future__ import annotations
 
 import ast
+import logging
 import operator
 import re
 from typing import Any, Dict, Union
+
+logger = logging.getLogger(__name__)
 
 from arena.core.tools.base import Tool, ToolResult
 
@@ -252,6 +255,7 @@ class CalculatorTool(Tool):
                 try:
                     bits = abs_base.bit_length() * int(exp)
                 except Exception:
+                    logger.warning("Failed to calculate bit_length for power", exc_info=True)
                     bits = _MAX_POW_BITS + 1
                 if bits > _MAX_POW_BITS:
                     raise ValueError("Power result would exceed safe limit")

@@ -391,7 +391,7 @@ def main():
                     token_expires_at TIMESTAMP,
                     is_active BOOLEAN DEFAULT TRUE,
                     connected_at TIMESTAMP DEFAULT NOW(),
-                    metadata JSONB,
+                    integration_metadata JSONB,
                     CONSTRAINT uq_mcp_user_service UNIQUE (user_id, service)
                 )
             """
@@ -406,7 +406,7 @@ def main():
                     token_expires_at TIMESTAMP,
                     is_active INTEGER DEFAULT 1,
                     connected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    metadata TEXT,
+                    integration_metadata TEXT,
                     UNIQUE (user_id, service)
                 )
             """
@@ -467,6 +467,53 @@ def main():
                     conn.commit()
                 except Exception as e:
                     print(f"==> Warning (password_reset_tokens idx): {e}", flush=True)
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+
+            # Razorpay webhook idempotency ledger (replay protection).
+            pg_webhook_events = """
+                CREATE TABLE IF NOT EXISTS processed_webhook_events (
+                    id SERIAL PRIMARY KEY,
+                    event_key VARCHAR(128) UNIQUE NOT NULL,
+                    event_name VARCHAR(64),
+                    processed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    expires_at TIMESTAMP NOT NULL
+                )
+            """
+            sqlite_webhook_events = """
+                CREATE TABLE IF NOT EXISTS processed_webhook_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_key VARCHAR(128) UNIQUE NOT NULL,
+                    event_name VARCHAR(64),
+                    processed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT NOT NULL
+                )
+            """
+            wh_sql = sqlite_webhook_events if dialect == "sqlite" else pg_webhook_events
+            try:
+                conn.execute(text(wh_sql))
+                conn.commit()
+                print("==> Migrated: processed_webhook_events table", flush=True)
+            except Exception as e:
+                print(f"==> Warning (processed_webhook_events): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+            for idx_sql in (
+                "CREATE INDEX IF NOT EXISTS ix_processed_webhook_events_event_key "
+                "ON processed_webhook_events(event_key)",
+                "CREATE INDEX IF NOT EXISTS ix_processed_webhook_events_expires_at "
+                "ON processed_webhook_events(expires_at)",
+            ):
+                try:
+                    conn.execute(text(idx_sql))
+                    conn.commit()
+                except Exception as e:
+                    print(f"==> Warning (processed_webhook_events idx): {e}", flush=True)
                     try:
                         conn.rollback()
                     except Exception:
@@ -581,6 +628,43 @@ def main():
                         conn.rollback()
                     except Exception:
                         pass
+
+            # Rename metadata columns to avoid shadowing Base.metadata.
+            # Best-effort: the column may already be renamed or the table may not exist.
+            for tbl, old_col, new_col in (
+                ("ux_events", "metadata", "event_metadata"),
+                ("mcp_integrations", "metadata", "integration_metadata"),
+            ):
+                try:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE %s RENAME COLUMN %s TO %s"
+                            % (tbl, old_col, new_col)
+                        )
+                    )
+                    conn.commit()
+                    print(f"==> Renamed {tbl}.{old_col} -> {new_col}", flush=True)
+                except Exception:
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+
+            # Hot-path composite index for get_today_token_usage query.
+            idx_sql = (
+                "CREATE INDEX IF NOT EXISTS idx_usage_records_user_timestamp "
+                "ON usage_records (user_id, timestamp)"
+            )
+            try:
+                conn.execute(text(idx_sql))
+                conn.commit()
+                print("==> Created idx_usage_records_user_timestamp", flush=True)
+            except Exception as e:
+                print(f"==> Warning (idx_usage_records_user_timestamp): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
 
         print("==> All migrations complete.", flush=True)
 

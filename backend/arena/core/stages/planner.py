@@ -1,8 +1,11 @@
 import json
+import logging
 import re
 import time
 
 from arena.core.attachment_prompts import build_attachment_text_block, claude_image_content_blocks
+
+logger = logging.getLogger(__name__)
 from arena.core.blackboard import Blackboard, StageStatus
 from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
@@ -128,6 +131,7 @@ User research history context:
             plan_data = json.loads(bb.plan.output)
             bb.plan.reasoning = plan_data.get("execution_plan", "")
         except Exception:
+            logger.warning("Failed to parse plan JSON for reasoning", exc_info=True)
             bb.plan.reasoning = ""
 
     return bb

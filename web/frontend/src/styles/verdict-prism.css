@@ -1205,3 +1205,104 @@ body .not-found-page [class*="panel"] {
   background: var(--vp-carbon-2) !important;
   color: var(--vp-ivory) !important;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   ✨ World-Class Smooth Physics, Rounded Radii & Premium Feel
+   ───────────────────────────────────────────────────────────── */
+
+/* 1. Global Corner Smoothing — Elevate harsh 0px/2px right angles to smooth 6px–8px radii & 9999px pills */
+html body button:not(.unstyled-btn),
+html body input,
+html body select,
+html body textarea,
+html body [class*="card"],
+html body [class*="chip"],
+html body [class*="tab"],
+html body [class*="badge"] {
+  border-radius: 6px !important;
+}
+
+html body [class*="pill"],
+html body .agent-score,
+html body .back-to-top-btn {
+  border-radius: 9999px !important;
+}
+
+/* 2. Global Smooth Scrollbars & Smooth Scroll Physics */
+html {
+  scroll-behavior: smooth !important;
+  overscroll-behavior-y: none;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vp-carbon);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(243, 240, 231, 0.22);
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vp-amber);
+}
+
+/* 3. Redesigned Vibrant Prism Color Animation & Tactile Button Physics */
+@keyframes vpButtonGlowShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+html body button,
+html body a[class*="btn"],
+html body a[class*="button"] {
+  position: relative;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  transition: background-color 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.2s ease,
+              transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Vibrant Animated Prism Glow on Hover */
+html body button:hover,
+html body a[class*="btn"]:hover,
+html body a[class*="button"]:hover {
+  box-shadow: 0 4px 18px rgba(240, 184, 78, 0.25), 0 0 10px rgba(215, 246, 74, 0.15);
+}
+
+/* Primary CTA Color Spectrum Shift */
+html body button[class*="primary"],
+html body button[class*="cta"],
+html body a[class*="primary"],
+html body .motion-btn--primary {
+  background-size: 200% 200% !important;
+  transition: background-position 0.4s ease, box-shadow 0.25s ease, transform 0.15s ease !important;
+}
+
+html body button[class*="primary"]:hover,
+html body button[class*="cta"]:hover,
+html body a[class*="primary"]:hover,
+html body .motion-btn--primary:hover {
+  background-image: linear-gradient(135deg, #f0b84e 0%, #d7f64a 40%, #5ed8ff 80%, #f0b84e 100%) !important;
+  background-position: 100% 50% !important;
+  color: #0b0c0a !important;
+  box-shadow: 0 6px 24px rgba(240, 184, 78, 0.38), 0 0 16px rgba(215, 246, 74, 0.28) !important;
+}
+
+/* Tactile Spring Compression on Click */
+html body button:active,
+html body a[class*="btn"]:active,
+html body a[class*="button"]:active {
+  transform: scale(0.975);
+  box-shadow: 0 2px 8px rgba(240, 184, 78, 0.2);
+}

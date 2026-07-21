@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, raiseload
 
 from arena.config import get_settings
 from arena.core.model_router import estimate_call_cost
@@ -161,7 +161,7 @@ def check_and_increment_guest(db: Session, ip: str) -> None:
     db.commit()
 
 
-def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
+def check_and_increment_user(db: Session, user_id: int) -> None:
     """
     Check registered/pro rate limit. Increments counter.
     Raises RateLimitExceeded if over limit.
@@ -180,11 +180,10 @@ def check_and_increment_user(db: Session, user_id: int, user_tier: str) -> None:
     # check — a TOCTOU race that lets a user exceed their daily limit. The lock
     # is released by db.commit() below, before any LLM work runs. SQLite ignores
     # FOR UPDATE; Postgres (production) enforces it.
-    user = db.query(User).filter(User.id == user_id).with_for_update().first()
+    user = db.query(User).options(raiseload('*')).filter(User.id == user_id).with_for_update().first()
     if not user:
         return
 
-    _ = user_tier  # tier is always taken from the fresh DB user row
     normalized_tier = normalize_tier(get_tier_str(user))
     limit = get_daily_limit(normalized_tier)
     now = _now_utc()
@@ -224,7 +223,7 @@ def check_token_budget(db: Session, user_id: int, estimated_cost: float = 0.0) -
     The row lock is released by db.commit() in record_usage() downstream.
     SQLite ignores FOR UPDATE; Postgres (production) enforces it.
     """
-    user = db.query(User).filter(User.id == user_id).with_for_update().first()
+    user = db.query(User).options(raiseload('*')).filter(User.id == user_id).with_for_update().first()
     if not user:
         return
 
@@ -284,8 +283,11 @@ def record_usage(
         db.add(record)
         db.commit()
     except Exception as e:
-        logger.error(f"Failed to record usage: {e}")
-        db.rollback()
+        logger.error("Failed to record usage: %s", e, exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            logger.warning("Failed to rollback usage record", exc_info=True)
 
 
 # ─────────────────────────────────────────────────

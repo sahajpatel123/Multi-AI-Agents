@@ -396,7 +396,7 @@ export function DebateMode({
           onError: (data) => {
             if (abortController.signal.aborted) return;
             if (flushTimer.current) clearInterval(flushTimer.current);
-            setError(data.detail);
+            setError(data.message || data.detail || 'Something went wrong');
             setPhase('done');
           },
         },

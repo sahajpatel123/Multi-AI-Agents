@@ -214,6 +214,9 @@ body .pricing-studio-page .pricing-billing-control button {
   border: 0;
   font: 700 11px/1 var(--vp-font-mono);
   text-transform: uppercase;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease));
 }
 
 body .pricing-studio-page .pricing-billing-control button span {
@@ -261,20 +264,25 @@ body .pricing-studio-page .pricing-tier-card {
   box-shadow: none;
   overflow: visible;
   scroll-margin-top: 88px;
-  transition: box-shadow 280ms var(--vp-ease);
+  transition:
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, var(--vp-ease)),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, var(--vp-ease));
 }
 
 body .pricing-studio-page .pricing-tier-card.is-recommended {
   box-shadow: 0 24px 60px -36px rgba(215, 246, 74, 0.45);
+  z-index: 1;
 }
 
 @media (hover: hover) and (pointer: fine) {
   body .pricing-studio-page .pricing-tier-card:hover {
     box-shadow: 0 18px 48px -40px rgba(243, 240, 231, 0.28);
+    transform: translateY(-3px);
   }
 
   body .pricing-studio-page .pricing-tier-card.is-recommended:hover {
     box-shadow: 0 28px 70px -34px rgba(215, 246, 74, 0.55);
+    transform: translateY(-4px);
   }
 }
 
@@ -439,7 +447,12 @@ body .pricing-studio-page .pricing-tier-card__state {
   border: 1px solid #f3f0e7 !important;
   font: 700 11px/1 var(--vp-font-mono);
   text-transform: uppercase;
-  transition: filter 200ms var(--vp-ease), box-shadow 240ms var(--vp-ease);
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    filter var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, var(--vp-ease));
 }
 
 body .pricing-studio-page .pricing-tier-card__cta svg,
@@ -638,6 +651,9 @@ body .pricing-studio-page .pricing-faq-studio__list article > button {
   color: var(--pw-ink) !important;
   background: transparent !important;
   border: 0;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease));
 }
 
 body .pricing-studio-page .pricing-faq-studio__list article > button small { display: none; }
@@ -723,6 +739,12 @@ body .pricing-studio-page .pricing-studio-close > div > button {
   border: 1px solid var(--pw-acid);
   font: 700 11px/1 var(--vp-font-mono);
   text-transform: uppercase;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, var(--vp-ease)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, var(--vp-ease));
 }
 
 body .pricing-studio-page .pricing-studio-close > div > button:last-child:not(:only-child) {
@@ -786,5 +808,10 @@ body .pricing-studio-page .pricing-studio-close > div > button:first-child * {
   body .pricing-studio-page *::after {
     animation: none !important;
     transition: none !important;
+  }
+
+  body .pricing-studio-page .pricing-tier-card:hover,
+  body .pricing-studio-page .pricing-tier-card.is-recommended:hover {
+    transform: none !important;
   }
 }

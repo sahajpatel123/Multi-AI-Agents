@@ -1,8 +1,11 @@
 import json
+import logging
 import re
 import time
 
 from arena.core.blackboard import Blackboard, StageStatus
+
+logger = logging.getLogger(__name__)
 from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
@@ -213,7 +216,7 @@ Remove unverifiable claims.
         try:
             bb.synthesis.model_used = MODEL_REGISTRY["claude_sonnet"]["model_id"]
         except Exception:
-            pass
+            logger.warning("Failed to assign model_used for synthesis", exc_info=True)
 
     return bb
 

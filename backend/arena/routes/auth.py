@@ -823,7 +823,10 @@ async def change_password(
         # correct via 401 vs 422.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "current_password_invalid"},
+            detail={
+                "error": "current_password_invalid",
+                "message": "Current password is incorrect.",
+            },
         )
 
     if matched and verify_password(body.new_password, user.password_hash)[0]:
@@ -832,7 +835,10 @@ async def change_password(
         # a separate password field.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "new_password_must_differ"},
+            detail={
+                "error": ErrorCodes.PASSWORD_SAME,
+                "message": "New password must differ from the current password.",
+            },
         )
 
     user.password_hash = hash_password(body.new_password)
@@ -1016,6 +1022,9 @@ async def reset_password(
 
     token_hash = _hash_reset_token(body.token)
     now = utcnow_naive()
+    # Lock the token row for the duration of this transaction so two
+    # concurrent redemption attempts cannot both see used_at IS NULL and
+    # both rotate the password (HOT-PATH: password-reset token reuse).
     row = (
         db.query(PasswordResetToken)
         .filter(
@@ -1023,6 +1032,7 @@ async def reset_password(
             PasswordResetToken.used_at.is_(None),
             PasswordResetToken.expires_at > now,
         )
+        .with_for_update()
         .first()
     )
     if row is None:
@@ -1031,7 +1041,12 @@ async def reset_password(
             detail={"error": "reset_token_invalid"},
         )
 
-    user = db.query(User).filter(User.id == row.user_id).first()
+    user = (
+        db.query(User)
+        .filter(User.id == row.user_id)
+        .with_for_update()
+        .first()
+    )
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1041,7 +1056,10 @@ async def reset_password(
     if verify_password(body.new_password, user.password_hash)[0]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "new_password_must_differ"},
+            detail={
+                "error": ErrorCodes.PASSWORD_SAME,
+                "message": "New password must differ from the current password.",
+            },
         )
 
     user.password_hash = hash_password(body.new_password)

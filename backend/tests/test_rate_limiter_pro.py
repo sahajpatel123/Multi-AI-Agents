@@ -29,6 +29,13 @@ def _db(count: int, oldest_ts=None):
             self._mode = "oldest"
             return self
 
+        def with_for_update(self, *a, **k):
+            # Cycle 160 fix: SELECT … FOR UPDATE on the User row to
+            # serialize concurrent check-then-insert races. The mock
+            # chain is unchanged — the lock is a no-op for the count
+            # assertions, which is exactly what we want for these tests.
+            return self
+
         def count(self):
             return count
 
@@ -64,3 +71,86 @@ def test_at_limit_without_oldest_row(monkeypatch):
     err = rlp.check_pro_window_limit(_db(10, oldest_ts=None), user_id=2)
     assert err is not None
     assert err["error"] == "rate_limit_exceeded"
+
+
+def test_acquires_user_row_lock_before_count(monkeypatch):
+    """Regression: `check_pro_window_limit` MUST acquire a SELECT … FOR
+    UPDATE lock on the User row before reading the recent-count.
+
+    Background (HOT-PATH-ANALYSIS, HIGH): the prior implementation
+    read `UsageRecord` count without any lock. N concurrent requests
+    for the same user could each see under-limit, each insert their
+    own UsageRecord, and the window would be silently exceeded. The
+    fix is a row-level lock on the User so the check-then-insert
+    window is serialized per-user.
+
+    This test pins the contract by checking that the first
+    `db.query(...)` chain (the User lock) calls `.with_for_update()`
+    before any chain calls `.count()` (the UsageRecord read). A
+    future refactor that drops the lock — and re-opens the race —
+    fails here.
+    """
+    monkeypatch.setattr(rlp, "get_settings", lambda: _Settings())
+
+    # Track each query chain as its own object so we can verify
+    # `.with_for_update()` was called on the chain that locks the
+    # User row, not on the chain that reads UsageRecord count.
+    chains: list[dict] = []
+
+    class _TrackingQ:
+        def __init__(self):
+            self.calls: list[str] = []
+
+        def filter(self, *a, **k):
+            self.calls.append("filter")
+            return self
+
+        def with_for_update(self, *a, **k):
+            self.calls.append("with_for_update")
+            return self
+
+        def order_by(self, *a, **k):
+            self.calls.append("order_by")
+            return self
+
+        def count(self):
+            self.calls.append("count")
+            return 4  # under limit
+
+        def first(self):
+            self.calls.append("first")
+            return None
+
+    db = MagicMock()
+
+    def _new_chain(*args, **kwargs):
+        chain = _TrackingQ()
+        chains.append(chain)
+        return chain
+
+    db.query.side_effect = _new_chain
+
+    # Under-limit path — the function reads count and returns None,
+    # never entering the `if recent_count >= window_limit` branch.
+    assert rlp.check_pro_window_limit(db, user_id=42) is None
+
+    # Pin the ordering: at least one chain called with_for_update()
+    # BEFORE any chain called count(). The User-lock chain is the
+    # only chain that should hold the lock; the UsageRecord count
+    # chain must not.
+    lock_chains = [c for c in chains if "with_for_update" in c.calls]
+    count_chains = [c for c in chains if "count" in c.calls]
+
+    assert len(lock_chains) == 1, (
+        f"expected exactly one User-lock chain (.with_for_update()), "
+        f"got {len(lock_chains)}; full chains: {[c.calls for c in chains]}"
+    )
+    assert "with_for_update" in lock_chains[0].calls
+    assert "count" not in lock_chains[0].calls, (
+        "the User-lock chain must not also call count() — those are "
+        "different query targets; the count() belongs to the UsageRecord chain"
+    )
+    assert len(count_chains) >= 1, (
+        f"expected at least one UsageRecord count chain, got 0; "
+        f"full chains: {[c.calls for c in chains]}"
+    )

@@ -1,9 +1,12 @@
+import logging
 import time
 
 from arena.core.blackboard import Blackboard, StageStatus
 from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
+
+logger = logging.getLogger(__name__)
 
 AGENT_MAX_TOKENS = 4096
 
@@ -80,6 +83,7 @@ Find every weakness and gap.
         bb.critique.duration_ms = int((time.time() - start) * 1000)
 
     except Exception:
+        logger.warning("Critic stage failed", exc_info=True)
         bb.critique.status = StageStatus.FAILED
         bb.critique.output = "Critic stage failed. Proceeding without critique."
         bb.critique.status = StageStatus.COMPLETE

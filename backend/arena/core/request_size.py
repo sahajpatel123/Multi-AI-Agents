@@ -7,12 +7,18 @@ arbitrary body.
 
 from __future__ import annotations
 
+import logging
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_MAX_BODY_BYTES = 10 * 1024
 UPLOAD_MAX_BODY_BYTES = 11 * 1024 * 1024  # 10MB file + multipart overhead
+# Razorpay webhook entities can exceed the default 10KB API cap, but must
+# still be bounded — unbounded bodies are a memory DoS vector.
+WEBHOOK_MAX_BODY_BYTES = 1024 * 1024  # 1 MB
 
 
 def max_request_body_bytes(path: str, default_max: int = DEFAULT_MAX_BODY_BYTES) -> int:
@@ -20,6 +26,8 @@ def max_request_body_bytes(path: str, default_max: int = DEFAULT_MAX_BODY_BYTES)
     p = (path or "").rstrip("/")
     if p.endswith("/api/agent/upload"):
         return UPLOAD_MAX_BODY_BYTES
+    if p.endswith("/api/payments/webhook"):
+        return WEBHOOK_MAX_BODY_BYTES
     return default_max
 
 
@@ -27,6 +35,8 @@ def payload_too_large_message(path: str) -> str:
     p = (path or "").rstrip("/")
     if p.endswith("/api/agent/upload"):
         return "File too large (max 10MB)"
+    if p.endswith("/api/payments/webhook"):
+        return "Webhook payload too large (max 1MB)"
     return "Request too large. Maximum 10KB allowed."
 
 
@@ -44,9 +54,6 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path.rstrip("/")
-        # Razorpay webhooks can exceed the default API body limit
-        if path.endswith("/api/payments/webhook"):
-            return await call_next(request)
         # Skip size check for OPTIONS preflight and non-body methods
         if request.method == "OPTIONS" or not is_body_method(request.method):
             return await call_next(request)
@@ -86,6 +93,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         try:
             body = await request.body()
         except Exception:
+            logger.warning("Failed to read request body for size check", exc_info=True)
             return JSONResponse(
                 status_code=400,
                 content={

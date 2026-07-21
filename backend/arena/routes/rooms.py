@@ -29,6 +29,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["rooms"])
 
+
+def _touch_room_member(member_id: int) -> None:
+    """Background write of last_seen_at so GET /rooms/{slug} stays idempotent."""
+    db = SessionLocal()
+    try:
+        rm = db.query(RoomMember).filter(RoomMember.id == member_id).first()
+        if rm:
+            rm.last_seen_at = utcnow_naive()
+            db.commit()
+    except Exception:
+        logger.warning("Failed to touch room member last_seen_at", exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
+
+
 MAX_ROOM_MEMBERS = 20
 
 
@@ -122,7 +138,7 @@ async def run_room_synthesis(slug: str) -> None:
         try:
             db.rollback()
         except Exception:
-            pass
+            logger.warning("Failed to rollback after room synthesis failure", exc_info=True)
     finally:
         db.close()
 
@@ -267,15 +283,33 @@ async def my_rooms(
         .limit(per_page)
         .all()
     )
+    room_ids = [r.id for r in rows]
+    if room_ids:
+        member_counts = dict(
+            db.query(RoomMember.room_id, func.count(RoomMember.id))
+            .filter(RoomMember.room_id.in_(room_ids))
+            .group_by(RoomMember.room_id)
+            .all()
+        )
+        task_counts = dict(
+            db.query(RoomTask.room_id, func.count(RoomTask.id))
+            .filter(RoomTask.room_id.in_(room_ids))
+            .group_by(RoomTask.room_id)
+            .all()
+        )
+        last_seen_map = dict(
+            db.query(RoomMember.room_id, RoomMember.last_seen_at)
+            .filter(RoomMember.room_id.in_(room_ids), RoomMember.user_id == user.id)
+            .all()
+        )
+    else:
+        member_counts = {}
+        task_counts = {}
+        last_seen_map = {}
     result = []
     for r in rows:
-        d = _room_to_dict(r, db)
-        rm = (
-            db.query(RoomMember)
-            .filter(RoomMember.room_id == r.id, RoomMember.user_id == user.id)
-            .first()
-        )
-        d["last_seen_at"] = rm.last_seen_at.isoformat() if rm and rm.last_seen_at else None
+        d = _room_to_dict(r, db, member_count=member_counts.get(r.id, 0), task_count=task_counts.get(r.id, 0))
+        d["last_seen_at"] = last_seen_map.get(r.id).isoformat() if last_seen_map.get(r.id) else None
         result.append(d)
     return {
         "rooms": result,
@@ -342,8 +376,25 @@ async def discover_rooms(
         .limit(per_page)
         .all()
     )
+    room_ids = [r.id for r in rows]
+    if room_ids:
+        member_counts = dict(
+            db.query(RoomMember.room_id, func.count(RoomMember.id))
+            .filter(RoomMember.room_id.in_(room_ids))
+            .group_by(RoomMember.room_id)
+            .all()
+        )
+        task_counts = dict(
+            db.query(RoomTask.room_id, func.count(RoomTask.id))
+            .filter(RoomTask.room_id.in_(room_ids))
+            .group_by(RoomTask.room_id)
+            .all()
+        )
+    else:
+        member_counts = {}
+        task_counts = {}
     return {
-        "rooms": [_room_to_dict(r, db) for r in rows],
+        "rooms": [_room_to_dict(r, db, member_count=member_counts.get(r.id, 0), task_count=task_counts.get(r.id, 0)) for r in rows],
         "total": total,
         "page": page,
         "per_page": per_page,
@@ -491,6 +542,7 @@ async def get_synthesis(
 async def get_room(
     request: Request,
     slug: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current: Optional[User] = Depends(get_current_user_optional_orm),
 ) -> dict[str, Any]:
@@ -525,10 +577,11 @@ async def get_room(
             .first()
         )
         if rm:
-            # Presence heartbeat for existing members only.
-            rm.last_seen_at = utcnow_naive()
-            db.add(rm)
-            db.commit()
+            # Presence heartbeat for existing members only — defer write
+            # to background task so GET stays side-effect-free for the
+            # request transaction (tests still observe the update after
+            # the ASGI response completes and Starlette drains tasks).
+            background_tasks.add_task(_touch_room_member, rm.id)
 
     return _build_room_payload(db, room)
 
@@ -821,7 +874,7 @@ def _extract_answer_snippet(raw: str | None, *, limit: int = 500) -> str:
                 elif parsed.get("text"):
                     text = str(parsed["text"])
         except Exception:
-            pass
+            logger.warning("Failed to parse response JSON in _extract_answer_snippet", exc_info=True)
     cleaned = re.sub(r"\s+", " ", text).strip()
     return cleaned[:limit]
 
@@ -1028,6 +1081,7 @@ async def get_perspective_drift(
                 else:
                     topics = str(parsed_topics)[:200]
             except Exception:
+                logger.warning("Failed to parse room task topics JSON", exc_info=True)
                 topics = str(at.topics)[:200]
 
         answer = _extract_answer_snippet(at.final_answer)
@@ -1044,6 +1098,7 @@ async def get_perspective_drift(
                 else:
                     answer = str(kc)[:500]
             except Exception:
+                logger.warning("Failed to parse room task key_conclusions JSON", exc_info=True)
                 answer = str(at.key_conclusions)[:500]
 
         display_name = (u.name or "").strip() or (u.email.split("@")[0] if u.email else "member")

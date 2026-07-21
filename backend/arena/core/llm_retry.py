@@ -117,7 +117,7 @@ async def retry_async(
                 try:
                     on_retry(attempt, exc, delay)
                 except Exception:  # noqa: BLE001
-                    pass
+                    logger.warning("on_retry callback failed", exc_info=True)
             await asyncio.sleep(delay)
 
     # Unreachable, but keeps type checkers happy.

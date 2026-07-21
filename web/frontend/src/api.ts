@@ -380,7 +380,7 @@ export interface StreamCallbacks {
   onAgentDone?: (data: { agent_id: string }) => void;
   onAgentError?: (data: { agent_id: string; error: string }) => void;
   onResult?: (data: PromptResponse) => void;
-  onError?: (data: { detail: string }) => void;
+  onError?: (data: { detail?: string; message?: string; error?: string }) => void;
 }
 
 export function parseStreamedAgentPreview(rawText: string): string | null {
@@ -503,7 +503,7 @@ export interface DebateStreamCallbacks {
   onReactionToken?: (data: { agent_id: string; token: string }) => void;
   onReactionDone?: (data: { agent_id: string }) => void;
   onResult?: (data: DebateRoundResponse) => void;
-  onError?: (data: { detail: string }) => void;
+  onError?: (data: { detail?: string; message?: string; error?: string }) => void;
 }
 
 export async function streamDebateRound(
@@ -559,7 +559,7 @@ export async function streamDebateRound(
 export interface DiscussStreamCallbacks {
   onToken?: (data: { agent_id: string; token: string }) => void;
   onResult?: (data: DiscussResponse) => void;
-  onError?: (data: { detail: string }) => void;
+  onError?: (data: { detail?: string; message?: string; error?: string }) => void;
 }
 
 export async function streamDiscuss(

@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
+import { Reveal } from '../components/Reveal';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
 import { setRedirectIntent } from '../utils/redirectIntent';
@@ -97,7 +98,7 @@ export function AboutPage() {
           </div>
         </section>
 
-        <section className="about-story" aria-labelledby="about-story-heading">
+        <Reveal as="section" className="about-story" aria-labelledby="about-story-heading">
           <h2 id="about-story-heading" className="about-story__heading">
             What Arena actually is
           </h2>
@@ -115,9 +116,9 @@ export function AboutPage() {
               </article>
             ))}
           </div>
-        </section>
+        </Reveal>
 
-        <section className="about-cta" aria-labelledby="about-cta-heading">
+        <Reveal as="section" className="about-cta" aria-labelledby="about-cta-heading">
           <p id="about-cta-heading" className="about-cta__pitch">
             Arena is live and free to try.
           </p>
@@ -127,20 +128,20 @@ export function AboutPage() {
             </MotionButton>
             <button
               type="button"
-              className="arena-btn arena-btn--secondary arena-btn--md"
+              className="arena-btn arena-btn--secondary arena-btn--md interactive-surface interactive-surface--soft"
               onClick={() => navigate('/product')}
             >
               How it works
             </button>
             <button
               type="button"
-              className="arena-btn arena-btn--ghost arena-btn--md"
+              className="arena-btn arena-btn--ghost arena-btn--md interactive-surface interactive-surface--soft"
               onClick={() => navigate('/pricing')}
             >
               Pricing
             </button>
           </div>
-        </section>
+        </Reveal>
       </main>
 
       <Footer />

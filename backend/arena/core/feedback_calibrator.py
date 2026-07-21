@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from arena.db_models import AgentTask, AnswerFeedback
@@ -14,15 +15,24 @@ except ImportError:  # pragma: no cover - Python 3.11+
     from datetime import timezone  # type: ignore[no-redef]
 
 
+def _feedback_counts_by_verdict(user_id: int, db: Session) -> dict[str, int]:
+    return dict(
+        db.query(AnswerFeedback.verdict, func.count(AnswerFeedback.id))
+        .filter(AnswerFeedback.user_id == user_id)
+        .group_by(AnswerFeedback.verdict)
+        .all()
+    )
+
+
 def get_answer_feedback_distribution(user_id: int, db: Session) -> dict[str, int]:
     """Percent breakdown of verdicts for Profile / POST response."""
-    rows = db.query(AnswerFeedback).filter(AnswerFeedback.user_id == user_id).all()
-    n = len(rows)
+    counts = _feedback_counts_by_verdict(user_id, db)
+    n = sum(counts.values())
     if n == 0:
         return {"total": 0, "correct_pct": 0, "partial_pct": 0, "wrong_pct": 0}
-    c = sum(1 for r in rows if r.verdict == "correct")
-    p = sum(1 for r in rows if r.verdict == "partial")
-    w = sum(1 for r in rows if r.verdict == "wrong")
+    c = counts.get("correct", 0)
+    p = counts.get("partial", 0)
+    w = counts.get("wrong", 0)
     return {
         "total": n,
         "correct_pct": round(100 * c / n),
@@ -35,8 +45,8 @@ def get_feedback_calibration(user_id: int, db: Session) -> Dict[str, Any]:
     """
     User-level stats used to adjust displayed confidence (not stored scores).
     """
-    records = db.query(AnswerFeedback).filter(AnswerFeedback.user_id == user_id).all()
-    n = len(records)
+    counts = _feedback_counts_by_verdict(user_id, db)
+    n = sum(counts.values())
     if n < 5:
         return {
             "adjustment": 0,
@@ -45,8 +55,8 @@ def get_feedback_calibration(user_id: int, db: Session) -> Dict[str, Any]:
             "wrong_rate": 0,
         }
 
-    wrong_rate = len([r for r in records if r.verdict == "wrong"]) / n
-    partial_rate = len([r for r in records if r.verdict == "partial"]) / n
+    wrong_rate = counts.get("wrong", 0) / n
+    partial_rate = counts.get("partial", 0) / n
     adjustment = int(round(-(wrong_rate * 15) - (partial_rate * 7)))
 
     return {

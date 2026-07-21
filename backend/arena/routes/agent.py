@@ -20,6 +20,7 @@ from arena.core.agent_pipeline import (
     run_refinement_pipeline,
 )
 from arena.core.file_ingest import process_upload
+from arena.core.bounded_read import UploadTooLargeError, read_upload_capped
 from arena.core.http_headers import content_disposition_attachment
 from arena.core.upload_store import UPLOAD_DIR, ensure_upload_dir, register_upload, resolve_attachments
 from arena.core.dependencies import get_current_user_required
@@ -641,7 +642,30 @@ def _watchlist_latest_summary(db: Session, user_id: int, latest_task_id: Optiona
     }
 
 
-def _watchlist_item_api_dict(db: Session, item: WatchlistItem) -> dict:
+def _batch_watchlist_latest_summaries(db: Session, user_id: int, task_ids: list[str]) -> dict[str, dict]:
+    """Batch-fetch latest task summaries for a list of task_ids."""
+    if not task_ids:
+        return {}
+    rows = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id.in_(task_ids), AgentTaskRow.user_id == user_id)
+        .all()
+    )
+    result = {}
+    for row in rows:
+        title = (row.title or "").strip() or (row.task_text or "")[:80]
+        result[row.task_id] = {
+            "task_id": row.task_id,
+            "title": title,
+            "created_at": row.created_at.isoformat() if row.created_at else "",
+            "final_score": row.final_score,
+        }
+    return result
+
+
+def _watchlist_item_api_dict(db: Session, item: WatchlistItem, *, latest_summary: Optional[dict] = None) -> dict:
+    if latest_summary is None:
+        latest_summary = _watchlist_latest_summary(db, item.user_id, item.latest_task_id)
     return {
         "id": item.id,
         "question": item.question,
@@ -654,7 +678,7 @@ def _watchlist_item_api_dict(db: Session, item: WatchlistItem) -> dict:
         "run_count": int(item.run_count or 0),
         "is_active": bool(item.is_active),
         "created_at": item.created_at.isoformat() if item.created_at else "",
-        "latest_task": _watchlist_latest_summary(db, item.user_id, item.latest_task_id),
+        "latest_task": latest_summary,
     }
 
 
@@ -836,7 +860,7 @@ async def _save_completed_task_to_memory(
                         if s not in sources:
                             sources.append(s)
             except Exception:
-                pass
+                logger.warning("Failed to parse final_answer sources", exc_info=True)
 
             stage_pairs = [
                 ("planner", bb.plan),
@@ -969,13 +993,22 @@ async def upload_agent_attachment(
         message="Too many file uploads. Limit is 30 per hour.",
     )
     ensure_upload_dir()
-    data = await file.read()
     max_bytes = 10 * 1024 * 1024
-    if len(data) > max_bytes:
+    # Fast-reject when the client declared an oversize Content-Length so we
+    # never start buffering chunks for a doomed upload.
+    declared = getattr(file, "size", None)
+    if isinstance(declared, int) and declared > max_bytes:
         raise HTTPException(
             status_code=413,
             detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "File too large (max 10MB)"},
         )
+    try:
+        data = await read_upload_capped(file, max_bytes)
+    except UploadTooLargeError:
+        raise HTTPException(
+            status_code=413,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "File too large (max 10MB)"},
+        ) from None
     orig = (file.filename or "upload").strip() or "upload"
     file_id = str(uuid.uuid4())
     safe_name = "".join(c for c in orig if c.isalnum() or c in "._- ")[:180] or "file"
@@ -2051,9 +2084,11 @@ async def list_watchlist_items(
         .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
         .count()
     )
+    latest_task_ids = [i.latest_task_id for i in items if i.latest_task_id]
+    latest_summaries = _batch_watchlist_latest_summaries(db, user.id, latest_task_ids) if latest_task_ids else {}
     return JSONResponse(
         content={
-            "items": [_watchlist_item_api_dict(db, i) for i in items],
+            "items": [_watchlist_item_api_dict(db, i, latest_summary=latest_summaries.get(i.latest_task_id)) for i in items],
             "active_count": active_n,
             "active_cap": WATCHLIST_MAX_ACTIVE,
         }

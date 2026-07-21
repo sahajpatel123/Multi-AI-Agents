@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from arena.core.datetime_utils import utcnow_naive
 from arena.db_models import AgentStance
 
 STANCE_STOP_WORDS = {
@@ -39,10 +40,6 @@ STANCE_STOP_WORDS = {
     "this",
     "that",
 }
-
-
-def _now_utc() -> datetime:
-    return datetime.now(UTC)
 
 
 def extract_topic(prompt: str) -> str:
@@ -91,6 +88,7 @@ async def save_agent_stance(
     session_id: str,
     prompt_snippet: str,
     db: Session,
+    commit: bool = True,
 ) -> None:
     normalized_topic = _normalize_topic(topic)
     existing = (
@@ -100,6 +98,7 @@ async def save_agent_stance(
             AgentStance.persona_id == persona_id,
             AgentStance.topic_normalized == normalized_topic,
         )
+        .with_for_update()
         .first()
     )
 
@@ -109,7 +108,7 @@ async def save_agent_stance(
         existing.confidence = max(0, min(100, int(confidence)))
         existing.session_id = session_id
         existing.prompt_snippet = prompt_snippet[:100]
-        existing.updated_at = _now_utc().replace(tzinfo=None)
+        existing.updated_at = utcnow_naive()
         db.add(existing)
     else:
         db.add(
@@ -125,7 +124,8 @@ async def save_agent_stance(
             )
         )
 
-    db.commit()
+    if commit:
+        db.commit()
 
 
 async def get_agent_stance(

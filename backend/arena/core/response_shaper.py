@@ -1,5 +1,6 @@
 """Response Shaper — winner formatter, one-liner generator, payload assembler"""
 
+import logging
 import uuid
 import json
 from datetime import datetime, timezone
@@ -7,6 +8,8 @@ from datetime import datetime, timezone
 import anthropic
 
 from arena.core.datetime_utils import utcnow_naive
+
+logger = logging.getLogger(__name__)
 from arena.core.model_router import get_route_for_task
 from arena.models.schemas import (
     AgentResponse,
@@ -61,7 +64,7 @@ async def generate_one_liner(
         )
         return result.content[0].text.strip().rstrip(".")  + "."
     except Exception:
-        # Fallback: take the first sentence
+        logger.warning("Failed to generate one-liner via LLM, falling back to first sentence", exc_info=True)
         return _extract_first_sentence(verdict)
 
 

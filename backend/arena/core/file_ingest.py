@@ -54,6 +54,7 @@ def extract_pdf_text(path: str) -> str:
             try:
                 t = page.extract_text() or ""
             except Exception:
+                logger.warning("Failed to extract text from PDF page", exc_info=True)
                 t = ""
             if t:
                 chunks.append(t)
@@ -72,6 +73,7 @@ def extract_plain_text(data: bytes) -> str:
     try:
         return _truncate(data.decode("utf-8", errors="ignore"))
     except Exception:
+        logger.warning("Failed to decode plain text bytes", exc_info=True)
         return ""
 
 
@@ -94,6 +96,7 @@ def image_b64_and_mime(data: bytes, content_type: str) -> Tuple[str, str]:
     except Image.DecompressionBombError as e:  # type: ignore[attr-defined]
         raise ValueError("Image is too large to process.") from e
     except Exception as e:
+        logger.warning("Failed to read image for ingest: %s", e, exc_info=True)
         raise ValueError("Could not read image file.") from e
 
     fmt = (im.format or "").upper()

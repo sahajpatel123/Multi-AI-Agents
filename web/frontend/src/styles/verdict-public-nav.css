@@ -51,6 +51,14 @@
   font-weight: 900;
   background: transparent;
   border: 0;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease)),
+    opacity var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease));
+}
+
+.vp-public-nav .vp-brand:hover,
+.vp-public-nav .vp-brand:focus-visible {
+  color: var(--acid);
 }
 
 .vp-public-nav .vp-brand i {
@@ -74,6 +82,9 @@
   border-left: 1px solid var(--rule);
   font: 10px/1 var(--vp-font-mono, monospace);
   color: #c7c8c2;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease)),
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease));
 }
 
 .vp-public-nav > nav a:last-child {
@@ -110,6 +121,24 @@
   border-radius: 2px;
   font-size: 12px;
   font-weight: 800;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease)),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease)),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, var(--ease)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, var(--ease));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .vp-public-nav .vp-enter:hover,
+  .vp-public-nav .vp-enter:focus-visible {
+    transform: translateY(-1.5px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  }
+}
+
+.vp-public-nav .vp-enter:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: var(--motion-press-ms, 95ms);
 }
 
 .vp-public-nav .vp-enter:hover,
@@ -132,6 +161,10 @@
   color: var(--ivory);
   border: 1px solid var(--rule);
   border-radius: 2px;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease)),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease)),
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease));
 }
 
 .vp-public-nav .vp-menu-button:hover,
@@ -188,6 +221,10 @@
   border-radius: 0;
   background: transparent;
   color: var(--ivory);
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease)),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease)),
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease));
 }
 
 .vp-public-menu .vp-menu-close:hover,
@@ -213,6 +250,9 @@
   grid-template-columns: 50px 1fr auto;
   align-items: center;
   border-bottom: 1px solid var(--rule);
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease)),
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--ease));
 }
 
 .vp-public-menu nav a small {
@@ -297,7 +337,20 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vp-menu.vp-public-menu {
+  .vp-menu.vp-public-menu,
+  .vp-public-nav .vp-brand,
+  .vp-public-nav > nav a,
+  .vp-public-nav .vp-enter,
+  .vp-public-nav .vp-menu-button,
+  .vp-public-menu .vp-menu-close,
+  .vp-public-menu nav a {
     transition: none;
+  }
+
+  .vp-public-nav .vp-enter:hover,
+  .vp-public-nav .vp-enter:focus-visible,
+  .vp-public-nav .vp-enter:active {
+    transform: none;
+    box-shadow: none;
   }
 }

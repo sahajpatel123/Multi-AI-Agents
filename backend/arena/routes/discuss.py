@@ -1,6 +1,7 @@
 """Discuss route — 1-on-1 private conversation with a single agent"""
 
 import json
+import logging
 import uuid
 from typing import Optional
 
@@ -30,6 +31,8 @@ from arena.models.schemas import (
     UserResponse,
 )
 from arena.core.agents import get_agent_config, get_persona_id_for_agent, get_raw_persona_prompt, call_persona, get_model_for_persona
+
+logger = logging.getLogger(__name__)
 from arena.core.memory import get_memory_manager
 from arena.core.model_router import get_route_for_persona
 
@@ -127,7 +130,7 @@ async def discuss_with_agent(
 
     # Check rate limit BEFORE any LLM calls
     try:
-        check_and_increment_user(db, user.id, user_tier)
+        check_and_increment_user(db, user.id)
     except RateLimitExceeded as e:
         raise HTTPException(
             status_code=429,
@@ -210,6 +213,7 @@ async def discuss_with_agent(
         )
 
     except Exception:
+        logger.exception("Discuss request failed")
         raise HTTPException(
             status_code=500,
             detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Discuss request failed"},
@@ -239,7 +243,7 @@ async def stream_discuss(
 
     # Check rate limit BEFORE any LLM calls
     try:
-        check_and_increment_user(db, user.id, user_tier)
+        check_and_increment_user(db, user.id)
     except RateLimitExceeded as e:
         raise HTTPException(
             status_code=429,
@@ -354,7 +358,8 @@ async def stream_discuss(
             # handles stream cleanup via __aexit__ on generator close.
             # Swallow silently — no error event needed for a disconnected client.
             return
-        except Exception as e:
+        except Exception:
+            logger.warning("Discuss SSE generator failed", exc_info=True)
             yield _sse_event("error", {"detail": "Discuss request failed"})
 
     return StreamingResponse(

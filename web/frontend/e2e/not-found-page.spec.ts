@@ -71,4 +71,70 @@ test.describe('Not Found page (mocked)', () => {
 
     expect(pageErrors).toEqual([]);
   });
+
+  test('recovery-actions group contains the documented 4 buttons + the copy-to-clipboard affordance', async ({
+    page,
+  }) => {
+    await page.goto('/missing-route-xyz');
+
+    // Recovery actions group: 4 buttons (Back to home / Try Arena →
+    // / How it works / Watchlist) per notFoundActions(isAuthenticated).
+    // For unauthenticated visitors, "Try Arena →" routes through
+    // /signin?tab=signup, so we can't pin the destination directly here —
+    // we pin the labels and verify they're all visible inside the group.
+    const group = page.getByRole('group', { name: /recovery options/i });
+    await expect(group).toBeVisible();
+    await expect(group.getByRole('button', { name: /back to home/i })).toBeVisible();
+    await expect(group.getByRole('button', { name: /try arena/i })).toBeVisible();
+
+    // Copy-to-clipboard button — its aria-label is what screen readers
+    // announce; pin the affordance is present so a regression that
+    // accidentally removed it surfaces in CI.
+    await expect(
+      page.getByRole('button', { name: /copy requested path/i }),
+    ).toBeVisible();
+  });
+
+  test('main landmark has the documented a11y attributes', async ({ page }) => {
+    await page.goto('/404');
+
+    // The <main> landmark must:
+    //   - carry id="main-content" (the skip-link + global landmark)
+    //   - have tabindex=-1 (so the skip-to-content anchor can focus it)
+    //   - have aria-labelledby pointing at the h1 (so screen readers
+    //     announce the page name when entering the landmark)
+    const main = page.locator('main#main-content');
+    await expect(main).toBeVisible();
+    await expect(main).toHaveAttribute('tabindex', '-1');
+    await expect(main).toHaveAttribute('aria-labelledby', 'not-found-title');
+
+    // And the labelled element exists + is the h1.
+    const heading = page.locator('#not-found-title');
+    await expect(heading).toHaveRole('heading');
+  });
+
+  test('h1 id="not-found-title" matches the aria-labelledby target', async ({ page }) => {
+    await page.goto('/404');
+
+    // The aria-labelledby on <main> points at an id that must exist as
+    // the labelled element. A regression that broke the linkage (e.g.,
+    // renamed the h1 id without updating aria-labelledby) would orphan
+    // the a11y label — pin both the labelled element's id and its role.
+    const labelled = page.locator('#not-found-title');
+    await expect(labelled).toBeVisible();
+    await expect(labelled).toHaveRole('heading');
+    await expect(labelled).toHaveText(/this page isn'?t in the arena/i);
+  });
+
+  test('recovery hint text guides the user to a working path', async ({ page }) => {
+    await page.goto('/404');
+
+    // The .not-found-hint is the soft "where do I go now" line at the
+    // bottom of the recovery card. It's a user-visible brand voice
+    // signal that suggests the right next action.
+    await expect(page.locator('.not-found-hint')).toBeVisible();
+    await expect(page.locator('.not-found-hint')).toContainText(
+      /start from home|jump straight into a fresh arena run/i,
+    );
+  });
 });

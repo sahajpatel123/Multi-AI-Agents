@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
+from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from dataclasses import dataclass, field
@@ -234,6 +235,7 @@ class Blackboard:
 
 
 active_tasks: dict[str, Blackboard] = {}
+_active_tasks_lock = Lock()
 
 
 def create_blackboard(user_id: int, task: str) -> Blackboard:
@@ -243,13 +245,16 @@ def create_blackboard(user_id: int, task: str) -> Blackboard:
         original_task=task,
         started_at=datetime.now(timezone.utc),
     )
-    active_tasks[bb.task_id] = bb
+    with _active_tasks_lock:
+        active_tasks[bb.task_id] = bb
     return bb
 
 
 def get_blackboard(task_id: str) -> Optional[Blackboard]:
-    return active_tasks.get(task_id)
+    with _active_tasks_lock:
+        return active_tasks.get(task_id)
 
 
 def remove_blackboard(task_id: str) -> None:
-    active_tasks.pop(task_id, None)
+    with _active_tasks_lock:
+        active_tasks.pop(task_id, None)
