@@ -797,8 +797,9 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                     db.commit()
                 else:
                     logger.warning("subscription.activated: no subscription entity in payload")
-            except Exception as exc:
-                logger.error("subscription.activated error: %s", exc)
+            except Exception:
+                logger.exception("subscription.activated error")
+                raise
 
         elif event == "subscription.charged":
             try:
@@ -812,8 +813,9 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                     db.commit()
                 else:
                     logger.warning("subscription.charged: no subscription entity in payload")
-            except Exception as exc:
-                logger.error("subscription.charged error: %s", exc)
+            except Exception:
+                logger.exception("subscription.charged error")
+                raise
 
         elif event == "subscription.halted":
             ent = _subscription_entity_from_payload(payload)
