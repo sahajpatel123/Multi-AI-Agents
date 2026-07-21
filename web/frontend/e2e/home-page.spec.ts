@@ -176,6 +176,27 @@ test.describe('Home page (mocked)', () => {
     await agentMode.getByRole('button', { name: /run an investigation/i }).click();
     await expect(page).toHaveURL(/\/signin\?tab=signup/);
   });
+
+  test('method section pins the 3 inner promise cards', async ({ page }) => {
+    await page.goto('/');
+
+    // The method section (#method) has a sub-grid `.vp-three` with 3
+    // promise cards that describe the product's core guarantees.
+    // Pin the h3 copy so a future copy edit surfaces in CI.
+    const method = page.locator('#method');
+    const promises = method.locator('.vp-three article');
+    expect(await promises.count()).toBe(3);
+
+    await expect(
+      promises.nth(0).getByRole('heading', { name: /difference is designed\./i }),
+    ).toBeVisible();
+    await expect(
+      promises.nth(1).getByRole('heading', { name: /the score is visible\./i }),
+    ).toBeVisible();
+    await expect(
+      promises.nth(2).getByRole('heading', { name: /the winner is not the end\./i }),
+    ).toBeVisible();
+  });
 });
 
 function escape(s: string): string {
