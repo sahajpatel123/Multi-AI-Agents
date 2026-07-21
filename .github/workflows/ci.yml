@@ -37,11 +37,15 @@ jobs:
           # Gitleaks below scans `git log <prev_sha>^..HEAD`; the
           # default fetch-depth: 1 leaves <prev_sha>^ unresolved so
           # the diff is empty AND the action exits non-zero. fetch-depth: 2
-          # is just enough for a single-commit push, but breaks again on
-          # multi-commit pushes (e.g. two commits in a row — the ^ of the
-          # second-newest SHA isn't in the clone). 10 covers up to 9-commit
-          # pushes; bigger ones are rare and we can revisit.
-          fetch-depth: 10
+          # is just enough for a single-commit push but breaks on any
+          # multi-commit push (the ^ of the second-newest SHA isn't in
+          # the clone). 50 covers the realistic worst-case (a long-lived
+          # branch batch-merged via a PR — e.g. the loop/fix-pin-floor
+          # branch took ~11 commits to land, and PR merges don't shorten
+          # the rev-walk because the merge-base can sit further back).
+          # If we ever push a real batch >50 commits this will need to
+          # bump again.
+          fetch-depth: 50
 
       - name: Set up Python
         uses: actions/setup-python@v6
