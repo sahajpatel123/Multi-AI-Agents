@@ -313,7 +313,7 @@ def _read_rss_bytes() -> Optional[int]:
 
         return int(psutil.Process(os.getpid()).memory_info().rss)
     except Exception:
-        pass
+        logger.warning("Failed to read RSS bytes via psutil", exc_info=True)
 
     status_path = Path("/proc/self/status")
     if not status_path.exists():
@@ -326,6 +326,7 @@ def _read_rss_bytes() -> Optional[int]:
                     # VmRSS is reported in kilobytes.
                     return int(parts[1]) * 1024
     except Exception:
+        logger.warning("Failed to read VmRSS from /proc/self/status", exc_info=True)
         return None
     return None
 
@@ -342,6 +343,7 @@ def _read_open_fd_count() -> Optional[int]:
     try:
         return sum(1 for entry in fd_dir.iterdir())
     except Exception:
+        logger.warning("Failed to count open file descriptors", exc_info=True)
         return None
 
 
@@ -350,6 +352,7 @@ def _read_cpu_count() -> Optional[int]:
     try:
         return os.cpu_count()
     except Exception:
+        logger.warning("Failed to read CPU count", exc_info=True)
         return None
 
 

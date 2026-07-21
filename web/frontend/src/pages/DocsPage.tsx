@@ -14,6 +14,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
+import { Pressable } from '../components/Pressable';
+import { Reveal } from '../components/Reveal';
 import { copyToClipboard } from '../lib/clipboard';
 import '../styles/verdict-docs.css';
 
@@ -209,7 +211,7 @@ export function DocsPage() {
             <p>Architecture, runtime behavior, public APIs, limits, and security boundaries—explained as one inspectable system.</p>
             <div className="docs-field-hero__actions">
               <a href="#start">Start locally <ArrowRight aria-hidden="true" /></a>
-              <button type="button" onClick={() => navigate('/product')}>Product overview</button>
+              <Pressable type="button" onClick={() => navigate('/product')}>Product overview</Pressable>
             </div>
             <dl className="docs-field-proof">
               <div><dt>7</dt><dd>field chapters</dd></div>
@@ -229,11 +231,12 @@ export function DocsPage() {
                 </a>
               ))}
             </nav>
-            <button type="button" onClick={() => navigate('/changelog')}>View changelog <ArrowRight aria-hidden="true" /></button>
+            <Pressable type="button" onClick={() => navigate('/changelog')}>View changelog <ArrowRight aria-hidden="true" /></Pressable>
           </aside>
 
           <div className="docs-field-reader">
             <section id="start" className="docs-field-chapter" aria-labelledby="docs-start-title">
+              <Reveal>
               <ChapterHeading id="docs-start-title" eyebrow="Start here" title="From clone to first verdict." body="Bring up the API, apply migrations, start the client, and verify both surfaces before changing behavior." />
               <div className="docs-boot-sequence" aria-label="Local boot sequence">
                 {[['ENV','Python 3.11+ · Node.js 18+'],['SECRETS','Anthropic key · strong SECRET_KEY'],['DATA','PostgreSQL primary · SQLite dev fallback'],['RUN','API :8000 · UI :5173']].map(([label,text]) => <article key={label}><strong>{label}</strong><p>{text}</p></article>)}
@@ -243,9 +246,11 @@ export function DocsPage() {
                 <CodeBlock id="frontend" label="Frontend / terminal" value={FRONTEND_SETUP} copyState={copyState} onCopy={copy} />
               </div>
               <div className="docs-field-note"><strong>Health sequence</strong><p>Run <code>alembic upgrade head</code>, then check <code>/api/health</code>. The browser reaches the API through <code>/api/*</code>; never hardcode a production backend URL.</p></div>
+              </Reveal>
             </section>
 
             <section id="concepts" className="docs-field-chapter" aria-labelledby="docs-concepts-title">
+              <Reveal>
               <ChapterHeading id="docs-concepts-title" eyebrow="Runtime model" title="One prompt. Five model roles. One verdict." body="Arena preserves disagreement: four configured personas answer independently, then a fifth model evaluates the resulting set." />
               <div className="docs-runtime-map">
                 <div className="docs-runtime-map__input"><small>Input</small><strong>Your question</strong><span>sanitize → classify → route</span></div>
@@ -258,9 +263,11 @@ export function DocsPage() {
               <div className="docs-score-ledger">
                 {[['RELEVANCE','Does it answer the actual question?'],['INSIGHT','Does it reveal something non-obvious?'],['CLARITY','Can the reasoning be inspected?'],['HONESTY','Are limits and uncertainty named?']].map(([label,text]) => <article key={label}><strong>{label}</strong><p>{text}</p></article>)}
               </div>
+              </Reveal>
             </section>
 
             <section id="agent" className="docs-field-chapter" aria-labelledby="docs-agent-title">
+              <Reveal>
               <ChapterHeading id="docs-agent-title" eyebrow="Agent Mode" title="A research pipeline that can reject its own work." body="Seven visible stages expose progress while the runtime carries structured artifacts forward and bounds refinement." />
               <div className="docs-pipeline-studio">
                 <div className="docs-pipeline" role="group" aria-label="Inspect Agent stage">
@@ -277,9 +284,11 @@ export function DocsPage() {
                 </aside>
               </div>
               <div className="docs-field-note"><strong>Public progress contract</strong><p>The product says seven stages because those are the stages users see. Pipeline internals remain implementation detail; do not infer additional public steps from source layout.</p></div>
+              </Reveal>
             </section>
 
             <section id="api" className="docs-field-chapter" aria-labelledby="docs-api-title">
+              <Reveal>
               <ChapterHeading id="docs-api-title" eyebrow="API surface" title="Typed routes. Streaming where time matters." body="The frontend centralizes backend calls in a typed client. Streaming paths use fetch readers so navigation and Stop controls can abort work." />
               <div className="docs-api-explorer">
                 <div className="docs-api-explorer__tabs" role="group" aria-label="API route group">
@@ -292,17 +301,21 @@ export function DocsPage() {
                   <footer><span>Base</span><b>/api/*</b><span>Client</span><b>src/api.ts</b></footer>
                 </div>
               </div>
+              </Reveal>
             </section>
 
             <section id="architecture" className="docs-field-chapter" aria-labelledby="docs-architecture-title">
+              <Reveal>
               <ChapterHeading id="docs-architecture-title" eyebrow="Architecture" title="Boundaries that make disagreement operable." body="Client, service, intelligence, and persistence remain separable so routing, scoring, memory, and transport can evolve independently." />
               <div className="docs-architecture-map">
                 {[['01','CLIENT','React 18 · TypeScript · Vite','Route-split pages, contexts, typed API calls, streaming UI.'],['02','SERVICE','FastAPI · SQLAlchemy · Alembic','Feature routers, middleware, schemas, additive migrations.'],['03','INTELLIGENCE','Anthropic · OpenAI · xAI · DeepSeek','Task-aware routes; missing optional provider keys fall back to Claude.'],['04','DATA & OPS','PostgreSQL · SQLite dev fallback','Persistent product data, JSON logs, latency and scoring audits.']].map(([n,label,stack,body]) => <article key={n}><small>{n} / {label}</small><h3>{stack}</h3><p>{body}</p></article>)}
               </div>
               <CodeBlock id="map" label="Repository / project map" value={PROJECT_MAP} copyState={copyState} onCopy={copy} />
+              </Reveal>
             </section>
 
             <section id="tiers" className="docs-field-chapter" aria-labelledby="docs-tiers-title">
+              <Reveal>
               <ChapterHeading id="docs-tiers-title" eyebrow="Plans & limits" title="Capacity is explicit before a run starts." body="Message and token budgets are enforced server-side. Agent Mode is included with Pro and available to Plus through the paid add-on." />
               <div className="docs-plan-ledger" role="region" aria-label="Plan limits table" tabIndex={0}>
                 <table>
@@ -311,10 +324,12 @@ export function DocsPage() {
                   <tbody>{PLAN_ROWS.map((row) => <tr key={row[0]}>{row.map((cell,index) => index === 0 ? <th key={cell} scope="row">{cell}</th> : <td key={cell}>{cell}</td>)}</tr>)}</tbody>
                 </table>
               </div>
-              <div className="docs-tier-actions"><p>Pro also uses a rolling 45-message / 5-hour window. Plus add-on runs retain Plus limits.</p><button type="button" onClick={() => navigate('/pricing')}>Compare full pricing <ArrowRight aria-hidden="true" /></button></div>
+              <div className="docs-tier-actions"><p>Pro also uses a rolling 45-message / 5-hour window. Plus add-on runs retain Plus limits.</p><Pressable type="button" onClick={() => navigate('/pricing')}>Compare full pricing <ArrowRight aria-hidden="true" /></Pressable></div>
+              </Reveal>
             </section>
 
             <section id="security" className="docs-field-chapter docs-field-chapter--last" aria-labelledby="docs-security-title">
+              <Reveal>
               <ChapterHeading id="docs-security-title" eyebrow="Security & boundaries" title="Defence belongs inside the runtime." body="Transport, identity, payments, prompts, secrets, and local execution each fail at a named boundary." />
               <div className="docs-security-grid">
                 {SECURITY_CONTROLS.map(([n,label,body]) => <article key={n}><header><small>{n}</small><ShieldCheck aria-hidden="true" /></header><strong>{label}</strong><p>{body}</p></article>)}
@@ -323,7 +338,8 @@ export function DocsPage() {
                 <div><h3>The browser does not control your machine.</h3></div>
                 <p>Arena handles web research. Opening desktop apps, writing local files, or running shell commands requires Condura—a separate local-first daemon. Never report local work as completed without that handoff.</p>
               </div>
-              <div className="docs-field-close"><div><h3>Choose the surface. Inspect the result.</h3></div><div><button type="button" onClick={() => navigate('/product')}>Explore product</button><button type="button" onClick={() => navigate('/signin?tab=signup')}>Start free <ArrowRight aria-hidden="true" /></button></div></div>
+              <div className="docs-field-close"><div><h3>Choose the surface. Inspect the result.</h3></div><div><Pressable type="button" onClick={() => navigate('/product')}>Explore product</Pressable><Pressable type="button" onClick={() => navigate('/signin?tab=signup')}>Start free <ArrowRight aria-hidden="true" /></Pressable></div></div>
+              </Reveal>
             </section>
           </div>
         </div>

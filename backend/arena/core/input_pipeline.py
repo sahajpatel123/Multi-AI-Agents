@@ -3,11 +3,14 @@
 import asyncio
 import html
 import json
+import logging
 import re
 import anthropic
 from fastapi import HTTPException
 
 from arena.core.model_router import get_route_for_prompt, get_route_for_task
+
+logger = logging.getLogger(__name__)
 from arena.models.schemas import (
     PromptCategory,
     PromptClassification,
@@ -184,6 +187,7 @@ async def classify_prompt(
             reasoning=data.get("reasoning", ""),
         )
     except Exception:
+        logger.warning("LLM classification failed, returning fallback", exc_info=True)
         return PromptClassification(
             category=PromptCategory.QUESTION,
             reasoning="Fallback: classification failed",
@@ -209,6 +213,7 @@ async def extract_intent(
             key_entities=data.get("key_entities", [])[:5],
         )
     except Exception:
+        logger.warning("LLM intent extraction failed, returning fallback", exc_info=True)
         return IntentExtraction(
             surface_intent=prompt,
             deeper_intent="",
@@ -235,6 +240,7 @@ async def check_toxicity_llm(
             confidence=float(data.get("confidence", 0.0)),
         )
     except Exception:
+        logger.warning("LLM toxicity check failed, returning safe fallback", exc_info=True)
         return ToxicityResult(is_toxic=False, reason=None, confidence=0.0)
 
 

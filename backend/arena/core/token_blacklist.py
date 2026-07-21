@@ -28,6 +28,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from arena.db_models import RevokedToken
@@ -164,8 +165,15 @@ def add(token: str, expires_at: datetime, db: Session, reason: Optional[str] = N
             existing.expires_at = expires_at
             db.commit()
         return
-    db.add(RevokedToken(token_hash=h, expires_at=expires_at, reason=reason))
-    db.commit()
+    try:
+        db.add(RevokedToken(token_hash=h, expires_at=expires_at, reason=reason))
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        logger.debug(
+            "concurrent blacklist insert detected for token %s...; rolled back",
+            h[:16],
+        )
 
 
 def is_blacklisted(token: str, db: Session) -> bool:

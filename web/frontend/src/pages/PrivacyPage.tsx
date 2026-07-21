@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
+import { Reveal } from '../components/Reveal';
 import { prefersReducedMotion } from '../lib/motion';
 import '../styles/verdict-privacy.css';
 
@@ -386,7 +387,8 @@ function PolicyChapter({
   children: ReactNode;
 }) {
   return (
-    <article
+    <Reveal
+      as="article"
       id={chapter.id}
       className="privacy-chapter"
       data-accent={chapter.accent}
@@ -401,7 +403,7 @@ function PolicyChapter({
         <h3 id={`${chapter.id}-title`}>{chapter.title}</h3>
         <div className="privacy-chapter__body">{children}</div>
       </div>
-    </article>
+    </Reveal>
   );
 }
 
@@ -719,7 +721,7 @@ export function PrivacyPage() {
           </div>
         </header>
 
-        <section className="privacy-posture" aria-labelledby="posture-title">
+        <Reveal as="section" className="privacy-posture" aria-labelledby="posture-title">
           <div className="privacy-section-heading">
             <div>
               <p className="privacy-eyebrow">Policy posture</p>
@@ -745,7 +747,7 @@ export function PrivacyPage() {
             <strong>Reading aid:</strong> these cards summarize the posture;
             the route details and full policy chapters provide the complete context.
           </p>
-        </section>
+        </Reveal>
 
         <section
           id="route-inspector"

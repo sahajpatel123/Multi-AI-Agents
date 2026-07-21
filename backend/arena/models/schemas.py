@@ -238,7 +238,7 @@ class ErrorResponse(BaseModel):
     """Standard error response"""
 
     error: str
-    detail: str | None = None
+    message: str | None = None
     timestamp: datetime = Field(default_factory=utcnow_naive)
 
 
@@ -370,7 +370,7 @@ class RateLimitError(BaseModel):
     tier: str
     prompts_used: int
     daily_limit: int
-    resets_at: str
+    scope: str = ""
 
 
 # ─────────────────────────────────────────────────

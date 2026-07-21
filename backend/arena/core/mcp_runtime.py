@@ -226,6 +226,7 @@ async def fetch_mcp_context_for_task(
 
                 meta = json.loads(meta)
             except Exception:
+                logger.warning("Failed to parse integration_metadata JSON (line 228)", exc_info=True)
                 meta = {}
         if not isinstance(meta, dict):
             meta = {}
@@ -285,6 +286,7 @@ async def search_integration_api(
 
             meta = json.loads(meta)
         except Exception:
+            logger.warning("Failed to parse integration_metadata JSON (line 287)", exc_info=True)
             meta = {}
     if not isinstance(meta, dict):
         meta = {}

@@ -11,6 +11,8 @@ import { useNavigate } from 'react-router-dom';
 import { getSubscriptionStatus } from '../api';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
+import { Pressable } from '../components/Pressable';
+import { Reveal } from '../components/Reveal';
 import { RazorpayCheckout } from '../components/RazorpayCheckout';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
@@ -301,22 +303,22 @@ export function PricingPage() {
 
     if (plan.id === 'explorer') {
       return (
-        <button type="button" className="pricing-tier-card__cta" onClick={startFree}>
+        <Pressable type="button" className="pricing-tier-card__cta" onClick={startFree}>
           <span>{isAuthenticated ? 'Open Arena' : 'Start for free'}</span>
           <ArrowRight aria-hidden="true" />
-        </button>
+        </Pressable>
       );
     }
 
     return (
-      <button
+      <Pressable
         type="button"
         className="pricing-tier-card__cta"
         onClick={() => beginCheckout(checkoutKeyFor(plan.id))}
       >
         <span>Get {plan.name}</span>
         <ArrowRight aria-hidden="true" />
-      </button>
+      </Pressable>
     );
   };
 
@@ -363,7 +365,7 @@ export function PricingPage() {
           />
         )}
 
-        <header className="pricing-paywall-hero" aria-labelledby="pricing-title">
+        <header className="pricing-paywall-hero arena-reveal is-visible" aria-labelledby="pricing-title">
           <p className="pricing-paywall-hero__kicker">Pricing</p>
           <h1 id="pricing-title">
             Pay for depth.
@@ -410,7 +412,8 @@ export function PricingPage() {
           </div>
         )}
 
-        <section
+        <Reveal
+          as="section"
           id="pricing-plans"
           className="pricing-paywall-plans"
           aria-labelledby="pricing-plans-title"
@@ -418,15 +421,17 @@ export function PricingPage() {
           <div className="pricing-paywall-plans__bar">
             <h2 id="pricing-plans-title">Choose a plan</h2>
             <div className="pricing-billing-control" role="group" aria-label="Billing period">
-              <button
+              <Pressable
+                soft
                 type="button"
                 aria-pressed={billing === 'monthly'}
                 className={billing === 'monthly' ? 'is-active' : ''}
                 onClick={() => setBilling('monthly')}
               >
                 Monthly
-              </button>
-              <button
+              </Pressable>
+              <Pressable
+                soft
                 type="button"
                 aria-pressed={billing === 'annual'}
                 className={billing === 'annual' ? 'is-active' : ''}
@@ -434,7 +439,7 @@ export function PricingPage() {
               >
                 Annual
                 <span>save more</span>
-              </button>
+              </Pressable>
             </div>
           </div>
 
@@ -503,12 +508,9 @@ export function PricingPage() {
               );
             })}
           </div>
-        </section>
+        </Reveal>
 
-        <section
-          className="pricing-studio-section pricing-comparison-ledger"
-          aria-labelledby="pricing-comparison-title"
-        >
+        <Reveal as="section" className="pricing-studio-section pricing-comparison-ledger" aria-labelledby="pricing-comparison-title">
           <header className="pricing-studio-section__head">
             <div>
               <span>Compare</span>
@@ -547,9 +549,9 @@ export function PricingPage() {
               </tbody>
             </table>
           </div>
-        </section>
+        </Reveal>
 
-        <section className="pricing-studio-section pricing-faq-studio" aria-labelledby="pricing-faq-title">
+        <Reveal as="section" className="pricing-studio-section pricing-faq-studio" aria-labelledby="pricing-faq-title">
           <header className="pricing-studio-section__head">
             <div>
               <span>FAQ</span>
@@ -584,26 +586,26 @@ export function PricingPage() {
               );
             })}
           </div>
-        </section>
+        </Reveal>
 
-        <section className="pricing-studio-close" aria-labelledby="pricing-close-title">
+        <Reveal as="section" className="pricing-studio-close" aria-labelledby="pricing-close-title">
           <p>No card required</p>
           <h2 id="pricing-close-title">Ask one real question first.</h2>
           <div>
-            <button type="button" onClick={startFree}>
+            <Pressable type="button" onClick={startFree}>
               {isAuthenticated ? 'Open Arena' : 'Start for free'} <ArrowRight aria-hidden="true" />
-            </button>
+            </Pressable>
             {isAuthenticated && currentPlan !== 'explorer' ? (
-              <button type="button" onClick={() => openModal('top-right', 'plan')}>
+              <Pressable type="button" onClick={() => openModal('top-right', 'plan')}>
                 {currentPlan === 'pro' ? 'Pro is active' : 'Manage Plus'} <ArrowRight aria-hidden="true" />
-              </button>
+              </Pressable>
             ) : (
-              <button type="button" onClick={() => beginCheckout(checkoutKeyFor('plus'))}>
+              <Pressable type="button" onClick={() => beginCheckout(checkoutKeyFor('plus'))}>
                 Get Plus <ArrowRight aria-hidden="true" />
-              </button>
+              </Pressable>
             )}
           </div>
-        </section>
+        </Reveal>
       </main>
 
       <Footer />

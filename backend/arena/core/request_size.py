@@ -7,9 +7,12 @@ arbitrary body.
 
 from __future__ import annotations
 
+import logging
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_BODY_BYTES = 10 * 1024
 UPLOAD_MAX_BODY_BYTES = 11 * 1024 * 1024  # 10MB file + multipart overhead
@@ -44,14 +47,15 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path.rstrip("/")
-        # Razorpay webhooks can exceed the default API body limit
-        if path.endswith("/api/payments/webhook"):
-            return await call_next(request)
         # Skip size check for OPTIONS preflight and non-body methods
         if request.method == "OPTIONS" or not is_body_method(request.method):
             return await call_next(request)
 
-        max_allowed = max_request_body_bytes(path, self.max_size)
+        # Razorpay webhooks can exceed the default API body limit, but still cap at 1 MB
+        if path.endswith("/api/payments/webhook"):
+            max_allowed = 1024 * 1024
+        else:
+            max_allowed = max_request_body_bytes(path, self.max_size)
         content_length = request.headers.get("content-length")
         if content_length is not None and content_length != "":
             try:
@@ -86,6 +90,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         try:
             body = await request.body()
         except Exception:
+            logger.warning("Failed to read request body for size check", exc_info=True)
             return JSONResponse(
                 status_code=400,
                 content={

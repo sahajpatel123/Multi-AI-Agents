@@ -112,11 +112,17 @@ class Orchestrator:
                         session_id=session_id,
                         prompt_snippet=prompt_snippet,
                         db=db,
+                        commit=False,
                     )
                 except Exception as exc:
                     logger.warning("Failed to archive stance for %s: %s", persona_id, exc)
+            db.commit()
         except Exception as exc:
             logger.warning("Stance archiving failed: %s", exc)
+            try:
+                db.rollback()
+            except Exception:
+                logger.warning("Failed to rollback stance archiving", exc_info=True)
 
     async def _call_agent(
         self,
@@ -154,7 +160,10 @@ class Orchestrator:
             return self._create_error_response(agent, "Request timed out")
         except json.JSONDecodeError as e:
             return self._create_error_response(agent, f"Invalid JSON response: {e}")
+        except asyncio.CancelledError:
+            return self._create_error_response(agent, "Request cancelled")
         except Exception as e:
+            logger.warning("Agent call failed for %s: %s", agent.name, e, exc_info=True)
             return self._create_error_response(agent, f"Error: {str(e)}")
     
     def _parse_agent_response(self, content: str, agent: AgentConfig) -> AgentResponse:
@@ -364,6 +373,13 @@ class Orchestrator:
             )
             return self._parse_agent_response(full_text, agent)
 
+        except asyncio.CancelledError:
+            await output_queue.put({
+                "type": "agent_error",
+                "agent_id": agent.agent_id,
+                "error": "Request cancelled",
+            })
+            return self._create_error_response(agent, "Request cancelled")
         except Exception as e:
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.error(

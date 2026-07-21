@@ -65,7 +65,7 @@ def _check_rate_limit(
 ) -> None:
     """Enforce rate limits BEFORE touching the input pipeline. Raises HTTPException if exceeded."""
     try:
-        check_and_increment_user(db, user.id, user.tier)
+        check_and_increment_user(db, user.id)
     except RateLimitExceeded as e:
         log_rate_limit_hit(
             request_id=request_id,
@@ -179,7 +179,7 @@ async def submit_prompt(
             log_toxicity_rejection(request_id, user_label, pipeline_result.rejection_reason or "")
             raise HTTPException(
                 status_code=400,
-                detail=pipeline_result.rejection_reason or "Prompt rejected by content policy",
+                detail={"error": "prompt_rejected", "message": pipeline_result.rejection_reason or "Prompt rejected by content policy"},
             )
 
         agent_timings: dict[str, int] = {}

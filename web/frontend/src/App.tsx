@@ -1393,7 +1393,7 @@ function App() {
               {isLoading || isStreaming || isFocusedChatStreaming ? (
                 <button
                   type="button"
-                  className="arena-btn arena-btn--ghost arena-btn--sm"
+                  className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                   onClick={handleStopGeneration}
                   title="Stop generating"
                   aria-label="Stop generating"
@@ -1410,7 +1410,7 @@ function App() {
                 <>
                   <button
                     type="button"
-                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => {
                       void handleExportWinner();
                     }}
@@ -1421,7 +1421,7 @@ function App() {
                   </button>
                   <button
                     type="button"
-                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => {
                       void handleExportAllTakes();
                     }}
@@ -1432,7 +1432,7 @@ function App() {
                   </button>
                   <button
                     type="button"
-                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => handleDownloadAllTakes()}
                     title="Download all four takes as a markdown file"
                     style={{ fontSize: 12 }}
@@ -1444,7 +1444,7 @@ function App() {
               {isDone && response && response.all_responses.length >= 2 ? (
                 <button
                   type="button"
-                  className="arena-btn arena-btn--ghost arena-btn--sm"
+                  className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                   onClick={() => setShowPerspectiveComparison(true)}
                   title="Compare perspectives across answers"
                   style={{ fontSize: 12 }}

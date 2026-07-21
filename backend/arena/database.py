@@ -68,6 +68,7 @@ def _safe_db_host(url: str) -> str:
         port = parsed.port
         return f"{host}:{port}" if port else host
     except Exception:
+        logger.warning("Failed to parse DSN URL for host", exc_info=True)
         return "?"
 
 
@@ -119,7 +120,7 @@ def _make_retrying_pg_creator(url: str, max_attempts: int = 3) -> Callable[[], A
         for attempt in range(1, max_attempts + 1):
             try:
                 return psycopg.connect(**kwargs)
-            except Exception as exc:  # noqa: BLE001 — surface after retries
+            except Exception as exc:  # noqa: BLE001 — psycopg and network errors share this path
                 last_error = exc
                 retryable = _is_retryable_connect_error(exc)
                 if attempt >= max_attempts or not retryable:
@@ -149,6 +150,7 @@ def _make_retrying_pg_creator(url: str, max_attempts: int = 3) -> Callable[[], A
 
 
 def _create_pg_engine(url: str) -> Engine:
+    settings = get_settings()
     # pool_pre_ping: drop dead connections before checkout (SSL EOF / idle kills).
     # pool_recycle: recycle before common managed-PG idle timeouts.
     # pool_use_lifo: prefer hot connections under bursty web traffic.
@@ -157,7 +159,7 @@ def _create_pg_engine(url: str) -> Engine:
         url,
         creator=_make_retrying_pg_creator(url, max_attempts=3),
         pool_pre_ping=True,
-        pool_recycle=280,
+        pool_recycle=settings.database_pool_recycle,
         pool_size=5,
         max_overflow=10,
         pool_timeout=30,
@@ -254,7 +256,7 @@ def _build_engine() -> Engine:
         fallback_url,
         connect_args={"check_same_thread": False} if "sqlite" in fallback_url else {},
     )
-    logger.info(f"Using SQLite fallback: {fallback_url}")
+    logger.info("Using SQLite fallback: %s", fallback_url)
     return engine
 
 
@@ -312,10 +314,15 @@ def get_db() -> Generator[Session, None, None]:
     try:
         yield db
     except Exception as exc:
+        # Broad catch: the yielded request handler may raise any exception.
+        # We only need to act on DB connectivity errors (rollback + dispose),
+        # but we must catch everything to perform that check. Non-DB errors
+        # are unconditionally re-raised.
         if is_db_connectivity_error(exc):
             try:
                 db.rollback()
             except Exception:
+                # Best-effort rollback; the pool will handle cleanup.
                 logger.debug("db.rollback() failed in get_db error path", exc_info=True)
             dispose_engine()
         raise

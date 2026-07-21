@@ -1,10 +1,13 @@
 """Contradiction detector — identifies when agents contradict their previous statements"""
 
 import asyncio
+import logging
 from difflib import SequenceMatcher
 from typing import Optional
 
 from arena.core.model_router import get_route_for_task
+
+logger = logging.getLogger(__name__)
 from arena.models.schemas import AgentResponse
 from arena.core.memory import get_memory_manager
 
@@ -98,7 +101,7 @@ Respond with ONLY valid JSON:
             return data.get("contradicts", False), data.get("severity", "low")
             
         except Exception:
-            # On error, assume no contradiction
+            logger.warning("Failed to parse LLM contradiction response", exc_info=True)
             return False, "low"
     
     async def check_agent_consistency(

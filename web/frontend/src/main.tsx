@@ -13,6 +13,7 @@ import { NetworkStatusBanner } from './components/NetworkStatusBanner'
 import { BackToTopButton } from './components/BackToTopButton'
 import { DocumentTitle } from './components/DocumentTitle'
 import { ScrollToTop } from './components/ScrollToTop'
+import { RouteEnter } from './components/RouteEnter'
 import { MotionButton } from './components/MotionButton'
 import './index.css'
 import './styles/verdict-prism.css'
@@ -186,7 +187,8 @@ if (!rootElement) {
                   Skip to content
                 </a>
                 <Suspense fallback={<RouteChunkFallback />}>
-                <div id="route-content" className="page-enter" tabIndex={-1} style={{ outline: 'none' }}>
+                <div id="route-content" tabIndex={-1} style={{ outline: 'none' }}>
+                <RouteEnter>
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/arena" element={
@@ -233,6 +235,7 @@ if (!rootElement) {
                   <Route path="/room/:slug" element={<RoomPage />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Routes>
+                </RouteEnter>
                 </div>
                 </Suspense>
                 </ProfileModalProvider>

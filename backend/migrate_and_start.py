@@ -391,7 +391,7 @@ def main():
                     token_expires_at TIMESTAMP,
                     is_active BOOLEAN DEFAULT TRUE,
                     connected_at TIMESTAMP DEFAULT NOW(),
-                    metadata JSONB,
+                    integration_metadata JSONB,
                     CONSTRAINT uq_mcp_user_service UNIQUE (user_id, service)
                 )
             """
@@ -406,7 +406,7 @@ def main():
                     token_expires_at TIMESTAMP,
                     is_active INTEGER DEFAULT 1,
                     connected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    metadata TEXT,
+                    integration_metadata TEXT,
                     UNIQUE (user_id, service)
                 )
             """
@@ -581,6 +581,43 @@ def main():
                         conn.rollback()
                     except Exception:
                         pass
+
+            # Rename metadata columns to avoid shadowing Base.metadata.
+            # Best-effort: the column may already be renamed or the table may not exist.
+            for tbl, old_col, new_col in (
+                ("ux_events", "metadata", "event_metadata"),
+                ("mcp_integrations", "metadata", "integration_metadata"),
+            ):
+                try:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE %s RENAME COLUMN %s TO %s"
+                            % (tbl, old_col, new_col)
+                        )
+                    )
+                    conn.commit()
+                    print(f"==> Renamed {tbl}.{old_col} -> {new_col}", flush=True)
+                except Exception:
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+
+            # Hot-path composite index for get_today_token_usage query.
+            idx_sql = (
+                "CREATE INDEX IF NOT EXISTS idx_usage_records_user_timestamp "
+                "ON usage_records (user_id, timestamp)"
+            )
+            try:
+                conn.execute(text(idx_sql))
+                conn.commit()
+                print("==> Created idx_usage_records_user_timestamp", flush=True)
+            except Exception as e:
+                print(f"==> Warning (idx_usage_records_user_timestamp): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
 
         print("==> All migrations complete.", flush=True)
 

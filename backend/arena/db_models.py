@@ -178,7 +178,7 @@ class DBSession(Base):
     session_id = Column(String(36), unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     guest_ip = Column(String(45), nullable=True)
-    topics = Column(Text, default="[]")
+    topics = Column(JSON, default=list, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
     last_active = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 
@@ -202,6 +202,10 @@ class DBTurn(Base):
 
 class UsageRecord(Base):
     __tablename__ = "usage_records"
+    __table_args__ = (
+        # Hot-path: get_today_token_usage filters user_id + timestamp >= midnight.
+        Index("idx_usage_records_user_timestamp", "user_id", "timestamp"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -433,7 +437,7 @@ class UXEvent(Base):
     event_type = Column(String(50), nullable=False, comment="See event types below")
     persona_id = Column(String(50), nullable=True, comment="Which persona was involved")
     agent_id = Column(String(20), nullable=True)
-    event_metadata = Column("metadata", JSON, nullable=True, comment="Extra event data")
+    event_metadata = Column("event_metadata", JSON, nullable=True, comment="Extra event data")
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="ux_events", lazy="joined")
@@ -682,7 +686,7 @@ class MCPIntegration(Base):
     token_expires_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     connected_at = Column(DateTime, default=_now, nullable=False)
-    integration_metadata = Column("metadata", JSON, nullable=True)
+    integration_metadata = Column("integration_metadata", JSON, nullable=True)
 
     user = relationship("User", back_populates="mcp_integrations", lazy="joined")
 

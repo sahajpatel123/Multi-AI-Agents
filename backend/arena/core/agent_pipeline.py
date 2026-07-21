@@ -229,6 +229,7 @@ async def run_agent_pipeline_on_blackboard(
                         bb=bb,
                     )
                 except Exception:
+                    logger.warning("intelligence_score post-pipeline failed, returning empty", exc_info=True)
                     return {}
 
             async def safe_assume(bb):
@@ -239,6 +240,7 @@ async def run_agent_pipeline_on_blackboard(
                         bb=bb,
                     )
                 except Exception:
+                    logger.warning("assumption surfacing post-pipeline failed, returning empty", exc_info=True)
                     return {}
 
             async def safe_dissent(bb):
@@ -250,6 +252,7 @@ async def run_agent_pipeline_on_blackboard(
                             critique_output=getattr(bb.critique, 'output', '') or ''
                         ), timeout=25)
                 except Exception:
+                    logger.warning("dissent report post-pipeline failed, returning empty", exc_info=True)
                     return {"positions": [], "minority_view_summary": ""}
 
             async def safe_temporal(bb):
@@ -260,6 +263,7 @@ async def run_agent_pipeline_on_blackboard(
                             final_answer=bb.final_answer
                         ), timeout=25)
                 except Exception:
+                    logger.warning("temporal classification post-pipeline failed, returning default", exc_info=True)
                     return {"decay_class": "durable", "half_life": "2–5 years", "recheck_by": None, "decay_reason": "", "time_sensitive_claims": []}
 
             try:

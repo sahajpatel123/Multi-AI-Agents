@@ -42,6 +42,7 @@ describe('ScrollToTop', () => {
     expect(scrollSpy).toHaveBeenCalled();
     const lastCall = scrollSpy.mock.calls[scrollSpy.mock.calls.length - 1];
     expect(lastCall[0]).toMatchObject({ top: 0, left: 0 });
+    expect((lastCall[0] as ScrollToOptions).behavior).toBeDefined();
   });
 
   it('hash navigation scrolls to the matching element when present', () => {

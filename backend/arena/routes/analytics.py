@@ -1,5 +1,6 @@
 """Analytics and UX tracking routes."""
 
+import logging
 from collections import Counter, defaultdict
 from datetime import datetime, time, timedelta
 
@@ -9,6 +10,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from arena.core.admin_gate import require_admin_email
+
+logger = logging.getLogger(__name__)
 from arena.core.dependencies import get_current_user_optional, get_current_user_required
 from arena.core.input_validation import sanitize_model_optional_text, sanitize_model_text
 from arena.core.model_router import get_all_routes_summary
@@ -112,7 +115,7 @@ async def track_event(
             db=db,
         )
     except Exception:
-        pass
+        logger.warning("Failed to log UX event", exc_info=True)
     return {"status": "tracked"}
 
 

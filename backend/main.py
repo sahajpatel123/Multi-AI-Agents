@@ -87,7 +87,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "frame-ancestors 'none'; "
             "object-src 'none'; "
             "base-uri 'self'; "
-            "form-action 'self'"
+            "form-action 'self'; "
+            "upgrade-insecure-requests"
         )
         # Defense-in-depth for any HTML ever served from the API origin.
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"

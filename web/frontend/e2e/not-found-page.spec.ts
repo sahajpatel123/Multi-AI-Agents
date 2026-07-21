@@ -125,4 +125,16 @@ test.describe('Not Found page (mocked)', () => {
     await expect(labelled).toHaveRole('heading');
     await expect(labelled).toHaveText(/this page isn'?t in the arena/i);
   });
+
+  test('recovery hint text guides the user to a working path', async ({ page }) => {
+    await page.goto('/404');
+
+    // The .not-found-hint is the soft "where do I go now" line at the
+    // bottom of the recovery card. It's a user-visible brand voice
+    // signal that suggests the right next action.
+    await expect(page.locator('.not-found-hint')).toBeVisible();
+    await expect(page.locator('.not-found-hint')).toContainText(
+      /start from home|jump straight into a fresh arena run/i,
+    );
+  });
 });

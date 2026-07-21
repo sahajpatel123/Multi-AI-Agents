@@ -1943,7 +1943,7 @@ body .privacy-page--motion .privacy-manual {
 }
 
 /* Keep the route wrapper from becoming the fixed Navbar's containing block. */
-#route-content.page-enter:has(.privacy-page) {
+#route-content .page-enter:has(.privacy-page) {
   animation-fill-mode: none;
 }
 

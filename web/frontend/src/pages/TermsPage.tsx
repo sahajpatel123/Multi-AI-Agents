@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
+import { Reveal } from '../components/Reveal';
 import { prefersReducedMotion } from '../lib/motion';
 import '../styles/verdict-terms.css';
 
@@ -300,7 +301,7 @@ export function TermsPage() {
           </div>
         </header>
 
-        <section className="terms-signals" aria-labelledby="terms-signals-title">
+        <Reveal as="section" className="terms-signals" aria-labelledby="terms-signals-title">
           <div className="terms-section-heading">
             <p className="terms-eyebrow">Before you continue</p>
             <h2 id="terms-signals-title">Four signals worth holding</h2>
@@ -322,9 +323,9 @@ export function TermsPage() {
             <strong>Reading aid:</strong> these signals compress the themes;
             the numbered clauses below are the agreement.
           </p>
-        </section>
+        </Reveal>
 
-        <section className="terms-ledger" aria-label="Terms agreement">
+        <Reveal as="section" className="terms-ledger" aria-label="Terms agreement">
           <aside className="terms-index">
             <div className="terms-index__sticky">
               <div className="terms-index__head">
@@ -434,7 +435,7 @@ export function TermsPage() {
               <a href="#main-content">Return to top <span aria-hidden="true">↑</span></a>
             </footer>
           </div>
-        </section>
+        </Reveal>
       </main>
       <Footer />
     </div>

@@ -11,6 +11,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { Pressable } from '../components/Pressable';
+import { Reveal } from '../components/Reveal';
 import { AgentDot } from '../components/AgentDot';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
@@ -605,7 +607,7 @@ export function PersonasPage() {
             </p>
             <div className="personas-studio-hero__actions">
               <a href="#panel-studio">Tune your panel <ArrowRight aria-hidden="true" /></a>
-              <button type="button" onClick={() => navigate('/app')}>Enter Arena</button>
+              <Pressable type="button" onClick={() => navigate('/app')}>Enter Arena</Pressable>
             </div>
             <dl className="personas-studio-proof">
               <div><dt>16</dt><dd>reasoning styles</dd></div>
@@ -630,7 +632,7 @@ export function PersonasPage() {
           </div>
         </section>
 
-        <section id="panel-studio" className="personas-studio-section personas-panel-studio" aria-labelledby="panel-studio-title">
+        <Reveal as="section" id="panel-studio" className="personas-studio-section personas-panel-studio" aria-labelledby="panel-studio-title">
           <header className="personas-studio-section__head">
             <div>
               <span className="personas-studio-eyebrow">Your panel</span>
@@ -814,9 +816,9 @@ export function PersonasPage() {
               ) : <span className="personas-panel-actions__status">DEFAULT PANEL / UNSAVED CHANGES: NONE</span>}
             </div>
           </div>
-        </section>
+        </Reveal>
 
-        <section className="personas-studio-section personas-page__library" aria-labelledby="library-title">
+        <Reveal as="section" className="personas-studio-section personas-page__library" aria-labelledby="library-title">
           <header className="personas-studio-section__head personas-library-title-row">
             <div>
               <span className="personas-studio-eyebrow">Mind index</span>
@@ -944,14 +946,14 @@ export function PersonasPage() {
               ) : null}
             </div>
           )}
-        </section>
+        </Reveal>
 
-        <section className="personas-studio-close" aria-labelledby="personas-close-title">
+        <Reveal as="section" className="personas-studio-close" aria-labelledby="personas-close-title">
           <small>THE ROOM IS THE INSTRUMENT</small>
           <h2 id="personas-close-title">Choose minds that fail differently.</h2>
           <p>Then give all four the question you cannot afford to examine from one angle.</p>
-          <button type="button" onClick={() => navigate('/app')}>Enter Arena <ArrowRight aria-hidden="true" /></button>
-        </section>
+          <Pressable type="button" onClick={() => navigate('/app')}>Enter Arena <ArrowRight aria-hidden="true" /></Pressable>
+        </Reveal>
       </main>
 
       <Footer />

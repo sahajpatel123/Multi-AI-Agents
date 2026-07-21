@@ -1097,7 +1097,7 @@ body .terms-page--motion .terms-control {
 }
 
 /* Review refinements: keep fixed chrome fixed and state indicators legible. */
-#route-content.page-enter:has(.terms-page) {
+#route-content .page-enter:has(.terms-page) {
   animation-fill-mode: none;
 }
 

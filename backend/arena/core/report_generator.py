@@ -139,6 +139,7 @@ def _markdown_answer_html(plain: str) -> str:
     try:
         body = markdown_lib.markdown(raw, extensions=["tables", "fenced_code"])
     except Exception:
+        logger.warning("Failed to render markdown, returning escaped plain text", exc_info=True)
         return f"<p>{html.escape(raw)}</p>"
     return f'<div class="answer-md">{body}</div>'
 

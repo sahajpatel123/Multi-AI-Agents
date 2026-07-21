@@ -81,6 +81,7 @@ def _integration_public(row: MCPIntegration) -> dict:
 
             meta = json.loads(meta)
         except Exception:
+            logger.warning("Failed to parse integration_metadata JSON in mcp list", exc_info=True)
             meta = None
     return {
         "id": row.id,

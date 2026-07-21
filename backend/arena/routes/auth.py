@@ -1016,6 +1016,9 @@ async def reset_password(
 
     token_hash = _hash_reset_token(body.token)
     now = utcnow_naive()
+    # Lock the token row for the duration of this transaction so two
+    # concurrent redemption attempts cannot both see used_at IS NULL and
+    # both rotate the password (HOT-PATH: password-reset token reuse).
     row = (
         db.query(PasswordResetToken)
         .filter(
@@ -1023,6 +1026,7 @@ async def reset_password(
             PasswordResetToken.used_at.is_(None),
             PasswordResetToken.expires_at > now,
         )
+        .with_for_update()
         .first()
     )
     if row is None:
@@ -1031,7 +1035,12 @@ async def reset_password(
             detail={"error": "reset_token_invalid"},
         )
 
-    user = db.query(User).filter(User.id == row.user_id).first()
+    user = (
+        db.query(User)
+        .filter(User.id == row.user_id)
+        .with_for_update()
+        .first()
+    )
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -41,14 +41,23 @@ def _task(title: str = "My Task", task_text: str = "the prompt") -> Any:
 
 
 class _FakeQuery:
-    """Records filter() calls and yields a fixed list of rows on all()."""
+    """Records filter() calls and yields a fixed list of rows on all().
+
+    Supports ``group_by()`` — when set, ``all()`` simulates GROUP BY
+    by returning ``[(verdict, count), ...]`` tuples counted from rows.
+    """
 
     def __init__(self, rows: list[Any]) -> None:
         self._rows = rows
         self.filters: list[Any] = []
+        self._group_by: list[Any] = []
 
     def filter(self, *args: Any, **kwargs: Any) -> "_FakeQuery":
         self.filters.extend(args)
+        return self
+
+    def group_by(self, *args: Any, **kwargs: Any) -> "_FakeQuery":
+        self._group_by.extend(args)
         return self
 
     def outerjoin(self, *args: Any, **kwargs: Any) -> "_FakeQuery":
@@ -64,6 +73,15 @@ class _FakeQuery:
         return self
 
     def all(self) -> list[Any]:
+        if self._group_by:
+            from collections import Counter
+            col = self._group_by[0]
+            col_name = col.key if hasattr(col, "key") else str(col)
+            if col_name in ("verdict", "AnswerFeedback.verdict"):
+                counts: Counter[str] = Counter()
+                for r in self._rows:
+                    counts[r.verdict] += 1
+                return list(counts.items())
         return list(self._rows)
 
 

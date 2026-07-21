@@ -2431,6 +2431,10 @@ canvas {
 .page-enter {
   animation: page-enter 320ms var(--ease-out-premium) both;
 }
+/* Dense authenticated shells — keep continuity, skip marketing lift */
+.page-enter--quiet {
+  animation: page-enter-quiet 160ms var(--ease-out-premium) both;
+}
 @keyframes page-enter {
   from {
     opacity: 0;
@@ -2440,6 +2444,29 @@ canvas {
     opacity: 1;
     transform: translateY(0);
   }
+}
+@keyframes page-enter-quiet {
+  from {
+    opacity: 0.92;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Shared scroll reveal (public marketing pages) */
+.arena-reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    opacity 0.65s var(--ease-out-premium),
+    transform 0.65s var(--ease-out-premium);
+  will-change: opacity, transform;
+}
+.arena-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
 }
 
 /* Skip link — first tab target on every route shell that includes it */
@@ -3236,6 +3263,8 @@ canvas {
     scroll-behavior: auto !important;
   }
   .page-enter,
+  .page-enter--quiet,
+  .arena-reveal,
   .condura-cta-panel,
   .arena-empty-state {
     animation: none !important;
@@ -11614,6 +11643,7 @@ canvas {
 @media (hover: hover) and (pointer: fine) {
   .sidebar-list-row:hover:not(.sidebar-list-row--active) {
     background: #f0ebe3;
+    transform: translateY(-1px);
   }
 
   .sidebar-list-row--saved:hover {

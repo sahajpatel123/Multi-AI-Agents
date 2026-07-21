@@ -7,7 +7,7 @@ from functools import lru_cache
 from typing import Optional
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
@@ -119,6 +119,7 @@ class Settings(BaseSettings):
     # Database
     database_url: Optional[str] = DATABASE_URL
     database_url_fallback: Optional[str] = "sqlite:///./arena.db"
+    database_pool_recycle: int = 280
 
     # Auth / JWT
     secret_key: str = "change-me-in-production-use-a-long-random-string"
@@ -126,9 +127,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
 
     # Encryption (for MCP tokens)
-    # Generate: python -c "from cryptography.fernet
-    # import Fernet; print(Fernet.generate_key()
-    # .decode())"
+    # Generate with: openssl rand -base64 32
     encryption_key: str = ""
 
     # CORS
@@ -220,7 +219,8 @@ class Settings(BaseSettings):
                 continue
             logger.warning(
                 "FRONTEND_PUBLIC_URL was unset or localhost; "
-                f"using first public ALLOWED_ORIGINS entry: {candidate}"
+                "using first public ALLOWED_ORIGINS entry: %s",
+                candidate,
             )
             object.__setattr__(self, "frontend_public_url", candidate)
             return self
@@ -235,7 +235,7 @@ class Settings(BaseSettings):
         if not self.secret_key:
             errors.append(
                 "SECRET_KEY is not set. "
-                "Generate one with: python3 -c 'import secrets; print(secrets.token_hex(32))'"
+                "Generate one with: python3 -c 'import secrets; secrets.token_hex(32)'"
             )
         elif len(self.secret_key) < 32:
             errors.append(
@@ -244,7 +244,7 @@ class Settings(BaseSettings):
         elif self.secret_key.lower() in _WEAK_SECRET_KEYS:
             errors.append(
                 "SECRET_KEY is a known default value. "
-                "Generate a strong key with: python3 -c 'import secrets; print(secrets.token_hex(32))'"
+                "Generate a strong key with: python3 -c 'import secrets; secrets.token_hex(32)'"
             )
 
         # --- ANTHROPIC_API_KEY (required in every environment that starts the API) ---
@@ -307,15 +307,17 @@ class Settings(BaseSettings):
 
             if not self.encryption_key:
                 errors.append(
-                    "ENCRYPTION_KEY not set. Generate with: python -c "
-                    "\"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+                "ENCRYPTION_KEY not set. Generate with: python -c "
+                "\"from cryptography.fernet import Fernet; Fernet.generate_key().decode()\""
                 )
             elif len(self.encryption_key) != 44:
                 errors.append("ENCRYPTION_KEY must be a 44-character Fernet key")
             else:
                 try:
                     Fernet(self.encryption_key.encode("utf-8"))
-                except Exception:
+                except (InvalidToken, ValueError, TypeError):
+                    # Fernet.__init__ raises ValueError for non-base64 / wrong
+                    # length payloads; InvalidToken covers decrypt-shaped keys.
                     errors.append("ENCRYPTION_KEY is not a valid Fernet key")
 
             if "*" in origins:

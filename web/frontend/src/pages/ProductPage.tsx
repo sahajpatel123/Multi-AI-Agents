@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
+import { Pressable } from '../components/Pressable';
+import { Reveal } from '../components/Reveal';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
@@ -143,10 +145,10 @@ export function ProductPage() {
           </div>
         </section>
 
-        <section className="product-modes" aria-label="Product modes">
+        <Reveal as="section" className="product-modes" aria-label="Product modes">
           <button
             type="button"
-            className="product-mode-card product-mode-card--arena"
+            className="product-mode-card product-mode-card--arena interactive-surface"
             onClick={() => go('/app')}
           >
             <span className="product-mode-card__badge">
@@ -169,7 +171,7 @@ export function ProductPage() {
 
           <button
             type="button"
-            className="product-mode-card product-mode-card--agent"
+            className="product-mode-card product-mode-card--agent interactive-surface"
             onClick={() => go('/agent')}
           >
             <span className="product-mode-card__badge product-mode-card__badge--agent">
@@ -191,9 +193,9 @@ export function ProductPage() {
             </ul>
             <span className="product-mode-card__cta product-mode-card__cta--agent">Enter Agent</span>
           </button>
-        </section>
+        </Reveal>
 
-        <section id="product-showcase" className="product-showcase" aria-labelledby="product-showcase-title">
+        <Reveal as="section" id="product-showcase" className="product-showcase" aria-labelledby="product-showcase-title">
           <header className="product-section-head">
             <div>
               <h2 id="product-showcase-title">See the difference in the output.</h2>
@@ -271,14 +273,14 @@ export function ProductPage() {
                 <blockquote>“{showcase.verdict}”</blockquote>
                 <footer>
                   <span>SOURCES · ASSUMPTIONS · CONFIDENCE</span>
-                  <button type="button" onClick={() => go('/agent')}>RUN AGENT <ArrowRight aria-hidden="true" /></button>
+                  <Pressable type="button" onClick={() => go('/agent')}>RUN AGENT <ArrowRight aria-hidden="true" /></Pressable>
                 </footer>
               </article>
             </div>
           </div>
-        </section>
+        </Reveal>
 
-        <section className="product-routing" aria-labelledby="product-routing-title">
+        <Reveal as="section" className="product-routing" aria-labelledby="product-routing-title">
           <header className="product-section-head">
             <div><h2 id="product-routing-title">Choose by the work—not the hype.</h2></div>
           </header>
@@ -289,13 +291,13 @@ export function ProductPage() {
                 <p>{row.signal}</p>
                 <strong>{row.mode}</strong>
                 <span>{row.output}</span>
-                <button type="button" onClick={() => go(row.path)}>RUN <ArrowRight aria-hidden="true" /></button>
+                <Pressable type="button" onClick={() => go(row.path)}>RUN <ArrowRight aria-hidden="true" /></Pressable>
               </div>
             ))}
           </div>
-        </section>
+        </Reveal>
 
-        <section className="product-surface" aria-labelledby="product-surface-title">
+        <Reveal as="section" className="product-surface" aria-labelledby="product-surface-title">
           <header className="product-section-head">
             <div><h2 id="product-surface-title">The verdict is only the beginning.</h2></div>
           </header>
@@ -309,11 +311,11 @@ export function ProductPage() {
           </div>
           <div className="product-surface__actions">
             <p><strong>16</strong> minds · <strong>04</strong> in every room · <strong>01</strong> visible verdict</p>
-            <button type="button" onClick={() => navigate('/capabilities')}>EXPLORE EVERY CAPABILITY <ArrowRight aria-hidden="true" /></button>
+            <Pressable type="button" onClick={() => navigate('/capabilities')}>EXPLORE EVERY CAPABILITY <ArrowRight aria-hidden="true" /></Pressable>
           </div>
-        </section>
+        </Reveal>
 
-        <section className="product-compare" aria-labelledby="product-compare-heading">
+        <Reveal as="section" className="product-compare" aria-labelledby="product-compare-heading">
           <h2 id="product-compare-heading" className="product-compare__heading">Choose the engine. Keep the account.</h2>
           <div className="product-compare__pills">
             <span className="product-compare__pill">Arena → opinions, decisions, debate</span>
@@ -323,11 +325,11 @@ export function ProductPage() {
             <MotionButton type="button" variant="secondary" size="md" onClick={() => navigate('/capabilities')}>
               See all capabilities
             </MotionButton>
-            <button type="button" className="arena-btn arena-btn--ghost arena-btn--md" onClick={() => navigate('/pricing')}>
+            <button type="button" className="arena-btn arena-btn--ghost arena-btn--md interactive-surface interactive-surface--soft" onClick={() => navigate('/pricing')}>
               Pricing
             </button>
           </div>
-        </section>
+        </Reveal>
       </main>
 
       <Footer />

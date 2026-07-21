@@ -112,6 +112,9 @@ class _StubSession:
     def query(self, _model):
         return self
 
+    def options(self, *_args, **_kwargs):
+        return self
+
     def filter(self, *_args, **_kwargs):
         return self
 

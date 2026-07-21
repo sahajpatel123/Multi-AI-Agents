@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -35,6 +36,8 @@ from arena.core.agents import (
 )
 from arena.core.model_router import get_route_for_persona
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["debate"])
 
@@ -151,11 +154,12 @@ async def _get_reaction(
             content=data.get("content", "No reaction."),
             stance=data.get("stance", "disagree"),
         )
-    except Exception as e:
+    except Exception:
+        logger.exception("Debate reaction failed for agent_id=%s", agent_id)
         return DebateReaction(
             agent_id=agent_id,
             agent_number=agent.agent_number,
-            content=f"[Failed to react: {e}]",
+            content="[Failed to generate reaction]",
             stance="disagree",
         )
 
@@ -188,7 +192,7 @@ async def run_debate_round(
     # Check rate limit BEFORE any LLM calls
     if not has_feature(user_tier, "unlimited_debates"):
         try:
-            check_and_increment_user(db, user.id, user_tier)
+            check_and_increment_user(db, user.id)
         except RateLimitExceeded as e:
             raise HTTPException(
                 status_code=429,
@@ -266,6 +270,7 @@ async def run_debate_round(
     except HTTPException:
         raise
     except Exception:
+        logger.exception("Debate request failed")
         raise HTTPException(
             status_code=500,
             detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Debate request failed"},
@@ -297,7 +302,7 @@ async def stream_debate_round(
     # Check rate limit BEFORE any LLM calls
     if not has_feature(user_tier, "unlimited_debates"):
         try:
-            check_and_increment_user(db, user.id, user_tier)
+            check_and_increment_user(db, user.id)
         except RateLimitExceeded as e:
             raise HTTPException(
                 status_code=429,
@@ -392,8 +397,9 @@ async def stream_debate_round(
                         "agent_id": agent_id,
                     })
                 except Exception as e:
+                    logger.warning("Debate reaction failed for agent_id=%s: %s", agent_id, e, exc_info=True)
                     full_texts[agent_id] = json.dumps({
-                        "content": f"[Failed to react: {e}]",
+                        "content": "[Failed to generate reaction]",
                         "stance": "disagree",
                     })
                     await queue.put({
@@ -443,6 +449,7 @@ async def stream_debate_round(
                         stance=data.get("stance", "disagree"),
                     ))
                 except Exception:
+                    logger.warning("Failed to parse debate reaction LLM response", exc_info=True)
                     reactions.append(DebateReaction(
                         agent_id=agent_id,
                         agent_number=agent.agent_number,
@@ -475,7 +482,8 @@ async def stream_debate_round(
 
             yield _sse_event("result", final.model_dump(mode="json"))
 
-        except Exception as e:
+        except Exception:
+            logger.warning("Debate SSE generator failed", exc_info=True)
             yield _sse_event("error", {"detail": "Debate request failed"})
         finally:
             # If the stream ends early — client disconnect (GeneratorExit) or a

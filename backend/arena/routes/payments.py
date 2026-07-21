@@ -691,6 +691,114 @@ def _payment_entity_from_payload(payload: dict[str, Any]) -> Optional[dict[str, 
         return None
 
 
+def _resolve_payment_subscription_id(
+    ent: dict[str, Any],
+    *,
+    event_label: str,
+) -> Optional[str]:
+    """Return a Razorpay subscription id from a payment entity.
+
+    Payment webhooks sometimes omit ``subscription_id`` on the entity.
+    When a payment id is present we fall back to a live Razorpay fetch so
+    state-changing handlers (captured / failed) still resolve the row.
+    """
+    subscription_id = ent.get("subscription_id")
+    if subscription_id:
+        return str(subscription_id)
+
+    payment_id = ent.get("id")
+    if not payment_id:
+        return None
+
+    try:
+        payment_details = _get_razorpay_client().payment.fetch(payment_id)
+        fetched = payment_details.get("subscription_id") if isinstance(payment_details, dict) else None
+        if fetched:
+            logger.info(
+                "%s fetched sub_id=%s for payment_id=%s",
+                event_label,
+                fetched,
+                payment_id,
+            )
+            return str(fetched)
+    except Exception as fetch_err:
+        logger.warning(
+            "%s: could not fetch payment details for %s: %s",
+            event_label,
+            payment_id,
+            fetch_err,
+        )
+    return None
+
+
+def _mark_subscription_payment_failed(
+    db: Session,
+    *,
+    razorpay_subscription_id: str,
+    payment_id: Optional[str] = None,
+) -> bool:
+    """Propagate a payment.failed event onto Subscription + User rows.
+
+    Historically this path compared the Razorpay string id against
+    ``User.subscription_id`` (an integer FK), so failed renewals never
+    updated status. Resolve via ``subscriptions.razorpay_subscription_id``
+    instead, then stamp the linked user (primary or agent-addon).
+    """
+    row = _find_subscription_by_rzp_id(db, razorpay_subscription_id)
+    if not row:
+        logger.warning(
+            "payment.failed: no subscription found for %s (payment_id=%s)",
+            razorpay_subscription_id,
+            payment_id,
+        )
+        return False
+
+    row.status = "failed"
+    db.add(row)
+
+    user = (
+        db.query(User)
+        .filter(User.id == row.user_id)
+        .with_for_update()
+        .first()
+    )
+    if not user:
+        db.commit()
+        return True
+
+    if get_tier_str(row) == "agent_addon":
+        linked_addon = (user.addon_subscription_id or "") == row.razorpay_subscription_id
+        if linked_addon or user.agent_addon_active or user.agent_addon_cancelling:
+            user.agent_addon_active = False
+            user.agent_addon_cancelling = False
+            db.add(user)
+            logger.info(
+                "payment.failed: agent addon deactivated user_id=%s sub=%s payment_id=%s",
+                user.id,
+                row.razorpay_subscription_id,
+                payment_id,
+            )
+    elif user.subscription_id == row.id:
+        user.subscription_status = "failed"
+        db.add(user)
+        logger.info(
+            "payment.failed: user_id=%s subscription_status=failed sub=%s payment_id=%s",
+            user.id,
+            row.razorpay_subscription_id,
+            payment_id,
+        )
+    else:
+        logger.warning(
+            "payment.failed: sub %s owned by user %s but user.subscription_id=%s",
+            row.razorpay_subscription_id,
+            user.id,
+            user.subscription_id,
+        )
+
+    db.commit()
+    return True
+
+
 def _apply_subscription_event(
     db: Session,
     entity: dict[str, Any],
@@ -884,19 +992,9 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                 ent = _payment_entity_from_payload(payload)
                 if ent:
                     payment_id = ent.get("id")
-                    subscription_id = ent.get("subscription_id")
-
-                    if payment_id and not subscription_id:
-                        try:
-                            razorpay_client = _get_razorpay_client()
-                            payment_details = razorpay_client.payment.fetch(payment_id)
-                            subscription_id = payment_details.get("subscription_id")
-                            logger.info(
-                                "payment.captured fetched sub_id: %s",
-                                subscription_id,
-                            )
-                        except Exception as fetch_err:
-                            logger.warning("Could not fetch payment details: %s", fetch_err)
+                    subscription_id = _resolve_payment_subscription_id(
+                        ent, event_label="payment.captured"
+                    )
 
                     logger.info(
                         "payment.captured id=%s subscription_id=%s",
@@ -942,25 +1040,27 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                 raise
 
         elif event == "payment.failed":
-            ent = _payment_entity_from_payload(payload)
-            if ent:
-                logger.info(
-                    "payment.failed id=%s subscription_id=%s",
-                    ent.get("id"),
-                    ent.get("subscription_id"),
-                )
-                subscription_id = ent.get("subscription_id")
-                if subscription_id:
-                    user = db.query(User).filter(
-                        User.subscription_id == subscription_id
-                    ).first()
-                    if user:
-                        user.subscription_status = "failed"
-                        db.commit()
-                        logger.info(
-                            "Payment failed for user %s, status updated",
-                            user.id
+            try:
+                ent = _payment_entity_from_payload(payload)
+                if ent:
+                    payment_id = ent.get("id")
+                    subscription_id = _resolve_payment_subscription_id(
+                        ent, event_label="payment.failed"
+                    )
+                    logger.info(
+                        "payment.failed id=%s subscription_id=%s",
+                        payment_id,
+                        subscription_id,
+                    )
+                    if subscription_id:
+                        _mark_subscription_payment_failed(
+                            db,
+                            razorpay_subscription_id=subscription_id,
+                            payment_id=str(payment_id) if payment_id else None,
                         )
+            except Exception:
+                logger.exception("payment.failed handler error")
+                raise
 
     except HTTPException:
         raise

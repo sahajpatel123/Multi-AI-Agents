@@ -178,10 +178,11 @@ def test_summarize_never_returns_just_ellipsis_for_long_input() -> None:
     assert "a" in result
 
 
-# ── _now_utc ──────────────────────────────────────────────────────
+# ── utcnow_naive (stance_archive uses arena.core.datetime_utils) ──
 
 
-def test_now_utc_returns_aware_datetime() -> None:
-    n = stance_archive._now_utc()
+def test_utcnow_naive() -> None:
+    from arena.core.datetime_utils import utcnow_naive
+    n = utcnow_naive()
     assert isinstance(n, datetime)
-    assert n.tzinfo is not None
+    assert n.tzinfo is None
