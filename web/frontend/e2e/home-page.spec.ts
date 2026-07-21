@@ -104,6 +104,25 @@ test.describe('Home page (mocked)', () => {
       ).toBeVisible();
     }
   });
+
+  test('live decision tape section pins the 8 product/scenario cards', async ({
+    page,
+  }) => {
+    await page.goto('/');
+
+    // The "LIVE DECISION TAPE / QUESTION TYPES" tape is a static
+    // showcase section that renders 8 article cards (4 categories
+    // × 2 groups). Pin both header strings + the card count so future
+    // copy edits or refactors that drop a category surface here.
+    const tape = page.locator('.vp-tape');
+    await expect(tape).toBeVisible();
+    await expect(tape.getByText(/live decision tape\s*\/\s*question types/i)).toBeVisible();
+    await expect(tape.getByText(/four minds\s*→\s*one verdict/i)).toBeVisible();
+
+    // The data structure is 4 categories (STRATEGY / CAREER / PRODUCT /
+    // POLICY) duplicated across 2 groups, giving 8 articles total.
+    expect(await tape.locator('article').count()).toBe(8);
+  });
 });
 
 function escape(s: string): string {
