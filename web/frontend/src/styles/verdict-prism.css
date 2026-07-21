@@ -1205,3 +1205,74 @@ body .not-found-page [class*="panel"] {
   background: var(--vp-carbon-2) !important;
   color: var(--vp-ivory) !important;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   ✨ World-Class Smooth Physics, Rounded Radii & Premium Feel
+   ───────────────────────────────────────────────────────────── */
+
+/* 1. Global Corner Smoothing — Elevate harsh 0px/2px right angles to smooth 6px–8px radii & 9999px pills */
+html body button:not(.unstyled-btn),
+html body input,
+html body select,
+html body textarea,
+html body [class*="card"],
+html body [class*="chip"],
+html body [class*="tab"],
+html body [class*="badge"] {
+  border-radius: 6px !important;
+}
+
+html body [class*="pill"],
+html body .agent-score,
+html body .back-to-top-btn {
+  border-radius: 9999px !important;
+}
+
+/* 2. Global Smooth Scrollbars & Smooth Scroll Physics */
+html {
+  scroll-behavior: smooth !important;
+  overscroll-behavior-y: none;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vp-carbon);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(243, 240, 231, 0.22);
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vp-amber);
+}
+
+/* 3. Smooth Click & Hover Physics (Tactile Feedback) */
+html body button:not(.unstyled-btn),
+html body a[class*="btn"],
+html body a[class*="button"] {
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+              background-color 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+html body button:not(.unstyled-btn):hover,
+html body a[class*="btn"]:hover,
+html body a[class*="button"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+html body button:not(.unstyled-btn):active,
+html body a[class*="btn"]:active,
+html body a[class*="button"]:active {
+  transform: translateY(0) scale(0.975);
+  transition-duration: 0.08s;
+}
