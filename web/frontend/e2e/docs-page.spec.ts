@@ -26,6 +26,22 @@ test.describe('Documentation field manual', () => {
     await expect(page.locator('.docs-query-console')).toHaveCount(0);
   });
 
+  test('chapter nav links update the URL hash on click', async ({ page }) => {
+    await page.goto('/docs');
+
+    // Clicking a chapter nav link should update the URL hash so the
+    // browser's deep-link + history works. The 3rd chapter link is
+    // a stable target — the URL hash it produces is the contract.
+    const chaptersNav = page.getByLabel('Documentation chapters');
+    const thirdChapter = chaptersNav.getByRole('link').nth(2);
+    const href = await thirdChapter.getAttribute('href');
+    expect(href).toMatch(/^#/);
+
+    await thirdChapter.click();
+    // The URL hash now reflects the clicked chapter.
+    expect(new URL(page.url()).hash).toBe(href);
+  });
+
   test('is inspectable and keyboard-safe at the 834px tablet edge', async ({ page }) => {
     await page.setViewportSize({ width: 834, height: 1000 });
     const errors: string[] = [];
