@@ -137,4 +137,39 @@ test.describe('Sign-in page (mocked)', () => {
     ).toBeVisible();
     await expect(page.locator('form.auth-page__form--signin')).toHaveCount(0);
   });
+
+  test('clicking the Sign in tab from sign-up restores the sign-in form', async ({
+    page,
+  }) => {
+    await page.goto('/signin?tab=signup');
+
+    // Start on the sign-up tab (verified by cycle 166's earlier test).
+    const tablist = page.getByRole('tablist', { name: 'Auth mode' });
+    await expect(tablist.getByRole('tab', { name: 'Sign up' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    // Click "Sign in" — tab flips back, sign-up form removed, sign-in
+    // form restored with its CTA + 2 fields. Closes the round-trip
+    // started by the previous test.
+    await tablist.getByRole('tab', { name: 'Sign in' }).click();
+    await expect(tablist.getByRole('tab', { name: 'Sign in' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(tablist.getByRole('tab', { name: 'Sign up' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+
+    await expect(page.locator('form.auth-page__form--signup')).toHaveCount(0);
+    const signinForm = page.locator('form.auth-page__form--signin');
+    await expect(signinForm).toBeVisible();
+    await expect(signinForm.locator('input#signin-email')).toHaveCount(1);
+    await expect(signinForm.locator('input#signin-password')).toHaveCount(1);
+    await expect(
+      signinForm.getByRole('button', { name: /sign in to arena/i }),
+    ).toBeVisible();
+  });
 });
