@@ -163,6 +163,16 @@ def test_detector_catches_dynamic_error_shapes():
         ('ToolResult(tool_name="x", success=True, data={"k": "v"})', False),
         # None for error — must NOT be flagged (legitimate "no error" sentinel).
         ('ToolResult(tool_name="x", success=False, error=None)', False),
+        # Subscripted attribute access on the exception — `exc.args[0]`
+        # is a common pattern; would expose whatever the exception put
+        # there. Must be flagged.
+        ('ToolResult(tool_name="x", success=False, error=exc.args[0])', True),
+        # Old-style `%` formatting on an exception string. Easy to hide
+        # behind: `"x: %s" % exc`. Must be flagged.
+        ('ToolResult(tool_name="x", success=False, error="x: %s" % exc)', True),
+        # `.format()` on a string template with positional/kwarg arg.
+        # Must be flagged — common "hide the leak" pattern.
+        ('ToolResult(tool_name="x", success=False, error="x: {}".format(exc))', True),
     ]
     for snippet, expect_dynamic in cases:
         # Wrap in a module so ast.parse accepts it.
