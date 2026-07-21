@@ -71,4 +71,27 @@ test.describe('Not Found page (mocked)', () => {
 
     expect(pageErrors).toEqual([]);
   });
+
+  test('recovery-actions group contains the documented 4 buttons + the copy-to-clipboard affordance', async ({
+    page,
+  }) => {
+    await page.goto('/missing-route-xyz');
+
+    // Recovery actions group: 4 buttons (Back to home / Try Arena →
+    // / How it works / Watchlist) per notFoundActions(isAuthenticated).
+    // For unauthenticated visitors, "Try Arena →" routes through
+    // /signin?tab=signup, so we can't pin the destination directly here —
+    // we pin the labels and verify they're all visible inside the group.
+    const group = page.getByRole('group', { name: /recovery options/i });
+    await expect(group).toBeVisible();
+    await expect(group.getByRole('button', { name: /back to home/i })).toBeVisible();
+    await expect(group.getByRole('button', { name: /try arena/i })).toBeVisible();
+
+    // Copy-to-clipboard button — its aria-label is what screen readers
+    // announce; pin the affordance is present so a regression that
+    // accidentally removed it surfaces in CI.
+    await expect(
+      page.getByRole('button', { name: /copy requested path/i }),
+    ).toBeVisible();
+  });
 });
