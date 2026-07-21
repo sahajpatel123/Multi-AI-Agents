@@ -147,6 +147,35 @@ test.describe('Home page (mocked)', () => {
     await expect(close).toContainText('ARENA © 2026');
     await expect(close).toContainText('MULTIPLE MINDS. ONE VERDICT.');
   });
+
+  test('Agent Mode pipeline section pins the 7 research stages', async ({ page }) => {
+    await page.goto('/');
+
+    // The Agent Mode pipeline section is the last narrative block before
+    // the closing CTA. It explains the 7-stage research pipeline that
+    // /agent runs when one pass isn't enough. Pin:
+    //   - section anchor (`#agent-mode`)
+    //   - the section heading copy
+    //   - exactly 7 stage names (verbatim from HomePage.tsx)
+    //   - the CTA routes unauthenticated visitors through /signin
+    const agentMode = page.locator('#agent-mode');
+    await expect(agentMode).toBeVisible();
+    await expect(
+      agentMode.getByRole('heading', {
+        name: /for questions that cannot end in one pass\./i,
+      }),
+    ).toBeVisible();
+
+    // Stage names — pinned as visible text inside the pipeline grid.
+    const stages = ['PLAN', 'RESEARCH', 'SOLVE', 'CRITIQUE', 'VERIFY', 'SYNTHESIZE', 'JUDGE'];
+    for (const stage of stages) {
+      await expect(agentMode.getByRole('heading', { name: stage })).toBeVisible();
+    }
+
+    // CTA → /signin?tab=signup (unauthenticated).
+    await agentMode.getByRole('button', { name: /run an investigation/i }).click();
+    await expect(page).toHaveURL(/\/signin\?tab=signup/);
+  });
 });
 
 function escape(s: string): string {
