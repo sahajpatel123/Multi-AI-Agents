@@ -74,9 +74,14 @@ def _is_dynamic_error(value: ast.AST) -> bool:
       - direct str() calls: `error=str(exc)`, `error=str(e)`
       - string concat with str(): `error="prefix: " + str(exc)`
       - any JoinedStr / BinOp / Call — the safe shape is a Constant string literal
+        (or None, the dataclass default).
     """
-    # String literals are the only acceptable shape.
+    # String literals are the accepted safe shape.
     if isinstance(value, ast.Constant) and isinstance(value.value, str):
+        return False
+    # None is also a safe sentinel (the ToolResult dataclass default) —
+    # it doesn't leak any runtime data.
+    if isinstance(value, ast.Constant) and value.value is None:
         return False
     # Everything else is dynamic — flag it.
     return True
@@ -140,11 +145,24 @@ def test_detector_catches_dynamic_error_shapes():
         ('ToolResult(tool_name="x", success=False, error="prefix: " + str(e))', True),
         ('ToolResult(tool_name="x", success=False, error=str(exc))', True),
         ('ToolResult(tool_name="x", success=False, error="x" + var)', True),
+        # Nested f-strings (f-string inside f-string) — must be flagged.
+        ('ToolResult(tool_name="x", success=False, error=f"outer {f"inner {e}"}")', True),
+        # Conditional expression that yields a str(exc) on one branch — flagged.
+        ('ToolResult(tool_name="x", success=False, error=str(e) if e else "fallback")', True),
+        # Attribute access on a captured object (`exc.message`) — flagged because
+        # it's not a literal string; could expose whatever `exc.message` holds.
+        ('ToolResult(tool_name="x", success=False, error=exc.message)', True),
+        # Subscripted string (e.g. error code prefix extraction) — flagged.
+        ('ToolResult(tool_name="x", success=False, error=codes[str(e)])', True),
+        # Function call returning a string (`.upper()`, `.format()` etc.) — flagged.
+        ('ToolResult(tool_name="x", success=False, error=f"x".upper())', True),
         # Acceptable shape — must NOT be flagged.
         ('ToolResult(tool_name="x", success=False, error="tool_unavailable")', False),
         ('ToolResult(tool_name="x", success=False, error="web_search_unavailable")', False),
         # No `error=` keyword at all (success=True path) — must NOT be flagged.
         ('ToolResult(tool_name="x", success=True, data={"k": "v"})', False),
+        # None for error — must NOT be flagged (legitimate "no error" sentinel).
+        ('ToolResult(tool_name="x", success=False, error=None)', False),
     ]
     for snippet, expect_dynamic in cases:
         # Wrap in a module so ast.parse accepts it.
