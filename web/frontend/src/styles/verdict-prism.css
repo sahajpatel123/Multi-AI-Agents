@@ -918,13 +918,61 @@ body .network-status-banner {
   border-radius: 0;
 }
 
-body .back-to-top-btn,
 body .skip-to-content {
   background: var(--vp-ivory);
   color: var(--vp-carbon);
   border: 1px solid var(--vp-carbon);
   border-radius: var(--vp-r1);
   box-shadow: none;
+}
+
+body .back-to-top-btn {
+  background: rgba(21, 23, 19, 0.92) !important;
+  color: var(--vp-ivory) !important;
+  border: 1px solid rgba(243, 240, 231, 0.18) !important;
+  border-radius: 9999px !important;
+  padding: 6px 14px 6px 6px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(243, 240, 231, 0.08) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  transition: background 0.2s cubic-bezier(0.2, 0.75, 0.15, 1),
+              border-color 0.2s cubic-bezier(0.2, 0.75, 0.15, 1),
+              color 0.2s cubic-bezier(0.2, 0.75, 0.15, 1),
+              box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1) !important;
+}
+
+body .back-to-top-btn:hover {
+  background: rgba(29, 32, 27, 0.98) !important;
+  border-color: var(--vp-amber) !important;
+  color: var(--vp-paper) !important;
+  box-shadow: 0 16px 40px rgba(240, 184, 78, 0.25), 0 0 16px rgba(240, 184, 78, 0.18) !important;
+  transform: translateY(-3px) scale(1.04) !important;
+}
+
+body .back-to-top-btn:hover .back-to-top-btn__arrow {
+  transform: translateY(-2px) !important;
+  color: var(--vp-amber) !important;
+}
+
+body .back-to-top-btn__ring-track {
+  stroke: rgba(243, 240, 231, 0.16) !important;
+}
+
+body .back-to-top-btn__ring-progress {
+  stroke: var(--vp-amber) !important;
+}
+
+body .back-to-top-btn__arrow {
+  color: var(--vp-ivory) !important;
+  transition: transform 0.2s cubic-bezier(0.34, 1.4, 0.64, 1), color 0.2s ease !important;
+}
+
+body .back-to-top-btn__label {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.03em !important;
+  color: var(--vp-ivory) !important;
 }
 
 /* Remove old atmospheric decoration and soft effects everywhere. */

@@ -929,8 +929,15 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                             db.commit()
                         else:
                             logger.warning("payment.captured: no subscription found for %s", subscription_id)
-            except Exception as exc:
-                logger.error("payment.captured handler error: %s", exc)
+            except Exception:
+                # Re-raise so the outer except (cycle-155 fix) returns 500
+                # and Razorpay retries. Previously this swallowed the
+                # error, fell through to the outer 200, and silently
+                # dropped the payment.captured event. See
+                # backend/docs/HOT-PATH-ANALYSIS.md — "Webhook returns 200
+                # on failure" (HIGH).
+                logger.exception("payment.captured handler error")
+                raise
 
         elif event == "payment.failed":
             ent = _payment_entity_from_payload(payload)
@@ -957,6 +964,15 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
         raise
     except Exception:
         logger.exception("Webhook handler error")
+        # Non-2xx so Razorpay retries — a silent 200 here causes data loss
+        # (see backend/docs/HOT-PATH-ANALYSIS.md, "Webhook returns 200 on
+        # failure" — HIGH severity). FastAPI's exception handler would also
+        # produce a 500 if we re-raised, but returning explicitly here keeps
+        # the contract stable and avoids depending on global handler ordering.
+        return JSONResponse(
+            status_code=500,
+            content={"error": "webhook_handler_error"},
+        )
 
     return JSONResponse(status_code=200, content={"status": "ok"})
 
