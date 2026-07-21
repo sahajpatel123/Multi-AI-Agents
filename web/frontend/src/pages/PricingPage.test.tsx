@@ -123,9 +123,12 @@ describe('PricingPage', () => {
   it('renders three plan cards with their tier names', () => {
     const { container } = renderPage();
     const names = Array.from(
-      container.querySelectorAll('.pricing-tier-card__intro h3'),
+      container.querySelectorAll('.pricing-tier-card__top h3'),
     ).map((el) => el.textContent?.trim() ?? '');
     expect(names).toEqual(['Explorer', 'Plus', 'Pro']);
+    expect(container.textContent).not.toMatch(/four minds\. one judge/i);
+    expect(container.textContent).not.toMatch(/the room that remembers/i);
+    expect(container.textContent).not.toMatch(/when the question needs a research pipeline/i);
   });
 
   it('keeps paid CTA icons inside the plan action buttons', () => {
@@ -145,13 +148,20 @@ describe('PricingPage', () => {
   it('renders the comparison matrix heading', () => {
     renderPage();
     expect(
-      screen.getByRole('heading', { name: /nothing important hidden behind checkout/i }),
+      screen.getByRole('heading', { name: /every limit, before checkout/i }),
     ).toBeInTheDocument();
   });
 
-  it('renders at least one FAQ item', () => {
+  it('renders FAQ honesty anchors for Agent Mode and Condura', () => {
     renderPage();
     expect(screen.getByText(/which minds are included with explorer/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /what is agent mode/i }));
+    expect(screen.getByText(/seven visible research stages/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /does agent mode control my computer/i }));
+    expect(screen.getByText(/arena is web-only/i)).toBeInTheDocument();
+    expect(screen.getByText(/require condura/i)).toBeInTheDocument();
   });
 
   it('renders plan feature lists with the current BEM classes', () => {
@@ -163,13 +173,13 @@ describe('PricingPage', () => {
     expect(container.querySelectorAll('.pricing-tier-card__features svg').length).toBeGreaterThan(0);
   });
 
-  it('updates the access preview when a different depth is focused', () => {
+  it('removes Agent Mode and Minds marketing sections from the paywall', () => {
     const { container } = renderPage();
-    const options = container.querySelectorAll('.pricing-depth-instrument__options button');
-    expect(options).toHaveLength(3);
-    fireEvent.click(options[0]);
-    expect(screen.getByText('06 / 16 minds')).toBeInTheDocument();
-    expect(screen.getByText(/current fit \/ explorer/i)).toBeInTheDocument();
+    expect(container.querySelector('.pricing-agent-bridge')).toBeNull();
+    expect(container.querySelector('.pricing-mind-access')).toBeNull();
+    expect(container.querySelector('.pricing-depth-instrument')).toBeNull();
+    expect(container.querySelector('.pricing-ladder')).toBeNull();
+    expect(container.querySelector('.pricing-paywall-hero')).toBeTruthy();
   });
 
   it('exposes the main landmark with id="main-content"', () => {
@@ -180,41 +190,36 @@ describe('PricingPage', () => {
 
   it('recommends Plus by fit without making an unsupported popularity claim', () => {
     renderPage();
-    expect(screen.getByText(/best fit for ongoing decisions/i)).toBeInTheDocument();
+    expect(screen.getByText(/^recommended$/i)).toBeInTheDocument();
     expect(screen.queryByText(/most popular/i)).not.toBeInTheDocument();
   });
 
   it('shows exact annual totals alongside effective monthly prices', () => {
     const { container } = renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /annual charged yearly/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^annual/i }));
 
     expect(
       container.querySelector('.pricing-tier-card--plus .pricing-tier-card__price'),
     ).toHaveTextContent('742');
     expect(container.querySelector('.pricing-tier-card--plus')).toHaveTextContent(
-      '₹8,899 charged yearly',
+      '₹8,899 / year',
     );
     expect(
       container.querySelector('.pricing-tier-card--pro .pricing-tier-card__price'),
     ).toHaveTextContent('1,650');
     expect(container.querySelector('.pricing-tier-card--pro')).toHaveTextContent(
-      '₹19,800 charged yearly',
+      '₹19,800 / year',
     );
   });
 
-  it('puts Agent access and the comparison before the persona proof', () => {
+  it('keeps comparison before FAQ', () => {
     const { container } = renderPage();
-    const agent = container.querySelector('.pricing-agent-bridge');
     const comparison = container.querySelector('.pricing-comparison-ledger');
-    const minds = container.querySelector('.pricing-mind-access');
+    const faq = container.querySelector('.pricing-faq-studio');
 
-    expect(agent).toBeTruthy();
     expect(comparison).toBeTruthy();
-    expect(minds).toBeTruthy();
-    expect(agent?.compareDocumentPosition(comparison as Node)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
-    expect(comparison?.compareDocumentPosition(minds as Node)).toBe(
+    expect(faq).toBeTruthy();
+    expect(comparison?.compareDocumentPosition(faq as Node)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
   });
@@ -222,9 +227,8 @@ describe('PricingPage', () => {
   it('resolves every section aria-labelledby reference', () => {
     const { container } = renderPage();
     for (const selector of [
-      '.pricing-agent-bridge',
+      '.pricing-paywall-plans',
       '.pricing-comparison-ledger',
-      '.pricing-mind-access',
       '.pricing-faq-studio',
     ]) {
       const section = container.querySelector(selector);
@@ -268,13 +272,5 @@ describe('PricingPage', () => {
     const close = container.querySelector('.pricing-studio-close');
     expect(close).toHaveTextContent('Pro is active');
     expect(close).not.toHaveTextContent('Get Plus');
-  });
-
-  it('marks the seven visible Agent Mode stages as an ordered list', () => {
-    renderPage();
-    const pipeline = screen.getByRole('list', {
-      name: /seven visible agent mode stages/i,
-    });
-    expect(pipeline.querySelectorAll('li')).toHaveLength(7);
   });
 });
