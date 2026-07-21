@@ -64,23 +64,6 @@ interface ToastState {
   kind?: PanelSaveToastKind;
 }
 
-const SHOWCASE_PROMPTS = [
-  {
-    label: 'DECISION',
-    prompt: 'Should we launch before the evidence is complete?',
-    note: 'A useful panel does not agree faster. It exposes a decision from different failure modes.',
-  },
-  {
-    label: 'PRODUCT',
-    prompt: 'Is this feature solving a problem—or decorating one?',
-    note: 'Each lens changes what gets inspected before the team commits engineering time.',
-  },
-  {
-    label: 'STRATEGY',
-    prompt: 'Where should a small team place its next asymmetric bet?',
-    note: 'The panel turns one broad prompt into four different tests of leverage, evidence, and consequence.',
-  },
-] as const;
 
 const PERSONA_LENSES: Record<string, string> = {
   analyst: 'Which assumption breaks the case first?',
@@ -134,7 +117,6 @@ export function PersonasPage() {
   const [swapSort, setSwapSort] = useState<PersonasLibrarySort>('default');
   const [swapAvailability, setSwapAvailability] =
     useState<PersonasLibraryAvailability>('all');
-  const [showcaseIndex, setShowcaseIndex] = useState(0);
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [showAllLibrary, setShowAllLibrary] = useState(false);
   const [inspectedSlot, setInspectedSlot] = useState<SlotIndex>(0);
@@ -144,7 +126,6 @@ export function PersonasPage() {
   const lastSwapTriggerRef = useRef<HTMLElement | null>(null);
   const slotLabels = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'] as const;
   const activePersona = activeSlot !== null ? panel[activeSlot] : null;
-  const showcase = SHOWCASE_PROMPTS[showcaseIndex];
   const panelTemperature = panel.length
     ? panel.reduce((total, persona) => total + persona.temperature, 0) / panel.length
     : 0;
@@ -566,31 +547,6 @@ export function PersonasPage() {
     closeModal();
   };
 
-  const applyRecipe = () => {
-    if (selectedRecipePersonas.length !== 4) {
-      setToast({
-        message: 'This recipe is unavailable in the current persona catalog',
-        color: '#E57373',
-        iconColor: '#0B0C0A',
-        kind: 'error',
-      });
-      return;
-    }
-    if (selectedRecipePersonas.some((persona) => !canUsePersona(persona.id))) {
-      navigate('/pricing');
-      return;
-    }
-    selectedRecipePersonas.forEach((persona, index) => {
-      swapAgent(index as SlotIndex, persona);
-    });
-    setToast({
-      message: `${selectedRecipe.label} loaded into your panel`,
-      color: '#1A1714',
-      iconColor: selectedRecipe.tone,
-      kind: 'success',
-    });
-    void track('persona_recipe_loaded', undefined, selectedRecipe.id);
-  };
 
   const handleSavePanel = async () => {
     if (!isAuthenticated) {
@@ -861,51 +817,10 @@ export function PersonasPage() {
           </div>
         </section>
 
-        <section className="personas-studio-section personas-lens-lab" aria-labelledby="lens-lab-title">
-          <header className="personas-studio-section__head">
-            <div>
-              <span className="personas-studio-eyebrow">02 / Lens preview</span>
-              <h2 id="lens-lab-title">One question. Four different inspections.</h2>
-            </div>
-            <p>
-              Persona choice changes what gets examined—not merely the tone of the response.
-              Preview the question each current mind is designed to ask first.
-            </p>
-          </header>
-
-          <div className="personas-lens-scenarios" role="group" aria-label="Lens preview scenario">
-            {SHOWCASE_PROMPTS.map((scenario, index) => (
-              <button
-                key={scenario.label}
-                type="button"
-                aria-pressed={showcaseIndex === index}
-                className={showcaseIndex === index ? 'is-active' : ''}
-                onClick={() => setShowcaseIndex(index)}
-              >
-                <small>0{index + 1}</small><strong>{scenario.label}</strong><span aria-hidden="true">{showcaseIndex === index ? '●' : '○'}</span>
-              </button>
-            ))}
-          </div>
-          <div className="personas-lens-question">
-            <small>ILLUSTRATIVE LENS PREVIEW · NOT A LIVE RUN</small>
-            <h3>{showcase.prompt}</h3>
-            <p>{showcase.note}</p>
-          </div>
-          <div className="personas-lens-grid">
-            {panel.map((persona, index) => (
-              <article key={`${persona.id}-lens`} style={{ '--tone': persona.color } as CSSProperties}>
-                <header><small>0{index + 1}</small><span>{persona.name}</span></header>
-                <blockquote>“{PERSONA_LENSES[persona.id] ?? persona.quote}”</blockquote>
-                <footer>DESIGNED LENS / {persona.temperature.toFixed(1)}</footer>
-              </article>
-            ))}
-          </div>
-        </section>
-
         <section className="personas-studio-section personas-page__library" aria-labelledby="library-title">
           <header className="personas-studio-section__head personas-library-title-row">
             <div>
-              <span className="personas-studio-eyebrow">03 / Mind index</span>
+              <span className="personas-studio-eyebrow">02 / Mind index</span>
               <h2 id="library-title">Inspect every reasoning style.</h2>
             </div>
             <p>
