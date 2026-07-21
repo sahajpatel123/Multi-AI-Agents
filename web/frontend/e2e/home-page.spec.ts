@@ -72,4 +72,40 @@ test.describe('Home page (mocked)', () => {
     await page.getByRole('button', { name: /put a question in/i }).click();
     await expect(page).toHaveURL(/\/signin\?tab=signup/);
   });
+
+  test('persona library exposes the full 16-persona roster', async ({ page }) => {
+    await page.goto('/');
+    // The persona library lives inside #minds. Pin all 16 stable persona
+    // names so future copy edits that drop or rename a persona surface
+    // here. Names taken verbatim from HomePage.tsx's PERSONAS const.
+    const expected = [
+      'The Analyst',
+      'The Philosopher',
+      'The Pragmatist',
+      'The Contrarian',
+      'The Scientist',
+      'The Historian',
+      'The Economist',
+      'The Ethicist',
+      'The Stoic',
+      'The Futurist',
+      'The Strategist',
+      'The Engineer',
+      'The Optimist',
+      'The Empath',
+      'First Principles',
+      "Devil's Advocate",
+    ];
+    const minds = page.locator('#minds');
+    await expect(minds).toBeVisible();
+    for (const name of expected) {
+      await expect(
+        minds.getByRole('button', { name: new RegExp(`^${escape(name)}$`, 'i') }),
+      ).toBeVisible();
+    }
+  });
 });
+
+function escape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
