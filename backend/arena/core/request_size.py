@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_BODY_BYTES = 10 * 1024
 UPLOAD_MAX_BODY_BYTES = 11 * 1024 * 1024  # 10MB file + multipart overhead
+# Razorpay webhook entities can exceed the default 10KB API cap, but must
+# still be bounded — unbounded bodies are a memory DoS vector.
+WEBHOOK_MAX_BODY_BYTES = 1024 * 1024  # 1 MB
 
 
 def max_request_body_bytes(path: str, default_max: int = DEFAULT_MAX_BODY_BYTES) -> int:
@@ -23,6 +26,8 @@ def max_request_body_bytes(path: str, default_max: int = DEFAULT_MAX_BODY_BYTES)
     p = (path or "").rstrip("/")
     if p.endswith("/api/agent/upload"):
         return UPLOAD_MAX_BODY_BYTES
+    if p.endswith("/api/payments/webhook"):
+        return WEBHOOK_MAX_BODY_BYTES
     return default_max
 
 
@@ -30,6 +35,8 @@ def payload_too_large_message(path: str) -> str:
     p = (path or "").rstrip("/")
     if p.endswith("/api/agent/upload"):
         return "File too large (max 10MB)"
+    if p.endswith("/api/payments/webhook"):
+        return "Webhook payload too large (max 1MB)"
     return "Request too large. Maximum 10KB allowed."
 
 
@@ -51,11 +58,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS" or not is_body_method(request.method):
             return await call_next(request)
 
-        # Razorpay webhooks can exceed the default API body limit, but still cap at 1 MB
-        if path.endswith("/api/payments/webhook"):
-            max_allowed = 1024 * 1024
-        else:
-            max_allowed = max_request_body_bytes(path, self.max_size)
+        max_allowed = max_request_body_bytes(path, self.max_size)
         content_length = request.headers.get("content-length")
         if content_length is not None and content_length != "":
             try:

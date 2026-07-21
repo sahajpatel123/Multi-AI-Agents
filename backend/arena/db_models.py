@@ -715,6 +715,24 @@ class RevokedToken(Base):
     reason = Column(String(64), nullable=True)  # 'logout' / 'admin' / etc.
 
 
+class ProcessedWebhookEvent(Base):
+    """Idempotency ledger for Razorpay (and future) signed webhooks.
+
+    Claiming an ``event_key`` before side effects prevents replay of the
+    same valid payload from double-applying subscription state. Keys are
+    TTL'd so the table stays bounded; failed handlers delete the claim
+    so Razorpay retries can re-process.
+    """
+
+    __tablename__ = "processed_webhook_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_key = Column(String(128), nullable=False, unique=True, index=True)
+    event_name = Column(String(64), nullable=True)
+    processed_at = Column(DateTime, default=_now, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+
 class RoomTask(Base):
     __tablename__ = "room_tasks"
     __table_args__ = (UniqueConstraint("room_id", "task_id", name="uq_room_task_room_task"),)

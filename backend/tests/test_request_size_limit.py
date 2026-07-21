@@ -19,11 +19,13 @@ def test_max_request_body_bytes_upload_vs_default():
     assert max_request_body_bytes("/api/health") == 10 * 1024
     assert max_request_body_bytes("/api/agent/upload") == 11 * 1024 * 1024
     assert max_request_body_bytes("/api/agent/upload/") == 11 * 1024 * 1024
+    assert max_request_body_bytes("/api/payments/webhook") == 1024 * 1024
 
 
 def test_payload_message_for_upload():
     assert "10MB" in payload_too_large_message("/api/agent/upload")
     assert "10KB" in payload_too_large_message("/api/auth/login")
+    assert "1MB" in payload_too_large_message("/api/payments/webhook")
 
 
 async def _echo(request: Request):

@@ -121,11 +121,11 @@ class TestRequestSizeLimits:
         )
 
     @pytest.mark.asyncio
-    async def test_webhook_path_bypasses_size_check(self, app_client, isolated_db):
-        # Per-path carve-out for /api/payments/webhook — Razorpay's
-        # signed webhooks can legitimately exceed the 10KB cap (large
-        # subscription entity payloads). The size middleware must NOT
-        # reject them so we can verify the HMAC and respond 200.
+    async def test_webhook_path_allows_over_default_under_1mb(
+        self, app_client, isolated_db
+    ):
+        # Razorpay webhooks may exceed the default 10KB API cap; they are
+        # still hard-capped at 1MB. 20KB must pass the size gate.
         res = await app_client.post(
             "/api/payments/webhook",
             content=b"x" * 20000,
@@ -134,9 +134,6 @@ class TestRequestSizeLimits:
                 "X-Razorpay-Signature": "0" * 64,
             },
         )
-        # Webhook handler returns 200 (with 'ok' body) when the secret
-        # is missing, or 400 (invalid signature). Either way it MUST
-        # NOT be 413 — the per-path carve-out must work.
         assert res.status_code != 413, (
             f"webhook path hit the size limit: {res.status_code}"
         )

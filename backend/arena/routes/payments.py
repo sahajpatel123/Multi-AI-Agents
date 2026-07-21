@@ -19,6 +19,11 @@ from arena.core.entitlements import compute_user_entitlements
 from arena.core.errors import ErrorCodes
 from arena.core.tier_config import get_tier_str
 from arena.core.dependencies import get_current_user_required_orm
+from arena.core.webhook_idempotency import (
+    build_webhook_event_key,
+    claim_webhook_event,
+    release_webhook_event,
+)
 from arena.database import get_db
 from arena.db_models import Subscription, User, UserTier
 from arena.models.schemas import SubscribePlanRequest, VerifyPaymentRequest
@@ -973,6 +978,8 @@ def _apply_subscription_event(
 async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> JSONResponse:
     settings = get_settings()
     raw_body = await request.body()
+    event_key: Optional[str] = None
+    claimed = False
 
     try:
         sig_header = request.headers.get("X-Razorpay-Signature") or ""
@@ -1002,6 +1009,16 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
 
         payload = json.loads(raw_body.decode("utf-8"))
         event = payload.get("event")
+        event_key = build_webhook_event_key(
+            payload if isinstance(payload, dict) else {},
+            event_id_header=request.headers.get("X-Razorpay-Event-Id"),
+        )
+        if not claim_webhook_event(db, event_key, event_name=str(event) if event else None):
+            return JSONResponse(
+                status_code=200,
+                content={"status": "ok", "duplicate": True},
+            )
+        claimed = True
 
         if event == "subscription.activated":
             try:
@@ -1177,8 +1194,12 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
                 raise
 
     except HTTPException:
+        if claimed and event_key:
+            release_webhook_event(db, event_key)
         raise
     except Exception:
+        if claimed and event_key:
+            release_webhook_event(db, event_key)
         logger.exception("Webhook handler error")
         # Non-2xx so Razorpay retries — a silent 200 here causes data loss
         # (see backend/docs/HOT-PATH-ANALYSIS.md, "Webhook returns 200 on

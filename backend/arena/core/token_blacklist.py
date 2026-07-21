@@ -71,6 +71,14 @@ def _purge_loop(stop_event: threading.Event, interval_seconds: int) -> None:
                         "Periodic revoked_tokens purge cleared %s row(s)",
                         n,
                     )
+                from arena.core.webhook_idempotency import purge_expired_webhook_events
+
+                wn = purge_expired_webhook_events(s)
+                if wn:
+                    logger.info(
+                        "Periodic processed_webhook_events purge cleared %s row(s)",
+                        wn,
+                    )
             finally:
                 s.close()
         except Exception as _exc:  # pragma: no cover - hard to trigger

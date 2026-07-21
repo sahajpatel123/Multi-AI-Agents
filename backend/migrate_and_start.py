@@ -472,6 +472,53 @@ def main():
                     except Exception:
                         pass
 
+            # Razorpay webhook idempotency ledger (replay protection).
+            pg_webhook_events = """
+                CREATE TABLE IF NOT EXISTS processed_webhook_events (
+                    id SERIAL PRIMARY KEY,
+                    event_key VARCHAR(128) UNIQUE NOT NULL,
+                    event_name VARCHAR(64),
+                    processed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    expires_at TIMESTAMP NOT NULL
+                )
+            """
+            sqlite_webhook_events = """
+                CREATE TABLE IF NOT EXISTS processed_webhook_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_key VARCHAR(128) UNIQUE NOT NULL,
+                    event_name VARCHAR(64),
+                    processed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT NOT NULL
+                )
+            """
+            wh_sql = sqlite_webhook_events if dialect == "sqlite" else pg_webhook_events
+            try:
+                conn.execute(text(wh_sql))
+                conn.commit()
+                print("==> Migrated: processed_webhook_events table", flush=True)
+            except Exception as e:
+                print(f"==> Warning (processed_webhook_events): {e}", flush=True)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+            for idx_sql in (
+                "CREATE INDEX IF NOT EXISTS ix_processed_webhook_events_event_key "
+                "ON processed_webhook_events(event_key)",
+                "CREATE INDEX IF NOT EXISTS ix_processed_webhook_events_expires_at "
+                "ON processed_webhook_events(expires_at)",
+            ):
+                try:
+                    conn.execute(text(idx_sql))
+                    conn.commit()
+                except Exception as e:
+                    print(f"==> Warning (processed_webhook_events idx): {e}", flush=True)
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+
             # Condura integration tables (handoff mirror + migration flags)
             pg_migration_flags = """
                 CREATE TABLE IF NOT EXISTS migration_flags (
