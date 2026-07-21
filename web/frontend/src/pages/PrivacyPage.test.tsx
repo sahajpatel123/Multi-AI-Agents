@@ -28,6 +28,41 @@ function setReducedMotion(matches: boolean) {
   });
 }
 
+/** Make the route inspector report as in-view so autoplay can run in jsdom. */
+function stubInspectorVisible() {
+  class VisibleIntersectionObserver implements IntersectionObserver {
+    readonly root: Element | Document | null = null;
+    readonly rootMargin = '0px';
+    readonly thresholds: ReadonlyArray<number> = [0];
+    private readonly callback: IntersectionObserverCallback;
+
+    constructor(callback: IntersectionObserverCallback) {
+      this.callback = callback;
+    }
+
+    observe(target: Element): void {
+      this.callback(
+        [
+          {
+            isIntersecting: true,
+            intersectionRatio: 1,
+            target,
+          } as IntersectionObserverEntry,
+        ],
+        this,
+      );
+    }
+
+    unobserve(): void {}
+    disconnect(): void {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+
+  vi.stubGlobal('IntersectionObserver', VisibleIntersectionObserver);
+}
+
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/privacy']}>
@@ -43,7 +78,9 @@ describe('PrivacyPage', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('renders shared chrome and a labelled, focusable main landmark', () => {
@@ -79,7 +116,7 @@ describe('PrivacyPage', () => {
     expect(scope.getByText(/these cards summarize the posture/i)).toBeInTheDocument();
   });
 
-  it('exposes five data-route controls with Conversation selected by default', () => {
+  it('exposes five data-route controls with Account selected by default', () => {
     renderPage();
 
     const selector = screen.getByRole('group', { name: 'Select a data route' });
@@ -93,11 +130,75 @@ describe('PrivacyPage', () => {
       '05Localwork',
     ]);
     expect(
+      within(selector).getByRole('button', { name: /01\s*Account/i }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByRole('heading', { name: 'Identity and profile' }),
+    ).toBeInTheDocument();
+  });
+
+  it('auto-advances data routes while the inspector is in view', () => {
+    stubInspectorVisible();
+    vi.useFakeTimers();
+    renderPage();
+
+    const selector = screen.getByRole('group', { name: 'Select a data route' });
+    expect(
+      within(selector).getByRole('button', { name: /01\s*Account/i }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+
+    expect(
       within(selector).getByRole('button', { name: /02\s*Conversation/i }),
     ).toHaveAttribute('aria-pressed', 'true');
     expect(
       screen.getByRole('heading', { name: 'Prompts, context, and answers' }),
     ).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+
+    expect(
+      within(selector).getByRole('button', { name: /03\s*Billing/i }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    vi.useRealTimers();
+  });
+
+  it('pauses autoplay after a manual route pick', () => {
+    stubInspectorVisible();
+    vi.useFakeTimers();
+    renderPage();
+
+    const selector = screen.getByRole('group', { name: 'Select a data route' });
+    const billing = within(selector).getByRole('button', { name: /03\s*Billing/i });
+    fireEvent.click(billing);
+
+    expect(billing).toHaveAttribute('aria-pressed', 'true');
+
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+
+    expect(billing).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      within(selector).getByRole('button', { name: /04\s*Integrations/i }),
+    ).toHaveAttribute('aria-pressed', 'false');
+
+    vi.useRealTimers();
+  });
+
+  it('animates route panel stages when motion is allowed', () => {
+    stubInspectorVisible();
+    renderPage();
+
+    const stage = document.querySelector('.privacy-route-panel__stage');
+    expect(stage).toHaveClass('is-entering');
+    expect(stage).toHaveAttribute('data-direction', 'forward');
   });
 
   it('updates route content and pressed state when a data class is selected', () => {
@@ -105,14 +206,14 @@ describe('PrivacyPage', () => {
 
     const selector = screen.getByRole('group', { name: 'Select a data route' });
     const billing = within(selector).getByRole('button', { name: /03\s*Billing/i });
-    const conversation = within(selector).getByRole('button', {
-      name: /02\s*Conversation/i,
+    const account = within(selector).getByRole('button', {
+      name: /01\s*Account/i,
     });
 
     fireEvent.click(billing);
 
     expect(billing).toHaveAttribute('aria-pressed', 'true');
-    expect(conversation).toHaveAttribute('aria-pressed', 'false');
+    expect(account).toHaveAttribute('aria-pressed', 'false');
     const panel = screen.getByRole('region', { name: /03\s*Billing/i });
     expect(
       within(panel).getByRole('heading', { name: 'Subscription and payment' }),

@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
 import { prefersReducedMotion } from '../lib/motion';
 import '../styles/verdict-privacy.css';
+
+/** Dwell time per data-route card while autoplay is running. */
+const ROUTE_AUTOPLAY_MS = 4000;
+/** After a manual pick, wait this long before autoplay resumes. */
+const ROUTE_RESUME_AFTER_INTERACTION_MS = 12_000;
 
 type PrivacyAccent = 'cyan' | 'violet' | 'coral' | 'acid' | 'amber';
 
@@ -178,6 +183,23 @@ const DATA_ROUTES = [
 ] as const satisfies readonly DataRoute[];
 
 type DataRouteId = (typeof DATA_ROUTES)[number]['id'];
+type RouteEnterDirection = 'forward' | 'back';
+
+function resolveRouteEnterDirection(
+  fromId: DataRouteId,
+  toId: DataRouteId,
+): RouteEnterDirection {
+  if (fromId === toId) return 'forward';
+  const fromIndex = DATA_ROUTES.findIndex((route) => route.id === fromId);
+  const toIndex = DATA_ROUTES.findIndex((route) => route.id === toId);
+  if (fromIndex < 0 || toIndex < 0) return 'forward';
+
+  // Autoplay wrap last → first continues forward through the cycle.
+  if (fromIndex === DATA_ROUTES.length - 1 && toIndex === 0) return 'forward';
+  // Manual wrap first → last reads as stepping backward.
+  if (fromIndex === 0 && toIndex === DATA_ROUTES.length - 1) return 'back';
+  return toIndex > fromIndex ? 'forward' : 'back';
+}
 
 const PRIVACY_CHAPTERS = [
   {
@@ -386,15 +408,52 @@ function PolicyChapter({
 export function PrivacyPage() {
   const reduceMotion = prefersReducedMotion();
   const [activeRouteId, setActiveRouteId] =
-    useState<DataRouteId>('conversation-route');
+    useState<DataRouteId>('account-route');
   const [activeChapter, setActiveChapter] = useState<PrivacyChapterId>(
     () => hashChapter() ?? PRIVACY_CHAPTERS[0].id,
   );
+  const [routeInspectorInView, setRouteInspectorInView] = useState(false);
+  const [routePointerInside, setRoutePointerInside] = useState(false);
+  const [routeUserPaused, setRouteUserPaused] = useState(false);
+  const [routeAutoplayEpoch, setRouteAutoplayEpoch] = useState(0);
+  const [routeEnterDirection, setRouteEnterDirection] =
+    useState<RouteEnterDirection>('forward');
   const chapterNavigationRef = useRef<HTMLElement>(null);
   const routeNavigationRef = useRef<HTMLDivElement>(null);
+  const routeInspectorRef = useRef<HTMLElement>(null);
+  const routeResumeTimerRef = useRef<number | undefined>(undefined);
+  const activeRouteIdRef = useRef<DataRouteId>(activeRouteId);
+  activeRouteIdRef.current = activeRouteId;
 
   const activeRoute =
-    DATA_ROUTES.find((route) => route.id === activeRouteId) ?? DATA_ROUTES[1];
+    DATA_ROUTES.find((route) => route.id === activeRouteId) ?? DATA_ROUTES[0];
+
+  const routeAutoplayActive =
+    !reduceMotion &&
+    routeInspectorInView &&
+    !routePointerInside &&
+    !routeUserPaused;
+
+  const activateDataRoute = (routeId: DataRouteId, source: 'user' | 'auto') => {
+    const current = activeRouteIdRef.current;
+    if (current !== routeId) {
+      setRouteEnterDirection(resolveRouteEnterDirection(current, routeId));
+      setActiveRouteId(routeId);
+      activeRouteIdRef.current = routeId;
+    }
+    if (source !== 'user') return;
+
+    setRouteUserPaused(true);
+    setRouteAutoplayEpoch((epoch) => epoch + 1);
+    if (routeResumeTimerRef.current !== undefined) {
+      window.clearTimeout(routeResumeTimerRef.current);
+    }
+    routeResumeTimerRef.current = window.setTimeout(() => {
+      setRouteUserPaused(false);
+      routeResumeTimerRef.current = undefined;
+      setRouteAutoplayEpoch((epoch) => epoch + 1);
+    }, ROUTE_RESUME_AFTER_INTERACTION_MS);
+  };
 
   useEffect(() => {
     let hashScrollFrame: number | undefined;
@@ -513,6 +572,75 @@ export function PrivacyPage() {
     navigation.scrollTo({ left: Math.max(0, targetLeft), behavior: 'auto' });
   }, [activeRouteId]);
 
+  useEffect(() => {
+    const inspector = routeInspectorRef.current;
+    if (!inspector || typeof IntersectionObserver !== 'function') {
+      setRouteInspectorInView(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        setRouteInspectorInView(Boolean(entry?.isIntersecting));
+      },
+      { threshold: 0.35, rootMargin: '0px 0px -8% 0px' },
+    );
+    observer.observe(inspector);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (routeResumeTimerRef.current !== undefined) {
+        window.clearTimeout(routeResumeTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      reduceMotion ||
+      !routeInspectorInView ||
+      routePointerInside ||
+      routeUserPaused
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled || document.hidden) return;
+      setActiveRouteId((current) => {
+        const index = DATA_ROUTES.findIndex((route) => route.id === current);
+        const nextIndex = index < 0 ? 0 : (index + 1) % DATA_ROUTES.length;
+        const nextId = DATA_ROUTES[nextIndex].id;
+        setRouteEnterDirection(resolveRouteEnterDirection(current, nextId));
+        return nextId;
+      });
+    };
+
+    const onVisibility = () => {
+      if (document.hidden) return;
+      // Restart the dwell clock when the tab becomes visible again.
+      setRouteAutoplayEpoch((epoch) => epoch + 1);
+    };
+
+    const intervalId = window.setInterval(tick, ROUTE_AUTOPLAY_MS);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [
+    reduceMotion,
+    routeInspectorInView,
+    routePointerInside,
+    routeUserPaused,
+    routeAutoplayEpoch,
+  ]);
+
   const activeChapterIndex = PRIVACY_CHAPTERS.findIndex(
     (chapter) => chapter.id === activeChapter,
   );
@@ -621,6 +749,7 @@ export function PrivacyPage() {
 
         <section
           id="route-inspector"
+          ref={routeInspectorRef}
           className="privacy-inspector"
           aria-labelledby="route-inspector-title"
         >
@@ -630,11 +759,27 @@ export function PrivacyPage() {
               <h2 id="route-inspector-title">Follow one class of data</h2>
             </div>
             <p>
-              Select a route to see collection, destination, purpose, and control.
+              Routes rotate on their own while this section is in view. Pick one
+              to pause and inspect collection, destination, purpose, and control.
             </p>
           </header>
 
-          <div className="privacy-inspector__console">
+          <div
+            className="privacy-inspector__console"
+            onMouseEnter={() => setRoutePointerInside(true)}
+            onMouseLeave={() => setRoutePointerInside(false)}
+            onFocusCapture={() => setRoutePointerInside(true)}
+            onBlurCapture={(event) => {
+              const next = event.relatedTarget;
+              if (
+                next instanceof Node &&
+                event.currentTarget.contains(next)
+              ) {
+                return;
+              }
+              setRoutePointerInside(false);
+            }}
+          >
             <div
               ref={routeNavigationRef}
               className="privacy-route-selector"
@@ -648,9 +793,19 @@ export function PrivacyPage() {
                   type="button"
                   data-route-id={route.id}
                   data-accent={route.accent}
+                  data-autoplay={
+                    routeAutoplayActive && activeRouteId === route.id
+                      ? 'true'
+                      : undefined
+                  }
+                  style={
+                    {
+                      '--privacy-route-dwell': `${ROUTE_AUTOPLAY_MS}ms`,
+                    } as CSSProperties
+                  }
                   aria-pressed={activeRouteId === route.id}
                   aria-controls="privacy-route-panel"
-                  onClick={() => setActiveRouteId(route.id)}
+                  onClick={() => activateDataRoute(route.id, 'user')}
                 >
                   <span>{route.number}</span>
                   <strong>{route.label}</strong>
@@ -662,44 +817,66 @@ export function PrivacyPage() {
               id="privacy-route-panel"
               className="privacy-route-panel"
               data-accent={activeRoute.accent}
+              data-direction={routeEnterDirection}
               role="region"
               aria-live="polite"
               aria-labelledby={`select-${activeRoute.id}`}
             >
-              <header className="privacy-route-panel__header">
-                <div>
-                  <span>ROUTE / {activeRoute.number}</span>
-                  <h3>{activeRoute.title}</h3>
-                </div>
-                <p>{activeRoute.summary}</p>
-              </header>
+              <div
+                key={activeRoute.id}
+                className={`privacy-route-panel__stage${
+                  reduceMotion ? '' : ' is-entering'
+                }`}
+                data-direction={routeEnterDirection}
+              >
+                <header className="privacy-route-panel__header">
+                  <div>
+                    <span>ROUTE / {activeRoute.number}</span>
+                    <h3>{activeRoute.title}</h3>
+                  </div>
+                  <p>{activeRoute.summary}</p>
+                </header>
 
-              <ol className="privacy-route-flow" aria-label={`${activeRoute.title} flow`}>
-                {activeRoute.nodes.map((node, index) => (
-                  <li key={`${activeRoute.id}-${node.label}`} data-boundary={node.boundary}>
-                    <span className="privacy-route-flow__step" aria-hidden="true">
-                      {String(index + 1).padStart(2, '0')}
-                    </span>
-                    <strong>{node.label}</strong>
-                    <p>{node.detail}</p>
-                  </li>
-                ))}
-              </ol>
+                <ol
+                  className="privacy-route-flow"
+                  aria-label={`${activeRoute.title} flow`}
+                >
+                  {activeRoute.nodes.map((node, index) => (
+                    <li
+                      key={`${activeRoute.id}-${node.label}`}
+                      data-boundary={node.boundary}
+                      style={
+                        reduceMotion
+                          ? undefined
+                          : ({
+                              '--privacy-route-stagger': `${80 + index * 55}ms`,
+                            } as CSSProperties)
+                      }
+                    >
+                      <span className="privacy-route-flow__step" aria-hidden="true">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <strong>{node.label}</strong>
+                      <p>{node.detail}</p>
+                    </li>
+                  ))}
+                </ol>
 
-              <dl className="privacy-route-facts">
-                <div>
-                  <dt>Data in motion</dt>
-                  <dd>{activeRoute.data}</dd>
-                </div>
-                <div>
-                  <dt>Outside Arena</dt>
-                  <dd>{activeRoute.outside}</dd>
-                </div>
-                <div>
-                  <dt>Your control</dt>
-                  <dd>{activeRoute.control}</dd>
-                </div>
-              </dl>
+                <dl className="privacy-route-facts">
+                  <div>
+                    <dt>Data in motion</dt>
+                    <dd>{activeRoute.data}</dd>
+                  </div>
+                  <div>
+                    <dt>Outside Arena</dt>
+                    <dd>{activeRoute.outside}</dd>
+                  </div>
+                  <div>
+                    <dt>Your control</dt>
+                    <dd>{activeRoute.control}</dd>
+                  </div>
+                </dl>
+              </div>
             </div>
           </div>
         </section>

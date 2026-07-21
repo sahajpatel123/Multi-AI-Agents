@@ -280,7 +280,7 @@ test.describe('Privacy data flow field guide', () => {
     await page.emulateMedia({ forcedColors: 'active' });
     await page.goto('/privacy');
 
-    const selectedRoute = page.getByRole('button', { name: /02\s*Conversation/i });
+    const selectedRoute = page.getByRole('button', { name: /01\s*Account/i });
     await expect(selectedRoute).toHaveAttribute('aria-pressed', 'true');
     await expect(selectedRoute).toHaveCSS('outline-style', 'solid');
     await expect(selectedRoute).toHaveCSS('outline-width', '3px');

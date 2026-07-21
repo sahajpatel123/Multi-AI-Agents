@@ -478,6 +478,7 @@ body .privacy-page .privacy-route-selector {
 }
 
 body .privacy-page .privacy-route-selector button {
+  position: relative;
   display: grid;
   width: 100%;
   min-height: 72px;
@@ -492,7 +493,34 @@ body .privacy-page .privacy-route-selector button {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease;
+  overflow: hidden;
+  transition:
+    background 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body .privacy-page .privacy-route-selector button[data-autoplay='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: currentColor;
+  opacity: 0.85;
+  pointer-events: none;
+  animation: privacy-route-dwell var(--privacy-route-dwell, 4s) linear forwards;
+}
+
+@keyframes privacy-route-dwell {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 body .privacy-page .privacy-route-selector button > span {
@@ -545,8 +573,181 @@ body .privacy-page .privacy-route-selector button[aria-pressed='true'] > span {
 }
 
 body .privacy-page .privacy-route-panel {
+  --privacy-route-accent: var(--privacy-cyan);
+  position: relative;
   min-width: 0;
+  overflow: hidden;
   color: var(--privacy-carbon);
+  isolation: isolate;
+}
+
+body .privacy-page .privacy-route-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  height: 8px;
+  background: var(--privacy-route-accent);
+  pointer-events: none;
+  transition: background-color 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body .privacy-page .privacy-route-panel[data-accent='cyan'] {
+  --privacy-route-accent: var(--privacy-cyan);
+}
+
+body .privacy-page .privacy-route-panel[data-accent='violet'] {
+  --privacy-route-accent: var(--privacy-violet);
+}
+
+body .privacy-page .privacy-route-panel[data-accent='coral'] {
+  --privacy-route-accent: var(--privacy-coral);
+}
+
+body .privacy-page .privacy-route-panel[data-accent='amber'] {
+  --privacy-route-accent: var(--privacy-amber);
+}
+
+body .privacy-page .privacy-route-panel[data-accent='acid'] {
+  --privacy-route-accent: var(--privacy-acid);
+}
+
+body .privacy-page .privacy-route-panel__stage {
+  min-width: 0;
+}
+
+body .privacy-page--motion .privacy-route-panel__stage.is-entering {
+  animation: privacy-route-stage-in 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+body .privacy-page--motion
+  .privacy-route-panel__stage.is-entering[data-direction='back'] {
+  animation-name: privacy-route-stage-in-back;
+}
+
+body .privacy-page--motion
+  .privacy-route-panel__stage.is-entering
+  .privacy-route-panel__header
+  > div {
+  animation: privacy-route-copy-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+body .privacy-page--motion
+  .privacy-route-panel__stage.is-entering
+  .privacy-route-panel__header
+  > p {
+  animation: privacy-route-copy-in 460ms cubic-bezier(0.22, 1, 0.36, 1) 40ms both;
+}
+
+body .privacy-page--motion
+  .privacy-route-panel__stage.is-entering
+  .privacy-route-flow
+  li {
+  animation: privacy-route-node-in 460ms cubic-bezier(0.22, 1, 0.36, 1)
+    var(--privacy-route-stagger, 80ms) both;
+}
+
+body .privacy-page--motion
+  .privacy-route-panel__stage.is-entering[data-direction='back']
+  .privacy-route-flow
+  li {
+  animation-name: privacy-route-node-in-back;
+}
+
+body .privacy-page--motion
+  .privacy-route-panel__stage.is-entering
+  .privacy-route-facts
+  > div {
+  animation: privacy-route-fact-in 440ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+body .privacy-page--motion
+  .privacy-route-panel__stage.is-entering
+  .privacy-route-facts
+  > div:nth-child(1) {
+  animation-delay: 180ms;
+}
+
+body .privacy-page--motion
+  .privacy-route-panel__stage.is-entering
+  .privacy-route-facts
+  > div:nth-child(2) {
+  animation-delay: 230ms;
+}
+
+body .privacy-page--motion
+  .privacy-route-panel__stage.is-entering
+  .privacy-route-facts
+  > div:nth-child(3) {
+  animation-delay: 280ms;
+}
+
+@keyframes privacy-route-stage-in {
+  from {
+    opacity: 0;
+    transform: translate3d(18px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes privacy-route-stage-in-back {
+  from {
+    opacity: 0;
+    transform: translate3d(-18px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes privacy-route-copy-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes privacy-route-node-in {
+  from {
+    opacity: 0;
+    transform: translate3d(14px, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes privacy-route-node-in-back {
+  from {
+    opacity: 0;
+    transform: translate3d(-14px, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes privacy-route-fact-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 body .privacy-page .privacy-route-panel__header {
@@ -556,6 +757,7 @@ body .privacy-page .privacy-route-panel__header {
   align-items: end;
   min-height: 154px;
   padding: 28px 32px;
+  border-top: 8px solid transparent;
   border-bottom: 1px solid var(--privacy-carbon);
   background: var(--privacy-paper-2);
 }
@@ -584,26 +786,6 @@ body .privacy-page .privacy-route-panel__header > p {
   font-size: 15px;
   font-weight: 650;
   line-height: 1.55;
-}
-
-body .privacy-page .privacy-route-panel[data-accent='cyan'] .privacy-route-panel__header {
-  border-top: 8px solid var(--privacy-cyan);
-}
-
-body .privacy-page .privacy-route-panel[data-accent='violet'] .privacy-route-panel__header {
-  border-top: 8px solid var(--privacy-violet);
-}
-
-body .privacy-page .privacy-route-panel[data-accent='coral'] .privacy-route-panel__header {
-  border-top: 8px solid var(--privacy-coral);
-}
-
-body .privacy-page .privacy-route-panel[data-accent='amber'] .privacy-route-panel__header {
-  border-top: 8px solid var(--privacy-amber);
-}
-
-body .privacy-page .privacy-route-panel[data-accent='acid'] .privacy-route-panel__header {
-  border-top: 8px solid var(--privacy-acid);
 }
 
 body .privacy-page .privacy-route-flow {

@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -9,16 +8,13 @@ import {
   ArrowRight,
   Check,
   Copy,
-  Search,
   ShieldCheck,
   Terminal,
-  X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
 import { copyToClipboard } from '../lib/clipboard';
-import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import '../styles/verdict-docs.css';
 
 type ChapterId = 'start' | 'concepts' | 'agent' | 'api' | 'architecture' | 'tiers' | 'security';
@@ -28,15 +24,14 @@ const CHAPTERS: readonly {
   id: ChapterId;
   index: string;
   label: string;
-  keywords: string;
 }[] = [
-  { id: 'start', index: '01', label: 'Start here', keywords: 'overview quick start setup install backend frontend local development' },
-  { id: 'concepts', index: '02', label: 'Runtime model', keywords: 'arena personas panel judge scorer scoring debate discuss focus stream' },
-  { id: 'agent', index: '03', label: 'Agent Mode', keywords: 'pipeline planner researcher solver critic verifier synthesizer judge refine' },
-  { id: 'api', index: '04', label: 'API surface', keywords: 'endpoints auth prompt stream debate agent payments calibration rooms panel' },
-  { id: 'architecture', index: '05', label: 'Architecture', keywords: 'react typescript fastapi sqlalchemy postgres sqlite providers mcp render' },
-  { id: 'tiers', index: '06', label: 'Plans & limits', keywords: 'guest free plus pro tokens credits messages personas add-on pricing' },
-  { id: 'security', index: '07', label: 'Security', keywords: 'cors headers rate limits passwords encryption webhook injection condura local' },
+  { id: 'start', index: '01', label: 'Start here' },
+  { id: 'concepts', index: '02', label: 'Runtime model' },
+  { id: 'agent', index: '03', label: 'Agent Mode' },
+  { id: 'api', index: '04', label: 'API surface' },
+  { id: 'architecture', index: '05', label: 'Architecture' },
+  { id: 'tiers', index: '06', label: 'Plans & limits' },
+  { id: 'security', index: '07', label: 'Security' },
 ] as const;
 
 const BACKEND_SETUP = `cd backend
@@ -150,29 +145,18 @@ function ChapterHeading({ id, index, eyebrow, title, body }: { id: string; index
 
 export function DocsPage() {
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
   const [copyState, setCopyState] = useState<CopyState>(null);
   const [activeStageId, setActiveStageId] = useState<(typeof PIPELINE)[number]['id']>(PIPELINE[0].id);
   const [activeApiId, setActiveApiId] = useState<(typeof API_GROUPS)[number]['id']>(API_GROUPS[1].id);
   const [activeChapter, setActiveChapter] = useState<ChapterId>('start');
-  const searchRef = useRef<HTMLInputElement | null>(null);
   const copyTimerRef = useRef<number | null>(null);
-  const normalized = query.trim().toLowerCase();
-
-  const visibleChapters = useMemo(
-    () => CHAPTERS.filter((chapter) => !normalized || `${chapter.label} ${chapter.keywords}`.toLowerCase().includes(normalized)),
-    [normalized],
-  );
-  const visible = useMemo(() => new Set(visibleChapters.map((chapter) => chapter.id)), [visibleChapters]);
   const activeStage = PIPELINE.find((stage) => stage.id === activeStageId) ?? PIPELINE[0];
   const activeApi = API_GROUPS.find((group) => group.id === activeApiId) ?? API_GROUPS[1];
 
   useEffect(() => {
-    if (visibleChapters.length === 0) return;
-
     const syncFromViewport = () => {
-      let nextChapter = visibleChapters[0].id;
-      for (const chapter of visibleChapters) {
+      let nextChapter: ChapterId = CHAPTERS[0].id;
+      for (const chapter of CHAPTERS) {
         const section = document.getElementById(chapter.id);
         if (!section) continue;
         if (section.getBoundingClientRect().top <= 160) nextChapter = chapter.id;
@@ -181,9 +165,8 @@ export function DocsPage() {
       setActiveChapter(nextChapter);
     };
     const syncFromHash = () => {
-      const hashChapter = visibleChapters.find(
-        (chapter) => chapter.id === window.location.hash.slice(1),
-      );
+      const hashId = window.location.hash.slice(1) as ChapterId;
+      const hashChapter = CHAPTERS.find((chapter) => chapter.id === hashId);
       if (!hashChapter) return false;
       setActiveChapter(hashChapter.id);
       return true;
@@ -199,22 +182,7 @@ export function DocsPage() {
       window.removeEventListener('scroll', syncFromViewport);
       window.removeEventListener('hashchange', onHashChange);
     };
-  }, [visibleChapters]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (isBareSlashKey(event) && shouldCaptureSlashFocus(event.target)) {
-        event.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
-      } else if (event.key === 'Escape' && document.activeElement === searchRef.current && query) {
-        event.preventDefault();
-        setQuery('');
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [query]);
+  }, []);
 
   useEffect(() => () => {
     if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
@@ -225,11 +193,6 @@ export function DocsPage() {
     if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
     setCopyState({ id, status: ok ? 'copied' : 'failed' });
     copyTimerRef.current = window.setTimeout(() => setCopyState(null), ok ? 1600 : 2600);
-  };
-
-  const clearSearch = () => {
-    setQuery('');
-    searchRef.current?.focus();
   };
 
   const jumpToChapter = (id: ChapterId) => {
@@ -254,38 +217,13 @@ export function DocsPage() {
               <div><dt>16</dt><dd>reasoning styles</dd></div>
             </dl>
           </div>
-
-          <aside className="docs-query-console" aria-label="Documentation search console">
-            <header><span>Field index</span><b>{String(visibleChapters.length).padStart(2, '0')} / 07</b></header>
-            <label>
-              <span><Search aria-hidden="true" /> Search the manual</span>
-              <div>
-                <input
-                  type="search"
-                  ref={searchRef}
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  aria-label="Search documentation"
-                  aria-keyshortcuts="/"
-                  placeholder="Try “security” or “stream”"
-                />
-                {query ? <button type="button" onClick={clearSearch} aria-label="Clear documentation search"><X aria-hidden="true" /></button> : <kbd>/</kbd>}
-              </div>
-            </label>
-            <ol>
-              {visibleChapters.map((chapter) => (
-                <li key={`${chapter.id}-hero`}><a href={`#${chapter.id}`} onClick={() => jumpToChapter(chapter.id)}><small>{chapter.index}</small><span>{chapter.label}</span><b>↘</b></a></li>
-              ))}
-            </ol>
-            <footer role="status" aria-live="polite">{normalized ? `${visibleChapters.length} chapter${visibleChapters.length === 1 ? '' : 's'} match “${query.trim()}”` : `${CHAPTERS.length} chapters available. Search titles, systems, routes, and limits.`}</footer>
-          </aside>
         </section>
 
         <div className="docs-field-layout">
           <aside className="docs-field-nav" aria-label="Documentation chapters">
-            <header><span>On this page</span><b>{String(visibleChapters.length).padStart(2, '0')}</b></header>
+            <header><span>On this page</span><b>{String(CHAPTERS.length).padStart(2, '0')}</b></header>
             <nav>
-              {visibleChapters.map((chapter) => (
+              {CHAPTERS.map((chapter) => (
                 <a key={chapter.id} href={`#${chapter.id}`} className={activeChapter === chapter.id ? 'is-active' : ''} aria-current={activeChapter === chapter.id ? 'location' : undefined} onClick={() => jumpToChapter(chapter.id)}>
                   <small>{chapter.index}</small><span>{chapter.label}</span>
                 </a>
@@ -295,120 +233,98 @@ export function DocsPage() {
           </aside>
 
           <div className="docs-field-reader">
-            {visible.size === 0 ? (
-              <section className="docs-field-empty" aria-live="polite">
-                <small>No matching chapter</small>
-                <h2>Nothing in the field manual matches “{query}”.</h2>
-                <button type="button" onClick={clearSearch}>Clear search</button>
-              </section>
-            ) : null}
+            <section id="start" className="docs-field-chapter" aria-labelledby="docs-start-title">
+              <ChapterHeading id="docs-start-title" index="01" eyebrow="Start here" title="From clone to first verdict." body="Bring up the API, apply migrations, start the client, and verify both surfaces before changing behavior." />
+              <div className="docs-boot-sequence" aria-label="Local boot sequence">
+                {[['01','ENV','Python 3.11+ · Node.js 18+'],['02','SECRETS','Anthropic key · strong SECRET_KEY'],['03','DATA','PostgreSQL primary · SQLite dev fallback'],['04','RUN','API :8000 · UI :5173']].map(([n,label,text]) => <article key={n}><small>{n}</small><strong>{label}</strong><p>{text}</p></article>)}
+              </div>
+              <div className="docs-code-grid">
+                <CodeBlock id="backend" label="Backend / terminal 01" value={BACKEND_SETUP} copyState={copyState} onCopy={copy} />
+                <CodeBlock id="frontend" label="Frontend / terminal 02" value={FRONTEND_SETUP} copyState={copyState} onCopy={copy} />
+              </div>
+              <div className="docs-field-note"><strong>Health sequence</strong><p>Run <code>alembic upgrade head</code>, then check <code>/api/health</code>. The browser reaches the API through <code>/api/*</code>; never hardcode a production backend URL.</p></div>
+            </section>
 
-            {visible.has('start') ? (
-              <section id="start" className="docs-field-chapter" aria-labelledby="docs-start-title">
-                <ChapterHeading id="docs-start-title" index="01" eyebrow="Start here" title="From clone to first verdict." body="Bring up the API, apply migrations, start the client, and verify both surfaces before changing behavior." />
-                <div className="docs-boot-sequence" aria-label="Local boot sequence">
-                  {[['01','ENV','Python 3.11+ · Node.js 18+'],['02','SECRETS','Anthropic key · strong SECRET_KEY'],['03','DATA','PostgreSQL primary · SQLite dev fallback'],['04','RUN','API :8000 · UI :5173']].map(([n,label,text]) => <article key={n}><small>{n}</small><strong>{label}</strong><p>{text}</p></article>)}
+            <section id="concepts" className="docs-field-chapter" aria-labelledby="docs-concepts-title">
+              <ChapterHeading id="docs-concepts-title" index="02" eyebrow="Runtime model" title="One prompt. Five model roles. One verdict." body="Arena preserves disagreement: four configured personas answer independently, then a fifth model evaluates the resulting set." />
+              <div className="docs-runtime-map">
+                <div className="docs-runtime-map__input"><small>Input / 01</small><strong>Your question</strong><span>sanitize → classify → route</span></div>
+                <div className="docs-runtime-map__fan" aria-label="Four parallel persona responses">
+                  {['Analyst','Philosopher','Pragmatist','Contrarian'].map((name,index) => <article key={name} style={{ '--runtime-tone': ['#5ED8FF','#A98CF8','#D7F64A','#FF6652'][index] } as CSSProperties}><small>0{index + 1}</small><strong>{name}</strong><span>parallel SSE</span></article>)}
                 </div>
-                <div className="docs-code-grid">
-                  <CodeBlock id="backend" label="Backend / terminal 01" value={BACKEND_SETUP} copyState={copyState} onCopy={copy} />
-                  <CodeBlock id="frontend" label="Frontend / terminal 02" value={FRONTEND_SETUP} copyState={copyState} onCopy={copy} />
-                </div>
-                <div className="docs-field-note"><strong>Health sequence</strong><p>Run <code>alembic upgrade head</code>, then check <code>/api/health</code>. The browser reaches the API through <code>/api/*</code>; never hardcode a production backend URL.</p></div>
-              </section>
-            ) : null}
+                <div className="docs-runtime-map__judge"><small>Role / 05</small><strong>Independent scorer</strong><span>relevance · insight · clarity · intellectual honesty</span></div>
+                <footer><span>Frontend transport</span><b>fetch + ReadableStream + AbortController</b></footer>
+              </div>
+              <div className="docs-score-ledger">
+                {[['RELEVANCE','Does it answer the actual question?'],['INSIGHT','Does it reveal something non-obvious?'],['CLARITY','Can the reasoning be inspected?'],['HONESTY','Are limits and uncertainty named?']].map(([label,text],index) => <article key={label}><small>0{index + 1}</small><strong>{label}</strong><p>{text}</p></article>)}
+              </div>
+            </section>
 
-            {visible.has('concepts') ? (
-              <section id="concepts" className="docs-field-chapter" aria-labelledby="docs-concepts-title">
-                <ChapterHeading id="docs-concepts-title" index="02" eyebrow="Runtime model" title="One prompt. Five model roles. One verdict." body="Arena preserves disagreement: four configured personas answer independently, then a fifth model evaluates the resulting set." />
-                <div className="docs-runtime-map">
-                  <div className="docs-runtime-map__input"><small>Input / 01</small><strong>Your question</strong><span>sanitize → classify → route</span></div>
-                  <div className="docs-runtime-map__fan" aria-label="Four parallel persona responses">
-                    {['Analyst','Philosopher','Pragmatist','Contrarian'].map((name,index) => <article key={name} style={{ '--runtime-tone': ['#5ED8FF','#A98CF8','#D7F64A','#FF6652'][index] } as CSSProperties}><small>0{index + 1}</small><strong>{name}</strong><span>parallel SSE</span></article>)}
-                  </div>
-                  <div className="docs-runtime-map__judge"><small>Role / 05</small><strong>Independent scorer</strong><span>relevance · insight · clarity · intellectual honesty</span></div>
-                  <footer><span>Frontend transport</span><b>fetch + ReadableStream + AbortController</b></footer>
+            <section id="agent" className="docs-field-chapter" aria-labelledby="docs-agent-title">
+              <ChapterHeading id="docs-agent-title" index="03" eyebrow="Agent Mode" title="A research pipeline that can reject its own work." body="Seven visible stages expose progress while the runtime carries structured artifacts forward and bounds refinement." />
+              <div className="docs-pipeline-studio">
+                <div className="docs-pipeline" role="group" aria-label="Inspect Agent stage">
+                  {PIPELINE.map((stage) => (
+                    <button key={stage.id} type="button" aria-label={`Stage ${stage.index}: ${stage.label}`} aria-pressed={activeStage.id === stage.id} className={activeStage.id === stage.id ? 'is-active' : ''} style={{ '--stage-tone': stage.tone } as CSSProperties} onClick={() => setActiveStageId(stage.id)}>
+                      <small>{stage.index}</small><strong>{stage.label}</strong><span aria-hidden="true">{activeStage.id === stage.id ? '●' : '○'}</span>
+                    </button>
+                  ))}
                 </div>
-                <div className="docs-score-ledger">
-                  {[['RELEVANCE','Does it answer the actual question?'],['INSIGHT','Does it reveal something non-obvious?'],['CLARITY','Can the reasoning be inspected?'],['HONESTY','Are limits and uncertainty named?']].map(([label,text],index) => <article key={label}><small>0{index + 1}</small><strong>{label}</strong><p>{text}</p></article>)}
-                </div>
-              </section>
-            ) : null}
+                <aside className="docs-stage-inspector" style={{ '--stage-tone': activeStage.tone } as CSSProperties} aria-live="polite" aria-label="Selected Agent stage">
+                  <header><span>Selected stage</span><b>{activeStage.index} / 07</b></header>
+                  <div><small>{activeStage.output}</small><h3>{activeStage.label}</h3><p>{activeStage.description}</p></div>
+                  <footer>Judge may request revision; solver → synthesis → judgment is bounded to two refinement passes.</footer>
+                </aside>
+              </div>
+              <div className="docs-field-note"><strong>Public progress contract</strong><p>The product says seven stages because those are the stages users see. Pipeline internals remain implementation detail; do not infer additional public steps from source layout.</p></div>
+            </section>
 
-            {visible.has('agent') ? (
-              <section id="agent" className="docs-field-chapter" aria-labelledby="docs-agent-title">
-                <ChapterHeading id="docs-agent-title" index="03" eyebrow="Agent Mode" title="A research pipeline that can reject its own work." body="Seven visible stages expose progress while the runtime carries structured artifacts forward and bounds refinement." />
-                <div className="docs-pipeline-studio">
-                  <div className="docs-pipeline" role="group" aria-label="Inspect Agent stage">
-                    {PIPELINE.map((stage) => (
-                      <button key={stage.id} type="button" aria-label={`Stage ${stage.index}: ${stage.label}`} aria-pressed={activeStage.id === stage.id} className={activeStage.id === stage.id ? 'is-active' : ''} style={{ '--stage-tone': stage.tone } as CSSProperties} onClick={() => setActiveStageId(stage.id)}>
-                        <small>{stage.index}</small><strong>{stage.label}</strong><span aria-hidden="true">{activeStage.id === stage.id ? '●' : '○'}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <aside className="docs-stage-inspector" style={{ '--stage-tone': activeStage.tone } as CSSProperties} aria-live="polite" aria-label="Selected Agent stage">
-                    <header><span>Selected stage</span><b>{activeStage.index} / 07</b></header>
-                    <div><small>{activeStage.output}</small><h3>{activeStage.label}</h3><p>{activeStage.description}</p></div>
-                    <footer>Judge may request revision; solver → synthesis → judgment is bounded to two refinement passes.</footer>
-                  </aside>
+            <section id="api" className="docs-field-chapter" aria-labelledby="docs-api-title">
+              <ChapterHeading id="docs-api-title" index="04" eyebrow="API surface" title="Typed routes. Streaming where time matters." body="The frontend centralizes backend calls in a typed client. Streaming paths use fetch readers so navigation and Stop controls can abort work." />
+              <div className="docs-api-explorer">
+                <div className="docs-api-explorer__tabs" role="group" aria-label="API route group">
+                  {API_GROUPS.map((group) => <button key={group.id} type="button" aria-label={`Show ${group.label} endpoints`} aria-pressed={activeApi.id === group.id} className={activeApi.id === group.id ? 'is-active' : ''} onClick={() => setActiveApiId(group.id)}><small>{group.index}</small><span>{group.label}</span></button>)}
                 </div>
-                <div className="docs-field-note"><strong>Public progress contract</strong><p>The product says seven stages because those are the stages users see. Pipeline internals remain implementation detail; do not infer additional public steps from source layout.</p></div>
-              </section>
-            ) : null}
+                <div className="docs-api-explorer__panel" aria-live="polite">
+                  <header><span>{activeApi.label} routes</span><b>{String(activeApi.routes.length).padStart(2,'0')} endpoints</b></header>
+                  <p>{activeApi.note}</p>
+                  <pre>{activeApi.routes.map((route) => <code key={route}>{route}</code>)}</pre>
+                  <footer><span>Base</span><b>/api/*</b><span>Client</span><b>src/api.ts</b></footer>
+                </div>
+              </div>
+            </section>
 
-            {visible.has('api') ? (
-              <section id="api" className="docs-field-chapter" aria-labelledby="docs-api-title">
-                <ChapterHeading id="docs-api-title" index="04" eyebrow="API surface" title="Typed routes. Streaming where time matters." body="The frontend centralizes backend calls in a typed client. Streaming paths use fetch readers so navigation and Stop controls can abort work." />
-                <div className="docs-api-explorer">
-                  <div className="docs-api-explorer__tabs" role="group" aria-label="API route group">
-                    {API_GROUPS.map((group) => <button key={group.id} type="button" aria-label={`Show ${group.label} endpoints`} aria-pressed={activeApi.id === group.id} className={activeApi.id === group.id ? 'is-active' : ''} onClick={() => setActiveApiId(group.id)}><small>{group.index}</small><span>{group.label}</span></button>)}
-                  </div>
-                  <div className="docs-api-explorer__panel" aria-live="polite">
-                    <header><span>{activeApi.label} routes</span><b>{String(activeApi.routes.length).padStart(2,'0')} endpoints</b></header>
-                    <p>{activeApi.note}</p>
-                    <pre>{activeApi.routes.map((route) => <code key={route}>{route}</code>)}</pre>
-                    <footer><span>Base</span><b>/api/*</b><span>Client</span><b>src/api.ts</b></footer>
-                  </div>
-                </div>
-              </section>
-            ) : null}
+            <section id="architecture" className="docs-field-chapter" aria-labelledby="docs-architecture-title">
+              <ChapterHeading id="docs-architecture-title" index="05" eyebrow="Architecture" title="Boundaries that make disagreement operable." body="Client, service, intelligence, and persistence remain separable so routing, scoring, memory, and transport can evolve independently." />
+              <div className="docs-architecture-map">
+                {[['01','CLIENT','React 18 · TypeScript · Vite','Route-split pages, contexts, typed API calls, streaming UI.'],['02','SERVICE','FastAPI · SQLAlchemy · Alembic','Feature routers, middleware, schemas, additive migrations.'],['03','INTELLIGENCE','Anthropic · OpenAI · xAI · DeepSeek','Task-aware routes; missing optional provider keys fall back to Claude.'],['04','DATA & OPS','PostgreSQL · SQLite dev fallback','Persistent product data, JSON logs, latency and scoring audits.']].map(([n,label,stack,body]) => <article key={n}><small>{n} / {label}</small><h3>{stack}</h3><p>{body}</p></article>)}
+              </div>
+              <CodeBlock id="map" label="Repository / project map" value={PROJECT_MAP} copyState={copyState} onCopy={copy} />
+            </section>
 
-            {visible.has('architecture') ? (
-              <section id="architecture" className="docs-field-chapter" aria-labelledby="docs-architecture-title">
-                <ChapterHeading id="docs-architecture-title" index="05" eyebrow="Architecture" title="Boundaries that make disagreement operable." body="Client, service, intelligence, and persistence remain separable so routing, scoring, memory, and transport can evolve independently." />
-                <div className="docs-architecture-map">
-                  {[['01','CLIENT','React 18 · TypeScript · Vite','Route-split pages, contexts, typed API calls, streaming UI.'],['02','SERVICE','FastAPI · SQLAlchemy · Alembic','Feature routers, middleware, schemas, additive migrations.'],['03','INTELLIGENCE','Anthropic · OpenAI · xAI · DeepSeek','Task-aware routes; missing optional provider keys fall back to Claude.'],['04','DATA & OPS','PostgreSQL · SQLite dev fallback','Persistent product data, JSON logs, latency and scoring audits.']].map(([n,label,stack,body]) => <article key={n}><small>{n} / {label}</small><h3>{stack}</h3><p>{body}</p></article>)}
-                </div>
-                <CodeBlock id="map" label="Repository / project map" value={PROJECT_MAP} copyState={copyState} onCopy={copy} />
-              </section>
-            ) : null}
+            <section id="tiers" className="docs-field-chapter" aria-labelledby="docs-tiers-title">
+              <ChapterHeading id="docs-tiers-title" index="06" eyebrow="Plans & limits" title="Capacity is explicit before a run starts." body="Message and token budgets are enforced server-side. Agent Mode is included with Pro and available to Plus through the paid add-on." />
+              <div className="docs-plan-ledger" role="region" aria-label="Plan limits table" tabIndex={0}>
+                <table>
+                  <caption className="docs-sr-only">Guest, Free, Plus, and Pro limits</caption>
+                  <thead><tr><th scope="col">Plan</th><th scope="col">Messages / day</th><th scope="col">Tokens / day</th><th scope="col">Personas</th><th scope="col">Agent Mode</th></tr></thead>
+                  <tbody>{PLAN_ROWS.map((row) => <tr key={row[0]}>{row.map((cell,index) => index === 0 ? <th key={cell} scope="row">{cell}</th> : <td key={cell}>{cell}</td>)}</tr>)}</tbody>
+                </table>
+              </div>
+              <div className="docs-tier-actions"><p>Pro also uses a rolling 45-message / 5-hour window. Plus add-on runs retain Plus limits.</p><button type="button" onClick={() => navigate('/pricing')}>Compare full pricing <ArrowRight aria-hidden="true" /></button></div>
+            </section>
 
-            {visible.has('tiers') ? (
-              <section id="tiers" className="docs-field-chapter" aria-labelledby="docs-tiers-title">
-                <ChapterHeading id="docs-tiers-title" index="06" eyebrow="Plans & limits" title="Capacity is explicit before a run starts." body="Message and token budgets are enforced server-side. Agent Mode is included with Pro and available to Plus through the paid add-on." />
-                <div className="docs-plan-ledger" role="region" aria-label="Plan limits table" tabIndex={0}>
-                  <table>
-                    <caption className="docs-sr-only">Guest, Free, Plus, and Pro limits</caption>
-                    <thead><tr><th scope="col">Plan</th><th scope="col">Messages / day</th><th scope="col">Tokens / day</th><th scope="col">Personas</th><th scope="col">Agent Mode</th></tr></thead>
-                    <tbody>{PLAN_ROWS.map((row) => <tr key={row[0]}>{row.map((cell,index) => index === 0 ? <th key={cell} scope="row">{cell}</th> : <td key={cell}>{cell}</td>)}</tr>)}</tbody>
-                  </table>
-                </div>
-                <div className="docs-tier-actions"><p>Pro also uses a rolling 45-message / 5-hour window. Plus add-on runs retain Plus limits.</p><button type="button" onClick={() => navigate('/pricing')}>Compare full pricing <ArrowRight aria-hidden="true" /></button></div>
-              </section>
-            ) : null}
-
-            {visible.has('security') ? (
-              <section id="security" className="docs-field-chapter docs-field-chapter--last" aria-labelledby="docs-security-title">
-                <ChapterHeading id="docs-security-title" index="07" eyebrow="Security & boundaries" title="Defence belongs inside the runtime." body="Transport, identity, payments, prompts, secrets, and local execution each fail at a named boundary." />
-                <div className="docs-security-grid">
-                  {SECURITY_CONTROLS.map(([n,label,body]) => <article key={n}><header><small>{n}</small><ShieldCheck aria-hidden="true" /></header><strong>{label}</strong><p>{body}</p></article>)}
-                </div>
-                <div className="docs-condura-boundary">
-                  <div><h3>The browser does not control your machine.</h3></div>
-                  <p>Arena handles web research. Opening desktop apps, writing local files, or running shell commands requires Condura—a separate local-first daemon. Never report local work as completed without that handoff.</p>
-                </div>
-                <div className="docs-field-close"><div><h3>Choose the surface. Inspect the result.</h3></div><div><button type="button" onClick={() => navigate('/product')}>Explore product</button><button type="button" onClick={() => navigate('/signin?tab=signup')}>Start free <ArrowRight aria-hidden="true" /></button></div></div>
-              </section>
-            ) : null}
+            <section id="security" className="docs-field-chapter docs-field-chapter--last" aria-labelledby="docs-security-title">
+              <ChapterHeading id="docs-security-title" index="07" eyebrow="Security & boundaries" title="Defence belongs inside the runtime." body="Transport, identity, payments, prompts, secrets, and local execution each fail at a named boundary." />
+              <div className="docs-security-grid">
+                {SECURITY_CONTROLS.map(([n,label,body]) => <article key={n}><header><small>{n}</small><ShieldCheck aria-hidden="true" /></header><strong>{label}</strong><p>{body}</p></article>)}
+              </div>
+              <div className="docs-condura-boundary">
+                <div><h3>The browser does not control your machine.</h3></div>
+                <p>Arena handles web research. Opening desktop apps, writing local files, or running shell commands requires Condura—a separate local-first daemon. Never report local work as completed without that handoff.</p>
+              </div>
+              <div className="docs-field-close"><div><h3>Choose the surface. Inspect the result.</h3></div><div><button type="button" onClick={() => navigate('/product')}>Explore product</button><button type="button" onClick={() => navigate('/signin?tab=signup')}>Start free <ArrowRight aria-hidden="true" /></button></div></div>
+            </section>
           </div>
         </div>
       </main>

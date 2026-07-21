@@ -78,42 +78,18 @@ describe('DocsPage', () => {
     expect(within(explorer as HTMLElement).getByText(/signed webhook lifecycle/i)).toBeInTheDocument();
   });
 
-  it('filters chapters, reports the live count, clears the query, and renders an empty state', () => {
-    renderPage();
-    const search = screen.getByRole('searchbox', { name: /search documentation/i });
+  it('keeps chapter navigation in the On this page rail without a duplicate hero index', () => {
+    const { container } = renderPage();
 
-    fireEvent.change(search, { target: { value: 'security' } });
-    expect(screen.getByRole('status')).toHaveTextContent('1 chapter match');
-    expect(screen.getByRole('heading', { name: /defence belongs inside the runtime/i })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: /from clone to first verdict/i })).not.toBeInTheDocument();
+    expect(container.querySelector('.docs-query-console')).toBeNull();
+    expect(screen.queryByRole('searchbox', { name: /search documentation/i })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /clear documentation search/i }));
-    expect(search).toHaveValue('');
-    expect(screen.getByRole('status')).toHaveTextContent('7 chapters available');
-
-    fireEvent.change(search, { target: { value: 'no-such-field-entry' } });
-    expect(screen.getByRole('heading', { name: /nothing in the field manual matches/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /clear search/i }));
-    expect(screen.getByRole('heading', { name: /from clone to first verdict/i })).toBeInTheDocument();
-  });
-
-  it('supports the slash search shortcut and Escape clearing without stealing form focus', () => {
-    renderPage();
-    const search = screen.getByRole('searchbox', { name: /search documentation/i });
-
-    fireEvent.keyDown(window, { key: '/' });
-    expect(search).toHaveFocus();
-
-    fireEvent.change(search, { target: { value: 'stream' } });
-    fireEvent.keyDown(search, { key: 'Escape' });
-    expect(search).toHaveValue('');
-
-    const focusGuard = document.createElement('input');
-    document.body.appendChild(focusGuard);
-    focusGuard.focus();
-    fireEvent.keyDown(focusGuard, { key: '/' });
-    expect(focusGuard).toHaveFocus();
-    focusGuard.remove();
+    const chapterNav = container.querySelector('.docs-field-nav');
+    expect(chapterNav).not.toBeNull();
+    expect(within(chapterNav as HTMLElement).getByText(/on this page/i)).toBeInTheDocument();
+    expect(within(chapterNav as HTMLElement).getAllByRole('link')).toHaveLength(7);
+    expect(within(chapterNav as HTMLElement).getByRole('link', { name: /start here/i })).toHaveAttribute('href', '#start');
+    expect(within(chapterNav as HTMLElement).getByRole('link', { name: /security/i })).toHaveAttribute('href', '#security');
   });
 
   it('copies setup commands through the shared clipboard helper and reports success', async () => {
