@@ -123,6 +123,30 @@ test.describe('Home page (mocked)', () => {
     // POLICY) duplicated across 2 groups, giving 8 articles total.
     expect(await tape.locator('article').count()).toBe(8);
   });
+
+  test('closing CTA section pins the h2, form, and footer brand strings', async ({
+    page,
+  }) => {
+    await page.goto('/');
+
+    const close = page.locator('section.vp-close');
+    await expect(close).toBeVisible();
+
+    // h2 headline + form labels + footer marketing strings. Each is
+    // user-visible brand copy that surfaces in the marketing-mark band
+    // shared with /signin (cycle 170).
+    await expect(
+      close.getByRole('heading', { name: /what deserves more than one answer\?/i }),
+    ).toBeVisible();
+    await expect(close.getByLabel(/your question/i)).toBeVisible();
+    await expect(close.getByRole('button', { name: /enter arena/i })).toBeVisible();
+
+    // Footer strings — referenced from /signin too ("3 FREE RUNS").
+    await expect(close).toContainText('3 RUNS FREE');
+    await expect(close).toContainText('NO CARD REQUIRED');
+    await expect(close).toContainText('ARENA © 2026');
+    await expect(close).toContainText('MULTIPLE MINDS. ONE VERDICT.');
+  });
 });
 
 function escape(s: string): string {
