@@ -957,6 +957,15 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)) -> J
         raise
     except Exception:
         logger.exception("Webhook handler error")
+        # Non-2xx so Razorpay retries — a silent 200 here causes data loss
+        # (see backend/docs/HOT-PATH-ANALYSIS.md, "Webhook returns 200 on
+        # failure" — HIGH severity). FastAPI's exception handler would also
+        # produce a 500 if we re-raised, but returning explicitly here keeps
+        # the contract stable and avoids depending on global handler ordering.
+        return JSONResponse(
+            status_code=500,
+            content={"error": "webhook_handler_error"},
+        )
 
     return JSONResponse(status_code=200, content={"status": "ok"})
 

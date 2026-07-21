@@ -206,6 +206,45 @@ class TestWebhookHmac:
         )
         assert res.status_code == 400, res.text
 
+    @pytest.mark.asyncio
+    async def test_handler_exception_returns_500_not_200(
+        self, app_client, secret_env
+    ):
+        """Regression: a non-HTTPException raised inside the webhook
+        handler MUST return a non-2xx response so Razorpay retries.
+
+        Before this fix, the outer `except Exception:` block at
+        `payments.py:958-959` logged the exception and fell through to
+        `return JSONResponse(status_code=200, ...)`. Razorpay interprets
+        that 200 as "we got it, don't retry" — silently losing the
+        payment event (HIGH severity, see
+        backend/docs/HOT-PATH-ANALYSIS.md).
+
+        Pin the contract: handler exception ⇒ 500 with
+        `{"error": "webhook_handler_error"}`.
+        """
+        body = _body()
+        sig = _sign(secret_env.razorpay_webhook_secret, body)
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("simulated inner-handler failure")
+
+        with patch(
+            "arena.routes.payments._find_subscription_by_rzp_id",
+            side_effect=_boom,
+        ):
+            res = await app_client.post(
+                "/api/payments/webhook",
+                content=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Razorpay-Signature": sig,
+                },
+            )
+        assert res.status_code == 500, res.text
+        payload = res.json()
+        assert payload.get("error") == "webhook_handler_error", payload
+
 
 class TestVerifyHmac:
     """POST /api/payments/verify uses the same HMAC primitive but
