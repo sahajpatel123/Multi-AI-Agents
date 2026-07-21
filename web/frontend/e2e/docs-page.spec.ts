@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Documentation field manual', () => {
-  test('is searchable, inspectable, and keyboard-safe at the 834px tablet edge', async ({ page }) => {
+  test('is inspectable and keyboard-safe at the 834px tablet edge', async ({ page }) => {
     await page.setViewportSize({ width: 834, height: 1000 });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -10,6 +10,9 @@ test.describe('Documentation field manual', () => {
     await expect(page.getByRole('heading', { name: /understand the system/i })).toBeVisible();
     await expect(page.locator('.docs-field-chapter')).toHaveCount(7);
     await expect(page.getByRole('region', { name: /from clone to first verdict/i })).toBeVisible();
+    await expect(page.locator('.docs-query-console')).toHaveCount(0);
+    await expect(page.getByLabel('Documentation chapters')).toBeVisible();
+    await expect(page.getByLabel('Documentation chapters').getByRole('link')).toHaveCount(7);
 
     const geometry = await page.evaluate(() => {
       const title = document.querySelector('.docs-field-hero h1')?.getBoundingClientRect();
@@ -39,19 +42,6 @@ test.describe('Documentation field manual', () => {
     await skip.focus();
     await skip.press('Enter');
     await expect(page.locator('main#main-content')).toBeFocused();
-
-    await page.locator('body').click({ position: { x: 4, y: 4 } });
-    await page.keyboard.press('/');
-    const search = page.getByRole('searchbox', { name: /search documentation/i });
-    await expect(search).toBeFocused();
-    await search.fill('security');
-    await expect(page.getByLabel('Documentation search console').getByRole('status')).toContainText('1 chapter match');
-    await expect(page.locator('.docs-field-chapter')).toHaveCount(1);
-    await expect(page.getByRole('region', { name: /defence belongs inside the runtime/i })).toBeVisible();
-    await search.press('Escape');
-    await expect(search).toHaveValue('');
-    await expect(page.locator('.docs-field-chapter')).toHaveCount(7);
-    await expect(page.getByLabel('Documentation search console').getByRole('status')).toContainText('7 chapters available');
 
     const pipeline = page.getByRole('group', { name: /inspect agent stage/i });
     await expect(pipeline.getByRole('button')).toHaveCount(7);
@@ -92,6 +82,7 @@ test.describe('Documentation field manual', () => {
 
     await page.goto('/docs');
     await expect(page.getByRole('heading', { name: /understand the system/i })).toBeVisible();
+    await expect(page.locator('.docs-query-console')).toHaveCount(0);
 
     const geometry = await page.evaluate(() => {
       const title = document.querySelector('.docs-field-hero h1')?.getBoundingClientRect();
@@ -149,11 +140,6 @@ test.describe('Documentation field manual', () => {
     await judge.click();
     await expect(judge).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByLabel('Selected Agent stage')).toContainText('Ready / revise');
-
-    const search = page.getByRole('searchbox', { name: /search documentation/i });
-    await search.fill('no-such-field-entry');
-    await expect(page.getByRole('heading', { name: /nothing in the field manual matches/i })).toBeVisible();
-    await page.getByRole('button', { name: /clear search/i }).click();
     await expect(page.locator('.docs-field-chapter')).toHaveCount(7);
 
     expect(errors).toEqual([]);

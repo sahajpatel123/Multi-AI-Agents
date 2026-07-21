@@ -53,6 +53,17 @@ COVERED_FILES = [
     ("routes", "saved.py"),
     ("core", "dependencies.py"),
     ("core", "input_validation.py"),
+    # Cycle 154 — extend the core sweep to the remaining HTTPException-bearing
+    # helpers. `errors.py` is the canonical ApiError / error_response helper
+    # that builds the dict envelope shape; `admin_gate.py`, `login_limiter.py`,
+    # `rate_limits.py`, and `input_pipeline.py` all already produce dict
+    # details, so adding them here is purely additive regression coverage.
+    # Verified clean via AST walk (zero string-detail raises across the 5).
+    ("core", "errors.py"),
+    ("core", "admin_gate.py"),
+    ("core", "login_limiter.py"),
+    ("core", "rate_limits.py"),
+    ("core", "input_pipeline.py"),
 ]
 
 
