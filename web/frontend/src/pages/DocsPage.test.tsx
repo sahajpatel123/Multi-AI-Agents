@@ -47,7 +47,7 @@ describe('DocsPage', () => {
     expect(stageButtons).toHaveLength(7);
     expect(pipeline).not.toHaveTextContent(/steelman/i);
     const proof = container.querySelector('.docs-field-proof');
-    expect(proof).toHaveTextContent(/07visible Agent stages/i);
+    expect(proof).toHaveTextContent(/7visible Agent stages/i);
 
     const plan = within(pipeline as HTMLElement).getByRole('button', { name: /stage 01: plan/i });
     const verify = within(pipeline as HTMLElement).getByRole('button', { name: /stage 05: verify/i });
@@ -94,7 +94,7 @@ describe('DocsPage', () => {
 
   it('copies setup commands through the shared clipboard helper and reports success', async () => {
     renderPage();
-    const copyButton = screen.getByRole('button', { name: /copy backend \/ terminal 01/i });
+    const copyButton = screen.getByRole('button', { name: /copy backend \/ terminal/i });
     fireEvent.click(copyButton);
 
     await waitFor(() => expect(copyToClipboard).toHaveBeenCalledTimes(1));
@@ -105,7 +105,7 @@ describe('DocsPage', () => {
   it('announces clipboard failure without using the browser clipboard directly', async () => {
     vi.mocked(copyToClipboard).mockResolvedValue(false);
     renderPage();
-    const copyButton = screen.getByRole('button', { name: /copy frontend \/ terminal 02/i });
+    const copyButton = screen.getByRole('button', { name: /copy frontend \/ terminal/i });
     fireEvent.click(copyButton);
 
     await waitFor(() => expect(copyToClipboard).toHaveBeenCalledWith(expect.stringContaining('npm run dev')));

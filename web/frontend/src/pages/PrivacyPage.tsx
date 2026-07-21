@@ -910,10 +910,9 @@ export function PrivacyPage() {
                 </tr>
               </thead>
               <tbody>
-                {INVENTORY_ROWS.map((row, index) => (
+                {INVENTORY_ROWS.map((row) => (
                   <tr key={row.category}>
                     <th scope="row">
-                      <span>{String(index + 1).padStart(2, '0')}</span>
                       {row.category}
                     </th>
                     <td>{row.examples}</td>

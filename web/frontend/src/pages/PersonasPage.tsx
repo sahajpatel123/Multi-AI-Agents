@@ -633,7 +633,7 @@ export function PersonasPage() {
         <section id="panel-studio" className="personas-studio-section personas-panel-studio" aria-labelledby="panel-studio-title">
           <header className="personas-studio-section__head">
             <div>
-              <span className="personas-studio-eyebrow">01 / Your panel</span>
+              <span className="personas-studio-eyebrow">Your panel</span>
               <h2 id="panel-studio-title">Shape the room before asking the question.</h2>
             </div>
             <p>
@@ -702,7 +702,7 @@ export function PersonasPage() {
                     >
                       <div className="personas-panel-card__rail" aria-hidden="true" />
                       <header className="personas-panel-card__meta">
-                        <span><b>0{index + 1}</b> / SLOT</span>
+                        <span>SLOT {index + 1}</span>
                         <span>
                           <AgentDot agentId={`agent_${index + 1}`} size={7} color={persona.color} />
                           DIVERGENCE {persona.temperature.toFixed(1)}
@@ -728,7 +728,6 @@ export function PersonasPage() {
                           onClick={() => setInspectedSlot(slot)}
                         >
                           <span>{isInspected ? 'Lens in focus' : 'Inspect lens'}</span>
-                          <b aria-hidden="true">0{index + 1}</b>
                         </button>
                         <button
                           type="button"
@@ -820,7 +819,7 @@ export function PersonasPage() {
         <section className="personas-studio-section personas-page__library" aria-labelledby="library-title">
           <header className="personas-studio-section__head personas-library-title-row">
             <div>
-              <span className="personas-studio-eyebrow">02 / Mind index</span>
+              <span className="personas-studio-eyebrow">Mind index</span>
               <h2 id="library-title">Inspect every reasoning style.</h2>
             </div>
             <p>

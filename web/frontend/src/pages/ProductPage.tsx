@@ -230,13 +230,12 @@ export function ProductPage() {
             <div className="product-engine-grid">
               <article className="product-engine product-engine--arena">
                 <header>
-                  <div><small>ENGINE 01</small><h3>ARENA / DECISION ROOM</h3></div>
+                  <div><small>PRIMARY ENGINE</small><h3>ARENA / DECISION ROOM</h3></div>
                   <span>4 RESPONSES · 1 JUDGE</span>
                 </header>
                 <div className="product-arena-answers">
-                  {showcase.answers.map((answer, index) => (
+                  {showcase.answers.map((answer) => (
                     <div key={answer.mind} style={{ '--tone': answer.tone } as CSSProperties}>
-                      <small>0{index + 1}</small>
                       <strong>{answer.mind}</strong>
                       <p>{answer.copy}</p>
                       <b>{answer.score}</b>
@@ -244,7 +243,7 @@ export function ProductPage() {
                   ))}
                 </div>
                 <div className="product-verdict">
-                  <div><small>JUDGE 05 / WINNER</small><strong>{showcase.winner}</strong></div>
+                  <div><small>WINNING VERDICT</small><strong>{showcase.winner}</strong></div>
                   <b>{Math.max(...showcase.answers.map((answer) => answer.score))}</b>
                   <p>{showcase.verdict}</p>
                 </div>
@@ -256,18 +255,18 @@ export function ProductPage() {
 
               <article className="product-engine product-engine--agent">
                 <header>
-                  <div><small>ENGINE 02</small><h3>AGENT / RESEARCH SYSTEM</h3></div>
+                  <div><small>RESEARCH ENGINE</small><h3>AGENT / RESEARCH SYSTEM</h3></div>
                   <span>7 VISIBLE STAGES · ILLUSTRATIVE</span>
                 </header>
                 <div className="product-agent-stages" aria-label="Agent pipeline stages">
-                  {AGENT_STAGES.map((stage, index) => <span key={stage}><small>0{index + 1}</small>{stage}</span>)}
+                  {AGENT_STAGES.map((stage) => <span key={stage}>{stage}</span>)}
                 </div>
                 <div className="product-agent-artifact">
                   <div><small>ILLUSTRATIVE DELIVERABLE</small><h4>{showcase.artifact}</h4></div>
                   <strong>{showcase.confidence}<small>ILLUSTRATIVE CONFIDENCE</small></strong>
                 </div>
                 <ul className="product-agent-evidence">
-                  {showcase.evidence.map((item, index) => <li key={item}><span>0{index + 1}</span>{item}<b>EXAMPLE</b></li>)}
+                  {showcase.evidence.map((item) => <li key={item}>{item}<b>EXAMPLE</b></li>)}
                 </ul>
                 <blockquote>“{showcase.verdict}”</blockquote>
                 <footer>
@@ -285,9 +284,9 @@ export function ProductPage() {
           </header>
           <div className="product-routing-table">
             <div className="product-routing-table__head"><span>SIGNAL</span><span>ROUTE</span><span>WHAT COMES BACK</span><span>ACTION</span></div>
-            {ROUTING_ROWS.map((row, index) => (
+            {ROUTING_ROWS.map((row) => (
               <div key={row.signal} className="product-routing-row" style={{ '--tone': row.tone } as CSSProperties}>
-                <p><small>0{index + 1}</small>{row.signal}</p>
+                <p>{row.signal}</p>
                 <strong>{row.mode}</strong>
                 <span>{row.output}</span>
                 <button type="button" onClick={() => go(row.path)}>RUN <ArrowRight aria-hidden="true" /></button>

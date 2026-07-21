@@ -306,16 +306,13 @@ export function TermsPage() {
             <h2 id="terms-signals-title">Four signals worth holding</h2>
           </div>
           <div className="terms-signals__grid" role="list">
-            {QUICK_SIGNALS.map((signal, index) => (
+            {QUICK_SIGNALS.map((signal) => (
               <article
                 key={signal.label}
                 className="terms-signal"
                 data-accent={signal.accent}
                 role="listitem"
               >
-                <span className="terms-signal__index" aria-hidden="true">
-                  0{index + 1}
-                </span>
                 <h3>{signal.label}</h3>
                 <p>{signal.value}</p>
               </article>
