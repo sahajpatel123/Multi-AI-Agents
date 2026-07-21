@@ -172,4 +172,36 @@ test.describe('Sign-in page (mocked)', () => {
       signinForm.getByRole('button', { name: /sign in to arena/i }),
     ).toBeVisible();
   });
+
+  test('password reveal toggle flips input type + aria-label on the sign-in form', async ({
+    page,
+  }) => {
+    await page.goto('/signin');
+
+    // Initial state: password input is type="password", reveal button
+    // announces "Show password" (so screen readers know what the
+    // affordance does).
+    const passwordInput = page.locator('input#signin-password');
+    await expect(passwordInput).toHaveAttribute('type', 'password');
+    await expect(
+      page.getByRole('button', { name: 'Show password' }),
+    ).toBeVisible();
+
+    // Click reveal — input type flips to text so the user can see what
+    // they're typing; button label flips to "Hide password" to reflect
+    // the new affordance.
+    await page.getByRole('button', { name: 'Show password' }).click();
+    await expect(passwordInput).toHaveAttribute('type', 'text');
+    await expect(
+      page.getByRole('button', { name: 'Hide password' }),
+    ).toBeVisible();
+
+    // Click again — toggles back. Pin the round-trip so a regression
+    // that broke toggle state surfaces here.
+    await page.getByRole('button', { name: 'Hide password' }).click();
+    await expect(passwordInput).toHaveAttribute('type', 'password');
+    await expect(
+      page.getByRole('button', { name: 'Show password' }),
+    ).toBeVisible();
+  });
 });
