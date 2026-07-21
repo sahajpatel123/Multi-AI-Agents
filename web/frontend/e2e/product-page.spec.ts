@@ -97,4 +97,48 @@ test.describe('Product page (mocked)', () => {
       .click();
     await expect(page).toHaveURL(/\/capabilities$/);
   });
+
+  test('four routing rows map signals to documented engine destinations', async ({
+    page,
+  }) => {
+    await page.goto('/product');
+
+    // The "Choose by the work" section maps 4 user signals to 4 engine
+    // destinations. Each row has a "RUN" button that routes to its
+    // destination. Pins:
+    //   - signal labels (mode names)
+    //   - destination paths
+    // The signals are marketing copy referenced from pricing CTAs.
+
+    const routingSection = page.locator('section').filter({
+      has: page.getByRole('heading', { name: /choose by the work—not the hype\./i }),
+    });
+
+    // Pin all 4 mode labels visible.
+    for (const label of ['ARENA', 'ARENA / DEBATE', 'AGENT', 'AGENT / WATCHLIST']) {
+      await expect(
+        routingSection.getByText(label, { exact: true }),
+      ).toBeVisible();
+    }
+
+    // Click each "RUN" button in order and verify the destination.
+    // Use first() because the section has one RUN button per row.
+    await routingSection.getByRole('button', { name: /^run$/i }).first().click();
+    await expect(page).toHaveURL(/\/app$/);
+    await page.goBack();
+
+    await page.goto('/product');
+    await routingSection.getByRole('button', { name: /^run$/i }).nth(1).click();
+    await expect(page).toHaveURL(/\/app$/); // debate also → /app
+    await page.goBack();
+
+    await page.goto('/product');
+    await routingSection.getByRole('button', { name: /^run$/i }).nth(2).click();
+    await expect(page).toHaveURL(/\/agent$/);
+    await page.goBack();
+
+    await page.goto('/product');
+    await routingSection.getByRole('button', { name: /^run$/i }).nth(3).click();
+    await expect(page).toHaveURL(/\/agent\/watchlist$/);
+  });
 });
