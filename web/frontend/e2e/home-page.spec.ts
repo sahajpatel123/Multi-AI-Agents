@@ -30,25 +30,51 @@ test.describe('Home page (mocked)', () => {
 
     // Five narrative sections, all anchored by id so future link targets
     // remain stable regardless of BEM renames.
+    // The body of HomePage scrolls each section in via IntersectionObserver
+    // to drive a `vp-reveal` opacity transition — in headless browsers the
+    // observer may not fire without a real scroll. scrollIntoViewIfNeeded
+    // ensures the IO callback runs and the heading becomes visible.
+    await page.locator('#method').scrollIntoViewIfNeeded();
     await expect(page.locator('#method')).toBeVisible();
+    await page.locator('#audit').scrollIntoViewIfNeeded();
     await expect(page.locator('#audit')).toBeVisible();
+    await page.locator('#debate').scrollIntoViewIfNeeded();
     await expect(page.locator('#debate')).toBeVisible();
+    await page.locator('#minds').scrollIntoViewIfNeeded();
     await expect(page.locator('#minds')).toBeVisible();
+    await page.locator('#agent-mode').scrollIntoViewIfNeeded();
     await expect(page.locator('#agent-mode')).toBeVisible();
 
     // Section-heading copy that survives any CSS refactor.
+    await page
+      .getByRole('heading', { name: /a verdict you can inspect\./i })
+      .scrollIntoViewIfNeeded();
     await expect(
       page.getByRole('heading', { name: /a verdict you can inspect\./i }),
     ).toBeVisible();
+    await page
+      .getByRole('heading', { name: /the verdict has receipts\./i })
+      .scrollIntoViewIfNeeded();
     await expect(
       page.getByRole('heading', { name: /the verdict has receipts\./i }),
     ).toBeVisible();
+    await page
+      .getByRole('heading', { name: /don't accept it\.\s*test it\./i })
+      .scrollIntoViewIfNeeded();
     await expect(
       page.getByRole('heading', { name: /don't accept it\.\s*test it\./i }),
     ).toBeVisible();
+    await page
+      .getByRole('heading', { name: /build the spectrum\./i })
+      .scrollIntoViewIfNeeded();
     await expect(
       page.getByRole('heading', { name: /build the spectrum\./i }),
     ).toBeVisible();
+    await page
+      .getByRole('heading', {
+        name: /for questions that cannot end in one pass\./i,
+      })
+      .scrollIntoViewIfNeeded();
     await expect(
       page.getByRole('heading', {
         name: /for questions that cannot end in one pass\./i,
