@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from arena.core.datetime_utils import utcnow_naive
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Path, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
@@ -3025,7 +3025,8 @@ async def cross_pollinate_agent_answer(
 
 @router.get("/history/{task_id}/evolution")
 async def get_temporal_evolution(
-    task_id: str,
+    task_id: str = Path(..., max_length=64, description="Agent task identifier (UUID slug)."),
+    related_limit: int = Query(20, ge=1, le=40, description="Max related-task rows to consider (1-40)."),
     db: Session = Depends(get_db),
     user: UserResponse = Depends(get_current_user_required),
 ):
@@ -3079,7 +3080,7 @@ async def get_temporal_evolution(
             AgentTaskRow.final_answer.is_not(None),
         )
         .order_by(AgentTaskRow.created_at.asc())
-        .limit(40)
+        .limit(related_limit)
         .all()
     )
 
