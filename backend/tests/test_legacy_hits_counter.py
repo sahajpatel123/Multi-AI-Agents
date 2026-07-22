@@ -86,6 +86,38 @@ class TestLegacyHitsCounter:
         finally:
             _restore_legacy_hits(saved)
 
+    def test_corrupted_hash_returns_no_match_without_raising(self):
+        """A row with a malformed bcrypt hash (e.g. truncated by a botched
+        migration) must NOT raise out of verify_password. The user gets a
+        clean ``(False, False)``; operators see the traceback in logs so the
+        hash can be repaired. This is the same defence as the early-cycle
+        silent-swallow fix on the same function."""
+        import logging
+        from arena.core.auth import verify_password
+
+        matched, used_legacy = verify_password("any-plain", "not-a-bcrypt-hash")
+        assert matched is False
+        assert used_legacy is False
+
+        # The prehash branch logs at error level for operator visibility.
+        import arena.core.auth as auth_mod
+        with auth_mod._legacy_hit_lock:
+            auth_mod._legacy_hits = 0
+        # Sanity: empty/None bytes path also handled.
+        matched_empty, used_legacy_empty = verify_password("any-plain", "")
+        assert matched_empty is False
+        assert used_legacy_empty is False
+
+    def test_corrupted_hash_does_not_increment_legacy_counter(self):
+        from arena.core.auth import legacy_hits, verify_password
+
+        saved = _reset_legacy_hits()
+        try:
+            verify_password("any-plain", "garbage-hash-value")
+            assert legacy_hits() == 0
+        finally:
+            _restore_legacy_hits(saved)
+
 
 class TestLegacyHitsInHealthEndpoint:
     @pytest.mark.asyncio
