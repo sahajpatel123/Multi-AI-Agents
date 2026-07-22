@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from arena.core.datetime_utils import utcnow_naive
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Path, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
@@ -2060,6 +2060,8 @@ async def create_watchlist_item(
 
 @router.get("/watchlist")
 async def list_watchlist_items(
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -2073,10 +2075,13 @@ async def list_watchlist_items(
         window_seconds=60,
         message="Too many watchlist lookups. Please slow down.",
     )
+    base_query = db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id)
+    total = base_query.count()
     items = (
-        db.query(WatchlistItem)
-        .filter(WatchlistItem.user_id == user.id)
+        base_query
         .order_by(WatchlistItem.next_run_at.asc())
+        .offset(offset)
+        .limit(limit)
         .all()
     )
     active_n = (
@@ -2089,6 +2094,10 @@ async def list_watchlist_items(
     return JSONResponse(
         content={
             "items": [_watchlist_item_api_dict(db, i, latest_summary=latest_summaries.get(i.latest_task_id)) for i in items],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + len(items) < total,
             "active_count": active_n,
             "active_cap": WATCHLIST_MAX_ACTIVE,
         }
@@ -3016,7 +3025,8 @@ async def cross_pollinate_agent_answer(
 
 @router.get("/history/{task_id}/evolution")
 async def get_temporal_evolution(
-    task_id: str,
+    task_id: str = Path(..., max_length=64, description="Agent task identifier (UUID slug)."),
+    related_limit: int = Query(20, ge=1, le=40, description="Max related-task rows to consider (1-40)."),
     db: Session = Depends(get_db),
     user: UserResponse = Depends(get_current_user_required),
 ):
@@ -3070,7 +3080,7 @@ async def get_temporal_evolution(
             AgentTaskRow.final_answer.is_not(None),
         )
         .order_by(AgentTaskRow.created_at.asc())
-        .limit(40)
+        .limit(related_limit)
         .all()
     )
 
