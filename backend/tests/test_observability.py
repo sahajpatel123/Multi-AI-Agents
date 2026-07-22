@@ -165,16 +165,31 @@ def test_setup_logging_does_not_duplicate_handlers(monkeypatch) -> None:
     # Reset the arena logger to a clean state so we can count handlers
     # before + after.
     arena_logger = logging.getLogger("arena")
-    # Snapshot the original handler list length.
+    # Snapshot the original handler list length + propagate flag so we can
+    # restore both after the test. setup_logging() sets propagate=False,
+    # which would otherwise leak into contract tests that rely on caplog
+    # (e.g. test_rooms_touch_member_safe) — those run after this one in
+    # alphabetical order and would lose log records to the root logger.
     original_handlers = list(arena_logger.handlers)
+    original_propagate = arena_logger.propagate
 
     # Patch the file handler creation to fail-safe in this environment
     # (no writable log directory needed for the idempotency check).
-    with patch.object(obs_mod, "_LOG_FILE", "/tmp/arena_observability_test.log"):
-        obs_mod.setup_logging()
-        after_first = list(arena_logger.handlers)
-        obs_mod.setup_logging()
-        after_second = list(arena_logger.handlers)
+    try:
+        with patch.object(obs_mod, "_LOG_FILE", "/tmp/arena_observability_test.log"):
+            obs_mod.setup_logging()
+            after_first = list(arena_logger.handlers)
+            obs_mod.setup_logging()
+            after_second = list(arena_logger.handlers)
 
-    # Calling setup_logging twice must NOT add new handlers
-    assert len(after_second) == len(after_first)
+        # Calling setup_logging twice must NOT add new handlers
+        assert len(after_second) == len(after_first)
+    finally:
+        # Restore the original logger state so subsequent tests that rely
+        # on root-logger propagation (caplog) keep working.
+        arena_logger.propagate = original_propagate
+        # Trim any handlers the test added to keep the side-effects out of
+        # the rest of the suite.
+        for h in arena_logger.handlers:
+            if h not in original_handlers:
+                arena_logger.removeHandler(h)
