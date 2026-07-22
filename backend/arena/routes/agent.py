@@ -2060,6 +2060,8 @@ async def create_watchlist_item(
 
 @router.get("/watchlist")
 async def list_watchlist_items(
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -2073,10 +2075,13 @@ async def list_watchlist_items(
         window_seconds=60,
         message="Too many watchlist lookups. Please slow down.",
     )
+    base_query = db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id)
+    total = base_query.count()
     items = (
-        db.query(WatchlistItem)
-        .filter(WatchlistItem.user_id == user.id)
+        base_query
         .order_by(WatchlistItem.next_run_at.asc())
+        .offset(offset)
+        .limit(limit)
         .all()
     )
     active_n = (
@@ -2089,6 +2094,10 @@ async def list_watchlist_items(
     return JSONResponse(
         content={
             "items": [_watchlist_item_api_dict(db, i, latest_summary=latest_summaries.get(i.latest_task_id)) for i in items],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + len(items) < total,
             "active_count": active_n,
             "active_cap": WATCHLIST_MAX_ACTIVE,
         }

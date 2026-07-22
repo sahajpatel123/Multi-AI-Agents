@@ -296,3 +296,51 @@ async def test_delete_403_for_free_tier(app_client, make_user, db_session):
         headers=_pro_headers(user),
     )
     assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_list_watchlist_paginates_and_reports_total(
+    app_client, make_user, db_session
+):
+    user = make_user(email="wl-list-page@test.com", tier=UserTier.PRO)
+    now = utcnow_naive()
+    for i in range(3):
+        db_session.add(
+            WatchlistItem(
+                user_id=user.id,
+                question=f"Paged question {i}",
+                interval_hours=24,
+                expertise_level="curious",
+                expertise_domain="",
+                is_active=i < 2,
+                next_run_at=now,
+                run_count=0,
+            )
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/watchlist?limit=2&offset=1",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert len(body["items"]) == 2
+    assert body["total"] == 3
+    assert body["limit"] == 2
+    assert body["offset"] == 1
+    assert body["has_more"] is False
+    assert body["active_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_list_watchlist_rejects_unbounded_page_size(app_client, make_user):
+    user = make_user(email="wl-list-bound@test.com", tier=UserTier.PRO)
+
+    res = await app_client.get(
+        "/api/agent/watchlist?limit=201",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 422
