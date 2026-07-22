@@ -553,6 +553,7 @@ Challenge this answer now.
             "status": "complete",
         }
     except Exception as e:
+        logger.exception("agent challenge failed", extra={"model_key": model_key})
         return {
             "challenger": challenger_name,
             "challenge": f"Challenge failed: {e}",

@@ -147,5 +147,5 @@ def purge_expired_webhook_events(db: Session, *, batch_limit: int = 1000) -> int
         try:
             db.rollback()
         except Exception:
-            pass
+            logger.debug("rollback after webhook purge failed", exc_info=True)
         return 0

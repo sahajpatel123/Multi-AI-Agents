@@ -1,6 +1,7 @@
 """Prompt route — main endpoint for submitting prompts to agents"""
 
 import json
+import logging
 import time
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -55,6 +56,8 @@ from arena.models.schemas import (
 )
 
 router = APIRouter(prefix="/api", tags=["prompt"])
+
+logger = logging.getLogger(__name__)
 
 
 def _check_rate_limit(
@@ -323,6 +326,7 @@ async def submit_prompt(
         raise
     except Exception as e:
         log_unhandled_exception(request_id, user_label, e)
+        logger.exception("prompt route handler failed", extra={"request_id": request_id})
         raise HTTPException(
             status_code=500,
             detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Prompt request failed"},
@@ -528,6 +532,7 @@ async def stream_prompt(
 
         except Exception as e:
             log_unhandled_exception(request_id, user_label, e)
+            logger.exception("prompt SSE handler failed", extra={"request_id": request_id})
             yield _sse_event("error", {
                 "error": ErrorCodes.REQUEST_FAILED,
                 "message": "Prompt request failed",
@@ -620,6 +625,7 @@ async def prompt_readiness(
         db.execute(text("SELECT 1"))
         checks["db"] = "ok"
     except Exception as exc:  # noqa: BLE001 — surface any failure mode
+        logger.warning("health check: db round-trip failed", exc_info=True)
         checks["db"] = f"fail: {type(exc).__name__}"
         ok = False
 
@@ -634,6 +640,7 @@ async def prompt_readiness(
         if mm is None:
             ok = False
     except Exception as exc:  # noqa: BLE001
+        logger.warning("health check: memory manager probe failed", exc_info=True)
         checks["memory"] = f"fail: {type(exc).__name__}"
         ok = False
 

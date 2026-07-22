@@ -146,7 +146,7 @@ def test_detector_catches_dynamic_error_shapes():
         ('ToolResult(tool_name="x", success=False, error=str(exc))', True),
         ('ToolResult(tool_name="x", success=False, error="x" + var)', True),
         # Nested f-strings (f-string inside f-string) — must be flagged.
-        ('ToolResult(tool_name="x", success=False, error=f"outer {f"inner {e}"}")', True),
+        ('ToolResult(tool_name="x", success=False, error=f"outer {f\'inner {e}\'}")', True),
         # Conditional expression that yields a str(exc) on one branch — flagged.
         ('ToolResult(tool_name="x", success=False, error=str(e) if e else "fallback")', True),
         # Attribute access on a captured object (`exc.message`) — flagged because
