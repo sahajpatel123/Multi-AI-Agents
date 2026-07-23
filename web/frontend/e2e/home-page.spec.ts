@@ -40,14 +40,15 @@ test.describe('Home page (mocked)', () => {
   });
 
   test('renders the documented hero + five sections + closing CTA', async ({ page }) => {
-    // Hero — use locator('h1') directly. The h1 contains
-    // "ASK ONCE.<br/><span>THINK FOUR WAYS.</span>" which has
-    // ambiguous accessible-name resolution across Chromium
-    // versions (with/without whitespace, with/without span
-    // separator). Direct DOM lookup avoids that whole class of
-    // flake. The h1 element itself is the contract.
-    await expect(page.locator('h1').first()).toBeVisible();
-    await expect(page.locator('h1').first()).toContainText(/ask once.*think four ways\./i);
+    // Hero — wait for the h1 to appear with a generous timeout, then
+    // assert visibility and content. The h1 contains
+    // "ASK ONCE.<br/><span>THINK FOUR WAYS.</span>" — using direct
+    // DOM lookup (vs. getByRole) avoids the ambiguous accessible-name
+    // resolution across Chromium versions.
+    const heroH1 = page.locator('h1').first();
+    await heroH1.waitFor({ state: 'attached', timeout: 15000 });
+    await expect(heroH1).toBeVisible();
+    await expect(heroH1).toContainText(/ask once.*think four ways\./i);
 
     // Five narrative sections, all anchored by id so future link targets
     // remain stable regardless of BEM renames.
