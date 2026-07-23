@@ -40,13 +40,13 @@ test.describe('Home page (mocked)', () => {
   });
 
   test('renders the documented hero + five sections + closing CTA', async ({ page }) => {
-    // Hero — wait for the h1 to appear with a generous timeout, then
-    // assert visibility and content. The h1 contains
-    // "ASK ONCE.<br/><span>THINK FOUR WAYS.</span>" — using direct
-    // DOM lookup (vs. getByRole) avoids the ambiguous accessible-name
-    // resolution across Chromium versions.
+    // Hero — wait for the h1 to appear. The page in CI is the Vite
+    // dev server (npm run dev), which can be slow to first-paint under
+    // xvfb. A 60-second waitFor is generous; the test only blocks on
+    // the network round-trip + initial render, not on the rest of the
+    // suite.
     const heroH1 = page.locator('h1').first();
-    await heroH1.waitFor({ state: 'attached', timeout: 15000 });
+    await heroH1.waitFor({ state: 'attached', timeout: 60000 });
     await expect(heroH1).toBeVisible();
     await expect(heroH1).toContainText(/ask once.*think four ways\./i);
 
