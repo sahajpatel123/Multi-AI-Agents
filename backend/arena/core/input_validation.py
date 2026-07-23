@@ -42,6 +42,14 @@ def _require_string(value: object, field_name: str) -> str:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": ErrorCodes.VALIDATION_ERROR, "message": f"{field_name} must be a string"},
         )
+    # Guard against str subclasses (e.g. markupsafe.Markup) — the
+    # downstream ``.strip()`` would silently fail on a Markup object
+    # that doesn't override __getattribute__ for strip.
+    if type(value) is not str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": f"{field_name} must be a string"},
+        )
     return value
 
 
