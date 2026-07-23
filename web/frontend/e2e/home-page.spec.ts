@@ -40,14 +40,14 @@ test.describe('Home page (mocked)', () => {
   });
 
   test('renders the documented hero + five sections + closing CTA', async ({ page }) => {
-    // Hero — use a permissive regex because <h1>ASK ONCE.<br/><span>THINK FOUR
-    // WAYS.</span></h1> has a <br/> in the middle. Chromium's
-    // accessible-name calc collapses it to whatever whitespace variant
-    // its build prefers; .* accepts any character (including newline)
-    // between the two halves.
-    await expect(
-      page.getByRole('heading', { level: 1, name: /ask once.*think four ways\./i }),
-    ).toBeVisible();
+    // Hero — use locator('h1') directly. The h1 contains
+    // "ASK ONCE.<br/><span>THINK FOUR WAYS.</span>" which has
+    // ambiguous accessible-name resolution across Chromium
+    // versions (with/without whitespace, with/without span
+    // separator). Direct DOM lookup avoids that whole class of
+    // flake. The h1 element itself is the contract.
+    await expect(page.locator('h1').first()).toBeVisible();
+    await expect(page.locator('h1').first()).toContainText(/ask once.*think four ways\./i);
 
     // Five narrative sections, all anchored by id so future link targets
     // remain stable regardless of BEM renames.
