@@ -18,28 +18,37 @@ import { expect, test } from '@playwright/test';
 
 test.describe('Home page (mocked)', () => {
   test('renders the documented hero + five sections + closing CTA', async ({ page }) => {
-    // Belt-and-braces visibility guard: the HomePage wraps each section in
-    // .vp-reveal which animates from opacity:0 to opacity:1 once an
-    // IntersectionObserver fires. Playwright's reducedMotion:'reduce' is
-    // set in playwright.config.ts but Chromium doesn't always pick up the
-    // CSS media query on first paint when launched headless under xvfb.
-    // Force visibility at the document level before navigating so the
-    // initial render of every .vp-reveal is opacity:1 — same effect the
-    // CSS rule provides, applied deterministically via addInitScript.
-    await page.addInitScript(() => {
-      const style = document.createElement('style');
-      style.textContent = '.vp-reveal{opacity:1!important;transform:none!important}';
-      // Append on every new document so SPA-style re-renders keep the rule.
-      const apply = () => document.head && document.head.appendChild(style.cloneNode(true));
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', apply, { once: true });
-      } else {
-        apply();
-      }
-      // Re-apply when document is replaced (HashRouter etc.).
-      new MutationObserver(apply).observe(document.documentElement, { childList: true });
-    });
     await page.goto('/');
+
+    // Belt-and-braces visibility guard: the HomePage wraps each section in
+    // .vp-reveal which animates from opacity:0 → opacity:1 once an
+    // IntersectionObserver fires. Three layers of defense to make this
+    // deterministic across CI matrix variations:
+    // 1. prefers-reduced-motion:reduce — set via playwright.config.ts
+    //    (chromium project use). HomePage's CSS has a media query for
+    //    this that pins .vp-reveal to opacity:1.
+    // 2. addInitScript above, layered below — injects an !important
+    //    CSS rule that overrides any leftover opacity:0 declarations,
+    //    applied on every new document via a DOMContentLoaded + a
+    //    MutationObserver for SPA-style re-renders.
+    // 3. addStyleTag here, after navigation — Playwright's
+    //    page.addStyleTag inserts a <style> into the live document's
+    //    <head>, even after the SPA has mounted. Belt and braces.
+    await page.addStyleTag({
+      content: `
+        .vp-reveal{opacity:1!important;transform:none!important}
+        .vp-section-head.vp-reveal,
+        .vp-method.vp-reveal,
+        .vp-three.vp-reveal,
+        .vp-audit.vp-reveal,
+        .vp-audit-main.vp-reveal,
+        .vp-debate.vp-reveal,
+        .vp-personas.vp-reveal,
+        .vp-pipeline.vp-reveal,
+        .vp-pipeline-cta.vp-reveal,
+        .vp-tape>div{opacity:1!important;transform:none!important;animation:none!important}
+      `,
+    });
 
     // Hero
     await expect(
