@@ -143,7 +143,7 @@ test.describe('Home page (mocked)', () => {
 
   test('live decision tape section pins the 8 product/scenario cards', async ({
     page,
-
+  }) => {
     // The "LIVE DECISION TAPE / QUESTION TYPES" tape is a static
     // showcase section that renders 8 article cards (4 categories
     // × 2 groups). Pin both header strings + the card count so future
