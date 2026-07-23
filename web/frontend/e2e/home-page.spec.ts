@@ -18,6 +18,27 @@ import { expect, test } from '@playwright/test';
 
 test.describe('Home page (mocked)', () => {
   test('renders the documented hero + five sections + closing CTA', async ({ page }) => {
+    // Belt-and-braces visibility guard: the HomePage wraps each section in
+    // .vp-reveal which animates from opacity:0 to opacity:1 once an
+    // IntersectionObserver fires. Playwright's reducedMotion:'reduce' is
+    // set in playwright.config.ts but Chromium doesn't always pick up the
+    // CSS media query on first paint when launched headless under xvfb.
+    // Force visibility at the document level before navigating so the
+    // initial render of every .vp-reveal is opacity:1 — same effect the
+    // CSS rule provides, applied deterministically via addInitScript.
+    await page.addInitScript(() => {
+      const style = document.createElement('style');
+      style.textContent = '.vp-reveal{opacity:1!important;transform:none!important}';
+      // Append on every new document so SPA-style re-renders keep the rule.
+      const apply = () => document.head && document.head.appendChild(style.cloneNode(true));
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', apply, { once: true });
+      } else {
+        apply();
+      }
+      // Re-apply when document is replaced (HashRouter etc.).
+      new MutationObserver(apply).observe(document.documentElement, { childList: true });
+    });
     await page.goto('/');
 
     // Hero
