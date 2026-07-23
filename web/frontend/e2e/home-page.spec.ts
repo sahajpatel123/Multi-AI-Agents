@@ -160,7 +160,7 @@ test.describe('Home page (mocked)', () => {
 
   test('closing CTA section pins the h2, form, and footer brand strings', async ({
     page,
-
+  }) => {
     const close = page.locator('section.vp-close');
     await expect(close).toBeVisible();
 
