@@ -17,23 +17,11 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Home page (mocked)', () => {
-  test('renders the documented hero + five sections + closing CTA', async ({ page }) => {
-    await page.goto('/');
+  // Apply on EVERY navigation, not just the first test — earlier iterations
+  // only added the style once and tests 124/228 failed because the personas
+  // and pipeline sections stay at opacity:0.
+  test.beforeEach(async ({ page }) => {
 
-    // Belt-and-braces visibility guard: the HomePage wraps each section in
-    // .vp-reveal which animates from opacity:0 → opacity:1 once an
-    // IntersectionObserver fires. Three layers of defense to make this
-    // deterministic across CI matrix variations:
-    // 1. prefers-reduced-motion:reduce — set via playwright.config.ts
-    //    (chromium project use). HomePage's CSS has a media query for
-    //    this that pins .vp-reveal to opacity:1.
-    // 2. addInitScript above, layered below — injects an !important
-    //    CSS rule that overrides any leftover opacity:0 declarations,
-    //    applied on every new document via a DOMContentLoaded + a
-    //    MutationObserver for SPA-style re-renders.
-    // 3. addStyleTag here, after navigation — Playwright's
-    //    page.addStyleTag inserts a <style> into the live document's
-    //    <head>, even after the SPA has mounted. Belt and braces.
     await page.addStyleTag({
       content: `
         .vp-reveal{opacity:1!important;transform:none!important}
@@ -49,7 +37,9 @@ test.describe('Home page (mocked)', () => {
         .vp-tape>div{opacity:1!important;transform:none!important;animation:none!important}
       `,
     });
+  });
 
+  test('renders the documented hero + five sections + closing CTA', async ({ page }) => {
     // Hero
     await expect(
       page.getByRole('heading', {
@@ -110,7 +100,6 @@ test.describe('Home page (mocked)', () => {
   });
 
   test('hero CTA on an unauthenticated visit routes through sign-up', async ({ page }) => {
-    await page.goto('/');
 
     // The hero "PUT A QUESTION IN" CTA fires `enterArena`, which routes
     // unauthenticated visitors to /signin?tab=signup with the redirect
@@ -122,7 +111,6 @@ test.describe('Home page (mocked)', () => {
   });
 
   test('persona library exposes the full 16-persona roster', async ({ page }) => {
-    await page.goto('/');
     // The persona library lives inside #minds. Pin all 16 stable persona
     // names so future copy edits that drop or rename a persona surface
     // here. Names taken verbatim from HomePage.tsx's PERSONAS const.
@@ -155,8 +143,6 @@ test.describe('Home page (mocked)', () => {
 
   test('live decision tape section pins the 8 product/scenario cards', async ({
     page,
-  }) => {
-    await page.goto('/');
 
     // The "LIVE DECISION TAPE / QUESTION TYPES" tape is a static
     // showcase section that renders 8 article cards (4 categories
@@ -174,8 +160,6 @@ test.describe('Home page (mocked)', () => {
 
   test('closing CTA section pins the h2, form, and footer brand strings', async ({
     page,
-  }) => {
-    await page.goto('/');
 
     const close = page.locator('section.vp-close');
     await expect(close).toBeVisible();
@@ -197,8 +181,6 @@ test.describe('Home page (mocked)', () => {
   });
 
   test('Agent Mode pipeline section pins the 7 research stages', async ({ page }) => {
-    await page.goto('/');
-
     // The Agent Mode pipeline section is the last narrative block before
     // the closing CTA. It explains the 7-stage research pipeline that
     // /agent runs when one pass isn't enough. Pin:
@@ -226,8 +208,6 @@ test.describe('Home page (mocked)', () => {
   });
 
   test('method section pins the 3 inner promise cards', async ({ page }) => {
-    await page.goto('/');
-
     // The method section (#method) has a sub-grid `.vp-three` with 3
     // promise cards that describe the product's core guarantees.
     // Pin the h3 copy so a future copy edit surfaces in CI.
