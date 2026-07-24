@@ -19,8 +19,12 @@ import {
   SPEED_QUESTION_COUNT,
   SPEED_TOTAL_SECONDS,
   buildSpeedQuestions,
+  comboMultiplier,
   computeSpeedPoints,
+  maxStreak,
   speedVerdict,
+  streakAtEachAnswer,
+  type PersonaSpeedQuestion,
 } from './personaSpeed';
 
 describe('buildSpeedQuestions', () => {
@@ -102,5 +106,111 @@ describe('speedVerdict', () => {
 
   it('returns empty string when total is 0', () => {
     expect(speedVerdict(0, 0)).toBe('');
+  });
+});
+
+describe('comboMultiplier', () => {
+  it('returns 1.0 below streak 3', () => {
+    expect(comboMultiplier(0)).toBe(1.0);
+    expect(comboMultiplier(1)).toBe(1.0);
+    expect(comboMultiplier(2)).toBe(1.0);
+  });
+
+  it('returns 1.5 at streak 3-4', () => {
+    expect(comboMultiplier(3)).toBe(1.5);
+    expect(comboMultiplier(4)).toBe(1.5);
+  });
+
+  it('returns 2.0 at streak 5-6', () => {
+    expect(comboMultiplier(5)).toBe(2.0);
+    expect(comboMultiplier(6)).toBe(2.0);
+  });
+
+  it('returns 3.0 at streak 7+', () => {
+    expect(comboMultiplier(7)).toBe(3.0);
+    expect(comboMultiplier(10)).toBe(3.0);
+    expect(comboMultiplier(100)).toBe(3.0);
+  });
+});
+
+describe('streakAtEachAnswer', () => {
+  const qs: ReadonlyArray<PersonaSpeedQuestion> = [
+    { id: 'a', quote: '', correctId: 'analyst', options: ['analyst', 'optimist', 'stoic', 'engineer'] },
+    { id: 'b', quote: '', correctId: 'optimist', options: ['optimist', 'analyst', 'stoic', 'engineer'] },
+    { id: 'c', quote: '', correctId: 'stoic', options: ['stoic', 'analyst', 'optimist', 'engineer'] },
+    { id: 'd', quote: '', correctId: 'engineer', options: ['engineer', 'analyst', 'optimist', 'stoic'] },
+    { id: 'e', quote: '', correctId: 'contrarian', options: ['contrarian', 'analyst', 'optimist', 'stoic'] },
+  ];
+
+  it('all correct produces 1,2,3,4,5 streaks', () => {
+    expect(streakAtEachAnswer(qs, {
+      a: 'analyst',
+      b: 'optimist',
+      c: 'stoic',
+      d: 'engineer',
+      e: 'contrarian',
+    })).toEqual({ a: 1, b: 2, c: 3, d: 4, e: 5 });
+  });
+
+  it('a wrong answer resets the streak to 0 then 1', () => {
+    expect(streakAtEachAnswer(qs, {
+      a: 'analyst',  // correct, streak 1
+      b: 'analyst',  // wrong (correctId is optimist), streak 0
+      c: 'stoic',    // correct, streak 1
+    })).toEqual({ a: 1, b: 0, c: 1 });
+  });
+
+  it('unanswered questions are skipped, not counted', () => {
+    expect(streakAtEachAnswer(qs, {
+      a: 'analyst',
+      // b not answered
+      c: 'stoic',
+    })).toEqual({ a: 1, c: 2 });
+  });
+
+  it('empty answers returns empty object', () => {
+    expect(streakAtEachAnswer(qs, {})).toEqual({});
+  });
+});
+
+describe('maxStreak', () => {
+  const qs: ReadonlyArray<PersonaSpeedQuestion> = [
+    { id: 'a', quote: '', correctId: 'analyst', options: ['analyst', 'optimist', 'stoic', 'engineer'] },
+    { id: 'b', quote: '', correctId: 'optimist', options: ['optimist', 'analyst', 'stoic', 'engineer'] },
+    { id: 'c', quote: '', correctId: 'stoic', options: ['stoic', 'analyst', 'optimist', 'engineer'] },
+    { id: 'd', quote: '', correctId: 'engineer', options: ['engineer', 'analyst', 'optimist', 'stoic'] },
+    { id: 'e', quote: '', correctId: 'contrarian', options: ['contrarian', 'analyst', 'optimist', 'stoic'] },
+  ];
+
+  it('returns 0 for all wrong', () => {
+    expect(maxStreak(qs, {
+      a: 'optimist',
+      b: 'analyst',
+      c: 'engineer',
+    })).toBe(0);
+  });
+
+  it('returns the longest consecutive run', () => {
+    expect(maxStreak(qs, {
+      a: 'analyst',     // 1
+      b: 'optimist',    // 2
+      c: 'stoic',       // 3
+      d: 'analyst',     // wrong, reset
+      e: 'contrarian',  // 1
+    })).toBe(3);
+  });
+
+  it('returns 0 for empty answers', () => {
+    expect(maxStreak(qs, {})).toBe(0);
+  });
+
+  it('counts consecutive correct at the end', () => {
+    expect(maxStreak(qs, {
+      a: 'analyst',
+      b: 'analyst',     // wrong, reset
+      c: 'stoic',       // 1
+      d: 'engineer',    // 2
+      e: 'contrarian',  // 3
+    })).toBe(3);
   });
 });

@@ -3,6 +3,8 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock,
+  Flame,
+  Pause,
   Play,
   RefreshCw,
   Share2,
@@ -22,8 +24,11 @@ import {
   SPEED_MAX_SPEED_BONUS,
   SPEED_TOTAL_SECONDS,
   buildSpeedQuestions,
+  comboMultiplier,
   computeSpeedPoints,
+  maxStreak,
   speedVerdict,
+  streakAtEachAnswer,
   type PersonaSpeedQuestion,
 } from '../data/personaSpeed';
 import { PERSONAS } from '../data/personas';
@@ -128,36 +133,57 @@ export function PersonaSpeedPage() {
   );
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(SPEED_TOTAL_SECONDS);
   const [done, setDone] = useState(false);
   const [highScore, setHighScore] = useState(0);
   const [copied, setCopied] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const roundStartRef = useRef<number>(0);
+  const pauseOffsetRef = useRef<number>(0);
+  const pauseStartedAtRef = useRef<number>(0);
 
   useEffect(() => {
     setPageVisible(true);
     setHighScore(readHighScore());
   }, []);
 
-  // Points per question
+  // Per-question streak (computed from answer order)
+  const streaks = useMemo(() => streakAtEachAnswer(questions, answers), [questions, answers]);
+  const roundMaxStreak = useMemo(() => maxStreak(questions, answers), [questions, answers]);
+
+  // Points per question (with combo multiplier applied)
   const pointsByQuestion = useMemo(() => {
     const map: Record<string, number> = {};
     const now = Date.now();
-    const elapsed = now - roundStartRef.current;
+    const elapsed = now - roundStartRef.current - pauseOffsetRef.current;
     for (const q of questions) {
       const pickedId = answers[q.id];
       if (!pickedId) continue;
       const correct = pickedId === q.correctId;
-      map[q.id] = computeSpeedPoints(correct, elapsed);
+      const base = computeSpeedPoints(correct, elapsed);
+      const streakAt = streaks[q.id] ?? 0;
+      map[q.id] = Math.round(base * comboMultiplier(streakAt));
     }
     return map;
-  }, [questions, answers, done]);
+  }, [questions, answers, done, streaks]);
 
   const totalPoints = useMemo(
     () => Object.values(pointsByQuestion).reduce((sum, p) => sum + p, 0),
     [pointsByQuestion],
   );
+
+  // Current streak (live, based on answered order)
+  const currentStreak = useMemo(() => {
+    let streak = 0;
+    for (const q of questions) {
+      const picked = answers[q.id];
+      if (!picked) break;
+      if (picked === q.correctId) streak += 1;
+      else break;
+    }
+    return streak;
+  }, [questions, answers]);
 
   const correctCount = useMemo(() => {
     let count = 0;
@@ -167,20 +193,21 @@ export function PersonaSpeedPage() {
     return count;
   }, [questions, answers]);
 
-  // Timer loop — fires every 250ms while running.
+  // Timer loop — fires every 250ms while running AND not paused.
   useEffect(() => {
-    if (!running) return;
+    if (!running || paused) return;
     const interval = window.setInterval(() => {
-      const elapsed = Math.floor((Date.now() - roundStartRef.current) / 1000);
-      const remaining = Math.max(0, SPEED_TOTAL_SECONDS - elapsed);
+      const elapsedMs = Date.now() - roundStartRef.current - pauseOffsetRef.current;
+      const remaining = Math.max(0, SPEED_TOTAL_SECONDS - Math.floor(elapsedMs / 1000));
       setSecondsLeft(remaining);
       if (remaining <= 0) {
         setRunning(false);
         setDone(true);
+        setPaused(false);
       }
     }, 250);
     return () => window.clearInterval(interval);
-  }, [running]);
+  }, [running, paused]);
 
   // When the round ends, persist high score.
   useEffect(() => {
@@ -195,8 +222,22 @@ export function PersonaSpeedPage() {
     setAnswers({});
     setDone(false);
     setRunning(true);
+    setPaused(false);
     setSecondsLeft(SPEED_TOTAL_SECONDS);
     roundStartRef.current = Date.now();
+    pauseOffsetRef.current = 0;
+  };
+
+  const onTogglePause = () => {
+    if (done) return;
+    if (paused) {
+      // Resuming: shift the round start so elapsed math keeps working.
+      pauseOffsetRef.current += Date.now() - pauseStartedAtRef.current;
+      setPaused(false);
+    } else {
+      pauseStartedAtRef.current = Date.now();
+      setPaused(true);
+    }
   };
 
   const onSelect = (questionId: string, optionId: string) => {
@@ -330,6 +371,35 @@ export function PersonaSpeedPage() {
               </MotionButton>
             )}
             {running && (
+              <div className="ps-controls__meta">
+                {currentStreak >= 2 && (
+                  <div className="ps-combo" aria-live="polite">
+                    <Flame aria-hidden="true" />
+                    <span className="ps-combo__count">{currentStreak}</span>
+                    <span className="ps-combo__mult">
+                      ×{comboMultiplier(currentStreak).toFixed(1)}
+                    </span>
+                  </div>
+                )}
+                <Pressable
+                  type="button"
+                  className="ps-pause"
+                  onClick={onTogglePause}
+                  aria-label={paused ? 'Resume round' : 'Pause round'}
+                >
+                  {paused ? (
+                    <>
+                      <Play aria-hidden="true" /> Resume
+                    </>
+                  ) : (
+                    <>
+                      <Pause aria-hidden="true" /> Pause
+                    </>
+                  )}
+                </Pressable>
+              </div>
+            )}
+            {running && (
               <p className="ps-controls__hint">
                 <span>
                   <kbd>1</kbd>–<kbd>4</kbd> answer · answered {answeredCount}/{questions.length}
@@ -357,6 +427,11 @@ export function PersonaSpeedPage() {
                 <span>
                   <Timer aria-hidden="true" /> Speed bonus {totalPoints - correctCount * SPEED_BASE_POINTS} pts
                 </span>
+                {roundMaxStreak >= 3 && (
+                  <span>
+                    <Flame aria-hidden="true" /> {roundMaxStreak}-combo
+                  </span>
+                )}
               </div>
               <p className="ps-score-card__verdict">{verdict}</p>
               {isNewHighScore && (

@@ -470,6 +470,72 @@ body .ps-results__link:hover {
   color: var(--vp-ivory);
 }
 
+/* Combo indicator + Pause control */
+body .ps-controls__meta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+body .ps-combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #E09898 16%, transparent);
+  border: 1px solid color-mix(in srgb, #E09898 50%, transparent);
+  color: #E09898;
+  animation: ps-combo-pop 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes ps-combo-pop {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+body .ps-combo__count {
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-size: 24px;
+  line-height: 1;
+}
+
+body .ps-combo__mult {
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+body .ps-pause {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(243, 240, 231, 0.06);
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 999px;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.8));
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 220ms ease, border-color 220ms ease;
+}
+
+body .ps-pause:hover {
+  color: var(--vp-ivory);
+  border-color: var(--ps-persona-color);
+}
+
 @media (max-width: 800px) {
   body .ps-stats {
     grid-template-columns: 1fr;

@@ -89,3 +89,62 @@ export function speedVerdict(score: number, total: number): string {
   if (ratio >= 0.25) return 'Rookie mind — speed is a skill you can train.';
   return 'Cold start — give it another go and the quotes will surface.';
 }
+
+// Combo bonus — consecutive correct answers stack a multiplier on top of
+// the speed-bonus base. 1.0x below 3 streak, 1.5x at 3, 2x at 5, 3x at 7+.
+// A wrong answer resets the streak.
+
+export function comboMultiplier(streak: number): number {
+  if (streak >= 7) return 3.0;
+  if (streak >= 5) return 2.0;
+  if (streak >= 3) return 1.5;
+  return 1.0;
+}
+
+/**
+ * Pure — given the answered questions in order, return the per-question
+ * combo multiplier applied at the moment that question was answered.
+ * The streak is the count of consecutive correct answers ending at the
+ * question (not counting future questions).
+ */
+export function streakAtEachAnswer(
+  questions: ReadonlyArray<PersonaSpeedQuestion>,
+  answers: Readonly<Record<string, string>>,
+): Readonly<Record<string, number>> {
+  const result: Record<string, number> = {};
+  let streak = 0;
+  for (const q of questions) {
+    const picked = answers[q.id];
+    if (!picked) {
+      // Not answered yet; streak unchanged.
+      continue;
+    }
+    if (picked === q.correctId) {
+      streak += 1;
+    } else {
+      streak = 0;
+    }
+    result[q.id] = streak;
+  }
+  return result;
+}
+
+/** Pure — compute the max streak reached in the round. */
+export function maxStreak(
+  questions: ReadonlyArray<PersonaSpeedQuestion>,
+  answers: Readonly<Record<string, string>>,
+): number {
+  let best = 0;
+  let current = 0;
+  for (const q of questions) {
+    const picked = answers[q.id];
+    if (!picked) continue;
+    if (picked === q.correctId) {
+      current += 1;
+      if (current > best) best = current;
+    } else {
+      current = 0;
+    }
+  }
+  return best;
+}
