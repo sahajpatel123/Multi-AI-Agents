@@ -13,6 +13,7 @@ const PRIMARY_LINKS = [
   { label: 'WHEEL', path: '/persona-wheel' },
   { label: 'TRIVIA', path: '/persona-trivia' },
   { label: 'SPEED', path: '/persona-speed' },
+  { label: 'ROAST', path: '/persona-roast' },
   { label: 'MOSAIC', path: '/persona-mosaic' },
   { label: 'LIBRARY', path: '/persona-library' },
   { label: 'PRICING', path: '/pricing' },
@@ -28,12 +29,13 @@ const MENU_LINKS = [
   { number: '06', label: 'Persona Wheel', path: '/persona-wheel' },
   { number: '07', label: 'Persona Trivia', path: '/persona-trivia' },
   { number: '08', label: 'Persona Speed', path: '/persona-speed' },
-  { number: '09', label: 'Persona Mosaic', path: '/persona-mosaic' },
-  { number: '10', label: 'Persona Library', path: '/persona-library' },
-  { number: '11', label: 'Pricing', path: '/pricing' },
-  { number: '12', label: 'Documentation', path: '/docs' },
-  { number: '13', label: 'About', path: '/about' },
-  { number: '14', label: 'Changelog', path: '/changelog' },
+  { number: '09', label: 'Persona Roast', path: '/persona-roast' },
+  { number: '10', label: 'Persona Mosaic', path: '/persona-mosaic' },
+  { number: '11', label: 'Persona Library', path: '/persona-library' },
+  { number: '12', label: 'Pricing', path: '/pricing' },
+  { number: '13', label: 'Documentation', path: '/docs' },
+  { number: '14', label: 'About', path: '/about' },
+  { number: '15', label: 'Changelog', path: '/changelog' },
 ] as const;
 
 export function Navbar() {

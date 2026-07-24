@@ -78,6 +78,9 @@ const PersonaLibraryPage = lazy(() =>
 const PersonaSpeedPage = lazy(() =>
   import('./pages/PersonaSpeedPage').then((m) => ({ default: m.PersonaSpeedPage })),
 )
+const PersonaRoastPage = lazy(() =>
+  import('./pages/PersonaRoastPage').then((m) => ({ default: m.PersonaRoastPage })),
+)
 const AccountPage = lazy(() =>
   import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })),
 )
@@ -234,6 +237,7 @@ if (!rootElement) {
                   <Route path="/persona-mosaic" element={<PersonaMosaicPage />} />
                   <Route path="/persona-library" element={<PersonaLibraryPage />} />
                   <Route path="/persona-speed" element={<PersonaSpeedPage />} />
+                  <Route path="/persona-roast" element={<PersonaRoastPage />} />
                   <Route path="/share" element={<SharePage />} />
                   <Route path="/app" element={
                     <ProtectedRoute>
