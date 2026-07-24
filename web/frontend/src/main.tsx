@@ -81,6 +81,9 @@ const PersonaSpeedPage = lazy(() =>
 const PersonaRoastPage = lazy(() =>
   import('./pages/PersonaRoastPage').then((m) => ({ default: m.PersonaRoastPage })),
 )
+const PersonaChallengePage = lazy(() =>
+  import('./pages/PersonaChallengePage').then((m) => ({ default: m.PersonaChallengePage })),
+)
 const AccountPage = lazy(() =>
   import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })),
 )
@@ -238,6 +241,7 @@ if (!rootElement) {
                   <Route path="/persona-library" element={<PersonaLibraryPage />} />
                   <Route path="/persona-speed" element={<PersonaSpeedPage />} />
                   <Route path="/persona-roast" element={<PersonaRoastPage />} />
+                  <Route path="/persona-challenge" element={<PersonaChallengePage />} />
                   <Route path="/share" element={<SharePage />} />
                   <Route path="/app" element={
                     <ProtectedRoute>
