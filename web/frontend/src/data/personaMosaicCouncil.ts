@@ -189,3 +189,83 @@ export function mosaicCouncilShareUrl(
 ): string {
   return `${origin}/persona-mosaic-council?q=${encodeURIComponent(question)}&p=${encodeURIComponent(panel.join(','))}`;
 }
+
+// Lifetime counter — how many councils the user has convened, persisted
+// across reloads so the user can see their own track record.
+
+const COUNTER_KEY = 'arena:persona-mosaic-council:counter:v1';
+
+export function readMosaicCouncilCounter(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(COUNTER_KEY);
+    if (!raw) return 0;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function incrementMosaicCouncilCounter(): number {
+  const next = readMosaicCouncilCounter() + 1;
+  if (typeof window === 'undefined') return next;
+  try {
+    window.localStorage.setItem(COUNTER_KEY, String(next));
+  } catch {
+    /* silent */
+  }
+  return next;
+}
+
+export function clearMosaicCouncilCounter() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(COUNTER_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+// Panel presets — common 4-mind combinations the user can
+// quick-load instead of clicking 4 chips.
+
+export interface MosaicPanelPreset {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly panel: ReadonlyArray<string>;
+}
+
+export const MOSAIC_PANEL_PRESETS: ReadonlyArray<MosaicPanelPreset> = [
+  {
+    id: 'strategy-team',
+    label: 'Strategy team',
+    description: 'pragmatist · strategist · engineer · contrarian',
+    panel: ['pragmatist', 'strategist', 'engineer', 'contrarian'],
+  },
+  {
+    id: 'ethics-panel',
+    label: 'Ethics panel',
+    description: 'empath · ethicist · stoic · philosopher',
+    panel: ['empath', 'ethicist', 'stoic', 'philosopher'],
+  },
+  {
+    id: 'creative-team',
+    label: 'Creative team',
+    description: 'optimist · contrarian · empath · futurist',
+    panel: ['optimist', 'contrarian', 'empath', 'futurist'],
+  },
+  {
+    id: 'skeptic-team',
+    label: 'Skeptic team',
+    description: 'analyst · scientist · stoic · firstprinciples',
+    panel: ['analyst', 'scientist', 'stoic', 'firstprinciples'],
+  },
+  {
+    id: 'mentor-team',
+    label: 'Mentor team',
+    description: 'stoic · historian · optimist · empath',
+    panel: ['stoic', 'historian', 'optimist', 'empath'],
+  },
+];

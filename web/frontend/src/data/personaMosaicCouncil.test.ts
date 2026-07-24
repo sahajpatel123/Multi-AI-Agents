@@ -18,8 +18,12 @@ import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
   buildMosaicCouncil,
+  clearMosaicCouncilCounter,
+  incrementMosaicCouncilCounter,
+  MOSAIC_PANEL_PRESETS,
   mosaicCouncilShareUrl,
   mosaicCouncilValid,
+  readMosaicCouncilCounter,
   type MosaicStance,
 } from './personaMosaicCouncil';
 
@@ -122,5 +126,56 @@ describe('mosaicCouncilShareUrl', () => {
     expect(url).toContain('/persona-mosaic-council');
     expect(url).toContain('q=A%20test%20question.');
     expect(url).toContain('p=analyst%2Cphilosopher%2Cpragmatist%2Ccontrarian');
+  });
+});
+
+describe('mosaic council counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearMosaicCouncilCounter();
+    expect(readMosaicCouncilCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearMosaicCouncilCounter();
+    expect(incrementMosaicCouncilCounter()).toBe(1);
+    expect(incrementMosaicCouncilCounter()).toBe(2);
+    expect(incrementMosaicCouncilCounter()).toBe(3);
+  });
+
+  it('clearMosaicCouncilCounter resets to 0', () => {
+    incrementMosaicCouncilCounter();
+    incrementMosaicCouncilCounter();
+    clearMosaicCouncilCounter();
+    expect(readMosaicCouncilCounter()).toBe(0);
+  });
+});
+
+describe('MOSAIC_PANEL_PRESETS', () => {
+  it('has at least 3 panel presets', () => {
+    expect(MOSAIC_PANEL_PRESETS.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('every preset has a non-empty label and 4-persona panel', () => {
+    for (const preset of MOSAIC_PANEL_PRESETS) {
+      expect(preset.label.length).toBeGreaterThan(0);
+      expect(preset.panel).toHaveLength(4);
+    }
+  });
+
+  it('every preset panel references real personas', () => {
+    const known = new Set(PERSONAS.map((p) => p.id));
+    for (const preset of MOSAIC_PANEL_PRESETS) {
+      for (const id of preset.panel) {
+        expect(known.has(id)).toBe(true);
+      }
+    }
+  });
+
+  it('every preset panel is unique', () => {
+    const seen = new Set<string>();
+    for (const preset of MOSAIC_PANEL_PRESETS) {
+      seen.add(preset.panel.join('|'));
+    }
+    expect(seen.size).toBe(MOSAIC_PANEL_PRESETS.length);
   });
 });

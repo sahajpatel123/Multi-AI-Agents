@@ -16,8 +16,12 @@ import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
   buildMosaicCouncil,
+  MOSAIC_PANEL_PRESETS,
   mosaicCouncilShareUrl,
   mosaicCouncilValid,
+  readMosaicCouncilCounter,
+  incrementMosaicCouncilCounter,
+  clearMosaicCouncilCounter,
   type MosaicCouncilTake,
   type MosaicStance,
   type PersonaMosaicCouncil,
@@ -74,9 +78,11 @@ export function PersonaMosaicCouncilPage() {
   );
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [convenedCount, setConvenedCount] = useState(0);
 
   useEffect(() => {
     setPageVisible(true);
+    setConvenedCount(readMosaicCouncilCounter());
   }, []);
 
   const council: PersonaMosaicCouncil | null = useMemo(() => {
@@ -100,6 +106,17 @@ export function PersonaMosaicCouncilPage() {
     if (typeof window === 'undefined') return;
     const url = mosaicCouncilShareUrl(window.location.origin, question, panel);
     window.history.replaceState({}, '', url);
+    const c = incrementMosaicCouncilCounter();
+    setConvenedCount(c);
+  };
+
+  const onLoadPreset = (presetPanel: ReadonlyArray<string>) => {
+    setPanel(presetPanel);
+  };
+
+  const onResetCounter = () => {
+    clearMosaicCouncilCounter();
+    setConvenedCount(0);
   };
 
   const onReset = () => {
@@ -231,6 +248,40 @@ export function PersonaMosaicCouncilPage() {
             <p className="pmc-panel__label">
               <Filter aria-hidden="true" /> Pick your 4 minds ({panel.length} / 4)
             </p>
+            <div className="pmc-panel__stats">
+              <Sparkles aria-hidden="true" />
+              <span>Councils convened: <strong>{convenedCount}</strong></span>
+              {convenedCount > 0 && (
+                <button
+                  type="button"
+                  className="pmc-panel__reset"
+                  onClick={onResetCounter}
+                  aria-label="Reset councils counter"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="pmc-presets" aria-label="Panel presets">
+            <p className="pmc-presets__label">Quick-load a preset panel</p>
+            <ul>
+              {MOSAIC_PANEL_PRESETS.map((preset) => {
+                const isCurrent = preset.panel.join('|') === panel.join('|');
+                return (
+                  <li key={preset.id}>
+                    <Pressable
+                      type="button"
+                      className={`pmc-preset${isCurrent ? ' pmc-preset--active' : ''}`}
+                      onClick={() => onLoadPreset(preset.panel)}
+                    >
+                      <span className="pmc-preset__label">{preset.label}</span>
+                      <span className="pmc-preset__description">{preset.description}</span>
+                    </Pressable>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
           <ul className="pmc-panel__list">
             {PERSONAS.map((persona) => {
