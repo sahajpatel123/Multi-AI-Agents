@@ -16,6 +16,7 @@ const PRIMARY_LINKS = [
   { label: 'ROAST', path: '/persona-roast' },
   { label: 'CHALLENGE', path: '/persona-challenge' },
   { label: 'DUEL', path: '/persona-duel' },
+  { label: 'ECHO', path: '/persona-echo' },
   { label: 'MOSAIC', path: '/persona-mosaic' },
   { label: 'LIBRARY', path: '/persona-library' },
   { label: 'PRICING', path: '/pricing' },
@@ -34,12 +35,13 @@ const MENU_LINKS = [
   { number: '09', label: 'Persona Roast', path: '/persona-roast' },
   { number: '10', label: 'Persona Challenge', path: '/persona-challenge' },
   { number: '11', label: 'Persona Duel', path: '/persona-duel' },
-  { number: '12', label: 'Persona Mosaic', path: '/persona-mosaic' },
-  { number: '13', label: 'Persona Library', path: '/persona-library' },
-  { number: '14', label: 'Pricing', path: '/pricing' },
-  { number: '15', label: 'Documentation', path: '/docs' },
-  { number: '16', label: 'About', path: '/about' },
-  { number: '17', label: 'Changelog', path: '/changelog' },
+  { number: '12', label: 'Persona Echo', path: '/persona-echo' },
+  { number: '13', label: 'Persona Mosaic', path: '/persona-mosaic' },
+  { number: '14', label: 'Persona Library', path: '/persona-library' },
+  { number: '15', label: 'Pricing', path: '/pricing' },
+  { number: '16', label: 'Documentation', path: '/docs' },
+  { number: '17', label: 'About', path: '/about' },
+  { number: '18', label: 'Changelog', path: '/changelog' },
 ] as const;
 
 export function Navbar() {

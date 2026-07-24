@@ -87,6 +87,9 @@ const PersonaChallengePage = lazy(() =>
 const PersonaDuelPage = lazy(() =>
   import('./pages/PersonaDuelPage').then((m) => ({ default: m.PersonaDuelPage })),
 )
+const PersonaEchoPage = lazy(() =>
+  import('./pages/PersonaEchoPage').then((m) => ({ default: m.PersonaEchoPage })),
+)
 const AccountPage = lazy(() =>
   import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })),
 )
@@ -246,6 +249,7 @@ if (!rootElement) {
                   <Route path="/persona-roast" element={<PersonaRoastPage />} />
                   <Route path="/persona-challenge" element={<PersonaChallengePage />} />
                   <Route path="/persona-duel" element={<PersonaDuelPage />} />
+                  <Route path="/persona-echo" element={<PersonaEchoPage />} />
                   <Route path="/share" element={<SharePage />} />
                   <Route path="/app" element={
                     <ProtectedRoute>
