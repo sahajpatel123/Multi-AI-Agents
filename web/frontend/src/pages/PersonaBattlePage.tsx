@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Crown, RotateCcw, Share2, Sparkles, Swords } from 'lucide-react';
+import { ArrowRight, Clock, Crown, History, RotateCcw, Share2, Sparkles, Swords, Wand2, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
@@ -10,6 +10,7 @@ import MicroLoader from '../components/MicroLoader';
 import {
   PERSONA_BATTLE_PRESETS,
   findBattlePreset,
+  suggestBattleTopic,
 } from '../data/personaBattle';
 import { PERSONAS } from '../data/personas';
 import { submitPrompt, type StreamCallbacks, streamPrompt } from '../api';
@@ -20,8 +21,62 @@ import { prefersReducedMotion } from '../lib/motion';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import '../styles/persona-battle-page.css';
 
+const HISTORY_KEY = 'arena:persona-battle:history:v1';
+const HISTORY_LIMIT = 8;
+
+interface BattleHistoryEntry {
+  readonly id: string;
+  readonly leftId: string;
+  readonly rightId: string;
+  readonly topic: string;
+  readonly winnerId: string | null;
+  readonly savedAt: string;
+}
+
 function findPersona(id: string) {
   return PERSONAS.find((p) => p.id === id) ?? null;
+}
+
+function readHistory(): ReadonlyArray<BattleHistoryEntry> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as BattleHistoryEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (entry) =>
+          entry &&
+          typeof entry.id === 'string' &&
+          typeof entry.leftId === 'string' &&
+          typeof entry.rightId === 'string' &&
+          typeof entry.topic === 'string',
+      )
+      .slice(0, HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+function appendHistory(entry: BattleHistoryEntry) {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = readHistory().filter((e) => e.id !== entry.id);
+    const next = [entry, ...existing].slice(0, HISTORY_LIMIT);
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    /* quota / private mode — silent fail */
+  }
+}
+
+function clearHistory() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(HISTORY_KEY);
+  } catch {
+    /* silent */
+  }
 }
 
 interface VersusCardProps {
@@ -31,6 +86,10 @@ interface VersusCardProps {
   readonly isLoser: boolean;
   readonly livePreview: string;
   readonly loading: boolean;
+  /** When true, the card starts in its staggered "thinking" state. */
+  readonly staggerActive: boolean;
+  /** 0 = no delay, 1 = first reveal, 2 = second. */
+  readonly staggerIndex: 1 | 2;
 }
 
 function VersusCard({
@@ -40,13 +99,18 @@ function VersusCard({
   isLoser,
   livePreview,
   loading,
+  staggerActive,
+  staggerIndex,
 }: VersusCardProps) {
   const persona = findPersona(personaId);
   if (!persona) return null;
   const verdict = response?.response.one_liner ?? livePreview ?? '';
+  const staggerClass = staggerActive
+    ? ` pb-versus--stagger-${staggerIndex}`
+    : '';
   return (
     <article
-      className={`pb-versus${isWinner ? ' pb-versus--winner' : ''}${isLoser ? ' pb-versus--loser' : ''}`}
+      className={`pb-versus${isWinner ? ' pb-versus--winner' : ''}${isLoser ? ' pb-versus--loser' : ''}${staggerClass}`}
       style={{
         ['--pb-persona-color' as string]: persona.color,
         ['--pb-persona-bg' as string]: persona.bgTint,
@@ -64,7 +128,7 @@ function VersusCard({
       <div className="pb-versus__body">
         {loading && !verdict ? (
           <div className="pb-versus__loader" aria-live="polite">
-            <MicroLoader label="Reasoning" cycleWords={false} />
+            <MicroLoader label={staggerIndex === 1 ? 'Reasoning' : 'Counter-thinking'} cycleWords={false} />
           </div>
         ) : (
           <p className="pb-versus__verdict">{verdict || '...'}</p>
@@ -112,6 +176,8 @@ export function PersonaBattlePage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [pageVisible, setPageVisible] = useState(false);
+  const [staggerActive, setStaggerActive] = useState(false);
+  const [history, setHistory] = useState<ReadonlyArray<BattleHistoryEntry>>([]);
 
   const [leftResponse, setLeftResponse] = useState<ScoredAgent | null>(null);
   const [rightResponse, setRightResponse] = useState<ScoredAgent | null>(null);
@@ -122,6 +188,11 @@ export function PersonaBattlePage() {
 
   useEffect(() => {
     setPageVisible(true);
+  }, []);
+
+  // Restore last battle from URL or localStorage history.
+  useEffect(() => {
+    setHistory(readHistory());
   }, []);
 
   const leftPersona = useMemo(() => findPersona(leftId), [leftId]);
@@ -152,6 +223,45 @@ export function PersonaBattlePage() {
     setErrorMsg(null);
   };
 
+  const onSuggestTopic = () => {
+    if (leftId === rightId) return;
+    const suggestion = suggestBattleTopic(leftId, rightId);
+    setTopic(suggestion);
+  };
+
+  const onReplayHistory = (entry: BattleHistoryEntry) => {
+    setLeftId(entry.leftId);
+    setRightId(entry.rightId);
+    setTopic(entry.topic);
+    setLeftResponse(null);
+    setRightResponse(null);
+    setLeftPreview('');
+    setRightPreview('');
+    setWinnerId(null);
+    setErrorMsg(null);
+  };
+
+  const onClearHistory = () => {
+    clearHistory();
+    setHistory([]);
+  };
+
+  const saveToHistory = useCallback(
+    (winner: string | null) => {
+      const entry: BattleHistoryEntry = {
+        id: `${leftId}-vs-${rightId}-${Date.now()}`,
+        leftId,
+        rightId,
+        topic: topic.trim(),
+        winnerId: winner,
+        savedAt: new Date().toISOString(),
+      };
+      appendHistory(entry);
+      setHistory(readHistory());
+    },
+    [leftId, rightId, topic],
+  );
+
   const runBattle = useCallback(async () => {
     if (!canBattle) return;
     setLoading(true);
@@ -161,6 +271,11 @@ export function PersonaBattlePage() {
     setLeftPreview('');
     setRightPreview('');
     setWinnerId(null);
+
+    // Stagger the reveal: left card lights up immediately, right card waits
+    // ~700ms so the user experiences a "left lands first, then right"
+    // theatrical effect rather than two equal-progress bars.
+    setStaggerActive(true);
 
     const onToken: StreamCallbacks['onToken'] = (data) => {
       if (data.agent_id === 'agent_1') setLeftPreview((p) => p + data.token);
@@ -178,12 +293,15 @@ export function PersonaBattlePage() {
       });
       setLeftResponse(left ?? null);
       setRightResponse(right ?? null);
-      setWinnerId(data.winner_agent_id ?? null);
+      const winner = data.winner_agent_id ?? null;
+      setWinnerId(winner);
       setLoading(false);
+      saveToHistory(winner);
     };
     const onError: StreamCallbacks['onError'] = (data) => {
       setErrorMsg(data.message ?? data.detail ?? data.error ?? 'Battle failed.');
       setLoading(false);
+      setStaggerActive(false);
     };
 
     try {
@@ -193,6 +311,7 @@ export function PersonaBattlePage() {
         undefined,
         [leftId, rightId],
       );
+      setStaggerActive(false);
     } catch (err) {
       // Fallback to non-streaming submit if the streaming endpoint is down.
       try {
@@ -205,9 +324,10 @@ export function PersonaBattlePage() {
           );
         }
         setLoading(false);
+        setStaggerActive(false);
       }
     }
-  }, [canBattle, leftId, rightId, topic, errorMsg]);
+  }, [canBattle, leftId, rightId, topic, errorMsg, saveToHistory]);
 
   const onShare = async () => {
     if (typeof window === 'undefined') return;
@@ -325,9 +445,22 @@ export function PersonaBattlePage() {
             </label>
           </div>
 
-          <label className="pb-controls__topic">
-            <span className="pb-controls__label">Topic</span>
+          <div className="pb-controls__topic">
+            <label className="pb-controls__topic-label" htmlFor="pb-topic-input">
+              <span className="pb-controls__label">Topic</span>
+              <button
+                type="button"
+                className="pb-controls__suggest"
+                onClick={onSuggestTopic}
+                disabled={!validPair}
+                aria-label="Suggest a topic for this pairing"
+              >
+                <Wand2 aria-hidden="true" />
+                Suggest a topic
+              </button>
+            </label>
             <textarea
+              id="pb-topic-input"
               className="pb-controls__textarea"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
@@ -336,7 +469,7 @@ export function PersonaBattlePage() {
               rows={3}
               aria-label="Battle topic"
             />
-          </label>
+          </div>
 
           <div className="pb-controls__cta">
             <MotionButton
@@ -378,6 +511,50 @@ export function PersonaBattlePage() {
               ))}
             </ul>
           </div>
+
+          {history.length > 0 && (
+            <div className="pb-history" aria-label="Recent battles">
+              <div className="pb-history__head">
+                <p className="pb-history__label">
+                  <History aria-hidden="true" /> Recent battles
+                </p>
+                <button
+                  type="button"
+                  className="pb-history__clear"
+                  onClick={onClearHistory}
+                  aria-label="Clear battle history"
+                >
+                  <X aria-hidden="true" /> Clear
+                </button>
+              </div>
+              <ul>
+                {history.map((entry) => {
+                  const left = findPersona(entry.leftId);
+                  const right = findPersona(entry.rightId);
+                  return (
+                    <li key={entry.id}>
+                      <Pressable
+                        type="button"
+                        className="pb-history__item"
+                        onClick={() => onReplayHistory(entry)}
+                        disabled={loading}
+                      >
+                        <span className="pb-history__pair">
+                          <span style={{ color: left?.color }}>{left?.name ?? entry.leftId}</span>
+                          <span aria-hidden="true">vs</span>
+                          <span style={{ color: right?.color }}>{right?.name ?? entry.rightId}</span>
+                        </span>
+                        <span className="pb-history__topic">{entry.topic}</span>
+                        <span className="pb-history__time">
+                          <Clock aria-hidden="true" /> {timeAgo(entry.savedAt)}
+                        </span>
+                      </Pressable>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </section>
 
         <section className="pb-arena" aria-label="Battle arena">
@@ -389,6 +566,8 @@ export function PersonaBattlePage() {
               isLoser={Boolean(isRightWinner)}
               livePreview={leftPreview}
               loading={loading}
+              staggerActive={staggerActive}
+              staggerIndex={1}
             />
             <div className="pb-arena__vs" aria-hidden="true">
               <span>VS</span>
@@ -400,6 +579,8 @@ export function PersonaBattlePage() {
               isLoser={Boolean(isLeftWinner)}
               livePreview={rightPreview}
               loading={loading}
+              staggerActive={staggerActive}
+              staggerIndex={2}
             />
           </div>
 
@@ -455,4 +636,14 @@ export function PersonaBattlePage() {
       <Footer />
     </div>
   );
+}
+
+function timeAgo(iso: string): string {
+  const saved = new Date(iso).getTime();
+  if (!Number.isFinite(saved)) return '';
+  const diffMs = Date.now() - saved;
+  if (diffMs < 60_000) return 'just now';
+  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
+  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h ago`;
+  return `${Math.floor(diffMs / 86_400_000)}d ago`;
 }
