@@ -10,6 +10,7 @@ const PRIMARY_LINKS = [
   { label: 'PERSONAS', path: '/personas' },
   { label: 'MATCH', path: '/persona-match' },
   { label: 'BATTLE', path: '/persona-battle' },
+  { label: 'WHEEL', path: '/persona-wheel' },
   { label: 'PRICING', path: '/pricing' },
   { label: 'DOCS', path: '/docs' },
 ] as const;
@@ -20,10 +21,11 @@ const MENU_LINKS = [
   { number: '03', label: 'Personas', path: '/personas' },
   { number: '04', label: 'Persona Match', path: '/persona-match' },
   { number: '05', label: 'Persona Battle', path: '/persona-battle' },
-  { number: '06', label: 'Pricing', path: '/pricing' },
-  { number: '07', label: 'Documentation', path: '/docs' },
-  { number: '08', label: 'About', path: '/about' },
-  { number: '09', label: 'Changelog', path: '/changelog' },
+  { number: '06', label: 'Persona Wheel', path: '/persona-wheel' },
+  { number: '07', label: 'Pricing', path: '/pricing' },
+  { number: '08', label: 'Documentation', path: '/docs' },
+  { number: '09', label: 'About', path: '/about' },
+  { number: '10', label: 'Changelog', path: '/changelog' },
 ] as const;
 
 export function Navbar() {

@@ -23,10 +23,12 @@ describe('shared public Prism navigation (source structure)', () => {
     expect(src).toContain("{ label: 'PRODUCT', path: '/product' }");
     expect(src).toContain("{ label: 'MATCH', path: '/persona-match' }");
     expect(src).toContain("{ label: 'BATTLE', path: '/persona-battle' }");
+    expect(src).toContain("{ label: 'WHEEL', path: '/persona-wheel' }");
     expect(src).toContain("{ number: '04', label: 'Persona Match', path: '/persona-match' }");
     expect(src).toContain("{ number: '05', label: 'Persona Battle', path: '/persona-battle' }");
-    expect(src).toContain("{ number: '08', label: 'About', path: '/about' }");
-    expect(src).toContain("{ number: '09', label: 'Changelog', path: '/changelog' }");
+    expect(src).toContain("{ number: '06', label: 'Persona Wheel', path: '/persona-wheel' }");
+    expect(src).toContain("{ number: '09', label: 'About', path: '/about' }");
+    expect(src).toContain("{ number: '10', label: 'Changelog', path: '/changelog' }");
     expect(src).not.toContain('navbar-inner-container');
   });
 
