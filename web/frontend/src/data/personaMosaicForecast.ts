@@ -182,3 +182,149 @@ export function mosaicForecastShareUrl(
 ): string {
   return `${origin}/persona-mosaic-forecast?a=${encodeURIComponent(outputA)}&b=${encodeURIComponent(outputB)}`;
 }
+
+// Lifetime counter + A/B win tally — persisted across reloads.
+
+export interface MosaicForecastDecisionEntry {
+  readonly id: string;
+  readonly outputASnippet: string;
+  readonly outputBSnippet: string;
+  readonly winner: MosaicForecastPick;
+  readonly savedAt: string;
+}
+
+const COUNTER_KEY = 'arena:persona-mosaic-forecast:counter:v1';
+const DECISIONS_KEY = 'arena:persona-mosaic-forecast:decisions:v1';
+const DECISIONS_LIMIT = 50;
+
+export function readMosaicForecastCounter(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(COUNTER_KEY);
+    if (!raw) return 0;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function incrementMosaicForecastCounter(): number {
+  const next = readMosaicForecastCounter() + 1;
+  if (typeof window === 'undefined') return next;
+  try {
+    window.localStorage.setItem(COUNTER_KEY, String(next));
+  } catch {
+    /* silent */
+  }
+  return next;
+}
+
+export function clearMosaicForecastCounter() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(COUNTER_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+export function appendMosaicForecastDecision(entry: MosaicForecastDecisionEntry) {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(DECISIONS_KEY);
+    const existing: MosaicForecastDecisionEntry[] = raw
+      ? (JSON.parse(raw) as MosaicForecastDecisionEntry[])
+      : [];
+    const next = [entry, ...existing.filter((e) => e.id !== entry.id)].slice(0, DECISIONS_LIMIT);
+    window.localStorage.setItem(DECISIONS_KEY, JSON.stringify(next));
+  } catch {
+    /* silent */
+  }
+}
+
+export function readMosaicForecastDecisions(): ReadonlyArray<MosaicForecastDecisionEntry> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(DECISIONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as MosaicForecastDecisionEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (e) =>
+        e &&
+        typeof e.id === 'string' &&
+        (e.winner === 'A' || e.winner === 'B'),
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function clearMosaicForecastDecisions() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(DECISIONS_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+export interface MosaicForecastTally {
+  readonly a: number;
+  readonly b: number;
+}
+
+/** Pure — compute lifetime A vs B win tally from decision log. */
+export function mosaicForecastWinTally(
+  decisions: ReadonlyArray<MosaicForecastDecisionEntry>,
+): MosaicForecastTally {
+  let a = 0;
+  let b = 0;
+  for (const d of decisions) {
+    if (d.winner === 'A') a += 1;
+    else b += 1;
+  }
+  return { a, b };
+}
+
+export type MosaicForecastMajorityLabel = 'unanimous' | 'strong' | 'split';
+
+export interface MosaicForecastMajorityInfo {
+  readonly label: MosaicForecastMajorityLabel;
+  readonly description: string;
+  readonly winnerCount: number;
+  readonly loserCount: number;
+}
+
+/** Pure — describe how decisive a tally is. For a 4-mind panel:
+ * 4/4 is unanimous, 3/4 is strong, 2/4 is split. */
+export function mosaicForecastMajorityInfo(
+  tally: MosaicForecastTally,
+  winner: MosaicForecastPick,
+): MosaicForecastMajorityInfo {
+  const winnerCount = winner === 'A' ? tally.a : tally.b;
+  const loserCount = winner === 'A' ? tally.b : tally.a;
+  if (winnerCount === 4) {
+    return {
+      label: 'unanimous',
+      description: '4 of 4 minds — unanimous.',
+      winnerCount,
+      loserCount,
+    };
+  }
+  if (winnerCount === 3) {
+    return {
+      label: 'strong',
+      description: '3 of 4 minds — a strong majority.',
+      winnerCount,
+      loserCount,
+    };
+  }
+  return {
+    label: 'split',
+    description: '2 of 4 minds — a genuine split.',
+    winnerCount,
+    loserCount,
+  };
+}

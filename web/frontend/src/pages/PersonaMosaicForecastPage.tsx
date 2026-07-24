@@ -15,9 +15,18 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendMosaicForecastDecision,
   buildMosaicForecast,
+  clearMosaicForecastCounter,
+  clearMosaicForecastDecisions,
+  incrementMosaicForecastCounter,
+  mosaicForecastMajorityInfo,
   mosaicForecastShareUrl,
   mosaicForecastValid,
+  mosaicForecastWinTally,
+  readMosaicForecastCounter,
+  readMosaicForecastDecisions,
+  type MosaicForecastDecisionEntry,
   type PersonaMosaicForecast,
 } from '../data/personaMosaicForecast';
 import { PERSONAS } from '../data/personas';
@@ -68,9 +77,13 @@ export function PersonaMosaicForecastPage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<{ a: string; b: string }>>([]);
+  const [castCount, setCastCount] = useState(0);
+  const [decisions, setDecisions] = useState<ReadonlyArray<MosaicForecastDecisionEntry>>([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setCastCount(readMosaicForecastCounter());
+    setDecisions(readMosaicForecastDecisions());
     try {
       const raw = window.localStorage.getItem('arena:persona-mosaic-forecast:history:v1');
       if (raw) {
@@ -87,6 +100,16 @@ export function PersonaMosaicForecastPage() {
     const f = buildMosaicForecast(outputA, outputB);
     return mosaicForecastValid(f) ? f : null;
   }, [outputA, outputB]);
+
+  const lifetimeTally = useMemo(
+    () => mosaicForecastWinTally(decisions),
+    [decisions],
+  );
+
+  const majority = useMemo(
+    () => (forecast ? mosaicForecastMajorityInfo(forecast.tally, forecast.winner) : null),
+    [forecast],
+  );
 
   const onForecast = () => {
     const url = mosaicForecastShareUrl(
@@ -111,6 +134,26 @@ export function PersonaMosaicForecastPage() {
     } catch {
       /* silent */
     }
+    if (forecast) {
+      const decision: MosaicForecastDecisionEntry = {
+        id: `forecast-${Date.now()}`,
+        outputASnippet: outputA.length > 40 ? `${outputA.slice(0, 37)}...` : outputA,
+        outputBSnippet: outputB.length > 40 ? `${outputB.slice(0, 37)}...` : outputB,
+        winner: forecast.winner,
+        savedAt: new Date().toISOString(),
+      };
+      appendMosaicForecastDecision(decision);
+      setDecisions(readMosaicForecastDecisions());
+    }
+    const c = incrementMosaicForecastCounter();
+    setCastCount(c);
+  };
+
+  const onResetLifetime = () => {
+    clearMosaicForecastCounter();
+    clearMosaicForecastDecisions();
+    setCastCount(0);
+    setDecisions([]);
   };
 
   const onReset = () => {
@@ -262,6 +305,35 @@ export function PersonaMosaicForecastPage() {
               </MotionButton>
             </div>
           </div>
+          <div className="pmf-input__stats" aria-label="Mosaic forecast stats">
+            <div className="pmf-input__stat">
+              <Sparkles aria-hidden="true" />
+              <span className="pmf-input__stat-label">Forecasts cast</span>
+              <span className="pmf-input__stat-value">{castCount}</span>
+            </div>
+            {lifetimeTally.a > 0 && (
+              <div className="pmf-input__stat pmf-input__stat--a">
+                <span className="pmf-input__stat-label">A wins</span>
+                <span className="pmf-input__stat-value">{lifetimeTally.a}</span>
+              </div>
+            )}
+            {lifetimeTally.b > 0 && (
+              <div className="pmf-input__stat pmf-input__stat--b">
+                <span className="pmf-input__stat-label">B wins</span>
+                <span className="pmf-input__stat-value">{lifetimeTally.b}</span>
+              </div>
+            )}
+            {(castCount > 0 || lifetimeTally.a > 0 || lifetimeTally.b > 0) && (
+              <button
+                type="button"
+                className="pmf-input__stat-reset"
+                onClick={onResetLifetime}
+                aria-label="Reset forecasts counter and lifetime tally"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="pmf-samples" aria-label="Sample forecasts">
@@ -302,6 +374,11 @@ export function PersonaMosaicForecastPage() {
                   {forecast.tally.a} for A · {forecast.tally.b} for B
                 </span>
               </h2>
+              {majority && (
+                <p className={`pmf-result__majority pmf-result__majority--${majority.label}`}>
+                  {majority.description}
+                </p>
+              )}
             </header>
 
             <div className="pmf-sides">
