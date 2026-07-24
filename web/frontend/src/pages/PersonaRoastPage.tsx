@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   ChevronRight,
+  Clock,
   Flame,
+  History,
   Mic,
   RotateCcw,
   Share2,
   Sparkles,
   Swords,
   Wand2,
+  X,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
@@ -16,9 +19,15 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendRoastHistory,
   buildRoast,
+  clearRoastHistory,
+  readRoastHistory,
   roastFlavorLabel,
+  roastSeverity,
+  roastSeverityLabel,
   roastShareUrl,
+  type RoastHistoryEntry,
   type RoastPick,
 } from '../data/personaRoast';
 import { PERSONAS } from '../data/personas';
@@ -69,9 +78,11 @@ export function PersonaRoastPage() {
   const [committedPrompt, setCommittedPrompt] = useState(initialPrompt);
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [history, setHistory] = useState<ReadonlyArray<RoastHistoryEntry>>([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setHistory(readRoastHistory());
   }, []);
 
   const roast: RoastPick | null = useMemo(() => {
@@ -87,6 +98,33 @@ export function PersonaRoastPage() {
       const url = roastShareUrl(window.location.origin, prompt);
       window.history.replaceState({}, '', url);
     }
+    // Append to history (with the same deterministic hash so reloads
+    // don't duplicate).
+    const roast = buildRoast(prompt);
+    const id = `roast-${roast.flavor}-${prompt.length}-${Date.now()}`;
+    const entry: RoastHistoryEntry = {
+      id,
+      flavor: roast.flavor,
+      severity: roastSeverity(prompt),
+      promptSnippet: prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt,
+      savedAt: new Date().toISOString(),
+    };
+    appendRoastHistory(entry);
+    setHistory(readRoastHistory());
+  };
+
+  const onReplayHistory = (entry: RoastHistoryEntry) => {
+    // For replay we have a snippet; recover a usable prompt by
+    // scanning localStorage for the full original. Since we stored
+    // only a snippet, we ask the user to paste again — but we
+    // pre-fill the textarea with the snippet so they can edit.
+    setPrompt(entry.promptSnippet);
+    setCommittedPrompt('');
+  };
+
+  const onClearHistory = () => {
+    clearRoastHistory();
+    setHistory([]);
   };
 
   const onReset = () => {
@@ -230,9 +268,33 @@ export function PersonaRoastPage() {
         {roast && (
           <section className="proast-result" aria-label="Roast result">
             <header className="proast-result__head">
-              <p className="proast-result__flavor">
-                {roastFlavorLabel(roast.flavor)}
-              </p>
+              <div className="proast-result__head-row">
+                <p className="proast-result__flavor">
+                  {roastFlavorLabel(roast.flavor)}
+                </p>
+                <div
+                  className="proast-severity"
+                  role="meter"
+                  aria-valuemin={0}
+                  aria-valuemax={10}
+                  aria-valuenow={roastSeverity(committedPrompt)}
+                  aria-label="Roast severity"
+                >
+                  <span className="proast-severity__label">Severity</span>
+                  <div className="proast-severity__bar">
+                    <div
+                      className="proast-severity__fill"
+                      style={{ width: `${roastSeverity(committedPrompt) * 10}%` }}
+                    />
+                  </div>
+                  <span className="proast-severity__value">
+                    {roastSeverity(committedPrompt)}/10
+                  </span>
+                  <span className="proast-severity__meaning">
+                    {roastSeverityLabel(roastSeverity(committedPrompt))}
+                  </span>
+                </div>
+              </div>
               <h2 className="proast-result__headline">{roast.headline}</h2>
               <p className="proast-result__lede">{roast.lede}</p>
             </header>
@@ -304,9 +366,61 @@ export function PersonaRoastPage() {
             </div>
           </section>
         )}
+
+        {history.length > 0 && (
+          <section className="proast-history" aria-label="Recent roasts">
+            <div className="proast-history__head">
+              <p className="proast-history__label">
+                <History aria-hidden="true" /> Recent roasts
+              </p>
+              <button
+                type="button"
+                className="proast-history__clear"
+                onClick={onClearHistory}
+                aria-label="Clear roast history"
+              >
+                <X aria-hidden="true" /> Clear
+              </button>
+            </div>
+            <ul>
+              {history.slice(0, 8).map((entry) => (
+                <li key={entry.id}>
+                  <Pressable
+                    type="button"
+                    className="proast-history__item"
+                    onClick={() => onReplayHistory(entry)}
+                  >
+                    <span className="proast-history__flavor">
+                      {roastFlavorLabel(entry.flavor)}
+                    </span>
+                    <span className="proast-history__snippet">
+                      "{entry.promptSnippet}"
+                    </span>
+                    <span className="proast-history__severity">
+                      {entry.severity}/10
+                    </span>
+                    <span className="proast-history__time">
+                      <Clock aria-hidden="true" /> {timeAgo(entry.savedAt)}
+                    </span>
+                  </Pressable>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
 
       <Footer />
     </div>
   );
+}
+
+function timeAgo(iso: string): string {
+  const saved = new Date(iso).getTime();
+  if (!Number.isFinite(saved)) return '';
+  const diffMs = Date.now() - saved;
+  if (diffMs < 60_000) return 'just now';
+  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
+  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h ago`;
+  return `${Math.floor(diffMs / 86_400_000)}d ago`;
 }

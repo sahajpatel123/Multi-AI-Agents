@@ -15,11 +15,17 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  appendRoastHistory,
   buildRoast,
+  clearRoastHistory,
   deriveRoastFlavor,
+  readRoastHistory,
   roastFlavorLabel,
+  roastSeverity,
+  roastSeverityLabel,
   roastShareUrl,
   type RoastFlavor,
+  type RoastHistoryEntry,
 } from './personaRoast';
 
 const VALID_FLAVORS = new Set<RoastFlavor>([
@@ -144,5 +150,105 @@ describe('roastFlavorLabel', () => {
       labels.add(roastFlavorLabel(flavor));
     }
     expect(labels.size).toBe(VALID_FLAVORS.size);
+  });
+});
+
+describe('roastSeverity', () => {
+  it('returns 1 for a balanced prompt', () => {
+    expect(roastSeverity('How should I price my SaaS for solo founders?')).toBe(1);
+  });
+
+  it('returns 9 for a shallow prompt', () => {
+    expect(roastSeverity('hi')).toBeGreaterThanOrEqual(8);
+  });
+
+  it('returns 7 for an overloaded prompt', () => {
+    const long = Array.from({ length: 90 }, () => 'word').join(' ');
+    expect(roastSeverity(long)).toBe(7);
+  });
+
+  it('returns 4 for a meta / roleplay prompt', () => {
+    expect(roastSeverity('Pretend you are a Nobel-winning economist.')).toBe(4);
+  });
+
+  it('is bounded between 0 and 10', () => {
+    const probes = [
+      '',
+      'hi',
+      Array.from({ length: 200 }, () => 'word').join(' '),
+      "Don't you think X is bad?",
+      'Pretend you are a chef.',
+      'How do I write a great landing page?',
+    ];
+    for (const prompt of probes) {
+      const s = roastSeverity(prompt);
+      expect(s).toBeGreaterThanOrEqual(0);
+      expect(s).toBeLessThanOrEqual(10);
+    }
+  });
+});
+
+describe('roastSeverityLabel', () => {
+  it('returns a non-empty label for every score 0-10', () => {
+    for (let score = 0; score <= 10; score++) {
+      expect(roastSeverityLabel(score).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('returns distinct labels for distinct buckets', () => {
+    const labels = new Set<string>();
+    for (let score = 0; score <= 10; score++) {
+      labels.add(roastSeverityLabel(score));
+    }
+    // Expect at least 4 distinct buckets.
+    expect(labels.size).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('roast history (localStorage)', () => {
+  const makeEntry = (id: string, flavor: RoastFlavor = 'shallow'): RoastHistoryEntry => ({
+    id,
+    flavor,
+    severity: 9,
+    promptSnippet: 'sample',
+    savedAt: new Date().toISOString(),
+  });
+
+  it('readRoastHistory returns empty array when storage is empty', () => {
+    clearRoastHistory();
+    expect(readRoastHistory()).toEqual([]);
+  });
+
+  it('appendRoastHistory + readRoastHistory round-trip', () => {
+    clearRoastHistory();
+    const entry = makeEntry('r-1');
+    appendRoastHistory(entry);
+    const result = readRoastHistory();
+    expect(result.length).toBe(1);
+    expect(result[0].id).toBe('r-1');
+    expect(result[0].flavor).toBe('shallow');
+  });
+
+  it('appendRoastHistory deduplicates by id', () => {
+    clearRoastHistory();
+    appendRoastHistory(makeEntry('dup', 'shallow'));
+    appendRoastHistory(makeEntry('dup', 'leading'));
+    const result = readRoastHistory();
+    expect(result.length).toBe(1);
+    expect(result[0].flavor).toBe('leading');
+  });
+
+  it('appendRoastHistory caps at 12 entries', () => {
+    clearRoastHistory();
+    for (let i = 0; i < 20; i++) {
+      appendRoastHistory(makeEntry(`r-${i}`, 'balanced'));
+    }
+    expect(readRoastHistory().length).toBeLessThanOrEqual(12);
+  });
+
+  it('clearRoastHistory empties storage', () => {
+    appendRoastHistory(makeEntry('x'));
+    clearRoastHistory();
+    expect(readRoastHistory()).toEqual([]);
   });
 });

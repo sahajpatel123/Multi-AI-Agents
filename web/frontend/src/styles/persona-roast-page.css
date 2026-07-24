@@ -256,6 +256,185 @@ body .proast-result__head {
   gap: 12px;
 }
 
+body .proast-result__head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+body .proast-severity {
+  display: grid;
+  grid-template-columns: auto 120px auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 999px;
+  background: rgba(243, 240, 231, 0.04);
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+body .proast-severity__label {
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.6));
+}
+
+body .proast-severity__bar {
+  width: 120px;
+  height: 6px;
+  background: rgba(243, 240, 231, 0.12);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+body .proast-severity__fill {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    #7DC597 0%,
+    #D9B36C 50%,
+    #E09898 100%
+  );
+  transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+body .proast-severity__value {
+  color: var(--vp-ivory);
+  font-variant-numeric: tabular-nums;
+}
+
+body .proast-severity__meaning {
+  color: var(--proast-persona-color);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* History */
+body .proast-history {
+  margin: 32px 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--public-rule-soft);
+}
+
+body .proast-history__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+body .proast-history__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));
+}
+
+body .proast-history__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.45));
+  font-size: 11px;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  cursor: pointer;
+  transition: color 220ms ease;
+}
+
+body .proast-history__clear:hover {
+  color: var(--vp-ivory);
+}
+
+body .proast-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+body .proast-history__item {
+  display: grid;
+  grid-template-columns: 100px 1fr 60px 80px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+  background: rgba(243, 240, 231, 0.03);
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 10px;
+  color: var(--vp-ivory);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 220ms ease, background 220ms ease;
+}
+
+body .proast-history__item:hover {
+  border-color: var(--proast-persona-color);
+  background: rgba(243, 240, 231, 0.05);
+}
+
+body .proast-history__flavor {
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--proast-persona-color);
+}
+
+body .proast-history__snippet {
+  font-size: 13px;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.8));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body .proast-history__severity {
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--vp-ivory);
+  font-variant-numeric: tabular-nums;
+}
+
+body .proast-history__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.5));
+  white-space: nowrap;
+}
+
+body .proast-history__time svg {
+  width: 12px;
+  height: 12px;
+}
+
+@media (max-width: 720px) {
+  body .proast-history__item {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+  body .proast-severity {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+}
+
 body .proast-result__flavor {
   display: inline-block;
   align-self: flex-start;

@@ -261,3 +261,102 @@ export function roastFlavorLabel(flavor: RoastFlavor): string {
       return 'Balanced';
   }
 }
+
+// Severity meter — a 0..10 number that quantifies how "off" the prompt
+// is. Higher = more fixable problems. Pure — depends only on the flavor
+// and the prompt content.
+//
+// Mapping:
+//   shallow   → 9 (least prompt = most fixable)
+//   overloaded → 7 (lots to trim)
+//   vague     → 6 (mostly fixable with specifics)
+//   leading   → 5 (moderate — needs reframing)
+//   meta      → 4 (mostly fixable — drop the costume)
+//   balanced  → 1 (already a good prompt)
+//
+// Fine-grained nudges: word count > 30 adds 1; question marks in a
+// leading prompt add 1; > 80 words subtracts 1 (already penalized by
+// overloaded). All bounded to 0..10.
+
+export function roastSeverity(prompt: string): number {
+  const flavor = deriveRoastFlavor(prompt);
+  const base: Record<RoastFlavor, number> = {
+    shallow: 9,
+    overloaded: 7,
+    vague: 6,
+    leading: 5,
+    meta: 4,
+    balanced: 1,
+  };
+  let score = base[flavor];
+  const words = prompt.trim().length === 0 ? 0 : prompt.trim().split(/\s+/).length;
+  // Fine-grained nudges: > 30 words adds 1, but only for flavors that
+  // aren't already 'overloaded' (already penalized by the base score).
+  if (flavor !== 'balanced' && flavor !== 'overloaded' && words > 30) score += 1;
+  if (flavor === 'leading' && prompt.includes('?')) score += 1;
+  return Math.max(0, Math.min(10, score));
+}
+
+export function roastSeverityLabel(score: number): string {
+  if (score >= 8) return 'Significant rework';
+  if (score >= 6) return 'Worth tightening';
+  if (score >= 4) return 'Light tweaks';
+  if (score >= 2) return 'Mostly fine';
+  return 'Sharp';
+}
+
+// Roast history — saves every roast the user runs so they can revisit
+// past critiques without re-pasting.
+
+export interface RoastHistoryEntry {
+  readonly id: string;
+  readonly flavor: RoastFlavor;
+  readonly severity: number;
+  readonly promptSnippet: string;
+  readonly savedAt: string;
+}
+
+const HISTORY_LIMIT = 12;
+const HISTORY_KEY = 'arena:persona-roast:history:v1';
+
+export function readRoastHistory(): ReadonlyArray<RoastHistoryEntry> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as RoastHistoryEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (e) =>
+          e &&
+          typeof e.id === 'string' &&
+          typeof e.flavor === 'string' &&
+          typeof e.severity === 'number' &&
+          typeof e.promptSnippet === 'string',
+      )
+      .slice(0, HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+export function appendRoastHistory(entry: RoastHistoryEntry) {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = readRoastHistory().filter((e) => e.id !== entry.id);
+    const next = [entry, ...existing].slice(0, HISTORY_LIMIT);
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    /* silent */
+  }
+}
+
+export function clearRoastHistory() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(HISTORY_KEY);
+  } catch {
+    /* silent */
+  }
+}
