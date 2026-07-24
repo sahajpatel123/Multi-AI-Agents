@@ -16,10 +16,13 @@ import { PERSONAS } from './personas';
 import {
   PERSONA_LIBRARY_CATEGORIES,
   PERSONA_LIBRARY_ENTRIES,
+  dailyFeaturedEntry,
   entriesByCategory,
   entriesFeaturedFirst,
   libraryArenaLink,
   libraryShareUrl,
+  pickRandomEntry,
+  todayIsoDate,
   type LibraryCategory,
   type PersonaLibraryEntry,
 } from './personaLibrary';
@@ -162,5 +165,62 @@ describe('PersonaLibraryEntry type invariants', () => {
     expect(typeof sample.category).toBe('string');
     expect(typeof sample.description).toBe('string');
     expect(typeof sample.tone).toBe('string');
+  });
+});
+
+describe('pickRandomEntry', () => {
+  it('returns null for empty input', () => {
+    expect(pickRandomEntry([])).toBeNull();
+  });
+
+  it('returns one of the input entries', () => {
+    const ids = PERSONA_LIBRARY_ENTRIES.map((e) => e.id);
+    for (let i = 0; i < 20; i++) {
+      const pick = pickRandomEntry(PERSONA_LIBRARY_ENTRIES);
+      expect(pick).not.toBeNull();
+      expect(ids).toContain(pick!.id);
+    }
+  });
+});
+
+describe('dailyFeaturedEntry', () => {
+  it('returns a valid entry for any YYYY-MM-DD date', () => {
+    const ids = PERSONA_LIBRARY_ENTRIES.map((e) => e.id);
+    for (let day = 1; day <= 30; day++) {
+      const entry = dailyFeaturedEntry(
+        `2026-07-${String(day).padStart(2, '0')}`,
+      );
+      expect(entry).not.toBeNull();
+      expect(ids).toContain(entry!.id);
+    }
+  });
+
+  it('is deterministic for the same date', () => {
+    expect(dailyFeaturedEntry('2026-07-24')?.id).toBe(
+      dailyFeaturedEntry('2026-07-24')?.id,
+    );
+  });
+
+  it('produces variety across many consecutive days', () => {
+    const seen = new Set<string>();
+    for (let day = 1; day <= 30; day++) {
+      const entry = dailyFeaturedEntry(
+        `2026-07-${String(day).padStart(2, '0')}`,
+      );
+      seen.add(entry!.id);
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(10);
+  });
+
+  it('falls back to a random entry for invalid dates', () => {
+    const entry = dailyFeaturedEntry('not-a-date');
+    expect(entry).not.toBeNull();
+  });
+});
+
+describe('todayIsoDate', () => {
+  it('returns a YYYY-MM-DD string', () => {
+    const s = todayIsoDate();
+    expect(s).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

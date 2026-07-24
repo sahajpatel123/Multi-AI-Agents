@@ -226,3 +226,34 @@ export function entriesFeaturedFirst(
     return af - bf;
   });
 }
+
+/** Pure — pick a random entry from a list. Uses Math.random so it's not deterministic. */
+export function pickRandomEntry(
+  entries: ReadonlyArray<PersonaLibraryEntry>,
+): PersonaLibraryEntry | null {
+  if (entries.length === 0) return null;
+  return entries[Math.floor(Math.random() * entries.length)];
+}
+
+/**
+ * Pure — daily featured prompt, deterministically picked so the same
+ * entry surfaces on the same day for every visitor. Uses the day-of-year
+ * modulo the catalog size to keep the rotation even.
+ */
+export function dailyFeaturedEntry(isoDate: string): PersonaLibraryEntry | null {
+  if (PERSONA_LIBRARY_ENTRIES.length === 0) return null;
+  const [y, m, d] = isoDate.split('-').map((s) => Number.parseInt(s, 10));
+  if (!y || !m || !d) return pickRandomEntry(PERSONA_LIBRARY_ENTRIES);
+  const dayIndex = Math.floor(Date.UTC(y, m - 1, d) / (1000 * 60 * 60 * 24));
+  const idx = dayIndex % PERSONA_LIBRARY_ENTRIES.length;
+  return PERSONA_LIBRARY_ENTRIES[idx];
+}
+
+/** Today's date as YYYY-MM-DD in the local timezone. */
+export function todayIsoDate(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}

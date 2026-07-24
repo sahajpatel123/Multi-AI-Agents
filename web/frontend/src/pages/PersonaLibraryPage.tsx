@@ -3,6 +3,8 @@ import {
   ArrowRight,
   Bookmark,
   BookmarkPlus,
+  Calendar,
+  Dices,
   Library,
   Search,
   Share2,
@@ -18,10 +20,13 @@ import { Pressable } from '../components/Pressable';
 import {
   PERSONA_LIBRARY_CATEGORIES,
   PERSONA_LIBRARY_ENTRIES,
+  dailyFeaturedEntry,
   entriesByCategory,
   entriesFeaturedFirst,
   libraryArenaLink,
   libraryShareUrl,
+  pickRandomEntry,
+  todayIsoDate,
   type LibraryCategory,
   type PersonaLibraryEntry,
 } from '../data/personaLibrary';
@@ -71,10 +76,13 @@ export function PersonaLibraryPage() {
   const [saved, setSaved] = useState<ReadonlyArray<string>>([]);
   const [pageVisible, setPageVisible] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [surpriseId, setSurpriseId] = useState<string | null>(null);
+  const [featuredToday, setFeaturedToday] = useState<PersonaLibraryEntry | null>(null);
 
   useEffect(() => {
     setPageVisible(true);
     setSaved(readSaved());
+    setFeaturedToday(dailyFeaturedEntry(todayIsoDate()));
     const entry = searchParams.get('entry');
     if (entry) {
       // Scroll to entry once rendered
@@ -98,6 +106,17 @@ export function PersonaLibraryPage() {
     }
     return entriesFeaturedFirst(next);
   }, [category, query]);
+
+  const onSurpriseMe = () => {
+    const random = pickRandomEntry(filtered.length > 0 ? filtered : PERSONA_LIBRARY_ENTRIES);
+    if (!random) return;
+    setSurpriseId(random.id);
+    // Smooth scroll into view
+    window.setTimeout(() => {
+      const el = document.getElementById(`entry-${random.id}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  };
 
   const onSave = (id: string) => {
     setSaved((prev) => {
@@ -225,13 +244,77 @@ export function PersonaLibraryPage() {
                 </Pressable>
               );
             })}
+            <Pressable
+              type="button"
+              className="plib-surprise"
+              onClick={onSurpriseMe}
+              aria-label="Surprise me with a random prompt"
+            >
+              <Dices aria-hidden="true" /> Surprise me
+            </Pressable>
           </div>
         </section>
+
+        {featuredToday && (
+          <aside className="plib-featured" aria-label="Today's featured prompt">
+            <div className="plib-featured__head">
+              <p className="plib-featured__kicker">
+                <Calendar aria-hidden="true" /> Today's featured prompt
+              </p>
+              <p className="plib-featured__date">{todayIsoDate()}</p>
+            </div>
+            <h2 className="plib-featured__title">{featuredToday.title}</h2>
+            <p className="plib-featured__description">{featuredToday.description}</p>
+            <blockquote className="plib-featured__prompt">"{featuredToday.prompt}"</blockquote>
+            <div className="plib-featured__actions">
+              <MotionButton
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => onTry(featuredToday)}
+                icon={<Swords aria-hidden="true" />}
+              >
+                Try in Arena
+              </MotionButton>
+              <Pressable
+                type="button"
+                className="plib-featured__jump"
+                onClick={() => {
+                  window.setTimeout(() => {
+                    const el = document.getElementById(`entry-${featuredToday.id}`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 50);
+                }}
+              >
+                <ArrowRight aria-hidden="true" /> Jump to entry
+              </Pressable>
+            </div>
+          </aside>
+        )}
 
         <section className="plib-results" aria-label="Library entries">
           {filtered.length === 0 ? (
             <div className="plib-empty">
               <p>No prompts match your filter.</p>
+              <div className="plib-empty__actions">
+                <Pressable
+                  type="button"
+                  className="plib-empty__cta"
+                  onClick={() => {
+                    setCategory(null);
+                    setQuery('');
+                  }}
+                >
+                  <X aria-hidden="true" /> Clear filters
+                </Pressable>
+                <Pressable
+                  type="button"
+                  className="plib-empty__cta plib-empty__cta--alt"
+                  onClick={onSurpriseMe}
+                >
+                  <Dices aria-hidden="true" /> Surprise me instead
+                </Pressable>
+              </div>
             </div>
           ) : (
             <ul className="plib-list">
@@ -241,7 +324,7 @@ export function PersonaLibraryPage() {
                   <li
                     key={entry.id}
                     id={`entry-${entry.id}`}
-                    className={`plib-entry plib-entry--${entry.tone}${entry.featured ? ' plib-entry--featured' : ''}`}
+                    className={`plib-entry plib-entry--${entry.tone}${entry.featured ? ' plib-entry--featured' : ''}${surpriseId === entry.id ? ' plib-entry--surprise' : ''}`}
                   >
                     <header className="plib-entry__head">
                       <p className="plib-entry__category">
