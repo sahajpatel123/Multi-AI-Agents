@@ -195,6 +195,67 @@ body .pdc-input__reset:disabled {
   cursor: not-allowed;
 }
 
+/* Stats row */
+body .pdc-input__stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+body .pdc-input__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(243, 240, 231, 0.04);
+  border: 1px solid var(--public-rule-soft);
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.7));
+}
+
+body .pdc-input__stat svg {
+  width: 14px;
+  height: 14px;
+  color: var(--pdc-persona-color);
+}
+
+body .pdc-input__stat--a {
+  border-color: color-mix(in srgb, #B0977E 50%, transparent);
+  color: #B0977E;
+}
+
+body .pdc-input__stat--b {
+  border-color: color-mix(in srgb, #7DC597 50%, transparent);
+  color: #7DC597;
+}
+
+body .pdc-input__stat-value {
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-size: 18px;
+  color: var(--vp-ivory);
+  font-variant-numeric: tabular-nums;
+}
+
+body .pdc-input__stat-reset {
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.5));
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 220ms ease;
+}
+
+body .pdc-input__stat-reset:hover {
+  color: var(--vp-ivory);
+}
+
 /* Samples */
 body .pdc-samples {
   margin: 24px 0;
@@ -339,6 +400,33 @@ body .pdc-result__tally {
   font-size: 12px;
   letter-spacing: 0.06em;
   color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.7));
+}
+
+body .pdc-result__majority {
+  display: inline-block;
+  margin: 0 auto;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-style: italic;
+  font-size: 14px;
+  background: rgba(243, 240, 231, 0.04);
+  border: 1px solid var(--public-rule-soft);
+}
+
+body .pdc-result__majority--decisive {
+  border-color: color-mix(in srgb, #7DC597 50%, transparent);
+  color: #7DC597;
+}
+
+body .pdc-result__majority--leaning {
+  border-color: color-mix(in srgb, #D9B36C 50%, transparent);
+  color: #D9B36C;
+}
+
+body .pdc-result__majority--split {
+  border-color: color-mix(in srgb, #E09898 50%, transparent);
+  color: #E09898;
 }
 
 /* Sides */

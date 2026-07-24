@@ -18,9 +18,17 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  appendDilemmaCouncilDecision,
   buildDilemmaCouncil,
+  clearDilemmaCouncilCounter,
+  clearDilemmaCouncilDecisions,
+  dilemmaCouncilMajorityInfo,
   dilemmaCouncilShareUrl,
   dilemmaCouncilValid,
+  dilemmaCouncilWinTally,
+  incrementDilemmaCouncilCounter,
+  readDilemmaCouncilCounter,
+  readDilemmaCouncilDecisions,
   type DilemmaCouncilPick,
 } from './personaDilemmaCouncil';
 
@@ -91,5 +99,98 @@ describe('dilemmaCouncilShareUrl', () => {
     expect(url).toContain('/persona-dilemma-council');
     expect(url).toContain('a=A%20text');
     expect(url).toContain('b=B%20text');
+  });
+});
+
+describe('dilemma council counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearDilemmaCouncilCounter();
+    expect(readDilemmaCouncilCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearDilemmaCouncilCounter();
+    expect(incrementDilemmaCouncilCounter()).toBe(1);
+    expect(incrementDilemmaCouncilCounter()).toBe(2);
+  });
+
+  it('clearDilemmaCouncilCounter resets to 0', () => {
+    incrementDilemmaCouncilCounter();
+    clearDilemmaCouncilCounter();
+    expect(readDilemmaCouncilCounter()).toBe(0);
+  });
+});
+
+describe('dilemma council decisions + winTally (localStorage)', () => {
+  const makeDecision = (id: string, winner: DilemmaCouncilPick) => ({
+    id,
+    optionASnippet: 'A',
+    optionBSnippet: 'B',
+    winner,
+    savedAt: '2026-07-25T00:00:00Z',
+  });
+
+  it('readDilemmaCouncilDecisions returns empty array when storage is empty', () => {
+    clearDilemmaCouncilDecisions();
+    expect(readDilemmaCouncilDecisions()).toEqual([]);
+  });
+
+  it('appendDilemmaCouncilDecision + read round-trip', () => {
+    clearDilemmaCouncilDecisions();
+    appendDilemmaCouncilDecision(makeDecision('d-1', 'A'));
+    expect(readDilemmaCouncilDecisions()).toHaveLength(1);
+  });
+
+  it('appendDilemmaCouncilDecision deduplicates by id', () => {
+    clearDilemmaCouncilDecisions();
+    appendDilemmaCouncilDecision(makeDecision('dup', 'A'));
+    appendDilemmaCouncilDecision(makeDecision('dup', 'B'));
+    const result = readDilemmaCouncilDecisions();
+    expect(result.length).toBe(1);
+    expect(result[0].winner).toBe('B');
+  });
+
+  it('clearDilemmaCouncilDecisions empties storage', () => {
+    appendDilemmaCouncilDecision(makeDecision('x', 'A'));
+    clearDilemmaCouncilDecisions();
+    expect(readDilemmaCouncilDecisions()).toEqual([]);
+  });
+});
+
+describe('dilemmaCouncilWinTally', () => {
+  it('returns 0/0 for empty history', () => {
+    expect(dilemmaCouncilWinTally([])).toEqual({ a: 0, b: 0 });
+  });
+
+  it('counts A and B winners correctly', () => {
+    const decisions = [
+      { id: 'a', optionASnippet: 'A', optionBSnippet: 'B', winner: 'A' as const, savedAt: '' },
+      { id: 'b', optionASnippet: 'A', optionBSnippet: 'B', winner: 'A' as const, savedAt: '' },
+      { id: 'c', optionASnippet: 'A', optionBSnippet: 'B', winner: 'B' as const, savedAt: '' },
+      { id: 'd', optionASnippet: 'A', optionBSnippet: 'B', winner: 'B' as const, savedAt: '' },
+      { id: 'e', optionASnippet: 'A', optionBSnippet: 'B', winner: 'B' as const, savedAt: '' },
+    ];
+    const tally = dilemmaCouncilWinTally(decisions);
+    expect(tally.a).toBe(2);
+    expect(tally.b).toBe(3);
+  });
+});
+
+describe('dilemmaCouncilMajorityInfo', () => {
+  it('returns decisive for 5+/8', () => {
+    const info = dilemmaCouncilMajorityInfo({ a: 6, b: 2 }, 'A');
+    expect(info.label).toBe('decisive');
+    expect(info.winnerCount).toBe(6);
+  });
+
+  it('returns leaning for 4/8', () => {
+    const info = dilemmaCouncilMajorityInfo({ a: 4, b: 4 }, 'A');
+    expect(info.label).toBe('leaning');
+  });
+
+  it('returns split for 3/8 or less', () => {
+    const info = dilemmaCouncilMajorityInfo({ a: 5, b: 3 }, 'B');
+    expect(info.label).toBe('split');
+    expect(info.winnerCount).toBe(3);
   });
 });

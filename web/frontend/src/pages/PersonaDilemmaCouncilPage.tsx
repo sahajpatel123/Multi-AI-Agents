@@ -17,9 +17,18 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendDilemmaCouncilDecision,
   buildDilemmaCouncil,
+  clearDilemmaCouncilCounter,
+  clearDilemmaCouncilDecisions,
+  dilemmaCouncilMajorityInfo,
   dilemmaCouncilShareUrl,
   dilemmaCouncilValid,
+  dilemmaCouncilWinTally,
+  incrementDilemmaCouncilCounter,
+  readDilemmaCouncilCounter,
+  readDilemmaCouncilDecisions,
+  type DilemmaCouncilDecisionEntry,
   type PersonaDilemmaCouncil,
 } from '../data/personaDilemmaCouncil';
 import { PERSONAS } from '../data/personas';
@@ -70,9 +79,15 @@ export function PersonaDilemmaCouncilPage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<{ a: string; b: string }>>([]);
+  const [convenedCount, setConvenedCount] = useState(0);
+  const [decisions, setDecisions] = useState<
+    ReadonlyArray<DilemmaCouncilDecisionEntry>
+  >([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setConvenedCount(readDilemmaCouncilCounter());
+    setDecisions(readDilemmaCouncilDecisions());
     try {
       const raw = window.localStorage.getItem('arena:persona-dilemma-council:history:v1');
       if (raw) {
@@ -89,6 +104,16 @@ export function PersonaDilemmaCouncilPage() {
     const c = buildDilemmaCouncil(optionA, optionB);
     return dilemmaCouncilValid(c) ? c : null;
   }, [optionA, optionB]);
+
+  const lifetimeTally = useMemo(
+    () => dilemmaCouncilWinTally(decisions),
+    [decisions],
+  );
+
+  const majority = useMemo(
+    () => (council ? dilemmaCouncilMajorityInfo(council.tally, council.winner) : null),
+    [council],
+  );
 
   const onConvene = () => {
     if (typeof window === 'undefined') return;
@@ -110,6 +135,26 @@ export function PersonaDilemmaCouncilPage() {
     } catch {
       /* silent */
     }
+    if (council) {
+      const decision: DilemmaCouncilDecisionEntry = {
+        id: `dilemma-${Date.now()}`,
+        optionASnippet: optionA.length > 40 ? `${optionA.slice(0, 37)}...` : optionA,
+        optionBSnippet: optionB.length > 40 ? `${optionB.slice(0, 37)}...` : optionB,
+        winner: council.winner,
+        savedAt: new Date().toISOString(),
+      };
+      appendDilemmaCouncilDecision(decision);
+      setDecisions(readDilemmaCouncilDecisions());
+    }
+    const c = incrementDilemmaCouncilCounter();
+    setConvenedCount(c);
+  };
+
+  const onResetLifetime = () => {
+    clearDilemmaCouncilCounter();
+    clearDilemmaCouncilDecisions();
+    setConvenedCount(0);
+    setDecisions([]);
   };
 
   const onReset = () => {
@@ -256,6 +301,35 @@ export function PersonaDilemmaCouncilPage() {
               </MotionButton>
             </div>
           </div>
+          <div className="pdc-input__stats" aria-label="Dilemma council stats">
+            <div className="pdc-input__stat">
+              <Crown aria-hidden="true" />
+              <span className="pdc-input__stat-label">Dilemmas convened</span>
+              <span className="pdc-input__stat-value">{convenedCount}</span>
+            </div>
+            {lifetimeTally.a > 0 && (
+              <div className="pdc-input__stat pdc-input__stat--a">
+                <span className="pdc-input__stat-label">A wins</span>
+                <span className="pdc-input__stat-value">{lifetimeTally.a}</span>
+              </div>
+            )}
+            {lifetimeTally.b > 0 && (
+              <div className="pdc-input__stat pdc-input__stat--b">
+                <span className="pdc-input__stat-label">B wins</span>
+                <span className="pdc-input__stat-value">{lifetimeTally.b}</span>
+              </div>
+            )}
+            {(convenedCount > 0 || lifetimeTally.a > 0 || lifetimeTally.b > 0) && (
+              <button
+                type="button"
+                className="pdc-input__stat-reset"
+                onClick={onResetLifetime}
+                aria-label="Reset dilemmas counter and lifetime tally"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="pdc-samples" aria-label="Sample dilemmas">
@@ -296,6 +370,11 @@ export function PersonaDilemmaCouncilPage() {
                   {council.tally.a} for A · {council.tally.b} for B
                 </span>
               </h2>
+              {majority && (
+                <p className={`pdc-result__majority pdc-result__majority--${majority.label}`}>
+                  {majority.description}
+                </p>
+              )}
             </header>
 
             <div className="pdc-sides">
