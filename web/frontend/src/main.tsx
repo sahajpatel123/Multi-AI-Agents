@@ -63,6 +63,75 @@ const PersonaMatchPage = lazy(() =>
 const PersonaBattlePage = lazy(() =>
   import('./pages/PersonaBattlePage').then((m) => ({ default: m.PersonaBattlePage })),
 )
+const PersonaWheelPage = lazy(() =>
+  import('./pages/PersonaWheelPage').then((m) => ({ default: m.PersonaWheelPage })),
+)
+const PersonaTriviaPage = lazy(() =>
+  import('./pages/PersonaTriviaPage').then((m) => ({ default: m.PersonaTriviaPage })),
+)
+const PersonaMosaicPage = lazy(() =>
+  import('./pages/PersonaMosaicPage').then((m) => ({ default: m.PersonaMosaicPage })),
+)
+const PersonaLibraryPage = lazy(() =>
+  import('./pages/PersonaLibraryPage').then((m) => ({ default: m.PersonaLibraryPage })),
+)
+const PersonaSpeedPage = lazy(() =>
+  import('./pages/PersonaSpeedPage').then((m) => ({ default: m.PersonaSpeedPage })),
+)
+const PersonaRoastPage = lazy(() =>
+  import('./pages/PersonaRoastPage').then((m) => ({ default: m.PersonaRoastPage })),
+)
+const PersonaChallengePage = lazy(() =>
+  import('./pages/PersonaChallengePage').then((m) => ({ default: m.PersonaChallengePage })),
+)
+const PersonaDuelPage = lazy(() =>
+  import('./pages/PersonaDuelPage').then((m) => ({ default: m.PersonaDuelPage })),
+)
+const PersonaEchoPage = lazy(() =>
+  import('./pages/PersonaEchoPage').then((m) => ({ default: m.PersonaEchoPage })),
+)
+const PersonaCouncilPage = lazy(() =>
+  import('./pages/PersonaCouncilPage').then((m) => ({ default: m.PersonaCouncilPage })),
+)
+const PersonaDilemmaPage = lazy(() =>
+  import('./pages/PersonaDilemmaPage').then((m) => ({ default: m.PersonaDilemmaPage })),
+)
+const PersonaForecastPage = lazy(() =>
+  import('./pages/PersonaForecastPage').then((m) => ({ default: m.PersonaForecastPage })),
+)
+const PersonaMosaicRoastPage = lazy(() =>
+  import('./pages/PersonaMosaicRoastPage').then((m) => ({ default: m.PersonaMosaicRoastPage })),
+)
+const PersonaRoastBattlePage = lazy(() =>
+  import('./pages/PersonaRoastBattlePage').then((m) => ({ default: m.PersonaRoastBattlePage })),
+)
+const PersonaConfessionalPage = lazy(() =>
+  import('./pages/PersonaConfessionalPage').then((m) => ({ default: m.PersonaConfessionalPage })),
+)
+const PersonaMosaicCouncilPage = lazy(() =>
+  import('./pages/PersonaMosaicCouncilPage').then((m) => ({ default: m.PersonaMosaicCouncilPage })),
+)
+const PersonaForecastBattlePage = lazy(() =>
+  import('./pages/PersonaForecastBattlePage').then((m) => ({ default: m.PersonaForecastBattlePage })),
+)
+const PersonaRoastBattleCouncilPage = lazy(() =>
+  import('./pages/PersonaRoastBattleCouncilPage').then((m) => ({ default: m.PersonaRoastBattleCouncilPage })),
+)
+const PersonaDilemmaCouncilPage = lazy(() =>
+  import('./pages/PersonaDilemmaCouncilPage').then((m) => ({ default: m.PersonaDilemmaCouncilPage })),
+)
+const PersonaMosaicBattlePage = lazy(() =>
+  import('./pages/PersonaMosaicBattlePage').then((m) => ({ default: m.PersonaMosaicBattlePage })),
+)
+const PersonaDilemmaForecastPage = lazy(() =>
+  import('./pages/PersonaDilemmaForecastPage').then((m) => ({ default: m.PersonaDilemmaForecastPage })),
+)
+const PersonaMosaicDilemmaCouncilPage = lazy(() =>
+  import('./pages/PersonaMosaicDilemmaCouncilPage').then((m) => ({ default: m.PersonaMosaicDilemmaCouncilPage })),
+)
+const PersonaMosaicForecastPage = lazy(() =>
+  import('./pages/PersonaMosaicForecastPage').then((m) => ({ default: m.PersonaMosaicForecastPage })),
+)
 const AccountPage = lazy(() =>
   import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })),
 )
@@ -214,6 +283,29 @@ if (!rootElement) {
                   <Route path="/personas" element={<PersonasPage />} />
                   <Route path="/persona-match" element={<PersonaMatchPage />} />
                   <Route path="/persona-battle" element={<PersonaBattlePage />} />
+                  <Route path="/persona-wheel" element={<PersonaWheelPage />} />
+                  <Route path="/persona-trivia" element={<PersonaTriviaPage />} />
+                  <Route path="/persona-mosaic" element={<PersonaMosaicPage />} />
+                  <Route path="/persona-library" element={<PersonaLibraryPage />} />
+                  <Route path="/persona-speed" element={<PersonaSpeedPage />} />
+                  <Route path="/persona-roast" element={<PersonaRoastPage />} />
+                  <Route path="/persona-challenge" element={<PersonaChallengePage />} />
+                  <Route path="/persona-duel" element={<PersonaDuelPage />} />
+                  <Route path="/persona-echo" element={<PersonaEchoPage />} />
+                  <Route path="/persona-council" element={<PersonaCouncilPage />} />
+                  <Route path="/persona-dilemma" element={<PersonaDilemmaPage />} />
+                  <Route path="/persona-forecast" element={<PersonaForecastPage />} />
+                  <Route path="/persona-mosaic-roast" element={<PersonaMosaicRoastPage />} />
+                  <Route path="/persona-roast-battle" element={<PersonaRoastBattlePage />} />
+                  <Route path="/persona-confessional" element={<PersonaConfessionalPage />} />
+                  <Route path="/persona-mosaic-council" element={<PersonaMosaicCouncilPage />} />
+                  <Route path="/persona-forecast-battle" element={<PersonaForecastBattlePage />} />
+                  <Route path="/persona-roast-battle-council" element={<PersonaRoastBattleCouncilPage />} />
+                  <Route path="/persona-dilemma-council" element={<PersonaDilemmaCouncilPage />} />
+                  <Route path="/persona-mosaic-battle" element={<PersonaMosaicBattlePage />} />
+                  <Route path="/persona-dilemma-forecast" element={<PersonaDilemmaForecastPage />} />
+                  <Route path="/persona-mosaic-dilemma-council" element={<PersonaMosaicDilemmaCouncilPage />} />
+                  <Route path="/persona-mosaic-forecast" element={<PersonaMosaicForecastPage />} />
                   <Route path="/share" element={<SharePage />} />
                   <Route path="/app" element={
                     <ProtectedRoute>
