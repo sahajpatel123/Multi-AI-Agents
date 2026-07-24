@@ -191,6 +191,20 @@ async def test_apply_preset_404_for_unknown_name(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_apply_preset_rejects_oversized_path_name(app_client, make_user):
+    """The ``name`` path parameter must be bounded at 50 chars (the
+    longest preset identifier in ``PANEL_PRESETS``). A 100-char name
+    must return 422 BEFORE the 404 lookup — that way a client
+    typo doesn't run an unbounded string match against the preset dict."""
+    user = make_user(email="preset-bound@test.com", tier=UserTier.PRO)
+    long_name = "x" * 100
+    res = await app_client.post(
+        f"/api/panel/preset/{long_name}", headers=_pro_headers(user)
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_apply_preset_403_for_paywalled(app_client, make_user):
     """A FREE user trying to apply a preset containing paywalled personas
     must get a 403 listing the blockers."""

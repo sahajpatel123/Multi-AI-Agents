@@ -8,6 +8,8 @@ import '../styles/verdict-public-nav.css';
 const PRIMARY_LINKS = [
   { label: 'PRODUCT', path: '/product' },
   { label: 'PERSONAS', path: '/personas' },
+  { label: 'MATCH', path: '/persona-match' },
+  { label: 'BATTLE', path: '/persona-battle' },
   { label: 'PRICING', path: '/pricing' },
   { label: 'DOCS', path: '/docs' },
 ] as const;
@@ -16,10 +18,12 @@ const MENU_LINKS = [
   { number: '01', label: 'Product', path: '/product' },
   { number: '02', label: 'Capabilities', path: '/capabilities' },
   { number: '03', label: 'Personas', path: '/personas' },
-  { number: '04', label: 'Pricing', path: '/pricing' },
-  { number: '05', label: 'Documentation', path: '/docs' },
-  { number: '06', label: 'About', path: '/about' },
-  { number: '07', label: 'Changelog', path: '/changelog' },
+  { number: '04', label: 'Persona Match', path: '/persona-match' },
+  { number: '05', label: 'Persona Battle', path: '/persona-battle' },
+  { number: '06', label: 'Pricing', path: '/pricing' },
+  { number: '07', label: 'Documentation', path: '/docs' },
+  { number: '08', label: 'About', path: '/about' },
+  { number: '09', label: 'Changelog', path: '/changelog' },
 ] as const;
 
 export function Navbar() {

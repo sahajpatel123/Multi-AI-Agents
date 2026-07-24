@@ -66,6 +66,32 @@ def test_at_limit_returns_structured_error(monkeypatch):
     assert "24 hours" in err["message"]
 
 
+def test_reset_at_is_iso8601_utc_string(monkeypatch):
+    """The frontend formats ``reset_at`` via ``new Date(...)`` — a malformed
+    timestamp would silently render as 'Invalid Date' in the Pro upgrade
+    tooltip. The contract: ``reset_at`` is an ISO-8601 string, parseable by
+    ``datetime.fromisoformat`` (with or without the trailing ``Z``)."""
+    from datetime import datetime as _dt
+    monkeypatch.setattr(rlp, "get_settings", lambda: _Settings())
+    oldest = utcnow_naive() - timedelta(hours=1)
+    err = rlp.check_pro_window_limit(_db(5, oldest_ts=oldest), user_id=9)
+    assert err is not None
+    # The value is a string (not a datetime object — JSON-encoders crash otherwise).
+    assert isinstance(err["reset_at"], str)
+    # And it parses. ``datetime.fromisoformat`` handles the ``+00:00`` form;
+    # the trailing ``Z`` is the form browsers emit natively.
+    raw = err["reset_at"]
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    parsed = _dt.fromisoformat(raw)
+    assert parsed is not None
+    # And the parsed time equals oldest+window_hours — the contract is the
+    # moment the oldest record ages out, not "now+window".
+    expected = oldest + timedelta(hours=24)
+    # Allow ±1 second for time spent in the test itself.
+    assert abs((parsed.replace(tzinfo=None) - expected).total_seconds()) < 2
+
+
 def test_at_limit_without_oldest_row(monkeypatch):
     monkeypatch.setattr(rlp, "get_settings", lambda: _Settings())
     err = rlp.check_pro_window_limit(_db(10, oldest_ts=None), user_id=2)
