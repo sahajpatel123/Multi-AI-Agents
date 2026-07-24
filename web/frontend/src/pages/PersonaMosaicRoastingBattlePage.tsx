@@ -16,9 +16,18 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendMosaicRoastingBattleDecision,
   buildMosaicRoastingBattle,
+  clearMosaicRoastingBattleCounter,
+  clearMosaicRoastingBattleDecisions,
+  incrementMosaicRoastingBattleCounter,
+  mosaicRoastingBattleMajorityInfo,
   mosaicRoastingBattleShareUrl,
   mosaicRoastingBattleValid,
+  mosaicRoastingBattleWinTally,
+  readMosaicRoastingBattleCounter,
+  readMosaicRoastingBattleDecisions,
+  type MosaicRoastingBattleDecisionEntry,
   type PersonaMosaicRoastingBattle,
 } from '../data/personaMosaicRoastingBattle';
 import { PERSONAS } from '../data/personas';
@@ -69,9 +78,13 @@ export function PersonaMosaicRoastingBattlePage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<{ a: string; b: string }>>([]);
+  const [castCount, setCastCount] = useState(0);
+  const [decisions, setDecisions] = useState<ReadonlyArray<MosaicRoastingBattleDecisionEntry>>([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setCastCount(readMosaicRoastingBattleCounter());
+    setDecisions(readMosaicRoastingBattleDecisions());
     try {
       const raw = window.localStorage.getItem('arena:persona-mosaic-roasting-battle:history:v1');
       if (raw) {
@@ -88,6 +101,16 @@ export function PersonaMosaicRoastingBattlePage() {
     const b = buildMosaicRoastingBattle(outputA, outputB);
     return mosaicRoastingBattleValid(b) ? b : null;
   }, [outputA, outputB]);
+
+  const lifetimeTally = useMemo(
+    () => mosaicRoastingBattleWinTally(decisions),
+    [decisions],
+  );
+
+  const majority = useMemo(
+    () => (battle ? mosaicRoastingBattleMajorityInfo(battle.tally, battle.winner) : null),
+    [battle],
+  );
 
   const onBattle = () => {
     const url = mosaicRoastingBattleShareUrl(
@@ -112,6 +135,26 @@ export function PersonaMosaicRoastingBattlePage() {
     } catch {
       /* silent */
     }
+    if (battle) {
+      const decision: MosaicRoastingBattleDecisionEntry = {
+        id: `battle-${Date.now()}`,
+        outputASnippet: outputA.length > 60 ? `${outputA.slice(0, 57)}...` : outputA,
+        outputBSnippet: outputB.length > 60 ? `${outputB.slice(0, 57)}...` : outputB,
+        winner: battle.winner,
+        savedAt: new Date().toISOString(),
+      };
+      appendMosaicRoastingBattleDecision(decision);
+      setDecisions(readMosaicRoastingBattleDecisions());
+    }
+    const c = incrementMosaicRoastingBattleCounter();
+    setCastCount(c);
+  };
+
+  const onResetLifetime = () => {
+    clearMosaicRoastingBattleCounter();
+    clearMosaicRoastingBattleDecisions();
+    setCastCount(0);
+    setDecisions([]);
   };
 
   const onReset = () => {
@@ -263,6 +306,35 @@ export function PersonaMosaicRoastingBattlePage() {
               </MotionButton>
             </div>
           </div>
+          <div className="pmrb-input__stats" aria-label="Mosaic roasting battle stats">
+            <div className="pmrb-input__stat">
+              <Sparkles aria-hidden="true" />
+              <span className="pmrb-input__stat-label">Battles cast</span>
+              <span className="pmrb-input__stat-value">{castCount}</span>
+            </div>
+            {lifetimeTally.a > 0 && (
+              <div className="pmrb-input__stat pmrb-input__stat--a">
+                <span className="pmrb-input__stat-label">A wins</span>
+                <span className="pmrb-input__stat-value">{lifetimeTally.a}</span>
+              </div>
+            )}
+            {lifetimeTally.b > 0 && (
+              <div className="pmrb-input__stat pmrb-input__stat--b">
+                <span className="pmrb-input__stat-label">B wins</span>
+                <span className="pmrb-input__stat-value">{lifetimeTally.b}</span>
+              </div>
+            )}
+            {(castCount > 0 || lifetimeTally.a > 0 || lifetimeTally.b > 0) && (
+              <button
+                type="button"
+                className="pmrb-input__stat-reset"
+                onClick={onResetLifetime}
+                aria-label="Reset battles counter and lifetime tally"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="pmrb-samples" aria-label="Sample battles">
@@ -303,6 +375,11 @@ export function PersonaMosaicRoastingBattlePage() {
                   {battle.tally.a} for A · {battle.tally.b} for B
                 </span>
               </h2>
+              {majority && (
+                <p className={`pmrb-result__majority pmrb-result__majority--${majority.label}`}>
+                  {majority.description}
+                </p>
+              )}
             </header>
 
             <div className="pmrb-sides">
