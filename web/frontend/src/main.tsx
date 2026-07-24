@@ -96,6 +96,9 @@ const PersonaCouncilPage = lazy(() =>
 const PersonaDilemmaPage = lazy(() =>
   import('./pages/PersonaDilemmaPage').then((m) => ({ default: m.PersonaDilemmaPage })),
 )
+const PersonaForecastPage = lazy(() =>
+  import('./pages/PersonaForecastPage').then((m) => ({ default: m.PersonaForecastPage })),
+)
 const AccountPage = lazy(() =>
   import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })),
 )
@@ -258,6 +261,7 @@ if (!rootElement) {
                   <Route path="/persona-echo" element={<PersonaEchoPage />} />
                   <Route path="/persona-council" element={<PersonaCouncilPage />} />
                   <Route path="/persona-dilemma" element={<PersonaDilemmaPage />} />
+                  <Route path="/persona-forecast" element={<PersonaForecastPage />} />
                   <Route path="/share" element={<SharePage />} />
                   <Route path="/app" element={
                     <ProtectedRoute>
