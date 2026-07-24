@@ -28,6 +28,7 @@ describe('shared public Prism navigation (source structure)', () => {
     expect(src).toContain("{ label: 'SPEED', path: '/persona-speed' }");
     expect(src).toContain("{ label: 'ROAST', path: '/persona-roast' }");
     expect(src).toContain("{ label: 'CHALLENGE', path: '/persona-challenge' }");
+    expect(src).toContain("{ label: 'DUEL', path: '/persona-duel' }");
     expect(src).toContain("{ label: 'MOSAIC', path: '/persona-mosaic' }");
     expect(src).toContain("{ label: 'LIBRARY', path: '/persona-library' }");
     expect(src).toContain("{ number: '04', label: 'Persona Match', path: '/persona-match' }");
@@ -37,10 +38,11 @@ describe('shared public Prism navigation (source structure)', () => {
     expect(src).toContain("{ number: '08', label: 'Persona Speed', path: '/persona-speed' }");
     expect(src).toContain("{ number: '09', label: 'Persona Roast', path: '/persona-roast' }");
     expect(src).toContain("{ number: '10', label: 'Persona Challenge', path: '/persona-challenge' }");
-    expect(src).toContain("{ number: '11', label: 'Persona Mosaic', path: '/persona-mosaic' }");
-    expect(src).toContain("{ number: '12', label: 'Persona Library', path: '/persona-library' }");
-    expect(src).toContain("{ number: '15', label: 'About', path: '/about' }");
-    expect(src).toContain("{ number: '16', label: 'Changelog', path: '/changelog' }");
+    expect(src).toContain("{ number: '11', label: 'Persona Duel', path: '/persona-duel' }");
+    expect(src).toContain("{ number: '12', label: 'Persona Mosaic', path: '/persona-mosaic' }");
+    expect(src).toContain("{ number: '13', label: 'Persona Library', path: '/persona-library' }");
+    expect(src).toContain("{ number: '16', label: 'About', path: '/about' }");
+    expect(src).toContain("{ number: '17', label: 'Changelog', path: '/changelog' }");
     expect(src).not.toContain('navbar-inner-container');
   });
 

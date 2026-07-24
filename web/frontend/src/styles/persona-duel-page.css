@@ -1,0 +1,439 @@
+/* Persona Duel — single-elimination bracket tournament. */
+
+body .pduel-page {
+  --public-rule: rgba(243, 240, 231, 0.2);
+  --public-rule-soft: rgba(243, 240, 231, 0.12);
+  --pduel-slot-color: var(--vp-ivory);
+  --pduel-slot-bg: rgba(243, 240, 231, 0.06);
+  --pduel-champion-color: var(--vp-ivory);
+  --pduel-champion-bg: rgba(243, 240, 231, 0.06);
+  min-height: 100vh;
+  background: var(--vp-carbon);
+  color: var(--vp-ivory);
+  overflow-x: clip;
+}
+
+body .pduel-main {
+  width: min(1240px, 100%);
+  max-width: none;
+  margin: 0 auto;
+  padding: 0 32px 120px;
+  opacity: 1;
+  transform: none;
+  transition: opacity 600ms ease, transform 600ms ease;
+}
+
+body .pduel-main--enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+body .pduel-page--enter .pduel-main--enter {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Hero */
+body .pduel-hero {
+  position: relative;
+  min-height: 240px;
+  margin: 0;
+  padding: 78px 0 48px;
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  row-gap: 18px;
+  border-bottom: 1px solid var(--public-rule);
+  isolation: isolate;
+}
+
+body .pduel-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(217, 179, 108, 0.18), transparent 55%),
+    radial-gradient(ellipse at 82% 100%, rgba(155, 143, 170, 0.18), transparent 55%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+body .pduel-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.65));
+  margin: 0;
+}
+
+body .pduel-hero__title {
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-size: clamp(40px, 6vw, 76px);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+body .pduel-hero__title-accent {
+  font-style: italic;
+  color: var(--pduel-champion-color);
+}
+
+body .pduel-hero__lede {
+  font-size: 17px;
+  line-height: 1.6;
+  max-width: 720px;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.85));
+  margin: 0;
+}
+
+body .pduel-progress {
+  display: grid;
+  gap: 8px;
+}
+
+body .pduel-progress__bar {
+  height: 6px;
+  background: rgba(243, 240, 231, 0.12);
+  border-radius: 999px;
+  overflow: hidden;
+  width: min(520px, 100%);
+}
+
+body .pduel-progress__fill {
+  height: 100%;
+  background: var(--pduel-champion-color);
+  transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+body .pduel-progress__count {
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.7));
+}
+
+/* Next matchup */
+body .pduel-next {
+  margin: 32px 0 24px;
+  padding: 24px;
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 16px;
+  background: rgba(243, 240, 231, 0.03);
+  display: grid;
+  gap: 12px;
+}
+
+body .pduel-next__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--pduel-champion-color);
+}
+
+/* Champion */
+body .pduel-champion {
+  margin: 32px 0;
+  display: grid;
+  gap: 16px;
+}
+
+body .pduel-champion__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--pduel-champion-color);
+}
+
+body .pduel-champion__card {
+  position: relative;
+  padding: 40px 32px;
+  border: 1px solid var(--pduel-champion-color);
+  border-radius: 22px;
+  background: linear-gradient(180deg, var(--pduel-champion-bg), rgba(243, 240, 231, 0.02));
+  display: grid;
+  gap: 14px;
+  overflow: hidden;
+}
+
+body .pduel-champion__dot {
+  position: absolute;
+  top: 24px;
+  right: 32px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--pduel-champion-color);
+  opacity: 0.18;
+  filter: blur(12px);
+  pointer-events: none;
+}
+
+body .pduel-champion__name {
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-size: clamp(36px, 5vw, 56px);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+body .pduel-champion__quote {
+  margin: 0;
+  font-style: italic;
+  font-size: 22px;
+  color: var(--pduel-champion-color);
+  max-width: 720px;
+}
+
+body .pduel-champion__description {
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.85));
+  max-width: 720px;
+}
+
+body .pduel-champion__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, max-content));
+  gap: 24px;
+  margin: 12px 0 0;
+}
+
+body .pduel-champion__meta dt {
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));
+  margin: 0 0 4px;
+}
+
+body .pduel-champion__meta dd {
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-size: 28px;
+  margin: 0;
+}
+
+body .pduel-champion__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Rounds */
+body .pduel-rounds {
+  display: grid;
+  gap: 24px;
+  margin: 32px 0;
+}
+
+body .pduel-round {
+  padding: 20px;
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 16px;
+  background: rgba(243, 240, 231, 0.02);
+}
+
+body .pduel-round__name {
+  margin: 0 0 16px;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));
+}
+
+body .pduel-round__matchups {
+  display: grid;
+  gap: 12px;
+}
+
+/* Matchup */
+body .pduel-matchup {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+body .pduel-slot {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, var(--pduel-slot-bg), rgba(243, 240, 231, 0.02));
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 12px;
+  color: var(--vp-ivory);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 220ms ease, transform 220ms ease, background 220ms ease, opacity 220ms ease;
+  text-align: left;
+}
+
+body .pduel-slot:hover:not(:disabled) {
+  border-color: var(--pduel-slot-color);
+  transform: translateY(-1px);
+}
+
+body .pduel-slot:disabled {
+  cursor: default;
+}
+
+body .pduel-slot--winner {
+  border-color: var(--pduel-slot-color);
+  box-shadow: 0 0 0 1px var(--pduel-slot-color);
+}
+
+body .pduel-slot--loser {
+  opacity: 0.45;
+}
+
+body .pduel-slot__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pduel-slot-color);
+  box-shadow: 0 0 8px var(--pduel-slot-color);
+}
+
+body .pduel-slot__name {
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-size: 17px;
+}
+
+body .pduel-slot__quote {
+  display: none;
+}
+
+body .pduel-slot__temp {
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));
+}
+
+body .pduel-slot__crown {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--pduel-slot-color);
+  color: var(--vp-carbon);
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+body .pduel-slot {
+  position: relative;
+}
+
+body .pduel-slot__crown svg {
+  width: 16px;
+  height: 16px;
+}
+
+body .pduel-vs {
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-style: italic;
+  font-size: 18px;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.5));
+  text-align: center;
+}
+
+/* CTA */
+body .pduel-cta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 24px;
+  border-top: 1px solid var(--public-rule-soft);
+}
+
+body .pduel-cta__new,
+body .pduel-cta__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: rgba(243, 240, 231, 0.04);
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 999px;
+  color: var(--vp-ivory);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 220ms ease, border-color 220ms ease;
+}
+
+body .pduel-cta__new:hover,
+body .pduel-cta__reset:hover {
+  color: var(--pduel-champion-color);
+  border-color: var(--pduel-champion-color);
+}
+
+body .pduel-cta__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  text-decoration: none;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.8));
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 2px;
+  transition: gap 220ms ease;
+}
+
+body .pduel-cta__link:hover {
+  gap: 12px;
+  color: var(--vp-ivory);
+}
+
+@media (max-width: 800px) {
+  body .pduel-matchup {
+    grid-template-columns: 1fr;
+  }
+  body .pduel-vs {
+    text-align: center;
+  }
+  body .pduel-slot__quote {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body .pduel-slot,
+  body .pduel-cta__new,
+  body .pduel-cta__reset,
+  body .pduel-cta__link,
+  body .pduel-progress__fill {
+    transition: none;
+  }
+  body .pduel-main--enter {
+    opacity: 1;
+    transform: none;
+  }
+}
