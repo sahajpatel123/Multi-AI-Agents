@@ -26,13 +26,15 @@ describe('shared public Prism navigation (source structure)', () => {
     expect(src).toContain("{ label: 'WHEEL', path: '/persona-wheel' }");
     expect(src).toContain("{ label: 'TRIVIA', path: '/persona-trivia' }");
     expect(src).toContain("{ label: 'MOSAIC', path: '/persona-mosaic' }");
+    expect(src).toContain("{ label: 'LIBRARY', path: '/persona-library' }");
     expect(src).toContain("{ number: '04', label: 'Persona Match', path: '/persona-match' }");
     expect(src).toContain("{ number: '05', label: 'Persona Battle', path: '/persona-battle' }");
     expect(src).toContain("{ number: '06', label: 'Persona Wheel', path: '/persona-wheel' }");
     expect(src).toContain("{ number: '07', label: 'Persona Trivia', path: '/persona-trivia' }");
     expect(src).toContain("{ number: '08', label: 'Persona Mosaic', path: '/persona-mosaic' }");
-    expect(src).toContain("{ number: '11', label: 'About', path: '/about' }");
-    expect(src).toContain("{ number: '12', label: 'Changelog', path: '/changelog' }");
+    expect(src).toContain("{ number: '09', label: 'Persona Library', path: '/persona-library' }");
+    expect(src).toContain("{ number: '12', label: 'About', path: '/about' }");
+    expect(src).toContain("{ number: '13', label: 'Changelog', path: '/changelog' }");
     expect(src).not.toContain('navbar-inner-container');
   });
 
