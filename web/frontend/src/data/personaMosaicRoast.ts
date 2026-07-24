@@ -206,6 +206,62 @@ export function buildMosaicRoast(output: string): PersonaMosaicRoast {
 
 export { VERDICT_LABELS };
 
+// Lifetime counter — how many roasts the user has cast, persisted
+// across reloads so the user can see their own track record.
+
+const COUNTER_KEY = 'arena:persona-mosaic-roast:counter:v1';
+
+export function readMosaicRoastCounter(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(COUNTER_KEY);
+    if (!raw) return 0;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function incrementMosaicRoastCounter(): number {
+  const next = readMosaicRoastCounter() + 1;
+  if (typeof window === 'undefined') return next;
+  try {
+    window.localStorage.setItem(COUNTER_KEY, String(next));
+  } catch {
+    /* silent */
+  }
+  return next;
+}
+
+export function clearMosaicRoastCounter() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(COUNTER_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+/**
+ * Pure — map a 0-10 score to a band label. Three bands: low (0-3,
+ * the panel thinks it missed), mid (4-6, mixed), high (7-10, the
+ * panel thinks it landed).
+ */
+export type ScoreBand = 'low' | 'mid' | 'high';
+
+export function scoreBand(score: number): ScoreBand {
+  if (score >= 7) return 'high';
+  if (score >= 4) return 'mid';
+  return 'low';
+}
+
+export const SCORE_BAND_LABELS: Record<ScoreBand, string> = {
+  low: 'The panel says: missed',
+  mid: 'The panel says: mixed',
+  high: 'The panel says: landed',
+};
+
 /** Pure — verify a mosaic-roast's critiques reference real personas. */
 export function mosaicRoastValid(roast: PersonaMosaicRoast): boolean {
   const known = new Set(PERSONAS.map((p) => p.id));

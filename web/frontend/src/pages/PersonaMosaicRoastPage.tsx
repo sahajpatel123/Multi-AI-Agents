@@ -17,10 +17,15 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  SCORE_BAND_LABELS,
   VERDICT_LABELS,
   buildMosaicRoast,
+  clearMosaicRoastCounter,
+  incrementMosaicRoastCounter,
   mosaicRoastShareUrl,
   mosaicRoastValid,
+  readMosaicRoastCounter,
+  scoreBand,
   type PersonaMosaicRoast,
 } from '../data/personaMosaicRoast';
 import { PERSONAS } from '../data/personas';
@@ -66,9 +71,11 @@ export function PersonaMosaicRoastPage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<string>>([]);
+  const [castCount, setCastCount] = useState(0);
 
   useEffect(() => {
     setPageVisible(true);
+    setCastCount(readMosaicRoastCounter());
     try {
       const raw = window.localStorage.getItem('arena:persona-mosaic-roast:history:v1');
       if (raw) {
@@ -85,6 +92,11 @@ export function PersonaMosaicRoastPage() {
     const r = buildMosaicRoast(committed);
     return mosaicRoastValid(r) ? r : null;
   }, [committed]);
+
+  const band = useMemo(
+    () => (roast ? scoreBand(roast.averageScore) : null),
+    [roast],
+  );
 
   const onRoast = () => {
     setCommitted(output);
@@ -106,6 +118,13 @@ export function PersonaMosaicRoastPage() {
     } catch {
       /* silent */
     }
+    const c = incrementMosaicRoastCounter();
+    setCastCount(c);
+  };
+
+  const onResetCounter = () => {
+    clearMosaicRoastCounter();
+    setCastCount(0);
   };
 
   const onReset = () => {
@@ -234,6 +253,23 @@ export function PersonaMosaicRoastPage() {
               </MotionButton>
             </div>
           </div>
+          <div className="pmr-input__stats" aria-label="Roast stats">
+            <div className="pmr-input__stat">
+              <Swords aria-hidden="true" />
+              <span className="pmr-input__stat-label">Roasts cast</span>
+              <span className="pmr-input__stat-value">{castCount}</span>
+            </div>
+            {castCount > 0 && (
+              <button
+                type="button"
+                className="pmr-input__stat-reset"
+                onClick={onResetCounter}
+                aria-label="Reset roasts counter"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="pmr-samples" aria-label="Sample outputs">
@@ -270,6 +306,37 @@ export function PersonaMosaicRoastPage() {
               <p className="pmr-result__dominant">
                 The panel mostly {VERDICT_LABELS[roast.dominantVerdict]}.
               </p>
+              <div
+                className={`pmr-scale pmr-scale--${band ?? 'mid'}`}
+                role="meter"
+                aria-valuemin={0}
+                aria-valuemax={10}
+                aria-valuenow={roast.averageScore}
+                aria-label="Average score band"
+              >
+                <div className="pmr-scale__bar">
+                  <div
+                    className="pmr-scale__fill"
+                    style={{ width: `${roast.averageScore * 10}%` }}
+                  />
+                  <div
+                    className="pmr-scale__mark"
+                    style={{ left: `${roast.averageScore * 10}%` }}
+                    aria-hidden="true"
+                  />
+                </div>
+                <div className="pmr-scale__labels">
+                  <span>0</span>
+                  <span>3</span>
+                  <span>7</span>
+                  <span>10</span>
+                </div>
+                {band && (
+                  <p className="pmr-scale__meaning">
+                    {SCORE_BAND_LABELS[band]}
+                  </p>
+                )}
+              </div>
             </header>
 
             <ul className="pmr-list">

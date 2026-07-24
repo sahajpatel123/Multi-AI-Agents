@@ -18,11 +18,17 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  SCORE_BAND_LABELS,
   VERDICT_LABELS,
   buildMosaicRoast,
+  clearMosaicRoastCounter,
+  incrementMosaicRoastCounter,
   mosaicRoastShareUrl,
   mosaicRoastValid,
+  readMosaicRoastCounter,
+  scoreBand,
   type CritiqueVerdict,
+  type ScoreBand,
 } from './personaMosaicRoast';
 
 const VALID_VERDICTS = new Set<CritiqueVerdict>(['sharp', 'mixed', 'soft']);
@@ -111,5 +117,55 @@ describe('VERDICT_LABELS', () => {
     for (const v of VALID_VERDICTS) {
       expect(VERDICT_LABELS[v].length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('scoreBand', () => {
+  it('returns high for scores >= 7', () => {
+    for (const score of [7, 8, 9, 10]) {
+      expect(scoreBand(score)).toBe('high');
+    }
+  });
+
+  it('returns mid for scores 4-6', () => {
+    for (const score of [4, 5, 6]) {
+      expect(scoreBand(score)).toBe('mid');
+    }
+  });
+
+  it('returns low for scores 0-3', () => {
+    for (const score of [0, 1, 2, 3]) {
+      expect(scoreBand(score)).toBe('low');
+    }
+  });
+});
+
+describe('SCORE_BAND_LABELS', () => {
+  it('returns a non-empty label for every band', () => {
+    const bands: ScoreBand[] = ['low', 'mid', 'high'];
+    for (const b of bands) {
+      expect(SCORE_BAND_LABELS[b].length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('mosaic roast counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearMosaicRoastCounter();
+    expect(readMosaicRoastCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearMosaicRoastCounter();
+    expect(incrementMosaicRoastCounter()).toBe(1);
+    expect(incrementMosaicRoastCounter()).toBe(2);
+    expect(incrementMosaicRoastCounter()).toBe(3);
+  });
+
+  it('clearMosaicRoastCounter resets to 0', () => {
+    incrementMosaicRoastCounter();
+    incrementMosaicRoastCounter();
+    clearMosaicRoastCounter();
+    expect(readMosaicRoastCounter()).toBe(0);
   });
 });
