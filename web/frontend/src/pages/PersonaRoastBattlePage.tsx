@@ -16,10 +16,18 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendRoastBattleDecision,
   buildRoastBattle,
+  clearRoastBattleCounter,
+  clearRoastBattleDecisions,
+  incrementRoastBattleCounter,
+  readRoastBattleCounter,
+  readRoastBattleDecisions,
   roastBattleShareUrl,
   roastBattleValid,
+  winTally,
   type PersonaRoastBattle,
+  type RoastBattleDecisionEntry,
 } from '../data/personaRoastBattle';
 import { PERSONAS } from '../data/personas';
 import { useAuth } from '../hooks/useAuth';
@@ -69,9 +77,13 @@ export function PersonaRoastBattlePage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<{ a: string; b: string }>>([]);
+  const [castCount, setCastCount] = useState(0);
+  const [decisions, setDecisions] = useState<ReadonlyArray<RoastBattleDecisionEntry>>([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setCastCount(readRoastBattleCounter());
+    setDecisions(readRoastBattleDecisions());
     try {
       const raw = window.localStorage.getItem('arena:persona-roast-battle:history:v1');
       if (raw) {
@@ -89,11 +101,12 @@ export function PersonaRoastBattlePage() {
     return roastBattleValid(b) ? b : null;
   }, [outputA, outputB]);
 
+const lifetimeTally = useMemo(() => winTally(decisions), [decisions]);
+
   const onBattle = () => {
-    if (typeof window !== 'undefined') {
-      const url = roastBattleShareUrl(window.location.origin, outputA, outputB);
-      window.history.replaceState({}, '', url);
-    }
+    if (typeof window === 'undefined') return;
+    const url = roastBattleShareUrl(window.location.origin, outputA, outputB);
+    window.history.replaceState({}, '', url);
     try {
       const snippetA = outputA.length > 60 ? `${outputA.slice(0, 57)}...` : outputA;
       const snippetB = outputB.length > 60 ? `${outputB.slice(0, 57)}...` : outputB;
@@ -110,6 +123,27 @@ export function PersonaRoastBattlePage() {
     } catch {
       /* silent */
     }
+    // Append the decision to the lifetime tally log.
+    if (battle) {
+      const decision: RoastBattleDecisionEntry = {
+        id: `battle-${Date.now()}`,
+        outputASnippet: outputA.length > 60 ? `${outputA.slice(0, 57)}...` : outputA,
+        outputBSnippet: outputB.length > 60 ? `${outputB.slice(0, 57)}...` : outputB,
+        winner: battle.winner,
+        savedAt: new Date().toISOString(),
+      };
+      appendRoastBattleDecision(decision);
+      setDecisions(readRoastBattleDecisions());
+    }
+    const c = incrementRoastBattleCounter();
+    setCastCount(c);
+  };
+
+  const onResetLifetime = () => {
+    clearRoastBattleCounter();
+    clearRoastBattleDecisions();
+    setCastCount(0);
+    setDecisions([]);
   };
 
   const onReset = () => {
@@ -255,6 +289,35 @@ export function PersonaRoastBattlePage() {
                 Run the battle
               </MotionButton>
             </div>
+          </div>
+          <div className="prb-input__stats" aria-label="Battle stats">
+            <div className="prb-input__stat">
+              <Swords aria-hidden="true" />
+              <span className="prb-input__stat-label">Battles run</span>
+              <span className="prb-input__stat-value">{castCount}</span>
+            </div>
+            {lifetimeTally.total > 0 && (
+              <div className="prb-input__stat prb-input__stat--a">
+                <span className="prb-input__stat-label">A wins</span>
+                <span className="prb-input__stat-value">{lifetimeTally.a}</span>
+              </div>
+            )}
+            {lifetimeTally.total > 0 && (
+              <div className="prb-input__stat prb-input__stat--b">
+                <span className="prb-input__stat-label">B wins</span>
+                <span className="prb-input__stat-value">{lifetimeTally.b}</span>
+              </div>
+            )}
+            {(castCount > 0 || lifetimeTally.total > 0) && (
+              <button
+                type="button"
+                className="prb-input__stat-reset"
+                onClick={onResetLifetime}
+                aria-label="Reset battles counter and lifetime tally"
+              >
+                Reset
+              </button>
+            )}
           </div>
         </section>
 

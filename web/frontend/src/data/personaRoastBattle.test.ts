@@ -19,9 +19,17 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  appendRoastBattleDecision,
   buildRoastBattle,
+  clearRoastBattleCounter,
+  clearRoastBattleDecisions,
+  incrementRoastBattleCounter,
+  readRoastBattleCounter,
+  readRoastBattleDecisions,
   roastBattleShareUrl,
   roastBattleValid,
+  winTally,
+  type RoastBattleDecisionEntry,
   type RoastBattlePick,
 } from './personaRoastBattle';
 
@@ -104,5 +112,79 @@ describe('roastBattleShareUrl', () => {
     expect(url).toContain('/persona-roast-battle');
     expect(url).toContain('a=A%20text');
     expect(url).toContain('b=B%20text');
+  });
+});
+
+describe('battle counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearRoastBattleCounter();
+    expect(readRoastBattleCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearRoastBattleCounter();
+    expect(incrementRoastBattleCounter()).toBe(1);
+    expect(incrementRoastBattleCounter()).toBe(2);
+    expect(incrementRoastBattleCounter()).toBe(3);
+  });
+
+  it('clearRoastBattleCounter resets to 0', () => {
+    incrementRoastBattleCounter();
+    incrementRoastBattleCounter();
+    clearRoastBattleCounter();
+    expect(readRoastBattleCounter()).toBe(0);
+  });
+});
+
+describe('battle decisions + winTally (localStorage)', () => {
+  const makeDecision = (id: string, winner: RoastBattlePick): RoastBattleDecisionEntry => ({
+    id,
+    outputASnippet: 'A',
+    outputBSnippet: 'B',
+    winner,
+    savedAt: new Date().toISOString(),
+  });
+
+  it('readRoastBattleDecisions returns empty array when storage is empty', () => {
+    clearRoastBattleDecisions();
+    expect(readRoastBattleDecisions()).toEqual([]);
+  });
+
+  it('appendRoastBattleDecision + read round-trip', () => {
+    clearRoastBattleDecisions();
+    appendRoastBattleDecision(makeDecision('d-1', 'A'));
+    expect(readRoastBattleDecisions()).toHaveLength(1);
+  });
+
+  it('appendRoastBattleDecision deduplicates by id', () => {
+    clearRoastBattleDecisions();
+    appendRoastBattleDecision(makeDecision('dup', 'A'));
+    appendRoastBattleDecision(makeDecision('dup', 'B'));
+    const result = readRoastBattleDecisions();
+    expect(result.length).toBe(1);
+    expect(result[0].winner).toBe('B');
+  });
+
+  it('clearRoastBattleDecisions empties storage', () => {
+    appendRoastBattleDecision(makeDecision('x', 'A'));
+    clearRoastBattleDecisions();
+    expect(readRoastBattleDecisions()).toEqual([]);
+  });
+});
+
+describe('winTally', () => {
+  it('returns 0/0 for empty history', () => {
+    expect(winTally([])).toEqual({ a: 0, b: 0, total: 0 });
+  });
+
+  it('counts A and B winners correctly', () => {
+    const decisions: ReadonlyArray<RoastBattleDecisionEntry> = [
+      { id: 'a', outputASnippet: 'A', outputBSnippet: 'B', winner: 'A', savedAt: '' },
+      { id: 'b', outputASnippet: 'A', outputBSnippet: 'B', winner: 'A', savedAt: '' },
+      { id: 'c', outputASnippet: 'A', outputBSnippet: 'B', winner: 'B', savedAt: '' },
+      { id: 'd', outputASnippet: 'A', outputBSnippet: 'B', winner: 'B', savedAt: '' },
+      { id: 'e', outputASnippet: 'A', outputBSnippet: 'B', winner: 'B', savedAt: '' },
+    ];
+    expect(winTally(decisions)).toEqual({ a: 2, b: 3, total: 5 });
   });
 });
