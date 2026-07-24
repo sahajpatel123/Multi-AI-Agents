@@ -2,23 +2,37 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   CheckCircle2,
+  Clock,
+  Flame,
+  History,
   RefreshCw,
   Share2,
   Sparkles,
   Target,
+  Timer,
   Trophy,
   XCircle,
+  X,
+  Zap,
 } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  BASE_POINTS,
+  DEFAULT_TIME_BUDGET_MS,
+  appendTriviaHistory,
   buildTriviaQuestions,
+  clearTriviaHistory,
+  computeMaxStreak,
+  computeQuestionPoints,
+  readTriviaHistory,
   scoreTrivia,
   triviaScorePercent,
   triviaVerdict,
   type PersonaTriviaQuestion,
+  type TriviaRoundEntry,
 } from '../data/personaTrivia';
 import { PERSONAS } from '../data/personas';
 import { copyToClipboard } from '../lib/clipboard';
@@ -141,14 +155,19 @@ export function PersonaTriviaPage() {
     () => buildTriviaQuestions(),
   );
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // Track the time each question was first answered (ms since round start).
+  const [answerTimes, setAnswerTimes] = useState<Record<string, number>>({});
   const [revealed, setRevealed] = useState(false);
   const [highScore, setHighScore] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [history, setHistory] = useState<ReadonlyArray<TriviaRoundEntry>>([]);
+  const [roundStart] = useState<number>(() => Date.now());
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setPageVisible(true);
     setHighScore(readHighScore());
+    setHistory(readTriviaHistory());
   }, []);
 
   const total = questions.length;
@@ -159,32 +178,94 @@ export function PersonaTriviaPage() {
   const allAnswered = answered === total;
   const score = useMemo(() => scoreTrivia(questions, answers), [questions, answers]);
 
+  // Compute total points (base + speed bonus) and max streak for the round.
+  const pointsByQuestion = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const q of questions) {
+      const pickedId = answers[q.id];
+      if (!pickedId) continue;
+      const correct = pickedId === q.correctId;
+      const elapsed = answerTimes[q.id] ?? DEFAULT_TIME_BUDGET_MS;
+      map[q.id] = computeQuestionPoints(correct, elapsed);
+    }
+    return map;
+  }, [questions, answers, answerTimes]);
+
+  const totalPoints = useMemo(
+    () => Object.values(pointsByQuestion).reduce((sum, p) => sum + p, 0),
+    [pointsByQuestion],
+  );
+
+  const perQuestionResults = useMemo(
+    () =>
+      questions.map((q) => ({
+        questionId: q.id,
+        correct: answers[q.id] === q.correctId,
+      })),
+    [questions, answers],
+  );
+
+  const maxStreak = useMemo(
+    () => computeMaxStreak(perQuestionResults),
+    [perQuestionResults],
+  );
+
+  // Current streak (resets on wrong answer).
+  const currentStreak = useMemo(() => {
+    let streak = 0;
+    for (const r of perQuestionResults) {
+      if (r.correct) streak += 1;
+      else break;
+    }
+    return streak;
+  }, [perQuestionResults]);
+
   const onSelect = (questionId: string, optionId: string) => {
     if (revealed) return;
+    const now = Date.now();
+    const elapsed = now - roundStart;
     setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
+    setAnswerTimes((prev) =>
+      prev[questionId] !== undefined ? prev : { ...prev, [questionId]: elapsed },
+    );
   };
 
   const onReveal = () => {
     if (!allAnswered) return;
     setRevealed(true);
-    const finalScore = scoreTrivia(questions, answers);
-    if (finalScore > highScore) {
-      writeHighScore(finalScore);
-      setHighScore(finalScore);
+    if (totalPoints > highScore) {
+      writeHighScore(totalPoints);
+      setHighScore(totalPoints);
     }
+    const entry: TriviaRoundEntry = {
+      id: `round-${roundStart}`,
+      score: totalPoints,
+      total: total * (BASE_POINTS + 50),
+      maxStreak,
+      savedAt: new Date().toISOString(),
+    };
+    appendTriviaHistory(entry);
+    setHistory(readTriviaHistory());
   };
 
   const onRetry = () => {
     setQuestions(buildTriviaQuestions());
     setAnswers({});
+    setAnswerTimes({});
     setRevealed(false);
+  };
+
+  const onClearHistory = () => {
+    clearTriviaHistory();
+    setHistory([]);
   };
 
   const onShare = async () => {
     if (typeof window === 'undefined') return;
-    const pct = triviaScorePercent(score, total);
+    const maxPossible = total * (BASE_POINTS + 50);
+    const pct = Math.round((totalPoints / maxPossible) * 100);
     const url = `${window.location.origin}/persona-trivia`;
-    const text = `I scored ${score}/${total} (${pct}%) on Arena Persona Trivia — which Arena mind said it?`;
+    const text = `I scored ${totalPoints}/${maxPossible} (${pct}%) with a ${maxStreak}-streak on Arena Persona Trivia — which Arena mind said it?`;
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({ title: 'Arena Persona Trivia', text, url });
@@ -239,10 +320,11 @@ export function PersonaTriviaPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [revealed, allAnswered, questions, answers]);
 
-  const pct = triviaScorePercent(score, total);
-  const verdict = triviaVerdict(score, total);
+  const correctCount = score;
+  const pct = triviaScorePercent(correctCount, total);
+  const verdict = triviaVerdict(correctCount, total);
   const progressPct = Math.round((answered / total) * 100);
-  const isNewHighScore = revealed && score === highScore && score > 0;
+  const isNewHighScore = revealed && totalPoints === highScore && totalPoints > 0;
 
   return (
     <div
@@ -265,14 +347,23 @@ export function PersonaTriviaPage() {
           </h1>
           <p className="pt-hero__lede">
             Ten quotes. Sixteen minds. One score. Read the line, pick the
-            persona — see how well you actually know the cast.
+            persona — see how well you actually know the cast. Faster
+            correct answers earn more points.
           </p>
 
           <div className="pt-hero__stats">
             <div className="pt-hero__stat">
               <span className="pt-hero__stat-label">High score</span>
-              <span className="pt-hero__stat-value">{highScore}/{total}</span>
+              <span className="pt-hero__stat-value">{highScore}</span>
+              <span className="pt-hero__stat-sub">points</span>
             </div>
+            {!revealed && currentStreak >= 2 && (
+              <div className="pt-hero__streak" aria-live="polite">
+                <Flame aria-hidden="true" />
+                <span className="pt-hero__streak-count">{currentStreak}</span>
+                <span className="pt-hero__streak-label">streak</span>
+              </div>
+            )}
             <div
               className="pt-progress"
               role="progressbar"
@@ -292,7 +383,7 @@ export function PersonaTriviaPage() {
 
           {!revealed && (
             <p className="pt-hero__hints">
-              <span><kbd>1</kbd>–<kbd>4</kbd> pick · <kbd>Enter</kbd> reveal answers</span>
+              <span><kbd>1</kbd>–<kbd>4</kbd> pick · <kbd>Enter</kbd> reveal answers · <Zap aria-hidden="true" /> faster = more points</span>
             </p>
           )}
         </section>
@@ -334,9 +425,22 @@ export function PersonaTriviaPage() {
                 <Target aria-hidden="true" /> Your score
               </p>
               <div className="pt-score-card__main">
-                <span className="pt-score-card__big">{score}</span>
-                <span className="pt-score-card__denominator">/ {total}</span>
+                <span className="pt-score-card__big">{totalPoints}</span>
+                <span className="pt-score-card__denominator">
+                  / {total * (BASE_POINTS + 50)}
+                </span>
                 <span className="pt-score-card__percent">{pct}%</span>
+              </div>
+              <div className="pt-score-card__meta">
+                <span>
+                  <CheckCircle2 aria-hidden="true" /> {correctCount}/{total} correct
+                </span>
+                <span>
+                  <Flame aria-hidden="true" /> {maxStreak}-streak
+                </span>
+                <span>
+                  <Timer aria-hidden="true" /> Speed bonus: {totalPoints - correctCount * BASE_POINTS} pts
+                </span>
               </div>
               <p className="pt-score-card__verdict">{verdict}</p>
               {isNewHighScore && (
@@ -384,6 +488,39 @@ export function PersonaTriviaPage() {
                 Study the cast <ArrowRight aria-hidden="true" />
               </a>
             </div>
+
+            {history.length > 0 && (
+              <div className="pt-history" aria-label="Recent rounds">
+                <div className="pt-history__head">
+                  <p className="pt-history__label">
+                    <History aria-hidden="true" /> Recent rounds
+                  </p>
+                  <button
+                    type="button"
+                    className="pt-history__clear"
+                    onClick={onClearHistory}
+                    aria-label="Clear round history"
+                  >
+                    <X aria-hidden="true" /> Clear
+                  </button>
+                </div>
+                <ul>
+                  {history.slice(0, 6).map((entry) => (
+                    <li key={entry.id} className="pt-history__item">
+                      <span className="pt-history__score">
+                        {entry.score} pts
+                      </span>
+                      <span className="pt-history__streak">
+                        <Flame aria-hidden="true" /> {entry.maxStreak}
+                      </span>
+                      <span className="pt-history__time">
+                        <Clock aria-hidden="true" /> {timeAgo(entry.savedAt)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         )}
       </main>
@@ -391,4 +528,14 @@ export function PersonaTriviaPage() {
       <Footer />
     </div>
   );
+}
+
+function timeAgo(iso: string): string {
+  const saved = new Date(iso).getTime();
+  if (!Number.isFinite(saved)) return '';
+  const diffMs = Date.now() - saved;
+  if (diffMs < 60_000) return 'just now';
+  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
+  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h ago`;
+  return `${Math.floor(diffMs / 86_400_000)}d ago`;
 }
