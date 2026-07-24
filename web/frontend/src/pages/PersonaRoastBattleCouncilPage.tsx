@@ -16,9 +16,17 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendRoastBattleCouncilDecision,
   buildRoastBattleCouncil,
+  clearRoastBattleCouncilCounter,
+  clearRoastBattleCouncilDecisions,
+  incrementRoastBattleCouncilCounter,
+  majorityInfo,
+  readRoastBattleCouncilCounter,
+  readRoastBattleCouncilDecisions,
   roastBattleCouncilShareUrl,
   roastBattleCouncilValid,
+  roastBattleCouncilWinTally,
   type PersonaRoastBattleCouncil,
   type RoastBattleCouncilPick,
 } from '../data/personaRoastBattleCouncil';
@@ -67,9 +75,17 @@ export function PersonaRoastBattleCouncilPage() {
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<{ a: string; b: string }>>([]);
   const [filter, setFilter] = useState<RoastBattleCouncilPick | 'all'>('all');
+  const [castCount, setCastCount] = useState(0);
+  const [decisions, setDecisions] = useState<
+    ReadonlyArray<
+      ReturnType<typeof readRoastBattleCouncilDecisions>[number]
+    >
+  >([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setCastCount(readRoastBattleCouncilCounter());
+    setDecisions(readRoastBattleCouncilDecisions());
     try {
       const raw = window.localStorage.getItem('arena:persona-roast-battle-council:history:v1');
       if (raw) {
@@ -93,6 +109,16 @@ export function PersonaRoastBattleCouncilPage() {
     return council.critiques.filter((c) => c.pick === filter);
   }, [council, filter]);
 
+  const lifetimeTally = useMemo(
+    () => roastBattleCouncilWinTally(decisions),
+    [decisions],
+  );
+
+  const majority = useMemo(
+    () => (council ? majorityInfo(council.tally, council.winner) : null),
+    [council],
+  );
+
   const onBattle = () => {
     if (typeof window === 'undefined') return;
     const url = roastBattleCouncilShareUrl(window.location.origin, outputA, outputB);
@@ -113,6 +139,26 @@ export function PersonaRoastBattleCouncilPage() {
     } catch {
       /* silent */
     }
+    if (council) {
+      const decision = {
+        id: `battle-${Date.now()}`,
+        outputASnippet: outputA.length > 60 ? `${outputA.slice(0, 57)}...` : outputA,
+        outputBSnippet: outputB.length > 60 ? `${outputB.slice(0, 57)}...` : outputB,
+        winner: council.winner,
+        savedAt: new Date().toISOString(),
+      };
+      appendRoastBattleCouncilDecision(decision);
+      setDecisions(readRoastBattleCouncilDecisions());
+    }
+    const c = incrementRoastBattleCouncilCounter();
+    setCastCount(c);
+  };
+
+  const onResetLifetime = () => {
+    clearRoastBattleCouncilCounter();
+    clearRoastBattleCouncilDecisions();
+    setCastCount(0);
+    setDecisions([]);
   };
 
   const onReset = () => {
@@ -138,7 +184,8 @@ export function PersonaRoastBattleCouncilPage() {
     if (typeof window === 'undefined' || !council) return;
     const url = roastBattleCouncilShareUrl(window.location.origin, outputA, outputB);
     const winnerLabel = council.winner === 'A' ? 'Output A' : 'Output B';
-    const text = `Arena Roast Battle Council: 8 Arena minds picked ${winnerLabel} (${council.tally[council.winner.toLowerCase() as 'a' | 'b']} of 8). Run yours:`;
+    const winnerCount = council.winner === 'A' ? council.tally.a : council.tally.b;
+    const text = `Arena Roast Battle Council: 8 Arena minds picked ${winnerLabel} (${winnerCount} of 8). Run yours:`;
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({ title: 'Arena Persona Roast Battle Council', text, url });
@@ -260,6 +307,35 @@ export function PersonaRoastBattleCouncilPage() {
               </MotionButton>
             </div>
           </div>
+          <div className="prbc-input__stats" aria-label="Council stats">
+            <div className="prbc-input__stat">
+              <Crown aria-hidden="true" />
+              <span className="prbc-input__stat-label">Councils convened</span>
+              <span className="prbc-input__stat-value">{castCount}</span>
+            </div>
+            {(lifetimeTally.total ?? 0) > 0 && (
+              <div className="prbc-input__stat prbc-input__stat--a">
+                <span className="prbc-input__stat-label">A wins</span>
+                <span className="prbc-input__stat-value">{lifetimeTally.a}</span>
+              </div>
+            )}
+            {(lifetimeTally.total ?? 0) > 0 && (
+              <div className="prbc-input__stat prbc-input__stat--b">
+                <span className="prbc-input__stat-label">B wins</span>
+                <span className="prbc-input__stat-value">{lifetimeTally.b}</span>
+              </div>
+            )}
+            {(castCount > 0 || (lifetimeTally.total ?? 0) > 0) && (
+              <button
+                type="button"
+                className="prbc-input__stat-reset"
+                onClick={onResetLifetime}
+                aria-label="Reset councils counter and lifetime tally"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="prbc-samples" aria-label="Sample battles">
@@ -300,6 +376,11 @@ export function PersonaRoastBattleCouncilPage() {
                   {council.tally.a} for A · {council.tally.b} for B
                 </span>
               </h2>
+              {majority && (
+                <p className={`prbc-result__majority prbc-result__majority--${majority.label}`}>
+                  {majority.description}
+                </p>
+              )}
             </header>
 
             <div className="prbc-sides">

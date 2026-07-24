@@ -18,9 +18,17 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  appendRoastBattleCouncilDecision,
   buildRoastBattleCouncil,
+  clearRoastBattleCouncilCounter,
+  clearRoastBattleCouncilDecisions,
+  incrementRoastBattleCouncilCounter,
+  majorityInfo,
+  readRoastBattleCouncilCounter,
+  readRoastBattleCouncilDecisions,
   roastBattleCouncilShareUrl,
   roastBattleCouncilValid,
+  roastBattleCouncilWinTally,
   type RoastBattleCouncilPick,
 } from './personaRoastBattleCouncil';
 
@@ -91,5 +99,105 @@ describe('roastBattleCouncilShareUrl', () => {
     expect(url).toContain('/persona-roast-battle-council');
     expect(url).toContain('a=A%20text');
     expect(url).toContain('b=B%20text');
+  });
+});
+
+describe('council counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearRoastBattleCouncilCounter();
+    expect(readRoastBattleCouncilCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearRoastBattleCouncilCounter();
+    expect(incrementRoastBattleCouncilCounter()).toBe(1);
+    expect(incrementRoastBattleCouncilCounter()).toBe(2);
+  });
+
+  it('clearRoastBattleCouncilCounter resets to 0', () => {
+    incrementRoastBattleCouncilCounter();
+    clearRoastBattleCouncilCounter();
+    expect(readRoastBattleCouncilCounter()).toBe(0);
+  });
+});
+
+describe('council decisions + winTally (localStorage)', () => {
+  const makeDecision = (id: string, winner: RoastBattleCouncilPick) => ({
+    id,
+    outputASnippet: 'A',
+    outputBSnippet: 'B',
+    winner,
+    savedAt: '2026-07-25T00:00:00Z',
+  });
+
+  it('readRoastBattleCouncilDecisions returns empty array when storage is empty', () => {
+    clearRoastBattleCouncilDecisions();
+    expect(readRoastBattleCouncilDecisions()).toEqual([]);
+  });
+
+  it('appendRoastBattleCouncilDecision + read round-trip', () => {
+    clearRoastBattleCouncilDecisions();
+    appendRoastBattleCouncilDecision(makeDecision('d-1', 'A'));
+    expect(readRoastBattleCouncilDecisions()).toHaveLength(1);
+  });
+
+  it('appendRoastBattleCouncilDecision deduplicates by id', () => {
+    clearRoastBattleCouncilDecisions();
+    appendRoastBattleCouncilDecision(makeDecision('dup', 'A'));
+    appendRoastBattleCouncilDecision(makeDecision('dup', 'B'));
+    const result = readRoastBattleCouncilDecisions();
+    expect(result.length).toBe(1);
+    expect(result[0].winner).toBe('B');
+  });
+
+  it('clearRoastBattleCouncilDecisions empties storage', () => {
+    appendRoastBattleCouncilDecision(makeDecision('x', 'A'));
+    clearRoastBattleCouncilDecisions();
+    expect(readRoastBattleCouncilDecisions()).toEqual([]);
+  });
+});
+
+describe('roastBattleCouncilWinTally', () => {
+  it('returns 0/0 for empty history', () => {
+    expect(roastBattleCouncilWinTally([]).a).toBe(0);
+    expect(roastBattleCouncilWinTally([]).b).toBe(0);
+  });
+
+  it('counts A and B winners correctly', () => {
+    const decisions = [
+      { id: 'a', outputASnippet: 'A', outputBSnippet: 'B', winner: 'A' as const, savedAt: '' },
+      { id: 'b', outputASnippet: 'A', outputBSnippet: 'B', winner: 'A' as const, savedAt: '' },
+      { id: 'c', outputASnippet: 'A', outputBSnippet: 'B', winner: 'B' as const, savedAt: '' },
+      { id: 'd', outputASnippet: 'A', outputBSnippet: 'B', winner: 'B' as const, savedAt: '' },
+      { id: 'e', outputASnippet: 'A', outputBSnippet: 'B', winner: 'B' as const, savedAt: '' },
+    ];
+    const tally = roastBattleCouncilWinTally(decisions);
+    expect(tally.a).toBe(2);
+    expect(tally.b).toBe(3);
+  });
+});
+
+describe('majorityInfo', () => {
+  it('returns decisive for 5+/8', () => {
+    const info = majorityInfo({ a: 6, b: 2 }, 'A');
+    expect(info.label).toBe('decisive');
+    expect(info.winnerCount).toBe(6);
+    expect(info.loserCount).toBe(2);
+  });
+
+  it('returns leaning for 4/8', () => {
+    const info = majorityInfo({ a: 4, b: 4 }, 'A');
+    expect(info.label).toBe('leaning');
+  });
+
+  it('returns split for 3/8 or less', () => {
+    // Use a tally where the winning side has 3 (which is split).
+    // 4-4 is leaning because the function checks winnerCount <= 3 for split.
+    // For a true split, the winner must have 3 or fewer minds.
+    // 3-5 means winner (B) has 5 minds, which is decisive.
+    // Let's use a 3-5 where A wins with 3 — that's split.
+    const info = majorityInfo({ a: 5, b: 3 }, 'B');
+    expect(info.label).toBe('split');
+    expect(info.winnerCount).toBe(3);
   });
 });

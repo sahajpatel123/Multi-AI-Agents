@@ -194,3 +194,153 @@ export function roastBattleCouncilShareUrl(
 ): string {
   return `${origin}/persona-roast-battle-council?a=${encodeURIComponent(outputA)}&b=${encodeURIComponent(outputB)}`;
 }
+
+// Lifetime counter + A/B win tally — persisted across reloads so the
+// user can see their track record over time.
+
+export interface RoastBattleCouncilDecisionEntry {
+  readonly id: string;
+  readonly outputASnippet: string;
+  readonly outputBSnippet: string;
+  readonly winner: RoastBattleCouncilPick;
+  readonly savedAt: string;
+}
+
+const COUNTER_KEY = 'arena:persona-roast-battle-council:counter:v1';
+const DECISIONS_KEY = 'arena:persona-roast-battle-council:decisions:v1';
+const DECISIONS_LIMIT = 50;
+
+export function readRoastBattleCouncilCounter(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(COUNTER_KEY);
+    if (!raw) return 0;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function incrementRoastBattleCouncilCounter(): number {
+  const next = readRoastBattleCouncilCounter() + 1;
+  if (typeof window === 'undefined') return next;
+  try {
+    window.localStorage.setItem(COUNTER_KEY, String(next));
+  } catch {
+    /* silent */
+  }
+  return next;
+}
+
+export function clearRoastBattleCouncilCounter() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(COUNTER_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+export function appendRoastBattleCouncilDecision(
+  entry: RoastBattleCouncilDecisionEntry,
+) {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(DECISIONS_KEY);
+    const existing: RoastBattleCouncilDecisionEntry[] = raw
+      ? (JSON.parse(raw) as RoastBattleCouncilDecisionEntry[])
+      : [];
+    const next = [entry, ...existing.filter((e) => e.id !== entry.id)].slice(0, DECISIONS_LIMIT);
+    window.localStorage.setItem(DECISIONS_KEY, JSON.stringify(next));
+  } catch {
+    /* silent */
+  }
+}
+
+export function readRoastBattleCouncilDecisions(): ReadonlyArray<RoastBattleCouncilDecisionEntry> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(DECISIONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as RoastBattleCouncilDecisionEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (e) =>
+        e &&
+        typeof e.id === 'string' &&
+        (e.winner === 'A' || e.winner === 'B'),
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function clearRoastBattleCouncilDecisions() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(DECISIONS_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+export interface RoastBattleCouncilTally {
+  readonly a: number;
+  readonly b: number;
+  readonly total?: number;
+}
+
+/** Pure — compute lifetime A vs B win tally from decision log. */
+export function roastBattleCouncilWinTally(
+  decisions: ReadonlyArray<RoastBattleCouncilDecisionEntry>,
+): RoastBattleCouncilTally {
+  let a = 0;
+  let b = 0;
+  for (const d of decisions) {
+    if (d.winner === 'A') a += 1;
+    else b += 1;
+  }
+  return { a, b, total: a + b };
+}
+
+export type MajorityLabel = 'decisive' | 'leaning' | 'split';
+
+export interface MajorityInfo {
+  readonly label: MajorityLabel;
+  readonly description: string;
+  readonly winnerCount: number;
+  readonly loserCount: number;
+}
+
+/** Pure — describe how decisive a tally is. For an 8-mind
+ * council: 5+/8 is decisive, 4/8 is leaning, 3/8 is split. */
+export function majorityInfo(
+  tally: RoastBattleCouncilTally,
+  winner: RoastBattleCouncilPick,
+): MajorityInfo {
+  const winnerCount = winner === 'A' ? tally.a : tally.b;
+  const loserCount = winner === 'A' ? tally.b : tally.a;
+  if (winnerCount >= 5) {
+    return {
+      label: 'decisive',
+      description: `${winnerCount} of 8 minds — a strong majority.`,
+      winnerCount,
+      loserCount,
+    };
+  }
+  if (winnerCount === 4) {
+    return {
+      label: 'leaning',
+      description: `${winnerCount} of 8 minds — a slight lean. The other side had real support.`,
+      winnerCount,
+      loserCount,
+    };
+  }
+  return {
+    label: 'split',
+    description: `Only ${winnerCount} of 8 minds — a genuine split. Run another council for clarity.`,
+    winnerCount,
+    loserCount,
+  };
+}
