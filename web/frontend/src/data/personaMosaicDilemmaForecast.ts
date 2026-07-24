@@ -193,3 +193,150 @@ export function mosaicDilemmaForecastShareUrl(
 ): string {
   return `${origin}/persona-mosaic-dilemma-forecast?a=${encodeURIComponent(dilemmaA)}&b=${encodeURIComponent(dilemmaB)}`;
 }
+// Lifetime counter + A/B win tally + majority threshold.
+
+export interface MosaicDilemmaForecastDecisionEntry {
+  readonly id: string;
+  readonly dilemmaASnippet: string;
+  readonly dilemmaBSnippet: string;
+  readonly winner: MosaicDilemmaForecastPick;
+  readonly savedAt: string;
+}
+
+const COUNTER_KEY = 'arena:persona-mosaic-dilemma-forecast:counter:v1';
+const DECISIONS_KEY = 'arena:persona-mosaic-dilemma-forecast:decisions:v1';
+const DECISIONS_LIMIT = 50;
+
+export function readMosaicDilemmaForecastCounter(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(COUNTER_KEY);
+    if (!raw) return 0;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function incrementMosaicDilemmaForecastCounter(): number {
+  const next = readMosaicDilemmaForecastCounter() + 1;
+  if (typeof window === 'undefined') return next;
+  try {
+    window.localStorage.setItem(COUNTER_KEY, String(next));
+  } catch {
+    /* silent */
+  }
+  return next;
+}
+
+export function clearMosaicDilemmaForecastCounter() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(COUNTER_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+export function appendMosaicDilemmaForecastDecision(
+  entry: MosaicDilemmaForecastDecisionEntry,
+) {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(DECISIONS_KEY);
+    const existing: MosaicDilemmaForecastDecisionEntry[] = raw
+      ? (JSON.parse(raw) as MosaicDilemmaForecastDecisionEntry[])
+      : [];
+    const next = [entry, ...existing.filter((e) => e.id !== entry.id)].slice(0, DECISIONS_LIMIT);
+    window.localStorage.setItem(DECISIONS_KEY, JSON.stringify(next));
+  } catch {
+    /* silent */
+  }
+}
+
+export function readMosaicDilemmaForecastDecisions(): ReadonlyArray<MosaicDilemmaForecastDecisionEntry> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(DECISIONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as MosaicDilemmaForecastDecisionEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (e) =>
+        e &&
+        typeof e.id === 'string' &&
+        (e.winner === 'A' || e.winner === 'B'),
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function clearMosaicDilemmaForecastDecisions() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(DECISIONS_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+export interface MosaicDilemmaForecastTally {
+  readonly a: number;
+  readonly b: number;
+}
+
+/** Pure — compute lifetime A vs B win tally from decision log. */
+export function mosaicDilemmaForecastWinTally(
+  decisions: ReadonlyArray<MosaicDilemmaForecastDecisionEntry>,
+): MosaicDilemmaForecastTally {
+  let a = 0;
+  let b = 0;
+  for (const d of decisions) {
+    if (d.winner === 'A') a += 1;
+    else b += 1;
+  }
+  return { a, b };
+}
+
+export type MosaicDilemmaForecastMajorityLabel = 'decisive' | 'leaning' | 'split';
+
+export interface MosaicDilemmaForecastMajorityInfo {
+  readonly label: MosaicDilemmaForecastMajorityLabel;
+  readonly description: string;
+  readonly winnerCount: number;
+  readonly loserCount: number;
+}
+
+/** Pure — describe how decisive a tally is. For an 8-mind
+ * panel: 5+/8 is decisive, 4/8 is leaning, 3/8 is split. */
+export function mosaicDilemmaForecastMajorityInfo(
+  tally: MosaicDilemmaForecastTally,
+  winner: MosaicDilemmaForecastPick,
+): MosaicDilemmaForecastMajorityInfo {
+  const winnerCount = winner === 'A' ? tally.a : tally.b;
+  const loserCount = winner === 'A' ? tally.b : tally.a;
+  if (winnerCount >= 5) {
+    return {
+      label: 'decisive',
+      description: `${winnerCount} of 8 minds — a strong majority.`,
+      winnerCount,
+      loserCount,
+    };
+  }
+  if (winnerCount === 4) {
+    return {
+      label: 'leaning',
+      description: `${winnerCount} of 8 minds — a slight lean. The other side had real support.`,
+      winnerCount,
+      loserCount,
+    };
+  }
+  return {
+    label: 'split',
+    description: `Only ${winnerCount} of 8 minds — a genuine split. Run another panel for clarity.`,
+    winnerCount,
+    loserCount,
+  };
+}
