@@ -21,8 +21,11 @@ import { PERSONAS } from './personas';
 import {
   FORECAST_STANCE_LABELS,
   buildForecast,
+  clearForecastCounter,
   forecastShareUrl,
   forecastValid,
+  incrementForecastCounter,
+  readForecastCounter,
 } from './personaForecast';
 
 const VALID_STANCES = new Set(Object.keys(FORECAST_STANCE_LABELS));
@@ -92,5 +95,26 @@ describe('forecastShareUrl', () => {
     const url = forecastShareUrl('https://x', 'AI in 10 years');
     expect(url).toContain('/persona-forecast');
     expect(url).toContain('s=AI%20in%2010%20years');
+  });
+});
+
+describe('forecast counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearForecastCounter();
+    expect(readForecastCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearForecastCounter();
+    expect(incrementForecastCounter()).toBe(1);
+    expect(incrementForecastCounter()).toBe(2);
+    expect(incrementForecastCounter()).toBe(3);
+  });
+
+  it('clearForecastCounter resets to 0', () => {
+    incrementForecastCounter();
+    incrementForecastCounter();
+    clearForecastCounter();
+    expect(readForecastCounter()).toBe(0);
   });
 });

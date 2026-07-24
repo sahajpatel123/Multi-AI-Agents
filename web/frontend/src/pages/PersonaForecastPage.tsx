@@ -20,8 +20,11 @@ import { Pressable } from '../components/Pressable';
 import {
   FORECAST_STANCE_LABELS,
   buildForecast,
+  clearForecastCounter,
   forecastShareUrl,
   forecastValid,
+  incrementForecastCounter,
+  readForecastCounter,
   type ForecastStance,
   type PersonaForecast,
 } from '../data/personaForecast';
@@ -75,9 +78,12 @@ export function PersonaForecastPage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<string>>([]);
+  const [castCount, setCastCount] = useState(0);
+  const [stanceFilter, setStanceFilter] = useState<ForecastStance | null>(null);
 
   useEffect(() => {
     setPageVisible(true);
+    setCastCount(readForecastCounter());
     try {
       const raw = window.localStorage.getItem('arena:persona-forecast:history:v1');
       if (raw) {
@@ -95,6 +101,12 @@ export function PersonaForecastPage() {
     return forecastValid(f) ? f : null;
   }, [committed]);
 
+  const filteredTakes = useMemo(() => {
+    if (!forecast) return [];
+    if (!stanceFilter) return forecast.takes;
+    return forecast.takes.filter((t) => t.stance === stanceFilter);
+  }, [forecast, stanceFilter]);
+
   const onForecast = () => {
     setCommitted(scenario);
     if (typeof window !== 'undefined') {
@@ -111,6 +123,13 @@ export function PersonaForecastPage() {
     } catch {
       /* silent */
     }
+    const c = incrementForecastCounter();
+    setCastCount(c);
+  };
+
+  const onResetCounter = () => {
+    clearForecastCounter();
+    setCastCount(0);
   };
 
   const onReset = () => {
@@ -243,6 +262,23 @@ export function PersonaForecastPage() {
               </MotionButton>
             </div>
           </div>
+          <div className="pf-input__stats" aria-label="Forecast stats">
+            <div className="pf-input__stat">
+              <Sparkles aria-hidden="true" />
+              <span className="pf-input__stat-label">Forecasts cast</span>
+              <span className="pf-input__stat-value">{castCount}</span>
+            </div>
+            {castCount > 0 && (
+              <button
+                type="button"
+                className="pf-input__stat-reset"
+                onClick={onResetCounter}
+                aria-label="Reset forecasts counter"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="pf-samples" aria-label="Sample scenarios">
@@ -282,8 +318,42 @@ export function PersonaForecastPage() {
               </div>
             </header>
 
+            <div
+              className="pf-filter"
+              role="radiogroup"
+              aria-label="Filter by stance"
+            >
+              <Pressable
+                type="button"
+                role="radio"
+                aria-checked={stanceFilter === null}
+                className={`pf-filter__chip${stanceFilter === null ? ' pf-filter__chip--active' : ''}`}
+                onClick={() => setStanceFilter(null)}
+              >
+                All ({forecast.takes.length})
+              </Pressable>
+              {(['predicts-up', 'predicts-down', 'predicts-sideways', 'predicts-disruption'] as const).map(
+                (stance) => {
+                  const count = forecast.takes.filter((t) => t.stance === stance).length;
+                  if (count === 0) return null;
+                  return (
+                    <Pressable
+                      key={stance}
+                      type="button"
+                      role="radio"
+                      aria-checked={stanceFilter === stance}
+                      className={`pf-filter__chip pf-filter__chip--${stance}${stanceFilter === stance ? ' pf-filter__chip--active' : ''}`}
+                      onClick={() => setStanceFilter(stance)}
+                    >
+                      {FORECAST_STANCE_LABELS[stance]} ({count})
+                    </Pressable>
+                  );
+                },
+              )}
+            </div>
+
             <ul className="pf-list">
-              {forecast.takes.map((take) => {
+              {filteredTakes.map((take) => {
                 const persona = findPersona(take.personaId);
                 if (!persona) return null;
                 const StanceIcon = STANCE_ICONS[take.stance];

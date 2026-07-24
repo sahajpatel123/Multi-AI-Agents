@@ -226,4 +226,41 @@ export function forecastShareUrl(origin: string, scenario: string): string {
   return `${origin}/persona-forecast?s=${encodeURIComponent(scenario)}`;
 }
 
+// Lifetime counter — how many forecasts the user has cast, persisted
+// across reloads.
+
+const COUNTER_KEY = 'arena:persona-forecast:counter:v1';
+
+export function readForecastCounter(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(COUNTER_KEY);
+    if (!raw) return 0;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function incrementForecastCounter(): number {
+  const next = readForecastCounter() + 1;
+  if (typeof window === 'undefined') return next;
+  try {
+    window.localStorage.setItem(COUNTER_KEY, String(next));
+  } catch {
+    /* silent */
+  }
+  return next;
+}
+
+export function clearForecastCounter() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(COUNTER_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
 export { STANCE_LABELS as FORECAST_STANCE_LABELS };
