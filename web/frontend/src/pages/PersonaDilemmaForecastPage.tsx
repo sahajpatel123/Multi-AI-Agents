@@ -15,9 +15,18 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendDilemmaForecastDecision,
   buildDilemmaForecast,
+  clearDilemmaForecastCounter,
+  clearDilemmaForecastDecisions,
+  dilemmaForecastMajorityInfo,
   dilemmaForecastShareUrl,
   dilemmaForecastValid,
+  dilemmaForecastWinTally,
+  incrementDilemmaForecastCounter,
+  readDilemmaForecastCounter,
+  readDilemmaForecastDecisions,
+  type DilemmaForecastDecisionEntry,
   type PersonaDilemmaForecast,
 } from '../data/personaDilemmaForecast';
 import { PERSONAS } from '../data/personas';
@@ -68,9 +77,13 @@ export function PersonaDilemmaForecastPage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<{ a: string; b: string }>>([]);
+  const [castCount, setCastCount] = useState(0);
+  const [decisions, setDecisions] = useState<ReadonlyArray<DilemmaForecastDecisionEntry>>([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setCastCount(readDilemmaForecastCounter());
+    setDecisions(readDilemmaForecastDecisions());
     try {
       const raw = window.localStorage.getItem('arena:persona-dilemma-forecast:history:v1');
       if (raw) {
@@ -87,6 +100,16 @@ export function PersonaDilemmaForecastPage() {
     const f = buildDilemmaForecast(dilemmaA, dilemmaB);
     return dilemmaForecastValid(f) ? f : null;
   }, [dilemmaA, dilemmaB]);
+
+  const lifetimeTally = useMemo(
+    () => dilemmaForecastWinTally(decisions),
+    [decisions],
+  );
+
+  const majority = useMemo(
+    () => (forecast ? dilemmaForecastMajorityInfo(forecast.tally, forecast.winner) : null),
+    [forecast],
+  );
 
   const onForecast = () => {
     const url = dilemmaForecastShareUrl(
@@ -111,6 +134,26 @@ export function PersonaDilemmaForecastPage() {
     } catch {
       /* silent */
     }
+    if (forecast) {
+      const decision: DilemmaForecastDecisionEntry = {
+        id: `forecast-${Date.now()}`,
+        dilemmaASnippet: dilemmaA.length > 40 ? `${dilemmaA.slice(0, 37)}...` : dilemmaA,
+        dilemmaBSnippet: dilemmaB.length > 40 ? `${dilemmaB.slice(0, 37)}...` : dilemmaB,
+        winner: forecast.winner,
+        savedAt: new Date().toISOString(),
+      };
+      appendDilemmaForecastDecision(decision);
+      setDecisions(readDilemmaForecastDecisions());
+    }
+    const c = incrementDilemmaForecastCounter();
+    setCastCount(c);
+  };
+
+  const onResetLifetime = () => {
+    clearDilemmaForecastCounter();
+    clearDilemmaForecastDecisions();
+    setCastCount(0);
+    setDecisions([]);
   };
 
   const onReset = () => {
@@ -262,6 +305,35 @@ export function PersonaDilemmaForecastPage() {
               </MotionButton>
             </div>
           </div>
+          <div className="pdfo-input__stats" aria-label="Forecast stats">
+            <div className="pdfo-input__stat">
+              <Sparkles aria-hidden="true" />
+              <span className="pdfo-input__stat-label">Forecasts cast</span>
+              <span className="pdfo-input__stat-value">{castCount}</span>
+            </div>
+            {lifetimeTally.a > 0 && (
+              <div className="pdfo-input__stat pdfo-input__stat--a">
+                <span className="pdfo-input__stat-label">A wins</span>
+                <span className="pdfo-input__stat-value">{lifetimeTally.a}</span>
+              </div>
+            )}
+            {lifetimeTally.b > 0 && (
+              <div className="pdfo-input__stat pdfo-input__stat--b">
+                <span className="pdfo-input__stat-label">B wins</span>
+                <span className="pdfo-input__stat-value">{lifetimeTally.b}</span>
+              </div>
+            )}
+            {(castCount > 0 || lifetimeTally.a > 0 || lifetimeTally.b > 0) && (
+              <button
+                type="button"
+                className="pdfo-input__stat-reset"
+                onClick={onResetLifetime}
+                aria-label="Reset forecasts counter and lifetime tally"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="pdfo-samples" aria-label="Sample forecasts">
@@ -302,6 +374,11 @@ export function PersonaDilemmaForecastPage() {
                   {forecast.tally.a} for A · {forecast.tally.b} for B
                 </span>
               </h2>
+              {majority && (
+                <p className={`pdfo-result__majority pdfo-result__majority--${majority.label}`}>
+                  {majority.description}
+                </p>
+              )}
             </header>
 
             <div className="pdfo-sides">

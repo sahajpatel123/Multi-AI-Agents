@@ -183,3 +183,151 @@ export function dilemmaForecastShareUrl(
 ): string {
   return `${origin}/persona-dilemma-forecast?a=${encodeURIComponent(dilemmaA)}&b=${encodeURIComponent(dilemmaB)}`;
 }
+
+// Lifetime counter + A/B win tally — persisted across reloads.
+
+export interface DilemmaForecastDecisionEntry {
+  readonly id: string;
+  readonly dilemmaASnippet: string;
+  readonly dilemmaBSnippet: string;
+  readonly winner: DilemmaForecastPick;
+  readonly savedAt: string;
+}
+
+const COUNTER_KEY = 'arena:persona-dilemma-forecast:counter:v1';
+const DECISIONS_KEY = 'arena:persona-dilemma-forecast:decisions:v1';
+const DECISIONS_LIMIT = 50;
+
+export function readDilemmaForecastCounter(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(COUNTER_KEY);
+    if (!raw) return 0;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function incrementDilemmaForecastCounter(): number {
+  const next = readDilemmaForecastCounter() + 1;
+  if (typeof window === 'undefined') return next;
+  try {
+    window.localStorage.setItem(COUNTER_KEY, String(next));
+  } catch {
+    /* silent */
+  }
+  return next;
+}
+
+export function clearDilemmaForecastCounter() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(COUNTER_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+export function appendDilemmaForecastDecision(
+  entry: DilemmaForecastDecisionEntry,
+) {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(DECISIONS_KEY);
+    const existing: DilemmaForecastDecisionEntry[] = raw
+      ? (JSON.parse(raw) as DilemmaForecastDecisionEntry[])
+      : [];
+    const next = [entry, ...existing.filter((e) => e.id !== entry.id)].slice(0, DECISIONS_LIMIT);
+    window.localStorage.setItem(DECISIONS_KEY, JSON.stringify(next));
+  } catch {
+    /* silent */
+  }
+}
+
+export function readDilemmaForecastDecisions(): ReadonlyArray<DilemmaForecastDecisionEntry> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(DECISIONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as DilemmaForecastDecisionEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (e) =>
+        e &&
+        typeof e.id === 'string' &&
+        (e.winner === 'A' || e.winner === 'B'),
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function clearDilemmaForecastDecisions() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(DECISIONS_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+export interface DilemmaForecastTally {
+  readonly a: number;
+  readonly b: number;
+}
+
+/** Pure — compute lifetime A vs B win tally from decision log. */
+export function dilemmaForecastWinTally(
+  decisions: ReadonlyArray<DilemmaForecastDecisionEntry>,
+): DilemmaForecastTally {
+  let a = 0;
+  let b = 0;
+  for (const d of decisions) {
+    if (d.winner === 'A') a += 1;
+    else b += 1;
+  }
+  return { a, b };
+}
+
+export type DilemmaForecastMajorityLabel = 'unanimous' | 'strong' | 'split';
+
+export interface DilemmaForecastMajorityInfo {
+  readonly label: DilemmaForecastMajorityLabel;
+  readonly description: string;
+  readonly winnerCount: number;
+  readonly loserCount: number;
+}
+
+/** Pure — describe how decisive a tally is. For a 4-mind panel:
+ * 4/4 is unanimous, 3/4 is strong, 2/4 is split. */
+export function dilemmaForecastMajorityInfo(
+  tally: DilemmaForecastTally,
+  winner: DilemmaForecastPick,
+): DilemmaForecastMajorityInfo {
+  const winnerCount = winner === 'A' ? tally.a : tally.b;
+  const loserCount = winner === 'A' ? tally.b : tally.a;
+  if (winnerCount === 4) {
+    return {
+      label: 'unanimous',
+      description: '4 of 4 minds — unanimous.',
+      winnerCount,
+      loserCount,
+    };
+  }
+  if (winnerCount === 3) {
+    return {
+      label: 'strong',
+      description: '3 of 4 minds — a strong majority.',
+      winnerCount,
+      loserCount,
+    };
+  }
+  return {
+    label: 'split',
+    description: '2 of 4 minds — a genuine split.',
+    winnerCount,
+    loserCount,
+  };
+}

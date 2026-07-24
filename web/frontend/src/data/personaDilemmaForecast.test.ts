@@ -18,9 +18,17 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  appendDilemmaForecastDecision,
   buildDilemmaForecast,
+  clearDilemmaForecastCounter,
+  clearDilemmaForecastDecisions,
+  dilemmaForecastMajorityInfo,
   dilemmaForecastShareUrl,
   dilemmaForecastValid,
+  dilemmaForecastWinTally,
+  incrementDilemmaForecastCounter,
+  readDilemmaForecastCounter,
+  readDilemmaForecastDecisions,
   type DilemmaForecastPick,
 } from './personaDilemmaForecast';
 
@@ -91,5 +99,95 @@ describe('dilemmaForecastShareUrl', () => {
     expect(url).toContain('/persona-dilemma-forecast');
     expect(url).toContain('a=Dilemma%20A');
     expect(url).toContain('b=Dilemma%20B');
+  });
+});
+
+describe('dilemma forecast counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearDilemmaForecastCounter();
+    expect(readDilemmaForecastCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearDilemmaForecastCounter();
+    expect(incrementDilemmaForecastCounter()).toBe(1);
+    expect(incrementDilemmaForecastCounter()).toBe(2);
+  });
+
+  it('clearDilemmaForecastCounter resets to 0', () => {
+    incrementDilemmaForecastCounter();
+    clearDilemmaForecastCounter();
+    expect(readDilemmaForecastCounter()).toBe(0);
+  });
+});
+
+describe('dilemma forecast decisions + winTally (localStorage)', () => {
+  const makeDecision = (id: string, winner: DilemmaForecastPick) => ({
+    id,
+    dilemmaASnippet: 'A',
+    dilemmaBSnippet: 'B',
+    winner,
+    savedAt: '2026-07-25T00:00:00Z',
+  });
+
+  it('readDilemmaForecastDecisions returns empty array when storage is empty', () => {
+    clearDilemmaForecastDecisions();
+    expect(readDilemmaForecastDecisions()).toEqual([]);
+  });
+
+  it('appendDilemmaForecastDecision + read round-trip', () => {
+    clearDilemmaForecastDecisions();
+    appendDilemmaForecastDecision(makeDecision('d-1', 'A'));
+    expect(readDilemmaForecastDecisions()).toHaveLength(1);
+  });
+
+  it('appendDilemmaForecastDecision deduplicates by id', () => {
+    clearDilemmaForecastDecisions();
+    appendDilemmaForecastDecision(makeDecision('dup', 'A'));
+    appendDilemmaForecastDecision(makeDecision('dup', 'B'));
+    const result = readDilemmaForecastDecisions();
+    expect(result.length).toBe(1);
+    expect(result[0].winner).toBe('B');
+  });
+
+  it('clearDilemmaForecastDecisions empties storage', () => {
+    appendDilemmaForecastDecision(makeDecision('x', 'A'));
+    clearDilemmaForecastDecisions();
+    expect(readDilemmaForecastDecisions()).toEqual([]);
+  });
+});
+
+describe('dilemmaForecastWinTally', () => {
+  it('returns 0/0 for empty history', () => {
+    expect(dilemmaForecastWinTally([])).toEqual({ a: 0, b: 0 });
+  });
+
+  it('counts A and B winners correctly', () => {
+    const decisions = [
+      { id: 'a', dilemmaASnippet: 'A', dilemmaBSnippet: 'B', winner: 'A' as const, savedAt: '' },
+      { id: 'b', dilemmaASnippet: 'A', dilemmaBSnippet: 'B', winner: 'A' as const, savedAt: '' },
+      { id: 'c', dilemmaASnippet: 'A', dilemmaBSnippet: 'B', winner: 'B' as const, savedAt: '' },
+    ];
+    const tally = dilemmaForecastWinTally(decisions);
+    expect(tally.a).toBe(2);
+    expect(tally.b).toBe(1);
+  });
+});
+
+describe('dilemmaForecastMajorityInfo', () => {
+  it('returns unanimous for 4/4', () => {
+    const info = dilemmaForecastMajorityInfo({ a: 4, b: 0 }, 'A');
+    expect(info.label).toBe('unanimous');
+    expect(info.winnerCount).toBe(4);
+  });
+
+  it('returns strong for 3/4', () => {
+    const info = dilemmaForecastMajorityInfo({ a: 3, b: 1 }, 'A');
+    expect(info.label).toBe('strong');
+  });
+
+  it('returns split for 2/4 or less', () => {
+    const info = dilemmaForecastMajorityInfo({ a: 2, b: 2 }, 'A');
+    expect(info.label).toBe('split');
   });
 });
