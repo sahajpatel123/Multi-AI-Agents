@@ -19,9 +19,17 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  appendForecastBattleDecision,
   buildForecastBattle,
+  clearForecastBattleCounter,
+  clearForecastBattleDecisions,
   forecastBattleShareUrl,
   forecastBattleValid,
+  forecastBattleWinTally,
+  incrementForecastBattleCounter,
+  readForecastBattleCounter,
+  readForecastBattleDecisions,
+  type ForecastBattleDecisionEntry,
   type ForecastBattlePick,
 } from './personaForecastBattle';
 
@@ -94,5 +102,78 @@ describe('forecastBattleShareUrl', () => {
     expect(url).toContain('/persona-forecast-battle');
     expect(url).toContain('a=A%20text');
     expect(url).toContain('b=B%20text');
+  });
+});
+
+describe('forecast battle counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearForecastBattleCounter();
+    expect(readForecastBattleCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearForecastBattleCounter();
+    expect(incrementForecastBattleCounter()).toBe(1);
+    expect(incrementForecastBattleCounter()).toBe(2);
+  });
+
+  it('clearForecastBattleCounter resets to 0', () => {
+    incrementForecastBattleCounter();
+    incrementForecastBattleCounter();
+    clearForecastBattleCounter();
+    expect(readForecastBattleCounter()).toBe(0);
+  });
+});
+
+describe('forecast battle decisions + winTally (localStorage)', () => {
+  const makeDecision = (id: string, winner: ForecastBattlePick): ForecastBattleDecisionEntry => ({
+    id,
+    scenarioASnippet: 'A',
+    scenarioBSnippet: 'B',
+    winner,
+    savedAt: new Date().toISOString(),
+  });
+
+  it('readForecastBattleDecisions returns empty array when storage is empty', () => {
+    clearForecastBattleDecisions();
+    expect(readForecastBattleDecisions()).toEqual([]);
+  });
+
+  it('appendForecastBattleDecision + read round-trip', () => {
+    clearForecastBattleDecisions();
+    appendForecastBattleDecision(makeDecision('d-1', 'A'));
+    expect(readForecastBattleDecisions()).toHaveLength(1);
+  });
+
+  it('appendForecastBattleDecision deduplicates by id', () => {
+    clearForecastBattleDecisions();
+    appendForecastBattleDecision(makeDecision('dup', 'A'));
+    appendForecastBattleDecision(makeDecision('dup', 'B'));
+    const result = readForecastBattleDecisions();
+    expect(result.length).toBe(1);
+    expect(result[0].winner).toBe('B');
+  });
+
+  it('clearForecastBattleDecisions empties storage', () => {
+    appendForecastBattleDecision(makeDecision('x', 'A'));
+    clearForecastBattleDecisions();
+    expect(readForecastBattleDecisions()).toEqual([]);
+  });
+});
+
+describe('forecastBattleWinTally', () => {
+  it('returns 0/0 for empty history', () => {
+    expect(forecastBattleWinTally([])).toEqual({ a: 0, b: 0, total: 0 });
+  });
+
+  it('counts A and B winners correctly', () => {
+    const decisions: ReadonlyArray<ForecastBattleDecisionEntry> = [
+      { id: 'a', scenarioASnippet: 'A', scenarioBSnippet: 'B', winner: 'A', savedAt: '' },
+      { id: 'b', scenarioASnippet: 'A', scenarioBSnippet: 'B', winner: 'A', savedAt: '' },
+      { id: 'c', scenarioASnippet: 'A', scenarioBSnippet: 'B', winner: 'B', savedAt: '' },
+      { id: 'd', scenarioASnippet: 'A', scenarioBSnippet: 'B', winner: 'B', savedAt: '' },
+      { id: 'e', scenarioASnippet: 'A', scenarioBSnippet: 'B', winner: 'B', savedAt: '' },
+    ];
+    expect(forecastBattleWinTally(decisions)).toEqual({ a: 2, b: 3, total: 5 });
   });
 });

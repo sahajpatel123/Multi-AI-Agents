@@ -17,9 +17,17 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendForecastBattleDecision,
   buildForecastBattle,
+  clearForecastBattleCounter,
+  clearForecastBattleDecisions,
   forecastBattleShareUrl,
   forecastBattleValid,
+  forecastBattleWinTally,
+  incrementForecastBattleCounter,
+  readForecastBattleCounter,
+  readForecastBattleDecisions,
+  type ForecastBattleDecisionEntry,
   type PersonaForecastBattle,
 } from '../data/personaForecastBattle';
 import { PERSONAS } from '../data/personas';
@@ -70,9 +78,13 @@ export function PersonaForecastBattlePage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<{ a: string; b: string }>>([]);
+  const [castCount, setCastCount] = useState(0);
+  const [decisions, setDecisions] = useState<ReadonlyArray<ForecastBattleDecisionEntry>>([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setCastCount(readForecastBattleCounter());
+    setDecisions(readForecastBattleDecisions());
     try {
       const raw = window.localStorage.getItem('arena:persona-forecast-battle:history:v1');
       if (raw) {
@@ -89,6 +101,11 @@ export function PersonaForecastBattlePage() {
     const b = buildForecastBattle(scenarioA, scenarioB);
     return forecastBattleValid(b) ? b : null;
   }, [scenarioA, scenarioB]);
+
+  const lifetimeTally = useMemo(
+    () => forecastBattleWinTally(decisions),
+    [decisions],
+  );
 
   const onBattle = () => {
     if (typeof window === 'undefined') return;
@@ -110,6 +127,26 @@ export function PersonaForecastBattlePage() {
     } catch {
       /* silent */
     }
+    if (battle) {
+      const decision: ForecastBattleDecisionEntry = {
+        id: `battle-${Date.now()}`,
+        scenarioASnippet: scenarioA.length > 40 ? `${scenarioA.slice(0, 37)}...` : scenarioA,
+        scenarioBSnippet: scenarioB.length > 40 ? `${scenarioB.slice(0, 37)}...` : scenarioB,
+        winner: battle.winner,
+        savedAt: new Date().toISOString(),
+      };
+      appendForecastBattleDecision(decision);
+      setDecisions(readForecastBattleDecisions());
+    }
+    const c = incrementForecastBattleCounter();
+    setCastCount(c);
+  };
+
+  const onResetLifetime = () => {
+    clearForecastBattleCounter();
+    clearForecastBattleDecisions();
+    setCastCount(0);
+    setDecisions([]);
   };
 
   const onReset = () => {
@@ -254,6 +291,35 @@ export function PersonaForecastBattlePage() {
                 Run the battle
               </MotionButton>
             </div>
+          </div>
+          <div className="pfb-input__stats" aria-label="Forecast battle stats">
+            <div className="pfb-input__stat">
+              <Crown aria-hidden="true" />
+              <span className="pfb-input__stat-label">Battles run</span>
+              <span className="pfb-input__stat-value">{castCount}</span>
+            </div>
+            {lifetimeTally.total > 0 && (
+              <div className="pfb-input__stat pfb-input__stat--a">
+                <span className="pfb-input__stat-label">A wins</span>
+                <span className="pfb-input__stat-value">{lifetimeTally.a}</span>
+              </div>
+            )}
+            {lifetimeTally.total > 0 && (
+              <div className="pfb-input__stat pfb-input__stat--b">
+                <span className="pfb-input__stat-label">B wins</span>
+                <span className="pfb-input__stat-value">{lifetimeTally.b}</span>
+              </div>
+            )}
+            {(castCount > 0 || lifetimeTally.total > 0) && (
+              <button
+                type="button"
+                className="pfb-input__stat-reset"
+                onClick={onResetLifetime}
+                aria-label="Reset battles counter and lifetime tally"
+              >
+                Reset
+              </button>
+            )}
           </div>
         </section>
 
