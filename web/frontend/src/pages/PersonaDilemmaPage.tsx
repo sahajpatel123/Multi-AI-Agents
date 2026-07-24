@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   CheckCircle2,
+  Eye,
+  EyeOff,
   History,
   RotateCcw,
   Scale,
   Share2,
   Sparkles,
   Swords,
+  Trophy,
   X,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -16,10 +19,14 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendDecision,
   buildDilemma,
+  clearDecisions,
   dilemmaShareUrl,
   dilemmaTally,
   dilemmaValid,
+  readDecisions,
+  winTally,
   type PersonaDilemma,
 } from '../data/personaDilemma';
 import { PERSONAS } from '../data/personas';
@@ -71,9 +78,12 @@ export function PersonaDilemmaPage() {
   const [copied, setCopied] = useState(false);
   const [winner, setWinner] = useState<'left' | 'right' | null>(null);
   const [history, setHistory] = useState<ReadonlyArray<{ left: string; right: string }>>([]);
+  const [muted, setMuted] = useState<ReadonlyArray<string>>([]);
+  const [decisions, setDecisions] = useState<ReturnType<typeof readDecisions>>([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setDecisions(readDecisions());
     try {
       const raw = window.localStorage.getItem('arena:persona-dilemma:history:v1');
       if (raw) {
@@ -91,10 +101,21 @@ export function PersonaDilemmaPage() {
     return dilemmaValid(d) ? d : null;
   }, [left, right]);
 
+  const filteredDilemma = useMemo(() => {
+    if (!dilemma) return null;
+    if (muted.length === 0) return dilemma;
+    return {
+      ...dilemma,
+      takes: dilemma.takes.filter((t) => !muted.includes(t.personaId)),
+    };
+  }, [dilemma, muted]);
+
   const tally = useMemo(
-    () => (dilemma ? dilemmaTally(dilemma) : { left: 0, right: 0 }),
-    [dilemma],
+    () => (filteredDilemma ? dilemmaTally(filteredDilemma) : { left: 0, right: 0 }),
+    [filteredDilemma],
   );
+
+  const lifetimeTally = useMemo(() => winTally(decisions), [decisions]);
 
   const onShare = async () => {
     if (typeof window === 'undefined' || !dilemma) return;
@@ -144,6 +165,29 @@ export function PersonaDilemmaPage() {
     } catch {
       /* silent */
     }
+    // Append to decisions tally (lifetime win tracking).
+    const id = `decision-${Date.now()}`;
+    appendDecision({
+      id,
+      left,
+      right,
+      winner: side,
+      savedAt: new Date().toISOString(),
+    });
+    setDecisions(readDecisions());
+  };
+
+  const onToggleMute = (personaId: string) => {
+    setMuted((prev) =>
+      prev.includes(personaId)
+        ? prev.filter((id) => id !== personaId)
+        : [...prev, personaId],
+    );
+  };
+
+  const onClearLifetime = () => {
+    clearDecisions();
+    setDecisions([]);
   };
 
   const onLoadSample = (sample: { left: string; right: string }) => {
@@ -285,7 +329,47 @@ export function PersonaDilemmaPage() {
                 <span className="pdil-result__tally-sep">·</span>
                 <span>{tally.right} argue for B</span>
               </p>
+              {lifetimeTally.total > 0 && (
+                <p className="pdil-result__lifetime">
+                  <Trophy aria-hidden="true" /> Your lifetime verdicts: {lifetimeTally.left} for A · {lifetimeTally.right} for B ({lifetimeTally.total} total)
+                </p>
+              )}
             </header>
+
+            <div
+              className="pdil-mute"
+              role="group"
+              aria-label="Mute minds from this debate"
+            >
+              <p className="pdil-mute__label">
+                <EyeOff aria-hidden="true" /> Mute a mind
+              </p>
+              <ul>
+                {dilemma.takes.map((take) => {
+                  const persona = findPersona(take.personaId);
+                  if (!persona) return null;
+                  const isMuted = muted.includes(take.personaId);
+                  return (
+                    <li key={take.personaId}>
+                      <Pressable
+                        type="button"
+                        className={`pdil-mute__chip${isMuted ? ' pdil-mute__chip--muted' : ''}`}
+                        onClick={() => onToggleMute(take.personaId)}
+                        aria-pressed={isMuted}
+                        style={{ ['--pdil-mute-color' as string]: persona.color }}
+                      >
+                        {isMuted ? (
+                          <EyeOff aria-hidden="true" />
+                        ) : (
+                          <Eye aria-hidden="true" />
+                        )}
+                        {persona.name}
+                      </Pressable>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
 
             <div className="pdil-sides">
               {(['left', 'right'] as const).map((side) => (
@@ -297,7 +381,7 @@ export function PersonaDilemmaPage() {
                     {side === 'left' ? 'Argues for A' : 'Argues for B'}
                   </p>
                   <ul className="pdil-side__takes">
-                    {dilemma.takes
+                    {(filteredDilemma?.takes ?? [])
                       .filter((t) => t.side === side)
                       .map((take) => {
                         const persona = findPersona(take.personaId);
@@ -385,10 +469,13 @@ export function PersonaDilemmaPage() {
               <button
                 type="button"
                 className="pdil-history__clear"
-                onClick={onClearHistory}
-                aria-label="Clear dilemma history"
+                onClick={() => {
+                  onClearHistory();
+                  onClearLifetime();
+                }}
+                aria-label="Clear all history and lifetime tally"
               >
-                <X aria-hidden="true" /> Clear
+                <X aria-hidden="true" /> Clear all
               </button>
             </div>
             <ul>

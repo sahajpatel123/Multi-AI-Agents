@@ -330,6 +330,97 @@ body .pdil-result__tally-sep {
   color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.4));
 }
 
+body .pdil-result__lifetime {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #D9B36C 18%, transparent);
+  border: 1px solid color-mix(in srgb, #D9B36C 50%, transparent);
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #D9B36C;
+  width: fit-content;
+}
+
+body .pdil-result__lifetime svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Mute row */
+body .pdil-mute {
+  padding: 16px 20px;
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 14px;
+  background: rgba(243, 240, 231, 0.03);
+}
+
+body .pdil-mute__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));
+}
+
+body .pdil-mute__label svg {
+  width: 12px;
+  height: 12px;
+}
+
+body .pdil-mute ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+body .pdil-mute__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(243, 240, 231, 0.04);
+  border: 1px solid color-mix(in srgb, var(--pdil-mute-color) 40%, transparent);
+  color: var(--vp-ivory);
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: opacity 220ms ease, background 220ms ease;
+}
+
+body .pdil-mute__chip:hover {
+  background: color-mix(in srgb, var(--pdil-mute-color) 14%, transparent);
+}
+
+body .pdil-mute__chip svg {
+  width: 12px;
+  height: 12px;
+  color: var(--pdil-mute-color);
+}
+
+body .pdil-mute__chip--muted {
+  opacity: 0.4;
+  text-decoration: line-through;
+  background: rgba(243, 240, 231, 0.02);
+}
+
+body .pdil-mute__chip--muted svg {
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.5));
+}
+
 /* Sides */
 body .pdil-sides {
   display: grid;

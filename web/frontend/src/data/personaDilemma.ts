@@ -168,3 +168,79 @@ export function dilemmaShareUrl(
 ): string {
   return `${origin}/persona-dilemma?l=${encodeURIComponent(left)}&r=${encodeURIComponent(right)}`;
 }
+
+// Decisions counter — lifetime tally of how many dilemmas the user
+// has actually decided (picked a winner on). Persisted across
+// reloads so the counter survives.
+
+export interface DilemmaDecisionEntry {
+  readonly id: string;
+  readonly left: string;
+  readonly right: string;
+  readonly winner: 'left' | 'right';
+  readonly savedAt: string;
+}
+
+const HISTORY_KEY = 'arena:persona-dilemma:decisions:v1';
+const COUNTER_LIMIT = 50;
+
+export function readDecisions(): ReadonlyArray<DilemmaDecisionEntry> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as DilemmaDecisionEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (e) =>
+          e &&
+          typeof e.id === 'string' &&
+          typeof e.left === 'string' &&
+          typeof e.right === 'string' &&
+          (e.winner === 'left' || e.winner === 'right'),
+      )
+      .slice(0, COUNTER_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+export function appendDecision(entry: DilemmaDecisionEntry) {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = readDecisions().filter((e) => e.id !== entry.id);
+    const next = [entry, ...existing].slice(0, COUNTER_LIMIT);
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    /* silent */
+  }
+}
+
+export function clearDecisions() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(HISTORY_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+export interface DilemmaWinTally {
+  readonly left: number;
+  readonly right: number;
+  readonly total: number;
+}
+
+/** Pure — compute lifetime win tally from decisions history. */
+export function winTally(
+  decisions: ReadonlyArray<DilemmaDecisionEntry>,
+): DilemmaWinTally {
+  let left = 0;
+  let right = 0;
+  for (const d of decisions) {
+    if (d.winner === 'left') left += 1;
+    else right += 1;
+  }
+  return { left, right, total: left + right };
+}
