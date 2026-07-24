@@ -17,9 +17,14 @@ import { Pressable } from '../components/Pressable';
 import {
   appendUserEntry,
   buildConfessionalCouncil,
+  clearConfessionalCounter,
   clearUserEntries,
   confessionalShareUrl,
+  confessionalTodayIso,
   getCuratedEntries,
+  incrementConfessionalCounter,
+  pickFeaturedEntryId,
+  readConfessionalCounter,
   readUserEntries,
   removeUserEntry,
   type ConfessionalCouncil,
@@ -49,13 +54,20 @@ export function PersonaConfessionalPage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [userEntries, setUserEntries] = useState<ReadonlyArray<ConfessionalEntry>>([]);
+  const [confessCount, setConfessCount] = useState(0);
 
   useEffect(() => {
     setPageVisible(true);
     setUserEntries(readUserEntries());
+    setConfessCount(readConfessionalCounter());
   }, []);
 
   const curated = useMemo(() => getCuratedEntries(), []);
+
+  const featuredId = useMemo(
+    () => pickFeaturedEntryId(confessionalTodayIso()),
+    [],
+  );
 
   // The displayed council — either a shared prompt from the URL, or
   // the selected entry, or nothing.
@@ -88,6 +100,13 @@ export function PersonaConfessionalPage() {
       const url = confessionalShareUrl(window.location.origin, entry.prompt);
       window.history.replaceState({}, '', url);
     }
+    const c = incrementConfessionalCounter();
+    setConfessCount(c);
+  };
+
+  const onResetCounter = () => {
+    clearConfessionalCounter();
+    setConfessCount(0);
   };
 
   const onShare = async () => {
@@ -177,14 +196,18 @@ export function PersonaConfessionalPage() {
           <ul className="pcf-wall__list">
             {curated.map((entry) => {
               const isActive = selectedEntry?.id === entry.id;
+              const isFeatured = featuredId === entry.id;
               return (
                 <li key={entry.id}>
                   <Pressable
                     type="button"
-                    className={`pcf-entry${isActive ? ' pcf-entry--active' : ''}`}
+                    className={`pcf-entry${isActive ? ' pcf-entry--active' : ''}${isFeatured ? ' pcf-entry--featured' : ''}`}
                     onClick={() => setSelectedEntry(entry)}
                   >
                     <span className="pcf-entry__badge">Curated</span>
+                    {isFeatured && (
+                      <span className="pcf-entry__featured">Today's pick</span>
+                    )}
                     <span className="pcf-entry__label">{entry.label}</span>
                     <span className="pcf-entry__prompt">
                       "{entry.prompt.slice(0, 80)}{entry.prompt.length > 80 ? '...' : ''}"
@@ -277,6 +300,23 @@ export function PersonaConfessionalPage() {
               <X aria-hidden="true" /> Clear all your entries
             </button>
           )}
+          <div className="pcf-submit__stats" aria-label="Confessional stats">
+            <div className="pcf-submit__stat">
+              <Flame aria-hidden="true" />
+              <span className="pcf-submit__stat-label">Confessions cast</span>
+              <span className="pcf-submit__stat-value">{confessCount}</span>
+            </div>
+            {confessCount > 0 && (
+              <button
+                type="button"
+                className="pcf-submit__stat-reset"
+                onClick={onResetCounter}
+                aria-label="Reset confessions counter"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         {activeCouncil && (

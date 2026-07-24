@@ -219,3 +219,62 @@ export function confessionalValid(entry: ConfessionalEntry): boolean {
 export function confessionalShareUrl(origin: string, prompt: string): string {
   return `${origin}/persona-confessional?prompt=${encodeURIComponent(prompt)}`;
 }
+
+// Lifetime counter — how many confessionals the user has submitted.
+
+const COUNTER_KEY = 'arena:persona-confessional:counter:v1';
+
+export function readConfessionalCounter(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(COUNTER_KEY);
+    if (!raw) return 0;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function incrementConfessionalCounter(): number {
+  const next = readConfessionalCounter() + 1;
+  if (typeof window === 'undefined') return next;
+  try {
+    window.localStorage.setItem(COUNTER_KEY, String(next));
+  } catch {
+    /* silent */
+  }
+  return next;
+}
+
+export function clearConfessionalCounter() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(COUNTER_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+/**
+ * Pure — pick the featured curated entry for the day. The featured
+ * entry rotates daily by day-of-year so the wall always has a
+ * different "today's pick" highlight.
+ */
+export function pickFeaturedEntryId(dateIso: string): string | null {
+  const entries = getCuratedEntries();
+  if (entries.length === 0) return null;
+  const [y, m, d] = dateIso.split('-').map((s) => Number.parseInt(s, 10));
+  if (!y || !m || !d) return entries[0]?.id ?? null;
+  const dayIndex = Math.floor(Date.UTC(y, m - 1, d) / (1000 * 60 * 60 * 24));
+  return entries[dayIndex % entries.length].id;
+}
+
+/** Today's date as YYYY-MM-DD in local timezone. */
+export function confessionalTodayIso(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}

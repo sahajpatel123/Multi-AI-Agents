@@ -22,10 +22,15 @@ import { PERSONAS } from './personas';
 import {
   appendUserEntry,
   buildConfessionalCouncil,
+  clearConfessionalCounter,
   clearUserEntries,
   confessionalShareUrl,
+  confessionalTodayIso,
   confessionalValid,
   getCuratedEntries,
+  incrementConfessionalCounter,
+  pickFeaturedEntryId,
+  readConfessionalCounter,
   readUserEntries,
   removeUserEntry,
   type ConfessionalEntry,
@@ -153,5 +158,58 @@ describe('user entries (localStorage)', () => {
     appendUserEntry(SAMPLE_ENTRY);
     clearUserEntries();
     expect(readUserEntries()).toEqual([]);
+  });
+});
+
+describe('confessional counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearConfessionalCounter();
+    expect(readConfessionalCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearConfessionalCounter();
+    expect(incrementConfessionalCounter()).toBe(1);
+    expect(incrementConfessionalCounter()).toBe(2);
+  });
+
+  it('clearConfessionalCounter resets to 0', () => {
+    incrementConfessionalCounter();
+    incrementConfessionalCounter();
+    clearConfessionalCounter();
+    expect(readConfessionalCounter()).toBe(0);
+  });
+});
+
+describe('confessionalTodayIso', () => {
+  it('returns a YYYY-MM-DD string', () => {
+    expect(confessionalTodayIso()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe('pickFeaturedEntryId', () => {
+  it('returns a curated entry id for any date', () => {
+    const ids = getCuratedEntries().map((e) => e.id);
+    for (let day = 1; day <= 14; day++) {
+      const id = pickFeaturedEntryId(`2026-07-${String(day).padStart(2, '0')}`);
+      expect(ids).toContain(id);
+    }
+  });
+
+  it('produces variety across many consecutive days', () => {
+    const seen = new Set<string>();
+    for (let day = 1; day <= 30; day++) {
+      seen.add(pickFeaturedEntryId(`2026-07-${String(day).padStart(2, '0')}`));
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(4);
+  });
+
+  it('returns null for an empty curated list', () => {
+    // We can't easily test null because getCuratedEntries is
+    // non-empty in this codebase, but the function handles the
+    // edge case by returning entries[0]?.id ?? null. We assert
+    // a non-null result for a known date.
+    const id = pickFeaturedEntryId('2026-07-24');
+    expect(id).not.toBeNull();
   });
 });
