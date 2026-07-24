@@ -14,13 +14,18 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  appendSpinHistory,
+  clearSpinHistory,
   deterministicSpin,
+  discoveredPersonas,
   personaFromSeed,
+  readSpinHistory,
   spinPersonas,
   wheelArenaLink,
   wheelBattleLink,
   wheelMatchLink,
   wheelShareUrl,
+  type WheelSpinEntry,
 } from './personaWheel';
 
 describe('spinPersonas', () => {
@@ -142,5 +147,110 @@ describe('URL builders', () => {
     expect(wheelArenaLink(['analyst', 'optimist'])).toBe(
       '/app?seedPersona=analyst&seedPersona=optimist',
     );
+  });
+});
+
+describe('discoveredPersonas', () => {
+  it('returns unique persona ids across all entries', () => {
+    const history: ReadonlyArray<WheelSpinEntry> = [
+      {
+        id: 'a',
+        mode: 'single',
+        personaIds: ['analyst'],
+        seed: 's1',
+        savedAt: new Date().toISOString(),
+      },
+      {
+        id: 'b',
+        mode: 'pair',
+        personaIds: ['analyst', 'contrarian'],
+        seed: 's2',
+        savedAt: new Date().toISOString(),
+      },
+      {
+        id: 'c',
+        mode: 'trio',
+        personaIds: ['optimist', 'analyst', 'stoic'],
+        seed: 's3',
+        savedAt: new Date().toISOString(),
+      },
+    ];
+    const result = discoveredPersonas(history);
+    expect(new Set(result).size).toBe(result.length);
+    expect(result).toContain('analyst');
+    expect(result).toContain('contrarian');
+    expect(result).toContain('optimist');
+    expect(result).toContain('stoic');
+  });
+
+  it('returns empty array for empty history', () => {
+    expect(discoveredPersonas([])).toEqual([]);
+  });
+
+  it('returns ids in canonical PERSONAS order', () => {
+    const history: ReadonlyArray<WheelSpinEntry> = [
+      {
+        id: 'a',
+        mode: 'pair',
+        personaIds: ['optimist', 'analyst'], // reversed from catalog order
+        seed: 's',
+        savedAt: new Date().toISOString(),
+      },
+    ];
+    const result = discoveredPersonas(history);
+    const expectedOrder = PERSONAS.map((p) => p.id).filter(
+      (id) => id === 'analyst' || id === 'optimist',
+    );
+    expect(result).toEqual(expectedOrder);
+  });
+});
+
+describe('spin history helpers (localStorage)', () => {
+  const makeEntry = (id: string, ids: string[]): WheelSpinEntry => ({
+    id,
+    mode: 'single',
+    personaIds: ids,
+    seed: id,
+    savedAt: new Date().toISOString(),
+  });
+
+  it('readSpinHistory returns empty array when storage is empty', () => {
+    clearSpinHistory();
+    expect(readSpinHistory()).toEqual([]);
+  });
+
+  it('appendSpinHistory + readSpinHistory round-trip', () => {
+    clearSpinHistory();
+    const entry = makeEntry('test-1', ['analyst']);
+    appendSpinHistory(entry);
+    const result = readSpinHistory();
+    expect(result.length).toBe(1);
+    expect(result[0].id).toBe('test-1');
+    expect(result[0].personaIds).toEqual(['analyst']);
+  });
+
+  it('appendSpinHistory deduplicates by id', () => {
+    clearSpinHistory();
+    appendSpinHistory(makeEntry('dup', ['analyst']));
+    appendSpinHistory(makeEntry('dup', ['contrarian']));
+    const result = readSpinHistory();
+    expect(result.length).toBe(1);
+    // Latest write wins because the helper filters out the old id first.
+    expect(result[0].personaIds).toEqual(['contrarian']);
+  });
+
+  it('appendSpinHistory caps the stored list', () => {
+    clearSpinHistory();
+    for (let i = 0; i < 30; i++) {
+      appendSpinHistory(makeEntry(`spin-${i}`, ['analyst']));
+    }
+    const result = readSpinHistory();
+    expect(result.length).toBeLessThanOrEqual(24);
+  });
+
+  it('clearSpinHistory empties storage', () => {
+    appendSpinHistory(makeEntry('x', ['analyst']));
+    clearSpinHistory();
+    expect(readSpinHistory()).toEqual([]);
   });
 });

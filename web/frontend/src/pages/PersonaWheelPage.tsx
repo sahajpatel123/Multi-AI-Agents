@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
+  History,
   RefreshCw,
   Share2,
   Sparkles,
@@ -8,6 +9,7 @@ import {
   Users,
   User,
   Wand2,
+  X,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
@@ -16,12 +18,19 @@ import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import { PERSONAS } from '../data/personas';
 import {
+  appendSpinHistory,
+  clearSpinHistory,
+  discoveredPersonas,
+  playLanding,
+  playTick,
+  readSpinHistory,
   spinPersonas,
   wheelArenaLink,
   wheelBattleLink,
   wheelMatchLink,
   wheelShareUrl,
   type WheelMode,
+  type WheelSpinEntry,
 } from '../data/personaWheel';
 import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
@@ -101,6 +110,17 @@ export function PersonaWheelPage() {
   const [spinning, setSpinning] = useState(false);
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [history, setHistory] = useState<ReadonlyArray<WheelSpinEntry>>([]);
+  const [audioOn, setAudioOn] = useState(true);
+
+  // Load spin history on mount.
+  useEffect(() => {
+    setHistory(readSpinHistory());
+  }, []);
+
+  const discovered = useMemo(() => discoveredPersonas(history), [history]);
+  const discoveredCount = discovered.length;
+  const totalPersonas = PERSONAS.length;
 
   useEffect(() => {
     setPageVisible(true);
@@ -113,21 +133,36 @@ export function PersonaWheelPage() {
 
   const onSpin = useCallback(() => {
     setSpinning(true);
-    // Short delay so the wheel has time to start its animation; final
-    // result is set synchronously after the delay so the URL state can
-    // update in the same paint frame as the result reveal.
+    // Schedule a few audio ticks during the spin to give the wheel a
+    // mechanical feel without overlapping the landing chord.
+    if (audioOn) {
+      for (let i = 0; i < 6; i++) {
+        window.setTimeout(() => playTick(0.4 + i * 0.04), 80 + i * 130);
+      }
+    }
     const newSeed = generateSeed();
     window.setTimeout(() => {
       const result = spinPersonas(count);
       setSeed(newSeed);
       setPicked(result);
       setSpinning(false);
+      if (audioOn) playLanding();
       if (typeof window !== 'undefined') {
         const url = wheelShareUrl(window.location.origin, mode, result, newSeed);
         window.history.replaceState({}, '', url);
       }
+      // Append to spin history (capped at 24 entries inside the helper).
+      const entry: WheelSpinEntry = {
+        id: `${mode}-${newSeed}`,
+        mode,
+        personaIds: result,
+        seed: newSeed,
+        savedAt: new Date().toISOString(),
+      };
+      appendSpinHistory(entry);
+      setHistory(readSpinHistory());
     }, 1100);
-  }, [count, mode]);
+  }, [audioOn, count, mode]);
 
   // When the mode changes, clear the result so the user doesn't see a stale
   // single-persona result after switching to "trio".
@@ -175,6 +210,26 @@ export function PersonaWheelPage() {
     }
     setRedirectIntent(link);
     navigate('/signin?tab=signup');
+  };
+
+  const onReplayHistory = (entry: WheelSpinEntry) => {
+    setMode(entry.mode);
+    setPicked(entry.personaIds);
+    setSeed(entry.seed);
+    if (typeof window !== 'undefined') {
+      const url = wheelShareUrl(
+        window.location.origin,
+        entry.mode,
+        entry.personaIds,
+        entry.seed,
+      );
+      window.history.replaceState({}, '', url);
+    }
+  };
+
+  const onClearHistory = () => {
+    clearSpinHistory();
+    setHistory([]);
   };
 
   // If the URL has a deterministic seed + persona list on first render,
@@ -368,15 +423,114 @@ export function PersonaWheelPage() {
           >
             {spinning ? 'Spinning…' : picked.length === 0 ? 'Spin the wheel' : 'Spin again'}
           </MotionButton>
+          <button
+            type="button"
+            className={`pw-audio-toggle${audioOn ? ' pw-audio-toggle--on' : ''}`}
+            onClick={() => setAudioOn((on) => !on)}
+            aria-label={audioOn ? 'Mute wheel sounds' : 'Unmute wheel sounds'}
+            aria-pressed={audioOn}
+          >
+            {audioOn ? '🔊 Sound on' : '🔇 Sound off'}
+          </button>
           {sharedSeed && (
             <p className="pw-spin-cta__note">
               Shared seed <code>{sharedSeed}</code> · spin again for a new combo
             </p>
           )}
         </section>
+
+        <section className="pw-progress" aria-label="Discovery progress">
+          <div className="pw-progress__head">
+            <p className="pw-progress__label">
+              You've met {discoveredCount} of {totalPersonas} minds
+            </p>
+            <p className="pw-progress__percent">
+              {Math.round((discoveredCount / totalPersonas) * 100)}%
+            </p>
+          </div>
+          <div
+            className="pw-progress__track"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={totalPersonas}
+            aria-valuenow={discoveredCount}
+            aria-label="Personas discovered on the wheel"
+          >
+            <div
+              className="pw-progress__fill"
+              style={{ width: `${(discoveredCount / totalPersonas) * 100}%` }}
+            />
+          </div>
+          <ul className="pw-progress__chips" aria-label="Discovered personas">
+            {PERSONAS.map((p) => {
+              const met = discovered.includes(p.id);
+              return (
+                <li
+                  key={p.id}
+                  className={`pw-progress__chip${met ? ' pw-progress__chip--met' : ''}`}
+                  style={{ ['--pw-chip-color' as string]: p.color }}
+                  title={met ? `Met ${p.name}` : `Not yet met: ${p.name}`}
+                  aria-label={met ? `${p.name} discovered` : `${p.name} not yet met`}
+                >
+                  <span className="pw-progress__chip-dot" aria-hidden="true" />
+                  <span className="pw-progress__chip-name">{p.name}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        {history.length > 0 && (
+          <section className="pw-history" aria-label="Recent spins">
+            <div className="pw-history__head">
+              <p className="pw-history__label">
+                <History aria-hidden="true" /> Recent spins
+              </p>
+              <button
+                type="button"
+                className="pw-history__clear"
+                onClick={onClearHistory}
+                aria-label="Clear spin history"
+              >
+                <X aria-hidden="true" /> Clear
+              </button>
+            </div>
+            <ul>
+              {history.slice(0, 8).map((entry) => {
+                const names = entry.personaIds
+                  .map((id) => findPersona(id)?.name ?? id)
+                  .join(' vs ');
+                return (
+                  <li key={entry.id}>
+                    <Pressable
+                      type="button"
+                      className="pw-history__item"
+                      onClick={() => onReplayHistory(entry)}
+                      disabled={spinning}
+                    >
+                      <span className="pw-history__mode">{entry.mode}</span>
+                      <span className="pw-history__names">{names}</span>
+                      <span className="pw-history__time">{timeAgo(entry.savedAt)}</span>
+                    </Pressable>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
       </main>
 
       <Footer />
     </div>
   );
+}
+
+function timeAgo(iso: string): string {
+  const saved = new Date(iso).getTime();
+  if (!Number.isFinite(saved)) return '';
+  const diffMs = Date.now() - saved;
+  if (diffMs < 60_000) return 'just now';
+  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
+  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h ago`;
+  return `${Math.floor(diffMs / 86_400_000)}d ago`;
 }
