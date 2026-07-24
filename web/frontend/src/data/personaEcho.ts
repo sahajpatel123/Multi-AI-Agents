@@ -228,3 +228,93 @@ export function echoAnglesValid(angles: ReadonlyArray<EchoAngle>): boolean {
 export function echoShareUrl(origin: string, text: string): string {
   return `${origin}/persona-echo?text=${encodeURIComponent(text)}`;
 }
+
+// Echo history (localStorage) — every committed echo is saved with
+// the kind + text snippet + timestamp so users can revisit past
+// reframes and the counter stays accurate across reloads.
+
+export interface EchoHistoryEntry {
+  readonly id: string;
+  readonly kind: EchoKind;
+  readonly textSnippet: string;
+  readonly savedAt: string;
+}
+
+const HISTORY_KEY = 'arena:persona-echo:history:v1';
+const HISTORY_LIMIT = 16;
+const COUNTER_KEY = 'arena:persona-echo:counter:v1';
+
+export function readEchoHistory(): ReadonlyArray<EchoHistoryEntry> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as EchoHistoryEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (e) =>
+          e &&
+          typeof e.id === 'string' &&
+          typeof e.kind === 'string' &&
+          typeof e.textSnippet === 'string',
+      )
+      .slice(0, HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+export function appendEchoHistory(entry: EchoHistoryEntry) {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = readEchoHistory().filter((e) => e.id !== entry.id);
+    const next = [entry, ...existing].slice(0, HISTORY_LIMIT);
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    /* silent */
+  }
+}
+
+export function clearEchoHistory() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(HISTORY_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+/** Pure — read the persisted echoes counter (lifetime count). */
+export function readEchoCounter(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(COUNTER_KEY);
+    if (!raw) return 0;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Side-effect-free — increment the persisted echoes counter. */
+export function incrementEchoCounter(): number {
+  const next = readEchoCounter() + 1;
+  if (typeof window === 'undefined') return next;
+  try {
+    window.localStorage.setItem(COUNTER_KEY, String(next));
+  } catch {
+    /* silent */
+  }
+  return next;
+}
+
+export function clearEchoCounter() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(COUNTER_KEY);
+  } catch {
+    /* silent */
+  }
+}

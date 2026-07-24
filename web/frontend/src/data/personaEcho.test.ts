@@ -14,10 +14,17 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  appendEchoHistory,
   buildEcho,
   classifyEchoKind,
+  clearEchoCounter,
+  clearEchoHistory,
   echoAnglesValid,
   echoShareUrl,
+  incrementEchoCounter,
+  readEchoCounter,
+  readEchoHistory,
+  type EchoHistoryEntry,
   type EchoKind,
 } from './personaEcho';
 
@@ -123,5 +130,69 @@ describe('echoShareUrl', () => {
     const url = echoShareUrl('https://x', 'A test prompt.');
     expect(url.startsWith('https://x/persona-echo?text=')).toBe(true);
     expect(decodeURIComponent(url)).toContain('A test prompt.');
+  });
+});
+
+describe('echo history (localStorage)', () => {
+  const makeEntry = (id: string, kind: EchoKind = 'short'): EchoHistoryEntry => ({
+    id,
+    kind,
+    textSnippet: 'snippet',
+    savedAt: new Date().toISOString(),
+  });
+
+  it('readEchoHistory returns empty array when storage is empty', () => {
+    clearEchoHistory();
+    expect(readEchoHistory()).toEqual([]);
+  });
+
+  it('appendEchoHistory + readEchoHistory round-trip', () => {
+    clearEchoHistory();
+    appendEchoHistory(makeEntry('e-1'));
+    expect(readEchoHistory()).toHaveLength(1);
+  });
+
+  it('appendEchoHistory deduplicates by id', () => {
+    clearEchoHistory();
+    appendEchoHistory(makeEntry('dup', 'short'));
+    appendEchoHistory(makeEntry('dup', 'long'));
+    const result = readEchoHistory();
+    expect(result.length).toBe(1);
+    expect(result[0].kind).toBe('long');
+  });
+
+  it('appendEchoHistory caps at 16 entries', () => {
+    clearEchoHistory();
+    for (let i = 0; i < 20; i++) {
+      appendEchoHistory(makeEntry(`e-${i}`, 'medium'));
+    }
+    expect(readEchoHistory().length).toBeLessThanOrEqual(16);
+  });
+
+  it('clearEchoHistory empties storage', () => {
+    appendEchoHistory(makeEntry('x'));
+    clearEchoHistory();
+    expect(readEchoHistory()).toEqual([]);
+  });
+});
+
+describe('echo counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearEchoCounter();
+    expect(readEchoCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearEchoCounter();
+    expect(incrementEchoCounter()).toBe(1);
+    expect(incrementEchoCounter()).toBe(2);
+    expect(incrementEchoCounter()).toBe(3);
+  });
+
+  it('clearEchoCounter resets to 0', () => {
+    incrementEchoCounter();
+    incrementEchoCounter();
+    clearEchoCounter();
+    expect(readEchoCounter()).toBe(0);
   });
 });

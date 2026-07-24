@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
+  Clock,
   CornerDownRight,
+  History,
   Mic,
   Quote,
   RotateCcw,
@@ -9,14 +11,22 @@ import {
   Sparkles,
   Swords,
   Wand2,
+  X,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import {
+  appendEchoHistory,
   buildEcho,
+  clearEchoCounter,
+  clearEchoHistory,
   echoShareUrl,
+  incrementEchoCounter,
+  readEchoCounter,
+  readEchoHistory,
+  type EchoHistoryEntry,
   type PersonaEcho,
 } from '../data/personaEcho';
 import { PERSONAS } from '../data/personas';
@@ -42,9 +52,13 @@ export function PersonaEchoPage() {
   const [committedText, setCommittedText] = useState(initialText);
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [history, setHistory] = useState<ReadonlyArray<EchoHistoryEntry>>([]);
+  const [counter, setCounter] = useState(0);
 
   useEffect(() => {
     setPageVisible(true);
+    setHistory(readEchoHistory());
+    setCounter(readEchoCounter());
   }, []);
 
   const echo: PersonaEcho | null = useMemo(() => {
@@ -60,6 +74,34 @@ export function PersonaEchoPage() {
       const url = echoShareUrl(window.location.origin, text);
       window.history.replaceState({}, '', url);
     }
+    // Persist: history entry + counter increment.
+    const id = `echo-${Date.now()}`;
+    const e = buildEcho(text);
+    const entry: EchoHistoryEntry = {
+      id,
+      kind: e.kind,
+      textSnippet: text.length > 80 ? `${text.slice(0, 77)}...` : text,
+      savedAt: new Date().toISOString(),
+    };
+    appendEchoHistory(entry);
+    setHistory(readEchoHistory());
+    const newCount = incrementEchoCounter();
+    setCounter(newCount);
+  };
+
+  const onReplayHistory = (entry: EchoHistoryEntry) => {
+    // We only saved a snippet, so pre-fill the textarea with it.
+    setText(entry.textSnippet);
+  };
+
+  const onClearHistory = () => {
+    clearEchoHistory();
+    setHistory([]);
+  };
+
+  const onClearCounter = () => {
+    clearEchoCounter();
+    setCounter(0);
   };
 
   const onReset = () => {
@@ -169,6 +211,23 @@ export function PersonaEchoPage() {
               </MotionButton>
             </div>
           </div>
+          <div className="pecho-stats" aria-label="Echo stats">
+            <div className="pecho-stat">
+              <Sparkles aria-hidden="true" />
+              <span className="pecho-stat__label">Echoes generated</span>
+              <span className="pecho-stat__value">{counter}</span>
+            </div>
+            {counter > 0 && (
+              <button
+                type="button"
+                className="pecho-stat__clear"
+                onClick={onClearCounter}
+                aria-label="Reset counter"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         {echo && (
@@ -244,9 +303,58 @@ export function PersonaEchoPage() {
             </div>
           </section>
         )}
+
+        {history.length > 0 && (
+          <section className="pecho-history" aria-label="Recent echoes">
+            <div className="pecho-history__head">
+              <p className="pecho-history__label">
+                <History aria-hidden="true" /> Recent echoes
+              </p>
+              <button
+                type="button"
+                className="pecho-history__clear"
+                onClick={onClearHistory}
+                aria-label="Clear echo history"
+              >
+                <X aria-hidden="true" /> Clear
+              </button>
+            </div>
+            <ul>
+              {history.slice(0, 8).map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    className="pecho-history__item"
+                    onClick={() => onReplayHistory(entry)}
+                  >
+                    <span className="pecho-history__kind">
+                      {entry.kind}
+                    </span>
+                    <span className="pecho-history__snippet">
+                      "{entry.textSnippet}"
+                    </span>
+                    <span className="pecho-history__time">
+                      <Clock aria-hidden="true" /> {timeAgo(entry.savedAt)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
 
       <Footer />
     </div>
   );
+}
+
+function timeAgo(iso: string): string {
+  const saved = new Date(iso).getTime();
+  if (!Number.isFinite(saved)) return '';
+  const diffMs = Date.now() - saved;
+  if (diffMs < 60_000) return 'just now';
+  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
+  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h ago`;
+  return `${Math.floor(diffMs / 86_400_000)}d ago`;
 }
