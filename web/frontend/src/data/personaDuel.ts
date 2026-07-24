@@ -255,3 +255,115 @@ export function championDescription(personaId: string): string {
       : 'ice-cold';
   return `${p.quote} — a ${tempLabel} mind, voted winner by you.`;
 }
+// Champion's journey — pure derivation of the path a champion took
+// to win, round by round. Each entry lists the opponent they beat
+// and the matchup id.
+
+export interface ChampionJourneyRound {
+  readonly roundName: string;
+  readonly opponentId: string;
+  readonly matchupId: string;
+}
+
+export function championJourney(
+  bracket: DuelBracket,
+  championId: string,
+): ReadonlyArray<ChampionJourneyRound> {
+  if (!championId) return [];
+  const journey: ChampionJourneyRound[] = [];
+  let emergingFromId: string | null = null;
+  for (const round of bracket.rounds) {
+    const match = round.matchups.find((m) => {
+      if (m.winnerId !== championId) return false;
+      if (emergingFromId !== null && m.id !== emergingFromId) return false;
+      return true;
+    });
+    if (!match) continue;
+    const opponentId =
+      match.leftId === championId ? match.rightId : match.leftId;
+    journey.push({
+      roundName: round.name,
+      opponentId,
+      matchupId: match.id,
+    });
+    emergingFromId = mIdOfNextMatch(bracket, match.id, round.index);
+  }
+  return journey;
+}
+
+function mIdOfNextMatch(
+  bracket: DuelBracket,
+  matchupId: string,
+  currentRoundIdx: number,
+): string | null {
+  const currentMatchIdx = bracket.rounds[currentRoundIdx].matchups.findIndex(
+    (m) => m.id === matchupId,
+  );
+  if (currentMatchIdx === -1) return null;
+  if (currentRoundIdx + 1 >= bracket.rounds.length) return null;
+  const nextSlotIdx = Math.floor(currentMatchIdx / 2);
+  return bracket.rounds[currentRoundIdx + 1].matchups[nextSlotIdx]?.id ?? null;
+}
+
+// Bracket history (localStorage)
+
+export interface DuelHistoryEntry {
+  readonly id: string;
+  readonly date: string;
+  readonly seed: string;
+  readonly championId: string;
+  readonly savedAt: string;
+}
+
+const HISTORY_KEY = 'arena:persona-duel:history:v1';
+const HISTORY_LIMIT = 12;
+
+export function readDuelHistory(): ReadonlyArray<DuelHistoryEntry> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as DuelHistoryEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (e) =>
+          e &&
+          typeof e.id === 'string' &&
+          typeof e.date === 'string' &&
+          typeof e.championId === 'string',
+      )
+      .slice(0, HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+export function appendDuelHistory(entry: DuelHistoryEntry) {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = readDuelHistory().filter((e) => e.id !== entry.id);
+    const next = [entry, ...existing].slice(0, HISTORY_LIMIT);
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    /* silent */
+  }
+}
+
+export function clearDuelHistory() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(HISTORY_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+/** Today's date as YYYY-MM-DD in local timezone. */
+export function duelTodayIsoDate(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}

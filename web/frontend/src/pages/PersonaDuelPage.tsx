@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
+  Clock,
   Crown,
   Dices,
+  History,
   RotateCcw,
   Share2,
   Sparkles,
   Swords,
   Trophy,
+  X,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
@@ -15,15 +18,21 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendDuelHistory,
   applyPick,
   buildBracket,
   championDescription,
+  championJourney,
+  clearDuelHistory,
   currentChampion,
   duelShareUrl,
+  duelTodayIsoDate,
   generateSeed,
   pickCount,
+  readDuelHistory,
   totalMatchups,
   type DuelBracket,
+  type DuelHistoryEntry,
   type DuelMatchup,
 } from '../data/personaDuel';
 import { PERSONAS } from '../data/personas';
@@ -108,9 +117,12 @@ export function PersonaDuelPage() {
   );
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [history, setHistory] = useState<ReadonlyArray<DuelHistoryEntry>>([]);
+  const [recordedSeed, setRecordedSeed] = useState<string | null>(null);
 
   useEffect(() => {
     setPageVisible(true);
+    setHistory(readDuelHistory());
   }, []);
 
   // If a shared seed arrives later, rebuild the bracket for it.
@@ -126,6 +138,27 @@ export function PersonaDuelPage() {
   const picks = useMemo(() => pickCount(bracket), [bracket]);
   const total = useMemo(() => totalMatchups(bracket), [bracket]);
   const champion = championId ? findPersona(championId) : null;
+  const journey = useMemo(
+    () => (championId ? championJourney(bracket, championId) : []),
+    [bracket, championId],
+  );
+
+  // When a champion is crowned for the first time on this bracket,
+  // append to history so the user can revisit it later.
+  useEffect(() => {
+    if (championId && recordedSeed !== seed) {
+      const entry: DuelHistoryEntry = {
+        id: `duel-${seed}-${Date.now()}`,
+        date: duelTodayIsoDate(),
+        seed,
+        championId,
+        savedAt: new Date().toISOString(),
+      };
+      appendDuelHistory(entry);
+      setHistory(readDuelHistory());
+      setRecordedSeed(seed);
+    }
+  }, [championId, recordedSeed, seed]);
 
   // The active (next) matchup: first matchup with no winner.
   const nextMatchup = useMemo(() => {
@@ -148,10 +181,26 @@ export function PersonaDuelPage() {
     const newSeed = generateSeed();
     setSeed(newSeed);
     setBracket(buildBracket(newSeed));
+    setRecordedSeed(null);
     if (typeof window !== 'undefined') {
       const url = duelShareUrl(window.location.origin, newSeed);
       window.history.replaceState({}, '', url);
     }
+  };
+
+  const onReplayHistory = (entry: DuelHistoryEntry) => {
+    setSeed(entry.seed);
+    setBracket(buildBracket(entry.seed));
+    setRecordedSeed(null);
+    if (typeof window !== 'undefined') {
+      const url = duelShareUrl(window.location.origin, entry.seed);
+      window.history.replaceState({}, '', url);
+    }
+  };
+
+  const onClearHistory = () => {
+    clearDuelHistory();
+    setHistory([]);
   };
 
   const onShare = async () => {
@@ -261,6 +310,44 @@ export function PersonaDuelPage() {
                 </div>
               </dl>
             </article>
+
+            {journey.length > 1 && (
+              <div className="pduel-journey" aria-label="Champion's journey">
+                <p className="pduel-journey__label">
+                  <Sparkles aria-hidden="true" /> The path to the crown
+                </p>
+                <ol>
+                  {journey.map((entry) => {
+                    const opp = findPersona(entry.opponentId);
+                    if (!opp) return null;
+                    return (
+                      <li
+                        key={entry.matchupId}
+                        className="pduel-journey__step"
+                        style={{
+                          ['--pduel-journey-color' as string]: opp.color,
+                        }}
+                      >
+                        <span className="pduel-journey__round">
+                          {entry.roundName}
+                        </span>
+                        <span className="pduel-journey__arrow" aria-hidden="true">
+                          <Swords aria-hidden="true" />
+                        </span>
+                        <span className="pduel-journey__opp">
+                          <span
+                            className="pduel-journey__opp-dot"
+                            aria-hidden="true"
+                          />
+                          {opp.name}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            )}
+
             <div className="pduel-champion__actions">
               <MotionButton
                 type="button"
@@ -281,6 +368,50 @@ export function PersonaDuelPage() {
                 {copied ? 'Link copied' : 'Share bracket'}
               </MotionButton>
             </div>
+          </section>
+        )}
+
+        {history.length > 0 && (
+          <section className="pduel-history" aria-label="Past champions">
+            <div className="pduel-history__head">
+              <p className="pduel-history__label">
+                <History aria-hidden="true" /> Past champions
+              </p>
+              <button
+                type="button"
+                className="pduel-history__clear"
+                onClick={onClearHistory}
+                aria-label="Clear champion history"
+              >
+                <X aria-hidden="true" /> Clear
+              </button>
+            </div>
+            <ul>
+              {history.slice(0, 8).map((entry) => {
+                const c = findPersona(entry.championId);
+                if (!c) return null;
+                return (
+                  <li key={entry.id} className="pduel-history__item">
+                    <Pressable
+                      type="button"
+                      className="pduel-history__load"
+                      onClick={() => onReplayHistory(entry)}
+                    >
+                      <span
+                        className="pduel-history__dot"
+                        style={{ background: c.color }}
+                        aria-hidden="true"
+                      />
+                      <span className="pduel-history__name">{c.name}</span>
+                      <span className="pduel-history__date">{entry.date}</span>
+                      <span className="pduel-history__time">
+                        <Clock aria-hidden="true" /> {timeAgo(entry.savedAt)}
+                      </span>
+                    </Pressable>
+                  </li>
+                );
+              })}
+            </ul>
           </section>
         )}
 
@@ -321,4 +452,14 @@ export function PersonaDuelPage() {
       <Footer />
     </div>
   );
+}
+
+function timeAgo(iso: string): string {
+  const saved = new Date(iso).getTime();
+  if (!Number.isFinite(saved)) return '';
+  const diffMs = Date.now() - saved;
+  if (diffMs < 60_000) return 'just now';
+  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
+  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h ago`;
+  return `${Math.floor(diffMs / 86_400_000)}d ago`;
 }

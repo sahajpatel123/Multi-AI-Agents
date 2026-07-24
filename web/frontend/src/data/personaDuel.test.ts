@@ -14,12 +14,17 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  appendDuelHistory,
   applyPick,
   buildBracket,
+  championJourney,
+  clearDuelHistory,
   currentChampion,
   duelShareUrl,
   pickCount,
+  readDuelHistory,
   totalMatchups,
+  type DuelHistoryEntry,
 } from './personaDuel';
 
 const CATALOG_SIZE = PERSONAS.length;
@@ -168,5 +173,89 @@ describe('duelShareUrl', () => {
   it('encodes the seed into a query string', () => {
     const url = duelShareUrl('https://x', 'my-seed');
     expect(url).toBe('https://x/persona-duel?seed=my-seed');
+  });
+});
+
+describe('championJourney', () => {
+  it('returns an empty array for an empty champion', () => {
+    const bracket = buildBracket('test');
+    expect(championJourney(bracket, '')).toEqual([]);
+  });
+
+  it('returns one entry per round for a fully-picked bracket', () => {
+    let bracket = buildBracket('test');
+    while (pickCount(bracket) < totalMatchups(bracket)) {
+      const next = bracket.rounds
+        .flatMap((r) => r.matchups)
+        .find((m) => !m.winnerId);
+      if (!next) break;
+      bracket = applyPick(bracket, next.id, next.leftId);
+    }
+    const champion = bracket.championId!;
+    const journey = championJourney(bracket, champion);
+    expect(journey.length).toBe(bracket.rounds.length);
+    // Every entry has a real opponent persona id.
+    for (const entry of journey) {
+      expect(PERSONAS.some((p) => p.id === entry.opponentId)).toBe(true);
+    }
+  });
+
+  it('lists the round names in order', () => {
+    let bracket = buildBracket('test');
+    while (pickCount(bracket) < totalMatchups(bracket)) {
+      const next = bracket.rounds
+        .flatMap((r) => r.matchups)
+        .find((m) => !m.winnerId);
+      if (!next) break;
+      bracket = applyPick(bracket, next.id, next.leftId);
+    }
+    const journey = championJourney(bracket, bracket.championId!);
+    const roundNames = journey.map((j) => j.roundName);
+    expect(roundNames[0]).toBe(bracket.rounds[0].name);
+    expect(roundNames[roundNames.length - 1]).toBe(bracket.rounds[bracket.rounds.length - 1].name);
+  });
+});
+
+describe('duel history (localStorage)', () => {
+  const makeEntry = (id: string, championId: string): DuelHistoryEntry => ({
+    id,
+    date: '2026-07-24',
+    seed: id,
+    championId,
+    savedAt: '2026-07-24T00:00:00Z',
+  });
+
+  it('readDuelHistory returns empty array when storage is empty', () => {
+    clearDuelHistory();
+    expect(readDuelHistory()).toEqual([]);
+  });
+
+  it('appendDuelHistory + readDuelHistory round-trip', () => {
+    clearDuelHistory();
+    appendDuelHistory(makeEntry('d-1', 'analyst'));
+    expect(readDuelHistory()).toHaveLength(1);
+  });
+
+  it('appendDuelHistory deduplicates by id', () => {
+    clearDuelHistory();
+    appendDuelHistory(makeEntry('dup', 'analyst'));
+    appendDuelHistory(makeEntry('dup', 'optimist'));
+    const result = readDuelHistory();
+    expect(result.length).toBe(1);
+    expect(result[0].championId).toBe('optimist');
+  });
+
+  it('appendDuelHistory caps at 12 entries', () => {
+    clearDuelHistory();
+    for (let i = 0; i < 16; i++) {
+      appendDuelHistory(makeEntry(`d-${i}`, 'analyst'));
+    }
+    expect(readDuelHistory().length).toBeLessThanOrEqual(12);
+  });
+
+  it('clearDuelHistory empties storage', () => {
+    appendDuelHistory(makeEntry('x', 'analyst'));
+    clearDuelHistory();
+    expect(readDuelHistory()).toEqual([]);
   });
 });

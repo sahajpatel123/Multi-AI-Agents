@@ -437,3 +437,188 @@ body .pduel-cta__link:hover {
     transform: none;
   }
 }
+/* Journey */
+body .pduel-journey {
+  margin: 24px 0 0;
+  padding: 20px 24px;
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 12px;
+  background: rgba(243, 240, 231, 0.03);
+}
+
+body .pduel-journey__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.7));
+}
+
+body .pduel-journey ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+body .pduel-journey__step {
+  display: grid;
+  grid-template-columns: 140px 24px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(243, 240, 231, 0.03);
+}
+
+body .pduel-journey__round {
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));
+}
+
+body .pduel-journey__arrow {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--pduel-journey-color) 18%, transparent);
+  color: var(--pduel-journey-color);
+}
+
+body .pduel-journey__arrow svg {
+  width: 12px;
+  height: 12px;
+}
+
+body .pduel-journey__opp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-size: 14px;
+  color: var(--vp-ivory);
+}
+
+body .pduel-journey__opp-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--pduel-journey-color);
+  box-shadow: 0 0 6px var(--pduel-journey-color);
+}
+
+/* History */
+body .pduel-history {
+  margin: 32px 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--public-rule-soft);
+}
+
+body .pduel-history__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+body .pduel-history__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));
+}
+
+body .pduel-history__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.45));
+  font-size: 11px;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  cursor: pointer;
+  transition: color 220ms ease;
+}
+
+body .pduel-history__clear:hover {
+  color: var(--vp-ivory);
+}
+
+body .pduel-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+body .pduel-history__load {
+  display: grid;
+  grid-template-columns: 14px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+  background: rgba(243, 240, 231, 0.03);
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 10px;
+  color: var(--vp-ivory);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 220ms ease, background 220ms ease;
+}
+
+body .pduel-history__load:hover {
+  border-color: var(--pduel-champion-color);
+  background: rgba(243, 240, 231, 0.05);
+}
+
+body .pduel-history__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+body .pduel-history__name {
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-size: 15px;
+}
+
+body .pduel-history__date {
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.6));
+}
+
+body .pduel-history__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.5));
+  white-space: nowrap;
+}
+
+body .pduel-history__time svg {
+  width: 12px;
+  height: 12px;
+}
