@@ -176,6 +176,43 @@ export function councilShareUrl(origin: string, question: string): string {
   return `${origin}/persona-council?q=${encodeURIComponent(question)}`;
 }
 
+// Counter — lifetime count of councils convened, persisted across
+// reloads so the user can see their own track record.
+
+const COUNTER_KEY = 'arena:persona-council:counter:v1';
+
+export function readCouncilCounter(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(COUNTER_KEY);
+    if (!raw) return 0;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function incrementCouncilCounter(): number {
+  const next = readCouncilCounter() + 1;
+  if (typeof window === 'undefined') return next;
+  try {
+    window.localStorage.setItem(COUNTER_KEY, String(next));
+  } catch {
+    /* silent */
+  }
+  return next;
+}
+
+export function clearCouncilCounter() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(COUNTER_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
 /** Pure — verify a council's takes reference real personas. */
 export function councilValid(council: PersonaCouncil): boolean {
   const known = new Set(PERSONAS.map((p) => p.id));

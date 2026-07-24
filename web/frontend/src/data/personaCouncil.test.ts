@@ -15,9 +15,12 @@ import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
   buildCouncil,
+  clearCouncilCounter,
   councilShareUrl,
   councilValid,
   dominantStance,
+  incrementCouncilCounter,
+  readCouncilCounter,
 } from './personaCouncil';
 
 const VALID_STANCES = new Set(['agrees', 'cautions', 'reframes', 'pushes', 'listens']);
@@ -99,5 +102,26 @@ describe('councilShareUrl', () => {
     const url = councilShareUrl('https://x', 'What is focus?');
     expect(url).toContain('/persona-council');
     expect(url).toContain('q=What%20is%20focus%3F');
+  });
+});
+
+describe('council counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearCouncilCounter();
+    expect(readCouncilCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearCouncilCounter();
+    expect(incrementCouncilCounter()).toBe(1);
+    expect(incrementCouncilCounter()).toBe(2);
+    expect(incrementCouncilCounter()).toBe(3);
+  });
+
+  it('clearCouncilCounter resets to 0', () => {
+    incrementCouncilCounter();
+    incrementCouncilCounter();
+    clearCouncilCounter();
+    expect(readCouncilCounter()).toBe(0);
   });
 });

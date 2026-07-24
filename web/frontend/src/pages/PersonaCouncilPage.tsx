@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ChevronRight,
   Compass,
+  Filter,
   History,
   MessageSquare,
   RotateCcw,
@@ -17,9 +18,12 @@ import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
   buildCouncil,
+  clearCouncilCounter,
   councilShareUrl,
   councilValid,
   dominantStance,
+  incrementCouncilCounter,
+  readCouncilCounter,
   type CouncilTake,
   type PersonaCouncil,
 } from '../data/personaCouncil';
@@ -55,9 +59,12 @@ export function PersonaCouncilPage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<string>>([]);
+  const [convenedCount, setConvenedCount] = useState(0);
+  const [stanceFilter, setStanceFilter] = useState<CouncilTake['stance'] | null>(null);
 
   useEffect(() => {
     setPageVisible(true);
+    setConvenedCount(readCouncilCounter());
     try {
       const raw = window.localStorage.getItem('arena:persona-council:history:v1');
       if (raw) {
@@ -80,6 +87,12 @@ export function PersonaCouncilPage() {
     [council],
   );
 
+  const filteredTakes = useMemo(() => {
+    if (!council) return [];
+    if (!stanceFilter) return council.takes;
+    return council.takes.filter((t) => t.stance === stanceFilter);
+  }, [council, stanceFilter]);
+
   const onConvene = () => {
     setCommitted(question);
     if (typeof window !== 'undefined') {
@@ -97,6 +110,9 @@ export function PersonaCouncilPage() {
     } catch {
       /* silent */
     }
+    // Bump lifetime counter.
+    const c = incrementCouncilCounter();
+    setConvenedCount(c);
   };
 
   const onReset = () => {
@@ -124,6 +140,11 @@ export function PersonaCouncilPage() {
       /* silent */
     }
     setHistory([]);
+  };
+
+  const onResetCounter = () => {
+    clearCouncilCounter();
+    setConvenedCount(0);
   };
 
   const onShare = async () => {
@@ -223,6 +244,23 @@ export function PersonaCouncilPage() {
               </MotionButton>
             </div>
           </div>
+          <div className="pcoun-input__stats" aria-label="Council stats">
+            <div className="pcoun-input__stat">
+              <Sparkles aria-hidden="true" />
+              <span className="pcoun-input__stat-label">Council convened</span>
+              <span className="pcoun-input__stat-value">{convenedCount}</span>
+            </div>
+            {convenedCount > 0 && (
+              <button
+                type="button"
+                className="pcoun-input__stat-reset"
+                onClick={onResetCounter}
+                aria-label="Reset convenings counter"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         {council && (
@@ -241,8 +279,41 @@ export function PersonaCouncilPage() {
               )}
             </header>
 
+            <div className="pcoun-filter" role="radiogroup" aria-label="Filter by stance">
+              <span className="pcoun-filter__label">
+                <Filter aria-hidden="true" /> Filter
+              </span>
+              <Pressable
+                type="button"
+                role="radio"
+                aria-checked={stanceFilter === null}
+                className={`pcoun-filter__chip${stanceFilter === null ? ' pcoun-filter__chip--active' : ''}`}
+                onClick={() => setStanceFilter(null)}
+              >
+                All ({council.takes.length})
+              </Pressable>
+              {(Object.keys(STANCE_LABELS) as CouncilTake['stance'][]).map(
+                (stance) => {
+                  const count = council.summary[stance];
+                  if (count === 0) return null;
+                  return (
+                    <Pressable
+                      key={stance}
+                      type="button"
+                      role="radio"
+                      aria-checked={stanceFilter === stance}
+                      className={`pcoun-filter__chip pcoun-filter__chip--${stance}${stanceFilter === stance ? ' pcoun-filter__chip--active' : ''}`}
+                      onClick={() => setStanceFilter(stance)}
+                    >
+                      {STANCE_LABELS[stance]} ({count})
+                    </Pressable>
+                  );
+                },
+              )}
+            </div>
+
             <ul className="pcoun-grid" aria-label="Council members">
-              {council.takes.map((take) => {
+              {filteredTakes.map((take) => {
                 const persona = findPersona(take.personaId);
                 if (!persona) return null;
                 return (
