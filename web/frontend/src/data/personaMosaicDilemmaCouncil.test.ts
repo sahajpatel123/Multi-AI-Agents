@@ -18,9 +18,17 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  appendMosaicDilemmaCouncilDecision,
   buildMosaicDilemmaCouncil,
+  clearMosaicDilemmaCouncilCounter,
+  clearMosaicDilemmaCouncilDecisions,
+  incrementMosaicDilemmaCouncilCounter,
+  mosaicDilemmaCouncilMajorityInfo,
   mosaicDilemmaCouncilShareUrl,
   mosaicDilemmaCouncilValid,
+  mosaicDilemmaCouncilWinTally,
+  readMosaicDilemmaCouncilCounter,
+  readMosaicDilemmaCouncilDecisions,
   type MosaicDilemmaCouncilPick,
 } from './personaMosaicDilemmaCouncil';
 
@@ -91,5 +99,98 @@ describe('mosaicDilemmaCouncilShareUrl', () => {
     expect(url).toContain('/persona-mosaic-dilemma-council');
     expect(url).toContain('a=Option%20A');
     expect(url).toContain('b=Option%20B');
+  });
+});
+
+describe('mosaic dilemma council counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearMosaicDilemmaCouncilCounter();
+    expect(readMosaicDilemmaCouncilCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearMosaicDilemmaCouncilCounter();
+    expect(incrementMosaicDilemmaCouncilCounter()).toBe(1);
+    expect(incrementMosaicDilemmaCouncilCounter()).toBe(2);
+  });
+
+  it('clearMosaicDilemmaCouncilCounter resets to 0', () => {
+    incrementMosaicDilemmaCouncilCounter();
+    clearMosaicDilemmaCouncilCounter();
+    expect(readMosaicDilemmaCouncilCounter()).toBe(0);
+  });
+});
+
+describe('mosaic dilemma council decisions + winTally (localStorage)', () => {
+  const makeDecision = (id: string, winner: MosaicDilemmaCouncilPick) => ({
+    id,
+    optionASnippet: 'A',
+    optionBSnippet: 'B',
+    winner,
+    savedAt: '2026-07-25T00:00:00Z',
+  });
+
+  it('readMosaicDilemmaCouncilDecisions returns empty array when storage is empty', () => {
+    clearMosaicDilemmaCouncilDecisions();
+    expect(readMosaicDilemmaCouncilDecisions()).toEqual([]);
+  });
+
+  it('appendMosaicDilemmaCouncilDecision + read round-trip', () => {
+    clearMosaicDilemmaCouncilDecisions();
+    appendMosaicDilemmaCouncilDecision(makeDecision('d-1', 'A'));
+    expect(readMosaicDilemmaCouncilDecisions()).toHaveLength(1);
+  });
+
+  it('appendMosaicDilemmaCouncilDecision deduplicates by id', () => {
+    clearMosaicDilemmaCouncilDecisions();
+    appendMosaicDilemmaCouncilDecision(makeDecision('dup', 'A'));
+    appendMosaicDilemmaCouncilDecision(makeDecision('dup', 'B'));
+    const result = readMosaicDilemmaCouncilDecisions();
+    expect(result.length).toBe(1);
+    expect(result[0].winner).toBe('B');
+  });
+
+  it('clearMosaicDilemmaCouncilDecisions empties storage', () => {
+    appendMosaicDilemmaCouncilDecision(makeDecision('x', 'A'));
+    clearMosaicDilemmaCouncilDecisions();
+    expect(readMosaicDilemmaCouncilDecisions()).toEqual([]);
+  });
+});
+
+describe('mosaicDilemmaCouncilWinTally', () => {
+  it('returns 0/0 for empty history', () => {
+    expect(mosaicDilemmaCouncilWinTally([])).toEqual({ a: 0, b: 0 });
+  });
+
+  it('counts A and B winners correctly', () => {
+    const decisions = [
+      { id: 'a', optionASnippet: 'A', optionBSnippet: 'B', winner: 'A' as const, savedAt: '' },
+      { id: 'b', optionASnippet: 'A', optionBSnippet: 'B', winner: 'B' as const, savedAt: '' },
+      { id: 'c', optionASnippet: 'A', optionBSnippet: 'B', winner: 'A' as const, savedAt: '' },
+    ];
+    const tally = mosaicDilemmaCouncilWinTally(decisions);
+    expect(tally.a).toBe(2);
+    expect(tally.b).toBe(1);
+  });
+});
+
+describe('mosaicDilemmaCouncilMajorityInfo', () => {
+  it('returns decisive for 5+/8', () => {
+    const info = mosaicDilemmaCouncilMajorityInfo({ a: 6, b: 2 }, 'A');
+    expect(info.label).toBe('decisive');
+    expect(info.winnerCount).toBe(6);
+  });
+
+  it('returns leaning for 4/8', () => {
+    const info = mosaicDilemmaCouncilMajorityInfo({ a: 4, b: 4 }, 'A');
+    expect(info.label).toBe('leaning');
+  });
+
+  it('returns split for 3/8 or less', () => {
+    // The function returns 'split' when the winner has 3 or fewer
+    // minds (i.e. the verdict is not strong). A 3-0 tally has a winner
+    // with 3, so it is split.
+    const info = mosaicDilemmaCouncilMajorityInfo({ a: 3, b: 0 }, 'A');
+    expect(info.label).toBe('split');
   });
 });

@@ -16,9 +16,18 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendMosaicDilemmaCouncilDecision,
   buildMosaicDilemmaCouncil,
+  clearMosaicDilemmaCouncilCounter,
+  clearMosaicDilemmaCouncilDecisions,
+  incrementMosaicDilemmaCouncilCounter,
+  mosaicDilemmaCouncilMajorityInfo,
   mosaicDilemmaCouncilShareUrl,
   mosaicDilemmaCouncilValid,
+  mosaicDilemmaCouncilWinTally,
+  readMosaicDilemmaCouncilCounter,
+  readMosaicDilemmaCouncilDecisions,
+  type MosaicDilemmaCouncilDecisionEntry,
   type PersonaMosaicDilemmaCouncil,
 } from '../data/personaMosaicDilemmaCouncil';
 import { PERSONAS } from '../data/personas';
@@ -69,9 +78,13 @@ export function PersonaMosaicDilemmaCouncilPage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<{ a: string; b: string }>>([]);
+  const [convenedCount, setConvenedCount] = useState(0);
+  const [decisions, setDecisions] = useState<ReadonlyArray<MosaicDilemmaCouncilDecisionEntry>>([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setConvenedCount(readMosaicDilemmaCouncilCounter());
+    setDecisions(readMosaicDilemmaCouncilDecisions());
     try {
       const raw = window.localStorage.getItem('arena:persona-mosaic-dilemma-council:history:v1');
       if (raw) {
@@ -88,6 +101,16 @@ export function PersonaMosaicDilemmaCouncilPage() {
     const c = buildMosaicDilemmaCouncil(optionA, optionB);
     return mosaicDilemmaCouncilValid(c) ? c : null;
   }, [optionA, optionB]);
+
+  const lifetimeTally = useMemo(
+    () => mosaicDilemmaCouncilWinTally(decisions),
+    [decisions],
+  );
+
+  const majority = useMemo(
+    () => (council ? mosaicDilemmaCouncilMajorityInfo(council.tally, council.winner) : null),
+    [council],
+  );
 
   const onConvene = () => {
     const url = mosaicDilemmaCouncilShareUrl(
@@ -112,6 +135,26 @@ export function PersonaMosaicDilemmaCouncilPage() {
     } catch {
       /* silent */
     }
+    if (council) {
+      const decision: MosaicDilemmaCouncilDecisionEntry = {
+        id: `council-${Date.now()}`,
+        optionASnippet: optionA.length > 40 ? `${optionA.slice(0, 37)}...` : optionA,
+        optionBSnippet: optionB.length > 40 ? `${optionB.slice(0, 37)}...` : optionB,
+        winner: council.winner,
+        savedAt: new Date().toISOString(),
+      };
+      appendMosaicDilemmaCouncilDecision(decision);
+      setDecisions(readMosaicDilemmaCouncilDecisions());
+    }
+    const c = incrementMosaicDilemmaCouncilCounter();
+    setConvenedCount(c);
+  };
+
+  const onResetLifetime = () => {
+    clearMosaicDilemmaCouncilCounter();
+    clearMosaicDilemmaCouncilDecisions();
+    setConvenedCount(0);
+    setDecisions([]);
   };
 
   const onReset = () => {
@@ -262,6 +305,35 @@ export function PersonaMosaicDilemmaCouncilPage() {
               </MotionButton>
             </div>
           </div>
+          <div className="pmdc-input__stats" aria-label="Council stats">
+            <div className="pmdc-input__stat">
+              <Scale aria-hidden="true" />
+              <span className="pmdc-input__stat-label">Councils convened</span>
+              <span className="pmdc-input__stat-value">{convenedCount}</span>
+            </div>
+            {lifetimeTally.a > 0 && (
+              <div className="pmdc-input__stat pmdc-input__stat--a">
+                <span className="pmdc-input__stat-label">A wins</span>
+                <span className="pmdc-input__stat-value">{lifetimeTally.a}</span>
+              </div>
+            )}
+            {lifetimeTally.b > 0 && (
+              <div className="pmdc-input__stat pmdc-input__stat--b">
+                <span className="pmdc-input__stat-label">B wins</span>
+                <span className="pmdc-input__stat-value">{lifetimeTally.b}</span>
+              </div>
+            )}
+            {(convenedCount > 0 || lifetimeTally.a > 0 || lifetimeTally.b > 0) && (
+              <button
+                type="button"
+                className="pmdc-input__stat-reset"
+                onClick={onResetLifetime}
+                aria-label="Reset councils counter and lifetime tally"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="pmdc-samples" aria-label="Sample dilemmas">
@@ -302,6 +374,11 @@ export function PersonaMosaicDilemmaCouncilPage() {
                   {council.tally.a} for A · {council.tally.b} for B
                 </span>
               </h2>
+              {majority && (
+                <p className={`pmdc-result__majority pmdc-result__majority--${majority.label}`}>
+                  {majority.description}
+                </p>
+              )}
             </header>
 
             <div className="pmdc-sides">
