@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, RotateCcw, Share2, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, RotateCcw, Share2, Sparkles, Swords } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
@@ -12,21 +13,75 @@ import {
   type PersonaMatchQuestion,
 } from '../data/personaMatch';
 import { PERSONAS } from '../data/personas';
+import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
 import { prefersReducedMotion } from '../lib/motion';
+import { setRedirectIntent } from '../utils/redirectIntent';
 import '../styles/persona-match-page.css';
+
+const STORAGE_KEY = 'arena:persona-match:v1';
 
 function findPersona(id: string) {
   return PERSONAS.find((p) => p.id === id) ?? null;
+}
+
+interface StoredMatch {
+  readonly v: 1;
+  readonly answers: Record<string, string>;
+  readonly personaId: string;
+  readonly savedAt: string;
+}
+
+function readStoredMatch(): StoredMatch | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredMatch;
+    if (parsed?.v !== 1 || typeof parsed.answers !== 'object' || !parsed.answers) {
+      return null;
+    }
+    if (!PERSONAS.some((p) => p.id === parsed.personaId)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredMatch(answers: Record<string, string>, personaId: string) {
+  if (typeof window === 'undefined') return;
+  const payload: StoredMatch = {
+    v: 1,
+    answers,
+    personaId,
+    savedAt: new Date().toISOString(),
+  };
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    /* quota / private mode — silent fail */
+  }
+}
+
+function clearStoredMatch() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* silent */
+  }
 }
 
 interface ResultPanelProps {
   readonly personaId: string;
   readonly score: number;
   readonly runnerUps: ReadonlyArray<{ personaId: string; score: number }>;
+  readonly onTryInArena: () => void;
 }
 
-function ResultPanel({ personaId, score, runnerUps }: ResultPanelProps) {
+function ResultPanel({ personaId, score, runnerUps, onTryInArena }: ResultPanelProps) {
   const persona = findPersona(personaId);
   const [copied, setCopied] = useState(false);
 
@@ -42,7 +97,7 @@ function ResultPanel({ personaId, score, runnerUps }: ResultPanelProps) {
     ? ''
     : `${window.location.origin}/persona-match?p=${personaId}`;
 
-  const shareText = `I am ${persona.name} on Arena Arena. Take the quiz:`;
+  const shareText = `I'm ${persona.name} on Arena. "${persona.quote}" — which Arena mind are you?`;
 
   const onShare = async () => {
     if (typeof navigator !== 'undefined' && navigator.share) {
@@ -50,10 +105,10 @@ function ResultPanel({ personaId, score, runnerUps }: ResultPanelProps) {
         await navigator.share({ title: 'Arena Persona Match', text: shareText, url: shareUrl });
         return;
       } catch (err) {
-        // fall through to clipboard
+        // user cancelled or share unavailable — fall through to clipboard
       }
     }
-    const ok = await copyToClipboard(shareUrl);
+    const ok = await copyToClipboard(`${shareText} ${shareUrl}`);
     if (ok) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
@@ -116,6 +171,15 @@ function ResultPanel({ personaId, score, runnerUps }: ResultPanelProps) {
           type="button"
           variant="primary"
           size="md"
+          onClick={onTryInArena}
+          icon={<Swords aria-hidden="true" />}
+        >
+          Try {persona.name} in Arena
+        </MotionButton>
+        <MotionButton
+          type="button"
+          variant="secondary"
+          size="md"
           onClick={onShare}
           icon={<Share2 aria-hidden="true" />}
         >
@@ -158,8 +222,9 @@ function QuestionCard({
           </p>
         </header>
         <ul className="pm-question__options" role="radiogroup" aria-label={question.prompt}>
-          {question.options.map((option) => {
+          {question.options.map((option, optionIndex) => {
             const isSelected = selected === option.id;
+            const hotkey = optionIndex + 1;
             return (
               <li key={option.id}>
                 <Pressable
@@ -169,7 +234,9 @@ function QuestionCard({
                   className={`pm-option${isSelected ? ' pm-option--selected' : ''}`}
                   onClick={() => onSelect(option.id)}
                 >
-                  <span className="pm-option__indicator" aria-hidden="true" />
+                  <span className="pm-option__indicator" aria-hidden="true">
+                    <span className="pm-option__hotkey">{hotkey}</span>
+                  </span>
                   <span className="pm-option__label">{option.label}</span>
                 </Pressable>
               </li>
@@ -182,16 +249,21 @@ function QuestionCard({
 }
 
 export function PersonaMatchPage() {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const reduceMotion = prefersReducedMotion();
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState(false);
   const [pageVisible, setPageVisible] = useState(false);
+  const [restoredMatch, setRestoredMatch] = useState<StoredMatch | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setPageVisible(true);
   }, []);
 
-  // Restore top match from URL ?p=param so shared links deep-link to a result.
+  // 1) URL ?p= wins (shared links).
+  // 2) Otherwise, restore last match from localStorage so refreshes feel seamless.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -199,6 +271,11 @@ export function PersonaMatchPage() {
     if (shared && PERSONAS.some((p) => p.id === shared)) {
       setAnswers({ __shared: shared });
       setRevealed(true);
+      return;
+    }
+    const stored = readStoredMatch();
+    if (stored) {
+      setRestoredMatch(stored);
     }
   }, []);
 
@@ -218,12 +295,18 @@ export function PersonaMatchPage() {
   };
 
   const onReveal = () => {
-    if (allAnswered) setRevealed(true);
+    if (allAnswered) {
+      const match = topPersonaMatch(answers);
+      if (match) writeStoredMatch(answers, match.personaId);
+      setRevealed(true);
+    }
   };
 
   const onReset = () => {
     setAnswers({});
     setRevealed(false);
+    setRestoredMatch(null);
+    clearStoredMatch();
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.delete('p');
@@ -231,10 +314,95 @@ export function PersonaMatchPage() {
     }
   };
 
+  const onRestore = () => {
+    if (!restoredMatch) return;
+    setAnswers(restoredMatch.answers);
+    setRevealed(true);
+    setRestoredMatch(null);
+  };
+
+  const onDismissRestore = () => {
+    setRestoredMatch(null);
+    clearStoredMatch();
+  };
+
+  const onTryInArena = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const personaId = answers.__shared
+      ? answers.__shared
+      : topMatch?.personaId;
+    if (!personaId) return;
+    if (isAuthenticated) {
+      navigate(`/app?seedPersona=${personaId}`);
+      return;
+    }
+    setRedirectIntent(`/app?seedPersona=${personaId}`);
+    navigate('/signin?tab=signup');
+  }, [answers, topMatch, isAuthenticated, navigate]);
+
+  // Global keyboard navigation: number keys 1-4 select an option for the
+  // first unanswered question; Enter reveals; R resets. Skipped when an
+  // input/textarea/contenteditable has focus so we don't hijack typing.
+  useEffect(() => {
+    if (revealed) return;
+    if (typeof window === 'undefined') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const tag = target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      if (event.key === 'r' || event.key === 'R') {
+        if (answered > 0) {
+          event.preventDefault();
+          onReset();
+        }
+        return;
+      }
+      if (event.key === 'Enter') {
+        if (allAnswered) {
+          event.preventDefault();
+          onReveal();
+        }
+        return;
+      }
+      const digit = Number.parseInt(event.key, 10);
+      if (!Number.isInteger(digit) || digit < 1 || digit > 4) return;
+      // Pick the first unanswered question, or fall back to the first one
+      // whose <digit>th option is currently unselected.
+      const questions = PERSONA_MATCH_QUESTIONS;
+      const firstUnanswered = questions.find((q) => !answers[q.id]);
+      const target2 = firstUnanswered ?? questions[0];
+      if (!target2) return;
+      const opt = target2.options[digit - 1];
+      if (!opt) return;
+      event.preventDefault();
+      onSelect(target2.id, opt.id);
+      // Scroll the just-answered question into view so the user sees the
+      // selection register visually on large layouts.
+      const el = containerRef.current?.querySelector(
+        `[data-question-id="${target2.id}"]`,
+      );
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [revealed, answered, allAnswered, answers]);
+
   const progressPct = Math.round((answered / total) * 100);
 
+  const activePersonaId = answers.__shared
+    ? answers.__shared
+    : topMatch?.personaId;
+
   return (
-    <div className={`pm-page${pageVisible ? ' pm-page--enter' : ''}`}>
+    <div
+      ref={containerRef}
+      className={`pm-page${pageVisible ? ' pm-page--enter' : ''}`}
+    >
       <Navbar />
 
       <main
@@ -269,13 +437,50 @@ export function PersonaMatchPage() {
               {answered} / {total} answered
             </span>
           </div>
+
+          {!revealed && (
+            <p className="pm-hero__hints" aria-hidden={false}>
+              <span><kbd>1</kbd>–<kbd>4</kbd> pick · <kbd>Enter</kbd> reveal · <kbd>R</kbd> reset</span>
+            </p>
+          )}
         </section>
+
+        {restoredMatch && !revealed && (
+          <aside className="pm-restore" role="region" aria-label="Previous match">
+            <div className="pm-restore__copy">
+              <p className="pm-restore__kicker">Welcome back</p>
+              <p className="pm-restore__text">
+                We saved your last match —{' '}
+                <strong>{findPersona(restoredMatch.personaId)?.name ?? 'A persona'}</strong>.
+                Restore it, or start fresh.
+              </p>
+            </div>
+            <div className="pm-restore__actions">
+              <MotionButton
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={onRestore}
+              >
+                See my match
+              </MotionButton>
+              <button
+                type="button"
+                className="pm-restore__dismiss"
+                onClick={onDismissRestore}
+                aria-label="Discard saved match and start over"
+              >
+                Start over
+              </button>
+            </div>
+          </aside>
+        )}
 
         {!revealed ? (
           <section className="pm-quiz" aria-label="Persona match quiz">
             <ol className="pm-quiz__list">
               {PERSONA_MATCH_QUESTIONS.map((question, index) => (
-                <li key={question.id}>
+                <li key={question.id} data-question-id={question.id}>
                   <QuestionCard
                     question={question}
                     index={index}
@@ -312,17 +517,14 @@ export function PersonaMatchPage() {
           </section>
         ) : (
           <section className="pm-results" aria-label="Persona match results">
-            {answers.__shared ? (
+            {activePersonaId ? (
               <ResultPanel
-                personaId={answers.__shared}
-                score={ranked.find((r) => r.personaId === answers.__shared)?.score ?? 0}
+                personaId={activePersonaId}
+                score={
+                  ranked.find((r) => r.personaId === activePersonaId)?.score ?? 0
+                }
                 runnerUps={ranked}
-              />
-            ) : topMatch ? (
-              <ResultPanel
-                personaId={topMatch.personaId}
-                score={topMatch.score}
-                runnerUps={ranked}
+                onTryInArena={onTryInArena}
               />
             ) : null}
 
