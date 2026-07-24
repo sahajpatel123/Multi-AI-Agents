@@ -18,9 +18,17 @@
 import { describe, expect, it } from 'vitest';
 import { PERSONAS } from './personas';
 import {
+  appendMosaicBattleDecision,
   buildMosaicBattle,
+  clearMosaicBattleCounter,
+  clearMosaicBattleDecisions,
+  incrementMosaicBattleCounter,
+  mosaicBattleMajorityInfo,
   mosaicBattleShareUrl,
   mosaicBattleValid,
+  mosaicBattleWinTally,
+  readMosaicBattleCounter,
+  readMosaicBattleDecisions,
   type MosaicBattlePick,
 } from './personaMosaicBattle';
 
@@ -91,5 +99,95 @@ describe('mosaicBattleShareUrl', () => {
     expect(url).toContain('/persona-mosaic-battle');
     expect(url).toContain('a=A%20text');
     expect(url).toContain('b=B%20text');
+  });
+});
+
+describe('mosaic battle counter (localStorage)', () => {
+  it('starts at 0 when storage is empty', () => {
+    clearMosaicBattleCounter();
+    expect(readMosaicBattleCounter()).toBe(0);
+  });
+
+  it('increments monotonically', () => {
+    clearMosaicBattleCounter();
+    expect(incrementMosaicBattleCounter()).toBe(1);
+    expect(incrementMosaicBattleCounter()).toBe(2);
+  });
+
+  it('clearMosaicBattleCounter resets to 0', () => {
+    incrementMosaicBattleCounter();
+    clearMosaicBattleCounter();
+    expect(readMosaicBattleCounter()).toBe(0);
+  });
+});
+
+describe('mosaic battle decisions + winTally (localStorage)', () => {
+  const makeDecision = (id: string, winner: MosaicBattlePick) => ({
+    id,
+    outputASnippet: 'A',
+    outputBSnippet: 'B',
+    winner,
+    savedAt: '2026-07-25T00:00:00Z',
+  });
+
+  it('readMosaicBattleDecisions returns empty array when storage is empty', () => {
+    clearMosaicBattleDecisions();
+    expect(readMosaicBattleDecisions()).toEqual([]);
+  });
+
+  it('appendMosaicBattleDecision + read round-trip', () => {
+    clearMosaicBattleDecisions();
+    appendMosaicBattleDecision(makeDecision('d-1', 'A'));
+    expect(readMosaicBattleDecisions()).toHaveLength(1);
+  });
+
+  it('appendMosaicBattleDecision deduplicates by id', () => {
+    clearMosaicBattleDecisions();
+    appendMosaicBattleDecision(makeDecision('dup', 'A'));
+    appendMosaicBattleDecision(makeDecision('dup', 'B'));
+    const result = readMosaicBattleDecisions();
+    expect(result.length).toBe(1);
+    expect(result[0].winner).toBe('B');
+  });
+
+  it('clearMosaicBattleDecisions empties storage', () => {
+    appendMosaicBattleDecision(makeDecision('x', 'A'));
+    clearMosaicBattleDecisions();
+    expect(readMosaicBattleDecisions()).toEqual([]);
+  });
+});
+
+describe('mosaicBattleWinTally', () => {
+  it('returns 0/0 for empty history', () => {
+    expect(mosaicBattleWinTally([])).toEqual({ a: 0, b: 0 });
+  });
+
+  it('counts A and B winners correctly', () => {
+    const decisions = [
+      { id: 'a', outputASnippet: 'A', outputBSnippet: 'B', winner: 'A' as const, savedAt: '' },
+      { id: 'b', outputASnippet: 'A', outputBSnippet: 'B', winner: 'B' as const, savedAt: '' },
+      { id: 'c', outputASnippet: 'A', outputBSnippet: 'B', winner: 'A' as const, savedAt: '' },
+    ];
+    const tally = mosaicBattleWinTally(decisions);
+    expect(tally.a).toBe(2);
+    expect(tally.b).toBe(1);
+  });
+});
+
+describe('mosaicBattleMajorityInfo', () => {
+  it('returns unanimous for 4/4', () => {
+    const info = mosaicBattleMajorityInfo({ a: 4, b: 0 }, 'A');
+    expect(info.label).toBe('unanimous');
+    expect(info.winnerCount).toBe(4);
+  });
+
+  it('returns strong for 3/4', () => {
+    const info = mosaicBattleMajorityInfo({ a: 3, b: 1 }, 'A');
+    expect(info.label).toBe('strong');
+  });
+
+  it('returns split for 2/4 or less', () => {
+    const info = mosaicBattleMajorityInfo({ a: 2, b: 2 }, 'A');
+    expect(info.label).toBe('split');
   });
 });

@@ -16,9 +16,18 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendMosaicBattleDecision,
   buildMosaicBattle,
+  clearMosaicBattleCounter,
+  clearMosaicBattleDecisions,
+  incrementMosaicBattleCounter,
+  mosaicBattleMajorityInfo,
   mosaicBattleShareUrl,
   mosaicBattleValid,
+  mosaicBattleWinTally,
+  readMosaicBattleCounter,
+  readMosaicBattleDecisions,
+  type MosaicBattleDecisionEntry,
   type PersonaMosaicBattle,
 } from '../data/personaMosaicBattle';
 import { PERSONAS } from '../data/personas';
@@ -69,9 +78,13 @@ export function PersonaMosaicBattlePage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ReadonlyArray<{ a: string; b: string }>>([]);
+  const [castCount, setCastCount] = useState(0);
+  const [decisions, setDecisions] = useState<ReadonlyArray<MosaicBattleDecisionEntry>>([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setCastCount(readMosaicBattleCounter());
+    setDecisions(readMosaicBattleDecisions());
     try {
       const raw = window.localStorage.getItem('arena:persona-mosaic-battle:history:v1');
       if (raw) {
@@ -88,6 +101,23 @@ export function PersonaMosaicBattlePage() {
     const b = buildMosaicBattle(outputA, outputB);
     return mosaicBattleValid(b) ? b : null;
   }, [outputA, outputB]);
+
+  const lifetimeTally = useMemo(
+    () => mosaicBattleWinTally(decisions),
+    [decisions],
+  );
+
+  const majority = useMemo(
+    () => (battle ? mosaicBattleMajorityInfo(battle.tally, battle.winner) : null),
+    [battle],
+  );
+
+  const onResetLifetime = () => {
+    clearMosaicBattleCounter();
+    clearMosaicBattleDecisions();
+    setCastCount(0);
+    setDecisions([]);
+  };
 
   const onBattle = () => {
     if (typeof window === 'undefined') return;
@@ -109,6 +139,19 @@ export function PersonaMosaicBattlePage() {
     } catch {
       /* silent */
     }
+    if (battle) {
+      const decision: MosaicBattleDecisionEntry = {
+        id: `battle-${Date.now()}`,
+        outputASnippet: outputA.length > 60 ? `${outputA.slice(0, 57)}...` : outputA,
+        outputBSnippet: outputB.length > 60 ? `${outputB.slice(0, 57)}...` : outputB,
+        winner: battle.winner,
+        savedAt: new Date().toISOString(),
+      };
+      appendMosaicBattleDecision(decision);
+      setDecisions(readMosaicBattleDecisions());
+    }
+    const c = incrementMosaicBattleCounter();
+    setCastCount(c);
   };
 
   const onReset = () => {
@@ -254,6 +297,35 @@ export function PersonaMosaicBattlePage() {
               </MotionButton>
             </div>
           </div>
+          <div className="pmob-input__stats" aria-label="Mosaic battle stats">
+            <div className="pmob-input__stat">
+              <Swords aria-hidden="true" />
+              <span className="pmob-input__stat-label">Battles run</span>
+              <span className="pmob-input__stat-value">{castCount}</span>
+            </div>
+            {lifetimeTally.a > 0 && (
+              <div className="pmob-input__stat pmob-input__stat--a">
+                <span className="pmob-input__stat-label">A wins</span>
+                <span className="pmob-input__stat-value">{lifetimeTally.a}</span>
+              </div>
+            )}
+            {lifetimeTally.b > 0 && (
+              <div className="pmob-input__stat pmob-input__stat--b">
+                <span className="pmob-input__stat-label">B wins</span>
+                <span className="pmob-input__stat-value">{lifetimeTally.b}</span>
+              </div>
+            )}
+            {(castCount > 0 || lifetimeTally.a > 0 || lifetimeTally.b > 0) && (
+              <button
+                type="button"
+                className="pmob-input__stat-reset"
+                onClick={onResetLifetime}
+                aria-label="Reset battles counter and lifetime tally"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="pmob-samples" aria-label="Sample battles">
@@ -294,6 +366,11 @@ export function PersonaMosaicBattlePage() {
                   {battle.tally.a} for A · {battle.tally.b} for B
                 </span>
               </h2>
+              {majority && (
+                <p className={`pmob-result__majority pmob-result__majority--${majority.label}`}>
+                  {majority.description}
+                </p>
+              )}
             </header>
 
             <div className="pmob-sides">
