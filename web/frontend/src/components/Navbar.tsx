@@ -18,6 +18,7 @@ const PRIMARY_LINKS = [
   { label: 'DUEL', path: '/persona-duel' },
   { label: 'ECHO', path: '/persona-echo' },
   { label: 'COUNCIL', path: '/persona-council' },
+  { label: 'DILEMMA', path: '/persona-dilemma' },
   { label: 'MOSAIC', path: '/persona-mosaic' },
   { label: 'LIBRARY', path: '/persona-library' },
   { label: 'PRICING', path: '/pricing' },
@@ -38,12 +39,13 @@ const MENU_LINKS = [
   { number: '11', label: 'Persona Duel', path: '/persona-duel' },
   { number: '12', label: 'Persona Echo', path: '/persona-echo' },
   { number: '13', label: 'Persona Council', path: '/persona-council' },
-  { number: '14', label: 'Persona Mosaic', path: '/persona-mosaic' },
-  { number: '15', label: 'Persona Library', path: '/persona-library' },
-  { number: '16', label: 'Pricing', path: '/pricing' },
-  { number: '17', label: 'Documentation', path: '/docs' },
-  { number: '18', label: 'About', path: '/about' },
-  { number: '19', label: 'Changelog', path: '/changelog' },
+  { number: '14', label: 'Persona Dilemma', path: '/persona-dilemma' },
+  { number: '15', label: 'Persona Mosaic', path: '/persona-mosaic' },
+  { number: '16', label: 'Persona Library', path: '/persona-library' },
+  { number: '17', label: 'Pricing', path: '/pricing' },
+  { number: '18', label: 'Documentation', path: '/docs' },
+  { number: '19', label: 'About', path: '/about' },
+  { number: '20', label: 'Changelog', path: '/changelog' },
 ] as const;
 
 export function Navbar() {
