@@ -33,6 +33,7 @@ import { PERSONAS } from '../data/personas';
 import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
 import { prefersReducedMotion } from '../lib/motion';
+import '../styles/persona-mosaic-dilemma-forecast-page.css';
 
 const MAX_DILEMMA_CHARS = 200;
 

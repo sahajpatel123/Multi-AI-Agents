@@ -135,6 +135,9 @@ const PersonaMosaicForecastPage = lazy(() =>
 const PersonaMosaicRoastingBattlePage = lazy(() =>
   import('./pages/PersonaMosaicRoastingBattlePage').then((m) => ({ default: m.PersonaMosaicRoastingBattlePage })),
 )
+const PersonaMosaicDilemmaForecastPage = lazy(() =>
+  import('./pages/PersonaMosaicDilemmaForecastPage').then((m) => ({ default: m.PersonaMosaicDilemmaForecastPage })),
+)
 const AccountPage = lazy(() =>
   import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })),
 )
@@ -310,6 +313,7 @@ if (!rootElement) {
                   <Route path="/persona-mosaic-dilemma-council" element={<PersonaMosaicDilemmaCouncilPage />} />
                   <Route path="/persona-mosaic-forecast" element={<PersonaMosaicForecastPage />} />
                   <Route path="/persona-mosaic-roasting-battle" element={<PersonaMosaicRoastingBattlePage />} />
+                  <Route path="/persona-mosaic-dilemma-forecast" element={<PersonaMosaicDilemmaForecastPage />} />
                   <Route path="/share" element={<SharePage />} />
                   <Route path="/app" element={
                     <ProtectedRoute>
