@@ -102,6 +102,55 @@ body .pchal-challenge {
   gap: 14px;
 }
 
+/* Stats row */
+body .pchal-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 0 0 24px;
+}
+
+body .pchal-stat {
+  display: grid;
+  grid-template-columns: 18px auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 12px;
+  background: rgba(243, 240, 231, 0.04);
+}
+
+body .pchal-stat svg {
+  width: 18px;
+  height: 18px;
+  color: var(--pchal-warn);
+}
+
+body .pchal-stat:nth-child(2) svg {
+  color: var(--pchal-accent);
+}
+
+body .pchal-stat:nth-child(3) svg {
+  color: var(--vp-ivory);
+}
+
+body .pchal-stat__label {
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));
+}
+
+body .pchal-stat__value {
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-size: 22px;
+  color: var(--vp-ivory);
+  font-variant-numeric: tabular-nums;
+  justify-self: end;
+}
+
 body .pchal-challenge__head {
   display: flex;
   align-items: baseline;

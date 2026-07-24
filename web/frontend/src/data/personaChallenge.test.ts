@@ -16,10 +16,14 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  bestScoreAllTime,
+  bestScoreForDate,
   challengeOfTheDay,
   challengeShareUrl,
+  computeChallengeStreak,
   scoreChallenge,
   todayIsoDate,
+  type ChallengeHistoryEntry,
   type PersonaChallenge,
 } from './personaChallenge';
 
@@ -141,5 +145,122 @@ describe('challengeShareUrl', () => {
     expect(url).toContain('c=over-eager');
     expect(url).toContain('s=');
     expect(decodeURIComponent(url)).toContain('A focused question.');
+  });
+});
+
+describe('computeChallengeStreak', () => {
+  const makeEntry = (date: string, after: number = 3): ChallengeHistoryEntry => ({
+    id: `${date}-${Math.random()}`,
+    date,
+    challengeId: 'test',
+    before: 8,
+    after,
+    improvement: 8 - after,
+    passed: after <= 2,
+    savedAt: `${date}T00:00:00Z`,
+  });
+
+  it('returns 0 for empty history', () => {
+    expect(computeChallengeStreak([], '2026-07-24')).toBe(0);
+  });
+
+  it('returns 1 for a single entry today', () => {
+    expect(computeChallengeStreak([makeEntry('2026-07-24')], '2026-07-24')).toBe(1);
+  });
+
+  it('returns 1 for a single entry yesterday (forgives "haven\'t played yet")', () => {
+    expect(computeChallengeStreak([makeEntry('2026-07-23')], '2026-07-24')).toBe(1);
+  });
+
+  it('returns 0 if the most recent entry is older than yesterday', () => {
+    expect(computeChallengeStreak([makeEntry('2026-07-20')], '2026-07-24')).toBe(0);
+  });
+
+  it('returns the consecutive-day count', () => {
+    const history = [
+      makeEntry('2026-07-24'),
+      makeEntry('2026-07-23'),
+      makeEntry('2026-07-22'),
+      makeEntry('2026-07-21'),
+    ];
+    expect(computeChallengeStreak(history, '2026-07-24')).toBe(4);
+  });
+
+  it('breaks the streak at the first gap', () => {
+    const history = [
+      makeEntry('2026-07-24'),
+      makeEntry('2026-07-23'),
+      // gap on 07-22
+      makeEntry('2026-07-21'),
+      makeEntry('2026-07-20'),
+    ];
+    expect(computeChallengeStreak(history, '2026-07-24')).toBe(2);
+  });
+
+  it('treats multiple entries on the same day as one streak day', () => {
+    const history = [
+      makeEntry('2026-07-24'),
+      makeEntry('2026-07-24'),
+      makeEntry('2026-07-23'),
+    ];
+    expect(computeChallengeStreak(history, '2026-07-24')).toBe(2);
+  });
+});
+
+describe('bestScoreForDate', () => {
+  const makeEntry = (date: string, after: number): ChallengeHistoryEntry => ({
+    id: `${date}-${after}`,
+    date,
+    challengeId: 'test',
+    before: 8,
+    after,
+    improvement: 8 - after,
+    passed: after <= 2,
+    savedAt: `${date}T00:00:00Z`,
+  });
+
+  it('returns null when there are no entries on that date', () => {
+    expect(bestScoreForDate([], '2026-07-24')).toBeNull();
+    expect(bestScoreForDate([makeEntry('2026-07-23', 3)], '2026-07-24')).toBeNull();
+  });
+
+  it('returns the entry with the lowest after-score', () => {
+    const history = [
+      makeEntry('2026-07-24', 5),
+      makeEntry('2026-07-24', 2),
+      makeEntry('2026-07-24', 4),
+    ];
+    const best = bestScoreForDate(history, '2026-07-24');
+    expect(best).not.toBeNull();
+    expect(best!.after).toBe(2);
+  });
+});
+
+describe('bestScoreAllTime', () => {
+  const makeEntry = (date: string, after: number): ChallengeHistoryEntry => ({
+    id: `${date}-${after}`,
+    date,
+    challengeId: 'test',
+    before: 8,
+    after,
+    improvement: 8 - after,
+    passed: after <= 2,
+    savedAt: `${date}T00:00:00Z`,
+  });
+
+  it('returns null for empty history', () => {
+    expect(bestScoreAllTime([])).toBeNull();
+  });
+
+  it('returns the entry with the lowest after-score across all dates', () => {
+    const history = [
+      makeEntry('2026-07-24', 5),
+      makeEntry('2026-07-23', 2),
+      makeEntry('2026-07-22', 4),
+    ];
+    const best = bestScoreAllTime(history);
+    expect(best).not.toBeNull();
+    expect(best!.after).toBe(2);
+    expect(best!.date).toBe('2026-07-23');
   });
 });

@@ -10,6 +10,7 @@ import {
   Sparkles,
   Swords,
   Target,
+  TrendingDown,
   Wand2,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -18,10 +19,16 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import {
+  appendChallengeHistory,
+  bestScoreAllTime,
+  bestScoreForDate,
   challengeOfTheDay,
   challengeShareUrl,
+  computeChallengeStreak,
+  readChallengeHistory,
   scoreChallenge,
   todayIsoDate,
+  type ChallengeHistoryEntry,
   type ChallengeResult,
   type PersonaChallenge,
 } from '../data/personaChallenge';
@@ -57,9 +64,11 @@ export function PersonaChallengePage() {
   const [committed, setCommitted] = useState(submissionParam ?? '');
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [history, setHistory] = useState<ReadonlyArray<ChallengeHistoryEntry>>([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setHistory(readChallengeHistory());
   }, []);
 
   const result: ChallengeResult | null = useMemo(() => {
@@ -77,6 +86,20 @@ export function PersonaChallengePage() {
       );
       window.history.replaceState({}, '', url);
     }
+    // Score once and append to history.
+    const scored = scoreChallenge(challenge, submission);
+    const entry: ChallengeHistoryEntry = {
+      id: `${challenge.id}-${todayIso}-${Date.now()}`,
+      date: todayIso,
+      challengeId: challenge.id,
+      before: scored.before,
+      after: scored.after,
+      improvement: scored.improvement,
+      passed: scored.passed,
+      savedAt: new Date().toISOString(),
+    };
+    appendChallengeHistory(entry);
+    setHistory(readChallengeHistory());
   };
 
   const onReset = () => {
@@ -129,6 +152,18 @@ export function PersonaChallengePage() {
   const charCount = submission.length;
   const improvement = result?.improvement ?? 0;
   const improvementClamped = Math.max(0, Math.min(10, improvement));
+  const todayIso = todayIsoDate();
+
+  // Derived streak + best-score metrics
+  const streak = useMemo(
+    () => computeChallengeStreak(history, todayIso),
+    [history],
+  );
+  const bestToday = useMemo(
+    () => bestScoreForDate(history, todayIso),
+    [history],
+  );
+  const bestAllTime = useMemo(() => bestScoreAllTime(history), [history]);
 
   return (
     <div className={`pchal-page${pageVisible ? ' pchal-page--enter' : ''}`}>
@@ -168,6 +203,28 @@ export function PersonaChallengePage() {
           <p className="pchal-challenge__hint">
             <Wand2 aria-hidden="true" /> Hint: {challenge.hint}
           </p>
+        </section>
+
+        <section className="pchal-stats" aria-label="Streak and best scores">
+          <div className="pchal-stat">
+            <Flame aria-hidden="true" />
+            <span className="pchal-stat__label">Day streak</span>
+            <span className="pchal-stat__value">{streak}</span>
+          </div>
+          <div className="pchal-stat">
+            <TrendingDown aria-hidden="true" />
+            <span className="pchal-stat__label">Best today</span>
+            <span className="pchal-stat__value">
+              {bestToday ? `${bestToday.after}/10` : '—'}
+            </span>
+          </div>
+          <div className="pchal-stat">
+            <Award aria-hidden="true" />
+            <span className="pchal-stat__label">All-time best</span>
+            <span className="pchal-stat__value">
+              {bestAllTime ? `${bestAllTime.after}/10` : '—'}
+            </span>
+          </div>
         </section>
 
         <section className="pchal-input" aria-label="Your submission">

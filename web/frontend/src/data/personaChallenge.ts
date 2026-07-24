@@ -133,3 +133,131 @@ export function challengeShareUrl(
 ): string {
   return `${origin}/persona-challenge?c=${encodeURIComponent(challengeId)}&s=${encodeURIComponent(submission)}`;
 }
+
+// Challenge history (localStorage) — every submission is saved with
+// the date + improvement + score so we can compute streaks and best-
+// score-per-day.
+
+export interface ChallengeHistoryEntry {
+  readonly id: string;
+  readonly date: string;
+  readonly challengeId: string;
+  readonly before: number;
+  readonly after: number;
+  readonly improvement: number;
+  readonly passed: boolean;
+  readonly savedAt: string;
+}
+
+const HISTORY_KEY = 'arena:persona-challenge:history:v1';
+const HISTORY_LIMIT = 30;
+
+export function readChallengeHistory(): ReadonlyArray<ChallengeHistoryEntry> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ChallengeHistoryEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (e) =>
+          e &&
+          typeof e.id === 'string' &&
+          typeof e.date === 'string' &&
+          typeof e.improvement === 'number',
+      )
+      .slice(0, HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+export function appendChallengeHistory(entry: ChallengeHistoryEntry) {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = readChallengeHistory().filter((e) => e.id !== entry.id);
+    const next = [entry, ...existing].slice(0, HISTORY_LIMIT);
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    /* silent */
+  }
+}
+
+export function clearChallengeHistory() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(HISTORY_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+/**
+ * Pure — compute the consecutive-day streak from a history list.
+ * Today counts as a streak day if any entry has today's date.
+ */
+export function computeChallengeStreak(
+  history: ReadonlyArray<ChallengeHistoryEntry>,
+  todayIso: string,
+): number {
+  if (history.length === 0) return 0;
+  // Get distinct dates, sorted descending.
+  const dates = new Set<string>();
+  for (const entry of history) {
+    dates.add(entry.date);
+  }
+  const sortedDesc = [...dates].sort().reverse();
+  // Streak must start from today (or yesterday — to forgive "haven't
+  // played yet today" UX).
+  const today = todayIso;
+  const yesterday = shiftDate(todayIso, -1);
+  let cursor: string;
+  if (sortedDesc[0] === today) cursor = today;
+  else if (sortedDesc[0] === yesterday) cursor = yesterday;
+  else return 0;
+  let streak = 0;
+  for (const d of sortedDesc) {
+    if (d === cursor) {
+      streak += 1;
+      cursor = shiftDate(cursor, -1);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+/** Pure — best (lowest) `after` score for a given date, or null. */
+export function bestScoreForDate(
+  history: ReadonlyArray<ChallengeHistoryEntry>,
+  dateIso: string,
+): ChallengeHistoryEntry | null {
+  const matching = history.filter((e) => e.date === dateIso);
+  if (matching.length === 0) return null;
+  return matching.reduce((best, cur) =>
+    cur.after < best.after ? cur : best,
+  );
+}
+
+/** Pure — best (lowest) `after` score across all dates. */
+export function bestScoreAllTime(
+  history: ReadonlyArray<ChallengeHistoryEntry>,
+): ChallengeHistoryEntry | null {
+  if (history.length === 0) return null;
+  return history.reduce((best, cur) =>
+    cur.after < best.after ? cur : best,
+  );
+}
+
+/** Pure — shift an ISO date by `days` days (negative = earlier). */
+function shiftDate(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map((s) => Number.parseInt(s, 10));
+  if (!y || !m || !d) return iso;
+  const t = Date.UTC(y, m - 1, d) + days * 86400000;
+  const date = new Date(t);
+  const yy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
