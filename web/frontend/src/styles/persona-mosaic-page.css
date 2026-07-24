@@ -87,6 +87,243 @@ body .pmos-hero__lede {
   margin: 0;
 }
 
+/* Mosaic of the day */
+body .pmos-otd {
+  margin: 32px 0 0;
+}
+
+body .pmos-otd__card {
+  padding: 20px 24px;
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(243, 240, 231, 0.05), rgba(243, 240, 231, 0.02));
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+
+body .pmos-otd__head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+body .pmos-otd__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--pmos-slot-color);
+}
+
+body .pmos-otd__date {
+  margin: 0;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));
+}
+
+body .pmos-otd__lineup {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+body .pmos-otd__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pmos-otd-color) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pmos-otd-color) 35%, transparent);
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--vp-ivory);
+}
+
+body .pmos-otd__load {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 999px;
+  padding: 10px 16px;
+  color: var(--vp-ivory);
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 220ms ease, border-color 220ms ease;
+}
+
+body .pmos-otd__load:hover:not(:disabled) {
+  color: var(--pmos-slot-color);
+  border-color: var(--pmos-slot-color);
+}
+
+body .pmos-otd__load:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  body .pmos-otd__card {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Saved teams */
+body .pmos-teams {
+  margin: 32px 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--public-rule-soft);
+}
+
+body .pmos-teams__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+body .pmos-teams__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));
+}
+
+body .pmos-teams__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.45));
+  font-size: 11px;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  cursor: pointer;
+  transition: color 220ms ease;
+}
+
+body .pmos-teams__clear:hover {
+  color: var(--vp-ivory);
+}
+
+body .pmos-teams ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+body .pmos-teams__item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: stretch;
+  background: rgba(243, 240, 231, 0.03);
+  border: 1px solid var(--public-rule-soft);
+  border-radius: 12px;
+  transition: border-color 220ms ease;
+}
+
+body .pmos-teams__item:hover {
+  border-color: var(--pmos-slot-color);
+}
+
+body .pmos-teams__load {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 16px;
+  background: transparent;
+  border: 0;
+  color: var(--vp-ivory);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+body .pmos-teams__name {
+  font-family: var(--vp-font-display, 'Times New Roman', serif);
+  font-size: 16px;
+}
+
+body .pmos-teams__lineup {
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.6));
+}
+
+body .pmos-teams__remove {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--public-rule-soft);
+  color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.5));
+  cursor: pointer;
+  transition: color 220ms ease;
+}
+
+body .pmos-teams__remove:hover {
+  color: #E09898;
+}
+
+body .pmos-card__save {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: rgba(243, 240, 231, 0.06);
+  border: 1px solid var(--pmos-slot-color);
+  border-radius: 999px;
+  color: var(--vp-ivory);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 220ms ease, background 220ms ease;
+}
+
+body .pmos-card__save:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--pmos-slot-color) 14%, transparent);
+}
+
+body .pmos-card__save:disabled,
+body .pmos-card__save--saved {
+  opacity: 0.7;
+  cursor: default;
+}
+
+body .pmos-card__notice {
+  margin: 0;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--pmos-slot-color);
+}
+
 /* Slots */
 body .pmos-slots {
   margin: 48px 0 24px;

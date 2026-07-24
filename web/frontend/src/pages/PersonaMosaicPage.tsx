@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
+  Bookmark,
+  BookmarkPlus,
+  Calendar,
   Check,
   Compass,
+  History,
   RefreshCw,
   Share2,
   Sparkles,
   Swords,
+  Trash2,
   Users,
   X,
 } from 'lucide-react';
@@ -17,8 +22,15 @@ import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import { PERSONAS } from '../data/personas';
 import {
+  appendSavedTeam,
   buildMosaic,
+  clearSavedTeams,
+  mosaicOfTheDay,
   mosaicShareUrl,
+  readSavedTeams,
+  removeSavedTeam,
+  todayIsoDate,
+  type MosaicSavedTeam,
 } from '../data/personaMosaic';
 import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
@@ -41,8 +53,6 @@ function parsePersonaIds(raw: string | null): string[] {
 }
 
 function pickDefaultFour(): string[] {
-  // Curated opening: four contrasting minds that produce a strong
-  // "balanced" mosaic on first load.
   return ['analyst', 'empath', 'engineer', 'contrarian'];
 }
 
@@ -58,9 +68,14 @@ export function PersonaMosaicPage() {
   );
   const [pageVisible, setPageVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [savedTeams, setSavedTeams] = useState<ReadonlyArray<MosaicSavedTeam>>([]);
+  const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [otdCombo, setOtdCombo] = useState<ReadonlyArray<string>>([]);
 
   useEffect(() => {
     setPageVisible(true);
+    setSavedTeams(readSavedTeams());
+    setOtdCombo(mosaicOfTheDay(todayIsoDate()));
   }, []);
 
   const mosaic = useMemo(() => buildMosaic(picked), [picked]);
@@ -70,8 +85,6 @@ export function PersonaMosaicPage() {
   const updateSlot = (slotIndex: number, personaId: string) => {
     setPicked((prev) => {
       const next = [...prev];
-      // If the persona is already in another slot, swap them so we never
-      // have duplicates. This is what users expect when picking.
       const existingIdx = next.findIndex((id) => id === personaId);
       if (existingIdx >= 0 && existingIdx !== slotIndex) {
         next[existingIdx] = next[slotIndex];
@@ -82,7 +95,6 @@ export function PersonaMosaicPage() {
   };
 
   const onAutoFill = () => {
-    // Pick 4 distinct personas with maximally contrasting temperatures.
     const sorted = [...PERSONAS].sort((a, b) => a.temperature - b.temperature);
     const picks = [
       sorted[0].id,
@@ -94,6 +106,39 @@ export function PersonaMosaicPage() {
   };
 
   const onClear = () => setPicked([]);
+
+  const onLoadOtd = () => {
+    setPicked(otdCombo);
+  };
+
+  const onSave = () => {
+    if (!mosaic) return;
+    const name = mosaic.houseName.replace(/^(Ice-cold|Cool-headed|Warm-blooded|Incendiary)\s+/, '');
+    const entry: MosaicSavedTeam = {
+      id: `team-${picked.join('-')}`,
+      name,
+      personaIds: picked,
+      savedAt: new Date().toISOString(),
+    };
+    appendSavedTeam(entry);
+    setSavedTeams(readSavedTeams());
+    setSavedNotice(`Saved "${name}" to your teams.`);
+    window.setTimeout(() => setSavedNotice(null), 2200);
+  };
+
+  const onLoadTeam = (team: MosaicSavedTeam) => {
+    setPicked(team.personaIds);
+  };
+
+  const onRemoveTeam = (id: string) => {
+    removeSavedTeam(id);
+    setSavedTeams(readSavedTeams());
+  };
+
+  const onClearTeams = () => {
+    clearSavedTeams();
+    setSavedTeams([]);
+  };
 
   const onShare = async () => {
     if (typeof window === 'undefined' || !mosaic) return;
@@ -126,6 +171,10 @@ export function PersonaMosaicPage() {
     navigate('/signin?tab=signup');
   };
 
+  const isCurrentSaved = savedTeams.some(
+    (t) => t.personaIds.join(',') === picked.join(','),
+  );
+
   return (
     <div className={`pmos-page${pageVisible ? ' pmos-page--enter' : ''}`}>
       <Navbar />
@@ -148,6 +197,42 @@ export function PersonaMosaicPage() {
             tagline, manifesto, and a question the team is built to
             answer — shareable, deterministic, and yours to take into Arena.
           </p>
+        </section>
+
+        <section className="pmos-otd" aria-label="Mosaic of the day">
+          <div className="pmos-otd__card">
+            <div className="pmos-otd__head">
+              <p className="pmos-otd__kicker">
+                <Calendar aria-hidden="true" /> Mosaic of the day
+              </p>
+              <p className="pmos-otd__date">{todayIsoDate()}</p>
+            </div>
+            {otdCombo.length === 4 && (
+              <div className="pmos-otd__lineup">
+                {otdCombo.map((id) => {
+                  const p = findPersona(id);
+                  if (!p) return null;
+                  return (
+                    <span
+                      key={id}
+                      className="pmos-otd__chip"
+                      style={{ ['--pmos-otd-color' as string]: p.color }}
+                    >
+                      {p.name}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <Pressable
+              type="button"
+              className="pmos-otd__load"
+              onClick={onLoadOtd}
+              disabled={otdCombo.join(',') === picked.join(',')}
+            >
+              <Sparkles aria-hidden="true" /> Load today's combo
+            </Pressable>
+          </div>
         </section>
 
         <section className="pmos-slots" aria-label="Mosaic slots">
@@ -280,6 +365,22 @@ export function PersonaMosaicPage() {
                 >
                   Bring all four into Arena
                 </MotionButton>
+                <Pressable
+                  type="button"
+                  className={`pmos-card__save${isCurrentSaved ? ' pmos-card__save--saved' : ''}`}
+                  onClick={onSave}
+                  disabled={isCurrentSaved}
+                >
+                  {isCurrentSaved ? (
+                    <>
+                      <Bookmark aria-hidden="true" /> Saved
+                    </>
+                  ) : (
+                    <>
+                      <BookmarkPlus aria-hidden="true" /> Save team
+                    </>
+                  )}
+                </Pressable>
                 <MotionButton
                   type="button"
                   variant="secondary"
@@ -293,6 +394,11 @@ export function PersonaMosaicPage() {
                   Browse all 16 minds <ArrowRight aria-hidden="true" />
                 </a>
               </div>
+              {savedNotice && (
+                <p className="pmos-card__notice" role="status" aria-live="polite">
+                  {savedNotice}
+                </p>
+              )}
             </article>
           ) : (
             <div className="pmos-empty">
@@ -300,6 +406,51 @@ export function PersonaMosaicPage() {
             </div>
           )}
         </section>
+
+        {savedTeams.length > 0 && (
+          <section className="pmos-teams" aria-label="Saved teams">
+            <div className="pmos-teams__head">
+              <p className="pmos-teams__label">
+                <History aria-hidden="true" /> Your saved teams
+              </p>
+              <button
+                type="button"
+                className="pmos-teams__clear"
+                onClick={onClearTeams}
+                aria-label="Clear saved teams"
+              >
+                <Trash2 aria-hidden="true" /> Clear all
+              </button>
+            </div>
+            <ul>
+              {savedTeams.map((team) => (
+                <li key={team.id} className="pmos-teams__item">
+                  <button
+                    type="button"
+                    className="pmos-teams__load"
+                    onClick={() => onLoadTeam(team)}
+                    aria-label={`Load ${team.name}`}
+                  >
+                    <span className="pmos-teams__name">{team.name}</span>
+                    <span className="pmos-teams__lineup">
+                      {team.personaIds
+                        .map((id) => findPersona(id)?.name ?? id)
+                        .join(' · ')}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="pmos-teams__remove"
+                    onClick={() => onRemoveTeam(team.id)}
+                    aria-label={`Remove ${team.name}`}
+                  >
+                    <X aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
 
       <Footer />

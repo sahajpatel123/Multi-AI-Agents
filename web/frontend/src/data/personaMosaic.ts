@@ -366,3 +366,112 @@ export function mosaicShareUrl(
 ): string {
   return `${origin}/persona-mosaic?p=${ids.join(',')}`;
 }
+
+// Saved teams (localStorage) — every named mosaic the user has bookmarked.
+// Capped at 12 entries so the page doesn't grow unbounded.
+
+export interface MosaicSavedTeam {
+  readonly id: string;
+  readonly name: string;
+  readonly personaIds: ReadonlyArray<string>;
+  readonly savedAt: string;
+}
+
+const SAVED_LIMIT = 12;
+const SAVED_KEY = 'arena:persona-mosaic:saved:v1';
+
+export function readSavedTeams(): ReadonlyArray<MosaicSavedTeam> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(SAVED_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as MosaicSavedTeam[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (e) =>
+          e &&
+          typeof e.id === 'string' &&
+          typeof e.name === 'string' &&
+          Array.isArray(e.personaIds) &&
+          e.personaIds.length === 4,
+      )
+      .slice(0, SAVED_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+export function appendSavedTeam(entry: MosaicSavedTeam) {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = readSavedTeams().filter((e) => e.id !== entry.id);
+    const next = [entry, ...existing].slice(0, SAVED_LIMIT);
+    window.localStorage.setItem(SAVED_KEY, JSON.stringify(next));
+  } catch {
+    /* silent */
+  }
+}
+
+export function removeSavedTeam(id: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const next = readSavedTeams().filter((e) => e.id !== id);
+    window.localStorage.setItem(SAVED_KEY, JSON.stringify(next));
+  } catch {
+    /* silent */
+  }
+}
+
+export function clearSavedTeams() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(SAVED_KEY);
+  } catch {
+    /* silent */
+  }
+}
+
+// Mosaic of the day — deterministic daily combo so the page always shows
+// a featured mosaic that changes every 24h. Uses the day-of-year as a
+// stable seed so the same combo appears for everyone on the same day.
+
+/**
+ * Pure — returns the 4 persona ids for the given ISO date (YYYY-MM-DD).
+ * Same date = same combo for every visitor.
+ */
+export function mosaicOfTheDay(isoDate: string): ReadonlyArray<string> {
+  // Parse YYYY-MM-DD into a day index. Stable across timezones if we
+  // anchor on UTC midnight.
+  const [y, m, d] = isoDate.split('-').map((s) => Number.parseInt(s, 10));
+  if (!y || !m || !d) {
+    return pickDefaultFourOfTheDay();
+  }
+  const dayIndex = Math.floor(
+    Date.UTC(y, m - 1, d) / (1000 * 60 * 60 * 24),
+  );
+  const pool = PERSONAS.map((p) => p.id);
+  const picked: string[] = [];
+  const remaining = [...pool];
+  for (let i = 0; i < 4; i++) {
+    if (remaining.length === 0) break;
+    const idx = simpleHash(`mosaic-otd-${dayIndex}-${i}`) % remaining.length;
+    picked.push(remaining[idx]);
+    remaining.splice(idx, 1);
+  }
+  return picked;
+}
+
+function pickDefaultFourOfTheDay(): ReadonlyArray<string> {
+  const pool = PERSONAS.map((p) => p.id);
+  return [pool[0], pool[4], pool[8], pool[12]];
+}
+
+/** Today's date as YYYY-MM-DD in the local timezone. */
+export function todayIsoDate(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}

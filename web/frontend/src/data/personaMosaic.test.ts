@@ -14,8 +14,15 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  appendSavedTeam,
   buildMosaic,
+  clearSavedTeams,
+  mosaicOfTheDay,
   mosaicShareUrl,
+  readSavedTeams,
+  removeSavedTeam,
+  todayIsoDate,
+  type MosaicSavedTeam,
   type PersonaMosaic,
 } from './personaMosaic';
 import { PERSONAS } from './personas';
@@ -144,5 +151,121 @@ describe('PersonaMosaic type invariants', () => {
     expect(Array.isArray(m!.manifesto)).toBe(true);
     expect(m!.manifesto.length).toBeGreaterThan(0);
     expect(typeof m!.bestQuestion).toBe('string');
+  });
+});
+
+describe('mosaicOfTheDay', () => {
+  it('returns 4 distinct persona ids for any YYYY-MM-DD date', () => {
+    const ids = mosaicOfTheDay('2026-07-24');
+    expect(ids).toHaveLength(4);
+    expect(new Set(ids).size).toBe(4);
+    for (const id of ids) {
+      expect(PERSONAS.some((p) => p.id === id)).toBe(true);
+    }
+  });
+
+  it('is deterministic for the same date', () => {
+    const a = mosaicOfTheDay('2026-07-24');
+    const b = mosaicOfTheDay('2026-07-24');
+    expect(a).toEqual(b);
+  });
+
+  it('produces a different combo for a different date', () => {
+    const a = mosaicOfTheDay('2026-07-24');
+    const b = mosaicOfTheDay('2026-07-25');
+    expect(a).not.toEqual(b);
+  });
+
+  it('falls back to a default combo for invalid date strings', () => {
+    const ids = mosaicOfTheDay('not-a-date');
+    expect(ids).toHaveLength(4);
+  });
+
+  it('returns valid combos across many consecutive days', () => {
+    const seen = new Set<string>();
+    for (let day = 1; day <= 30; day++) {
+      const ids = mosaicOfTheDay(`2026-07-${String(day).padStart(2, '0')}`);
+      seen.add(ids.join(','));
+      for (const id of ids) {
+        expect(PERSONAS.some((p) => p.id === id)).toBe(true);
+      }
+    }
+    // Across 30 days we expect a healthy variety — at least 20 distinct combos.
+    expect(seen.size).toBeGreaterThanOrEqual(20);
+  });
+});
+
+describe('todayIsoDate', () => {
+  it('returns a YYYY-MM-DD string', () => {
+    const s = todayIsoDate();
+    expect(s).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe('saved teams (localStorage)', () => {
+  const makeTeam = (id: string, ids: string[]): MosaicSavedTeam => ({
+    id,
+    name: `Team ${id}`,
+    personaIds: ids,
+    savedAt: new Date().toISOString(),
+  });
+
+  it('readSavedTeams returns empty array when storage is empty', () => {
+    clearSavedTeams();
+    expect(readSavedTeams()).toEqual([]);
+  });
+
+  it('appendSavedTeam + readSavedTeams round-trip', () => {
+    clearSavedTeams();
+    const team = makeTeam('a', SAMPLE);
+    appendSavedTeam(team);
+    expect(readSavedTeams()).toHaveLength(1);
+  });
+
+  it('appendSavedTeam deduplicates by id', () => {
+    clearSavedTeams();
+    appendSavedTeam(makeTeam('dup', SAMPLE));
+    appendSavedTeam(makeTeam('dup', ['contrarian', 'analyst', 'optimist', 'engineer']));
+    const result = readSavedTeams();
+    expect(result.length).toBe(1);
+    expect(result[0].personaIds).toEqual(['contrarian', 'analyst', 'optimist', 'engineer']);
+  });
+
+  it('appendSavedTeam caps the stored list at 12 entries', () => {
+    clearSavedTeams();
+    for (let i = 0; i < 20; i++) {
+      appendSavedTeam(
+        makeTeam(`t-${i}`, ['analyst', 'optimist', 'stoic', 'contrarian']),
+      );
+    }
+    expect(readSavedTeams().length).toBeLessThanOrEqual(12);
+  });
+
+  it('removeSavedTeam deletes a single entry', () => {
+    clearSavedTeams();
+    appendSavedTeam(makeTeam('a', SAMPLE));
+    appendSavedTeam(makeTeam('b', ['contrarian', 'analyst', 'optimist', 'engineer']));
+    removeSavedTeam('a');
+    const result = readSavedTeams();
+    expect(result.length).toBe(1);
+    expect(result[0].id).toBe('b');
+  });
+
+  it('clearSavedTeams empties storage', () => {
+    appendSavedTeam(makeTeam('x', SAMPLE));
+    clearSavedTeams();
+    expect(readSavedTeams()).toEqual([]);
+  });
+
+  it('rejects entries that do not have exactly 4 persona ids', () => {
+    clearSavedTeams();
+    // Direct write bypassing the helper to test validation
+    window.localStorage.setItem(
+      'arena:persona-mosaic:saved:v1',
+      JSON.stringify([
+        { id: 'a', name: 'Bad Team', personaIds: ['analyst', 'optimist'], savedAt: 'x' },
+      ]),
+    );
+    expect(readSavedTeams()).toEqual([]);
   });
 });
