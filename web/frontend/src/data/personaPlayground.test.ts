@@ -25,7 +25,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   PERSONA_PLAYGROUND_ENTRIES,
+  clearFeaturedDismissState,
+  dayOfYear,
+  formatLocalDate,
+  isDismissedFor,
   personaPlaygroundCategories,
+  pickFeaturedOfDay,
+  readFeaturedDismissState,
+  writeFeaturedDismissState,
   type PersonaPlaygroundEntry,
 } from './personaPlayground';
 
@@ -123,3 +130,151 @@ describe('Persona Playground entry shape (typecheck helper)', () => {
     expect(sample.path).toMatch(/^\/persona/);
   });
 });
+
+describe('Daily featured tool', () => {
+  it('formatLocalDate produces zero-padded YYYY-MM-DD', () => {
+    expect(formatLocalDate(new Date(2026, 0, 5))).toBe('2026-01-05');
+    expect(formatLocalDate(new Date(2026, 11, 31))).toBe('2026-12-31');
+    expect(formatLocalDate(new Date(2026, 6, 25))).toBe('2026-07-25');
+  });
+
+  it('dayOfYear is 1 on Jan 1 and 366 on Dec 31 in a leap year', () => {
+    expect(dayOfYear(new Date(2026, 0, 1))).toBe(1);
+    expect(dayOfYear(new Date(2024, 11, 31))).toBe(366);
+    expect(dayOfYear(new Date(2026, 11, 31))).toBe(365);
+  });
+
+  it('pickFeaturedOfDay is deterministic for the same date', () => {
+    const a = new Date(2026, 6, 25, 9, 0, 0);
+    const b = new Date(2026, 6, 25, 23, 59, 59);
+    expect(pickFeaturedOfDay(a)).toEqual(pickFeaturedOfDay(b));
+  });
+
+  it('pickFeaturedOfDay changes on a different day', () => {
+    const today = new Date(2026, 6, 25);
+    const tomorrow = new Date(2026, 6, 26);
+    const todayPick = pickFeaturedOfDay(today);
+    const tomorrowPick = pickFeaturedOfDay(tomorrow);
+    // Adjacent days in a 27-entry catalog may land on the same slot if
+    // dayOfYear % 27 collides — skip the assertion in that case.
+    if (dayOfYear(today) % PERSONA_PLAYGROUND_ENTRIES.length !==
+        dayOfYear(tomorrow) % PERSONA_PLAYGROUND_ENTRIES.length) {
+      expect(todayPick).not.toEqual(tomorrowPick);
+    }
+  });
+
+  it('pickFeaturedOfDay returns null for empty catalog', () => {
+    expect(pickFeaturedOfDay(new Date(2026, 6, 25), [])).toBeNull();
+  });
+
+  it('pickFeaturedOfDay returns an entry indexed by dayOfYear mod length', () => {
+    const date = new Date(2026, 6, 25);
+    const expected = PERSONA_PLAYGROUND_ENTRIES[dayOfYear(date) % PERSONA_PLAYGROUND_ENTRIES.length];
+    expect(pickFeaturedOfDay(date)).toEqual(expected);
+  });
+
+  it('isDismissedFor requires matching day and current schema version', () => {
+    const today = new Date(2026, 6, 25);
+    const todayKey = formatLocalDate(today);
+    expect(
+      isDismissedFor(today, { v: 1, dismissedOn: todayKey }),
+    ).toBe(true);
+    expect(
+      isDismissedFor(today, { v: 1, dismissedOn: '2026-07-24' }),
+    ).toBe(false);
+    expect(
+      isDismissedFor(today, { v: 2, dismissedOn: todayKey }),
+    ).toBe(false);
+    expect(isDismissedFor(today, null)).toBe(false);
+  });
+
+  it('readFeaturedDismissState parses the canonical shape', () => {
+    const storage = makeMemoryStorage({
+      'arena:persona-playground:featured:v1': JSON.stringify({
+        v: 1,
+        dismissedOn: '2026-07-25',
+      }),
+    });
+    expect(readFeaturedDismissState(storage)).toEqual({
+      v: 1,
+      dismissedOn: '2026-07-25',
+    });
+  });
+
+  it('readFeaturedDismissState rejects malformed JSON silently', () => {
+    const storage = makeMemoryStorage({
+      'arena:persona-playground:featured:v1': '{not json',
+    });
+    expect(readFeaturedDismissState(storage)).toBeNull();
+  });
+
+  it('readFeaturedDismissState rejects wrong version', () => {
+    const storage = makeMemoryStorage({
+      'arena:persona-playground:featured:v1': JSON.stringify({
+        v: 99,
+        dismissedOn: '2026-07-25',
+      }),
+    });
+    expect(readFeaturedDismissState(storage)).toBeNull();
+  });
+
+  it('readFeaturedDismissState rejects malformed date', () => {
+    const storage = makeMemoryStorage({
+      'arena:persona-playground:featured:v1': JSON.stringify({
+        v: 1,
+        dismissedOn: 'not-a-date',
+      }),
+    });
+    expect(readFeaturedDismissState(storage)).toBeNull();
+  });
+
+  it('writeFeaturedDismissState round-trips through read', () => {
+    const storage = makeMemoryStorage();
+    const today = new Date(2026, 6, 25);
+    writeFeaturedDismissState(storage, today);
+    expect(readFeaturedDismissState(storage)).toEqual({
+      v: 1,
+      dismissedOn: '2026-07-25',
+    });
+  });
+
+  it('clearFeaturedDismissState removes the key', () => {
+    const storage = makeMemoryStorage({
+      'arena:persona-playground:featured:v1': JSON.stringify({
+        v: 1,
+        dismissedOn: '2026-07-25',
+      }),
+    });
+    clearFeaturedDismissState(storage);
+    expect(storage.getItem('arena:persona-playground:featured:v1')).toBeNull();
+  });
+
+  it('write and clear are no-ops when storage is null', () => {
+    expect(() => writeFeaturedDismissState(null, new Date(2026, 6, 25))).not.toThrow();
+    expect(() => clearFeaturedDismissState(null)).not.toThrow();
+  });
+});
+
+function makeMemoryStorage(initial: Record<string, string> = {}): Storage {
+  const map = new Map<string, string>(Object.entries(initial));
+  return {
+    get length() {
+      return map.size;
+    },
+    clear() {
+      map.clear();
+    },
+    getItem(key: string) {
+      return map.has(key) ? (map.get(key) as string) : null;
+    },
+    key(index: number) {
+      return Array.from(map.keys())[index] ?? null;
+    },
+    removeItem(key: string) {
+      map.delete(key);
+    },
+    setItem(key: string, value: string) {
+      map.set(key, value);
+    },
+  };
+}

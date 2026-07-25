@@ -1,29 +1,36 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Search, Sparkles } from 'lucide-react';
+import { ArrowRight, Search, Sparkles, Star, X } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
+import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import {
   PERSONA_PLAYGROUND_ENTRIES,
+  clearFeaturedDismissState,
+  isDismissedFor,
   personaPlaygroundCategories,
   personaPlaygroundCategoryLabel,
+  pickFeaturedOfDay,
+  readFeaturedDismissState,
+  writeFeaturedDismissState,
   type PersonaPlaygroundCategory,
   type PersonaPlaygroundEntry,
 } from '../data/personaPlayground';
 import '../styles/persona-playground-page.css';
 
 const ALL_CATEGORIES: readonly PersonaPlaygroundCategory[] = personaPlaygroundCategories();
-const DEFAULT_CATEGORY: 'all' = 'all';
-type CategoryFilter = 'all' | PersonaPlaygroundCategory;
-
+const DEFAULT_CATEGORY = 'all' as const;
+type CategoryFilter = typeof DEFAULT_CATEGORY | PersonaPlaygroundCategory;
 const ALL_FILTERS: ReadonlyArray<{ key: CategoryFilter; label: string }> = [
   { key: DEFAULT_CATEGORY, label: 'All' },
   ...ALL_CATEGORIES.map((c) => ({ key: c as CategoryFilter, label: personaPlaygroundCategoryLabel(c) })),
 ];
+const FILTER_TABLIST_ID = 'ppg-filter-tabs';
+const FILTER_PANEL_ID = 'ppg-filter-panel';
 
 function readCategoryFromUrl(value: string | null): CategoryFilter {
   if (!value) return DEFAULT_CATEGORY;
@@ -55,6 +62,13 @@ export function PersonaPlaygroundPage() {
 
   const category = readCategoryFromUrl(params.get('cat'));
 
+  const today = useMemo(() => new Date(), []);
+  const featured = useMemo(() => pickFeaturedOfDay(today), [today]);
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return isDismissedFor(today, readFeaturedDismissState(window.localStorage));
+  });
+
   useEffect(() => {
     const reduceMotion = prefersReducedMotion();
     const id = window.setTimeout(() => setPageVisible(true), reduceMotion ? 0 : 80);
@@ -67,6 +81,17 @@ export function PersonaPlaygroundPage() {
         window.clearTimeout(searchDebounceRef.current);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!isBareSlashKey(event) || !shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   const onCategoryClick = useCallback(
@@ -97,6 +122,31 @@ export function PersonaPlaygroundPage() {
     },
     [params, setParams],
   );
+
+  const onClearSearch = useCallback(() => {
+    if (searchDebounceRef.current !== null) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
+    setQuery('');
+    const nextParams = new URLSearchParams(params);
+    nextParams.delete('q');
+    if (category === DEFAULT_CATEGORY) nextParams.delete('cat');
+    setParams(nextParams, { replace: true });
+    searchInputRef.current?.focus();
+  }, [params, setParams, category]);
+
+  const onDismissFeatured = useCallback(() => {
+    writeFeaturedDismissState(
+      typeof window === 'undefined' ? null : window.localStorage,
+      today,
+    );
+    setDismissed(true);
+  }, [today]);
+
+  const onRestoreFeatured = useCallback(() => {
+    clearFeaturedDismissState(typeof window === 'undefined' ? null : window.localStorage);
+    setDismissed(false);
+  }, []);
 
   const onTryInArena = useCallback(
     (path: string) => {
@@ -130,6 +180,9 @@ export function PersonaPlaygroundPage() {
     for (const entry of PERSONA_PLAYGROUND_ENTRIES) byCategory[entry.category] += 1;
     return byCategory;
   }, []);
+
+  const showFeatured = featured && !dismissed;
+  const showRestore = featured && dismissed;
 
   return (
     <div className={`ppg-page${pageVisible ? ' ppg-page--enter' : ''}`}>
@@ -166,12 +219,79 @@ export function PersonaPlaygroundPage() {
                 autoComplete="off"
                 spellCheck={false}
               />
+              {query && (
+                <button
+                  type="button"
+                  className="ppg-search__clear"
+                  onClick={onClearSearch}
+                  aria-label="Clear search"
+                >
+                  <X aria-hidden="true" />
+                </button>
+              )}
+              <kbd className="ppg-search__hint" aria-hidden="true">
+                /
+              </kbd>
             </div>
           </div>
         </section>
 
-        <Reveal as="section" className="ppg-filters" aria-label="Filter persona tools">
-          <div role="tablist" aria-label="Categories" className="ppg-filters__chips">
+        {showFeatured && featured && (
+          <Reveal as="section" className="ppg-featured" aria-label="Today's pick">
+            <div className="ppg-featured__body">
+              <p className="ppg-featured__tag">
+                <Star aria-hidden="true" /> Today's pick
+              </p>
+              <h2 className="ppg-featured__name">{featured.name}</h2>
+              <p className="ppg-featured__tagline">{featured.tagline}</p>
+              <p className="ppg-featured__blurb">{featured.blurb}</p>
+            </div>
+            <div className="ppg-featured__actions">
+              <Link
+                to={featured.path}
+                className="ppg-featured__link"
+                onClick={() => onTryInArena(featured.path)}
+              >
+                Try it
+                <ArrowRight aria-hidden="true" />
+              </Link>
+              <button
+                type="button"
+                className="ppg-featured__dismiss"
+                onClick={onDismissFeatured}
+                aria-label="Dismiss today's pick"
+              >
+                <X aria-hidden="true" />
+                <span>Dismiss</span>
+              </button>
+            </div>
+          </Reveal>
+        )}
+
+        {showRestore && featured && (
+          <div className="ppg-featured-restore">
+            <button
+              type="button"
+              className="ppg-featured-restore__btn"
+              onClick={onRestoreFeatured}
+            >
+              Bring back today's pick
+            </button>
+          </div>
+        )}
+
+        <Reveal
+          as="section"
+          className="ppg-filters"
+          aria-label="Filter persona tools"
+        >
+          <div
+            id={FILTER_TABLIST_ID}
+            role="tablist"
+            aria-label="Categories"
+            aria-controls={FILTER_PANEL_ID}
+            className="ppg-filters__chips"
+          >
             {ALL_FILTERS.map((filter) => {
               const isActive = category === filter.key;
               const count = counts[filter.key] ?? 0;
@@ -181,6 +301,7 @@ export function PersonaPlaygroundPage() {
                   type="button"
                   role="tab"
                   aria-selected={isActive}
+                  aria-controls={FILTER_PANEL_ID}
                   className={`ppg-chip${isActive ? ' ppg-chip--active' : ''}`}
                   onClick={() => onCategoryClick(filter.key)}
                 >
@@ -195,20 +316,21 @@ export function PersonaPlaygroundPage() {
           </p>
         </Reveal>
 
-        <Reveal as="section" className="ppg-grid-wrap" aria-label="Persona tools">
+        <Reveal
+          as="section"
+          id={FILTER_PANEL_ID}
+          className="ppg-grid-wrap"
+          aria-label="Persona tools"
+          role="tabpanel"
+          aria-labelledby={FILTER_TABLIST_ID}
+        >
           {visible.length === 0 ? (
             <div className="ppg-empty" role="status">
               <p>No tools match that search yet.</p>
               <button
                 type="button"
                 className="ppg-empty__reset"
-                onClick={() => {
-                  setQuery('');
-                  const nextParams = new URLSearchParams();
-                  if (category !== DEFAULT_CATEGORY) nextParams.set('cat', category);
-                  setParams(nextParams, { replace: true });
-                  searchInputRef.current?.focus();
-                }}
+                onClick={onClearSearch}
               >
                 Clear search
               </button>

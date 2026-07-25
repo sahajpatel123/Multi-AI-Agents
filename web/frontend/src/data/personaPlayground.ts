@@ -297,3 +297,127 @@ export function personaPlaygroundCategoryLabel(category: PersonaPlaygroundCatego
       return 'Mosaic';
   }
 }
+
+// ---------------------------------------------------------------------------
+// Daily featured tool
+// ---------------------------------------------------------------------------
+// The playground rotates one tool per day to a "Today's pick" slot so the
+// page feels alive on every visit. The pick is deterministic — same day →
+// same entry — so SSR and shared URLs agree. The dismiss state is
+// persisted in localStorage so a user can hide the banner for the rest of
+// the day without it coming back on re-render.
+
+export const FEATURED_KEY = 'arena:persona-playground:featured:v1';
+export const FEATURED_STATE_VERSION = 1 as const;
+
+export interface FeaturedDismissState {
+  /** Schema version — bump if the shape changes. */
+  readonly v: typeof FEATURED_STATE_VERSION;
+  /** YYYY-MM-DD of the day the user dismissed the pick. */
+  readonly dismissedOn: string;
+}
+
+/**
+ * YYYY-MM-DD in the user's local timezone. Pure: given a Date, returns
+ * the canonical date string. Used as the rotation key and the dismiss key.
+ */
+export function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * 1–366 day-of-year for the given date. Local timezone.
+ */
+export function dayOfYear(date: Date): number {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const diff = date.getTime() - start.getTime();
+  return Math.floor(diff / 86_400_000) + 1;
+}
+
+/**
+ * Deterministic pick from the catalog for the given date. Same day →
+ * same entry, regardless of when in the day the function is called.
+ */
+export function pickFeaturedOfDay(
+  date: Date,
+  entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+): PersonaPlaygroundEntry | null {
+  if (entries.length === 0) return null;
+  const idx = dayOfYear(date) % entries.length;
+  return entries[idx];
+}
+
+/**
+ * True when the dismiss state is still valid for the given date.
+ * A state is "valid" when it was dismissed on the same calendar day as
+ * `today` — the next day the banner is allowed to show again.
+ */
+export function isDismissedFor(
+  today: Date,
+  state: FeaturedDismissState | null,
+): boolean {
+  if (!state) return false;
+  if (state.v !== FEATURED_STATE_VERSION) return false;
+  return state.dismissedOn === formatLocalDate(today);
+}
+
+/**
+ * Read the dismiss state from localStorage. Returns null on any
+ * failure (private mode, missing key, malformed JSON).
+ */
+export function readFeaturedDismissState(
+  storage: Pick<Storage, 'getItem'> | null,
+): FeaturedDismissState | null {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(FEATURED_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as FeaturedDismissState;
+    if (
+      parsed?.v === FEATURED_STATE_VERSION &&
+      typeof parsed.dismissedOn === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(parsed.dismissedOn)
+    ) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write the dismiss state. Silent on storage failure (quota / private mode).
+ */
+export function writeFeaturedDismissState(
+  storage: Pick<Storage, 'setItem'> | null,
+  today: Date,
+): void {
+  if (!storage) return;
+  const payload: FeaturedDismissState = {
+    v: FEATURED_STATE_VERSION,
+    dismissedOn: formatLocalDate(today),
+  };
+  try {
+    storage.setItem(FEATURED_KEY, JSON.stringify(payload));
+  } catch {
+    /* silent */
+  }
+}
+
+/**
+ * Clear the dismiss state. Silent on storage failure.
+ */
+export function clearFeaturedDismissState(
+  storage: Pick<Storage, 'removeItem'> | null,
+): void {
+  if (!storage) return;
+  try {
+    storage.removeItem(FEATURED_KEY);
+  } catch {
+    /* silent */
+  }
+}
