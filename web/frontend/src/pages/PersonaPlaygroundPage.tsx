@@ -360,7 +360,7 @@ export function PersonaPlaygroundPage() {
           )}
         </Reveal>
 
-        <RelatedTools path="/persona-playground" heading="Pairs well with the hub" />
+        <RelatedTools path="/persona-playground" />
       </main>
 
       <Footer />

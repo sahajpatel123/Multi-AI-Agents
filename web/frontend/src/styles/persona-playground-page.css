@@ -380,11 +380,30 @@
   border: 1px solid var(--ppg-card-border);
   transition: border-color 180ms ease, transform 180ms ease;
   min-width: 0;
+  position: relative;
+}
+
+.ppg-related__card::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ppg-related-dot, var(--ppg-accent-dim));
+  opacity: 0.7;
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .ppg-related__card:hover {
   border-color: var(--ppg-card-border-hover);
   transform: translateY(-1px);
+}
+
+.ppg-related__card:hover::before {
+  opacity: 1;
+  transform: scale(1.18);
 }
 
 .ppg-related__tag {

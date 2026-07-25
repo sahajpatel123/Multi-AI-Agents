@@ -306,6 +306,22 @@ export function relatedTools(
   return ordered.slice(0, limit);
 }
 
+/**
+ * Default heading for a "related tools" rail. Tells the reader *why*
+ * they're seeing these specific picks — keyed off the current entry's
+ * category label. Returns null when the path is unknown so the rail
+ * can choose to hide the heading entirely.
+ */
+export function relatedToolsDefaultHeading(
+  path: string,
+  entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+): string | null {
+  const current = entries.find((e) => e.path === path);
+  if (!current) return null;
+  const label = personaPlaygroundCategoryLabel(current.category);
+  return `More ${label.toLowerCase()} tools`;
+}
+
 export function personaPlaygroundCategoryLabel(category: PersonaPlaygroundCategory): string {
   switch (category) {
     case 'discover':

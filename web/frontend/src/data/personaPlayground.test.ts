@@ -33,6 +33,7 @@ import {
   pickFeaturedOfDay,
   readFeaturedDismissState,
   relatedTools,
+  relatedToolsDefaultHeading,
   writeFeaturedDismissState,
   type PersonaPlaygroundEntry,
 } from './personaPlayground';
@@ -341,5 +342,28 @@ describe('relatedTools', () => {
     relatedTools('/persona-confessional', 10);
     const after = PERSONA_PLAYGROUND_ENTRIES.map((e) => e.path);
     expect(after).toEqual(before);
+  });
+});
+
+describe('relatedToolsDefaultHeading', () => {
+  it('returns a category-aware heading for known paths', () => {
+    expect(relatedToolsDefaultHeading('/persona-match')).toBe('More discover tools');
+    expect(relatedToolsDefaultHeading('/persona-roast')).toBe('More roast tools');
+    expect(relatedToolsDefaultHeading('/persona-council')).toBe('More council tools');
+    expect(relatedToolsDefaultHeading('/persona-mosaic')).toBe('More mosaic tools');
+  });
+
+  it('returns null for unknown paths', () => {
+    expect(relatedToolsDefaultHeading('/persona-not-real')).toBeNull();
+  });
+
+  it('respects the entries argument', () => {
+    expect(relatedToolsDefaultHeading('/persona-match', [])).toBeNull();
+  });
+
+  it('is deterministic across calls', () => {
+    expect(relatedToolsDefaultHeading('/persona-battle')).toBe(
+      relatedToolsDefaultHeading('/persona-battle'),
+    );
   });
 });
