@@ -80,6 +80,17 @@ const AUTH_PATHS_NO_REFRESH = [
   '/api/auth/logout',
 ];
 
+/**
+ * Exact-match check that ignores trailing slashes and query strings.
+ * Substring matching (the previous behaviour) would treat a future
+ * endpoint like /api/auth/login-history as a no-refresh path and
+ * leave the user locked out.
+ */
+function isAuthPathNoRefresh(path: string): boolean {
+  const cleanPath = path.split('?')[0].replace(/\/+$/, '');
+  return AUTH_PATHS_NO_REFRESH.some((skipPath) => cleanPath === skipPath);
+}
+
 export async function apiFetch(path: string, options: ApiFetchOptions = {}): Promise<Response> {
   const { skipAuthRefresh, ...fetchOpts } = options;
   const token = getAccessToken();
@@ -93,7 +104,7 @@ export async function apiFetch(path: string, options: ApiFetchOptions = {}): Pro
   if (
     res.status === 401 &&
     !skipAuthRefresh &&
-    !AUTH_PATHS_NO_REFRESH.some(skipPath => path.includes(skipPath))
+    !isAuthPathNoRefresh(path)
   ) {
     if (!isRefreshing) {
       isRefreshing = true;

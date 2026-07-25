@@ -140,4 +140,28 @@ describe('apiFetch', () => {
     expect(res.status).toBe(401);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('uses exact-path match so /api/auth/login-history still triggers refresh (cycle 381)', async () => {
+    // Substring matching (the previous behaviour) would treat any path
+    // containing '/api/auth/login' as a no-refresh endpoint and leave
+    // the user locked out. Switched to exact-path match — this test
+    // pins the negative case so the bug can't regress.
+    localStorage.setItem('arena_access_token', 'tok');
+    localStorage.setItem('arena_refresh_token', 'ref');
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(buildResponse(401))          // /api/auth/login-history → 401
+      .mockResolvedValueOnce(buildResponse(200, {         // refresh succeeds
+        access_token: 'new-tok',
+        refresh_token: 'new-ref',
+      }))
+      .mockResolvedValueOnce(buildResponse(200));         // retry succeeds
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await apiFetch('/api/auth/login-history', { method: 'GET' });
+    expect(res.status).toBe(200);
+    // Original + refresh + retry = 3 calls.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
 });
