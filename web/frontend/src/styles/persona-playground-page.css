@@ -1244,6 +1244,27 @@
   text-overflow: ellipsis;
 }
 
+.ppg-archive__link--today {
+  border-color: rgba(200, 185, 255, 0.4);
+  background: rgba(200, 185, 255, 0.08);
+}
+
+.ppg-archive__link--today:hover {
+  border-color: rgba(200, 185, 255, 0.6);
+  background: rgba(200, 185, 255, 0.12);
+}
+
+.ppg-archive__today-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #c8b9ff;
+}
+
 /* tools-not-yet-tried widget */
 .ppg-unvisited {
   display: grid;
