@@ -80,4 +80,13 @@ describe('vercel.json security headers', () => {
     expect(csp).toContain('connect-src');
     expect(csp).toContain('frame-src checkout.razorpay.com');
   });
+
+  it('hardens CSP with restrictive directives (cycle 376)', () => {
+    const csp = headerValue(rule, 'Content-Security-Policy');
+    expect(csp).toContain("base-uri 'self'");
+    expect(csp).toContain("form-action 'self'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("manifest-src 'self'");
+  });
 });
