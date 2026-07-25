@@ -5,6 +5,11 @@ import {
   MATCHUPS,
 } from '../data/personaPlayground';
 
+/** Number of public /persona-playground/* routes. Sourced from the
+ *  SITEMAP constant on PersonaPlaygroundSitemapPage to keep this in
+ *  sync with the actual sitemap. */
+const DEEP_LINK_PAGE_COUNT = 8;
+
 export interface PersonaPlaygroundStatsProps {
   /** Heading shown above the widget. */
   heading?: string;
@@ -54,7 +59,7 @@ export function PersonaPlaygroundStats({
     },
     {
       label: 'deep-link pages',
-      value: 8,
+      value: DEEP_LINK_PAGE_COUNT,
       link: '/persona-playground/sitemap',
       accent: '#f1e9d8',
     },

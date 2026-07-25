@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Map } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
+import { PersonaPlaygroundStats } from '../components/PersonaPlaygroundStats';
 import { prefersReducedMotion } from '../lib/motion';
 import '../styles/persona-sitemap-page.css';
 
@@ -106,6 +107,8 @@ export function PersonaPlaygroundSitemapPage() {
             surface the hub has.
           </p>
         </section>
+
+        <PersonaPlaygroundStats compact />
 
         <Reveal as="section" className="psm-grid-wrap" aria-label="All pages">
           <ul className="psm-grid">
