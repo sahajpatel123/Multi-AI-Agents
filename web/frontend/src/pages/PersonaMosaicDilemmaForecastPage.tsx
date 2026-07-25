@@ -164,11 +164,16 @@ export function PersonaMosaicDilemmaForecastPage() {
     setDecisions([]);
   };
 
+  // Build the shareable URL for the given dilemma pair. Pure — the
+  // caller decides whether to write it to the address bar or to
+  // hand it to the Web Share API.
+  const buildShareUrl = (a: string, b: string) =>
+    mosaicDilemmaForecastShareUrl(window.location.origin, a, b);
+
   // Write the shareable URL to the address bar without a navigation,
   // so the user can copy it and a colleague lands on the same forecast.
   const writeShareUrl = (a: string, b: string) => {
-    const url = mosaicDilemmaForecastShareUrl(window.location.origin, a, b);
-    window.history.replaceState({}, '', url);
+    window.history.replaceState({}, '', buildShareUrl(a, b));
   };
 
   const onReset = () => {
@@ -185,11 +190,7 @@ export function PersonaMosaicDilemmaForecastPage() {
 
   const onShare = async () => {
     if (typeof window === 'undefined' || !forecast) return;
-    const url = mosaicDilemmaForecastShareUrl(
-      window.location.origin,
-      dilemmaA,
-      dilemmaB,
-    );
+    const url = buildShareUrl(dilemmaA, dilemmaB);
     const winnerLabel = forecast.winner === 'A' ? 'Dilemma A' : 'Dilemma B';
     const winnerCount = forecast.winner === 'A' ? forecast.tally.a : forecast.tally.b;
     const text = `Arena Mosaic Dilemma Forecast: 8 Arena minds picked ${winnerLabel} (${winnerCount} of 8). Same dilemma pair in = same verdict. Run yours:`;
