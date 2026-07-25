@@ -330,7 +330,12 @@ export function mosaicDilemmaForecastWinTally(
   let b = 0;
   for (const d of decisions) {
     if (d.winner === 'A') a += 1;
-    else b += 1;
+    else if (d.winner === 'B') b += 1;
+    // Malformed entries (anything other than 'A' or 'B') are skipped
+    // — the read-side filter in readMosaicDilemmaForecastDecisions
+    // already scrubs them, so reaching here is rare, but explicit
+    // handling here means a future schema drift can't silently
+    // over-count a third outcome into 'A' or 'B'.
   }
   return { a, b };
 }
