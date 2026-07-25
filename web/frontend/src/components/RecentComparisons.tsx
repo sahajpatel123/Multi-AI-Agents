@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Clock, History, Trash2 } from 'lucide-react';
+import { Clock, History, Sparkles, Trash2 } from 'lucide-react';
 import {
   readRecentComparisons,
   clearRecentComparisons,
@@ -8,6 +8,7 @@ import {
 } from '../lib/recentComparisons';
 import {
   PERSONA_PLAYGROUND_ENTRIES,
+  findMatchupByPaths,
 } from '../data/personaPlayground';
 
 export interface RecentComparisonsProps {
@@ -48,7 +49,7 @@ export function RecentComparisons({
   limit = 3,
 }: RecentComparisonsProps) {
   const [items, setItems] = useState<readonly RecentComparison[]>([]);
-  const now = Date.now();
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -59,7 +60,11 @@ export function RecentComparisons({
       }
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    const tick = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(tick);
+    };
   }, [limit]);
 
   if (items.length === 0) return null;
@@ -87,6 +92,7 @@ export function RecentComparisons({
       <ul className="ppg-recent__list">
         {items.map((item) => {
           const href = `/persona-playground/compare?a=${encodeURIComponent(item.a)}&b=${encodeURIComponent(item.b)}`;
+          const curated = findMatchupByPaths(item.a, item.b);
           return (
             <li key={`${item.a}|${item.b}`} className="ppg-recent__item">
               <Link to={href} className="ppg-recent__link">
@@ -96,6 +102,16 @@ export function RecentComparisons({
                     vs
                   </span>
                   <span>{toolName(item.b)}</span>
+                  {curated && (
+                    <span
+                      className="ppg-recent__badge"
+                      title={curated.title}
+                      aria-label={`Curated matchup: ${curated.title}`}
+                    >
+                      <Sparkles aria-hidden="true" />
+                      Curated
+                    </span>
+                  )}
                 </span>
                 <span className="ppg-recent__time">
                   <Clock aria-hidden="true" />
