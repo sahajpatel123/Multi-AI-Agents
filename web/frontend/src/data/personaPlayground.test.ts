@@ -26,6 +26,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PERSONA_PLAYGROUND_ENTRIES,
   clearFeaturedDismissState,
+  compareEntries,
   dayOfYear,
   formatLocalDate,
   isDismissedFor,
@@ -46,7 +47,7 @@ const ROUTES_PATH = '../main.tsx';
 
 const ROUTE_PATTERN = /<Route\s+path="([^"]+)"\s+element=\{<([A-Za-z0-9_]+)Page\s+\/>\}/g;
 
-const TOOL_PATH_PATTERN = /^\/persona-(?!playground$)[a-z-]+$/;
+const TOOL_PATH_PATTERN = /^\/persona-(?!playground(?:\/|$))[a-z-]+$/;
 
 function extractPersonaRoutes(): string[] {
   const src = readSource(ROUTES_PATH);
@@ -365,5 +366,51 @@ describe('relatedToolsDefaultHeading', () => {
     expect(relatedToolsDefaultHeading('/persona-battle')).toBe(
       relatedToolsDefaultHeading('/persona-battle'),
     );
+  });
+});
+
+describe('compareEntries', () => {
+  it('returns [a, b] for two valid catalog paths', () => {
+    const result = compareEntries('/persona-council', '/persona-mosaic-council');
+    expect(result).not.toBeNull();
+    expect(result?.[0].path).toBe('/persona-council');
+    expect(result?.[1].path).toBe('/persona-mosaic-council');
+  });
+
+  it('allows the same path on both sides (compare to itself)', () => {
+    const result = compareEntries('/persona-battle', '/persona-battle');
+    expect(result).not.toBeNull();
+    expect(result?.[0].path).toBe('/persona-battle');
+    expect(result?.[1].path).toBe('/persona-battle');
+  });
+
+  it('returns null when a is missing', () => {
+    expect(compareEntries(null, '/persona-battle')).toBeNull();
+    expect(compareEntries('', '/persona-battle')).toBeNull();
+  });
+
+  it('returns null when b is missing', () => {
+    expect(compareEntries('/persona-battle', null)).toBeNull();
+    expect(compareEntries('/persona-battle', '')).toBeNull();
+  });
+
+  it('returns null when a is not in the catalog', () => {
+    expect(compareEntries('/persona-not-real', '/persona-battle')).toBeNull();
+  });
+
+  it('returns null when b is not in the catalog', () => {
+    expect(compareEntries('/persona-battle', '/persona-not-real')).toBeNull();
+  });
+
+  it('is deterministic across calls', () => {
+    const a = compareEntries('/persona-council', '/persona-mosaic');
+    const b = compareEntries('/persona-council', '/persona-mosaic');
+    expect(a).toEqual(b);
+  });
+
+  it('respects the entries argument (does not mutate the default)', () => {
+    const before = PERSONA_PLAYGROUND_ENTRIES.length;
+    compareEntries('/persona-battle', '/persona-council', []);
+    expect(PERSONA_PLAYGROUND_ENTRIES.length).toBe(before);
   });
 });

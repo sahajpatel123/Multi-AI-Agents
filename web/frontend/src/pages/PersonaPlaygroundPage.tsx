@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Search, Sparkles, Star, X } from 'lucide-react';
+import { ArrowRight, GitCompare, Search, Sparkles, Star, X } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
@@ -361,6 +361,29 @@ export function PersonaPlaygroundPage() {
         </Reveal>
 
         <RelatedTools path="/persona-playground" />
+
+        <Reveal as="section" className="ppg-compare-cta" aria-label="Compare tools">
+          <div className="ppg-compare-cta__copy">
+            <p className="ppg-compare-cta__eyebrow">
+              <GitCompare aria-hidden="true" /> Compare two tools
+            </p>
+            <h2 className="ppg-compare-cta__title">Pit any two tools side by side.</h2>
+            <p className="ppg-compare-cta__lede">
+              Start with a featured matchup or grab any two from the catalog. Comparison URLs
+              are shareable — paste a verdict into a chat, embed it in a doc, or keep it for
+              next week.
+            </p>
+          </div>
+          <div className="ppg-compare-cta__actions">
+            <Link
+              to={`/persona-playground/compare?a=${encodeURIComponent(PERSONA_PLAYGROUND_ENTRIES[0].path)}&b=${encodeURIComponent(PERSONA_PLAYGROUND_ENTRIES[1].path)}`}
+              className="ppg-compare-cta__btn"
+            >
+              Try a matchup
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        </Reveal>
       </main>
 
       <Footer />
