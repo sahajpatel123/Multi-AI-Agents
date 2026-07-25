@@ -29,12 +29,19 @@ export function SurpriseButton({
     <Link
       to={surprise.path}
       className="ppg-surprise"
-      aria-label={`${label}: ${surprise.name}`}
+      aria-label={`${label}: ${surprise.name} (${surprise.format})`}
     >
-      <Shuffle aria-hidden="true" />
-      <span>
-        {label}
-        <strong>{surprise.name}</strong>
+      <Shuffle aria-hidden="true" className="ppg-surprise__icon" />
+      <span className="ppg-surprise__body">
+        <span className="ppg-surprise__head">
+          <span className="ppg-surprise__pill">Today</span>
+          <span className="ppg-surprise__label">{label}</span>
+        </span>
+        <span className="ppg-surprise__name">
+          <strong>{surprise.name}</strong>
+          <span className="ppg-surprise__format">· {surprise.format}</span>
+        </span>
+        <span className="ppg-surprise__tagline">{surprise.tagline}</span>
       </span>
     </Link>
   );
