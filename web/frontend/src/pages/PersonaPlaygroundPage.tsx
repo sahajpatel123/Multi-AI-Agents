@@ -11,6 +11,7 @@ import { RecentTools } from '../components/RecentTools';
 import { DailyStreak } from '../components/DailyStreak';
 import { SurpriseButton } from '../components/SurpriseButton';
 import { ToolsNotYetTried } from '../components/ToolsNotYetTried';
+import { PersonaPlaygroundStats } from '../components/PersonaPlaygroundStats';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -391,6 +392,8 @@ export function PersonaPlaygroundPage() {
         <DailyStreak />
 
         <RecentTools />
+
+        <PersonaPlaygroundStats />
 
         <Reveal as="section" className="ppg-categories-cta" aria-label="Browse by category">
           <div className="ppg-categories-cta__copy">
