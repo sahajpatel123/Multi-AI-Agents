@@ -229,4 +229,21 @@ describe('mosaicDilemmaForecastMajorityInfo', () => {
     const info = mosaicDilemmaForecastMajorityInfo({ a: 3, b: 5 }, 'A');
     expect(info.label).toBe('split');
   });
+
+  it('returns winnerCount and loserCount for the winner', () => {
+    const aWins = mosaicDilemmaForecastMajorityInfo({ a: 6, b: 2 }, 'A');
+    expect(aWins.winnerCount).toBe(6);
+    expect(aWins.loserCount).toBe(2);
+    const bWins = mosaicDilemmaForecastMajorityInfo({ a: 2, b: 6 }, 'B');
+    expect(bWins.winnerCount).toBe(6);
+    expect(bWins.loserCount).toBe(2);
+  });
+
+  it('references the winner side, not always A', () => {
+    // Regression: a refactor that hardcoded tally.a would silently
+    // mislabel the count when B is the winner.
+    const info = mosaicDilemmaForecastMajorityInfo({ a: 3, b: 5 }, 'B');
+    expect(info.winnerCount).toBe(5);
+    expect(info.loserCount).toBe(3);
+  });
 });
