@@ -280,6 +280,52 @@ export function personaPlaygroundCategories(): readonly PersonaPlaygroundCategor
 }
 
 /**
+ * Aggregated summary per category — used by the
+ * /persona-playground/categories page. Each entry has a 1-line
+ * description that tells the reader what kind of tools to expect.
+ */
+export interface CategorySummary {
+  readonly category: PersonaPlaygroundCategory;
+  readonly label: string;
+  readonly count: number;
+  readonly description: string;
+}
+
+const CATEGORY_DESCRIPTIONS: Record<PersonaPlaygroundCategory, string> = {
+  discover: 'Quizzes, spinners, and reference surfaces for finding the right mind.',
+  versus: 'Two minds head-to-head — output A vs output B, two topics, two futures.',
+  council: 'Many minds, one question — full panels, curated panels, Mosaic picks.',
+  roast: 'Drop a prompt or output and watch four judges tear it apart.',
+  decide: 'Forced-choice frameworks — two options, two dilemma framings, one verdict.',
+  forecast: 'Future-scenario tools — name a future, name two, weigh the odds.',
+  mosaic: 'Pick four of the sixteen minds and Arena names the house style they share.',
+};
+
+export function categorySummaries(): readonly CategorySummary[] {
+  const seen = new Set<PersonaPlaygroundCategory>();
+  const counts: Record<PersonaPlaygroundCategory, number> = {
+    discover: 0,
+    versus: 0,
+    council: 0,
+    roast: 0,
+    decide: 0,
+    forecast: 0,
+    mosaic: 0,
+  };
+  for (const entry of PERSONA_PLAYGROUND_ENTRIES) {
+    if (!seen.has(entry.category)) seen.add(entry.category);
+    counts[entry.category] += 1;
+  }
+  // Stable order matches personaPlaygroundCategories() output.
+  return personaPlaygroundCategories().map((category) => ({
+    category,
+    label: personaPlaygroundCategoryLabel(category),
+    count: counts[category],
+    description: CATEGORY_DESCRIPTIONS[category],
+  }));
+}
+
+/**
  * Return up to `limit` related entries for the given path. Same-category
  * entries come first (in catalog order), then any other categories fill
  * the remaining slots (also in catalog order). The current path is

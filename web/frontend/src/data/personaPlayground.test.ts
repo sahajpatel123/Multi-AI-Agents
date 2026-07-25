@@ -27,6 +27,7 @@ import {
   MATCHUPS,
   PERSONA_PLAYGROUND_ENTRIES,
   buildCompareShareUrl,
+  categorySummaries,
   clearFeaturedDismissState,
   compareEntries,
   dayOfYear,
@@ -584,6 +585,27 @@ describe('findMatchupByPaths', () => {
 
   it('respects the matchups argument', () => {
     expect(findMatchupByPaths('/persona-council', '/persona-mosaic-council', [])).toBeNull();
+  });
+});
+
+describe('categorySummaries', () => {
+  it('returns one entry per category', () => {
+    const summaries = categorySummaries();
+    const seen = new Set(summaries.map((s) => s.category));
+    expect(seen.size).toBe(personaPlaygroundCategories().length);
+  });
+
+  it('every summary has a non-empty label, count, and description', () => {
+    for (const summary of categorySummaries()) {
+      expect(summary.label).not.toEqual('');
+      expect(summary.count).toBeGreaterThan(0);
+      expect(summary.description).not.toEqual('');
+    }
+  });
+
+  it('counts sum to the catalog size', () => {
+    const total = categorySummaries().reduce((acc, s) => acc + s.count, 0);
+    expect(total).toBe(PERSONA_PLAYGROUND_ENTRIES.length);
   });
 });
 
