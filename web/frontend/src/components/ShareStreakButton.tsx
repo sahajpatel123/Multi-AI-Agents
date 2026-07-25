@@ -5,6 +5,7 @@ import {
   type DailyStreakState,
 } from '../lib/dailyStreak';
 import { copyToClipboard } from '../lib/clipboard';
+import { recordRecentShare } from '../lib/recentShares';
 
 export interface ShareStreakButtonProps {
   /** Current streak state — the button reads `current` and `longest`. */
@@ -47,7 +48,15 @@ export function ShareStreakButton({
     setCopied(true);
     if (resetRef.current !== null) window.clearTimeout(resetRef.current);
     resetRef.current = window.setTimeout(() => setCopied(false), 1800);
-  }, [text]);
+    if (typeof window !== 'undefined') {
+      const url = `${resolvedOrigin.replace(/\/$/, '')}/persona-playground`;
+      recordRecentShare(window.localStorage, {
+        kind: 'streak',
+        label: `${streak.current}-day streak`,
+        url,
+      });
+    }
+  }, [text, resolvedOrigin, streak.current]);
 
   return (
     <button

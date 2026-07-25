@@ -16,6 +16,7 @@ import {
   type PersonaPlaygroundEntry,
 } from '../data/personaPlayground';
 import { recordRecentComparison } from '../lib/recentComparisons';
+import { recordRecentShare } from '../lib/recentShares';
 import '../styles/persona-compare-page.css';
 
 const CATEGORY_DOT_COLOR: Record<string, string> = {
@@ -68,6 +69,13 @@ export function PersonaPlaygroundComparePage() {
     setCopied(true);
     if (copyResetRef.current !== null) window.clearTimeout(copyResetRef.current);
     copyResetRef.current = window.setTimeout(() => setCopied(false), 1800);
+    // Record the share event so the hub's RecentShares widget can re-surface it.
+    const match = findMatchupByPaths(a, b);
+    recordRecentShare(window.localStorage, {
+      kind: 'compare',
+      label: match?.title ?? 'Compare two tools',
+      url,
+    });
   }, [a, b]);
 
   useEffect(() => {
