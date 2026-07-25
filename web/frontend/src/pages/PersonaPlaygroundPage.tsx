@@ -11,10 +11,19 @@ import { RecentTools } from '../components/RecentTools';
 import { DailyStreak } from '../components/DailyStreak';
 import { SurpriseButton } from '../components/SurpriseButton';
 import { ToolsNotYetTried } from '../components/ToolsNotYetTried';
+import { FeaturedArchive } from '../components/FeaturedArchive';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
+import { recordFeaturedPick } from '../lib/featuredArchive';
 import { setRedirectIntent } from '../utils/redirectIntent';
+
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 import {
   PERSONA_PLAYGROUND_ENTRIES,
   clearFeaturedDismissState,
@@ -71,6 +80,11 @@ export function PersonaPlaygroundPage() {
 
   const today = useMemo(() => new Date(), []);
   const featured = useMemo(() => pickFeaturedOfDay(today), [today]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !featured) return;
+    recordFeaturedPick(window.localStorage, featured.path, formatLocalDate(today));
+  }, [featured, today]);
   const [dismissed, setDismissed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return isDismissedFor(today, readFeaturedDismissState(window.localStorage));
@@ -367,6 +381,8 @@ export function PersonaPlaygroundPage() {
         </Reveal>
 
         <RelatedTools path="/persona-playground" />
+
+        <FeaturedArchive />
 
         <DailyStreak />
 
