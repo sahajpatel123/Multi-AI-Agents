@@ -255,7 +255,7 @@ export function PersonaMosaicDilemmaForecastPage() {
                 className="pmdf-input__textarea"
                 value={dilemmaA}
                 onChange={(e) => setDilemmaA(e.target.value)}
-                placeholder="Paste a dilemma framing..."
+                placeholder="Take the safe job..."
                 maxLength={MAX_DILEMMA_CHARS}
                 rows={3}
                 aria-label="Dilemma A"
@@ -270,7 +270,7 @@ export function PersonaMosaicDilemmaForecastPage() {
                 className="pmdf-input__textarea"
                 value={dilemmaB}
                 onChange={(e) => setDilemmaB(e.target.value)}
-                placeholder="Paste another dilemma framing..."
+                placeholder="Take the risky startup..."
                 maxLength={MAX_DILEMMA_CHARS}
                 rows={3}
                 aria-label="Dilemma B"
