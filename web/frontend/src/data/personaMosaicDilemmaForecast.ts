@@ -241,8 +241,8 @@ export function clearMosaicDilemmaForecastCounter() {
 
 export function appendMosaicDilemmaForecastDecision(
   entry: MosaicDilemmaForecastDecisionEntry,
-) {
-  if (typeof window === 'undefined') return;
+): ReadonlyArray<MosaicDilemmaForecastDecisionEntry> {
+  if (typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(DECISIONS_KEY);
     const existing: MosaicDilemmaForecastDecisionEntry[] = raw
@@ -264,8 +264,9 @@ export function appendMosaicDilemmaForecastDecision(
       .filter((e, idx, arr) => arr.findIndex((x) => x.id === e.id) === idx)
       .slice(0, DECISIONS_LIMIT);
     window.localStorage.setItem(DECISIONS_KEY, JSON.stringify(next));
+    return next;
   } catch {
-    /* silent */
+    return [];
   }
 }
 
