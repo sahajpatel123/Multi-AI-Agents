@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { ArrowRight, Lock, Sparkles, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Pressable } from '../components/Pressable';
@@ -607,7 +607,7 @@ export function PersonasPage() {
             </p>
             <div className="personas-studio-hero__actions">
               <a href="#panel-studio">Tune your panel <ArrowRight aria-hidden="true" /></a>
-              <a href="/persona-playground">Explore the playground <ArrowRight aria-hidden="true" /></a>
+              <Link to="/persona-playground">Explore the playground <ArrowRight aria-hidden="true" /></Link>
               <Pressable type="button" onClick={() => navigate('/app')}>Enter Arena</Pressable>
             </div>
             <dl className="personas-studio-proof">
