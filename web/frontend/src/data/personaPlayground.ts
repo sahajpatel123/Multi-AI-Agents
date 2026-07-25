@@ -301,6 +301,37 @@ const CATEGORY_DESCRIPTIONS: Record<PersonaPlaygroundCategory, string> = {
   mosaic: 'Pick four of the sixteen minds and Arena names the house style they share.',
 };
 
+/**
+ * Format aggregation — groups the catalog by the freeform
+ * `format` string (e.g. '4-mind panel', '60s sort'). Powers the
+ * /persona-playground/formats deep-link page. Different aggregation
+ * than category — many categories share a format (e.g. 4-mind
+ * panel appears under council, versus, and roast).
+ */
+export interface FormatSummary {
+  readonly format: string;
+  readonly count: number;
+  readonly entries: readonly PersonaPlaygroundEntry[];
+}
+
+export function formatSummaries(
+  entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+): readonly FormatSummary[] {
+  const map = new Map<string, PersonaPlaygroundEntry[]>();
+  for (const entry of entries) {
+    const list = map.get(entry.format) ?? [];
+    list.push(entry);
+    map.set(entry.format, list);
+  }
+  // Sort by count desc, then by format asc for stable output.
+  return Array.from(map.entries())
+    .map(([format, list]) => ({ format, count: list.length, entries: list }))
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.format.localeCompare(b.format);
+    });
+}
+
 export function categorySummaries(): readonly CategorySummary[] {
   const seen = new Set<PersonaPlaygroundCategory>();
   const counts: Record<PersonaPlaygroundCategory, number> = {

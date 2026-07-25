@@ -1,0 +1,233 @@
+/* Persona Playground formats page (/persona-playground/formats)
+ * Card list that groups all 27 tools by their freeform format
+ * string (4-mind panel, 60s sort, etc.). Different aggregation
+ * than the categories page.
+ */
+
+.pfmt-page {
+  --pfmt-accent: var(--arena-cream, #f1e9d8);
+  --pfmt-accent-dim: rgba(241, 233, 216, 0.55);
+  --pfmt-card-bg: rgba(255, 255, 255, 0.04);
+  --pfmt-card-border: rgba(255, 255, 255, 0.08);
+  --pfmt-card-border-hover: rgba(241, 233, 216, 0.45);
+  --pfmt-radius: 18px;
+  --pfmt-pad: clamp(20px, 4vw, 36px);
+  min-height: 100vh;
+  color: var(--pfmt-accent);
+  background:
+    radial-gradient(900px 500px at 0% 0%, rgba(255, 167, 86, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(241, 233, 216, 0.08), transparent 60%),
+    #0b0b10;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 600ms ease, transform 600ms ease;
+}
+
+.pfmt-page--enter {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pfmt-page { transition: none; transform: none; }
+}
+
+.pfmt-main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(48px, 8vw, 96px) var(--pfmt-pad) clamp(64px, 10vw, 120px);
+  display: grid;
+  gap: clamp(32px, 5vw, 56px);
+}
+
+.pfmt-hero {
+  display: grid;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.pfmt-hero__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(241, 233, 216, 0.06);
+  border: 1px solid var(--pfmt-card-border);
+  color: var(--pfmt-accent);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 160ms ease, border-color 160ms ease;
+  width: fit-content;
+  margin-bottom: 8px;
+}
+
+.pfmt-hero__back:hover {
+  background: rgba(241, 233, 216, 0.12);
+  border-color: var(--pfmt-card-border-hover);
+}
+
+.pfmt-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+  color: #ffa756;
+}
+
+.pfmt-hero__title {
+  font-size: clamp(36px, 5.5vw, 56px);
+  line-height: 1.04;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.pfmt-hero__title-accent {
+  display: block;
+  background: linear-gradient(120deg, #ffa756, #ffd86b 60%, #c8b9ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.pfmt-hero__lede {
+  margin: 0;
+  font-size: clamp(15px, 1.3vw, 17px);
+  line-height: 1.6;
+  color: var(--pfmt-accent-dim);
+  max-width: 62ch;
+}
+
+.pfmt-list-wrap {
+  display: grid;
+  gap: 16px;
+}
+
+.pfmt-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.pfmt-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: var(--pfmt-radius);
+  background: var(--pfmt-card-bg);
+  border: 1px solid var(--pfmt-card-border);
+}
+
+.pfmt-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--pfmt-card-border);
+}
+
+.pfmt-card__format {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--pfmt-accent);
+  line-height: 1.2;
+}
+
+.pfmt-card__count {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--pfmt-accent-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pfmt-card__tools {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.pfmt-card__tool {
+  min-width: 0;
+}
+
+.pfmt-card__link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--pfmt-accent);
+  text-decoration: none;
+  transition: border-color 150ms ease, background 150ms ease, gap 150ms ease;
+}
+
+.pfmt-card__link:hover {
+  border-color: var(--pfmt-card-border-hover);
+  background: rgba(255, 255, 255, 0.04);
+  gap: 14px;
+}
+
+.pfmt-card__link:focus-visible {
+  outline: 2px solid var(--pfmt-accent);
+  outline-offset: 2px;
+}
+
+.pfmt-card__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pfmt-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pfmt-card__cat {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--pfmt-accent-dim);
+  white-space: nowrap;
+}
+
+.pfmt-card__arrow {
+  width: 12px;
+  height: 12px;
+  color: var(--pfmt-accent-dim);
+  flex: 0 0 auto;
+  transition: color 150ms ease;
+}
+
+.pfmt-card__link:hover .pfmt-card__arrow {
+  color: var(--pfmt-accent);
+}
+
+@media (max-width: 720px) {
+  .pfmt-card__link {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+  }
+  .pfmt-card__cat {
+    grid-column: 1;
+  }
+  .pfmt-card__arrow {
+    grid-row: span 2;
+    align-self: center;
+  }
+}

@@ -34,6 +34,7 @@ import {
   dayOfYear,
   findMatchupByPaths,
   formatLocalDate,
+  formatSummaries,
   isDismissedFor,
   personaPlaygroundCategories,
   pickFeaturedOfDay,
@@ -681,5 +682,45 @@ describe('WHATS_NEW', () => {
       expect(seen.has(entry.title), `duplicate: ${entry.title}`).toBe(false);
       seen.add(entry.title);
     }
+  });
+});
+
+describe('formatSummaries', () => {
+  it('aggregates entries by format string', () => {
+    const summaries = formatSummaries();
+    const seen = new Set<string>();
+    let total = 0;
+    for (const summary of summaries) {
+      expect(seen.has(summary.format)).toBe(false);
+      seen.add(summary.format);
+      expect(summary.count).toBe(summary.entries.length);
+      total += summary.count;
+    }
+    expect(total).toBe(PERSONA_PLAYGROUND_ENTRIES.length);
+  });
+
+  it('sorts by count desc, then by format asc', () => {
+    const summaries = formatSummaries();
+    for (let i = 0; i < summaries.length - 1; i += 1) {
+      const a = summaries[i];
+      const b = summaries[i + 1];
+      if (a.count === b.count) {
+        expect(a.format.localeCompare(b.format)).toBeLessThan(0);
+      } else {
+        expect(a.count).toBeGreaterThan(b.count);
+      }
+    }
+  });
+
+  it('every entry in a summary has the matching format', () => {
+    for (const summary of formatSummaries()) {
+      for (const entry of summary.entries) {
+        expect(entry.format).toBe(summary.format);
+      }
+    }
+  });
+
+  it('returns [] for empty input', () => {
+    expect(formatSummaries([])).toEqual([]);
   });
 });
