@@ -198,8 +198,7 @@ export function PersonaMosaicDilemmaForecastPage() {
   const onShare = async () => {
     if (typeof window === 'undefined' || !forecast || !majority) return;
     const url = buildShareUrl(dilemmaA, dilemmaB);
-    const winnerLabel = forecast.winner === 'A' ? 'Dilemma A' : 'Dilemma B';
-    const text = `Arena Mosaic Dilemma Forecast: ${PANEL_SIZE} Arena minds picked ${winnerLabel} (${majority.winnerCount} of ${PANEL_SIZE}). Same dilemma pair in = same verdict. Run yours:`;
+    const text = buildShareText(forecast.winner, majority.winnerCount);
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({ title: 'Arena Persona Mosaic Dilemma Forecast', text, url });
@@ -213,6 +212,13 @@ export function PersonaMosaicDilemmaForecastPage() {
       setCopied(true);
       window.setTimeout(() => setCopied(false), COPIED_RESET_MS);
     }
+  };
+
+  // Build the share text for the Web Share API / clipboard
+  // fallback. Pure — the caller supplies the winner and count.
+  const buildShareText = (winner: 'A' | 'B', winnerCount: number) => {
+    const winnerLabel = winner === 'A' ? 'Dilemma A' : 'Dilemma B';
+    return `Arena Mosaic Dilemma Forecast: ${PANEL_SIZE} Arena minds picked ${winnerLabel} (${winnerCount} of ${PANEL_SIZE}). Same dilemma pair in = same verdict. Run yours:`;
   };
 
   const onTryInArena = () => {
