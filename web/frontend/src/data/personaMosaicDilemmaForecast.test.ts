@@ -118,6 +118,29 @@ describe('mosaicDilemmaForecastShareUrl', () => {
     expect(url).toContain('a=A');
     expect(url).toContain('b=B');
   });
+
+  it('encodes special characters so the URL is round-trippable', () => {
+    // A regression that dropped encodeURIComponent would let
+    // '&' / '=' / '#' from the dilemma text leak into the query
+    // string and corrupt the share link.
+    const url = mosaicDilemmaForecastShareUrl(
+      'https://x',
+      'Take the safe job & a bonus',
+      'Tell them the hard truth #now',
+    );
+    expect(url).toContain('a=Take%20the%20safe%20job%20%26%20a%20bonus');
+    expect(url).toContain('b=Tell%20them%20the%20hard%20truth%20%23now');
+    // The encoded URL, when the page parses it, must round-trip
+    // back to the original dilemma text.
+    const a = decodeURIComponent(
+      new URL(url).searchParams.get('a') ?? '',
+    );
+    const b = decodeURIComponent(
+      new URL(url).searchParams.get('b') ?? '',
+    );
+    expect(a).toBe('Take the safe job & a bonus');
+    expect(b).toBe('Tell them the hard truth #now');
+  });
 });
 describe('mosaic dilemma forecast counter (localStorage)', () => {
   it('starts at 0 when storage is empty', () => {
