@@ -165,6 +165,11 @@ export function milestoneFor(days: number): StreakMilestone | null {
  * takes the streak state + optional origin, returns a string ready to
  * paste into chat or social. Returns null when the streak is &lt; 1
  * so callers can skip the share affordance.
+ *
+ * Format: '<glyph> <N>-day streak on Arena Playground (Tier). Can you
+ * keep up? <url>'. The leading glyph (✦ ✺ ✸ ✹ ✷) gives the message
+ * visual flair when pasted in chat; the tier name is omitted below
+ * the first threshold so the message stays clean for new users.
  */
 export function buildShareStreakText(
   streak: DailyStreakState,
@@ -176,6 +181,7 @@ export function buildShareStreakText(
   const dayWord = days === 1 ? 'day' : 'days';
   const base = origin.replace(/\/$/, '');
   const url = `${base}/persona-playground`;
+  const glyph = milestone ? `${milestone.glyph} ` : '';
   const tier = milestone ? ` (${milestone.name})` : '';
-  return `I have a ${days}-${dayWord} streak on Arena Playground${tier}. Can you keep up? ${url}`;
+  return `${glyph}${days}-${dayWord} streak on Arena Playground${tier}. Can you keep up? ${url}`;
 }

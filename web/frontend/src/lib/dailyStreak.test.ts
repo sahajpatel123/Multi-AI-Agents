@@ -205,8 +205,16 @@ describe('buildShareStreakText', () => {
       'https://arena.example',
     );
     expect(result).toBe(
-      'I have a 1-day streak on Arena Playground. Can you keep up? https://arena.example/persona-playground',
+      '1-day streak on Arena Playground. Can you keep up? https://arena.example/persona-playground',
     );
+  });
+
+  it('includes the milestone glyph when reached', () => {
+    const result = buildShareStreakText(
+      { v: 1, lastVisit: '2026-07-25', current: 7, longest: 7 },
+      'https://arena.example',
+    );
+    expect(result?.startsWith('✺ 7-')).toBe(true);
   });
 
   it('uses plural "days" for streaks > 1', () => {
