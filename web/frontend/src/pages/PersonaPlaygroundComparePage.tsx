@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, GitCompare, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Check, Copy, GitCompare, Sparkles } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
 import { useAuth } from '../hooks/useAuth';
+import { copyToClipboard } from '../lib/clipboard';
 import { prefersReducedMotion } from '../lib/motion';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import {
+  buildCompareShareUrl,
   compareEntries,
   personaPlaygroundCategoryLabel,
   type PersonaPlaygroundEntry,
@@ -46,6 +48,25 @@ export function PersonaPlaygroundComparePage() {
     }
   };
 
+  const [copied, setCopied] = useState(false);
+  const copyResetRef = useRef<number | null>(null);
+  const onCopyShareUrl = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    const url = buildCompareShareUrl(window.location.origin, a, b);
+    if (!url) return;
+    const ok = await copyToClipboard(url);
+    if (!ok) return;
+    setCopied(true);
+    if (copyResetRef.current !== null) window.clearTimeout(copyResetRef.current);
+    copyResetRef.current = window.setTimeout(() => setCopied(false), 1800);
+  }, [a, b]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetRef.current !== null) window.clearTimeout(copyResetRef.current);
+    };
+  }, []);
+
   return (
     <div className={`pcmp-page${pageVisible ? ' pcmp-page--enter' : ''}`}>
       <Navbar />
@@ -59,6 +80,26 @@ export function PersonaPlaygroundComparePage() {
             <span>Two tools,</span>
             <span className="pcmp-hero__title-accent">side by side.</span>
           </h1>
+          {pair && (
+            <button
+              type="button"
+              className={`pcmp-hero__copy${copied ? ' pcmp-hero__copy--copied' : ''}`}
+              onClick={onCopyShareUrl}
+              aria-live="polite"
+            >
+              {copied ? (
+                <>
+                  <Check aria-hidden="true" />
+                  Share URL copied
+                </>
+              ) : (
+                <>
+                  <Copy aria-hidden="true" />
+                  Copy share URL
+                </>
+              )}
+            </button>
+          )}
           <p className="pcmp-hero__lede">
             Put any two Arena tools next to each other — share a comparison URL, weigh the
             trade-offs, and pick the one that fits the prompt you have in front of you.

@@ -342,6 +342,23 @@ export function compareEntries(
   return [entryA, entryB];
 }
 
+/**
+ * Build the canonical share URL for a compare pair. Pure: takes an
+ * origin + two valid catalog paths, returns a URL with both params
+ * encoded. Returns null when either path is missing so callers can
+ * skip the copy affordance.
+ */
+export function buildCompareShareUrl(
+  origin: string,
+  a: string | null,
+  b: string | null,
+): string | null {
+  if (!a || !b) return null;
+  if (!a.startsWith('/persona-') || !b.startsWith('/persona-')) return null;
+  const base = origin.replace(/\/$/, '');
+  return `${base}/persona-playground/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`;
+}
+
 export function personaPlaygroundCategoryLabel(category: PersonaPlaygroundCategory): string {
   switch (category) {
     case 'discover':

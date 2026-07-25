@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   PERSONA_PLAYGROUND_ENTRIES,
+  buildCompareShareUrl,
   clearFeaturedDismissState,
   compareEntries,
   dayOfYear,
@@ -412,5 +413,46 @@ describe('compareEntries', () => {
     const before = PERSONA_PLAYGROUND_ENTRIES.length;
     compareEntries('/persona-battle', '/persona-council', []);
     expect(PERSONA_PLAYGROUND_ENTRIES.length).toBe(before);
+  });
+});
+
+describe('buildCompareShareUrl', () => {
+  it('encodes both paths and joins with the origin', () => {
+    expect(
+      buildCompareShareUrl(
+        'https://arena.example',
+        '/persona-council',
+        '/persona-mosaic-council',
+      ),
+    ).toBe(
+      'https://arena.example/persona-playground/compare?a=%2Fpersona-council&b=%2Fpersona-mosaic-council',
+    );
+  });
+
+  it('trims a trailing slash on the origin', () => {
+    expect(
+      buildCompareShareUrl(
+        'https://arena.example/',
+        '/persona-council',
+        '/persona-mosaic-council',
+      ),
+    ).toBe(
+      'https://arena.example/persona-playground/compare?a=%2Fpersona-council&b=%2Fpersona-mosaic-council',
+    );
+  });
+
+  it('returns null when a or b is missing', () => {
+    expect(buildCompareShareUrl('https://x', null, '/persona-council')).toBeNull();
+    expect(buildCompareShareUrl('https://x', '', '/persona-council')).toBeNull();
+    expect(buildCompareShareUrl('https://x', '/persona-council', null)).toBeNull();
+  });
+
+  it('returns null when paths do not look like persona tool routes', () => {
+    expect(
+      buildCompareShareUrl('https://x', '/something-else', '/persona-council'),
+    ).toBeNull();
+    expect(
+      buildCompareShareUrl('https://x', '/persona-council', 'https://other/path'),
+    ).toBeNull();
   });
 });

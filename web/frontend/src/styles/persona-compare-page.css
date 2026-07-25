@@ -80,6 +80,41 @@
   max-width: 60ch;
 }
 
+.pcmp-hero__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  padding: 9px 16px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: rgba(241, 233, 216, 0.08);
+  border: 1px solid var(--pcmp-card-border);
+  color: var(--pcmp-accent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, gap 160ms ease;
+}
+
+.pcmp-hero__copy:hover {
+  background: rgba(241, 233, 216, 0.14);
+  border-color: var(--pcmp-card-border-hover);
+}
+
+.pcmp-hero__copy:focus-visible {
+  outline: 2px solid var(--pcmp-accent);
+  outline-offset: 2px;
+}
+
+.pcmp-hero__copy--copied {
+  background: rgba(155, 227, 194, 0.16);
+  border-color: rgba(155, 227, 194, 0.5);
+  color: #9be3c2;
+  cursor: default;
+}
+
 /* pair layout */
 .pcmp-pair {
   display: grid;
