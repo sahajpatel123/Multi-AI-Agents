@@ -149,6 +149,14 @@ describe('mosaic dilemma forecast decisions + winTally (localStorage)', () => {
     expect(result[0].winner).toBe('B');
   });
 
+  it('appendMosaicDilemmaForecastDecision caps at 50 entries', () => {
+    clearMosaicDilemmaForecastDecisions();
+    for (let i = 0; i < 60; i++) {
+      appendMosaicDilemmaForecastDecision(makeDecision(`d-${i}`, 'A'));
+    }
+    expect(readMosaicDilemmaForecastDecisions().length).toBe(50);
+  });
+
   it('clearMosaicDilemmaForecastDecisions empties storage', () => {
     appendMosaicDilemmaForecastDecision(makeDecision('x', 'A'));
     clearMosaicDilemmaForecastDecisions();
