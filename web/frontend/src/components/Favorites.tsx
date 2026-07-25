@@ -51,19 +51,24 @@ export function Favorites({
         <p className="ppg-favs__eyebrow">
           <Star aria-hidden="true" /> {heading}
         </p>
-        <button
-          type="button"
-          className="ppg-favs__clear"
-          onClick={() => {
-            if (typeof window === 'undefined') return;
-            clearFavorites(window.localStorage);
-            setPaths([]);
-          }}
-          aria-label="Clear favorites"
-        >
-          <Trash2 aria-hidden="true" />
-          <span>Clear</span>
-        </button>
+        <div className="ppg-favs__head-meta">
+          <span className="ppg-favs__count" aria-label={`${paths.length} favorites`}>
+            {paths.length} favorited
+          </span>
+          <button
+            type="button"
+            className="ppg-favs__clear"
+            onClick={() => {
+              if (typeof window === 'undefined') return;
+              clearFavorites(window.localStorage);
+              setPaths([]);
+            }}
+            aria-label="Clear favorites"
+          >
+            <Trash2 aria-hidden="true" />
+            <span>Clear</span>
+          </button>
+        </div>
       </header>
       <ul className="ppg-favs__list">
         {paths.map((path) => {

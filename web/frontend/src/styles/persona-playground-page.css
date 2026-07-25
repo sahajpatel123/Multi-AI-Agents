@@ -1346,6 +1346,19 @@
   transition: border-color 150ms ease, color 150ms ease;
 }
 
+.ppg-favs__head-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ppg-favs__count {
+  font-size: 12px;
+  color: var(--ppg-accent-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .ppg-favs__clear:hover {
   border-color: var(--ppg-card-border-hover);
   color: var(--ppg-accent);
