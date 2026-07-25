@@ -296,15 +296,17 @@ export function relatedTools(
   const current = entries.find((e) => e.path === path);
   if (!current) return [];
 
-  const sameCategory = entries.filter(
-    (e) => e.path !== path && e.category === current.category,
-  );
-  const otherCategory = entries.filter(
-    (e) => e.path !== path && e.category !== current.category,
-  );
+  // Single pass: bucket each non-self entry into same- or other-category,
+  // preserving catalog order (which is the deterministic "related" order).
+  const sameCategory: PersonaPlaygroundEntry[] = [];
+  const otherCategory: PersonaPlaygroundEntry[] = [];
+  for (const e of entries) {
+    if (e.path === path) continue;
+    if (e.category === current.category) sameCategory.push(e);
+    else otherCategory.push(e);
+  }
 
-  const ordered = [...sameCategory, ...otherCategory];
-  return ordered.slice(0, limit);
+  return [...sameCategory, ...otherCategory].slice(0, limit);
 }
 
 /**
