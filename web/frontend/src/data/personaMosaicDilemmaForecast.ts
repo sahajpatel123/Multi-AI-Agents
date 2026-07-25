@@ -252,17 +252,27 @@ export function appendMosaicDilemmaForecastDecision(
     // localStorage payload (e.g. a partial write from a future
     // schema) is scrubbed on the next append rather than
     // re-serialized and persisted forever.
-    const next = [
-      entry,
-      ...existing.filter(
-        (e) =>
-          e &&
-          typeof e.id === 'string' &&
-          (e.winner === 'A' || e.winner === 'B'),
-      ),
-    ]
-      .filter((e, idx, arr) => arr.findIndex((x) => x.id === e.id) === idx)
-      .slice(0, DECISIONS_LIMIT);
+    // Validate the entry shape AND dedup in a single O(n) pass so
+    // a corrupted localStorage payload (e.g. a partial write or a
+    // duplicate id) is scrubbed on the next append rather than
+    // re-serialized and persisted forever. The new entry wins on id
+    // collision (it's at the head of the final array).
+    const seen = new Set<string>([entry.id]);
+    const valid: MosaicDilemmaForecastDecisionEntry[] = [];
+    for (const e of existing) {
+      if (
+        !e ||
+        typeof e.id !== 'string' ||
+        e.id === entry.id ||
+        (e.winner !== 'A' && e.winner !== 'B') ||
+        seen.has(e.id)
+      ) {
+        continue;
+      }
+      seen.add(e.id);
+      valid.push(e);
+    }
+    const next = [entry, ...valid].slice(0, DECISIONS_LIMIT);
     window.localStorage.setItem(DECISIONS_KEY, JSON.stringify(next));
     return next;
   } catch {
