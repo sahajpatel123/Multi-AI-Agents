@@ -32,6 +32,7 @@ import {
   personaPlaygroundCategories,
   pickFeaturedOfDay,
   readFeaturedDismissState,
+  relatedTools,
   writeFeaturedDismissState,
   type PersonaPlaygroundEntry,
 } from './personaPlayground';
@@ -278,3 +279,67 @@ function makeMemoryStorage(initial: Record<string, string> = {}): Storage {
     },
   };
 }
+
+describe('relatedTools', () => {
+  it('excludes the current path', () => {
+    const result = relatedTools('/persona-match', 5);
+    expect(result.find((e) => e.path === '/persona-match')).toBeUndefined();
+  });
+
+  it('returns at most `limit` entries', () => {
+    expect(relatedTools('/persona-match', 3)).toHaveLength(3);
+    expect(relatedTools('/persona-match', 100)).toHaveLength(
+      PERSONA_PLAYGROUND_ENTRIES.length - 1,
+    );
+  });
+
+  it('defaults to 3 entries', () => {
+    expect(relatedTools('/persona-match')).toHaveLength(3);
+  });
+
+  it('returns [] for unknown paths', () => {
+    expect(relatedTools('/persona-does-not-exist')).toEqual([]);
+  });
+
+  it('returns [] for non-positive limit', () => {
+    expect(relatedTools('/persona-match', 0)).toEqual([]);
+    expect(relatedTools('/persona-match', -1)).toEqual([]);
+  });
+
+  it('returns [] for empty entry list', () => {
+    expect(relatedTools('/persona-match', 3, [])).toEqual([]);
+  });
+
+  it('prefers same-category entries first', () => {
+    // /persona-match is a discover-category tool with 6 same-category
+    // siblings in the catalog. The first 3 results should all be discover.
+    const result = relatedTools('/persona-match', 3);
+    expect(result).toHaveLength(3);
+    for (const entry of result) {
+      expect(entry.category).toBe('discover');
+    }
+  });
+
+  it('falls back to other categories when same-category is exhausted', () => {
+    // /persona-roast is the only entry in the "roast" category, so the
+    // second item must come from a different category.
+    const result = relatedTools('/persona-roast', 2);
+    expect(result).toHaveLength(2);
+    expect(result[0]?.category).toBe('roast');
+    // The second slot is unavoidable cross-category.
+    expect(result[1]?.category).not.toBe('roast');
+  });
+
+  it('is deterministic across calls', () => {
+    const a = relatedTools('/persona-council', 5);
+    const b = relatedTools('/persona-council', 5);
+    expect(a).toEqual(b);
+  });
+
+  it('does not mutate the input entries', () => {
+    const before = PERSONA_PLAYGROUND_ENTRIES.map((e) => e.path);
+    relatedTools('/persona-confessional', 10);
+    const after = PERSONA_PLAYGROUND_ENTRIES.map((e) => e.path);
+    expect(after).toEqual(before);
+  });
+});

@@ -345,6 +345,95 @@
   }
 }
 
+/* related-tools rail */
+.ppg-related {
+  display: grid;
+  gap: 14px;
+  padding-top: clamp(8px, 1.5vw, 16px);
+  border-top: 1px solid var(--ppg-card-border);
+}
+
+.ppg-related__heading {
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--ppg-accent-dim);
+  font-weight: 500;
+}
+
+.ppg-related__row {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.ppg-related__card {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--ppg-card-bg);
+  border: 1px solid var(--ppg-card-border);
+  transition: border-color 180ms ease, transform 180ms ease;
+  min-width: 0;
+}
+
+.ppg-related__card:hover {
+  border-color: var(--ppg-card-border-hover);
+  transform: translateY(-1px);
+}
+
+.ppg-related__tag {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-related__name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ppg-accent);
+  line-height: 1.2;
+}
+
+.ppg-related__tagline {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ppg-accent-dim);
+  line-height: 1.4;
+  /* keep cards uniform height */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ppg-related__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ppg-accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 150ms ease, gap 150ms ease;
+  width: fit-content;
+}
+
+.ppg-related__link:hover {
+  gap: 10px;
+  border-color: var(--ppg-card-border-hover);
+}
+
 /* filters */
 .ppg-filters {
   display: grid;

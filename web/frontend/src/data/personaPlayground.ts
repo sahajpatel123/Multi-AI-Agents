@@ -279,6 +279,33 @@ export function personaPlaygroundCategories(): readonly PersonaPlaygroundCategor
   return Array.from(seen);
 }
 
+/**
+ * Return up to `limit` related entries for the given path. Same-category
+ * entries come first (in catalog order), then any other categories fill
+ * the remaining slots (deterministic — sorted by category label, then
+ * path). The current path is always excluded. Returns [] when the path
+ * is not in the catalog — callers should treat that as "no related".
+ */
+export function relatedTools(
+  path: string,
+  limit: number = 3,
+  entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+): readonly PersonaPlaygroundEntry[] {
+  if (limit <= 0 || entries.length === 0) return [];
+  const current = entries.find((e) => e.path === path);
+  if (!current) return [];
+
+  const sameCategory = entries.filter(
+    (e) => e.path !== path && e.category === current.category,
+  );
+  const otherCategory = entries.filter(
+    (e) => e.path !== path && e.category !== current.category,
+  );
+
+  const ordered = [...sameCategory, ...otherCategory];
+  return ordered.slice(0, limit);
+}
+
 export function personaPlaygroundCategoryLabel(category: PersonaPlaygroundCategory): string {
   switch (category) {
     case 'discover':

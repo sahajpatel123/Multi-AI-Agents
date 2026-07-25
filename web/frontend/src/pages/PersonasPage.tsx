@@ -607,6 +607,7 @@ export function PersonasPage() {
             </p>
             <div className="personas-studio-hero__actions">
               <a href="#panel-studio">Tune your panel <ArrowRight aria-hidden="true" /></a>
+              <a href="/persona-playground">Explore the playground <ArrowRight aria-hidden="true" /></a>
               <Pressable type="button" onClick={() => navigate('/app')}>Enter Arena</Pressable>
             </div>
             <dl className="personas-studio-proof">

@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
+import { RelatedTools } from '../components/RelatedTools';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
@@ -358,6 +359,8 @@ export function PersonaPlaygroundPage() {
             </ul>
           )}
         </Reveal>
+
+        <RelatedTools path="/persona-playground" heading="Pairs well with the hub" />
       </main>
 
       <Footer />
