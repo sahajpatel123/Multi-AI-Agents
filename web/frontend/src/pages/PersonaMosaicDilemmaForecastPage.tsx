@@ -119,12 +119,7 @@ export function PersonaMosaicDilemmaForecastPage() {
   );
 
   const onForecast = () => {
-    const url = mosaicDilemmaForecastShareUrl(
-      window.location.origin,
-      dilemmaA,
-      dilemmaB,
-    );
-    window.history.replaceState({}, '', url);
+    writeShareUrl(dilemmaA, dilemmaB);
     try {
       const snippetA = snippetDilemma(dilemmaA);
       const snippetB = snippetDilemma(dilemmaB);
