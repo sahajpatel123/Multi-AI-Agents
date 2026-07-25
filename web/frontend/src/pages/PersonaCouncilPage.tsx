@@ -16,6 +16,7 @@ import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
+import { RelatedTools } from '../components/RelatedTools';
 import {
   buildCouncil,
   clearCouncilCounter,
@@ -396,6 +397,8 @@ export function PersonaCouncilPage() {
           </section>
         )}
       </main>
+
+      <RelatedTools path="/persona-council" />
 
       <Footer />
     </div>

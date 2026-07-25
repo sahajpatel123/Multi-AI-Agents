@@ -20,6 +20,7 @@ import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
+import { RelatedTools } from '../components/RelatedTools';
 import { PERSONAS } from '../data/personas';
 import {
   appendSavedTeam,
@@ -452,6 +453,8 @@ export function PersonaMosaicPage() {
           </section>
         )}
       </main>
+
+      <RelatedTools path="/persona-mosaic" />
 
       <Footer />
     </div>

@@ -6,6 +6,7 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Reveal } from '../components/Reveal';
 import { Pressable } from '../components/Pressable';
+import { RelatedTools } from '../components/RelatedTools';
 import MicroLoader from '../components/MicroLoader';
 import {
   PERSONA_BATTLE_PRESETS,
@@ -632,6 +633,8 @@ export function PersonaBattlePage() {
           )}
         </section>
       </main>
+
+      <RelatedTools path="/persona-battle" />
 
       <Footer />
     </div>
