@@ -132,12 +132,12 @@ export function buildMosaicDilemmaForecast(
   const all = PERSONAS.map((p) => p.id);
   const panel: string[] = [];
   for (const id of preferred) {
-    if (panel.length >= 8) break;
+    if (panel.length >= PANEL_SIZE) break;
     if (all.includes(id)) panel.push(id);
   }
-  if (panel.length < 8) {
+  if (panel.length < PANEL_SIZE) {
     for (const i of all) {
-      if (panel.length >= 8) break;
+      if (panel.length >= PANEL_SIZE) break;
       if (!panel.includes(i)) panel.push(i);
     }
   }
