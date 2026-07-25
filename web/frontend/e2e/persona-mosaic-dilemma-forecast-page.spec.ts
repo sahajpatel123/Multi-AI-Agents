@@ -17,6 +17,11 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Persona Mosaic Dilemma Forecast page (mocked)', () => {
+  // Two contrasting dilemma framings in the cycle-297 imperative
+  // shape, used by every "fill both inputs" test.
+  const SAMPLE_A = 'Take the safe job — predictable, well-paid, low upside.';
+  const SAMPLE_B = 'Take the risky startup — uncertain, low-paid, high upside.';
+
   test('renders the hero, sample list, and predictor on empty inputs', async ({ page }) => {
     await page.goto('/persona-mosaic-dilemma-forecast');
 
@@ -46,8 +51,8 @@ test.describe('Persona Mosaic Dilemma Forecast page (mocked)', () => {
 
     // Type two contrasting dilemma framings (imperative A vs B form
     // matches the cycle-297 sample shape).
-    await page.getByLabel('Dilemma A').fill('Take the safe job — predictable, well-paid, low upside.');
-    await page.getByLabel('Dilemma B').fill('Take the risky startup — uncertain, low-paid, high upside.');
+    await page.getByLabel('Dilemma A').fill(SAMPLE_A);
+    await page.getByLabel('Dilemma B').fill(SAMPLE_B);
 
     // Click "Forecast the sharper".
     await page.getByRole('button', { name: /forecast the sharper/i }).click();
@@ -83,8 +88,8 @@ test.describe('Persona Mosaic Dilemma Forecast page (mocked)', () => {
 
   test('share URL updates after a forecast', async ({ page }) => {
     await page.goto('/persona-mosaic-dilemma-forecast');
-    await page.getByLabel('Dilemma A').fill('Take the safe job — predictable, well-paid, low upside.');
-    await page.getByLabel('Dilemma B').fill('Take the risky startup — uncertain, low-paid, high upside.');
+    await page.getByLabel('Dilemma A').fill(SAMPLE_A);
+    await page.getByLabel('Dilemma B').fill(SAMPLE_B);
     await page.getByRole('button', { name: /forecast the sharper/i }).click();
     // Cycle 314 / 315: writeShareUrl mirrors the inputs into the
     // address bar so the user can copy the share link.
