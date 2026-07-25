@@ -444,6 +444,24 @@ export function PersonaPlaygroundPage() {
           </Link>
         </Reveal>
 
+        <Reveal as="section" className="ppg-formats-cta" aria-label="Browse by format">
+          <div className="ppg-formats-cta__copy">
+            <p className="ppg-formats-cta__eyebrow">
+              <Layers aria-hidden="true" /> By format
+            </p>
+            <h2 className="ppg-formats-cta__title">Want to find every tool of a particular shape?</h2>
+            <p className="ppg-formats-cta__lede">
+              Many categories share a format — "4-mind panel" appears in council, versus,
+              and roast. Browse every tool that matches a particular shape, regardless of
+              category.
+            </p>
+          </div>
+          <Link to="/persona-playground/formats" className="ppg-formats-cta__btn">
+            View by format
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Reveal>
+
         <Favorites />
 
         <ToolsNotYetTried />
