@@ -3,12 +3,8 @@ import { BarChart3 } from 'lucide-react';
 import {
   PERSONA_PLAYGROUND_ENTRIES,
   MATCHUPS,
+  PERSONA_PLAYGROUND_SITEMAP,
 } from '../data/personaPlayground';
-
-/** Number of public /persona-playground/* routes. Sourced from the
- *  SITEMAP constant on PersonaPlaygroundSitemapPage to keep this in
- *  sync with the actual sitemap. */
-const DEEP_LINK_PAGE_COUNT = 8;
 
 export interface PersonaPlaygroundStatsProps {
   /** Heading shown above the widget. */
@@ -59,7 +55,7 @@ export function PersonaPlaygroundStats({
     },
     {
       label: 'deep-link pages',
-      value: DEEP_LINK_PAGE_COUNT,
+      value: PERSONA_PLAYGROUND_SITEMAP.length,
       link: '/persona-playground/sitemap',
       accent: '#f1e9d8',
     },

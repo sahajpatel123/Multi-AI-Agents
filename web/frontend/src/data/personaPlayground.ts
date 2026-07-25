@@ -793,3 +793,76 @@ export function clearFeaturedDismissState(
     /* silent */
   }
 }
+
+// ---------------------------------------------------------------------------
+// Sitemap — table-of-contents entries for /persona-playground/sitemap.
+// Single source of truth: the SitemapPage renders from this list and the
+// PersonaPlaygroundStats widget derives its "deep-link pages" tile from
+// the same length so the two surfaces can't drift apart.
+
+export interface PersonaPlaygroundSitemapEntry {
+  readonly path: string;
+  readonly title: string;
+  readonly description: string;
+  /** Visual accent for the card top-stripe. */
+  readonly accent: string;
+}
+
+export const PERSONA_PLAYGROUND_SITEMAP: readonly PersonaPlaygroundSitemapEntry[] = [
+  {
+    path: '/persona-playground',
+    title: 'Hub',
+    description:
+      'The single front door for all 27 tools — search, filter, daily featured, recent tools, recent comparisons, recent shares, favorites, unvisited tools, curated matchups, and compare CTA.',
+    accent: '#c8b9ff',
+  },
+  {
+    path: '/persona-playground/compare',
+    title: 'Compare any two tools',
+    description:
+      'Render two tools side-by-side from a ?a=…&b=… query string. Copy the share URL with one click.',
+    accent: '#c8b9ff',
+  },
+  {
+    path: '/persona-playground/categories',
+    title: 'Browse by category',
+    description:
+      'Seven categories — Discover, Versus, Council, Roast, Decide, Forecast, Mosaic — each with a tool count and a one-line description.',
+    accent: '#8aa3ff',
+  },
+  {
+    path: '/persona-playground/formats',
+    title: 'Browse by format',
+    description:
+      'Group every tool by its freeform format string (4-mind panel, 60s sort, etc.) — different aggregation than category.',
+    accent: '#ffa756',
+  },
+  {
+    path: '/persona-playground/favorites',
+    title: 'Your favorites',
+    description:
+      'The tools you starred from the hub. Local-only, so the list never leaves your browser.',
+    accent: '#ffd86b',
+  },
+  {
+    path: '/persona-playground/index',
+    title: 'A-Z tool index',
+    description:
+      'Alphabetical reference list of all 27 tools with format and category, grouped by first letter.',
+    accent: '#c8b9ff',
+  },
+  {
+    path: '/persona-playground/whats-new',
+    title: "What's new",
+    description:
+      'A curated changelog of recent playground improvements — every new feature surfaces here for returning visitors.',
+    accent: '#9be3c2',
+  },
+  {
+    path: '/persona-playground/sitemap',
+    title: 'Sitemap',
+    description:
+      'This page — a table of contents for every public persona-playground route.',
+    accent: '#f1e9d8',
+  },
+];
