@@ -12,12 +12,17 @@ export interface MosaicDilemmaForecastCritique {
   readonly take: string;
 }
 
+export interface PersonaMosaicDilemmaForecastTally {
+  readonly a: number;
+  readonly b: number;
+}
+
 export interface PersonaMosaicDilemmaForecast {
   readonly dilemmaA: string;
   readonly dilemmaB: string;
   readonly critiques: ReadonlyArray<MosaicDilemmaForecastCritique>;
   readonly winner: MosaicDilemmaForecastPick;
-  readonly tally: { readonly a: number; readonly b: number };
+  readonly tally: PersonaMosaicDilemmaForecastTally;
 }
 
 const PERSONA_TAKES: Record<
@@ -316,15 +321,11 @@ export function clearMosaicDilemmaForecastDecisions() {
   }
 }
 
-export interface MosaicDilemmaForecastTally {
-  readonly a: number;
-  readonly b: number;
-}
 
 /** Pure — compute lifetime A vs B win tally from decision log. */
 export function mosaicDilemmaForecastWinTally(
   decisions: ReadonlyArray<MosaicDilemmaForecastDecisionEntry>,
-): MosaicDilemmaForecastTally {
+): PersonaMosaicDilemmaForecastTally {
   let a = 0;
   let b = 0;
   for (const d of decisions) {
