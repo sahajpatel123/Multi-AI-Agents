@@ -972,10 +972,8 @@
 }
 
 .ppg-recent-tools__link {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  gap: 4px;
   padding: 10px 14px;
   border-radius: 10px;
   background: var(--ppg-card-bg);
@@ -998,6 +996,14 @@
   outline-offset: 2px;
 }
 
+.ppg-recent-tools__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
 .ppg-recent-tools__name {
   white-space: nowrap;
   overflow: hidden;
@@ -1013,6 +1019,17 @@
   color: var(--ppg-accent-dim);
   white-space: nowrap;
   flex: 0 0 auto;
+}
+
+.ppg-recent-tools__tagline {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ppg-accent-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-width: 0;
 }
 
 /* filters */

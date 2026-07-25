@@ -88,11 +88,14 @@ export function RecentTools({
           return (
             <li key={item.path} className="ppg-recent-tools__item">
               <Link to={item.path} className="ppg-recent-tools__link">
-                <span className="ppg-recent-tools__name">{tool.name}</span>
-                <span className="ppg-recent-tools__time">
-                  <Clock aria-hidden="true" />
-                  {formatRelative(item.at, now)}
+                <span className="ppg-recent-tools__row">
+                  <span className="ppg-recent-tools__name">{tool.name}</span>
+                  <span className="ppg-recent-tools__time">
+                    <Clock aria-hidden="true" />
+                    {formatRelative(item.at, now)}
+                  </span>
                 </span>
+                <span className="ppg-recent-tools__tagline">{tool.tagline}</span>
               </Link>
             </li>
           );
