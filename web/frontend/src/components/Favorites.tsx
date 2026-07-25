@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Star, Trash2 } from 'lucide-react';
+import { ArrowRight, Star, Trash2 } from 'lucide-react';
 import { readFavorites, clearFavorites, toggleFavorite } from '../lib/favorites';
 import { PERSONA_PLAYGROUND_ENTRIES } from '../data/personaPlayground';
 
@@ -55,6 +55,10 @@ export function Favorites({
           <span className="ppg-favs__count" aria-label={`${paths.length} favorites`}>
             {paths.length} favorited
           </span>
+          <Link to="/persona-playground/favorites" className="ppg-favs__view-all">
+            View all
+            <ArrowRight aria-hidden="true" />
+          </Link>
           <button
             type="button"
             className="ppg-favs__clear"
