@@ -5,6 +5,7 @@ import {
   milestoneFor,
   type DailyStreakState,
 } from '../lib/dailyStreak';
+import { ShareStreakButton } from './ShareStreakButton';
 
 const EMPTY: DailyStreakState = { v: 1, lastVisit: '', current: 0, longest: 0 };
 
@@ -63,6 +64,7 @@ export function DailyStreak({ heading = 'Your streak' }: DailyStreakProps) {
         {state.longest > state.current && (
           <p className="ppg-streak__longest">Longest: {state.longest} days</p>
         )}
+        <ShareStreakButton streak={state} />
       </div>
     </section>
   );

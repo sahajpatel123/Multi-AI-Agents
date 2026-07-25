@@ -1108,6 +1108,46 @@
   color: var(--ppg-accent-dim);
 }
 
+.ppg-share-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 167, 86, 0.12);
+  border: 1px solid rgba(255, 167, 86, 0.36);
+  color: #ffa756;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  width: fit-content;
+}
+
+.ppg-share-streak:hover {
+  background: rgba(255, 167, 86, 0.18);
+  border-color: rgba(255, 167, 86, 0.5);
+}
+
+.ppg-share-streak:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-share-streak svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ppg-share-streak--copied {
+  background: rgba(155, 227, 194, 0.18);
+  border-color: rgba(155, 227, 194, 0.5);
+  color: #9be3c2;
+  cursor: default;
+}
+
 .ppg-streak__badge {
   display: inline-flex;
   align-items: center;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DAILY_STREAK_KEY,
   DAILY_STREAK_VERSION,
+  buildShareStreakText,
   clearDailyStreak,
   milestoneFor,
   readDailyStreak,
@@ -188,5 +189,55 @@ describe('STREAK_MILESTONES', () => {
       expect(m.name).not.toEqual('');
       expect(m.glyph).not.toEqual('');
     }
+  });
+});
+
+describe('buildShareStreakText', () => {
+  const EMPTY = { v: 1, lastVisit: '', current: 0, longest: 0 };
+
+  it('returns null for an empty streak', () => {
+    expect(buildShareStreakText(EMPTY)).toBeNull();
+  });
+
+  it('interpolates the day count and origin', () => {
+    const result = buildShareStreakText(
+      { v: 1, lastVisit: '2026-07-25', current: 1, longest: 1 },
+      'https://arena.example',
+    );
+    expect(result).toBe(
+      'I have a 1-day streak on Arena Playground. Can you keep up? https://arena.example/persona-playground',
+    );
+  });
+
+  it('uses plural "days" for streaks > 1', () => {
+    const result = buildShareStreakText(
+      { v: 1, lastVisit: '2026-07-25', current: 5, longest: 5 },
+      'https://arena.example',
+    );
+    expect(result).toContain('5-days');
+  });
+
+  it('interpolates the milestone name when reached', () => {
+    const result = buildShareStreakText(
+      { v: 1, lastVisit: '2026-07-25', current: 7, longest: 7 },
+      'https://arena.example',
+    );
+    expect(result).toContain('(Committed)');
+  });
+
+  it('omits the milestone tag when below the first threshold', () => {
+    const result = buildShareStreakText(
+      { v: 1, lastVisit: '2026-07-25', current: 2, longest: 2 },
+      'https://arena.example',
+    );
+    expect(result).not.toContain('(');
+  });
+
+  it('trims a trailing slash on the origin', () => {
+    const result = buildShareStreakText(
+      { v: 1, lastVisit: '2026-07-25', current: 1, longest: 1 },
+      'https://arena.example/',
+    );
+    expect(result).toContain('https://arena.example/persona-playground');
   });
 });

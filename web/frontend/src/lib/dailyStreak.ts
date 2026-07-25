@@ -159,3 +159,23 @@ export function milestoneFor(days: number): StreakMilestone | null {
   }
   return best;
 }
+
+/**
+ * Build a pre-formatted share message for the current streak. Pure:
+ * takes the streak state + optional origin, returns a string ready to
+ * paste into chat or social. Returns null when the streak is &lt; 1
+ * so callers can skip the share affordance.
+ */
+export function buildShareStreakText(
+  streak: DailyStreakState,
+  origin: string = 'https://arena.example',
+): string | null {
+  if (streak.current < 1) return null;
+  const days = streak.current;
+  const milestone = milestoneFor(days);
+  const dayWord = days === 1 ? 'day' : 'days';
+  const base = origin.replace(/\/$/, '');
+  const url = `${base}/persona-playground`;
+  const tier = milestone ? ` (${milestone.name})` : '';
+  return `I have a ${days}-${dayWord} streak on Arena Playground${tier}. Can you keep up? ${url}`;
+}
