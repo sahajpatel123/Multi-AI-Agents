@@ -26,6 +26,13 @@ function findPersona(id: string) {
   return PERSONAS.find((p) => p.id === id) ?? null;
 }
 
+// Pure — the persona-match share URL routes to the same page with
+// the ?p=<id> param so the recipient lands on the result panel.
+const buildShareUrl = (personaId: string) =>
+  typeof window === 'undefined'
+    ? ''
+    : `${window.location.origin}/persona-match?p=${personaId}`;
+
 interface StoredMatch {
   readonly v: 1;
   readonly answers: Record<string, string>;
@@ -94,9 +101,7 @@ function ResultPanel({ personaId, score, runnerUps, onTryInArena }: ResultPanelP
     );
   }
 
-  const shareUrl = typeof window === 'undefined'
-    ? ''
-    : `${window.location.origin}/persona-match?p=${personaId}`;
+  const shareUrl = buildShareUrl(personaId);
 
   const shareText = `I'm ${persona.name} on Arena. "${persona.quote}" — which Arena mind are you?`;
 
