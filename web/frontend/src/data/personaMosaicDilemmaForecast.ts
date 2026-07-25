@@ -276,12 +276,14 @@ export function readMosaicDilemmaForecastDecisions(): ReadonlyArray<MosaicDilemm
     if (!raw) return [];
     const parsed = JSON.parse(raw) as MosaicDilemmaForecastDecisionEntry[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (e) =>
-        e &&
-        typeof e.id === 'string' &&
-        (e.winner === 'A' || e.winner === 'B'),
-    );
+    return parsed
+      .filter(
+        (e) =>
+          e &&
+          typeof e.id === 'string' &&
+          (e.winner === 'A' || e.winner === 'B'),
+      )
+      .slice(0, DECISIONS_LIMIT);
   } catch {
     return [];
   }
