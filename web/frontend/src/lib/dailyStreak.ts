@@ -125,3 +125,37 @@ export function clearDailyStreak(
 
 export const DAILY_STREAK_KEY = STORAGE_KEY;
 export const DAILY_STREAK_VERSION = STATE_VERSION;
+
+// ---------------------------------------------------------------------------
+// Milestone tiers
+// ---------------------------------------------------------------------------
+// Names + glyphs for consecutive-day streaks. The first milestone is at
+// 3 days (anything less is "just getting started") and the last is at 100
+// (which is the project's horizon for "you're a fixture of the playground").
+// milestoneFor(days) returns the highest tier the streak has reached.
+
+export interface StreakMilestone {
+  /** Consecutive-day threshold to reach this tier. */
+  readonly days: number;
+  /** Display name (e.g. "Curious", "Devoted"). */
+  readonly name: string;
+  /** One-character glyph for the badge. */
+  readonly glyph: string;
+}
+
+export const STREAK_MILESTONES: readonly StreakMilestone[] = [
+  { days: 3, name: 'Curious', glyph: '✦' },
+  { days: 7, name: 'Committed', glyph: '✺' },
+  { days: 14, name: 'Devoted', glyph: '✸' },
+  { days: 30, name: 'Expert', glyph: '✹' },
+  { days: 100, name: 'Legend', glyph: '✷' },
+];
+
+export function milestoneFor(days: number): StreakMilestone | null {
+  if (days < STREAK_MILESTONES[0]?.days) return null;
+  let best: StreakMilestone | null = null;
+  for (const m of STREAK_MILESTONES) {
+    if (days >= m.days) best = m;
+  }
+  return best;
+}

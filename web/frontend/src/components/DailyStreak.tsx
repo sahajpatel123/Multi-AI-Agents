@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Flame } from 'lucide-react';
 import {
   recordDailyStreak,
+  milestoneFor,
   type DailyStreakState,
 } from '../lib/dailyStreak';
 
@@ -37,6 +38,8 @@ export function DailyStreak({ heading = 'Your streak' }: DailyStreakProps) {
 
   if (state.current === 0) return null;
 
+  const milestone = milestoneFor(state.current);
+
   return (
     <section className="ppg-streak" aria-label={heading}>
       <div className="ppg-streak__icon" aria-hidden="true">
@@ -47,6 +50,15 @@ export function DailyStreak({ heading = 'Your streak' }: DailyStreakProps) {
         <p className="ppg-streak__count">
           <strong>{state.current}</strong>
           <span>{state.current === 1 ? 'day' : 'days'}</span>
+          {milestone && (
+            <span
+              className="ppg-streak__badge"
+              title={`${milestone.name} — ${milestone.days}+ day streak`}
+            >
+              <span aria-hidden="true">{milestone.glyph}</span>
+              {milestone.name}
+            </span>
+          )}
         </p>
         {state.longest > state.current && (
           <p className="ppg-streak__longest">Longest: {state.longest} days</p>

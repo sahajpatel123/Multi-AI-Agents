@@ -3,8 +3,10 @@ import {
   DAILY_STREAK_KEY,
   DAILY_STREAK_VERSION,
   clearDailyStreak,
+  milestoneFor,
   readDailyStreak,
   recordDailyStreak,
+  STREAK_MILESTONES,
   writeDailyStreak,
 } from './dailyStreak';
 
@@ -144,5 +146,47 @@ describe('clearDailyStreak', () => {
 
   it('is a no-op when storage is null', () => {
     expect(() => clearDailyStreak(null)).not.toThrow();
+  });
+});
+
+describe('milestoneFor', () => {
+  it('returns null for streaks below the first threshold', () => {
+    expect(milestoneFor(0)).toBeNull();
+    expect(milestoneFor(1)).toBeNull();
+    expect(milestoneFor(2)).toBeNull();
+  });
+
+  it('returns the lowest tier for streaks at the first threshold', () => {
+    expect(milestoneFor(3)).toEqual({ days: 3, name: 'Curious', glyph: '✦' });
+  });
+
+  it('returns the highest reached tier for streaks past a threshold', () => {
+    expect(milestoneFor(7)?.name).toBe('Committed');
+    expect(milestoneFor(14)?.name).toBe('Devoted');
+    expect(milestoneFor(30)?.name).toBe('Expert');
+    expect(milestoneFor(100)?.name).toBe('Legend');
+    expect(milestoneFor(250)?.name).toBe('Legend');
+  });
+
+  it('handles boundary days (one below a threshold)', () => {
+    expect(milestoneFor(6)?.name).toBe('Curious');
+    expect(milestoneFor(13)?.name).toBe('Committed');
+    expect(milestoneFor(29)?.name).toBe('Devoted');
+    expect(milestoneFor(99)?.name).toBe('Expert');
+  });
+});
+
+describe('STREAK_MILESTONES', () => {
+  it('thresholds are in ascending order', () => {
+    const days = STREAK_MILESTONES.map((m) => m.days);
+    const sorted = [...days].sort((a, b) => a - b);
+    expect(days).toEqual(sorted);
+  });
+
+  it('every tier has a non-empty name and glyph', () => {
+    for (const m of STREAK_MILESTONES) {
+      expect(m.name).not.toEqual('');
+      expect(m.glyph).not.toEqual('');
+    }
   });
 });
