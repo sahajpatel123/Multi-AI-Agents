@@ -345,8 +345,8 @@ export function compareEntries(
 /**
  * Build the canonical share URL for a compare pair. Pure: takes an
  * origin + two valid catalog paths, returns a URL with both params
- * encoded. Returns null when either path is missing so callers can
- * skip the copy affordance.
+ * encoded. Returns null when either path is missing or doesn't look
+ * like a persona tool route so callers can skip the copy affordance.
  */
 export function buildCompareShareUrl(
   origin: string,
@@ -354,10 +354,63 @@ export function buildCompareShareUrl(
   b: string | null,
 ): string | null {
   if (!a || !b) return null;
-  if (!a.startsWith('/persona-') || !b.startsWith('/persona-')) return null;
+  if (!a.startsWith(PERSONA_PATH_PREFIX) || !b.startsWith(PERSONA_PATH_PREFIX)) {
+    return null;
+  }
   const base = origin.replace(/\/$/, '');
   return `${base}/persona-playground/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`;
 }
+
+/**
+ * Curated matchups — pre-baked comparison pairs with strong narratives.
+ * Each entry renders as a card on the hub that links to the compare
+ * route with prefilled params. The narrative tells the reader *why*
+ * this pair is worth comparing.
+ */
+export interface Matchup {
+  readonly title: string;
+  readonly summary: string;
+  readonly paths: readonly [string, string];
+}
+
+export const MATCHUPS: readonly Matchup[] = [
+  {
+    title: 'Council vs Mosaic Council',
+    summary:
+      'Sixteen minds answering one question vs four minds hand-picked by you. Democratize vs curate.',
+    paths: ['/persona-council', '/persona-mosaic-council'],
+  },
+  {
+    title: 'Roast vs Mosaic Roast',
+    summary:
+      'Four Arena judges tear into your prompt vs four Mosaic-style judges who never met your taste. Catch the gap.',
+    paths: ['/persona-roast', '/persona-mosaic-roast'],
+  },
+  {
+    title: 'Dilemma vs Dilemma Council',
+    summary:
+      'Four minds break a two-option call vs eight minds voting on the same. Small panel vs a hung jury.',
+    paths: ['/persona-dilemma', '/persona-dilemma-council'],
+  },
+  {
+    title: 'Forecast vs Mosaic Forecast',
+    summary:
+      'Four minds predict a future vs four Mosaic-style minds picking between two futures. Open-ended vs head-to-head.',
+    paths: ['/persona-forecast', '/persona-mosaic-forecast'],
+  },
+  {
+    title: 'Battle vs Mosaic Battle',
+    summary:
+      'Two minds on any topic vs two Mosaic-style minds judging two outputs. Topic-driven vs output-driven.',
+    paths: ['/persona-battle', '/persona-mosaic-battle'],
+  },
+  {
+    title: 'Dilemma Forecast vs Mosaic Dilemma Forecast',
+    summary:
+      'Two dilemma framings go to a 4-mind panel vs an 8-mind Mosaic panel. Edge case vs stacked jury.',
+    paths: ['/persona-dilemma-forecast', '/persona-mosaic-dilemma-forecast'],
+  },
+];
 
 export function personaPlaygroundCategoryLabel(category: PersonaPlaygroundCategory): string {
   switch (category) {
@@ -421,6 +474,11 @@ export function dayOfYear(date: Date): number {
 // the millisecond delta since Jan 1. Hoisted as a constant so the
 // unit is named where the math is.
 const MS_PER_DAY = 86_400_000;
+
+// All tool paths share this prefix; buildCompareShareUrl uses it
+// to reject non-persona routes (a defense against the share link
+// silently pointing at an arbitrary user-supplied path).
+const PERSONA_PATH_PREFIX = '/persona-';
 
 /**
  * Deterministic pick from the catalog for the given date. Same day →
