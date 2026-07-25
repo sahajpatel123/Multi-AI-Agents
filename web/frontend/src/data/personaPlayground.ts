@@ -412,6 +412,25 @@ export const MATCHUPS: readonly Matchup[] = [
   },
 ];
 
+/**
+ * Look up a curated matchup by its two paths. Order-insensitive so
+ * `?a=A&b=B` and `?a=B&b=A` both resolve. Returns null when neither
+ * param is missing or when no curated matchup pairs those paths —
+ * callers should treat that as "no banner, just the comparison".
+ */
+export function findMatchupByPaths(
+  a: string | null,
+  b: string | null,
+  matchups: readonly Matchup[] = MATCHUPS,
+): Matchup | null {
+  if (!a || !b) return null;
+  for (const m of matchups) {
+    const [p1, p2] = m.paths;
+    if ((a === p1 && b === p2) || (a === p2 && b === p1)) return m;
+  }
+  return null;
+}
+
 export function personaPlaygroundCategoryLabel(category: PersonaPlaygroundCategory): string {
   switch (category) {
     case 'discover':

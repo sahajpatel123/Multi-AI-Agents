@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Copy, GitCompare, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Copy, GitCompare, Sparkles } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
@@ -11,6 +11,7 @@ import { setRedirectIntent } from '../utils/redirectIntent';
 import {
   buildCompareShareUrl,
   compareEntries,
+  findMatchupByPaths,
   personaPlaygroundCategoryLabel,
   type PersonaPlaygroundEntry,
 } from '../data/personaPlayground';
@@ -35,6 +36,7 @@ export function PersonaPlaygroundComparePage() {
   const b = params.get('b');
 
   const pair = useMemo(() => compareEntries(a, b), [a, b]);
+  const matchup = useMemo(() => findMatchupByPaths(a, b), [a, b]);
 
   useEffect(() => {
     const reduceMotion = prefersReducedMotion();
@@ -72,6 +74,19 @@ export function PersonaPlaygroundComparePage() {
       <Navbar />
 
       <main className="pcmp-main">
+        {matchup && (
+          <nav className="pcmp-matchup-banner" aria-label="Curated matchup">
+            <Link to="/persona-playground" className="pcmp-matchup-banner__back">
+              <ArrowLeft aria-hidden="true" />
+              <span>All matchups</span>
+            </Link>
+            <span className="pcmp-matchup-banner__title">
+              <GitCompare aria-hidden="true" />
+              {matchup.title}
+            </span>
+            <p className="pcmp-matchup-banner__summary">{matchup.summary}</p>
+          </nav>
+        )}
         <section className="pcmp-hero">
           <p className="pcmp-hero__eyebrow">
             <GitCompare aria-hidden="true" /> Compare tools

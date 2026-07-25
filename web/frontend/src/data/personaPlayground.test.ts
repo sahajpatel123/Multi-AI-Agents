@@ -30,6 +30,7 @@ import {
   clearFeaturedDismissState,
   compareEntries,
   dayOfYear,
+  findMatchupByPaths,
   formatLocalDate,
   isDismissedFor,
   personaPlaygroundCategories,
@@ -487,5 +488,31 @@ describe('MATCHUPS', () => {
       expect(seen.has(matchup.title), `duplicate title: ${matchup.title}`).toBe(false);
       seen.add(matchup.title);
     }
+  });
+});
+
+describe('findMatchupByPaths', () => {
+  it('returns the matchup when given its declared path order', () => {
+    const m = findMatchupByPaths('/persona-council', '/persona-mosaic-council');
+    expect(m?.title).toBe('Council vs Mosaic Council');
+  });
+
+  it('is order-insensitive (a/b can be swapped)', () => {
+    const m = findMatchupByPaths('/persona-mosaic-council', '/persona-council');
+    expect(m?.title).toBe('Council vs Mosaic Council');
+  });
+
+  it('returns null when a or b is missing', () => {
+    expect(findMatchupByPaths(null, '/persona-council')).toBeNull();
+    expect(findMatchupByPaths('/persona-council', null)).toBeNull();
+    expect(findMatchupByPaths('', '')).toBeNull();
+  });
+
+  it('returns null when paths do not match any curated matchup', () => {
+    expect(findMatchupByPaths('/persona-match', '/persona-battle')).toBeNull();
+  });
+
+  it('respects the matchups argument', () => {
+    expect(findMatchupByPaths('/persona-council', '/persona-mosaic-council', [])).toBeNull();
   });
 });
