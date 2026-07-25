@@ -254,7 +254,7 @@ export function PersonaMosaicDilemmaForecastPage() {
             <span>One is sharper.</span>
           </h1>
           <p className="pmdf-hero__lede">
-            Paste two dilemma framings and an 8-persona panel picks
+            Two dilemma framings go in, an 8-persona panel picks
             the sharper one. Each mind votes + explains. Same
             dilemma pair in = same verdict, so a shared link
             replays the exact same forecast.
