@@ -217,12 +217,16 @@ export function PersonaMosaicDilemmaForecastPage() {
 
   const onTryInArena = () => {
     if (typeof window === 'undefined' || !dilemmaA.trim() || !dilemmaB.trim()) return;
-    const link = `/app?prompt=${encodeURIComponent(`Compare these two dilemma framings: A) ${dilemmaA} B) ${dilemmaB}`)}`;
-    // /app is a ProtectedRoute; ProtectedRoute will redirect to
-    // /signin when the user is unauthenticated, so the call site
-    // does not need to branch on isAuthenticated.
-    navigate(link);
+    navigate(buildTryInArenaLink(dilemmaA, dilemmaB));
   };
+
+  // Build the deep-link to the Arena agent page that compares the
+  // two framings. Pure — the caller decides whether to navigate
+  // or copy. /app is a ProtectedRoute; ProtectedRoute will redirect
+  // to /signin when the user is unauthenticated, so the call site
+  // does not need to branch on isAuthenticated.
+  const buildTryInArenaLink = (a: string, b: string) =>
+    `/app?prompt=${encodeURIComponent(`Compare these two dilemma framings: A) ${a} B) ${b}`)}`;
 
   const onReplayHistory = (entry: { a: string; b: string }) => {
     setDilemmaA(entry.a);

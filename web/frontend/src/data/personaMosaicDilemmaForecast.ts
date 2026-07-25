@@ -352,7 +352,7 @@ export interface MosaicDilemmaForecastMajorityInfo {
 /** Pure — describe how decisive a tally is. For an 8-mind
  * panel: 5+/8 is decisive, 4/8 is leaning, 3/8 is split. */
 export function mosaicDilemmaForecastMajorityInfo(
-  tally: MosaicDilemmaForecastTally,
+  tally: PersonaMosaicDilemmaForecastTally,
   winner: MosaicDilemmaForecastPick,
 ): MosaicDilemmaForecastMajorityInfo {
   const winnerCount = winner === 'A' ? tally.a : tally.b;
