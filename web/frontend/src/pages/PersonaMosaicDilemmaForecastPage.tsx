@@ -36,6 +36,13 @@ import '../styles/persona-mosaic-dilemma-forecast-page.css';
 
 const MAX_DILEMMA_CHARS = 200;
 
+// Trim a dilemma to a 40-char snippet, with "..." if it was longer.
+// Used twice (history entry + decision log) — extract once so the
+// truncation rule lives in one place.
+function snippetDilemma(s: string): string {
+  return s.length > 40 ? `${s.slice(0, 37)}...` : s;
+}
+
 function findPersona(id: string) {
   return PERSONAS.find((p) => p.id === id) ?? null;
 }
@@ -117,8 +124,8 @@ export function PersonaMosaicDilemmaForecastPage() {
     );
     window.history.replaceState({}, '', url);
     try {
-      const snippetA = dilemmaA.length > 40 ? `${dilemmaA.slice(0, 37)}...` : dilemmaA;
-      const snippetB = dilemmaB.length > 40 ? `${dilemmaB.slice(0, 37)}...` : dilemmaB;
+      const snippetA = snippetDilemma(dilemmaA);
+      const snippetB = snippetDilemma(dilemmaB);
       const entry = { a: snippetA, b: snippetB };
       const next = [
         entry,
@@ -140,8 +147,8 @@ export function PersonaMosaicDilemmaForecastPage() {
         // 6-hex random suffix so back-to-back appends always win a
         // unique id.
         id: `mdf-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-        dilemmaASnippet: dilemmaA.length > 40 ? `${dilemmaA.slice(0, 37)}...` : dilemmaA,
-        dilemmaBSnippet: dilemmaB.length > 40 ? `${dilemmaB.slice(0, 37)}...` : dilemmaB,
+        dilemmaASnippet: snippetDilemma(dilemmaA),
+        dilemmaBSnippet: snippetDilemma(dilemmaB),
         winner: forecast.winner,
         savedAt: new Date().toISOString(),
       };
