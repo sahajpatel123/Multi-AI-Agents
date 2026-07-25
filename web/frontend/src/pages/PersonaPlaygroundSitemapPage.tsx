@@ -5,6 +5,7 @@ import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
 import { PersonaPlaygroundStats } from '../components/PersonaPlaygroundStats';
+import { RandomToolButton } from '../components/RandomToolButton';
 import { PERSONA_PLAYGROUND_SITEMAP } from '../data/personaPlayground';
 import { prefersReducedMotion } from '../lib/motion';
 import '../styles/persona-sitemap-page.css';
@@ -43,6 +44,8 @@ export function PersonaPlaygroundSitemapPage() {
         </section>
 
         <PersonaPlaygroundStats compact />
+
+        <RandomToolButton label="Try a random tool" />
 
         <Reveal as="section" className="psm-grid-wrap" aria-label="All pages">
           <ul className="psm-grid">
