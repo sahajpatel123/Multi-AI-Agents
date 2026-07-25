@@ -30,7 +30,6 @@ import {
   type PersonaMosaicDilemmaForecast,
 } from '../data/personaMosaicDilemmaForecast';
 import { PERSONAS } from '../data/personas';
-import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
 import { prefersReducedMotion } from '../lib/motion';
 import '../styles/persona-mosaic-dilemma-forecast-page.css';
@@ -66,7 +65,6 @@ const SAMPLE_FORECASTS: ReadonlyArray<{ readonly label: string; readonly a: stri
 
 export function PersonaMosaicDilemmaForecastPage() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
   const reduceMotion = prefersReducedMotion();
   const [searchParams] = useSearchParams();
   const initialA = searchParams.get('a') ?? '';
@@ -202,10 +200,9 @@ export function PersonaMosaicDilemmaForecastPage() {
   const onTryInArena = () => {
     if (typeof window === 'undefined' || !dilemmaA.trim() || !dilemmaB.trim()) return;
     const link = `/app?prompt=${encodeURIComponent(`Compare these two dilemma framings: A) ${dilemmaA} B) ${dilemmaB}`)}`;
-    if (isAuthenticated) {
-      navigate(link);
-      return;
-    }
+    // /app is a ProtectedRoute; ProtectedRoute will redirect to
+    // /signin when the user is unauthenticated, so the call site
+    // does not need to branch on isAuthenticated.
     navigate(link);
   };
 
