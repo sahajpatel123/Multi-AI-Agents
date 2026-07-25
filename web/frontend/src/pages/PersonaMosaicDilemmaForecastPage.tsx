@@ -169,22 +169,23 @@ export function PersonaMosaicDilemmaForecastPage() {
     setDecisions([]);
   };
 
+  // Write the shareable URL to the address bar without a navigation,
+  // so the user can copy it and a colleague lands on the same forecast.
+  const writeShareUrl = (a: string, b: string) => {
+    const url = mosaicDilemmaForecastShareUrl(window.location.origin, a, b);
+    window.history.replaceState({}, '', url);
+  };
+
   const onReset = () => {
     setDilemmaA('');
     setDilemmaB('');
-    const url = mosaicDilemmaForecastShareUrl(window.location.origin, '', '');
-    window.history.replaceState({}, '', url);
+    writeShareUrl('', '');
   };
 
   const onLoadSample = (sample: { a: string; b: string }) => {
     setDilemmaA(sample.a);
     setDilemmaB(sample.b);
-    const url = mosaicDilemmaForecastShareUrl(
-      window.location.origin,
-      sample.a,
-      sample.b,
-    );
-    window.history.replaceState({}, '', url);
+    writeShareUrl(sample.a, sample.b);
   };
 
   const onShare = async () => {
