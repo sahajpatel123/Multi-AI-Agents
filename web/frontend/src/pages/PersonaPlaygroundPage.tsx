@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, GitCompare, Search, Sparkles, Star, X } from 'lucide-react';
+import { ArrowRight, GitCompare, Layers, Search, Sparkles, Star, X } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
@@ -391,6 +391,24 @@ export function PersonaPlaygroundPage() {
         <DailyStreak />
 
         <RecentTools />
+
+        <Reveal as="section" className="ppg-categories-cta" aria-label="Browse by category">
+          <div className="ppg-categories-cta__copy">
+            <p className="ppg-categories-cta__eyebrow">
+              <Layers aria-hidden="true" /> Browse by category
+            </p>
+            <h2 className="ppg-categories-cta__title">Want to scan the catalog by shape?</h2>
+            <p className="ppg-categories-cta__lede">
+              Seven categories — Discover, Versus, Council, Roast, Decide, Forecast, Mosaic —
+              each with a tool count and a one-line description. Jump straight to the ones
+              that match your task.
+            </p>
+          </div>
+          <Link to="/persona-playground/categories" className="ppg-categories-cta__btn">
+            Browse all 7 categories
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Reveal>
 
         <Favorites />
 

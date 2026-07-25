@@ -57,6 +57,28 @@
   color: var(--pcat-accent-dim);
 }
 
+.pcat-hero__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(241, 233, 216, 0.06);
+  border: 1px solid var(--pcat-card-border);
+  color: var(--pcat-accent);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 160ms ease, border-color 160ms ease;
+  width: fit-content;
+  margin-bottom: 8px;
+}
+
+.pcat-hero__back:hover {
+  background: rgba(241, 233, 216, 0.12);
+  border-color: var(--pcat-card-border-hover);
+}
+
 .pcat-hero__title {
   font-size: clamp(36px, 5.5vw, 56px);
   line-height: 1.04;

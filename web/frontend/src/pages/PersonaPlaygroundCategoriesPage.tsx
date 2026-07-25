@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Layers } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Layers } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
@@ -24,6 +24,10 @@ export function PersonaPlaygroundCategoriesPage() {
 
       <main className="pcat-main">
         <section className="pcat-hero">
+          <Link to="/persona-playground" className="pcat-hero__back">
+            <ArrowLeft aria-hidden="true" />
+            <span>Back to the hub</span>
+          </Link>
           <p className="pcat-hero__eyebrow">
             <Layers aria-hidden="true" /> Categories
           </p>
