@@ -27,9 +27,11 @@ import {
   mosaicDilemmaForecastShareUrl,
   mosaicDilemmaForecastValid,
   mosaicDilemmaForecastWinTally,
+  PANEL_SIZE,
   readMosaicDilemmaForecastCounter,
   readMosaicDilemmaForecastDecisions,
   type MosaicDilemmaForecastPick,
+  type PersonaMosaicDilemmaForecast,
 } from './personaMosaicDilemmaForecast';
 
 const VALID_PICKS = new Set<MosaicDilemmaForecastPick>(['A', 'B']);
@@ -47,6 +49,22 @@ describe('buildMosaicDilemmaForecast', () => {
     for (const c of f.critiques) {
       expect(known.has(c.personaId)).toBe(true);
     }
+  });
+
+  it('returns false when a critique references an unknown persona', () => {
+    const f = buildMosaicDilemmaForecast('A', 'B');
+    const bogus: PersonaMosaicDilemmaForecast = {
+      ...f,
+      critiques: [
+        ...f.critiques.slice(0, PANEL_SIZE - 1),
+        {
+          personaId: 'not-a-real-persona',
+          pick: 'A',
+          take: 'I have no view on this battle.',
+        },
+      ],
+    };
+    expect(mosaicDilemmaForecastValid(bogus)).toBe(false);
   });
 
   it('every pick is in the closed set', () => {
