@@ -189,11 +189,10 @@ export function PersonaMosaicDilemmaForecastPage() {
   };
 
   const onShare = async () => {
-    if (typeof window === 'undefined' || !forecast) return;
+    if (typeof window === 'undefined' || !forecast || !majority) return;
     const url = buildShareUrl(dilemmaA, dilemmaB);
     const winnerLabel = forecast.winner === 'A' ? 'Dilemma A' : 'Dilemma B';
-    const winnerCount = forecast.winner === 'A' ? forecast.tally.a : forecast.tally.b;
-    const text = `Arena Mosaic Dilemma Forecast: 8 Arena minds picked ${winnerLabel} (${winnerCount} of 8). Same dilemma pair in = same verdict. Run yours:`;
+    const text = `Arena Mosaic Dilemma Forecast: 8 Arena minds picked ${winnerLabel} (${majority.winnerCount} of 8). Same dilemma pair in = same verdict. Run yours:`;
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({ title: 'Arena Persona Mosaic Dilemma Forecast', text, url });
