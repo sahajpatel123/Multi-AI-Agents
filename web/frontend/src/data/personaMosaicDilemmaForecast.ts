@@ -104,6 +104,7 @@ function simpleHash(s: string): number {
 // constant so the share text + majority descriptions stay in
 // sync.
 const PANEL_SIZE = 8;
+export { PANEL_SIZE };
 
 /**
  * Pure — build a Mosaic Dilemma Forecast for two framings. 8
@@ -353,7 +354,7 @@ export function mosaicDilemmaForecastMajorityInfo(
   if (winnerCount >= 5) {
     return {
       label: 'decisive',
-      description: `${winnerCount} of 8 minds — a strong majority.`,
+      description: `${winnerCount} of ${PANEL_SIZE} minds — a strong majority.`,
       winnerCount,
       loserCount,
     };
@@ -361,14 +362,14 @@ export function mosaicDilemmaForecastMajorityInfo(
   if (winnerCount === 4) {
     return {
       label: 'leaning',
-      description: `${winnerCount} of 8 minds — a slight lean. The other side had real support.`,
+      description: `${winnerCount} of ${PANEL_SIZE} minds — a slight lean. The other side had real support.`,
       winnerCount,
       loserCount,
     };
   }
   return {
     label: 'split',
-    description: `Only ${winnerCount} of 8 minds — a genuine split. Run another panel for clarity.`,
+    description: `Only ${winnerCount} of ${PANEL_SIZE} minds — a genuine split. Run another panel for clarity.`,
     winnerCount,
     loserCount,
   };

@@ -24,6 +24,7 @@ import {
   mosaicDilemmaForecastShareUrl,
   mosaicDilemmaForecastValid,
   mosaicDilemmaForecastWinTally,
+  PANEL_SIZE,
   readMosaicDilemmaForecastCounter,
   readMosaicDilemmaForecastDecisions,
   type MosaicDilemmaForecastDecisionEntry,
@@ -193,7 +194,7 @@ export function PersonaMosaicDilemmaForecastPage() {
     if (typeof window === 'undefined' || !forecast || !majority) return;
     const url = buildShareUrl(dilemmaA, dilemmaB);
     const winnerLabel = forecast.winner === 'A' ? 'Dilemma A' : 'Dilemma B';
-    const text = `Arena Mosaic Dilemma Forecast: 8 Arena minds picked ${winnerLabel} (${majority.winnerCount} of 8). Same dilemma pair in = same verdict. Run yours:`;
+    const text = `Arena Mosaic Dilemma Forecast: ${PANEL_SIZE} Arena minds picked ${winnerLabel} (${majority.winnerCount} of ${PANEL_SIZE}). Same dilemma pair in = same verdict. Run yours:`;
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({ title: 'Arena Persona Mosaic Dilemma Forecast', text, url });
