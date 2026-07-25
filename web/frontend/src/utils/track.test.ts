@@ -120,4 +120,24 @@ describe('track', () => {
     await track('e', '', '');
     expect(lastCallBody()).toMatchObject({ persona_id: null, agent_id: null });
   });
+
+  it('falls back to "unknown-session" when localStorage.getItem throws (cycle 384)', async () => {
+    // Private mode, quota exceeded, and enterprise storage-disable
+    // policies all throw inside localStorage. The tracking call MUST
+    // not surface the throw — analytics gaps are fine, UI crashes are
+    // not.
+    const getSpy = vi
+      .spyOn(window.localStorage, 'getItem')
+      .mockImplementation(() => {
+        throw new Error('SecurityError');
+      });
+    try {
+      await expect(track('page_view')).resolves.toBeUndefined();
+      // The fetch call still happened, with the sentinel session id.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(lastCallBody().session_id).toBe('unknown-session');
+    } finally {
+      getSpy.mockRestore();
+    }
+  });
 });

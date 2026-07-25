@@ -1,5 +1,12 @@
 const getCurrentSessionId = (): string => {
-  return localStorage.getItem('arena_session_id') || 'unknown-session';
+  // localStorage can throw in private mode, with quota exceeded, or
+  // under enterprise storage-disable policies. Tracking must never
+  // break the UI, so fall back to the sentinel rather than bubble.
+  try {
+    return localStorage.getItem('arena_session_id') || 'unknown-session';
+  } catch {
+    return 'unknown-session';
+  }
 };
 
 const track = async (
