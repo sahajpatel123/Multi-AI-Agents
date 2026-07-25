@@ -37,6 +37,7 @@ import '../styles/persona-mosaic-dilemma-forecast-page.css';
 const MAX_DILEMMA_CHARS = 200;
 const HISTORY_KEY = 'arena:persona-mosaic-dilemma-forecast:history:v1';
 const HISTORY_LIMIT = 6;
+const COPIED_RESET_MS = 1800;
 
 // Trim a dilemma to a 40-char snippet, with "..." if it was longer.
 // Used twice (history entry + decision log) — extract once so the
@@ -204,7 +205,7 @@ export function PersonaMosaicDilemmaForecastPage() {
     const ok = await copyToClipboard(`${text} ${url}`);
     if (ok) {
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      window.setTimeout(() => setCopied(false), COPIED_RESET_MS);
     }
   };
 
