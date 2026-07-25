@@ -167,16 +167,12 @@ export function PersonaPlaygroundPage() {
   );
 
   const counts = useMemo<Record<CategoryFilter, number>>(() => {
-    const byCategory = {
-      all: PERSONA_PLAYGROUND_ENTRIES.length,
-      discover: 0,
-      versus: 0,
-      council: 0,
-      roast: 0,
-      decide: 0,
-      forecast: 0,
-      mosaic: 0,
-    } as Record<CategoryFilter, number>;
+    // Seed from ALL_CATEGORIES so a future category addition to
+    // the type automatically gets a 0-initialized key, rather than
+    // silently dropping entries from the rendered count.
+    const byCategory = {} as Record<CategoryFilter, number>;
+    byCategory.all = PERSONA_PLAYGROUND_ENTRIES.length;
+    for (const c of ALL_CATEGORIES) byCategory[c] = 0;
     for (const entry of PERSONA_PLAYGROUND_ENTRIES) byCategory[entry.category] += 1;
     return byCategory;
   }, []);
