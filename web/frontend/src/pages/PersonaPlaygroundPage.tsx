@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, GitCompare, Layers, ListOrdered, Search, Sparkles, Star, X } from 'lucide-react';
+import { ArrowRight, GitCompare, Layers, ListOrdered, Map, Search, Sparkles, Star, X } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
@@ -458,6 +458,23 @@ export function PersonaPlaygroundPage() {
           </div>
           <Link to="/persona-playground/formats" className="ppg-formats-cta__btn">
             View by format
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Reveal>
+
+        <Reveal as="section" className="ppg-sitemap-cta" aria-label="Sitemap">
+          <div className="ppg-sitemap-cta__copy">
+            <p className="ppg-sitemap-cta__eyebrow">
+              <Map aria-hidden="true" /> Sitemap
+            </p>
+            <h2 className="ppg-sitemap-cta__title">Want a map of every page?</h2>
+            <p className="ppg-sitemap-cta__lede">
+              The sitemap lists every public persona-playground route with a one-line
+              description — the table of contents for the hub.
+            </p>
+          </div>
+          <Link to="/persona-playground/sitemap" className="ppg-sitemap-cta__btn">
+            View sitemap
             <ArrowRight aria-hidden="true" />
           </Link>
         </Reveal>
