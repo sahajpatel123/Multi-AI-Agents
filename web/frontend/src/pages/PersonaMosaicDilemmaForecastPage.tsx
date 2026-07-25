@@ -220,6 +220,9 @@ export function PersonaMosaicDilemmaForecastPage() {
   const onReplayHistory = (entry: { a: string; b: string }) => {
     setDilemmaA(entry.a);
     setDilemmaB(entry.b);
+    // Keep the address bar in sync with the replayed pair so the
+    // user can share the same URL they just clicked.
+    writeShareUrl(entry.a, entry.b);
   };
 
   const onClearHistory = () => {
