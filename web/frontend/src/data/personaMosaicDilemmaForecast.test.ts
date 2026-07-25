@@ -197,6 +197,16 @@ describe('mosaic dilemma forecast decisions + winTally (localStorage)', () => {
     expect(readMosaicDilemmaForecastDecisions().length).toBe(50);
   });
 
+  it('appendMosaicDilemmaForecastDecision returns [] when localStorage is empty', () => {
+    // Pin the post-append return value contract from cycle 312: the
+    // function returns the validated next array, and an empty log
+    // yields an empty array (not undefined or null).
+    clearMosaicDilemmaForecastDecisions();
+    expect(appendMosaicDilemmaForecastDecision(makeDecision('first', 'A'))).toEqual([
+      makeDecision('first', 'A'),
+    ]);
+  });
+
   it('appendMosaicDilemmaForecastDecision scrubs malformed entries', () => {
     clearMosaicDilemmaForecastDecisions();
     // Simulate a corrupted payload (partial write, schema drift, manual
