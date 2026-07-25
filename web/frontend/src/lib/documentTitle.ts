@@ -45,6 +45,8 @@ export function titleForPath(pathname: string): string {
       return `All tools A–Z · ${BRAND}`;
     case '/persona-playground/whats-new':
       return `What's new · ${BRAND}`;
+    case '/persona-playground/formats':
+      return `By format · ${BRAND}`;
     case '/persona-mosaic':
       return `Persona Mosaic · ${BRAND}`;
     case '/persona-dilemma':

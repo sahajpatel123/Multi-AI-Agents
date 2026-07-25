@@ -31,6 +31,7 @@ describe('titleForPath', () => {
     expect(titleForPath('/persona-playground/favorites')).toBe('Favorites · Arena');
     expect(titleForPath('/persona-playground/index')).toBe('All tools A–Z · Arena');
     expect(titleForPath('/persona-playground/whats-new')).toBe("What's new · Arena");
+    expect(titleForPath('/persona-playground/formats')).toBe('By format · Arena');
   });
 
   it('labels the top-traffic persona tool pages by entry name', () => {
