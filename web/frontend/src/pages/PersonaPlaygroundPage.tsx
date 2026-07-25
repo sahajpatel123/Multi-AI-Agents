@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, GitCompare, Layers, Search, Sparkles, Star, X } from 'lucide-react';
+import { ArrowRight, GitCompare, Layers, ListOrdered, Search, Sparkles, Star, X } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
@@ -406,6 +406,23 @@ export function PersonaPlaygroundPage() {
           </div>
           <Link to="/persona-playground/categories" className="ppg-categories-cta__btn">
             Browse all 7 categories
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Reveal>
+
+        <Reveal as="section" className="ppg-index-cta" aria-label="A-Z index">
+          <div className="ppg-index-cta__copy">
+            <p className="ppg-index-cta__eyebrow">
+              <ListOrdered aria-hidden="true" /> A-Z index
+            </p>
+            <h2 className="ppg-index-cta__title">Want to scan every tool in one list?</h2>
+            <p className="ppg-index-cta__lede">
+              The alphabetical index lists all 27 tools A–Z with format and category, no
+              filtering — just a dense reference surface for power users and crawlers.
+            </p>
+          </div>
+          <Link to="/persona-playground/index" className="ppg-index-cta__btn">
+            View A-Z index
             <ArrowRight aria-hidden="true" />
           </Link>
         </Reveal>
