@@ -533,6 +533,76 @@ export function personaPlaygroundCategoryLabel(category: PersonaPlaygroundCatego
 }
 
 // ---------------------------------------------------------------------------
+// What's new — curated changelog of recent playground improvements.
+// Powers the /persona-playground/whats-new timeline. Pure data, no
+// effects; deterministic for the same input. Add new entries to the
+// top of the list so the freshest items surface first.
+
+export interface WhatsNewEntry {
+  /** YYYY-MM-DD of the cycle that shipped the change. */
+  readonly date: string;
+  /** One-line title of the change. */
+  readonly title: string;
+  /** One-sentence summary of what shipped and why. */
+  readonly summary: string;
+  /** Optional path to the surface the change is on. */
+  readonly link?: string;
+}
+
+export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  {
+    date: '2026-07-25',
+    title: 'Persona Playground hub',
+    summary:
+      'A single front door for all 27 Arena tools — search, filter, daily featured, surprise me, recent tools, recent comparisons, recent shares, favorites, unvisited tools, curated matchups, and a compare CTA.',
+    link: '/persona-playground',
+  },
+  {
+    date: '2026-07-25',
+    title: 'Compare any two tools',
+    summary:
+      '/persona-playground/compare?a=…&b=… renders two tools side-by-side with category dots, name, tagline, blurb, format, and a Swap CTA. Copy the share URL with one click.',
+    link: '/persona-playground/compare',
+  },
+  {
+    date: '2026-07-25',
+    title: 'Curated matchups gallery',
+    summary:
+      'Six pre-baked comparison pairs (Council vs Mosaic Council, Roast vs Mosaic Roast, etc.) with a one-line narrative explaining why the pair is worth comparing.',
+    link: '/persona-playground',
+  },
+  {
+    date: '2026-07-25',
+    title: 'Daily streak with milestone badges',
+    summary:
+      'Track consecutive-day return visits. Hit 3, 7, 14, 30, or 100 days to earn the Curious / Committed / Devoted / Expert / Legend badges — and a glyph-led share text for the moment.',
+    link: '/persona-playground',
+  },
+  {
+    date: '2026-07-25',
+    title: 'Favorites with a dedicated page',
+    summary:
+      'Star any tool from the hub cards; manage the collection on /persona-playground/favorites. Local-only, so your favorites list never leaves your browser.',
+    link: '/persona-playground/favorites',
+  },
+  {
+    date: '2026-07-25',
+    title: 'Categories overview',
+    summary:
+      'Seven categories — Discover, Versus, Council, Roast, Decide, Forecast, Mosaic — each with a tool count and a one-line description. Deep-links to the hub with a ?cat=… filter.',
+    link: '/persona-playground/categories',
+  },
+  {
+    date: '2026-07-25',
+    title: 'A-Z tool index',
+    summary:
+      'Alphabetical reference list of all 27 tools with format and category, grouped by first letter. A dense, no-frills alternative to the visual grid.',
+    link: '/persona-playground/index',
+  },
+];
+
+
+// ---------------------------------------------------------------------------
 // Daily featured tool
 // ---------------------------------------------------------------------------
 // The playground rotates one tool per day to a "Today's pick" slot so the

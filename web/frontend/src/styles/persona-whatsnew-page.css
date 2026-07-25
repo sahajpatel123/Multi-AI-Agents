@@ -1,0 +1,192 @@
+/* Persona Playground what's new page (/persona-playground/whats-new)
+ * Curated changelog of recent playground improvements. Timeline
+ * layout with date on the left, title + summary + optional link
+ * on the right.
+ */
+
+.pwn-page {
+  --pwn-accent: var(--arena-cream, #f1e9d8);
+  --pwn-accent-dim: rgba(241, 233, 216, 0.55);
+  --pwn-card-bg: rgba(255, 255, 255, 0.04);
+  --pwn-card-border: rgba(255, 255, 255, 0.08);
+  --pwn-card-border-hover: rgba(241, 233, 216, 0.45);
+  --pwn-radius: 18px;
+  --pwn-pad: clamp(20px, 4vw, 36px);
+  min-height: 100vh;
+  color: var(--pwn-accent);
+  background:
+    radial-gradient(900px 500px at 0% 0%, rgba(155, 227, 194, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(241, 233, 216, 0.08), transparent 60%),
+    #0b0b10;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 600ms ease, transform 600ms ease;
+}
+
+.pwn-page--enter {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pwn-page { transition: none; transform: none; }
+}
+
+.pwn-main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: clamp(48px, 8vw, 96px) var(--pwn-pad) clamp(64px, 10vw, 120px);
+  display: grid;
+  gap: clamp(32px, 5vw, 56px);
+}
+
+.pwn-hero {
+  display: grid;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.pwn-hero__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(241, 233, 216, 0.06);
+  border: 1px solid var(--pwn-card-border);
+  color: var(--pwn-accent);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 160ms ease, border-color 160ms ease;
+  width: fit-content;
+  margin-bottom: 8px;
+}
+
+.pwn-hero__back:hover {
+  background: rgba(241, 233, 216, 0.12);
+  border-color: var(--pwn-card-border-hover);
+}
+
+.pwn-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+  color: #9be3c2;
+}
+
+.pwn-hero__title {
+  font-size: clamp(32px, 5vw, 48px);
+  line-height: 1.05;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.pwn-hero__title-accent {
+  display: block;
+  background: linear-gradient(120deg, #9be3c2, #8aa3ff 60%, #c8b9ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.pwn-hero__lede {
+  margin: 0;
+  font-size: clamp(15px, 1.3vw, 17px);
+  line-height: 1.6;
+  color: var(--pwn-accent-dim);
+  max-width: 60ch;
+}
+
+.pwn-timeline {
+  display: grid;
+  gap: 16px;
+}
+
+.pwn-timeline__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.pwn-entry {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 20px;
+  padding: 18px;
+  border-radius: var(--pwn-radius);
+  background: var(--pwn-card-bg);
+  border: 1px solid var(--pwn-card-border);
+  align-items: start;
+}
+
+.pwn-entry:hover {
+  border-color: var(--pwn-card-border-hover);
+}
+
+.pwn-entry__date {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--pwn-accent-dim);
+  font-variant-numeric: tabular-nums;
+  padding-top: 4px;
+}
+
+.pwn-entry__body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pwn-entry__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--pwn-accent);
+  line-height: 1.3;
+}
+
+.pwn-entry__summary {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--pwn-accent-dim);
+}
+
+.pwn-entry__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(155, 227, 194, 0.12);
+  border: 1px solid rgba(155, 227, 194, 0.4);
+  color: #9be3c2;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  width: fit-content;
+  transition: background 160ms ease, border-color 160ms ease, gap 160ms ease;
+}
+
+.pwn-entry__link:hover {
+  background: rgba(155, 227, 194, 0.2);
+  border-color: rgba(155, 227, 194, 0.6);
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .pwn-entry {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}

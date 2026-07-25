@@ -26,6 +26,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MATCHUPS,
   PERSONA_PLAYGROUND_ENTRIES,
+  WHATS_NEW,
   buildCompareShareUrl,
   categorySummaries,
   clearFeaturedDismissState,
@@ -650,5 +651,35 @@ describe('unvisitedTools', () => {
     const result = unvisitedTools(['/persona-match'], 100);
     expect(result.length).toBeLessThanOrEqual(100);
     expect(result.length).toBe(PERSONA_PLAYGROUND_ENTRIES.length - 1);
+  });
+});
+
+describe('WHATS_NEW', () => {
+  it('is non-empty', () => {
+    expect(WHATS_NEW.length).toBeGreaterThan(0);
+  });
+
+  it('every entry has a valid date, title, and summary', () => {
+    for (const entry of WHATS_NEW) {
+      expect(entry.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(entry.title).not.toEqual('');
+      expect(entry.summary).not.toEqual('');
+    }
+  });
+
+  it('optional links start with /persona- when present', () => {
+    for (const entry of WHATS_NEW) {
+      if (entry.link !== undefined) {
+        expect(entry.link, `${entry.title} link`).toMatch(/^\/persona-/);
+      }
+    }
+  });
+
+  it('titles are unique', () => {
+    const seen = new Set<string>();
+    for (const entry of WHATS_NEW) {
+      expect(seen.has(entry.title), `duplicate: ${entry.title}`).toBe(false);
+      seen.add(entry.title);
+    }
   });
 });
