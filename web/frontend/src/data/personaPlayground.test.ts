@@ -39,6 +39,7 @@ import {
   readFeaturedDismissState,
   relatedTools,
   relatedToolsDefaultHeading,
+  unvisitedTools,
   writeFeaturedDismissState,
   type PersonaPlaygroundEntry,
 } from './personaPlayground';
@@ -583,5 +584,49 @@ describe('findMatchupByPaths', () => {
 
   it('respects the matchups argument', () => {
     expect(findMatchupByPaths('/persona-council', '/persona-mosaic-council', [])).toBeNull();
+  });
+});
+
+describe('unvisitedTools', () => {
+  it('returns N entries not in the recent set', () => {
+    const recent = ['/persona-match', '/persona-battle'];
+    const result = unvisitedTools(recent, 3);
+    expect(result).toHaveLength(3);
+    for (const entry of result) {
+      expect(recent).not.toContain(entry.path);
+    }
+  });
+
+  it('excludes the given paths', () => {
+    const result = unvisitedTools(['/persona-match'], 5);
+    expect(result.find((e) => e.path === '/persona-match')).toBeUndefined();
+  });
+
+  it('returns [] when count is non-positive', () => {
+    expect(unvisitedTools(['/x'], 0)).toEqual([]);
+    expect(unvisitedTools(['/x'], -1)).toEqual([]);
+  });
+
+  it('returns [] when catalog is empty', () => {
+    expect(unvisitedTools(['/x'], 3, [])).toEqual([]);
+  });
+
+  it('returns [] when recent covers the whole catalog', () => {
+    const allPaths = PERSONA_PLAYGROUND_ENTRIES.map((e) => e.path);
+    expect(unvisitedTools(allPaths, 3)).toEqual([]);
+  });
+
+  it('is deterministic for the same date + recent set', () => {
+    const recent = ['/persona-match', '/persona-battle', '/persona-council'];
+    const date = new Date(2026, 6, 25);
+    const a = unvisitedTools(recent, 4, PERSONA_PLAYGROUND_ENTRIES, date);
+    const b = unvisitedTools(recent, 4, PERSONA_PLAYGROUND_ENTRIES, date);
+    expect(a).toEqual(b);
+  });
+
+  it('caps at the count', () => {
+    const result = unvisitedTools(['/persona-match'], 100);
+    expect(result.length).toBeLessThanOrEqual(100);
+    expect(result.length).toBe(PERSONA_PLAYGROUND_ENTRIES.length - 1);
   });
 });

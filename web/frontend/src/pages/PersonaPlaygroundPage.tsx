@@ -10,6 +10,7 @@ import { RecentComparisons } from '../components/RecentComparisons';
 import { RecentTools } from '../components/RecentTools';
 import { DailyStreak } from '../components/DailyStreak';
 import { SurpriseButton } from '../components/SurpriseButton';
+import { ToolsNotYetTried } from '../components/ToolsNotYetTried';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
@@ -370,6 +371,8 @@ export function PersonaPlaygroundPage() {
         <DailyStreak />
 
         <RecentTools />
+
+        <ToolsNotYetTried />
 
         <SurpriseButton />
 

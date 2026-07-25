@@ -428,11 +428,32 @@ export const MATCHUPS: readonly Matchup[] = [
 ];
 
 /**
- * Look up a curated matchup by its two paths. Order-insensitive so
- * `?a=A&b=B` and `?a=B&b=A` both resolve. Returns null when neither
- * param is missing or when no curated matchup pairs those paths —
- * callers should treat that as "no banner, just the comparison".
+ * Pick N catalog entries that are NOT in the given set of recent
+ * paths. Deterministic for the same inputs — uses day-of-year as a
+ * stable seed so different days surface different unvisited tools.
+ * Returns [] when the catalog is empty, when the recent set covers
+ * the whole catalog, or when the requested count is non-positive.
  */
+export function unvisitedTools(
+  recentPaths: readonly string[],
+  count: number = 3,
+  entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+  date: Date = new Date(),
+): readonly PersonaPlaygroundEntry[] {
+  if (count <= 0 || entries.length === 0) return [];
+  const recent = new Set(recentPaths);
+  const candidates = entries.filter((e) => !recent.has(e.path));
+  if (candidates.length === 0) return [];
+  // Stable seed: day-of-year. Rotates daily so consecutive days
+  // surface different unvisited tools but the same day always picks
+  // the same set.
+  const start = dayOfYear(date) % candidates.length;
+  const out: PersonaPlaygroundEntry[] = [];
+  for (let offset = 0; offset < candidates.length && out.length < count; offset += 1) {
+    out.push(candidates[(start + offset) % candidates.length]);
+  }
+  return out;
+}
 export function findMatchupByPaths(
   a: string | null,
   b: string | null,
