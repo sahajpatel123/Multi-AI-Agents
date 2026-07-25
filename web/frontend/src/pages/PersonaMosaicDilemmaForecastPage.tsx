@@ -134,7 +134,12 @@ export function PersonaMosaicDilemmaForecastPage() {
     }
     if (forecast) {
       const decision: MosaicDilemmaForecastDecisionEntry = {
-        id: `mdf-${Date.now()}`,
+        // Date.now() alone can collide when a user double-clicks the
+        // forecast button in the same millisecond — the dedup-by-id
+        // branch would silently drop the second decision. Append a
+        // 6-hex random suffix so back-to-back appends always win a
+        // unique id.
+        id: `mdf-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
         dilemmaASnippet: dilemmaA.length > 40 ? `${dilemmaA.slice(0, 37)}...` : dilemmaA,
         dilemmaBSnippet: dilemmaB.length > 40 ? `${dilemmaB.slice(0, 37)}...` : dilemmaB,
         winner: forecast.winner,
