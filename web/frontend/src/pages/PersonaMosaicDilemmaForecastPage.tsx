@@ -154,8 +154,9 @@ export function PersonaMosaicDilemmaForecastPage() {
         winner: forecast.winner,
         savedAt: new Date().toISOString(),
       };
-      appendMosaicDilemmaForecastDecision(decision);
-      setDecisions(readMosaicDilemmaForecastDecisions());
+      // appendMosaicDilemmaForecastDecision now returns the validated
+      // post-append array (cycle 312), so we can skip the O(n) re-read.
+      setDecisions(appendMosaicDilemmaForecastDecision(decision));
     }
     const c = incrementMosaicDilemmaForecastCounter();
     setCastCount(c);
