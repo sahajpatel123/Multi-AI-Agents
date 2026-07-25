@@ -39,6 +39,12 @@ const MAX_DILEMMA_CHARS = 200;
 const HISTORY_KEY = 'arena:persona-mosaic-dilemma-forecast:history:v1';
 const HISTORY_LIMIT = 6;
 const COPIED_RESET_MS = 1800;
+const ID_PREFIX = 'mdf-';
+// A user double-click in the same millisecond would produce two
+// identical Date.now() ids; the dedup-by-id branch would silently
+// drop the second decision. The 6-hex random suffix is the
+// minimum that keeps the collision probability under 1 in 16M.
+const ID_RANDOM_HEX_CHARS = 6;
 
 // Trim a dilemma to a 40-char snippet, with "..." if it was longer.
 // Used twice (history entry + decision log) — extract once so the
@@ -142,10 +148,9 @@ export function PersonaMosaicDilemmaForecastPage() {
       const decision: MosaicDilemmaForecastDecisionEntry = {
         // Date.now() alone can collide when a user double-clicks the
         // forecast button in the same millisecond — the dedup-by-id
-        // branch would silently drop the second decision. Append a
-        // 6-hex random suffix so back-to-back appends always win a
-        // unique id.
-        id: `mdf-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+        // branch would silently drop the second decision. The random
+        // suffix ensures back-to-back appends always win a unique id.
+        id: `${ID_PREFIX}${Date.now()}-${Math.random().toString(16).slice(2, 2 + ID_RANDOM_HEX_CHARS)}`,
         dilemmaASnippet: snippetDilemma(dilemmaA),
         dilemmaBSnippet: snippetDilemma(dilemmaB),
         winner: forecast.winner,
