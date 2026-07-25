@@ -193,7 +193,7 @@ export function PersonaMosaicDilemmaForecastPage() {
     );
     const winnerLabel = forecast.winner === 'A' ? 'Dilemma A' : 'Dilemma B';
     const winnerCount = forecast.winner === 'A' ? forecast.tally.a : forecast.tally.b;
-    const text = `Arena Mosaic Dilemma Forecast: 8 Arena minds picked ${winnerLabel} (${winnerCount} of 8). Run yours:`;
+    const text = `Arena Mosaic Dilemma Forecast: 8 Arena minds picked ${winnerLabel} (${winnerCount} of 8). Same dilemma pair in = same verdict. Run yours:`;
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({ title: 'Arena Persona Mosaic Dilemma Forecast', text, url });
