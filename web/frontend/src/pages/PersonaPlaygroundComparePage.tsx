@@ -15,6 +15,7 @@ import {
   personaPlaygroundCategoryLabel,
   type PersonaPlaygroundEntry,
 } from '../data/personaPlayground';
+import { recordRecentComparison } from '../lib/recentComparisons';
 import '../styles/persona-compare-page.css';
 
 const CATEGORY_DOT_COLOR: Record<string, string> = {
@@ -37,6 +38,12 @@ export function PersonaPlaygroundComparePage() {
 
   const pair = useMemo(() => compareEntries(a, b), [a, b]);
   const matchup = useMemo(() => findMatchupByPaths(a, b), [a, b]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!pair || !a || !b) return;
+    recordRecentComparison(window.localStorage, a, b);
+  }, [pair, a, b]);
 
   useEffect(() => {
     const reduceMotion = prefersReducedMotion();

@@ -6,6 +6,7 @@ import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
 import { RelatedTools } from '../components/RelatedTools';
 import { Matchups } from '../components/Matchups';
+import { RecentComparisons } from '../components/RecentComparisons';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
@@ -362,6 +363,8 @@ export function PersonaPlaygroundPage() {
         </Reveal>
 
         <RelatedTools path="/persona-playground" />
+
+        <RecentComparisons />
 
         <Matchups />
 

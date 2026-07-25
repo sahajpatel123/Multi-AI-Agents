@@ -660,6 +660,129 @@
   gap: 10px;
 }
 
+/* recent-comparisons widget */
+.ppg-recent {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: var(--ppg-radius);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ppg-card-border);
+}
+
+.ppg-recent__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ppg-recent__eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-recent__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--ppg-card-border);
+  color: var(--ppg-accent-dim);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.ppg-recent__clear:hover {
+  border-color: var(--ppg-card-border-hover);
+  color: var(--ppg-accent);
+}
+
+.ppg-recent__clear:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-recent__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.ppg-recent__item {
+  min-width: 0;
+}
+
+.ppg-recent__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--ppg-card-bg);
+  border: 1px solid transparent;
+  color: var(--ppg-accent);
+  text-decoration: none;
+  transition: border-color 150ms ease, background 150ms ease;
+  min-width: 0;
+}
+
+.ppg-recent__link:hover {
+  border-color: var(--ppg-card-border-hover);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ppg-recent__link:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-recent__pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ppg-recent__pair > span:first-child,
+.ppg-recent__pair > span:last-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ppg-recent__vs {
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-recent__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ppg-accent-dim);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
 /* filters */
 .ppg-filters {
   display: grid;
