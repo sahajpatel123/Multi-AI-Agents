@@ -146,7 +146,7 @@ export function buildMosaicDilemmaForecast(
       if (!panel.includes(i)) panel.push(i);
     }
   }
-  const critiques: MosaicDilemmaForecastCritique[] = panel.slice(0, 8).map(
+  const critiques: MosaicDilemmaForecastCritique[] = panel.slice(0, PANEL_SIZE).map(
     (personaId, slot) => {
       const pool = PERSONA_TAKES[personaId];
       const pick: MosaicDilemmaForecastPick = pool
