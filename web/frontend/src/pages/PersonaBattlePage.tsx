@@ -7,6 +7,7 @@ import { MotionButton } from '../components/MotionButton';
 import { Reveal } from '../components/Reveal';
 import { Pressable } from '../components/Pressable';
 import { RelatedTools } from '../components/RelatedTools';
+import { useRecordRecentTool } from '../hooks/useRecordRecentTool';
 import MicroLoader from '../components/MicroLoader';
 import {
   PERSONA_BATTLE_PRESETS,
@@ -159,6 +160,7 @@ function VersusCard({
 }
 
 export function PersonaBattlePage() {
+  useRecordRecentTool('/persona-battle');
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const reduceMotion = prefersReducedMotion();

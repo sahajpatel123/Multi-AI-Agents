@@ -21,6 +21,7 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import { RelatedTools } from '../components/RelatedTools';
+import { useRecordRecentTool } from '../hooks/useRecordRecentTool';
 import { PERSONAS } from '../data/personas';
 import {
   appendSavedTeam,
@@ -58,6 +59,7 @@ function pickDefaultFour(): string[] {
 }
 
 export function PersonaMosaicPage() {
+  useRecordRecentTool('/persona-mosaic');
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const reduceMotion = prefersReducedMotion();

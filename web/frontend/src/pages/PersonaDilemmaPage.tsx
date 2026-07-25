@@ -19,6 +19,7 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Pressable } from '../components/Pressable';
 import { RelatedTools } from '../components/RelatedTools';
+import { useRecordRecentTool } from '../hooks/useRecordRecentTool';
 import {
   appendDecision,
   buildDilemma,
@@ -66,6 +67,7 @@ const SAMPLE_DILEMMAS: ReadonlyArray<{ readonly label: string; readonly left: st
 ];
 
 export function PersonaDilemmaPage() {
+  useRecordRecentTool('/persona-dilemma');
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const reduceMotion = prefersReducedMotion();

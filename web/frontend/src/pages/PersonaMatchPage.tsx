@@ -7,6 +7,7 @@ import { MotionButton } from '../components/MotionButton';
 import { Reveal } from '../components/Reveal';
 import { Pressable } from '../components/Pressable';
 import { RelatedTools } from '../components/RelatedTools';
+import { useRecordRecentTool } from '../hooks/useRecordRecentTool';
 import {
   PERSONA_MATCH_QUESTIONS,
   scorePersonaMatch,
@@ -255,6 +256,7 @@ function QuestionCard({
 }
 
 export function PersonaMatchPage() {
+  useRecordRecentTool('/persona-match');
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const reduceMotion = prefersReducedMotion();
