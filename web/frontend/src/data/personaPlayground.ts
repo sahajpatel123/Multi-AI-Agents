@@ -338,8 +338,21 @@ export function compareEntries(
   entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
 ): readonly [PersonaPlaygroundEntry, PersonaPlaygroundEntry] | null {
   if (!a || !b) return null;
-  const entryA = entries.find((e) => e.path === a);
-  const entryB = entries.find((e) => e.path === b);
+  // Single pass — both paths share the lookup, so capture each
+  // match as we go. Avoids a second linear scan. The same path
+  // on both sides is allowed (compare to itself) — when that
+  // happens, both slots point to the same entry.
+  let entryA: PersonaPlaygroundEntry | undefined;
+  let entryB: PersonaPlaygroundEntry | undefined;
+  for (const e of entries) {
+    if (e.path === a) {
+      entryA = e;
+      if (!entryB && a === b) entryB = e;
+    } else if (e.path === b) {
+      entryB = e;
+    }
+    if (entryA && entryB) break;
+  }
   if (!entryA || !entryB) return null;
   return [entryA, entryB];
 }
