@@ -157,6 +157,21 @@ describe('mosaic dilemma forecast decisions + winTally (localStorage)', () => {
     expect(readMosaicDilemmaForecastDecisions().length).toBe(50);
   });
 
+  it('readMosaicDilemmaForecastDecisions caps at 50 even when localStorage has more', () => {
+    clearMosaicDilemmaForecastDecisions();
+    // Seed localStorage with 60 valid entries directly. The read
+    // function should slice to DECISIONS_LIMIT so the on-screen tally
+    // never exceeds the cap before the next append scrubs it.
+    const overCap = Array.from({ length: 60 }, (_, i) =>
+      makeDecision(`d-${i}`, 'A'),
+    );
+    window.localStorage.setItem(
+      'arena:persona-mosaic-dilemma-forecast:decisions:v1',
+      JSON.stringify(overCap),
+    );
+    expect(readMosaicDilemmaForecastDecisions().length).toBe(50);
+  });
+
   it('appendMosaicDilemmaForecastDecision scrubs malformed entries', () => {
     clearMosaicDilemmaForecastDecisions();
     // Simulate a corrupted payload (partial write, schema drift, manual
