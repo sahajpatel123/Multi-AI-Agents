@@ -1,0 +1,330 @@
+/* Persona Playground hub (/persona-playground)
+ * Single hub that surfaces all 27 persona tools with category
+ * filters and a search field. Visual language follows the
+ * existing persona-* page family (dark prism + cream accent).
+ */
+
+.ppg-page {
+  --ppg-accent: var(--arena-cream, #f1e9d8);
+  --ppg-accent-dim: rgba(241, 233, 216, 0.55);
+  --ppg-card-bg: rgba(255, 255, 255, 0.04);
+  --ppg-card-border: rgba(255, 255, 255, 0.08);
+  --ppg-card-border-hover: rgba(241, 233, 216, 0.45);
+  --ppg-radius: 18px;
+  --ppg-pad: clamp(20px, 4vw, 36px);
+  min-height: 100vh;
+  color: var(--ppg-accent);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(241, 233, 216, 0.08), transparent 60%),
+    radial-gradient(900px 500px at 90% 0%, rgba(120, 90, 200, 0.12), transparent 60%),
+    #0b0b10;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 600ms ease, transform 600ms ease;
+}
+
+.ppg-page--enter {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ppg-page {
+    transition: none;
+    transform: none;
+  }
+}
+
+.ppg-main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(48px, 8vw, 96px) var(--ppg-pad) clamp(64px, 10vw, 120px);
+  display: grid;
+  gap: clamp(32px, 5vw, 56px);
+}
+
+/* hero */
+.ppg-hero {
+  display: grid;
+  gap: 16px;
+  max-width: 760px;
+}
+
+.ppg-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-hero__title {
+  font-size: clamp(38px, 6vw, 64px);
+  line-height: 1.04;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.ppg-hero__title-accent {
+  display: block;
+  background: linear-gradient(120deg, var(--ppg-accent), #c8b9ff 60%, #8aa3ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.ppg-hero__lede {
+  margin: 0;
+  font-size: clamp(16px, 1.4vw, 18px);
+  line-height: 1.6;
+  color: var(--ppg-accent-dim);
+  max-width: 62ch;
+}
+
+.ppg-hero__search {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ppg-hero__search-label {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11px;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 999px;
+  background: var(--ppg-card-bg);
+  border: 1px solid var(--ppg-card-border);
+  transition: border-color 200ms ease, background 200ms ease;
+}
+
+.ppg-search:focus-within {
+  border-color: var(--ppg-card-border-hover);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.ppg-search__icon {
+  width: 18px;
+  height: 18px;
+  color: var(--ppg-accent-dim);
+  flex: 0 0 auto;
+}
+
+.ppg-search__input {
+  flex: 1 1 auto;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--ppg-accent);
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.ppg-search__input::placeholder {
+  color: var(--ppg-accent-dim);
+}
+
+/* filters */
+.ppg-filters {
+  display: grid;
+  gap: 12px;
+}
+
+.ppg-filters__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ppg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--ppg-card-bg);
+  border: 1px solid var(--ppg-card-border);
+  color: var(--ppg-accent);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease;
+  font-family: inherit;
+}
+
+.ppg-chip small {
+  font-size: 11px;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-chip:hover {
+  border-color: var(--ppg-card-border-hover);
+}
+
+.ppg-chip--active {
+  background: var(--ppg-accent);
+  color: #0b0b10;
+  border-color: var(--ppg-accent);
+}
+
+.ppg-chip--active small {
+  color: rgba(11, 11, 16, 0.65);
+}
+
+.ppg-filters__count {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ppg-accent-dim);
+}
+
+/* grid */
+.ppg-grid-wrap {
+  display: grid;
+  gap: 24px;
+}
+
+.ppg-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.ppg-card {
+  display: grid;
+  gap: 10px;
+  padding: 22px;
+  border-radius: var(--ppg-radius);
+  background: var(--ppg-card-bg);
+  border: 1px solid var(--ppg-card-border);
+  transition: border-color 200ms ease, transform 200ms ease, background 200ms ease;
+}
+
+.ppg-card:hover {
+  border-color: var(--ppg-card-border-hover);
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-2px);
+}
+
+.ppg-card__tag {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11px;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-card__name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.ppg-card__tagline {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ppg-accent);
+  line-height: 1.35;
+}
+
+.ppg-card__blurb {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-card__format {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.ppg-card__link,
+.ppg-card__browse {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ppg-accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 150ms ease, gap 150ms ease;
+}
+
+.ppg-card__link {
+  border-color: var(--ppg-card-border-hover);
+  padding-bottom: 2px;
+}
+
+.ppg-card__link:hover {
+  gap: 10px;
+}
+
+.ppg-card__browse {
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-card__browse:hover {
+  border-color: var(--ppg-accent-dim);
+  color: var(--ppg-accent);
+}
+
+/* empty */
+.ppg-empty {
+  display: grid;
+  gap: 12px;
+  padding: 32px;
+  border-radius: var(--ppg-radius);
+  background: var(--ppg-card-bg);
+  border: 1px dashed var(--ppg-card-border);
+  color: var(--ppg-accent-dim);
+  text-align: center;
+}
+
+.ppg-empty p {
+  margin: 0;
+  font-size: 15px;
+}
+
+.ppg-empty__reset {
+  justify-self: center;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: var(--ppg-accent);
+  color: #0b0b10;
+  border: 0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ppg-empty__reset:hover {
+  filter: brightness(1.05);
+}

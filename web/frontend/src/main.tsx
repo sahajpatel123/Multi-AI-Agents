@@ -60,6 +60,9 @@ const PersonasPage = lazy(() =>
 const PersonaMatchPage = lazy(() =>
   import('./pages/PersonaMatchPage').then((m) => ({ default: m.PersonaMatchPage })),
 )
+const PersonaPlaygroundPage = lazy(() =>
+  import('./pages/PersonaPlaygroundPage').then((m) => ({ default: m.PersonaPlaygroundPage })),
+)
 const PersonaBattlePage = lazy(() =>
   import('./pages/PersonaBattlePage').then((m) => ({ default: m.PersonaBattlePage })),
 )
@@ -287,6 +290,7 @@ if (!rootElement) {
                   <Route path="/terms" element={<TermsPage />} />
                   <Route path="/privacy" element={<PrivacyPage />} />
                   <Route path="/personas" element={<PersonasPage />} />
+                  <Route path="/persona-playground" element={<PersonaPlaygroundPage />} />
                   <Route path="/persona-match" element={<PersonaMatchPage />} />
                   <Route path="/persona-battle" element={<PersonaBattlePage />} />
                   <Route path="/persona-wheel" element={<PersonaWheelPage />} />
