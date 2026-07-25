@@ -44,9 +44,10 @@ test.describe('Persona Mosaic Dilemma Forecast page (mocked)', () => {
   test('8-mind panel renders after both inputs are filled', async ({ page }) => {
     await page.goto('/persona-mosaic-dilemma-forecast');
 
-    // Type two contrasting dilemma framings.
-    await page.getByLabel('Dilemma A').fill('Should I take the safe job or the risky startup?');
-    await page.getByLabel('Dilemma B').fill('Should I stay in my current role or pursue a new opportunity?');
+    // Type two contrasting dilemma framings (imperative A vs B form
+    // matches the cycle-297 sample shape).
+    await page.getByLabel('Dilemma A').fill('Take the safe job — predictable, well-paid, low upside.');
+    await page.getByLabel('Dilemma B').fill('Take the risky startup — uncertain, low-paid, high upside.');
 
     // Click "Forecast the sharper".
     await page.getByRole('button', { name: /forecast the sharper/i }).click();
