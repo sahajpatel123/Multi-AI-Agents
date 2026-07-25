@@ -323,6 +323,25 @@ export function relatedToolsDefaultHeading(
   return `More ${label.toLowerCase()} tools`;
 }
 
+/**
+ * Look up two entries by path for the compare page. Returns
+ * [entryA, entryB] when both paths are valid catalog paths (paths may
+ * match — comparing a tool to itself is allowed). Returns null when
+ * either path is missing or invalid so the page can render an empty
+ * state. Deterministic.
+ */
+export function compareEntries(
+  a: string | null,
+  b: string | null,
+  entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+): readonly [PersonaPlaygroundEntry, PersonaPlaygroundEntry] | null {
+  if (!a || !b) return null;
+  const entryA = entries.find((e) => e.path === a);
+  const entryB = entries.find((e) => e.path === b);
+  if (!entryA || !entryB) return null;
+  return [entryA, entryB];
+}
+
 export function personaPlaygroundCategoryLabel(category: PersonaPlaygroundCategory): string {
   switch (category) {
     case 'discover':
@@ -378,8 +397,13 @@ export function formatLocalDate(date: Date): string {
 export function dayOfYear(date: Date): number {
   const start = new Date(date.getFullYear(), 0, 1);
   const diff = date.getTime() - start.getTime();
-  return Math.floor(diff / 86_400_000) + 1;
+  return Math.floor(diff / MS_PER_DAY) + 1;
 }
+
+// Milliseconds in a 24-hour day. Used to compute day-of-year from
+// the millisecond delta since Jan 1. Hoisted as a constant so the
+// unit is named where the math is.
+const MS_PER_DAY = 86_400_000;
 
 /**
  * Deterministic pick from the catalog for the given date. Same day →
