@@ -98,4 +98,20 @@ describe('vercel.json security headers', () => {
     const csp = headerValue(rule, 'Content-Security-Policy');
     expect(csp).toContain("script-src-attr 'none'");
   });
+
+  it('closes the Google Fonts gap and locks down worker/media (cycle 379)', () => {
+    // index.html preconnects + stylesheet-links fonts.googleapis.com /
+    // fonts.gstatic.com. Before this cycle, neither was in CSP, so the
+    // browser silently dropped the stylesheet AND the font files in
+    // production — pages rendered with the Georgia fallback only.
+    // Now whitelisted explicitly so the design-intent Source Serif 4
+    // actually loads.
+    const csp = headerValue(rule, 'Content-Security-Policy');
+    expect(csp).toContain('font-src');
+    expect(csp).toContain('https://fonts.gstatic.com');
+    expect(csp).toContain('https://fonts.googleapis.com');
+    // Worker / media are unused — lock both down to 'none'.
+    expect(csp).toContain("worker-src 'none'");
+    expect(csp).toContain("media-src 'none'");
+  });
 });
