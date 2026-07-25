@@ -44,23 +44,23 @@ function findPersona(id: string) {
 const SAMPLE_FORECASTS: ReadonlyArray<{ readonly label: string; readonly a: string; readonly b: string }> = [
   {
     label: 'Career paths',
-    a: 'Should I take the safe job or the risky startup?',
-    b: 'Should I stay in my current role or pursue a new opportunity?',
+    a: 'Take the safe job — predictable, well-paid, low upside.',
+    b: 'Take the risky startup — uncertain, low-paid, high upside.',
   },
   {
     label: 'Communication',
-    a: 'Should I tell them the hard truth or let them figure it out?',
-    b: 'Should I share this feedback publicly or keep it private?',
+    a: 'Tell them the hard truth now, even if it stings.',
+    b: 'Let them figure it out — they will, on their own timeline.',
   },
   {
     label: 'Strategic moves',
-    a: 'Should we specialize or stay generalist?',
-    b: 'Should we expand into the new market or focus on our core?',
+    a: 'Specialize — go deep and own the niche.',
+    b: 'Stay generalist — keep options and adapt fast.',
   },
   {
     label: 'Personal trade-offs',
-    a: 'Should I optimize for more money or more time?',
-    b: 'Should I invest now or wait for a better opportunity?',
+    a: 'Optimize for more money now, more flexibility later.',
+    b: 'Optimize for more time now, more money later.',
   },
 ];
 
