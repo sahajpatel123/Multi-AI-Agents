@@ -12,6 +12,7 @@ import { DailyStreak } from '../components/DailyStreak';
 import { SurpriseButton } from '../components/SurpriseButton';
 import { ToolsNotYetTried } from '../components/ToolsNotYetTried';
 import { PersonaPlaygroundStats } from '../components/PersonaPlaygroundStats';
+import { RandomToolButton } from '../components/RandomToolButton';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -487,6 +488,8 @@ export function PersonaPlaygroundPage() {
         <ToolsNotYetTried />
 
         <SurpriseButton />
+
+        <RandomToolButton excludePaths={featured ? [featured.path] : []} />
 
         <RecentComparisons />
 

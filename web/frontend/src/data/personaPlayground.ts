@@ -723,6 +723,31 @@ export function pickSurpriseTool(
 }
 
 /**
+ * Pick a random tool that's NOT in the given exclude set. Different
+ * from pickFeaturedOfDay (one specific tool per day) and
+ * pickSurpriseTool (one non-featured tool per day) — this is a
+ * "shuffle me" picker that can exclude multiple paths.
+ *
+ * Uses dayOfYear + a salt as a stable seed so the same day returns
+ * the same pick for the same exclude set, but consecutive days
+ * surface different tools. Returns null when catalog is empty or
+ * when the only entries are all excluded.
+ */
+export function pickRandomTool(
+  excludePaths: readonly string[] = [],
+  salt: number = 0,
+  date: Date = new Date(),
+  entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+): PersonaPlaygroundEntry | null {
+  if (entries.length === 0) return null;
+  const excluded = new Set(excludePaths);
+  const candidates = entries.filter((e) => !excluded.has(e.path));
+  if (candidates.length === 0) return null;
+  const idx = (dayOfYear(date) + salt) % candidates.length;
+  return candidates[idx];
+}
+
+/**
  * True when the dismiss state is still valid for the given date.
  * A state is "valid" when it was dismissed on the same calendar day as
  * `today` — the next day the banner is allowed to show again.

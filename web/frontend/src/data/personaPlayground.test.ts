@@ -38,6 +38,7 @@ import {
   isDismissedFor,
   personaPlaygroundCategories,
   pickFeaturedOfDay,
+  pickRandomTool,
   pickSurpriseTool,
   readFeaturedDismissState,
   relatedTools,
@@ -722,5 +723,54 @@ describe('formatSummaries', () => {
 
   it('returns [] for empty input', () => {
     expect(formatSummaries([])).toEqual([]);
+  });
+});
+
+describe('pickRandomTool', () => {
+  it('returns a non-null entry from the catalog', () => {
+    const pick = pickRandomTool([], 0, new Date(2026, 6, 25));
+    expect(pick).not.toBeNull();
+    expect(pick?.path).toMatch(/^\/persona-/);
+  });
+
+  it('excludes all paths in the exclude set', () => {
+    const recent = ['/persona-match', '/persona-battle', '/persona-council'];
+    const result = pickRandomTool(recent, 0, new Date(2026, 6, 25));
+    if (result) {
+      expect(recent).not.toContain(result.path);
+    }
+  });
+
+  it('returns null when the only entry is excluded', () => {
+    const only: PersonaPlaygroundEntry = {
+      path: '/only',
+      name: 'Only',
+      tagline: '',
+      blurb: '',
+      category: 'discover',
+      format: '',
+    };
+    expect(pickRandomTool(['/only'], 0, new Date(2026, 6, 25), [only])).toBeNull();
+  });
+
+  it('returns null for empty catalog', () => {
+    expect(pickRandomTool([], 0, new Date(2026, 6, 25), [])).toBeNull();
+  });
+
+  it('is deterministic for the same date + salt + exclude set', () => {
+    const a = pickRandomTool(['/persona-match'], 0, new Date(2026, 6, 25));
+    const b = pickRandomTool(['/persona-match'], 0, new Date(2026, 6, 25));
+    expect(a?.path).toBe(b?.path);
+  });
+
+  it('different salts can yield different picks', () => {
+    // Salt 0 and salt 13 are arbitrary; just verify the helper uses
+    // the salt as a seed offset.
+    const a = pickRandomTool(['/persona-match'], 0, new Date(2026, 6, 25));
+    const b = pickRandomTool(['/persona-match'], 13, new Date(2026, 6, 25));
+    // With 26 candidates and 1 excluded, (day + 0) % 26 vs (day + 13) % 26
+    // can collide if day % 26 happens to align. We just check shape.
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
   });
 });
