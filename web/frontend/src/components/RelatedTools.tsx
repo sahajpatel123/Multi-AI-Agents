@@ -59,12 +59,14 @@ function RelatedToolCard({ entry }: { entry: PersonaPlaygroundEntry }) {
       className="ppg-related__card"
       style={{ '--ppg-related-dot': dotColor } as CSSProperties}
     >
-      <p className="ppg-related__tag">{personaPlaygroundCategoryLabel(entry.category)}</p>
-      <h3 className="ppg-related__name">{entry.name}</h3>
-      <p className="ppg-related__tagline">{entry.tagline}</p>
       <Link to={entry.path} className="ppg-related__link">
-        Try it
-        <ArrowRight aria-hidden="true" />
+        <p className="ppg-related__tag">{personaPlaygroundCategoryLabel(entry.category)}</p>
+        <h3 className="ppg-related__name">{entry.name}</h3>
+        <p className="ppg-related__tagline">{entry.tagline}</p>
+        <span className="ppg-related__cta">
+          Try it
+          <ArrowRight aria-hidden="true" />
+        </span>
       </Link>
     </li>
   );
