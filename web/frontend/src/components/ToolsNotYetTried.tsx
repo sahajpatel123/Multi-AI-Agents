@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Compass } from 'lucide-react';
 import {
+  PERSONA_PLAYGROUND_ENTRIES,
   unvisitedTools,
   type PersonaPlaygroundEntry,
 } from '../data/personaPlayground';
@@ -31,10 +32,10 @@ export function ToolsNotYetTried({
     setRecent(readRecentTools(window.localStorage));
   }, []);
 
-  const visible = unvisitedTools(
-    recent.map((r) => r.path),
-    count,
-  );
+  const recentPaths = recent.map((r) => r.path);
+  const visible = unvisitedTools(recentPaths, count);
+  const triedCount = recentPaths.length;
+  const totalCount = PERSONA_PLAYGROUND_ENTRIES.length;
 
   if (visible.length === 0) return null;
 
@@ -43,6 +44,9 @@ export function ToolsNotYetTried({
       <header className="ppg-unvisited__head">
         <p className="ppg-unvisited__eyebrow">
           <Compass aria-hidden="true" /> {heading}
+        </p>
+        <p className="ppg-unvisited__count" aria-label="Exploration progress">
+          {triedCount} of {totalCount} tried
         </p>
       </header>
       <ul className="ppg-unvisited__list">
@@ -59,6 +63,7 @@ function UnvisitedCard({ entry }: { entry: PersonaPlaygroundEntry }) {
     <li className="ppg-unvisited__item">
       <Link to={entry.path} className="ppg-unvisited__link">
         <span className="ppg-unvisited__name">{entry.name}</span>
+        <span className="ppg-unvisited__format">{entry.format}</span>
         <span className="ppg-unvisited__tagline">{entry.tagline}</span>
       </Link>
     </li>
