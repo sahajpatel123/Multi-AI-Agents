@@ -238,6 +238,17 @@ describe('mosaic dilemma forecast decisions + winTally (localStorage)', () => {
     expect(readMosaicDilemmaForecastDecisions().length).toBe(50);
   });
 
+  it('appendMosaicDilemmaForecastDecision returns the new array when localStorage is empty', () => {
+    clearMosaicDilemmaForecastDecisions();
+    const next = appendMosaicDilemmaForecastDecision(makeDecision('first', 'A'));
+    // The cycle-312 contract: append returns the validated next array
+    // so the page can skip a second localStorage read. With a fresh
+    // log, that array is exactly the one entry.
+    expect(next).toHaveLength(1);
+    expect(next[0]?.id).toBe('first');
+    expect(next[0]?.winner).toBe('A');
+  });
+
   it('appendMosaicDilemmaForecastDecision returns [] when localStorage is empty', () => {
     // Pin the post-append return value contract from cycle 312: the
     // function returns the validated next array, and an empty log
