@@ -1,0 +1,207 @@
+/* Persona Playground sitemap page (/persona-playground/sitemap)
+ * Table of contents for every public persona-playground route. Each
+ * card has a colored top-stripe that matches the destination
+ * surface's accent.
+ */
+
+.psm-page {
+  --psm-accent: var(--arena-cream, #f1e9d8);
+  --psm-accent-dim: rgba(241, 233, 216, 0.55);
+  --psm-card-bg: rgba(255, 255, 255, 0.04);
+  --psm-card-border: rgba(255, 255, 255, 0.08);
+  --psm-card-border-hover: rgba(241, 233, 216, 0.45);
+  --psm-radius: 18px;
+  --psm-pad: clamp(20px, 4vw, 36px);
+  min-height: 100vh;
+  color: var(--psm-accent);
+  background:
+    radial-gradient(900px 500px at 0% 0%, rgba(200, 185, 255, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(241, 233, 216, 0.08), transparent 60%),
+    #0b0b10;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 600ms ease, transform 600ms ease;
+}
+
+.psm-page--enter {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .psm-page { transition: none; transform: none; }
+}
+
+.psm-main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(48px, 8vw, 96px) var(--psm-pad) clamp(64px, 10vw, 120px);
+  display: grid;
+  gap: clamp(32px, 5vw, 56px);
+}
+
+.psm-hero {
+  display: grid;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.psm-hero__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(241, 233, 216, 0.06);
+  border: 1px solid var(--psm-card-border);
+  color: var(--psm-accent);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 160ms ease, border-color 160ms ease;
+  width: fit-content;
+  margin-bottom: 8px;
+}
+
+.psm-hero__back:hover {
+  background: rgba(241, 233, 216, 0.12);
+  border-color: var(--psm-card-border-hover);
+}
+
+.psm-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+  color: var(--psm-accent-dim);
+}
+
+.psm-hero__title {
+  font-size: clamp(36px, 5.5vw, 56px);
+  line-height: 1.04;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.psm-hero__title-accent {
+  display: block;
+  background: linear-gradient(120deg, var(--psm-accent), #c8b9ff 60%, #8aa3ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.psm-hero__lede {
+  margin: 0;
+  font-size: clamp(15px, 1.3vw, 17px);
+  line-height: 1.6;
+  color: var(--psm-accent-dim);
+  max-width: 60ch;
+}
+
+.psm-grid-wrap {
+  display: grid;
+  gap: 14px;
+}
+
+.psm-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.psm-card {
+  min-width: 0;
+}
+
+.psm-card__link {
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: stretch;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--psm-card-bg);
+  border: 1px solid var(--psm-card-border);
+  color: var(--psm-accent);
+  text-decoration: none;
+  transition: border-color 180ms ease, transform 180ms ease, background 180ms ease, gap 180ms ease;
+  min-width: 0;
+}
+
+.psm-card__link:hover {
+  border-color: var(--psm-card-border-hover);
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+  gap: 18px;
+}
+
+.psm-card__link:focus-visible {
+  outline: 2px solid var(--psm-accent);
+  outline-offset: 2px;
+}
+
+.psm-card__stripe {
+  background: var(--psm-accent, var(--psm-accent-dim));
+  border-radius: 2px;
+  width: 4px;
+  align-self: stretch;
+  opacity: 0.7;
+  transition: opacity 180ms ease;
+}
+
+.psm-card__link:hover .psm-card__stripe {
+  opacity: 1;
+}
+
+.psm-card__body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.psm-card__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--psm-accent);
+  line-height: 1.2;
+}
+
+.psm-card__path {
+  margin: 0;
+  font-size: 11px;
+  color: var(--psm-accent-dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.psm-card__desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--psm-accent-dim);
+}
+
+.psm-card__arrow {
+  width: 16px;
+  height: 16px;
+  color: var(--psm-accent-dim);
+  align-self: center;
+  flex: 0 0 auto;
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+.psm-card__link:hover .psm-card__arrow {
+  color: var(--psm-accent);
+  transform: translateX(2px);
+}
