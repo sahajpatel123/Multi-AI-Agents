@@ -24,6 +24,20 @@ describe('titleForPath', () => {
     expect(titleForPath('/personas')).toBe('Personas · Arena');
   });
 
+  it('labels the persona playground hub and its deep-link pages', () => {
+    expect(titleForPath('/persona-playground')).toBe('Persona Playground · Arena');
+    expect(titleForPath('/persona-playground/compare')).toBe('Compare tools · Arena');
+    expect(titleForPath('/persona-playground/categories')).toBe('Categories · Arena');
+    expect(titleForPath('/persona-playground/favorites')).toBe('Favorites · Arena');
+    expect(titleForPath('/persona-playground/index')).toBe('All tools A–Z · Arena');
+  });
+
+  it('still labels unknown playground paths as not found', () => {
+    // Typos under the playground prefix must NOT be silently swallowed
+    // by a prefix wildcard — NotFoundPage needs the honest label.
+    expect(titleForPath('/persona-playground/unknown')).toBe('Not found · Arena');
+  });
+
   it('handles rooms, share, trailing slashes, and unknown routes', () => {
     expect(titleForPath('/room/abc')).toBe('Room · Arena');
     expect(titleForPath('/share')).toBe('Shared take · Arena');

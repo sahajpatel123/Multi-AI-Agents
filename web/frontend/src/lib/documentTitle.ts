@@ -33,6 +33,16 @@ export function titleForPath(pathname: string): string {
       return `Watchlist · ${BRAND}`;
     case '/personas':
       return `Personas · ${BRAND}`;
+    case '/persona-playground':
+      return `Persona Playground · ${BRAND}`;
+    case '/persona-playground/compare':
+      return `Compare tools · ${BRAND}`;
+    case '/persona-playground/categories':
+      return `Categories · ${BRAND}`;
+    case '/persona-playground/favorites':
+      return `Favorites · ${BRAND}`;
+    case '/persona-playground/index':
+      return `All tools A–Z · ${BRAND}`;
     case '/pricing':
       return `Pricing · ${BRAND}`;
     case '/product':
