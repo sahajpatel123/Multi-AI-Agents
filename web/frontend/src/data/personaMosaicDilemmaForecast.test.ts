@@ -255,6 +255,13 @@ describe('mosaicDilemmaForecastMajorityInfo', () => {
     expect(info.label).toBe('decisive');
   });
 
+  it('returns decisive for the max 8/0', () => {
+    const info = mosaicDilemmaForecastMajorityInfo({ a: 8, b: 0 }, 'A');
+    expect(info.label).toBe('decisive');
+    expect(info.winnerCount).toBe(8);
+    expect(info.loserCount).toBe(0);
+  });
+
   it('returns leaning for 4/8', () => {
     const info = mosaicDilemmaForecastMajorityInfo({ a: 4, b: 4 }, 'A');
     expect(info.label).toBe('leaning');
