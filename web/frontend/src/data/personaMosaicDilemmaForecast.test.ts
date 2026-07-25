@@ -157,6 +157,24 @@ describe('mosaic dilemma forecast decisions + winTally (localStorage)', () => {
     expect(readMosaicDilemmaForecastDecisions().length).toBe(50);
   });
 
+  it('appendMosaicDilemmaForecastDecision scrubs malformed entries', () => {
+    clearMosaicDilemmaForecastDecisions();
+    // Simulate a corrupted payload (partial write, schema drift, manual
+    // edit): a string passed where an entry should be, an entry missing
+    // the winner field, and an entry with an invalid winner value.
+    const corrupted = [
+      'not-an-object',
+      { id: 'valid-1', dilemmaASnippet: 'A', dilemmaBSnippet: 'B', winner: 'A', savedAt: '' },
+      { id: 'no-winner', dilemmaASnippet: 'A', dilemmaBSnippet: 'B', savedAt: '' },
+      { id: 'bad-winner', dilemmaASnippet: 'A', dilemmaBSnippet: 'B', winner: 'Z', savedAt: '' },
+    ];
+    window.localStorage.setItem('arena:persona-mosaic-dilemma-forecast:decisions:v1', JSON.stringify(corrupted));
+    appendMosaicDilemmaForecastDecision(makeDecision('new', 'B'));
+    const result = readMosaicDilemmaForecastDecisions();
+    // Only the valid entry + the new one survive.
+    expect(result.map((e) => e.id).sort()).toEqual(['new', 'valid-1']);
+  });
+
   it('clearMosaicDilemmaForecastDecisions empties storage', () => {
     appendMosaicDilemmaForecastDecision(makeDecision('x', 'A'));
     clearMosaicDilemmaForecastDecisions();
