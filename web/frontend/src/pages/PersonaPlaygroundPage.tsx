@@ -427,6 +427,23 @@ export function PersonaPlaygroundPage() {
           </Link>
         </Reveal>
 
+        <Reveal as="section" className="ppg-whatsnew-cta" aria-label="What's new">
+          <div className="ppg-whatsnew-cta__copy">
+            <p className="ppg-whatsnew-cta__eyebrow">
+              <Sparkles aria-hidden="true" /> What's new
+            </p>
+            <h2 className="ppg-whatsnew-cta__title">Haven't visited in a while?</h2>
+            <p className="ppg-whatsnew-cta__lede">
+              The playground just shipped a curated changelog — hub, compare, matchups,
+              streak, favorites, categories, A-Z index. Catch up on what you've missed.
+            </p>
+          </div>
+          <Link to="/persona-playground/whats-new" className="ppg-whatsnew-cta__btn">
+            See what's new
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Reveal>
+
         <Favorites />
 
         <ToolsNotYetTried />
