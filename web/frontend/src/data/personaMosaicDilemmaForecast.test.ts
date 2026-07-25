@@ -157,6 +157,31 @@ describe('mosaic dilemma forecast decisions + winTally (localStorage)', () => {
     expect(readMosaicDilemmaForecastDecisions().length).toBe(50);
   });
 
+  it('appendMosaicDilemmaForecastDecision dedupes within existing entries', () => {
+    clearMosaicDilemmaForecastDecisions();
+    // Seed with two entries that share the same id (legacy duplicate
+    // from a partial write or external edit). The Set-based dedup
+    // in cycle 319 should collapse them so the read returns a single
+    // entry per id.
+    const dupes = [
+      makeDecision('shared', 'A'),
+      makeDecision('shared', 'B'),
+      makeDecision('unique', 'A'),
+    ];
+    window.localStorage.setItem(
+      'arena:persona-mosaic-dilemma-forecast:decisions:v1',
+      JSON.stringify(dupes),
+    );
+    appendMosaicDilemmaForecastDecision(makeDecision('fresh', 'A'));
+    const result = readMosaicDilemmaForecastDecisions();
+    const ids = result.map((e) => e.id);
+    expect(ids).toContain('fresh');
+    expect(ids).toContain('shared');
+    expect(ids).toContain('unique');
+    // The 'shared' duplicate should be collapsed (only the first wins).
+    expect(result.filter((e) => e.id === 'shared').length).toBe(1);
+  });
+
   it('readMosaicDilemmaForecastDecisions caps at 50 even when localStorage has more', () => {
     clearMosaicDilemmaForecastDecisions();
     // Seed localStorage with 60 valid entries directly. The read
