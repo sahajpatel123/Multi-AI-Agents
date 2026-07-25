@@ -7,6 +7,7 @@ import { Reveal } from '../components/Reveal';
 import { RelatedTools } from '../components/RelatedTools';
 import { Matchups } from '../components/Matchups';
 import { RecentComparisons } from '../components/RecentComparisons';
+import { RecentTools } from '../components/RecentTools';
 import { SurpriseButton } from '../components/SurpriseButton';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
@@ -364,6 +365,8 @@ export function PersonaPlaygroundPage() {
         </Reveal>
 
         <RelatedTools path="/persona-playground" />
+
+        <RecentTools />
 
         <SurpriseButton />
 
