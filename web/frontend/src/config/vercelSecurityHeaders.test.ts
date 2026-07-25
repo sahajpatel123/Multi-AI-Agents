@@ -89,4 +89,13 @@ describe('vercel.json security headers', () => {
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("manifest-src 'self'");
   });
+
+  it('disables inline event-handler attributes (cycle 378)', () => {
+    // React uses event delegation via the root listener, so onClick={…}
+    // and friends compile to delegation handlers — never inline
+    // onclick="…". Disabling script-src-attr closes the inline-handler
+    // injection vector without breaking React.
+    const csp = headerValue(rule, 'Content-Security-Policy');
+    expect(csp).toContain("script-src-attr 'none'");
+  });
 });
