@@ -47,6 +47,8 @@ export function titleForPath(pathname: string): string {
       return `What's new · ${BRAND}`;
     case '/persona-playground/formats':
       return `By format · ${BRAND}`;
+    case '/persona-playground/sitemap':
+      return `Sitemap · ${BRAND}`;
     case '/persona-mosaic':
       return `Persona Mosaic · ${BRAND}`;
     case '/persona-dilemma':
@@ -57,6 +59,50 @@ export function titleForPath(pathname: string): string {
       return `Persona Council · ${BRAND}`;
     case '/persona-battle':
       return `Persona Battle · ${BRAND}`;
+    case '/persona-wheel':
+      return `Persona Wheel · ${BRAND}`;
+    case '/persona-trivia':
+      return `Persona Trivia · ${BRAND}`;
+    case '/persona-speed':
+      return `Persona Speed · ${BRAND}`;
+    case '/persona-challenge':
+      return `Persona Challenge · ${BRAND}`;
+    case '/persona-library':
+      return `Persona Library · ${BRAND}`;
+    case '/persona-confessional':
+      return `Persona Confessional · ${BRAND}`;
+    case '/persona-duel':
+      return `Persona Duel · ${BRAND}`;
+    case '/persona-echo':
+      return `Persona Echo · ${BRAND}`;
+    case '/persona-roast':
+      return `Persona Roast · ${BRAND}`;
+    case '/persona-forecast':
+      return `Persona Forecast · ${BRAND}`;
+    case '/persona-roast-battle':
+      return `Roast Battle · ${BRAND}`;
+    case '/persona-forecast-battle':
+      return `Forecast Battle · ${BRAND}`;
+    case '/persona-mosaic-battle':
+      return `Mosaic Battle · ${BRAND}`;
+    case '/persona-mosaic-roasting-battle':
+      return `Mosaic Roasting Battle · ${BRAND}`;
+    case '/persona-mosaic-council':
+      return `Mosaic Council · ${BRAND}`;
+    case '/persona-dilemma-council':
+      return `Dilemma Council · ${BRAND}`;
+    case '/persona-roast-battle-council':
+      return `Roast Battle Council · ${BRAND}`;
+    case '/persona-mosaic-dilemma-council':
+      return `Mosaic Dilemma Council · ${BRAND}`;
+    case '/persona-mosaic-roast':
+      return `Mosaic Roast · ${BRAND}`;
+    case '/persona-dilemma-forecast':
+      return `Dilemma Forecast · ${BRAND}`;
+    case '/persona-mosaic-dilemma-forecast':
+      return `Mosaic Dilemma Forecast · ${BRAND}`;
+    case '/persona-mosaic-forecast':
+      return `Mosaic Forecast · ${BRAND}`;
     case '/pricing':
       return `Pricing · ${BRAND}`;
     case '/product':

@@ -32,6 +32,7 @@ describe('titleForPath', () => {
     expect(titleForPath('/persona-playground/index')).toBe('All tools A–Z · Arena');
     expect(titleForPath('/persona-playground/whats-new')).toBe("What's new · Arena");
     expect(titleForPath('/persona-playground/formats')).toBe('By format · Arena');
+    expect(titleForPath('/persona-playground/sitemap')).toBe('Sitemap · Arena');
   });
 
   it('labels the top-traffic persona tool pages by entry name', () => {
@@ -42,6 +43,35 @@ describe('titleForPath', () => {
     expect(titleForPath('/persona-match')).toBe('Persona Match · Arena');
     expect(titleForPath('/persona-council')).toBe('Persona Council · Arena');
     expect(titleForPath('/persona-battle')).toBe('Persona Battle · Arena');
+  });
+
+  it('labels every persona tool page by its catalog entry name (cycle 380)', () => {
+    // Single-word tools get the "Persona " prefix; compound tools
+    // (Roast Battle, Mosaic Council, …) drop it. Title mirrors
+    // PERSONA_PLAYGROUND_ENTRIES verbatim so a rename in the catalog
+    // is the only place this needs to be updated.
+    expect(titleForPath('/persona-wheel')).toBe('Persona Wheel · Arena');
+    expect(titleForPath('/persona-trivia')).toBe('Persona Trivia · Arena');
+    expect(titleForPath('/persona-speed')).toBe('Persona Speed · Arena');
+    expect(titleForPath('/persona-challenge')).toBe('Persona Challenge · Arena');
+    expect(titleForPath('/persona-library')).toBe('Persona Library · Arena');
+    expect(titleForPath('/persona-confessional')).toBe('Persona Confessional · Arena');
+    expect(titleForPath('/persona-duel')).toBe('Persona Duel · Arena');
+    expect(titleForPath('/persona-echo')).toBe('Persona Echo · Arena');
+    expect(titleForPath('/persona-roast')).toBe('Persona Roast · Arena');
+    expect(titleForPath('/persona-forecast')).toBe('Persona Forecast · Arena');
+    expect(titleForPath('/persona-roast-battle')).toBe('Roast Battle · Arena');
+    expect(titleForPath('/persona-forecast-battle')).toBe('Forecast Battle · Arena');
+    expect(titleForPath('/persona-mosaic-battle')).toBe('Mosaic Battle · Arena');
+    expect(titleForPath('/persona-mosaic-roasting-battle')).toBe('Mosaic Roasting Battle · Arena');
+    expect(titleForPath('/persona-mosaic-council')).toBe('Mosaic Council · Arena');
+    expect(titleForPath('/persona-dilemma-council')).toBe('Dilemma Council · Arena');
+    expect(titleForPath('/persona-roast-battle-council')).toBe('Roast Battle Council · Arena');
+    expect(titleForPath('/persona-mosaic-dilemma-council')).toBe('Mosaic Dilemma Council · Arena');
+    expect(titleForPath('/persona-mosaic-roast')).toBe('Mosaic Roast · Arena');
+    expect(titleForPath('/persona-dilemma-forecast')).toBe('Dilemma Forecast · Arena');
+    expect(titleForPath('/persona-mosaic-dilemma-forecast')).toBe('Mosaic Dilemma Forecast · Arena');
+    expect(titleForPath('/persona-mosaic-forecast')).toBe('Mosaic Forecast · Arena');
   });
 
   it('still labels unknown playground paths as not found', () => {
