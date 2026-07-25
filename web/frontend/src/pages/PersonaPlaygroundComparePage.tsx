@@ -7,6 +7,7 @@ import { Reveal } from '../components/Reveal';
 import { useAuth } from '../hooks/useAuth';
 import { copyToClipboard } from '../lib/clipboard';
 import { prefersReducedMotion } from '../lib/motion';
+import { RecentComparisonsOnCompare } from '../components/RecentComparisonsOnCompare';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import {
   buildCompareShareUrl,
@@ -172,6 +173,8 @@ export function PersonaPlaygroundComparePage() {
             </p>
           </Reveal>
         )}
+
+        <RecentComparisonsOnCompare currentA={a} currentB={b} />
       </main>
 
       <Footer />
