@@ -248,7 +248,21 @@ export function appendMosaicDilemmaForecastDecision(
     const existing: MosaicDilemmaForecastDecisionEntry[] = raw
       ? (JSON.parse(raw) as MosaicDilemmaForecastDecisionEntry[])
       : [];
-    const next = [entry, ...existing.filter((e) => e.id !== entry.id)].slice(0, DECISIONS_LIMIT);
+    // Filter by id AND validate the entry shape so a corrupted
+    // localStorage payload (e.g. a partial write from a future
+    // schema) is scrubbed on the next append rather than
+    // re-serialized and persisted forever.
+    const next = [
+      entry,
+      ...existing.filter(
+        (e) =>
+          e &&
+          typeof e.id === 'string' &&
+          (e.winner === 'A' || e.winner === 'B'),
+      ),
+    ]
+      .filter((e, idx, arr) => arr.findIndex((x) => x.id === e.id) === idx)
+      .slice(0, DECISIONS_LIMIT);
     window.localStorage.setItem(DECISIONS_KEY, JSON.stringify(next));
   } catch {
     /* silent */
