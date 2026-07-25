@@ -80,4 +80,15 @@ test.describe('Persona Mosaic Dilemma Forecast page (mocked)', () => {
     await expect(page.locator('.pmdf-result__winner-pill')).toBeVisible();
     await expect(page.locator('.pmdf-critic')).toHaveCount(8);
   });
+
+  test('share URL updates after a forecast', async ({ page }) => {
+    await page.goto('/persona-mosaic-dilemma-forecast');
+    await page.getByLabel('Dilemma A').fill('Take the safe job — predictable, well-paid, low upside.');
+    await page.getByLabel('Dilemma B').fill('Take the risky startup — uncertain, low-paid, high upside.');
+    await page.getByRole('button', { name: /forecast the sharper/i }).click();
+    // Cycle 314 / 315: writeShareUrl mirrors the inputs into the
+    // address bar so the user can copy the share link.
+    await expect.poll(() => new URL(page.url()).searchParams.get('a')).not.toBeNull();
+    await expect.poll(() => new URL(page.url()).searchParams.get('b')).not.toBeNull();
+  });
 });
