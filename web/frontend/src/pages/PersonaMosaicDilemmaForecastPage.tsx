@@ -35,6 +35,8 @@ import { prefersReducedMotion } from '../lib/motion';
 import '../styles/persona-mosaic-dilemma-forecast-page.css';
 
 const MAX_DILEMMA_CHARS = 200;
+const HISTORY_KEY = 'arena:persona-mosaic-dilemma-forecast:history:v1';
+const HISTORY_LIMIT = 6;
 
 // Trim a dilemma to a 40-char snippet, with "..." if it was longer.
 // Used twice (history entry + decision log) — extract once so the
@@ -90,7 +92,7 @@ export function PersonaMosaicDilemmaForecastPage() {
     setCastCount(readMosaicDilemmaForecastCounter());
     setDecisions(readMosaicDilemmaForecastDecisions());
     try {
-      const raw = window.localStorage.getItem('arena:persona-mosaic-dilemma-forecast:history:v1');
+      const raw = window.localStorage.getItem(HISTORY_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) setHistory(parsed);
@@ -130,9 +132,9 @@ export function PersonaMosaicDilemmaForecastPage() {
       const next = [
         entry,
         ...history.filter((h) => h.a !== snippetA || h.b !== snippetB),
-      ].slice(0, 6);
+      ].slice(0, HISTORY_LIMIT);
       window.localStorage.setItem(
-        'arena:persona-mosaic-dilemma-forecast:history:v1',
+        HISTORY_KEY,
         JSON.stringify(next),
       );
       setHistory(next);
@@ -225,7 +227,7 @@ export function PersonaMosaicDilemmaForecastPage() {
 
   const onClearHistory = () => {
     try {
-      window.localStorage.removeItem('arena:persona-mosaic-dilemma-forecast:history:v1');
+      window.localStorage.removeItem(HISTORY_KEY);
     } catch {
       /* silent */
     }
