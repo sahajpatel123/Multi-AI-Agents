@@ -78,6 +78,11 @@ const PersonaPlaygroundFavoritesPage = lazy(() =>
     default: m.PersonaPlaygroundFavoritesPage,
   })),
 )
+const PersonaPlaygroundIndexPage = lazy(() =>
+  import('./pages/PersonaPlaygroundIndexPage').then((m) => ({
+    default: m.PersonaPlaygroundIndexPage,
+  })),
+)
 const PersonaBattlePage = lazy(() =>
   import('./pages/PersonaBattlePage').then((m) => ({ default: m.PersonaBattlePage })),
 )
@@ -309,6 +314,7 @@ if (!rootElement) {
                   <Route path="/persona-playground/compare" element={<PersonaPlaygroundComparePage />} />
                   <Route path="/persona-playground/categories" element={<PersonaPlaygroundCategoriesPage />} />
                   <Route path="/persona-playground/favorites" element={<PersonaPlaygroundFavoritesPage />} />
+                  <Route path="/persona-playground/index" element={<PersonaPlaygroundIndexPage />} />
                   <Route path="/persona-match" element={<PersonaMatchPage />} />
                   <Route path="/persona-battle" element={<PersonaBattlePage />} />
                   <Route path="/persona-wheel" element={<PersonaWheelPage />} />
