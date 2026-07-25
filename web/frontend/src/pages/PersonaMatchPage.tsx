@@ -6,6 +6,7 @@ import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
 import { Reveal } from '../components/Reveal';
 import { Pressable } from '../components/Pressable';
+import { RelatedTools } from '../components/RelatedTools';
 import {
   PERSONA_MATCH_QUESTIONS,
   scorePersonaMatch,
@@ -544,6 +545,8 @@ export function PersonaMatchPage() {
           </section>
         )}
       </main>
+
+      <RelatedTools path="/persona-match" />
 
       <Footer />
     </div>
