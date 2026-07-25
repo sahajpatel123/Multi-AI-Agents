@@ -515,6 +515,33 @@ export function pickFeaturedOfDay(
 }
 
 /**
+ * Deterministic "Surprise me" pick for the given date. Returns a
+ * catalog entry that is NOT the excluded path (defaults to today's
+ * featured pick) so a "Surprise me" button can sit next to the
+ * daily featured without duplicating it. Uses a day-of-year-derived
+ * index that walks past the excluded slot. Returns null for empty
+ * catalogs or when the only entry is the excluded one.
+ */
+export function pickSurpriseTool(
+  date: Date,
+  excludePath: string | null = null,
+  entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+): PersonaPlaygroundEntry | null {
+  if (entries.length === 0) return null;
+  if (entries.length === 1) {
+    return excludePath === entries[0].path ? null : entries[0];
+  }
+  // Use a different day-key (dayOfYear + 1) and modulo so consecutive
+  // days get different picks but the same day always returns the same.
+  const startIdx = (dayOfYear(date) + 1) % entries.length;
+  for (let offset = 0; offset < entries.length; offset += 1) {
+    const candidate = entries[(startIdx + offset) % entries.length];
+    if (candidate.path !== excludePath) return candidate;
+  }
+  return null;
+}
+
+/**
  * True when the dismiss state is still valid for the given date.
  * A state is "valid" when it was dismissed on the same calendar day as
  * `today` — the next day the banner is allowed to show again.

@@ -35,6 +35,7 @@ import {
   isDismissedFor,
   personaPlaygroundCategories,
   pickFeaturedOfDay,
+  pickSurpriseTool,
   readFeaturedDismissState,
   relatedTools,
   relatedToolsDefaultHeading,
@@ -487,6 +488,74 @@ describe('MATCHUPS', () => {
     for (const matchup of MATCHUPS) {
       expect(seen.has(matchup.title), `duplicate title: ${matchup.title}`).toBe(false);
       seen.add(matchup.title);
+    }
+  });
+});
+
+describe('pickSurpriseTool', () => {
+  it('returns a non-null entry from the catalog', () => {
+    const pick = pickSurpriseTool(new Date(2026, 6, 25));
+    expect(pick).not.toBeNull();
+    expect(pick?.path).toMatch(/^\/persona-/);
+  });
+
+  it('excludes the given path', () => {
+    const featured = pickFeaturedOfDay(new Date(2026, 6, 25));
+    const surprise = pickSurpriseTool(new Date(2026, 6, 25), featured?.path ?? null);
+    expect(surprise?.path).not.toBe(featured?.path);
+  });
+
+  it('excludes null safely (no exclusion)', () => {
+    const pick = pickSurpriseTool(new Date(2026, 6, 25), null);
+    expect(pick).not.toBeNull();
+  });
+
+  it('is deterministic for the same date', () => {
+    const a = pickSurpriseTool(new Date(2026, 6, 25));
+    const b = pickSurpriseTool(new Date(2026, 6, 25));
+    expect(a).toEqual(b);
+  });
+
+  it('returns null for empty catalog', () => {
+    expect(pickSurpriseTool(new Date(2026, 6, 25), null, [])).toBeNull();
+  });
+
+  it('returns null for single-entry catalog when the entry is excluded', () => {
+    const only: PersonaPlaygroundEntry = {
+      path: '/only',
+      name: 'Only',
+      tagline: '',
+      blurb: '',
+      category: 'discover',
+      format: '',
+    };
+    expect(pickSurpriseTool(new Date(2026, 6, 25), '/only', [only])).toBeNull();
+  });
+
+  it('returns the single entry when it is not excluded', () => {
+    const only: PersonaPlaygroundEntry = {
+      path: '/only',
+      name: 'Only',
+      tagline: '',
+      blurb: '',
+      category: 'discover',
+      format: '',
+    };
+    expect(pickSurpriseTool(new Date(2026, 6, 25), '/other', [only])).toEqual(only);
+  });
+
+  it('changes pick between days when catalog has >2 entries', () => {
+    const today = new Date(2026, 6, 25);
+    const tomorrow = new Date(2026, 6, 26);
+    const a = pickSurpriseTool(today);
+    const b = pickSurpriseTool(tomorrow);
+    // Catalog is 27 entries; with exclusion by featured, consecutive
+    // days may collide occasionally — assert only when they differ.
+    if (
+      dayOfYear(today) % PERSONA_PLAYGROUND_ENTRIES.length !==
+      dayOfYear(tomorrow) % PERSONA_PLAYGROUND_ENTRIES.length
+    ) {
+      expect(a?.path).not.toBe(b?.path);
     }
   });
 });
