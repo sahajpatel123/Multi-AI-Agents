@@ -30,6 +30,17 @@ describe('titleForPath', () => {
     expect(titleForPath('/persona-playground/categories')).toBe('Categories · Arena');
     expect(titleForPath('/persona-playground/favorites')).toBe('Favorites · Arena');
     expect(titleForPath('/persona-playground/index')).toBe('All tools A–Z · Arena');
+    expect(titleForPath('/persona-playground/whats-new')).toBe("What's new · Arena");
+  });
+
+  it('labels the top-traffic persona tool pages by entry name', () => {
+    // Pinned to RelatedTools-mounted pages from cycle 343 — these are the
+    // surfaces the cross-link rail points at, so they get real traffic.
+    expect(titleForPath('/persona-mosaic')).toBe('Persona Mosaic · Arena');
+    expect(titleForPath('/persona-dilemma')).toBe('Persona Dilemma · Arena');
+    expect(titleForPath('/persona-match')).toBe('Persona Match · Arena');
+    expect(titleForPath('/persona-council')).toBe('Persona Council · Arena');
+    expect(titleForPath('/persona-battle')).toBe('Persona Battle · Arena');
   });
 
   it('still labels unknown playground paths as not found', () => {
