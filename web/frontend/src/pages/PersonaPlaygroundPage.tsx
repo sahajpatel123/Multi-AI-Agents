@@ -5,6 +5,7 @@ import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
 import { RelatedTools } from '../components/RelatedTools';
+import { Matchups } from '../components/Matchups';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
 import { isBareSlashKey, shouldCaptureSlashFocus } from '../lib/slashFocus';
@@ -361,6 +362,8 @@ export function PersonaPlaygroundPage() {
         </Reveal>
 
         <RelatedTools path="/persona-playground" />
+
+        <Matchups />
 
         <Reveal as="section" className="ppg-compare-cta" aria-label="Compare tools">
           <div className="ppg-compare-cta__copy">

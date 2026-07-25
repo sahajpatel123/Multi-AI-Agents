@@ -24,6 +24,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  MATCHUPS,
   PERSONA_PLAYGROUND_ENTRIES,
   buildCompareShareUrl,
   clearFeaturedDismissState,
@@ -454,5 +455,37 @@ describe('buildCompareShareUrl', () => {
     expect(
       buildCompareShareUrl('https://x', '/persona-council', 'https://other/path'),
     ).toBeNull();
+  });
+});
+
+describe('MATCHUPS', () => {
+  it('every matchup has a non-empty title and summary', () => {
+    for (const matchup of MATCHUPS) {
+      expect(matchup.title).not.toEqual('');
+      expect(matchup.summary).not.toEqual('');
+    }
+  });
+
+  it('every matchup pairs two distinct paths', () => {
+    for (const matchup of MATCHUPS) {
+      expect(matchup.paths).toHaveLength(2);
+      expect(matchup.paths[0]).not.toBe(matchup.paths[1]);
+    }
+  });
+
+  it('every matchup path is in the catalog', () => {
+    const catalogPaths = new Set(PERSONA_PLAYGROUND_ENTRIES.map((e) => e.path));
+    for (const matchup of MATCHUPS) {
+      expect(catalogPaths.has(matchup.paths[0]), `${matchup.paths[0]} (matchup "${matchup.title}")`).toBe(true);
+      expect(catalogPaths.has(matchup.paths[1]), `${matchup.paths[1]} (matchup "${matchup.title}")`).toBe(true);
+    }
+  });
+
+  it('matchup titles are unique', () => {
+    const seen = new Set<string>();
+    for (const matchup of MATCHUPS) {
+      expect(seen.has(matchup.title), `duplicate title: ${matchup.title}`).toBe(false);
+      seen.add(matchup.title);
+    }
   });
 });
