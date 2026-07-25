@@ -23,6 +23,23 @@ const KIND_LABEL: Record<ShareKind, string> = {
   other: 'Share',
 };
 
+/**
+ * Count the shares that landed in the last 7 days (rolling window).
+ * Pure: takes the items + a now Date so tests can drive time.
+ */
+export function sharesThisWeek(
+  items: readonly RecentShare[],
+  now: Date = new Date(),
+): number {
+  // Strictly &gt; cutoff so a share at exactly 7 days ago is excluded.
+  const cutoff = now.getTime() - 7 * 86_400_000;
+  let count = 0;
+  for (const item of items) {
+    if (item.at > cutoff) count += 1;
+  }
+  return count;
+}
+
 export interface RecentSharesProps {
   /** Heading shown above the widget. */
   heading?: string;
@@ -94,25 +111,32 @@ export function RecentShares({
 
   if (items.length === 0) return null;
 
+  const thisWeek = sharesThisWeek(items, new Date(now));
+
   return (
     <section className="ppg-shares" aria-label={heading}>
       <header className="ppg-shares__head">
         <p className="ppg-shares__eyebrow">
           <Share2 aria-hidden="true" /> {heading}
         </p>
-        <button
-          type="button"
-          className="ppg-shares__clear"
-          onClick={() => {
-            if (typeof window === 'undefined') return;
-            clearRecentShares(window.localStorage);
-            setItems([]);
-          }}
-          aria-label="Clear recent shares"
-        >
-          <Trash2 aria-hidden="true" />
-          <span>Clear</span>
-        </button>
+        <div className="ppg-shares__head-meta">
+          <span className="ppg-shares__count" aria-label={`${thisWeek} shares this week`}>
+            {thisWeek} this week
+          </span>
+          <button
+            type="button"
+            className="ppg-shares__clear"
+            onClick={() => {
+              if (typeof window === 'undefined') return;
+              clearRecentShares(window.localStorage);
+              setItems([]);
+            }}
+            aria-label="Clear recent shares"
+          >
+            <Trash2 aria-hidden="true" />
+            <span>Clear</span>
+          </button>
+        </div>
       </header>
       <ul className="ppg-shares__list">
         {items.map((item) => {

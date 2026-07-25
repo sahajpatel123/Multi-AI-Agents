@@ -1293,6 +1293,19 @@
   color: var(--ppg-accent-dim);
 }
 
+.ppg-shares__head-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ppg-shares__count {
+  font-size: 12px;
+  color: var(--ppg-accent-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .ppg-shares__clear {
   display: inline-flex;
   align-items: center;
