@@ -282,9 +282,10 @@ export function personaPlaygroundCategories(): readonly PersonaPlaygroundCategor
 /**
  * Return up to `limit` related entries for the given path. Same-category
  * entries come first (in catalog order), then any other categories fill
- * the remaining slots (deterministic — sorted by category label, then
- * path). The current path is always excluded. Returns [] when the path
- * is not in the catalog — callers should treat that as "no related".
+ * the remaining slots (also in catalog order). The current path is
+ * always excluded. Deterministic given a stable catalog. Returns [] when
+ * the path is not in the catalog — callers should treat that as
+ * "no related".
  */
 export function relatedTools(
   path: string,
