@@ -99,6 +99,12 @@ function simpleHash(s: string): number {
   return Math.abs(h);
 }
 
+// Panel size for the 8-mind dilemma framing. Sourced from the
+// curated list below; a future change to that list updates this
+// constant so the share text + majority descriptions stay in
+// sync.
+const PANEL_SIZE = 8;
+
 /**
  * Pure — build a Mosaic Dilemma Forecast for two framings. 8
  * personas each pick A or B + explain. Same inputs in = same
