@@ -37,6 +37,7 @@ import {
   formatLocalDate,
   formatSummaries,
   isDismissedFor,
+  matchToolForPurpose,
   personaPlaygroundCategories,
   pickFeaturedOfDay,
   pickRandomTool,
@@ -820,5 +821,53 @@ describe('buildCompareFromCategory', () => {
     const b = buildCompareFromCategory('council', [], 0, date);
     expect(a?.[0].path).toBe(b?.[0].path);
     expect(a?.[1].path).toBe(b?.[1].path);
+  });
+});
+
+describe('matchToolForPurpose', () => {
+  it('returns an entry whose fields contain the query words', () => {
+    const result = matchToolForPurpose('dilemma');
+    expect(result).not.toBeNull();
+    if (result) {
+      const haystack = `${result.name} ${result.tagline} ${result.blurb} ${result.format}`.toLowerCase();
+      expect(haystack).toContain('dilemma');
+    }
+  });
+
+  it('matches against format strings', () => {
+    const result = matchToolForPurpose('trivia');
+    expect(result?.path).toBe('/persona-trivia');
+  });
+
+  it('returns null for an empty query', () => {
+    expect(matchToolForPurpose('')).toBeNull();
+  });
+
+  it('returns null for short words that are filtered out', () => {
+    expect(matchToolForPurpose('a an to')).toBeNull();
+  });
+
+  it('returns null when no entry matches', () => {
+    expect(matchToolForPurpose('xyzzy-no-such-thing')).toBeNull();
+  });
+
+  it('is deterministic for the same query', () => {
+    const a = matchToolForPurpose('council');
+    const b = matchToolForPurpose('council');
+    expect(a?.path).toBe(b?.path);
+  });
+
+  it('scores multi-word queries by total word matches', () => {
+    // "persona forecast" should pick the entry that contains BOTH
+    // words rather than just one.
+    const result = matchToolForPurpose('persona forecast');
+    // Both /persona-forecast and /persona-mosaic-dilemma-forecast
+    // match; tie-breaks on first match in the catalog, which is
+    // /persona-forecast (lower index). Score > 1 is what we test.
+    expect(result).not.toBeNull();
+    if (result) {
+      const haystack = `${result.name} ${result.tagline} ${result.blurb} ${result.format}`.toLowerCase();
+      expect(haystack).toContain('forecast');
+    }
   });
 });

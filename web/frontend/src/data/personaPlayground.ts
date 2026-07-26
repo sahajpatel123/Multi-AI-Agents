@@ -777,6 +777,39 @@ export function buildCompareFromCategory(
 }
 
 /**
+ * Match a free-text query to a catalog entry. Tokenizes the
+ * query into lowercase words and scores each entry by how many
+ * of those words appear in the entry's name + tagline + blurb +
+ * format. Returns the highest-scoring entry, or null if no entry
+ * matches at all. Deterministic for the same inputs.
+ */
+export function matchToolForPurpose(
+  query: string,
+  entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+): PersonaPlaygroundEntry | null {
+  const words = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => w.replace(/[^a-z0-9-]/g, ''))
+    .filter((w) => w.length >= 3);
+  if (words.length === 0) return null;
+  let best: PersonaPlaygroundEntry | null = null;
+  let bestScore = 0;
+  for (const entry of entries) {
+    const haystack = `${entry.name} ${entry.tagline} ${entry.blurb} ${entry.format}`.toLowerCase();
+    let score = 0;
+    for (const word of words) {
+      if (haystack.includes(word)) score += 1;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = entry;
+    }
+  }
+  return bestScore > 0 ? best : null;
+}
+
+/**
  * True when the dismiss state is still valid for the given date.
  * A state is "valid" when it was dismissed on the same calendar day as
  * `today` — the next day the banner is allowed to show again.
