@@ -4113,3 +4113,178 @@
   border: 0.5px solid rgba(196, 149, 106, 0.28);
   border-radius: 4px;
 }
+
+/* ------------------------------------------------------------------
+   OnboardingTour — 4-step first-time walkthrough overlay
+   ------------------------------------------------------------------ */
+.ppg-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 13000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.ppg-tour__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 23, 20, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.ppg-tour__panel {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  background: #faf7f4;
+  border-radius: 16px;
+  padding: 22px 22px 18px;
+  box-shadow:
+    0 24px 64px rgba(26, 23, 20, 0.22),
+    0 4px 12px rgba(26, 23, 20, 0.08);
+  animation: ppg-tour-panel-in 280ms var(--ease-out-premium) both;
+}
+
+@keyframes ppg-tour-panel-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ppg-tour__panel { animation: none; }
+}
+
+.ppg-tour__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ppg-accent-dim);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--motion-hover-ms) var(--ease-btn), color var(--motion-hover-ms) var(--ease-btn);
+}
+
+.ppg-tour__close:hover {
+  background: rgba(196, 149, 106, 0.12);
+  color: #1a1714;
+}
+
+.ppg-tour__eyebrow {
+  margin: 0 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ppg-accent);
+}
+
+.ppg-tour__title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  font-family: Georgia, 'Times New Roman', serif;
+  color: #1a1714;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.ppg-tour__body {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: #1a1714;
+  line-height: 1.5;
+}
+
+.ppg-tour__hint {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--ppg-accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.ppg-tour__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ppg-tour__dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ppg-tour__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(196, 149, 106, 0.25);
+  transition: background var(--motion-hover-ms) var(--ease-btn);
+}
+
+.ppg-tour__dot--on {
+  background: var(--ppg-accent);
+}
+
+.ppg-tour__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ppg-tour__skip {
+  padding: 6px 14px;
+  background: transparent;
+  border: 0.5px solid rgba(196, 149, 106, 0.32);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--ppg-accent-dim);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ppg-tour__skip:hover {
+  color: var(--ppg-accent);
+  border-color: rgba(196, 149, 106, 0.55);
+}
+
+.ppg-tour__next {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--ppg-accent);
+  color: #0b0b10;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ppg-tour__next:hover {
+  filter: brightness(1.05);
+}
+
+.ppg-tour__skip:focus-visible,
+.ppg-tour__next:focus-visible,
+.ppg-tour__close:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}

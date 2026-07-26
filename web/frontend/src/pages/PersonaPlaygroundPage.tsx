@@ -29,6 +29,7 @@ import { SmartSuggestions } from '../components/SmartSuggestions';
 import { HubSearchHistory } from '../components/HubSearchHistory';
 import { CatalogExport } from '../components/CatalogExport';
 import { RecentlyUsedCategories } from '../components/RecentlyUsedCategories';
+import { OnboardingTour } from '../components/OnboardingTour';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -348,6 +349,8 @@ export function PersonaPlaygroundPage() {
   return (
     <div className={`ppg-page${pageVisible ? ' ppg-page--enter' : ''}`}>
       <Navbar />
+
+      <OnboardingTour />
 
       <KeyboardShortcutsHelp surface="persona-playground" />
 
