@@ -38,6 +38,52 @@ describe('onboardingTour (pure helpers)', () => {
   });
 });
 
+describe('onboardingTour same-tab storage notification', () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('dispatches a synthetic storage event on dismissOnboardingTour', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      dismissOnboardingTour(window.localStorage);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(ONBOARDING_TOUR_KEY);
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('dispatches a synthetic storage event on resetOnboardingTour', () => {
+    dismissOnboardingTour(window.localStorage);
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      resetOnboardingTour(window.localStorage);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(ONBOARDING_TOUR_KEY);
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('does not notify when storage is null', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      dismissOnboardingTour(null);
+      resetOnboardingTour(null);
+      expect(onStorage).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+});
+
 describe('OnboardingTour widget', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -91,5 +137,75 @@ describe('OnboardingTour widget', () => {
     await waitFor(() =>
       expect(readOnboardingTour(window.localStorage)).toEqual({ v: 1, dismissed: true }),
     );
+  });
+
+  it('locks body scroll while open and restores on dismiss', async () => {
+    const original = document.body.style.overflow;
+    render(<OnboardingTour />);
+    await waitFor(() =>
+      expect(screen.getByText(/Welcome to the Persona Playground/i)).toBeInTheDocument(),
+    );
+    expect(document.body.style.overflow).toBe('hidden');
+    fireEvent.click(screen.getByRole('button', { name: /^Skip$/i }));
+    await waitFor(() => expect(document.body.style.overflow).toBe(original));
+  });
+
+  it('Escape dismisses the tour', async () => {
+    render(<OnboardingTour />);
+    await waitFor(() =>
+      expect(screen.getByText(/Welcome to the Persona Playground/i)).toBeInTheDocument(),
+    );
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() =>
+      expect(readOnboardingTour(window.localStorage)).toEqual({ v: 1, dismissed: true }),
+    );
+  });
+
+  it('resets the step cursor on dismiss so a re-shown tour starts at 0', async () => {
+    // First mount: advance to step 2 by clicking Next twice.
+    const { unmount } = render(<OnboardingTour />);
+    await waitFor(() =>
+      expect(screen.getByText(/Welcome to the Persona Playground/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Next$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Next$/i }));
+    // Dismiss.
+    fireEvent.click(screen.getByRole('button', { name: /^Skip$/i }));
+    await waitFor(() => expect(readOnboardingTour(window.localStorage).dismissed).toBe(true));
+    unmount();
+    // Reset the dismissal and re-mount — the tour must show step 0, not step 2.
+    resetOnboardingTour(window.localStorage);
+    render(<OnboardingTour />);
+    await waitFor(() =>
+      expect(screen.getByText(/Welcome to the Persona Playground/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/1 of 4/)).toBeInTheDocument();
+  });
+
+  it('ReplayOnboardingTour clears the dismissed flag and re-opens the tour', async () => {
+    // First, dismiss the tour.
+    render(<OnboardingTour />);
+    await waitFor(() =>
+      expect(screen.getByText(/Welcome to the Persona Playground/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Skip$/i }));
+    await waitFor(() =>
+      expect(readOnboardingTour(window.localStorage).dismissed).toBe(true),
+    );
+    // Mount a fresh OnboardingTour + ReplayOnboardingTour. Click
+    // Replay → the tour re-opens because resetOnboardingTour fires
+    // a synthetic storage event the widget listens for.
+    const { unmount } = render(
+      <div>
+        <OnboardingTour />
+        <ReplayOnboardingTour label="Replay tour" />
+      </div>,
+    );
+    expect(screen.queryByText(/Welcome to the Persona Playground/i)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Replay onboarding tour/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/Welcome to the Persona Playground/i)).toBeInTheDocument(),
+    );
+    unmount();
   });
 });

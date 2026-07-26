@@ -12,6 +12,26 @@
 const STORAGE_KEY = 'arena:persona-playground:onboarding-tour:v1';
 const SCHEMA_VERSION = 1;
 
+/**
+ * Notify same-tab listeners that the tour state changed. The
+ * browser `StorageEvent` only fires in OTHER tabs, so without
+ * this signal the OnboardingTour widget mounted in the same tab
+ * would not refresh until the next page load. Swallows any
+ * dispatch failure (jsdom quirks, locked-down iframes).
+ */
+function notifySameTab(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const event = new StorageEvent('storage', {
+      key: STORAGE_KEY,
+      newValue: window.localStorage.getItem(STORAGE_KEY),
+    });
+    window.dispatchEvent(event);
+  } catch {
+    /* silent */
+  }
+}
+
 export interface OnboardingTourState {
   /** Schema version, for future migrations. */
   readonly v: typeof SCHEMA_VERSION;
@@ -50,7 +70,9 @@ export function writeOnboardingTour(
     storage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 export function dismissOnboardingTour(
@@ -67,7 +89,9 @@ export function resetOnboardingTour(
     storage.removeItem(STORAGE_KEY);
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 export const ONBOARDING_TOUR_KEY = STORAGE_KEY;
