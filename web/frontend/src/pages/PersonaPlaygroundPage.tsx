@@ -327,6 +327,20 @@ export function PersonaPlaygroundPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Global Shift+A — jump to the All-tools index page.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'A' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      setShiftTAnnouncement('Opening the all-tools index');
+      navigateRef.current('/persona-playground/index');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (searchDebounceRef.current !== null) {
@@ -793,6 +807,9 @@ export function PersonaPlaygroundPage() {
           </div>
           <Link to="/persona-playground/index" className="ppg-index-cta__btn">
             View A-Z index
+            <kbd className="ppg-index-cta__shortcut" aria-hidden="true">
+              Shift + A
+            </kbd>
             <ArrowRight aria-hidden="true" />
           </Link>
         </Reveal>
