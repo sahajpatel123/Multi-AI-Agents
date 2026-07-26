@@ -3285,3 +3285,141 @@
   border: 0.5px solid rgba(196, 149, 106, 0.28);
   border-radius: 4px;
 }
+
+/* ------------------------------------------------------------------
+   PinnedTools — sticky pinned-tools bar at the top of the hub
+   ------------------------------------------------------------------ */
+.ppg-pinned {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: var(--ppg-radius);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 216, 107, 0.08) 0%,
+    rgba(196, 149, 106, 0.04) 100%
+  );
+  border: 1px solid rgba(255, 216, 107, 0.32);
+}
+
+.ppg-pinned__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ppg-pinned__eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11px;
+  color: #b8923e;
+}
+
+.ppg-pinned__count {
+  font-size: 10px;
+  font-weight: 600;
+  color: #b8923e;
+  background: rgba(255, 216, 107, 0.32);
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.ppg-pinned__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: transparent;
+  border: 0.5px solid rgba(255, 216, 107, 0.4);
+  color: #b8923e;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color var(--motion-hover-ms) var(--ease-btn), color var(--motion-hover-ms) var(--ease-btn);
+}
+
+.ppg-pinned__clear:hover {
+  border-color: rgba(255, 216, 107, 0.8);
+  color: #1a1714;
+}
+
+.ppg-pinned__clear:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-pinned__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ppg-pinned__item {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 0.5px solid rgba(196, 149, 106, 0.3);
+  overflow: hidden;
+}
+
+.ppg-pinned__chip {
+  display: grid;
+  gap: 1px;
+  padding: 8px 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: background var(--motion-hover-ms) var(--ease-btn);
+}
+
+.ppg-pinned__chip:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.ppg-pinned__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1714;
+  line-height: 1.3;
+}
+
+.ppg-pinned__tagline {
+  font-size: 11px;
+  color: var(--ppg-accent-dim);
+  line-height: 1.35;
+}
+
+.ppg-pinned__unpin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-left: 0.5px solid rgba(196, 149, 106, 0.22);
+  color: var(--ppg-accent-dim);
+  cursor: pointer;
+  transition: color var(--motion-hover-ms) var(--ease-btn), background var(--motion-hover-ms) var(--ease-btn);
+}
+
+.ppg-pinned__unpin:hover {
+  color: #1a1714;
+  background: rgba(255, 216, 107, 0.18);
+}
+
+.ppg-pinned__unpin:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: -2px;
+}

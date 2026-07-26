@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   RECENT_TOOLS_KEY,
   RECENT_TOOLS_LIMIT,
@@ -103,6 +103,33 @@ describe('writeRecentTools', () => {
   it('is a no-op when storage is null', () => {
     expect(() => writeRecentTools(null, [])).not.toThrow();
   });
+
+  it('notifies same-tab listeners after a successful write', () => {
+    const storage = window.localStorage;
+    storage.clear();
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      writeRecentTools(storage, [{ path: '/persona-battle', at: 1 }]);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(RECENT_TOOLS_KEY);
+    } finally {
+      window.removeEventListener('storage', onStorage);
+      storage.clear();
+    }
+  });
+
+  it('does not notify when storage is null', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      writeRecentTools(null, []);
+      expect(onStorage).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
 });
 
 describe('recordRecentTool', () => {
@@ -145,5 +172,22 @@ describe('clearRecentTools', () => {
 
   it('is a no-op when storage is null', () => {
     expect(() => clearRecentTools(null)).not.toThrow();
+  });
+
+  it('notifies same-tab listeners after a successful clear', () => {
+    const storage = window.localStorage;
+    storage.setItem(RECENT_TOOLS_KEY, JSON.stringify([{ path: '/x', at: 1 }]));
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      clearRecentTools(storage);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(RECENT_TOOLS_KEY);
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+      storage.clear();
+    }
   });
 });

@@ -23,6 +23,7 @@ import { MoodMatcher } from '../components/MoodMatcher';
 import { MoodMatcherHistory } from '../components/MoodMatcherHistory';
 import { HubShareButton } from '../components/HubShareButton';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
+import { PinnedTools } from '../components/PinnedTools';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -341,6 +342,8 @@ export function PersonaPlaygroundPage() {
 
           <ToolSearchLauncher />
         </section>
+
+        <PinnedTools />
 
         <ProgressStrip
           onJumpTried={() => {

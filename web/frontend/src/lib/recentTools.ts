@@ -15,6 +15,26 @@ import { PERSONA_PATH_PREFIX } from '../data/personaPlayground';
 const STORAGE_KEY = 'arena:persona-playground:recent-tools:v1';
 const MAX_ITEMS = 8;
 
+/**
+ * Notify same-tab listeners that the recent-tools list changed.
+ * The browser `StorageEvent` only fires in OTHER tabs, so without
+ * this signal widgets like `RecentTools` mounted in the same tab
+ * would not refresh until the next page load. Swallows any
+ * dispatch failure (jsdom quirks, locked-down iframes).
+ */
+function notifySameTab(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const event = new StorageEvent('storage', {
+      key: STORAGE_KEY,
+      newValue: window.localStorage.getItem(STORAGE_KEY),
+    });
+    window.dispatchEvent(event);
+  } catch {
+    /* silent */
+  }
+}
+
 export interface RecentTool {
   /** Catalog path, e.g. /persona-battle. */
   readonly path: string;
@@ -64,7 +84,9 @@ export function writeRecentTools(
     storage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, MAX_ITEMS)));
   } catch {
     /* silent (quota / private mode) */
+    return;
   }
+  notifySameTab();
 }
 
 export function recordRecentTool(
@@ -88,7 +110,9 @@ export function clearRecentTools(
     storage.removeItem(STORAGE_KEY);
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 export const RECENT_TOOLS_KEY = STORAGE_KEY;
