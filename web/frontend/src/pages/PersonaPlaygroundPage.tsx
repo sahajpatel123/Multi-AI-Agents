@@ -99,6 +99,8 @@ export function PersonaPlaygroundPage() {
   const [query, setQuery] = useState(() => params.get('q') ?? '');
   const [moodId, setMoodId] = useState<MoodId | null>(null);
   const [shiftTAnnouncement, setShiftTAnnouncement] = useState<string>('');
+  const [pulseTick, setPulseTick] = useState(0);
+  const [pulsePath, setPulsePath] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<number | null>(null);
   // Forward-declared ref so the Shift+S effect (registered before
@@ -299,6 +301,9 @@ export function PersonaPlaygroundPage() {
           if (!entry) return;
           const nowPinned = togglePinnedTool(window.localStorage, top.path);
           setShiftTAnnouncement(nowPinned ? `Pinned ${entry.name}` : `Unpinned ${entry.name}`);
+          // Pulse the affected chip so the user sees the change.
+          setPulsePath(top.path);
+          setPulseTick((tick) => tick + 1);
         })
         .catch(() => {
           /* chunk load failed — silently abort */
@@ -547,7 +552,7 @@ export function PersonaPlaygroundPage() {
           <ToolSearchLauncher />
         </section>
 
-        <PinnedTools />
+        <PinnedTools pulseTick={pulseTick} pulsePath={pulsePath} />
 
         <SmartSuggestions />
 

@@ -122,6 +122,31 @@ describe('PinnedTools', () => {
     fireEvent.click(screen.getByRole('button', { name: /Unpin all tools/i }));
     expect(readPinnedTools(window.localStorage)).toEqual([]);
   });
+
+  it('applies the pulse class to the matching chip when pulseTick + pulsePath are set', () => {
+    writePinned(['/persona-battle', '/persona-match']);
+    const { container } = render(
+      <MemoryRouter>
+        <PinnedTools pulseTick={1} pulsePath="/persona-battle" />
+      </MemoryRouter>,
+    );
+    const items = container.querySelectorAll('.ppg-pinned__item');
+    expect(items.length).toBe(2);
+    const pulsing = container.querySelectorAll('.ppg-pinned__item--pulse');
+    expect(pulsing.length).toBe(1);
+    // The pulsing chip should be the one whose Link points at /persona-battle.
+    expect(pulsing[0].textContent).toContain('Persona Battle');
+  });
+
+  it('does not pulse when pulseTick is 0 (default)', () => {
+    writePinned(['/persona-battle']);
+    const { container } = render(
+      <MemoryRouter>
+        <PinnedTools />
+      </MemoryRouter>,
+    );
+    expect(container.querySelector('.ppg-pinned__item--pulse')).toBeNull();
+  });
 });
 
 describe('pinnedTools same-tab storage notification', () => {
