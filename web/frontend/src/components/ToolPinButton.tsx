@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pin } from 'lucide-react';
 import { isPinned, togglePinnedTool } from '../lib/pinnedTools';
 
 const STORAGE_KEY = 'arena:persona-playground:pinned-tools:v1';
+
+const LIMIT_HINT_REVERT_MS = 1500;
 
 export interface ToolPinButtonProps {
   /** Persona-tool path to pin/unpin. */
@@ -24,6 +26,7 @@ export function ToolPinButton({ path, label }: ToolPinButtonProps) {
     return isPinned(window.localStorage, path);
   });
   const [limitHit, setLimitHit] = useState<boolean>(false);
+  const limitHintTimerRef = useRef<number | null>(null);
 
   const refresh = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -37,7 +40,13 @@ export function ToolPinButton({ path, label }: ToolPinButtonProps) {
       if (event.key === null || event.key === STORAGE_KEY) refresh();
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      if (limitHintTimerRef.current !== null) {
+        window.clearTimeout(limitHintTimerRef.current);
+        limitHintTimerRef.current = null;
+      }
+    };
   }, [refresh]);
 
   const onClick = useCallback(() => {
@@ -48,7 +57,13 @@ export function ToolPinButton({ path, label }: ToolPinButtonProps) {
     // storage event. Reflect that locally.
     if (!next && !isPinned(window.localStorage, path)) {
       setLimitHit(true);
-      window.setTimeout(() => setLimitHit(false), 1500);
+      if (limitHintTimerRef.current !== null) {
+        window.clearTimeout(limitHintTimerRef.current);
+      }
+      limitHintTimerRef.current = window.setTimeout(() => {
+        setLimitHit(false);
+        limitHintTimerRef.current = null;
+      }, LIMIT_HINT_REVERT_MS);
       return;
     }
     setPinned(next);

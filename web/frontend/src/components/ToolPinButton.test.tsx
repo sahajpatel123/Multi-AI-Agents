@@ -61,4 +61,22 @@ describe('ToolPinButton', () => {
     );
     expect(readPinnedTools(window.localStorage).length).toBe(3);
   });
+
+  it('cancels the pending limit-hint timer on unmount (no setState after unmount)', () => {
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout');
+    try {
+      window.localStorage.setItem(
+        'arena:persona-playground:pinned-tools:v1',
+        JSON.stringify(['/persona-match', '/persona-council', '/persona-battle']),
+      );
+      const { unmount } = render(<ToolPinButton path="/persona-dilemma" />);
+      fireEvent.click(screen.getByRole('button', { name: /Pin to hub/i }));
+      expect(clearTimeoutSpy).not.toHaveBeenCalled();
+      unmount();
+      // Cleanup should have cleared the pending timer.
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+    } finally {
+      clearTimeoutSpy.mockRestore();
+    }
+  });
 });
