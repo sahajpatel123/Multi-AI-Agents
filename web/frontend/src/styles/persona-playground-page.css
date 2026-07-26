@@ -2160,6 +2160,32 @@
 .ppg-recent-shuffles {
   display: grid;
   gap: 10px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 320ms ease, transform 320ms ease;
+}
+
+.ppg-recent-shuffles--enter {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ppg-recent-shuffles--static {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+.ppg-recent-shuffles__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .ppg-recent-shuffles__head {
