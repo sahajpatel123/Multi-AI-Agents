@@ -32,7 +32,7 @@ describe('RelatedTools mount on top-traffic tool pages', () => {
         "import { RelatedTools } from '../components/RelatedTools';",
       );
       expect(src, `${file} mounts RelatedTools with path=${path}`).toMatch(
-        new RegExp(`<RelatedTools[^>]*path=\"${path}\"[^>]*/>`),
+        new RegExp(`<RelatedTools[^>]*path="${path}"[^>]*/>`),
       );
     });
   }
@@ -47,6 +47,6 @@ describe('RelatedTools mount on top-traffic tool pages', () => {
 
   it('RelatedTools component is also mounted on the hub', () => {
     const src = readSource('../pages/PersonaPlaygroundPage.tsx');
-    expect(src).toMatch(/<RelatedTools[^>]*path=\"\/persona-playground\"[^>]*\/>/);
+    expect(src).toMatch(/<RelatedTools[^>]*path="\/persona-playground"[^>]*\/>/);
   });
 });

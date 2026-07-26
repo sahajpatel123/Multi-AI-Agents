@@ -40,9 +40,12 @@ export function ShareStreakButton({
     origin ?? (typeof window === 'undefined' ? '' : window.location.origin);
 
   const text = buildShareStreakText(streak, resolvedOrigin);
-  if (!text) return null;
 
+  // Hooks must be called unconditionally — move useCallback above the
+  // early-return so React's hook count stays stable across renders
+  // where `text` toggles between null and non-null.
   const onClick = useCallback(async () => {
+    if (!text) return;
     const ok = await copyToClipboard(text);
     if (!ok) return;
     setCopied(true);
@@ -57,6 +60,8 @@ export function ShareStreakButton({
       });
     }
   }, [text, resolvedOrigin, streak.current]);
+
+  if (!text) return null;
 
   return (
     <button
