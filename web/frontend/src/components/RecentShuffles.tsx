@@ -44,6 +44,9 @@ export function RecentShuffles({ limit = 5 }: RecentShufflesProps) {
   const [pinned, setPinned] = useState<readonly string[]>([]);
   const [announcement, setAnnouncement] = useState('');
   const [entered, setEntered] = useState(false);
+  const [pulseTick, setPulseTick] = useState(0);
+  const [pulsePath, setPulsePath] = useState<string | null>(null);
+  const [limitFlash, setLimitFlash] = useState(0);
   const firstItemRef = useRef<HTMLLIElement | null>(null);
   const reduceMotion = prefersReducedMotion();
   const PINNED_TOOLS_KEY = 'arena:persona-playground:pinned-tools:v1';
@@ -116,9 +119,15 @@ export function RecentShuffles({ limit = 5 }: RecentShufflesProps) {
     const nowPinned = togglePinnedTool(window.localStorage, path);
     if (!nowPinned && !wasPinned) {
       setAnnouncement(`Pin limit reached (${PINNED_TOOLS_LIMIT}). Unpin a tool first.`);
+      // Briefly flash the strip red so the user sees that the
+      // action was rejected — not silent.
+      setLimitFlash((tick) => tick + 1);
       return;
     }
     setAnnouncement(nowPinned ? `Pinned ${name}` : `Unpinned ${name}`);
+    // Pulse the affected chip so the user sees the pin state change.
+    setPulsePath(path);
+    setPulseTick((tick) => tick + 1);
   };
 
   if (items.length === 0) return null;
@@ -129,6 +138,8 @@ export function RecentShuffles({ limit = 5 }: RecentShufflesProps) {
         reduceMotion ? ' ppg-recent-shuffles--static' : ''
       }`}
       aria-label="Recent random picks"
+      data-limit-flash={limitFlash > 0 ? 'true' : undefined}
+      data-limit-flash-tick={limitFlash > 0 ? limitFlash : undefined}
     >
       <div
         className="ppg-recent-shuffles__sr-only"
@@ -175,6 +186,10 @@ export function RecentShuffles({ limit = 5 }: RecentShufflesProps) {
                 to={tool.path}
                 className={`ppg-recent-shuffles__chip${
                   isPinnedNow ? ' ppg-recent-shuffles__chip--pinned' : ''
+                }${
+                  pulseTick > 0 && pulsePath === item.path
+                    ? ' ppg-recent-shuffles__chip--pulse'
+                    : ''
                 }`}
                 aria-label={`Re-open recent random pick: ${tool.name}`}
               >

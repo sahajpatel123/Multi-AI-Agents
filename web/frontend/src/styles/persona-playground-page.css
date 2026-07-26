@@ -2280,6 +2280,60 @@
   box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.18) inset;
 }
 
+/* Pulse animation — fires when the user toggles the pin on a chip.
+ * The .ppg-recent-shuffles--static modifier (set when the user
+ * prefers reduced motion) disables the animation. */
+@keyframes ppg-recent-shuffles-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 209, 102, 0.6);
+    transform: translateY(-1px) scale(1.04);
+  }
+  60% {
+    box-shadow: 0 0 0 8px rgba(255, 209, 102, 0);
+    transform: translateY(-1px) scale(1.04);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 209, 102, 0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ppg-recent-shuffles__chip--pulse {
+  animation: ppg-recent-shuffles-pulse 480ms ease-out;
+}
+
+.ppg-recent-shuffles--static .ppg-recent-shuffles__chip--pulse {
+  animation: none;
+}
+
+/* Limit-flash — brief red border on the strip when the user hits
+ * the 3-pin cap. Keyed off a data-attribute so the animation only
+ * fires when the user actually hits the limit (not on first paint). */
+@keyframes ppg-recent-shuffles-limit-flash {
+  0% {
+    border-color: rgba(255, 138, 138, 0);
+  }
+  20% {
+    border-color: rgba(255, 138, 138, 0.7);
+  }
+  100% {
+    border-color: rgba(255, 138, 138, 0);
+  }
+}
+
+.ppg-recent-shuffles[data-limit-flash='true'] {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 4px;
+  margin: -4px;
+  animation: ppg-recent-shuffles-limit-flash 800ms ease-out;
+}
+
+.ppg-recent-shuffles--static[data-limit-flash='true'] {
+  animation: none;
+  border-color: rgba(255, 138, 138, 0.4);
+}
+
 .ppg-recent-shuffles__pin {
   position: absolute;
   top: 6px;
