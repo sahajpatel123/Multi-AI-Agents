@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, GitCompare, Layers, ListOrdered, Map, Search, Sparkles, Star, X } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
@@ -94,6 +94,8 @@ function matchesFilter(
 export function PersonaPlaygroundPage() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isOnIndex = location.pathname === '/persona-playground/index';
   const { isAuthenticated } = useAuth();
   const [pageVisible, setPageVisible] = useState(false);
   const [query, setQuery] = useState(() => params.get('q') ?? '');
@@ -284,6 +286,7 @@ export function PersonaPlaygroundPage() {
   // calls togglePinnedTool, which already notifies same-tab
   // listeners so the PinnedTools widget refreshes.
   useEffect(() => {
+    let cancelled = false;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'E' || !event.shiftKey) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -295,6 +298,11 @@ export function PersonaPlaygroundPage() {
         import('../lib/pinnedTools'),
       ])
         .then(([{ readRecentTools }, { togglePinnedTool }]) => {
+          // Bail out if the user navigated away while the chunk was
+          // loading — same defensive pattern as the Shift+M handler
+          // (cycle 446) and the dynamic-import guards across the
+          // codebase.
+          if (cancelled) return;
           const top = readRecentTools(window.localStorage)[0];
           if (!top) return;
           const entry = PERSONA_PLAYGROUND_ENTRIES.find((e) => e.path === top.path);
@@ -310,7 +318,10 @@ export function PersonaPlaygroundPage() {
         });
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   // Global Shift+F — jump to the Favorites page.
@@ -334,6 +345,13 @@ export function PersonaPlaygroundPage() {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (!shouldCaptureSlashFocus(event.target)) return;
       event.preventDefault();
+      if (typeof window === 'undefined') return;
+      // Skip the announce + nav when we're already on the index —
+      // saves a redundant "Opening the all-tools index" + scroll.
+      if (window.location.pathname === '/persona-playground/index') {
+        setShiftTAnnouncement('You are already on the all-tools index');
+        return;
+      }
       setShiftTAnnouncement('Opening the all-tools index');
       navigateRef.current('/persona-playground/index');
     };
@@ -805,7 +823,12 @@ export function PersonaPlaygroundPage() {
               filtering — just a dense reference surface for power users and crawlers.
             </p>
           </div>
-          <Link to="/persona-playground/index" className="ppg-index-cta__btn">
+          <Link
+            to="/persona-playground/index"
+            className="ppg-index-cta__btn"
+            data-route-active={isOnIndex ? 'true' : undefined}
+            aria-current={isOnIndex ? 'page' : undefined}
+          >
             View A-Z index
             <kbd className="ppg-index-cta__shortcut" aria-hidden="true">
               Shift + A
