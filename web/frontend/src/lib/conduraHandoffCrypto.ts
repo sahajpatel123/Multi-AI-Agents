@@ -19,7 +19,17 @@ export async function getOrCreateSigningKey(): Promise<{
   publicKeyJwk: JsonWebKey;
   privateKey: CryptoKey;
 }> {
-  const existing = sessionStorage.getItem(KEY_STORAGE);
+  // sessionStorage can throw in private mode, with quota exceeded, or
+  // under enterprise storage-disable policies. Treat every read as
+  // best-effort — if the read fails, fall through to key generation.
+  // The signing key never leaves the browser; nothing security-relevant
+  // is at risk, but a crash here would silently break every handoff.
+  let existing: string | null = null;
+  try {
+    existing = sessionStorage.getItem(KEY_STORAGE);
+  } catch {
+    existing = null;
+  }
   if (existing) {
     try {
       const jwk = JSON.parse(existing) as JsonWebKey;
@@ -39,7 +49,11 @@ export async function getOrCreateSigningKey(): Promise<{
       delete publicJwk.d;
       return { publicKeyJwk: publicJwk, privateKey };
     } catch {
-      sessionStorage.removeItem(KEY_STORAGE);
+      try {
+        sessionStorage.removeItem(KEY_STORAGE);
+      } catch {
+        /* ignore — best-effort cleanup */
+      }
     }
   }
   const keyPair = await crypto.subtle.generateKey(
@@ -48,7 +62,13 @@ export async function getOrCreateSigningKey(): Promise<{
     ['sign', 'verify'],
   );
   const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
-  sessionStorage.setItem(KEY_STORAGE, JSON.stringify(privateJwk));
+  try {
+    sessionStorage.setItem(KEY_STORAGE, JSON.stringify(privateJwk));
+  } catch {
+    // Quota / private mode — the in-memory CryptoKey is still usable
+    // for the current call, but the next call will regenerate. That's
+    // acceptable for a handoff signing key.
+  }
   const publicKeyJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
   return { publicKeyJwk, privateKey: keyPair.privateKey };
 }
@@ -57,7 +77,11 @@ export async function rotateSigningKey(): Promise<{
   publicKeyJwk: JsonWebKey;
   privateKey: CryptoKey;
 }> {
-  sessionStorage.removeItem(KEY_STORAGE);
+  try {
+    sessionStorage.removeItem(KEY_STORAGE);
+  } catch {
+    /* ignore — the regeneration below proceeds regardless */
+  }
   return getOrCreateSigningKey();
 }
 

@@ -21,7 +21,7 @@
  * slate so the key-persistence branch is deterministic.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canonicalize } from './jcs';
 import {
   buildSignedHandoff,
@@ -208,5 +208,44 @@ describe('buildSignedHandoff', () => {
     // or a different curve trips this test loudly.
     expect(payload.auth.signature.length).toBeGreaterThanOrEqual(80);
     expect(payload.auth.signature.length).toBeLessThanOrEqual(96);
+  });
+
+  it('survives sessionStorage throws across get/set/remove (cycle 385)', async () => {
+    // Private mode, quota exceeded, and enterprise storage-disable
+    // policies all throw inside sessionStorage. The signing key
+    // helpers must not bubble — every handoff depends on this path.
+    const getSpy = vi
+      .spyOn(window.sessionStorage, 'getItem')
+      .mockImplementation(() => {
+        throw new Error('SecurityError');
+      });
+    const setSpy = vi
+      .spyOn(window.sessionStorage, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('QuotaExceededError');
+      });
+    const removeSpy = vi
+      .spyOn(window.sessionStorage, 'removeItem')
+      .mockImplementation(() => {
+        throw new Error('SecurityError');
+      });
+    try {
+      // getOrCreateSigningKey: read throws, falls through to key gen,
+      // write throws, but the in-memory CryptoKey is still returned.
+      const { publicKeyJwk, privateKey } = await getOrCreateSigningKey();
+      expect(publicKeyJwk.kty).toBe('EC');
+      expect(publicKeyJwk.crv).toBe('P-256');
+      expect(privateKey.extractable).toBe(true);
+      // rotateSigningKey: remove throws, but regeneration still succeeds.
+      await expect(rotateSigningKey()).resolves.toBeDefined();
+      // buildSignedHandoff still works end-to-end despite storage being
+      // completely broken.
+      const payload = await buildSignedHandoff(baseInput);
+      expect(payload.schema).toBe('arena.handoff.v1');
+    } finally {
+      getSpy.mockRestore();
+      setSpy.mockRestore();
+      removeSpy.mockRestore();
+    }
   });
 });
