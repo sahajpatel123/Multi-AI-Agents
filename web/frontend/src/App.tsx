@@ -28,6 +28,7 @@ import {
 } from './api';
 import { copyToClipboard } from './lib/clipboard';
 import { downloadMarkdownFile } from './lib/downloadTextFile';
+import { safeLocalStorage } from './lib/safeStorage';
 import { formatArenaExport, formatArenaWinnerExport } from './lib/arenaExport';
 import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
 import { isScrollNearBottom, shouldAutoScrollChat } from './lib/chatScroll';
@@ -236,7 +237,7 @@ function App() {
 
   // Session restore on mount
   useEffect(() => {
-    const storedSessionId = localStorage.getItem('arena_session_id');
+    const storedSessionId = safeLocalStorage.getItem('arena_session_id');
     if (!storedSessionId) return;
     void getSession(storedSessionId)
       .then((data) => {
@@ -245,11 +246,11 @@ function App() {
           const lastTurn = data.turns[data.turns.length - 1];
           loadTurn(lastTurn);
         } else {
-          localStorage.removeItem('arena_session_id');
+          safeLocalStorage.removeItem('arena_session_id');
         }
       })
       .catch(() => {
-        localStorage.removeItem('arena_session_id');
+        safeLocalStorage.removeItem('arena_session_id');
       });
   }, []);
 
@@ -327,7 +328,7 @@ function App() {
     }));
 
     const promptResponse: PromptResponse = {
-      session_id: sessionData?.session_id || localStorage.getItem('arena_session_id') || '',
+      session_id: sessionData?.session_id || safeLocalStorage.getItem('arena_session_id') || '',
       prompt: turn.prompt,
       prompt_category: turn.prompt_category || '',
       winner: turn.agent_responses[turn.winner_id],
@@ -648,7 +649,7 @@ function App() {
 
   const handleNewChat = useCallback(async () => {
     void track('new_chat_clicked');
-    const currentSessionId = sessionData?.session_id || localStorage.getItem('arena_session_id');
+    const currentSessionId = sessionData?.session_id || safeLocalStorage.getItem('arena_session_id');
     if (user && currentSessionId) {
       try {
         await saveMemory(currentSessionId, 'new_chat');
@@ -740,7 +741,7 @@ function App() {
     tokenBuffers.current = {};
 
     // Pass existing session_id if available
-    const existingSessionId = sessionData?.session_id || localStorage.getItem('arena_session_id') || undefined;
+    const existingSessionId = sessionData?.session_id || safeLocalStorage.getItem('arena_session_id') || undefined;
 
     // Flush buffered tokens to React state ~20fps so cards feel alive without
     // re-rendering on every SSE token.
@@ -805,7 +806,7 @@ function App() {
           setCrossPollinateIntelScore(null);
 
           // Save session ID to localStorage
-          localStorage.setItem('arena_session_id', data.session_id);
+          safeLocalStorage.setItem('arena_session_id', data.session_id);
 
           // Update session data with new turn using functional update
           const currentTimestamp = new Date().toISOString();
@@ -1125,7 +1126,7 @@ function App() {
           conversation_history: currentHistory,
           original_verdict: focusedScored?.response.verdict || focusedAgentConfig?.oneLiner || '',
           original_prompt: response?.prompt || currentPrompt || 'General discussion',
-          session_id: response?.session_id || sessionData?.session_id || localStorage.getItem('arena_session_id') || undefined,
+          session_id: response?.session_id || sessionData?.session_id || safeLocalStorage.getItem('arena_session_id') || undefined,
           persona_ids: personaIds,
         },
         {
