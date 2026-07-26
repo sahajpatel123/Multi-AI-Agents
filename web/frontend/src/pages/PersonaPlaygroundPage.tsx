@@ -313,6 +313,19 @@ export function PersonaPlaygroundPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Global Shift+F — jump to the Favorites page.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'F' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      navigateRef.current('/persona-playground/favorites');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (searchDebounceRef.current !== null) {

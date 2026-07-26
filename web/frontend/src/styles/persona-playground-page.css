@@ -1422,6 +1422,23 @@
   background: rgba(255, 216, 107, 0.1);
 }
 
+.ppg-favs__shortcut {
+  margin-left: 2px;
+  margin-right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: rgba(255, 216, 107, 0.86);
+  background: rgba(255, 216, 107, 0.08);
+  border: 1px solid rgba(255, 216, 107, 0.32);
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+
 .ppg-favs__clear:hover {
   border-color: var(--ppg-card-border-hover);
   color: var(--ppg-accent);

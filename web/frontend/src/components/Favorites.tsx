@@ -57,6 +57,9 @@ export function Favorites({
           </span>
           <Link to="/persona-playground/favorites" className="ppg-favs__view-all">
             View all
+            <kbd className="ppg-favs__shortcut" aria-hidden="true">
+              Shift + F
+            </kbd>
             <ArrowRight aria-hidden="true" />
           </Link>
           <button
