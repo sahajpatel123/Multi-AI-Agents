@@ -1,3 +1,5 @@
+import { safeSessionStorage } from '../lib/safeStorage';
+
 const INTENT_KEY = 'arena_post_auth_redirect';
 
 /** Canonical post-auth home when no deep-link was requested. */
@@ -60,29 +62,17 @@ export function normalizeRedirectPath(path: string): string {
 
 export function setRedirectIntent(path: string): void {
   if (!isSafeRedirectPath(path)) return;
-  try {
-    sessionStorage.setItem(INTENT_KEY, normalizeRedirectPath(path.trim()));
-  } catch {
-    /* private mode / quota */
-  }
+  safeSessionStorage.setItem(INTENT_KEY, normalizeRedirectPath(path.trim()));
 }
 
 export function getRedirectIntent(): string {
-  try {
-    const raw = sessionStorage.getItem(INTENT_KEY);
-    if (raw && isSafeRedirectPath(raw)) return normalizeRedirectPath(raw.trim());
-  } catch {
-    /* ignore */
-  }
+  const raw = safeSessionStorage.getItem(INTENT_KEY);
+  if (raw && isSafeRedirectPath(raw)) return normalizeRedirectPath(raw.trim());
   return DEFAULT_REDIRECT_INTENT;
 }
 
 export function clearRedirectIntent(): void {
-  try {
-    sessionStorage.removeItem(INTENT_KEY);
-  } catch {
-    /* ignore */
-  }
+  safeSessionStorage.removeItem(INTENT_KEY);
 }
 
 /** Human label for where post-auth navigation will land. */
