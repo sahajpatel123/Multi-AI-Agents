@@ -58,7 +58,9 @@ export function SmartSuggestions({
 
   const all = useMemo(() => {
     if (initial.length === 0) return [];
+    if (typeof window === 'undefined') return [];
     return listEligibleInCategory(
+      window.localStorage,
       initial[0].category,
       initial[0].affinity,
     );

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SmartSuggestions } from './SmartSuggestions';
-import { suggestTools } from '../lib/smartSuggestions';
+import { listEligibleInCategory, suggestTools } from '../lib/smartSuggestions';
 import { toggleFavorite } from '../lib/favorites';
 import { recordRecentTool } from '../lib/recentTools';
 import { PERSONA_PLAYGROUND_ENTRIES } from '../data/personaPlayground';
@@ -127,5 +127,37 @@ describe('SmartSuggestions', () => {
     );
     const button = screen.getByRole('button', { name: /Show all/i });
     expect(button).toBeInTheDocument();
+  });
+});
+
+describe('listEligibleInCategory', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('returns [] when storage is null', () => {
+    expect(listEligibleInCategory(null, 'decide', 0)).toEqual([]);
+  });
+
+  it('reads from the supplied storage argument, not window.localStorage', () => {
+    // Pin one decide tool in real window.localStorage so the real
+    // storage has a seen entry. The mock storage passed to the
+    // helper is empty — the helper must respect that, not silently
+    // re-read window.localStorage.
+    toggleFavorite(window.localStorage, '/persona-dilemma');
+    const emptyStorage = {
+      getItem: () => null,
+    } as Pick<Storage, 'getItem'>;
+    const out = listEligibleInCategory(emptyStorage, 'decide', 0);
+    // The decide category has at least one entry that should be
+    // returned when storage is empty.
+    expect(out.length).toBeGreaterThan(0);
+    expect(out.every((s) => s.category === 'decide')).toBe(true);
+  });
+
+  it('excludes paths already in the supplied storage', () => {
+    toggleFavorite(window.localStorage, '/persona-dilemma');
+    const out = listEligibleInCategory(window.localStorage, 'decide', 0);
+    expect(out.every((s) => s.entry.path !== '/persona-dilemma')).toBe(true);
   });
 });
