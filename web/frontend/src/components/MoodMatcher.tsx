@@ -7,6 +7,7 @@ import {
   isMoodId,
   type MoodId,
 } from '../lib/moodMatcher';
+import { recordMoodPick } from '../lib/moodHistory';
 import {
   PERSONA_PLAYGROUND_ENTRIES,
   personaPlaygroundCategoryLabel,
@@ -67,6 +68,13 @@ export function MoodMatcher({
     if (!mood) return null;
     const tool = TOOL_BY_PATH.get(mood.toolPath);
     return { mood, tool };
+  }, [active]);
+
+  // Record the pick for the history widget whenever `active` flips
+  // to a new mood. The history lib is silent on storage failures.
+  useEffect(() => {
+    if (!active || typeof window === 'undefined') return;
+    recordMoodPick(window.localStorage, active);
   }, [active]);
 
   const focusMood = useCallback((id: MoodId) => {

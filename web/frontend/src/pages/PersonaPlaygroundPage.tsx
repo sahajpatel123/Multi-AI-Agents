@@ -20,6 +20,7 @@ import { ToolSearchPalette } from '../components/ToolSearchPalette';
 import { ToolSearchLauncher } from '../components/ToolSearchLauncher';
 import { ProgressStrip } from '../components/ProgressStrip';
 import { MoodMatcher } from '../components/MoodMatcher';
+import { MoodMatcherHistory } from '../components/MoodMatcherHistory';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -288,6 +289,7 @@ export function PersonaPlaygroundPage() {
         />
 
         <MoodMatcher syncUrl />
+        <MoodMatcherHistory />
 
         {showFeatured && featured && (
           <Reveal as="section" className="ppg-featured" aria-label="Today's pick">
