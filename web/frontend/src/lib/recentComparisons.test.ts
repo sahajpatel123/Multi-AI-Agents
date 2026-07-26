@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   RECENT_COMPARISONS_KEY,
   RECENT_COMPARISONS_LIMIT,
@@ -156,5 +156,54 @@ describe('clearRecentComparisons', () => {
 
   it('is a no-op when storage is null', () => {
     expect(() => clearRecentComparisons(null)).not.toThrow();
+  });
+});
+
+describe('recentComparisons same-tab storage notification', () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('dispatches a synthetic storage event on recordRecentComparison', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      recordRecentComparison(window.localStorage, '/persona-battle', '/persona-match', 1);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(RECENT_COMPARISONS_KEY);
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('dispatches a synthetic storage event on clearRecentComparisons', () => {
+    window.localStorage.setItem(
+      RECENT_COMPARISONS_KEY,
+      JSON.stringify([{ a: '/x', b: '/y', at: 1 }]),
+    );
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      clearRecentComparisons(window.localStorage);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(RECENT_COMPARISONS_KEY);
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('does not notify when storage is null', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      writeRecentComparisons(null, []);
+      clearRecentComparisons(null);
+      expect(onStorage).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
   });
 });

@@ -27,6 +27,7 @@ import { PinnedTools } from '../components/PinnedTools';
 import { ToolPinButton } from '../components/ToolPinButton';
 import { SmartSuggestions } from '../components/SmartSuggestions';
 import { HubSearchHistory } from '../components/HubSearchHistory';
+import { CatalogExport } from '../components/CatalogExport';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -436,6 +437,7 @@ export function PersonaPlaygroundPage() {
           }}
         />
         <HubSearchHistory onReplay={onReplaySearch} />
+        <CatalogExport />
 
         {showFeatured && featured && (
           <Reveal as="section" className="ppg-featured" aria-label="Today's pick">

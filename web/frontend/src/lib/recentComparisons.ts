@@ -13,6 +13,26 @@ import { PERSONA_PATH_PREFIX } from '../data/personaPlayground';
 const STORAGE_KEY = 'arena:persona-playground:recent-comparisons:v1';
 const MAX_ITEMS = 6;
 
+/**
+ * Notify same-tab listeners that the recent-comparisons list changed.
+ * The browser `StorageEvent` only fires in OTHER tabs, so without
+ * this signal the RecentComparisons widgets mounted in the same
+ * tab would not refresh until the next page load. Swallows any
+ * dispatch failure (jsdom quirks, locked-down iframes).
+ */
+function notifySameTab(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const event = new StorageEvent('storage', {
+      key: STORAGE_KEY,
+      newValue: window.localStorage.getItem(STORAGE_KEY),
+    });
+    window.dispatchEvent(event);
+  } catch {
+    /* silent */
+  }
+}
+
 export interface RecentComparison {
   /** First path (slot A). */
   readonly a: string;
@@ -71,7 +91,9 @@ export function writeRecentComparisons(
     storage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, MAX_ITEMS)));
   } catch {
     /* silent (quota / private mode) */
+    return;
   }
+  notifySameTab();
 }
 
 export function recordRecentComparison(
@@ -98,7 +120,9 @@ export function clearRecentComparisons(
     storage.removeItem(STORAGE_KEY);
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 export const RECENT_COMPARISONS_KEY = STORAGE_KEY;
