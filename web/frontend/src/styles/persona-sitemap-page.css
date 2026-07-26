@@ -103,6 +103,47 @@
   max-width: 60ch;
 }
 
+/* Mirror of cycles 471 (categories) and 473 (whats-new). The hero
+ * also exposes the global Shift+P shortcut here so users landing
+ * via the "View sitemap" CTA can discover the shortcut they'd use
+ * on the hub. */
+.psm-hero__shortcut-hint {
+  margin: 4px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--psm-accent-dim);
+  width: fit-content;
+}
+
+.psm-hero__kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--psm-accent);
+  background: rgba(241, 233, 216, 0.08);
+  border: 1px solid rgba(241, 233, 216, 0.2);
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+/* Heading is focusable so the page can drop focus on arrival when
+ * Shift+P navigates here — the screen reader announces the title
+ * instead of stalling on the document body. */
+.psm-hero__title:focus {
+  outline: none;
+}
+
+.psm-hero__title:focus-visible {
+  outline: 2px solid var(--psm-accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
 .psm-grid-wrap {
   display: grid;
   gap: 14px;

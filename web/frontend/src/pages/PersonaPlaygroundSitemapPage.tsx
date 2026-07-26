@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Map } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
@@ -13,11 +13,23 @@ import '../styles/persona-sitemap-page.css';
 
 export function PersonaPlaygroundSitemapPage() {
   const [pageVisible, setPageVisible] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
 
   useEffect(() => {
     const reduceMotion = prefersReducedMotion();
     const id = window.setTimeout(() => setPageVisible(true), reduceMotion ? 0 : 80);
     return () => window.clearTimeout(id);
+  }, []);
+
+  // Focus the heading on arrival so screen-reader / keyboard users land
+  // on the page title (not the body) when Shift+P navigates them here.
+  // Mirror of cycles 471 (categories) and 473 (whats-new): only refocus
+  // when the user is arriving fresh, never steal focus from a click.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.tagName !== 'HTML') return;
+    headingRef.current?.focus({ preventScroll: true });
   }, []);
 
   return (
@@ -33,7 +45,12 @@ export function PersonaPlaygroundSitemapPage() {
           <p className="psm-hero__eyebrow">
             <Map aria-hidden="true" /> Sitemap
           </p>
-          <h1 id="psm-title" className="psm-hero__title">
+          <h1
+            id="psm-title"
+            ref={headingRef}
+            tabIndex={-1}
+            className="psm-hero__title"
+          >
             <span>Every page</span>
             <span className="psm-hero__title-accent">in the playground.</span>
           </h1>
@@ -41,6 +58,10 @@ export function PersonaPlaygroundSitemapPage() {
             A table of contents for the persona playground — {PERSONA_PLAYGROUND_SITEMAP.length} public pages,
             each with a one-line description. Use this as a quick map of every deep-link
             surface the hub has.
+          </p>
+          <p className="psm-hero__shortcut-hint">
+            <kbd className="psm-hero__kbd" aria-hidden="true">Shift + P</kbd>
+            <span>Press this shortcut on the hub to jump back here.</span>
           </p>
         </section>
 
