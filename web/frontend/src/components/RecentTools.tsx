@@ -88,14 +88,39 @@ export function RecentTools({
         </button>
       </header>
       <ul className="ppg-recent-tools__list">
-        {items.map((item) => {
+        {items.map((item, index) => {
           const tool = TOOL_BY_PATH.get(item.path);
           if (!tool) return null;
+          const isLatest = index === 0;
+          const classes = [
+            'ppg-recent-tools__item',
+            isLatest ? 'ppg-recent-tools__item--latest' : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
           return (
-            <li key={item.path} className="ppg-recent-tools__item">
-              <Link to={item.path} className="ppg-recent-tools__link">
+            <li key={item.path} className={classes}>
+              <Link
+                to={item.path}
+                className="ppg-recent-tools__link"
+                aria-label={
+                  isLatest
+                    ? `${tool.name} — most recent, press Shift + T to jump (${formatRelative(item.at, now)})`
+                    : `${tool.name} (${formatRelative(item.at, now)})`
+                }
+              >
                 <span className="ppg-recent-tools__row">
-                  <span className="ppg-recent-tools__name">{tool.name}</span>
+                  <span className="ppg-recent-tools__name">
+                    {tool.name}
+                    {isLatest ? (
+                      <span
+                        className="ppg-recent-tools__latest-tag"
+                        aria-hidden="true"
+                      >
+                        latest
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="ppg-recent-tools__time">
                     <Clock aria-hidden="true" />
                     {formatRelative(item.at, now)}

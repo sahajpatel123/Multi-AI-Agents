@@ -97,6 +97,7 @@ export function PersonaPlaygroundPage() {
   const [pageVisible, setPageVisible] = useState(false);
   const [query, setQuery] = useState(() => params.get('q') ?? '');
   const [moodId, setMoodId] = useState<MoodId | null>(null);
+  const [shiftTAnnouncement, setShiftTAnnouncement] = useState<string>('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<number | null>(null);
   // Forward-declared ref so the Shift+S effect (registered before
@@ -227,6 +228,10 @@ export function PersonaPlaygroundPage() {
       import('../lib/recentTools').then(({ readRecentTools }) => {
         const top = readRecentTools(window.localStorage)[0];
         if (!top) return;
+        const entry = PERSONA_PLAYGROUND_ENTRIES.find((e) => e.path === top.path);
+        if (entry) {
+          setShiftTAnnouncement(`Re-opened ${entry.name}`);
+        }
         navigateRef.current(top.path);
       });
     };
@@ -384,6 +389,15 @@ export function PersonaPlaygroundPage() {
       <OnboardingTour />
 
       <KeyboardShortcutsHelp surface="persona-playground" />
+
+      <div
+        className="ppg-sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {shiftTAnnouncement}
+      </div>
 
       <main className="ppg-main">
         <section className="ppg-hero">

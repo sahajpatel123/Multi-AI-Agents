@@ -8,6 +8,10 @@ import {
   clearRecentTools,
 } from '../lib/recentTools';
 
+// `rows` is implicit: each row in `writeRecentTools` ends up rendered as a
+// link. We deliberately use the existing paths so the catalog lookup
+// succeeds — orphan paths are exercised in another test.
+
 function writeRecentTools(values: Array<{ path: string; at: number }>) {
   window.localStorage.setItem(
     'arena:persona-playground:recent-tools:v1',
@@ -82,5 +86,24 @@ describe('RecentTools widget', () => {
     const out = readRecentTools(window.localStorage);
     expect(out[0].path).toBe('/persona-battle');
     clearRecentTools(window.localStorage);
+  });
+
+  it('marks only the top entry as latest and exposes the Shift+T shortcut in its aria-label', () => {
+    writeRecentTools([
+      { path: '/persona-battle', at: Date.now() },
+      { path: '/persona-roast', at: Date.now() - 1000 },
+      { path: '/persona-duel', at: Date.now() - 2000 },
+    ]);
+    renderWithRouter(<RecentTools />);
+    expect(screen.getByText(/^latest$/i)).toBeInTheDocument();
+    const latestLink = screen.getByLabelText(/Persona Battle — most recent, press Shift \+ T/i);
+    expect(latestLink).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Persona Roast/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Persona Duel/i)).toBeInTheDocument();
+  });
+
+  it('renders no latest tag when history is empty', () => {
+    renderWithRouter(<RecentTools />);
+    expect(screen.queryByText(/^latest$/i)).toBeNull();
   });
 });
