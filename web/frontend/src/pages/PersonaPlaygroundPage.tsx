@@ -13,6 +13,7 @@ import { SurpriseButton } from '../components/SurpriseButton';
 import { ToolsNotYetTried } from '../components/ToolsNotYetTried';
 import { PersonaPlaygroundStats } from '../components/PersonaPlaygroundStats';
 import { RandomToolButton } from '../components/RandomToolButton';
+import { CompareFromCategoryButton } from '../components/CompareFromCategoryButton';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -490,6 +491,8 @@ export function PersonaPlaygroundPage() {
         <SurpriseButton />
 
         <RandomToolButton excludePaths={featured ? [featured.path] : []} />
+
+        <CompareFromCategoryButton excludePaths={featured ? [featured.path] : []} />
 
         <RecentComparisons />
 

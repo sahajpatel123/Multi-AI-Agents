@@ -27,6 +27,7 @@ import {
   MATCHUPS,
   PERSONA_PLAYGROUND_ENTRIES,
   WHATS_NEW,
+  buildCompareFromCategory,
   buildCompareShareUrl,
   categorySummaries,
   clearFeaturedDismissState,
@@ -772,5 +773,52 @@ describe('pickRandomTool', () => {
     // can collide if day % 26 happens to align. We just check shape.
     expect(a).not.toBeNull();
     expect(b).not.toBeNull();
+  });
+});
+
+describe('buildCompareFromCategory', () => {
+  it('returns 2 entries from the same category', () => {
+    const result = buildCompareFromCategory('versus', [], 0, new Date(2026, 6, 25));
+    expect(result).not.toBeNull();
+    if (result) {
+      expect(result[0].category).toBe('versus');
+      expect(result[1].category).toBe('versus');
+      expect(result[0].path).not.toBe(result[1].path);
+    }
+  });
+
+  it('excludes the given paths', () => {
+    const result = buildCompareFromCategory(
+      'versus',
+      ['/persona-battle'],
+      0,
+      new Date(2026, 6, 25),
+    );
+    if (result) {
+      expect(result[0].path).not.toBe('/persona-battle');
+      expect(result[1].path).not.toBe('/persona-battle');
+    }
+  });
+
+  it('returns null when fewer than 2 non-excluded entries exist', () => {
+    const only: PersonaPlaygroundEntry[] = [
+      {
+        path: '/a',
+        name: 'A',
+        tagline: '',
+        blurb: '',
+        category: 'mosaic',
+        format: '',
+      },
+    ];
+    expect(buildCompareFromCategory('mosaic', [], 0, new Date(2026, 6, 25), only)).toBeNull();
+  });
+
+  it('is deterministic for the same inputs', () => {
+    const date = new Date(2026, 6, 25);
+    const a = buildCompareFromCategory('council', [], 0, date);
+    const b = buildCompareFromCategory('council', [], 0, date);
+    expect(a?.[0].path).toBe(b?.[0].path);
+    expect(a?.[1].path).toBe(b?.[1].path);
   });
 });

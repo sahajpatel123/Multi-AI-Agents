@@ -748,6 +748,35 @@ export function pickRandomTool(
 }
 
 /**
+ * Pick 2 distinct tools from a given category for a one-click
+ * compare. Returns null if the category has fewer than 2
+ * non-excluded entries. Deterministic for the same inputs
+ * (day-of-year-derived start index) so a visit to the hub
+ * returns a stable pair.
+ */
+export function buildCompareFromCategory(
+  category: PersonaPlaygroundCategory,
+  excludePaths: readonly string[] = [],
+  salt: number = 0,
+  date: Date = new Date(),
+  entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+): readonly [PersonaPlaygroundEntry, PersonaPlaygroundEntry] | null {
+  const excluded = new Set(excludePaths);
+  const candidates = entries.filter(
+    (e) => e.category === category && !excluded.has(e.path),
+  );
+  if (candidates.length < 2) return null;
+  const start = (dayOfYear(date) + salt) % candidates.length;
+  const a = candidates[start];
+  let bIdx = (start + 1) % candidates.length;
+  // Ensure the two picks are distinct (candidates already deduped by path).
+  if (candidates[bIdx].path === a.path) {
+    bIdx = (bIdx + 1) % candidates.length;
+  }
+  return [a, candidates[bIdx]];
+}
+
+/**
  * True when the dismiss state is still valid for the given date.
  * A state is "valid" when it was dismissed on the same calendar day as
  * `today` — the next day the banner is allowed to show again.
