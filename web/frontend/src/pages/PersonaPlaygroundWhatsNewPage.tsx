@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
@@ -23,11 +23,23 @@ function isSafeLink(link: string | undefined): link is string {
 
 export function PersonaPlaygroundWhatsNewPage() {
   const [pageVisible, setPageVisible] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
 
   useEffect(() => {
     const reduceMotion = prefersReducedMotion();
     const id = window.setTimeout(() => setPageVisible(true), reduceMotion ? 0 : 80);
     return () => window.clearTimeout(id);
+  }, []);
+
+  // Focus the heading on arrival so screen-reader / keyboard users land
+  // on the page title (not the body) when Shift+W navigates them here.
+  // Same pattern as the categories page (cycle 471): only refocus when
+  // the user is arriving fresh, never steal focus from a link click.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.tagName !== 'HTML') return;
+    headingRef.current?.focus({ preventScroll: true });
   }, []);
 
   return (
@@ -43,13 +55,22 @@ export function PersonaPlaygroundWhatsNewPage() {
           <p className="pwn-hero__eyebrow">
             <Sparkles aria-hidden="true" /> What's new
           </p>
-          <h1 id="pwn-title" className="pwn-hero__title">
+          <h1
+            id="pwn-title"
+            ref={headingRef}
+            tabIndex={-1}
+            className="pwn-hero__title"
+          >
             <span>Recent improvements</span>
             <span className="pwn-hero__title-accent">to the playground.</span>
           </h1>
           <p className="pwn-hero__lede">
             A curated changelog of the features that have landed in the persona playground —
             the hub itself, compare, matchups, favorites, daily streak, and more.
+          </p>
+          <p className="pwn-hero__shortcut-hint">
+            <kbd className="pwn-hero__kbd" aria-hidden="true">Shift + W</kbd>
+            <span>Press this shortcut on the hub to jump back here.</span>
           </p>
         </section>
 

@@ -103,6 +103,47 @@
   max-width: 60ch;
 }
 
+/* Mirror of cycle-471 (categories page). The hero also exposes the
+ * global Shift+W shortcut here so users landing via the
+ * "See what's new" CTA can discover the shortcut they'd use on
+ * the hub. */
+.pwn-hero__shortcut-hint {
+  margin: 4px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--pwn-accent-dim);
+  width: fit-content;
+}
+
+.pwn-hero__kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--pwn-accent);
+  background: rgba(155, 227, 194, 0.08);
+  border: 1px solid rgba(155, 227, 194, 0.22);
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+/* Heading is focusable so the page can drop focus on arrival when
+ * Shift+W navigates here — the screen reader announces the title
+ * instead of stalling on the document body. */
+.pwn-hero__title:focus {
+  outline: none;
+}
+
+.pwn-hero__title:focus-visible {
+  outline: 2px solid var(--pwn-accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
 .pwn-timeline {
   display: grid;
   gap: 16px;
