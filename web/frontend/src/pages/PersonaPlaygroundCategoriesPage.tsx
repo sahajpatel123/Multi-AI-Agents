@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Layers } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
@@ -11,11 +11,25 @@ import '../styles/persona-categories-page.css';
 export function PersonaPlaygroundCategoriesPage() {
   const summaries = categorySummaries();
   const [pageVisible, setPageVisible] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
 
   useEffect(() => {
     const reduceMotion = prefersReducedMotion();
     const id = window.setTimeout(() => setPageVisible(true), reduceMotion ? 0 : 80);
     return () => window.clearTimeout(id);
+  }, []);
+
+  // Focus the heading on arrival so screen-reader / keyboard users land
+  // on the page title (not the body) when Shift+G navigates them here.
+  // We focus the heading without scrolling so the smooth-page-enter
+  // animation stays intact; the next Tab takes the user into the grid.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const active = document.activeElement;
+    // Only refocus when the user is arriving fresh (focus is on body or
+    // nothing) — not when navigating back via a non-keyboard trigger.
+    if (active && active !== document.body && active.tagName !== 'HTML') return;
+    headingRef.current?.focus({ preventScroll: true });
   }, []);
 
   return (
@@ -31,7 +45,12 @@ export function PersonaPlaygroundCategoriesPage() {
           <p className="pcat-hero__eyebrow">
             <Layers aria-hidden="true" /> Categories
           </p>
-          <h1 id="pcat-title" className="pcat-hero__title">
+          <h1
+            id="pcat-title"
+            ref={headingRef}
+            tabIndex={-1}
+            className="pcat-hero__title"
+          >
             <span>Browse the playground</span>
             <span className="pcat-hero__title-accent">by category.</span>
           </h1>
@@ -40,6 +59,10 @@ export function PersonaPlaygroundCategoriesPage() {
             discovery, head-to-head adjudication, multi-mind councils, roasting, forced-choice
             decisions, future forecasting, and Mosaic-style hand-picked panels. Pick a category
             to see the tools inside it, or jump straight to the full hub.
+          </p>
+          <p className="pcat-hero__shortcut-hint">
+            <kbd className="pcat-hero__kbd" aria-hidden="true">Shift + G</kbd>
+            <span>Press this shortcut on the hub to jump back here.</span>
           </p>
         </section>
 

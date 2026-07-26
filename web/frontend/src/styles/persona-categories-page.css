@@ -103,6 +103,47 @@
   max-width: 62ch;
 }
 
+/* The page also exposes the global Shift+G shortcut here so users
+ * arriving via "Browse all 7 categories" can discover the same key
+ * they would have used on the hub. Mirrors the ppg-index-cta__shortcut
+ * pattern (cycle 468). */
+.pcat-hero__shortcut-hint {
+  margin: 4px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--pcat-accent-dim);
+  width: fit-content;
+}
+
+.pcat-hero__kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--pcat-accent);
+  background: rgba(241, 233, 216, 0.08);
+  border: 1px solid rgba(241, 233, 216, 0.18);
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+/* Heading is focusable so the page can drop focus on arrival when
+ * Shift+G navigates here — the screen reader announces the title
+ * instead of stalling on the document body. */
+.pcat-hero__title:focus {
+  outline: none;
+}
+
+.pcat-hero__title:focus-visible {
+  outline: 2px solid var(--pcat-accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
 .pcat-grid-wrap {
   display: grid;
   gap: 16px;
