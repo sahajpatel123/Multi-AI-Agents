@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ArrowRight, Star, Trash2 } from 'lucide-react';
 import { readFavorites, clearFavorites, toggleFavorite } from '../lib/favorites';
 import { PERSONA_PLAYGROUND_ENTRIES } from '../data/personaPlayground';
@@ -26,6 +26,8 @@ export function Favorites({
   limit = 6,
 }: FavoritesProps) {
   const [paths, setPaths] = useState<readonly string[]>([]);
+  const location = useLocation();
+  const isOnFavoritesPage = location.pathname === '/persona-playground/favorites';
 
   const refresh = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -55,7 +57,12 @@ export function Favorites({
           <span className="ppg-favs__count" aria-label={`${paths.length} favorites`}>
             {paths.length} favorited
           </span>
-          <Link to="/persona-playground/favorites" className="ppg-favs__view-all">
+          <Link
+            to="/persona-playground/favorites"
+            className="ppg-favs__view-all"
+            data-route-active={isOnFavoritesPage ? 'true' : undefined}
+            aria-current={isOnFavoritesPage ? 'page' : undefined}
+          >
             View all
             <kbd className="ppg-favs__shortcut" aria-hidden="true">
               Shift + F

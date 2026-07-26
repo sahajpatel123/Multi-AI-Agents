@@ -320,6 +320,7 @@ export function PersonaPlaygroundPage() {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (!shouldCaptureSlashFocus(event.target)) return;
       event.preventDefault();
+      setShiftTAnnouncement('Opening your favorites');
       navigateRef.current('/persona-playground/favorites');
     };
     window.addEventListener('keydown', onKey);

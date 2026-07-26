@@ -15,8 +15,10 @@ function writeFavorites(values: string[]) {
   );
 }
 
-function renderWithRouter(ui: React.ReactElement) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>);
+function renderWithRouter(ui: React.ReactElement, initialPath = '/persona-playground') {
+  return render(
+    <MemoryRouter initialEntries={[initialPath]}>{ui}</MemoryRouter>,
+  );
 }
 
 describe('Favorites widget', () => {
@@ -59,5 +61,21 @@ describe('Favorites widget', () => {
     toggleFavorite(window.localStorage, '/persona-battle');
     expect(readFavorites(window.localStorage)).toContain('/persona-battle');
     clearFavorites(window.localStorage);
+  });
+
+  it('marks the View-all link as route-active when on /favorites', () => {
+    writeFavorites(['/persona-battle']);
+    renderWithRouter(<Favorites />, '/persona-playground/favorites');
+    const link = screen.getByRole('link', { name: /view all/i });
+    expect(link.getAttribute('data-route-active')).toBe('true');
+    expect(link.getAttribute('aria-current')).toBe('page');
+  });
+
+  it('does not mark the View-all link as active on the hub', () => {
+    writeFavorites(['/persona-battle']);
+    renderWithRouter(<Favorites />, '/persona-playground');
+    const link = screen.getByRole('link', { name: /view all/i });
+    expect(link.getAttribute('data-route-active')).toBeNull();
+    expect(link.getAttribute('aria-current')).toBeNull();
   });
 });
