@@ -62,6 +62,9 @@ export function OnboardingTour() {
         if (next.dismissed) {
           setOpen(false);
           setStep(0);
+        } else {
+          setOpen(true);
+          setStep(0);
         }
       }
     };

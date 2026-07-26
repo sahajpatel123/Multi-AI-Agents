@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { OnboardingTour } from './OnboardingTour';
+import { OnboardingTour, ReplayOnboardingTour } from './OnboardingTour';
 import {
   readOnboardingTour,
   dismissOnboardingTour,
@@ -184,7 +184,7 @@ describe('OnboardingTour widget', () => {
 
   it('ReplayOnboardingTour clears the dismissed flag and re-opens the tour', async () => {
     // First, dismiss the tour.
-    render(<OnboardingTour />);
+    const first = render(<OnboardingTour />);
     await waitFor(() =>
       expect(screen.getByText(/Welcome to the Persona Playground/i)).toBeInTheDocument(),
     );
@@ -192,9 +192,11 @@ describe('OnboardingTour widget', () => {
     await waitFor(() =>
       expect(readOnboardingTour(window.localStorage).dismissed).toBe(true),
     );
-    // Mount a fresh OnboardingTour + ReplayOnboardingTour. Click
-    // Replay → the tour re-opens because resetOnboardingTour fires
-    // a synthetic storage event the widget listens for.
+    first.unmount();
+    // Mount a fresh OnboardingTour + ReplayOnboardingTour. The tour
+    // is currently dismissed so the panel should NOT show. Click
+    // Replay → the widget listens for the synthetic storage event
+    // and re-opens.
     const { unmount } = render(
       <div>
         <OnboardingTour />

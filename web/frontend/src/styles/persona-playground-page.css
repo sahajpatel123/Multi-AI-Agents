@@ -3228,6 +3228,10 @@
    ------------------------------------------------------------------ */
 .ppg-hero__shortcut-hint {
   margin: 0 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .ppg-hero__shortcut-btn {

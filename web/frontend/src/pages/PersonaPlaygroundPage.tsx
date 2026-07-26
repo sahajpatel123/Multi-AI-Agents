@@ -29,7 +29,7 @@ import { SmartSuggestions } from '../components/SmartSuggestions';
 import { HubSearchHistory } from '../components/HubSearchHistory';
 import { CatalogExport } from '../components/CatalogExport';
 import { RecentlyUsedCategories } from '../components/RecentlyUsedCategories';
-import { OnboardingTour } from '../components/OnboardingTour';
+import { OnboardingTour, ReplayOnboardingTour } from '../components/OnboardingTour';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -381,6 +381,7 @@ export function PersonaPlaygroundPage() {
             >
               Press <kbd className="ppg-hero__kbd">?</kbd> for shortcuts
             </button>
+            <ReplayOnboardingTour label="Replay tour" />
           </p>
 
           <div className="ppg-hero__search">

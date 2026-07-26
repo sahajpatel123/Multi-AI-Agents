@@ -3,6 +3,26 @@
 const STORAGE_KEY = 'arena_sidebar_turn_titles_v1';
 const MAX_ENTRIES = 200;
 
+/**
+ * Notify same-tab listeners that the sidebar-turn-titles map
+ * changed. The browser `StorageEvent` only fires in OTHER tabs, so
+ * without this signal any widget subscribed to this key in the
+ * same tab would not refresh until the next page load. Swallows
+ * any dispatch failure (jsdom quirks, locked-down iframes).
+ */
+function notifySameTab(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const event = new StorageEvent('storage', {
+      key: STORAGE_KEY,
+      newValue: window.localStorage.getItem(STORAGE_KEY),
+    });
+    window.dispatchEvent(event);
+  } catch {
+    /* silent */
+  }
+}
+
 /** Keep titles scannable in the sidebar. */
 export const SIDEBAR_TURN_TITLE_MAX = 120;
 
@@ -84,7 +104,9 @@ export function saveSidebarTurnTitle(
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {
     /* quota / private mode */
+    return next;
   }
+  notifySameTab();
   return next;
 }
 
@@ -93,5 +115,7 @@ export function clearSidebarTurnTitles(): void {
     localStorage.removeItem(STORAGE_KEY);
   } catch {
     /* ignore */
+    return;
   }
+  notifySameTab();
 }
