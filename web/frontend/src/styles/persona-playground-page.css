@@ -2113,6 +2113,35 @@
   line-height: 1.4;
 }
 
+.ppg-purpose__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 0;
+  color: var(--ppg-accent);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 150ms ease;
+}
+
+.ppg-purpose__clear:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.ppg-purpose__clear:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-purpose__clear svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* recent-shares widget */
 .ppg-shares {
   display: grid;

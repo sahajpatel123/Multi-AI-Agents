@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Compass, Search } from 'lucide-react';
+import { Compass, Search, X } from 'lucide-react';
 import { matchToolForPurpose } from '../data/personaPlayground';
 
 export interface ToolForPurposeProps {
@@ -21,7 +21,13 @@ export function ToolForPurpose({
   placeholder = 'e.g. "compare two", "fastest", "myself"',
 }: ToolForPurposeProps) {
   const [query, setQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
   const match = useMemo(() => matchToolForPurpose(query), [query]);
+
+  const onClear = () => {
+    setQuery('');
+    inputRef.current?.focus();
+  };
 
   return (
     <section className="ppg-purpose" aria-label={heading}>
@@ -33,6 +39,7 @@ export function ToolForPurpose({
       <div className="ppg-purpose__input">
         <Search aria-hidden="true" className="ppg-purpose__icon" />
         <input
+          ref={inputRef}
           type="search"
           className="ppg-purpose__field"
           value={query}
@@ -40,6 +47,16 @@ export function ToolForPurpose({
           placeholder={placeholder}
           aria-label="Search tools by purpose"
         />
+        {query && (
+          <button
+            type="button"
+            className="ppg-purpose__clear"
+            onClick={onClear}
+            aria-label="Clear search"
+          >
+            <X aria-hidden="true" />
+          </button>
+        )}
       </div>
       {match && (
         <Link to={match.path} className="ppg-purpose__match" aria-label={`Open ${match.name}`}>
