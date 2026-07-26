@@ -8,6 +8,7 @@ import {
   type MoodId,
 } from '../lib/moodMatcher';
 import { recordMoodPick } from '../lib/moodHistory';
+import { CompareFromMood } from './CompareFromMood';
 import {
   PERSONA_PLAYGROUND_ENTRIES,
   personaPlaygroundCategoryLabel,
@@ -186,6 +187,7 @@ export function MoodMatcher({
           </Link>
         </div>
       )}
+      {pick && <CompareFromMood moodId={pick.mood.id} />}
       {pick && (
         <button
           type="button"

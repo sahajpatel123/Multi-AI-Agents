@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   RECENT_SHARES_KEY,
   RECENT_SHARES_LIMIT,
@@ -150,5 +150,58 @@ describe('clearRecentShares', () => {
 
   it('is a no-op when storage is null', () => {
     expect(() => clearRecentShares(null)).not.toThrow();
+  });
+});
+
+describe('recentShares same-tab storage notification', () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('dispatches a synthetic storage event on recordRecentShare', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      recordRecentShare(window.localStorage, {
+        kind: 'compare',
+        label: 'A vs B',
+        url: 'https://arena.example/x',
+      });
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(RECENT_SHARES_KEY);
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('dispatches a synthetic storage event on clearRecentShares', () => {
+    window.localStorage.setItem(
+      RECENT_SHARES_KEY,
+      JSON.stringify([{ kind: 'compare', label: 'A vs B', at: 1 }]),
+    );
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      clearRecentShares(window.localStorage);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(RECENT_SHARES_KEY);
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('does not notify when storage is null', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      writeRecentShares(null, []);
+      clearRecentShares(null);
+      expect(onStorage).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
   });
 });
