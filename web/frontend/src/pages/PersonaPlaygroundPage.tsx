@@ -18,6 +18,7 @@ import { ToolForPurpose } from '../components/ToolForPurpose';
 import { TryNextButton } from '../components/TryNextButton';
 import { ToolSearchPalette } from '../components/ToolSearchPalette';
 import { ToolSearchLauncher } from '../components/ToolSearchLauncher';
+import { ProgressStrip } from '../components/ProgressStrip';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -263,6 +264,8 @@ export function PersonaPlaygroundPage() {
 
           <ToolSearchLauncher />
         </section>
+
+        <ProgressStrip />
 
         {showFeatured && featured && (
           <Reveal as="section" className="ppg-featured" aria-label="Today's pick">

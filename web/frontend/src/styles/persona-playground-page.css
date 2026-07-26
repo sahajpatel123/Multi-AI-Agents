@@ -2654,3 +2654,166 @@
 .ppg-empty__reset:hover {
   filter: brightness(1.05);
 }
+
+/* ------------------------------------------------------------------
+   ProgressStrip — tried / favorited / untried stat row + bar
+   ------------------------------------------------------------------ */
+.ppg-progress {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--ppg-radius);
+  background: rgba(196, 149, 106, 0.05);
+  border: 1px solid rgba(196, 149, 106, 0.22);
+}
+
+.ppg-progress__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ppg-progress__eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  color: var(--ppg-accent);
+}
+
+.ppg-progress__cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ppg-progress__card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 0.5px solid rgba(196, 149, 106, 0.28);
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  color: inherit;
+  transition:
+    border-color var(--motion-hover-ms) var(--ease-btn),
+    background var(--motion-hover-ms) var(--ease-btn),
+    transform var(--motion-press-ms) var(--ease-btn);
+}
+
+.ppg-progress__card:hover {
+  border-color: rgba(196, 149, 106, 0.55);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.ppg-progress__card:active {
+  transform: scale(0.985);
+}
+
+.ppg-progress__card:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-progress__icon {
+  grid-row: 1 / span 2;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ppg-accent);
+  background: rgba(196, 149, 106, 0.12);
+  border: 0.5px solid rgba(196, 149, 106, 0.32);
+}
+
+.ppg-progress__card--fav .ppg-progress__icon {
+  color: #c4956a;
+  background: rgba(255, 216, 107, 0.16);
+  border-color: rgba(255, 216, 107, 0.36);
+}
+
+.ppg-progress__card--left .ppg-progress__icon {
+  color: #6b6460;
+  background: rgba(240, 235, 227, 0.5);
+  border-color: rgba(160, 144, 112, 0.3);
+}
+
+.ppg-progress__num {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1a1714;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.ppg-progress__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #1a1714;
+}
+
+.ppg-progress__sub {
+  grid-column: 2;
+  font-size: 11px;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-progress__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(196, 149, 106, 0.12);
+  overflow: hidden;
+}
+
+.ppg-progress__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(196, 149, 106, 0.85) 0%,
+    rgba(255, 216, 107, 0.9) 100%
+  );
+  transition: width 320ms var(--ease-out-premium);
+}
+
+.ppg-progress__msg {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ppg-accent-dim);
+  line-height: 1.5;
+}
+
+@media (max-width: 540px) {
+  .ppg-progress__cards {
+    grid-template-columns: 1fr;
+  }
+  .ppg-progress__card {
+    grid-template-columns: auto 1fr auto;
+  }
+  .ppg-progress__sub {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ppg-progress__bar-fill {
+    transition: none !important;
+  }
+}
