@@ -141,7 +141,7 @@ body .pmc-input__meta {
 }
 
 body .pmc-input__meta > span {
-  font-family: var(--vp-font-mono, ui-monospace, monospace;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
   font-size: 11px;
   letter-spacing: 0.06em;
   color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));
@@ -310,7 +310,7 @@ body .pmc-preset__label {
 }
 
 body .pmc-preset__description {
-  font-family: var(--vp-font-mono, ui-monospace, monospace;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
   font-size: 9px;
   letter-spacing: 0.06em;
   color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.55));

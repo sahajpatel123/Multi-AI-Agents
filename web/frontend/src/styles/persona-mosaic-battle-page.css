@@ -181,7 +181,7 @@ body .pmob-input__reset {
   padding: 8px 14px;
   color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.7));
   font-size: 12px;
-  font-family: var(--vp-font-mono, ui-monospace, monospace;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
   letter-spacing: 0.04em;
   cursor: pointer;
   transition: color 220ms ease, border-color 220ms ease;

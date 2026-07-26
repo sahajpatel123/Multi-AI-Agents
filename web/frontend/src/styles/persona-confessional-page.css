@@ -310,7 +310,7 @@ body .pcf-submit__clear {
   padding: 4px 8px;
   color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.45));
   font-size: 11px;
-  font-family: var(--vp-font-mono, ui-monospace, monospace;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
   cursor: pointer;
   transition: color 220ms ease;
   width: fit-content;

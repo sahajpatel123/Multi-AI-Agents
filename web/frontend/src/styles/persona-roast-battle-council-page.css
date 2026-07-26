@@ -386,7 +386,7 @@ body .prbc-result__winner-pill {
 }
 
 body .prbc-result__tally {
-  font-family: var(--vp-font-mono, ui-monospace, monospace;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
   font-size: 12px;
   letter-spacing: 0.06em;
   color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.7));
@@ -464,7 +464,7 @@ body .prbc-filter__chip {
   background: rgba(243, 240, 231, 0.04);
   border: 1px solid var(--public-rule-soft);
   color: var(--vp-ivory-dim, rgba(243, 240, 231, 0.8));
-  font-family: var(--vp-font-mono, ui-monospace, monospace;
+  font-family: var(--vp-font-mono, ui-monospace, monospace);
   font-size: 11px;
   letter-spacing: 0.06em;
   cursor: pointer;
