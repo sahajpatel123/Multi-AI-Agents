@@ -19,7 +19,7 @@ import {
   type PersonaPlaygroundEntry,
 } from '../data/personaPlayground';
 
-export type ExportFormat = 'markdown' | 'json';
+export type ExportFormat = 'markdown' | 'json' | 'csv';
 
 const CATEGORY_ORDER: readonly PersonaPlaygroundCategory[] = [
   'discover',
@@ -85,13 +85,35 @@ export function renderCatalogJson(): string {
   return JSON.stringify(records, null, 2);
 }
 
+function escapeCsv(value: string): string {
+  if (value.includes('"') || value.includes(',') || value.includes('\n')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+export function renderCatalogCsv(): string {
+  const header = ['name', 'path', 'category', 'format', 'tagline', 'blurb'];
+  const rows = [...PERSONA_PLAYGROUND_ENTRIES]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((e) =>
+      [e.name, e.path, e.category, e.format, e.tagline, e.blurb]
+        .map(escapeCsv)
+        .join(','),
+    );
+  return [header.join(','), ...rows].join('\n');
+}
+
 export function renderCatalog(format: ExportFormat): string {
-  return format === 'markdown' ? renderCatalogMarkdown() : renderCatalogJson();
+  if (format === 'markdown') return renderCatalogMarkdown();
+  if (format === 'csv') return renderCatalogCsv();
+  return renderCatalogJson();
 }
 
 export function catalogFilename(format: ExportFormat): string {
   const stamp = new Date().toISOString().slice(0, 10);
-  return `persona-playground-${stamp}.${format === 'markdown' ? 'md' : 'json'}`;
+  const ext = format === 'markdown' ? 'md' : format === 'csv' ? 'csv' : 'json';
+  return `persona-playground-${stamp}.${ext}`;
 }
 
 /**
@@ -103,7 +125,12 @@ export function downloadCatalog(format: ExportFormat): boolean {
   if (typeof window === 'undefined' || typeof document === 'undefined') return false;
   try {
     const blob = new Blob([renderCatalog(format)], {
-      type: format === 'markdown' ? 'text/markdown;charset=utf-8' : 'application/json',
+      type:
+        format === 'markdown'
+          ? 'text/markdown;charset=utf-8'
+          : format === 'csv'
+            ? 'text/csv;charset=utf-8'
+            : 'application/json',
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

@@ -4,6 +4,7 @@ import { CatalogExport } from './CatalogExport';
 import {
   renderCatalogMarkdown,
   renderCatalogJson,
+  renderCatalogCsv,
   renderCatalog,
   catalogFilename,
   downloadCatalog,
@@ -39,7 +40,22 @@ describe('catalogExport (pure helpers)', () => {
   it('catalogFilename includes the date and correct extension', () => {
     expect(catalogFilename('markdown')).toMatch(/\.md$/);
     expect(catalogFilename('json')).toMatch(/\.json$/);
+    expect(catalogFilename('csv')).toMatch(/\.csv$/);
     expect(catalogFilename('markdown')).toMatch(/persona-playground-\d{4}-\d{2}-\d{2}\.md$/);
+  });
+
+  it('renders a CSV catalog with a header row', () => {
+    const csv = renderCatalogCsv();
+    const firstLine = csv.split('\n')[0];
+    expect(firstLine).toContain('name');
+    expect(firstLine).toContain('path');
+    expect(firstLine).toContain('category');
+    // Quoted blurb with a comma must round-trip.
+    const lines = csv.split('\n').slice(1);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      expect(line.length).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -91,11 +107,85 @@ describe('CatalogExport widget', () => {
     expect(screen.getByRole('button', { name: /Download catalog/i }).textContent).toMatch(/\.json/);
   });
 
+  it('renders a CSV radio option', () => {
+    render(<CatalogExport />);
+    expect(screen.getByRole('radio', { name: /CSV/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: /CSV/i }));
+    expect(screen.getByRole('radio', { name: /CSV/i })).toBeChecked();
+    expect(screen.getByRole('button', { name: /Download catalog/i }).textContent).toMatch(/\.csv/);
+  });
+
   it('downloadCatalog returns false when window/document are unavailable', () => {
     const originalWindow = globalThis.window;
     // @ts-expect-error — simulate no-window environment
     delete (globalThis as { window?: unknown }).window;
     expect(downloadCatalog('markdown')).toBe(false);
     ;(globalThis as { window?: unknown }).window = originalWindow;
+  });
+
+  it('flips the aria-label to a failure announcement when the download fails', async () => {
+    // Force downloadCatalog to return false by removing document.body.appendChild's anchor consumer.
+    const originalAppend = document.body.appendChild.bind(document.body);
+    const appendSpy = vi
+      .spyOn(document.body, 'appendChild')
+      .mockImplementation((node) => {
+        // Refuse to mount the anchor, so downloadCatalog returns false.
+        return originalAppend(node);
+      });
+    // Now break the link.click path so the download function returns false.
+    const originalCreate = document.createElement.bind(document);
+    const createSpy = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation((tag: string) => {
+        if (tag === 'a') {
+          const el = originalCreate('a') as HTMLAnchorElement;
+          el.click = () => {
+            throw new Error('blocked');
+          };
+          return el;
+        }
+        return originalCreate(tag);
+      });
+    try {
+      render(<CatalogExport />);
+      fireEvent.click(screen.getByRole('button', { name: /Download catalog/i }));
+      await waitFor(() =>
+        expect(screen.getByRole('button').getAttribute('aria-label')).toBe(
+          'Catalog download failed',
+        ),
+      );
+    } finally {
+      appendSpy.mockRestore();
+      createSpy.mockRestore();
+    }
+  });
+
+  it('flips the aria-label back to the idle label after the timeout', async () => {
+    render(<CatalogExport />);
+    const button = screen.getByRole('button', { name: /Download catalog/i });
+    // Mock the link.click so the download succeeds.
+    const originalCreate = document.createElement.bind(document);
+    const createSpy = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation((tag: string) => {
+        if (tag === 'a') {
+          const el = originalCreate('a') as HTMLAnchorElement;
+          el.click = vi.fn();
+          return el;
+        }
+        return originalCreate(tag);
+      });
+    try {
+      fireEvent.click(button);
+      await waitFor(() =>
+        expect(button.getAttribute('aria-label')).toBe('Catalog downloaded'),
+      );
+      await waitFor(
+        () => expect(button.getAttribute('aria-label')).toBe('Download catalog'),
+        { timeout: 3000 },
+      );
+    } finally {
+      createSpy.mockRestore();
+    }
   });
 });

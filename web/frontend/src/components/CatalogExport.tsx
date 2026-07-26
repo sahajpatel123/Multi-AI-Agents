@@ -44,6 +44,11 @@ export function CatalogExport({
 
   const isOk = status === 'ok';
   const isError = status === 'error';
+  const ariaLabel = isOk
+    ? 'Catalog downloaded'
+    : isError
+      ? 'Catalog download failed'
+      : 'Download catalog';
 
   return (
     <section className="ppg-export" aria-label={heading}>
@@ -76,13 +81,23 @@ export function CatalogExport({
             />
             <span>JSON</span>
           </label>
+          <label className="ppg-export__radio">
+            <input
+              type="radio"
+              name="catalog-format"
+              value="csv"
+              checked={format === 'csv'}
+              onChange={() => setFormat('csv')}
+            />
+            <span>CSV</span>
+          </label>
         </fieldset>
         <button
           type="button"
           className="ppg-export__btn"
           onClick={onDownload}
           aria-live="polite"
-          aria-label={isOk ? 'Catalog downloaded' : 'Download catalog'}
+          aria-label={ariaLabel}
         >
           <span className="ppg-export__btn-icon" aria-hidden>
             {isOk ? (
@@ -98,7 +113,7 @@ export function CatalogExport({
               ? 'Downloaded'
               : isError
                 ? 'Failed'
-                : `Download .${format === 'markdown' ? 'md' : 'json'}`}
+                : `Download .${format === 'markdown' ? 'md' : format === 'csv' ? 'csv' : 'json'}`}
           </span>
         </button>
       </div>
