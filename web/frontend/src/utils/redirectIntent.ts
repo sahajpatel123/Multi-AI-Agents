@@ -24,21 +24,43 @@ export function isSafeRedirectPath(path: string): boolean {
   // Block encoded tricks that still resolve off-site in some browsers
   const lower = p.toLowerCase();
   if (lower.includes('javascript:') || lower.includes('data:')) return false;
+  // Decode percent-escapes (both at the top level and inside the
+  // query string) before re-running the checks. A raw `//` or `://`
+  // hidden behind `%2F%2F` or `%3A%2F%2F` would slip past literal
+  // checks but is decoded to a protocol-relative prefix at the
+  // browser navigation step.
+  let decoded = p;
+  let decodedQs = '';
+  const qIndex = p.indexOf('?');
+  if (qIndex >= 0) {
+    decoded = p.slice(0, qIndex);
+    decodedQs = p.slice(qIndex + 1);
+  }
+  try {
+    decoded = decodeURIComponent(decoded);
+    decodedQs = decodeURIComponent(decodedQs);
+  } catch {
+    // Malformed percent-escape — refuse outright rather than try
+    // to interpret it. A malformed escape shouldn't reach navigate().
+    return false;
+  }
+  if (decoded.startsWith('//')) return false;
+  if (decoded.includes('\\')) return false;
+  if (decoded.includes('://')) return false;
+  const decodedLower = decoded.toLowerCase();
+  if (decodedLower.includes('javascript:') || decodedLower.includes('data:')) return false;
   // Defense-in-depth: reject any query-string value that contains a
   // protocol-relative prefix, absolute scheme, backslash trick, or
   // js:/data: payload. A downstream component reading `?next=//evil.com`
   // and passing it to window.location is an open redirect even if the
   // outer path is safe — refuse at the source.
-  const qIndex = p.indexOf('?');
-  if (qIndex >= 0) {
-    const qs = p.slice(qIndex + 1);
-    const qsLower = qs.toLowerCase();
+  if (decodedQs) {
     if (
-      qs.includes('//') ||
-      qs.includes('://') ||
-      qs.includes('\\') ||
-      qsLower.includes('javascript:') ||
-      qsLower.includes('data:')
+      decodedQs.includes('//') ||
+      decodedQs.includes('://') ||
+      decodedQs.includes('\\') ||
+      decodedQs.toLowerCase().includes('javascript:') ||
+      decodedQs.toLowerCase().includes('data:')
     ) {
       return false;
     }

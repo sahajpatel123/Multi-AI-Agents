@@ -79,6 +79,26 @@ describe('isSafeRedirectPath', () => {
     expect(isSafeRedirectPath('/app?next=/app/safe')).toBe(true);
     expect(isSafeRedirectPath('/app?tab=1&q=hello')).toBe(true);
   });
+
+  it('rejects URL-encoded open-redirect payloads (cycle 398)', () => {
+    // Literal `//` and `://` checks would pass `%2F%2Fevil.com` and
+    // `%3A%2F%2Fevil.com`, but the browser decodes the percent-escapes
+    // at navigation time — so the validator must decode first or a
+    // downstream `navigate()` becomes an open redirect.
+    expect(isSafeRedirectPath('/%2F%2Fevil.com')).toBe(false);
+    expect(isSafeRedirectPath('/%3A%2F%2Fevil.com')).toBe(false);
+    // Same trick in query-string values.
+    expect(isSafeRedirectPath('/app?next=%2F%2Fevil.com')).toBe(false);
+    expect(isSafeRedirectPath('/app?next=%3A%2F%2Fevil.com')).toBe(false);
+    // Malformed percent-escape refuses outright rather than try to
+    // interpret it — a broken encoding shouldn't reach navigate().
+    expect(isSafeRedirectPath('/app%2not-hex')).toBe(false);
+    // Sanity: ordinary paths still pass through decoding unchanged.
+    expect(isSafeRedirectPath('/app/%20safe')).toBe(true);
+    // Note: `/app%2F%2Fevil.com` decodes to `/app//evil.com` —
+    // browsers normalize `//` in paths to `/`, so this is NOT an
+    // open redirect and the validator legitimately allows it.
+  });
 });
 
 describe('describeRedirectDestination', () => {
