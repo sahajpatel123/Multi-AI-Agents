@@ -72,6 +72,7 @@ const PERSONA_PLAYGROUND: ShortcutHint[] = [
   { keys: 'Shift + C', action: 'Replay your most recent category filter' },
   { keys: 'Shift + S', action: 'Replay your most recent search query' },
   { keys: 'Shift + T', action: 'Jump to your most recently visited tool' },
+  { keys: 'Shift + R', action: 'Open a random persona tool' },
   { keys: '←  →', action: 'Rotate through mood chips' },
   { keys: 'Esc', action: 'Close the command palette' },
   { keys: '?', action: 'Toggle this shortcuts list' },

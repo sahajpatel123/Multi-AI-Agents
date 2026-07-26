@@ -74,7 +74,7 @@ describe('RandomToolButton', () => {
     expect(link?.className).toContain('ppg-randombtn--sm');
   });
 
-  it('applies the md size class when size is "md"', () => {
+    it('applies the md size class when size is "md"', () => {
     render(
       <MemoryRouter>
         <RandomToolButton size="md" />
@@ -82,5 +82,39 @@ describe('RandomToolButton', () => {
     );
     const link = document.querySelector('a.ppg-randombtn');
     expect(link?.className).toContain('ppg-randombtn--md');
+  });
+
+  it('renders the Shift + R shortcut chip by default', () => {
+    render(
+      <MemoryRouter>
+        <RandomToolButton />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Shift + R')).toBeInTheDocument();
+    const link = screen.getByRole('link');
+    expect(link.getAttribute('aria-label')).toContain('Shift + R');
+  });
+
+  it('omits the shortcut chip when showShortcut is false', () => {
+    render(
+      <MemoryRouter>
+        <RandomToolButton showShortcut={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText('Shift + R')).toBeNull();
+    const link = screen.getByRole('link');
+    expect(link.getAttribute('aria-label')).not.toContain('Shift + R');
+  });
+
+  it('uses the supplied pick when one is provided', () => {
+    const entry = PERSONA_PLAYGROUND_ENTRIES[0];
+    render(
+      <MemoryRouter>
+        <RandomToolButton pick={entry} />
+      </MemoryRouter>,
+    );
+    const link = screen.getByRole('link');
+    expect(link.getAttribute('href')).toBe(entry.path);
+    expect(link.getAttribute('aria-label')).toContain(entry.name);
   });
 });

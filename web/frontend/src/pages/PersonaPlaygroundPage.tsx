@@ -52,6 +52,7 @@ import {
   personaPlaygroundCategories,
   personaPlaygroundCategoryLabel,
   pickFeaturedOfDay,
+  pickRandomTool,
   readFeaturedDismissState,
   writeFeaturedDismissState,
   type PersonaPlaygroundCategory,
@@ -110,6 +111,15 @@ export function PersonaPlaygroundPage() {
 
   const today = useMemo(() => new Date(), []);
   const featured = useMemo(() => pickFeaturedOfDay(today), [today]);
+  // The Shift+R shortcut lands on the same pick the on-screen
+  // RandomToolButton advertises, so we compute the pick once and
+  // pass it down. `randomPickSalt` is a per-day value so the pick
+  // only changes when the user's date rolls over.
+  const randomPickSalt = useMemo(() => Math.floor(today.getTime() / 86_400_000), [today]);
+  const randomPick = useMemo(
+    () => pickRandomTool(featured ? [featured.path] : [], randomPickSalt, today),
+    [featured, randomPickSalt, today],
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined' || !featured) return;
@@ -239,6 +249,27 @@ export function PersonaPlaygroundPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Global Shift+R — jump to a random persona tool (same pick as the
+  // visible RandomToolButton. Uses a forward-declared ref for the
+  // current random pick so the keydown handler stays in sync with
+  // the rendered button. Excludes the day's featured tool to match
+  // the on-screen button's exclusion list.
+  const randomPickRef = useRef<{ path: string; name: string } | null>(null);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'R' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      const pick = randomPickRef.current;
+      if (!pick) return;
+      setShiftTAnnouncement(`Opened a random tool — ${pick.name}`);
+      navigateRef.current(pick.path);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (searchDebounceRef.current !== null) {
@@ -324,6 +355,13 @@ export function PersonaPlaygroundPage() {
   useEffect(() => {
     navigateRef.current = navigate;
   }, [navigate]);
+
+  // Keep the Shift+R random-pick ref in sync with the latest memo
+  // so the shortcut always lands on the same tool the button
+  // advertises.
+  useEffect(() => {
+    randomPickRef.current = randomPick ? { path: randomPick.path, name: randomPick.name } : null;
+  }, [randomPick]);
 
   const onClearSearch = useCallback(() => {
     if (searchDebounceRef.current !== null) {
@@ -761,7 +799,7 @@ export function PersonaPlaygroundPage() {
 
         <SurpriseButton />
 
-        <RandomToolButton excludePaths={featured ? [featured.path] : []} />
+        <RandomToolButton pick={randomPick} excludePaths={featured ? [featured.path] : []} />
 
         <CompareFromCategoryButton excludePaths={featured ? [featured.path] : []} />
 
