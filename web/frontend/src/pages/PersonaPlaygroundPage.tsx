@@ -22,6 +22,7 @@ import { ProgressStrip } from '../components/ProgressStrip';
 import { MoodMatcher } from '../components/MoodMatcher';
 import { MoodMatcherHistory } from '../components/MoodMatcherHistory';
 import { HubShareButton } from '../components/HubShareButton';
+import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -120,6 +121,29 @@ export function PersonaPlaygroundPage() {
       if (!shouldCaptureSlashFocus(event.target)) return;
       event.preventDefault();
       shareBtnRef.current?.trigger();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Global Shift+M — replay the most recent mood from history.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'M' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      if (typeof window === 'undefined') return;
+      // Lazily import to avoid a hard cycle.
+      import('../lib/moodHistory').then(({ readMoodHistory }) => {
+        const recent = readMoodHistory(window.localStorage);
+        const top = recent[0]?.id;
+        if (!top) return;
+        setMoodId(top);
+        document
+          .getElementById('ppg-jump-mood')
+          ?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+      });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -233,6 +257,8 @@ export function PersonaPlaygroundPage() {
   return (
     <div className={`ppg-page${pageVisible ? ' ppg-page--enter' : ''}`}>
       <Navbar />
+
+      <KeyboardShortcutsHelp surface="persona-playground" />
 
       <main className="ppg-main">
         <section className="ppg-hero">

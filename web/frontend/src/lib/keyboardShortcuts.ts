@@ -12,7 +12,8 @@ export type ShortcutSurface =
   | 'debate'
   | 'room'
   | 'watchlist'
-  | 'personas';
+  | 'personas'
+  | 'persona-playground';
 
 const ARENA: ShortcutHint[] = [
   { keys: '/', action: 'Focus the Arena prompt' },
@@ -63,6 +64,16 @@ const PERSONAS: ShortcutHint[] = [
   { keys: '?', action: 'Toggle this shortcuts list' },
 ];
 
+const PERSONA_PLAYGROUND: ShortcutHint[] = [
+  { keys: '/', action: 'Focus the hub search' },
+  { keys: '⌘ K', action: 'Open the command palette' },
+  { keys: 'Shift + L', action: 'Copy a link to this view' },
+  { keys: 'Shift + M', action: 'Replay your most recent mood' },
+  { keys: '←  →', action: 'Rotate through mood chips' },
+  { keys: 'Esc', action: 'Close the command palette' },
+  { keys: '?', action: 'Toggle this shortcuts list' },
+];
+
 export function shortcutsForSurface(surface: ShortcutSurface): ShortcutHint[] {
   switch (surface) {
     case 'agent':
@@ -77,6 +88,8 @@ export function shortcutsForSurface(surface: ShortcutSurface): ShortcutHint[] {
       return [...WATCHLIST];
     case 'personas':
       return [...PERSONAS];
+    case 'persona-playground':
+      return [...PERSONA_PLAYGROUND];
     case 'arena':
     default:
       return [...ARENA];
@@ -97,6 +110,8 @@ export function shortcutsPanelTitle(surface: ShortcutSurface): string {
       return 'Watchlist shortcuts';
     case 'personas':
       return 'Personas shortcuts';
+    case 'persona-playground':
+      return 'Persona Playground shortcuts';
     case 'arena':
     default:
       return 'Arena shortcuts';
