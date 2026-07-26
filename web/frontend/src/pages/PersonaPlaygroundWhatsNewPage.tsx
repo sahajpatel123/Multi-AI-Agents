@@ -5,8 +5,21 @@ import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
 import { prefersReducedMotion } from '../lib/motion';
-import { WHATS_NEW } from '../data/personaPlayground';
+import { WHATS_NEW, PERSONA_PATH_PREFIX } from '../data/personaPlayground';
 import '../styles/persona-whatsnew-page.css';
+
+/**
+ * Defense-in-depth: even though the data layer pins every
+ * WHATS_NEW link to start with `/persona-` (see personaPlayground
+ * test "optional links start with /persona-"), the render site
+ * also rejects anything else. A future entry that bypasses the
+ * data test — or a hot-patch that adds a malformed link at
+ * runtime — can't smuggle a `javascript:` / protocol-relative
+ * target into the Link `to=`.
+ */
+function isSafeLink(link: string | undefined): link is string {
+  return typeof link === 'string' && link.startsWith(PERSONA_PATH_PREFIX);
+}
 
 export function PersonaPlaygroundWhatsNewPage() {
   const [pageVisible, setPageVisible] = useState(false);
@@ -50,7 +63,7 @@ export function PersonaPlaygroundWhatsNewPage() {
                 <div className="pwn-entry__body">
                   <h2 className="pwn-entry__title">{entry.title}</h2>
                   <p className="pwn-entry__summary">{entry.summary}</p>
-                  {entry.link && (
+                  {isSafeLink(entry.link) && (
                     <Link to={entry.link} className="pwn-entry__link">
                       Open the surface
                       <ArrowRight aria-hidden="true" />
