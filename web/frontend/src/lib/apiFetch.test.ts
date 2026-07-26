@@ -164,4 +164,32 @@ describe('apiFetch', () => {
     // Original + refresh + retry = 3 calls.
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  it('aborts the request when the timeout fires (cycle 390)', async () => {
+    // Without a per-request timeout, a hung backend would leave the
+    // user staring at a spinner until the browser's ~5min default.
+    // Abort the request on a 50ms timer, assert the fetch receives
+    // the abort signal AND the calling promise rejects.
+    const abortSpy = vi.fn();
+    // jsdom doesn't fire the AbortController abort handler unless the
+    // signal is observed, so attach a real listener.
+    const originalFetch = vi.fn().mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_, reject) => {
+          const signal = init?.signal as AbortSignal | undefined;
+          if (signal) {
+            signal.addEventListener('abort', () => {
+              abortSpy();
+              reject(new DOMException('aborted', 'AbortError'));
+            });
+          }
+        }),
+    );
+    vi.stubGlobal('fetch', originalFetch);
+
+    await expect(
+      apiFetch('/api/protected', { method: 'GET', timeoutMs: 50 }),
+    ).rejects.toBeInstanceOf(DOMException);
+    expect(abortSpy).toHaveBeenCalledTimes(1);
+  });
 });
