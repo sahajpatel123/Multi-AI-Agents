@@ -25,6 +25,7 @@ import { HubShareButton } from '../components/HubShareButton';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { PinnedTools } from '../components/PinnedTools';
 import { ToolPinButton } from '../components/ToolPinButton';
+import { SmartSuggestions } from '../components/SmartSuggestions';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -345,6 +346,8 @@ export function PersonaPlaygroundPage() {
         </section>
 
         <PinnedTools />
+
+        <SmartSuggestions />
 
         <ProgressStrip
           onJumpTried={() => {

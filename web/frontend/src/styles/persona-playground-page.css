@@ -3464,3 +3464,116 @@
   background: rgba(255, 216, 107, 0.22);
   border-color: rgba(255, 216, 107, 0.7);
 }
+
+/* ------------------------------------------------------------------
+   SmartSuggestions — "Based on what you've tried" rec card
+   ------------------------------------------------------------------ */
+.ppg-suggest {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: var(--ppg-radius);
+  background: rgba(196, 149, 106, 0.05);
+  border: 1px solid rgba(196, 149, 106, 0.24);
+}
+
+.ppg-suggest__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ppg-suggest__eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11px;
+  color: var(--ppg-accent);
+}
+
+.ppg-suggest__sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ppg-accent-dim);
+  line-height: 1.45;
+}
+
+.ppg-suggest__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.ppg-suggest__item {
+  margin: 0;
+}
+
+.ppg-suggest__chip {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto auto;
+  column-gap: 12px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 0.5px solid rgba(196, 149, 106, 0.3);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color var(--motion-hover-ms) var(--ease-btn),
+    background var(--motion-hover-ms) var(--ease-btn),
+    transform var(--motion-press-ms) var(--ease-btn);
+}
+
+.ppg-suggest__chip:hover {
+  border-color: rgba(196, 149, 106, 0.55);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.ppg-suggest__chip:active {
+  transform: scale(0.99);
+}
+
+.ppg-suggest__cat {
+  grid-column: 1;
+  grid-row: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+  color: var(--ppg-accent);
+}
+
+.ppg-suggest__arrow {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: center;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-suggest__name {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1714;
+  line-height: 1.3;
+}
+
+.ppg-suggest__tagline {
+  grid-column: 1;
+  grid-row: 3;
+  font-size: 11px;
+  color: var(--ppg-accent-dim);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
