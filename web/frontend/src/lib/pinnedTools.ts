@@ -15,6 +15,26 @@ import { PERSONA_PATH_PREFIX } from '../data/personaPlayground';
 const STORAGE_KEY = 'arena:persona-playground:pinned-tools:v1';
 const MAX_ITEMS = 3;
 
+/**
+ * Notify same-tab listeners that the pinned-tools list changed.
+ * The browser `StorageEvent` only fires in OTHER tabs, so without
+ * this signal the PinnedTools widget mounted in the same tab
+ * would not refresh until the next page load. Swallows any
+ * dispatch failure (jsdom quirks, locked-down iframes).
+ */
+function notifySameTab(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const event = new StorageEvent('storage', {
+      key: STORAGE_KEY,
+      newValue: window.localStorage.getItem(STORAGE_KEY),
+    });
+    window.dispatchEvent(event);
+  } catch {
+    /* silent */
+  }
+}
+
 function normalize(path: string): string | null {
   if (typeof path !== 'string') return null;
   if (!path.startsWith(PERSONA_PATH_PREFIX)) return null;
@@ -55,7 +75,9 @@ export function writePinnedTools(
     storage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, MAX_ITEMS)));
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 /**
@@ -94,7 +116,9 @@ export function clearPinnedTools(
     storage.removeItem(STORAGE_KEY);
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 export const PINNED_TOOLS_KEY = STORAGE_KEY;

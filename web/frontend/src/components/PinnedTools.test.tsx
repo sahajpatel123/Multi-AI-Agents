@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { PinnedTools } from './PinnedTools';
 import {
+  clearPinnedTools,
   readPinnedTools,
   togglePinnedTool,
   PINNED_TOOLS_LIMIT,
@@ -110,5 +111,42 @@ describe('PinnedTools', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /Unpin all tools/i }));
     expect(readPinnedTools(window.localStorage)).toEqual([]);
+  });
+});
+
+describe('pinnedTools same-tab storage notification', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('dispatches a synthetic storage event on togglePinnedTool', async () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      togglePinnedTool(window.localStorage, '/persona-battle');
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe('arena:persona-playground:pinned-tools:v1');
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('dispatches a synthetic storage event on clear', () => {
+    writePinned(['/persona-battle']);
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      clearPinnedTools(window.localStorage);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe('arena:persona-playground:pinned-tools:v1');
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
   });
 });
