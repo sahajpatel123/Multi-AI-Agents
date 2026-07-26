@@ -99,4 +99,58 @@ describe('MoodMatcher', () => {
     fireEvent.click(screen.getByRole('button', { name: /Try another mood/i }));
     expect(screen.queryByText(/Try it/)).toBeNull();
   });
+
+  it('moves focus and selection with ArrowRight', () => {
+    render(
+      <MemoryRouter>
+        <MoodMatcher />
+      </MemoryRouter>,
+    );
+    const stuck = screen.getByRole('radio', { name: /I'm stuck/i });
+    stuck.focus();
+    fireEvent.keyDown(stuck, { key: 'ArrowRight' });
+    expect(screen.getByText(/Persona Confessional/i)).toBeInTheDocument();
+  });
+
+  it('wraps ArrowLeft from the first chip to the last', () => {
+    render(
+      <MemoryRouter>
+        <MoodMatcher />
+      </MemoryRouter>,
+    );
+    const stuck = screen.getByRole('radio', { name: /I'm stuck/i });
+    stuck.focus();
+    fireEvent.keyDown(stuck, { key: 'ArrowLeft' });
+    expect(screen.getByText(/Persona Wheel/i)).toBeInTheDocument();
+  });
+
+  it('honors Home/End keyboard shortcuts', () => {
+    render(
+      <MemoryRouter>
+        <MoodMatcher />
+      </MemoryRouter>,
+    );
+    const inspired = screen.getByRole('radio', { name: /Want inspiration/i });
+    inspired.focus();
+    fireEvent.keyDown(inspired, { key: 'Home' });
+    expect(screen.getByText(/Persona Battle/i)).toBeInTheDocument();
+  });
+
+  it('pre-selects from the ?mood= URL param when syncUrl is on', () => {
+    render(
+      <MemoryRouter initialEntries={['/persona-playground?mood=verdict']}>
+        <MoodMatcher syncUrl />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/Persona Dilemma/i)).toBeInTheDocument();
+  });
+
+  it('ignores invalid ?mood= values', () => {
+    render(
+      <MemoryRouter initialEntries={['/persona-playground?mood=garbage']}>
+        <MoodMatcher syncUrl />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(/Try it/)).toBeNull();
+  });
 });

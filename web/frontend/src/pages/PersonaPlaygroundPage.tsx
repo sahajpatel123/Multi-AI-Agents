@@ -287,7 +287,7 @@ export function PersonaPlaygroundPage() {
           }}
         />
 
-        <MoodMatcher />
+        <MoodMatcher syncUrl />
 
         {showFeatured && featured && (
           <Reveal as="section" className="ppg-featured" aria-label="Today's pick">
