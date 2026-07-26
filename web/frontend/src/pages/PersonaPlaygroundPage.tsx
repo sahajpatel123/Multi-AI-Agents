@@ -197,40 +197,58 @@ export function PersonaPlaygroundPage() {
 
   // Global Shift+C — replay the most recent category filter.
   useEffect(() => {
+    let cancelled = false;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'C' || !event.shiftKey) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (!shouldCaptureSlashFocus(event.target)) return;
       event.preventDefault();
       if (typeof window === 'undefined') return;
-      import('../lib/recentCategories').then(({ readRecentCategories }) => {
-        const top = readRecentCategories(window.localStorage)[0];
-        if (!top) return;
-        const next = new URLSearchParams(params);
-        next.set('cat', top);
-        setParams(next, { replace: true });
-      });
+      import('../lib/recentCategories')
+        .then(({ readRecentCategories }) => {
+          if (cancelled) return;
+          const top = readRecentCategories(window.localStorage)[0];
+          if (!top) return;
+          const next = new URLSearchParams(params);
+          next.set('cat', top);
+          setParams(next, { replace: true });
+        })
+        .catch(() => {
+          /* chunk load failed — silently abort */
+        });
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('keydown', onKey);
+    };
   }, [params, setParams]);
 
   // Global Shift+S — replay the most recent search query.
   useEffect(() => {
+    let cancelled = false;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'S' || !event.shiftKey) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (!shouldCaptureSlashFocus(event.target)) return;
       event.preventDefault();
       if (typeof window === 'undefined') return;
-      import('../lib/hubSearchHistory').then(({ readSearchHistory }) => {
-        const top = readSearchHistory(window.localStorage)[0];
-        if (!top) return;
-        onReplaySearchRef.current(top.query);
-      });
+      import('../lib/hubSearchHistory')
+        .then(({ readSearchHistory }) => {
+          if (cancelled) return;
+          const top = readSearchHistory(window.localStorage)[0];
+          if (!top) return;
+          onReplaySearchRef.current(top.query);
+        })
+        .catch(() => {
+          /* chunk load failed — silently abort */
+        });
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   // Global Shift+T — jump to the most recently visited tool.
@@ -240,24 +258,33 @@ export function PersonaPlaygroundPage() {
   // localStorage agree on which tool is "most recent".
   const navigateRef = useRef<(path: string) => void>(() => {});
   useEffect(() => {
+    let cancelled = false;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'T' || !event.shiftKey) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (!shouldCaptureSlashFocus(event.target)) return;
       event.preventDefault();
       if (typeof window === 'undefined') return;
-      import('../lib/recentTools').then(({ readRecentTools }) => {
-        const top = readRecentTools(window.localStorage)[0];
-        if (!top) return;
-        const entry = PERSONA_PLAYGROUND_ENTRIES.find((e) => e.path === top.path);
-        if (entry) {
-          setShiftTAnnouncement(`Re-opened ${entry.name}`);
-        }
-        navigateRef.current(top.path);
-      });
+      import('../lib/recentTools')
+        .then(({ readRecentTools }) => {
+          if (cancelled) return;
+          const top = readRecentTools(window.localStorage)[0];
+          if (!top) return;
+          const entry = PERSONA_PLAYGROUND_ENTRIES.find((e) => e.path === top.path);
+          if (entry) {
+            setShiftTAnnouncement(`Re-opened ${entry.name}`);
+          }
+          navigateRef.current(top.path);
+        })
+        .catch(() => {
+          /* chunk load failed — silently abort */
+        });
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   // Global Shift+R — jump to a random persona tool (same pick as the
