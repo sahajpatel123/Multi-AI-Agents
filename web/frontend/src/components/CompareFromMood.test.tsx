@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { CompareFromMood } from './CompareFromMood';
 import {
@@ -87,5 +87,24 @@ describe('CompareFromMood widget', () => {
       </MemoryRouter>,
     );
     expect(screen.queryByRole('button', { name: /Show all/i })).toBeNull();
+  });
+
+  it('resets expanded state when moodId changes', () => {
+    // Sanity: with a small limit, the Show-all button is present
+    // for both moods. The defensive effect runs on moodId change
+    // and resets expanded to false.
+    const { rerender } = render(
+      <MemoryRouter>
+        <CompareFromMood moodId="stuck" limit={1} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: /Show all/i })).toBeInTheDocument();
+    rerender(
+      <MemoryRouter>
+        <CompareFromMood moodId="verdict" limit={1} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('button', { name: /Show fewer/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /Show all/i })).toBeInTheDocument();
   });
 });

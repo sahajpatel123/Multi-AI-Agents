@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRightLeft, ChevronDown, GitCompare } from 'lucide-react';
 import {
@@ -32,11 +32,23 @@ export function CompareFromMood({ moodId, limit = 2 }: CompareFromMoodProps) {
   const [swapIndex, setSwapIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
 
+  // Reset the per-mood local state when the user switches moods.
+  // Without this, the swap cursor and the expanded/collapsed
+  // preference would persist across mood changes and point at
+  // stale alt indices from the previous mood.
+  useEffect(() => {
+    setSwapIndex(0);
+    setExpanded(false);
+  }, [moodId]);
+
   const all = useMemo(
     () => compareAlternativesForMood(moodId, { limit: ALL_LIMIT }),
     [moodId],
   );
-  const visible = expanded ? all : compareAlternativesForMood(moodId, { limit });
+  const visible = useMemo(
+    () => (expanded ? all : compareAlternativesForMood(moodId, { limit })),
+    [expanded, all, moodId, limit],
+  );
   if (all.length === 0) return null;
 
   const primary = visible[swapIndex % Math.max(visible.length, 1)];
