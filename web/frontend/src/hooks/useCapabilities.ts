@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { API_ORIGIN } from '../api';
+import { fetchWithTimeout } from '../lib/apiFetch';
 
 export type CapabilitySummary = {
   id: string;
@@ -14,6 +15,10 @@ type State = {
   loading: boolean;
   error: string | null;
 };
+
+/** Per-request timeout (ms). The capability catalog is small + cached
+ *  client-side — 10s is plenty even on slow connections. */
+const CAPABILITIES_TIMEOUT_MS = 10_000;
 
 /**
  * Fetch and cache the capability catalog.
@@ -33,7 +38,11 @@ let cache: CapabilitySummary[] | null = null;
 function fetchCapabilities(): Promise<CapabilitySummary[]> {
   if (cache) return Promise.resolve(cache);
   if (inflight) return inflight;
-  inflight = fetch(`${API_ORIGIN}/api/agent/capabilities`)
+  inflight = fetchWithTimeout(
+    `${API_ORIGIN}/api/agent/capabilities`,
+    { method: 'GET' },
+    CAPABILITIES_TIMEOUT_MS,
+  )
     .then(async (r) => {
       if (!r.ok) throw new Error(`capabilities: ${r.status}`);
       const body = (await r.json()) as { capabilities: CapabilitySummary[] };
