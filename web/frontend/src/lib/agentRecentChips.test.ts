@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearDismissedAgentChips,
   dismissAgentChip,
@@ -60,5 +60,39 @@ describe('pickRecentAgentChips', () => {
     expect(chips.map((c) => c.task_id)).toEqual(['2']);
     clearDismissedAgentChips();
     expect(loadDismissedAgentChipIds().size).toBe(0);
+  });
+});
+
+describe('agentRecentChips same-tab storage notification', () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('dispatches a synthetic storage event on dismissAgentChip', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      dismissAgentChip('abc-123');
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe('arena_agent_chip_dismissed_v1');
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('dispatches a synthetic storage event on clearDismissedAgentChips', () => {
+    dismissAgentChip('x');
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      clearDismissedAgentChips();
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe('arena_agent_chip_dismissed_v1');
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
   });
 });

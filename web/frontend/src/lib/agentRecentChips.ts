@@ -3,6 +3,26 @@
 const DISMISS_KEY = 'arena_agent_chip_dismissed_v1';
 const MAX_DISMISSED = 40;
 
+/**
+ * Notify same-tab listeners that the dismissed-chip set changed.
+ * The browser `StorageEvent` only fires in OTHER tabs, so without
+ * this signal any widget subscribed to this key in the same tab
+ * would not refresh until the next page load. Swallows any
+ * dispatch failure (jsdom quirks, locked-down iframes).
+ */
+function notifySameTab(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const event = new StorageEvent('storage', {
+      key: DISMISS_KEY,
+      newValue: window.localStorage.getItem(DISMISS_KEY),
+    });
+    window.dispatchEvent(event);
+  } catch {
+    /* silent */
+  }
+}
+
 export type AgentHistoryLike = {
   task_id: string;
   title?: string | null;
@@ -47,7 +67,9 @@ function persistDismissed(ids: Set<string>): void {
     localStorage.setItem(DISMISS_KEY, JSON.stringify([...ids].slice(0, MAX_DISMISSED)));
   } catch {
     /* ignore */
+    return;
   }
+  notifySameTab();
 }
 
 /** Hide one chip locally (does not delete server history). */
@@ -64,6 +86,8 @@ export function clearDismissedAgentChips(): Set<string> {
     localStorage.removeItem(DISMISS_KEY);
   } catch {
     /* ignore */
+    return new Set();
   }
+  notifySameTab();
   return new Set();
 }
