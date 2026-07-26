@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Compass } from 'lucide-react';
-import { tryNextTool } from '../data/personaPlayground';
+import {
+  PERSONA_PLAYGROUND_ENTRIES,
+  tryNextTool,
+} from '../data/personaPlayground';
 import { readFavorites } from '../lib/favorites';
 import { readRecentTools } from '../lib/recentTools';
+
+const TOOL_BY_PATH = new Map(
+  PERSONA_PLAYGROUND_ENTRIES.map((e) => [e.path, e] as const),
+);
 
 export interface TryNextButtonProps {
   /** Heading shown above the button. */
@@ -34,13 +41,15 @@ export function TryNextButton({
     setPick(result?.path ?? null);
   }, [date]);
 
-  if (!pick) return null;
+  const tool = useMemo(() => (pick ? TOOL_BY_PATH.get(pick) : null), [pick]);
+
+  if (!pick || !tool) return null;
   return (
-    <Link to={pick} className="ppg-trynext" aria-label={`${label}: ${pick}`}>
+    <Link to={pick} className="ppg-trynext" aria-label={`${label}: ${tool.name}`}>
       <Compass aria-hidden="true" />
       <span>
         {label}
-        <strong>{pick.replace('/persona-', '').replace(/-/g, ' ')}</strong>
+        <strong>{tool.name}</strong>
       </span>
     </Link>
   );
