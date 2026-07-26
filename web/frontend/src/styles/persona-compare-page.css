@@ -440,6 +440,19 @@
   color: rgba(241, 233, 216, 0.55);
 }
 
+.pcmp-recent__head-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pcmp-recent__count {
+  font-size: 12px;
+  color: rgba(241, 233, 216, 0.55);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .pcmp-recent__clear {
   display: inline-flex;
   align-items: center;

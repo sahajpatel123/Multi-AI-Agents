@@ -36,6 +36,18 @@ function buildHref(entry: RecentComparison): string {
   return `/persona-playground/compare?a=${encodeURIComponent(entry.a)}&b=${encodeURIComponent(entry.b)}`;
 }
 
+function formatRelative(at: number, now: number): string {
+  const diff = Math.max(0, now - at);
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  return new Date(at).toLocaleDateString();
+}
+
 function describePair(entry: RecentComparison): string {
   const matchup = findMatchupByPaths(entry.a, entry.b);
   if (matchup) return matchup.title;
@@ -56,6 +68,7 @@ export function RecentComparisonsOnCompare({
   limit = 3,
 }: RecentComparisonsOnCompareProps) {
   const [items, setItems] = useState<readonly RecentComparison[]>([]);
+  const [now, setNow] = useState(() => Date.now());
 
   const refresh = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -71,7 +84,11 @@ export function RecentComparisonsOnCompare({
       }
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    const tick = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(tick);
+    };
   }, [refresh]);
 
   const visible = items
@@ -86,26 +103,34 @@ export function RecentComparisonsOnCompare({
         <p className="pcmp-recent__eyebrow">
           <History aria-hidden="true" /> Your recent comparisons
         </p>
-        <button
-          type="button"
-          className="pcmp-recent__clear"
-          onClick={() => {
-            if (typeof window === 'undefined') return;
-            clearRecentComparisons(window.localStorage);
-            setItems([]);
-          }}
-          aria-label="Clear recent comparisons"
-        >
-          <Trash2 aria-hidden="true" />
-          <span>Clear</span>
-        </button>
+        <div className="pcmp-recent__head-meta">
+          <span
+            className="pcmp-recent__count"
+            aria-label={`${items.length} total comparisons`}
+          >
+            {items.length} total
+          </span>
+          <button
+            type="button"
+            className="pcmp-recent__clear"
+            onClick={() => {
+              if (typeof window === 'undefined') return;
+              clearRecentComparisons(window.localStorage);
+              setItems([]);
+            }}
+            aria-label="Clear recent comparisons"
+          >
+            <Trash2 aria-hidden="true" />
+            <span>Clear</span>
+          </button>
+        </div>
       </header>
       <ul className="pcmp-recent__list">
         {visible.map((entry) => (
           <li key={`${entry.a}|${entry.b}`} className="pcmp-recent__item">
             <Link to={buildHref(entry)} className="pcmp-recent__link">
               <span className="pcmp-recent__pair">{describePair(entry)}</span>
-              <span className="pcmp-recent__time">{new Date(entry.at).toLocaleDateString()}</span>
+              <span className="pcmp-recent__time">{formatRelative(entry.at, now)}</span>
             </Link>
           </li>
         ))}
