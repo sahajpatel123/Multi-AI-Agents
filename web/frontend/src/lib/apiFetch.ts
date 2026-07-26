@@ -18,11 +18,16 @@ export type ApiFetchOptions = RequestInit & {
  * Race a fetch against an AbortController-driven timeout. Without this,
  * a hung backend (TCP open, no response) leaves the user staring at a
  * spinner until the browser's default ~5min timeout fires.
+ *
+ * Exported so callers that need a timed fetch WITHOUT going through the
+ * apiFetch auth-refresh dance (e.g. the auth endpoints themselves,
+ * which deliberately skip refresh on 401) can still get the timeout
+ * protection.
  */
-async function fetchWithTimeout(
+export async function fetchWithTimeout(
   input: string,
   init: RequestInit,
-  timeoutMs: number,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<Response> {
   if (timeoutMs <= 0) return fetch(input, init);
   const controller = new AbortController();

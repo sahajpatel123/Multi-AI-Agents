@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import { apiFetch as bearerApiFetch, type ApiFetchOptions } from './lib/apiFetch';
+import { apiFetch as bearerApiFetch, fetchWithTimeout, type ApiFetchOptions } from './lib/apiFetch';
 import { clearTokens, getRefreshToken, setTokens } from './lib/tokenStorage';
 import {
   PromptResponse,
@@ -107,7 +107,7 @@ type TokenAuthResponse = {
 };
 
 export async function register(name: string, email: string, password: string): Promise<User> {
-  const res = await fetch(`${API_ORIGIN}/api/auth/register`, {
+  const res = await fetchWithTimeout(`${API_ORIGIN}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password }),
@@ -123,7 +123,7 @@ export async function register(name: string, email: string, password: string): P
 }
 
 export async function login(email: string, password: string): Promise<User> {
-  const res = await fetch(`${API_ORIGIN}/api/auth/login`, {
+  const res = await fetchWithTimeout(`${API_ORIGIN}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -210,7 +210,7 @@ export async function getUserTier(): Promise<TierStatus | null> {
 export async function refreshToken(): Promise<User | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
-  const res = await fetch(`${API_ORIGIN}/api/auth/refresh`, {
+  const res = await fetchWithTimeout(`${API_ORIGIN}/api/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refresh }),
