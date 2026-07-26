@@ -5,10 +5,9 @@
  * JSON parse, normalization, silent on quota / private-mode
  * failures.
  *
- * Stored as a flat array of paths (deduped) rather than a map for
- * simplicity. The hub uses this to surface a "Your favorite tools"
- * widget so return visits land on the tools the user explicitly
- * claimed.
+ * Stored as an array of `{ path, at }` entries (deduped by path,
+ * most-recent-first). Backward-compatible with the old `string[]`
+ * format from cycle 365 — read accepts both shapes.
  */
 
 import { PERSONA_PATH_PREFIX } from '../data/personaPlayground';
@@ -22,9 +21,27 @@ function normalize(path: string): string | null {
   return path;
 }
 
+export interface FavoriteEntry {
+  readonly path: string;
+  /** Last-starred timestamp (ms since epoch). 0 for legacy entries. */
+  readonly at: number;
+}
+
+function isFavoriteEntry(item: unknown): item is FavoriteEntry {
+  if (!item || typeof item !== 'object') return false;
+  const o = item as { path?: unknown; at?: unknown };
+  return typeof o.path === 'string' && (o.at === undefined || typeof o.at === 'number');
+}
+
 export function readFavorites(
   storage: Pick<Storage, 'getItem'> | null,
 ): readonly string[] {
+  return readFavoriteEntries(storage).map((e) => e.path);
+}
+
+export function readFavoriteEntries(
+  storage: Pick<Storage, 'getItem'> | null,
+): readonly FavoriteEntry[] {
   if (!storage) return [];
   try {
     const raw = storage.getItem(STORAGE_KEY);
@@ -32,12 +49,22 @@ export function readFavorites(
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
     const seen = new Set<string>();
-    const out: string[] = [];
+    const out: FavoriteEntry[] = [];
     for (const item of parsed) {
-      const path = normalize(typeof item === 'string' ? item : '');
-      if (!path || seen.has(path)) continue;
-      seen.add(path);
-      out.push(path);
+      if (typeof item === 'string') {
+        const path = normalize(item);
+        if (!path || seen.has(path)) continue;
+        seen.add(path);
+        out.push({ path, at: 0 });
+      } else if (isFavoriteEntry(item)) {
+        const path = normalize(item.path);
+        if (!path || seen.has(path)) continue;
+        seen.add(path);
+        const at = typeof item.at === 'number' && Number.isFinite(item.at) ? item.at : 0;
+        out.push({ path, at });
+      } else {
+        continue;
+      }
       if (out.length >= MAX_ITEMS) break;
     }
     return out;
@@ -48,7 +75,7 @@ export function readFavorites(
 
 export function writeFavorites(
   storage: Pick<Storage, 'setItem'> | null,
-  list: readonly string[],
+  list: readonly FavoriteEntry[],
 ): void {
   if (!storage) return;
   try {
@@ -69,20 +96,29 @@ export function isFavorited(
 
 /**
  * Toggle a path in the favorites list. Returns the new state
- * (true = now favorited, false = now removed).
+ * (true = now favorited, false = now removed). Bumps the
+ * `at` timestamp to now when adding; clears the entry when
+ * removing.
  */
 export function toggleFavorite(
   storage: Pick<Storage, 'getItem' | 'setItem'> | null,
   path: string,
+  now: number = Date.now(),
 ): boolean {
   const normalized = normalize(path);
   if (!normalized) return false;
-  const current = readFavorites(storage);
-  if (current.includes(normalized)) {
-    writeFavorites(storage, current.filter((p) => p !== normalized));
+  const current = readFavoriteEntries(storage);
+  if (current.some((e) => e.path === normalized)) {
+    writeFavorites(
+      storage,
+      current.filter((e) => e.path !== normalized),
+    );
     return false;
   }
-  writeFavorites(storage, [normalized, ...current].slice(0, MAX_ITEMS));
+  writeFavorites(
+    storage,
+    [{ path: normalized, at: now }, ...current].slice(0, MAX_ITEMS),
+  );
   return true;
 }
 

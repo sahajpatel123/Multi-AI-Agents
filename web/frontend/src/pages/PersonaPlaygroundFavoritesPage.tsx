@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Star, StarOff, Trash2 } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
+import { RecentlyFavorited } from '../components/RecentlyFavorited';
 import { prefersReducedMotion } from '../lib/motion';
 import {
   readFavorites,
@@ -133,6 +134,8 @@ export function PersonaPlaygroundFavoritesPage() {
             </div>
           </>
         )}
+
+        <RecentlyFavorited />
       </main>
 
       <Footer />

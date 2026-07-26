@@ -4,6 +4,7 @@ import {
   FAVORITES_LIMIT,
   clearFavorites,
   isFavorited,
+  readFavoriteEntries,
   readFavorites,
   toggleFavorite,
   writeFavorites,
@@ -133,5 +134,52 @@ describe('clearFavorites', () => {
 
   it('is a no-op when storage is null', () => {
     expect(() => clearFavorites(null)).not.toThrow();
+  });
+});
+
+describe('readFavoriteEntries', () => {
+  it('returns the new entry shape', () => {
+    const storage = makeMemoryStorage({
+      [FAVORITES_KEY]: JSON.stringify([{ path: '/persona-match', at: 100 }]),
+    });
+    expect(readFavoriteEntries(storage)).toEqual([{ path: '/persona-match', at: 100 }]);
+  });
+
+  it('accepts the legacy string[] format with at:0', () => {
+    const storage = makeMemoryStorage({
+      [FAVORITES_KEY]: JSON.stringify(['/persona-match', '/persona-battle']),
+    });
+    expect(readFavoriteEntries(storage)).toEqual([
+      { path: '/persona-match', at: 0 },
+      { path: '/persona-battle', at: 0 },
+    ]);
+  });
+
+  it('dedupes paths even when mixed shape', () => {
+    const storage = makeMemoryStorage({
+      [FAVORITES_KEY]: JSON.stringify([
+        '/persona-match',
+        { path: '/persona-match', at: 100 },
+        { path: '/persona-battle', at: 200 },
+      ]),
+    });
+    const result = readFavoriteEntries(storage);
+    expect(result.map((e) => e.path)).toEqual(['/persona-match', '/persona-battle']);
+  });
+});
+
+describe('toggleFavorite with timestamps', () => {
+  it('writes a new entry with the supplied timestamp', () => {
+    const storage = makeMemoryStorage();
+    expect(toggleFavorite(storage, '/persona-match', 1234)).toBe(true);
+    expect(readFavoriteEntries(storage)).toEqual([{ path: '/persona-match', at: 1234 }]);
+  });
+
+  it('dedupes by path (toggling the same path twice = remove)', () => {
+    const storage = makeMemoryStorage();
+    toggleFavorite(storage, '/persona-match', 1);
+    toggleFavorite(storage, '/persona-battle', 2);
+    toggleFavorite(storage, '/persona-match', 3);
+    expect(readFavoriteEntries(storage)).toEqual([{ path: '/persona-battle', at: 2 }]);
   });
 });
