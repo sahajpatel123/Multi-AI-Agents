@@ -70,4 +70,22 @@ describe('CompareFromMood widget', () => {
     );
     expect(screen.getByText(/Or compare against/i)).toBeInTheDocument();
   });
+
+  it('renders a Swap button when more than one alt is visible', () => {
+    render(
+      <MemoryRouter>
+        <CompareFromMood moodId="stuck" limit={2} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: /Swap the comparison partner/i })).toBeInTheDocument();
+  });
+
+  it('hides the Show all button when there are no more alts', () => {
+    render(
+      <MemoryRouter>
+        <CompareFromMood moodId="stuck" limit={10} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('button', { name: /Show all/i })).toBeNull();
+  });
 });

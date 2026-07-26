@@ -3946,3 +3946,63 @@
   outline-offset: 4px;
   border-radius: 4px;
 }
+
+/* Cycle 463 polish — Swap + Show all controls */
+.ppg-mood-compare__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.ppg-mood-compare__swap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 0.5px solid rgba(196, 149, 106, 0.32);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--ppg-accent-dim);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color var(--motion-hover-ms) var(--ease-btn), color var(--motion-hover-ms) var(--ease-btn);
+}
+
+.ppg-mood-compare__swap:hover {
+  border-color: rgba(196, 149, 106, 0.55);
+  color: var(--ppg-accent);
+}
+
+.ppg-mood-compare__swap:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-mood-compare__more {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: transparent;
+  border: 0.5px dashed rgba(196, 149, 106, 0.32);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--ppg-accent);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ppg-mood-compare__more:hover {
+  border-color: rgba(196, 149, 106, 0.6);
+}
+
+.ppg-mood-compare__more-icon {
+  transition: transform var(--motion-hover-ms) var(--ease-btn);
+}
+
+.ppg-mood-compare__more-icon--up {
+  transform: rotate(180deg);
+}
