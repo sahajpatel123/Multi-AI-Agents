@@ -89,6 +89,16 @@ describe('PinnedTools', () => {
     expect(screen.getByText('Persona Match')).toBeInTheDocument();
   });
 
+  it('renders the Shift + E shortcut chip in the heading', () => {
+    writePinned(['/persona-battle']);
+    render(
+      <MemoryRouter>
+        <PinnedTools />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Shift + E')).toBeInTheDocument();
+  });
+
   it('unpins a tool when its X is clicked', () => {
     writePinned(['/persona-battle']);
     const { container } = render(

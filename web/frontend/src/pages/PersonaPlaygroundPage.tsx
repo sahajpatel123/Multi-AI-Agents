@@ -277,6 +277,37 @@ export function PersonaPlaygroundPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Global Shift+E — toggle pin on the most recently visited tool.
+  // Reads from recentTools (the same source Shift + T uses) and
+  // calls togglePinnedTool, which already notifies same-tab
+  // listeners so the PinnedTools widget refreshes.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'E' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      if (typeof window === 'undefined') return;
+      Promise.all([
+        import('../lib/recentTools'),
+        import('../lib/pinnedTools'),
+      ])
+        .then(([{ readRecentTools }, { togglePinnedTool }]) => {
+          const top = readRecentTools(window.localStorage)[0];
+          if (!top) return;
+          const entry = PERSONA_PLAYGROUND_ENTRIES.find((e) => e.path === top.path);
+          if (!entry) return;
+          const nowPinned = togglePinnedTool(window.localStorage, top.path);
+          setShiftTAnnouncement(nowPinned ? `Pinned ${entry.name}` : `Unpinned ${entry.name}`);
+        })
+        .catch(() => {
+          /* chunk load failed — silently abort */
+        });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (searchDebounceRef.current !== null) {

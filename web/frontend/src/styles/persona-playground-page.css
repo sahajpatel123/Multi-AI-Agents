@@ -3426,6 +3426,21 @@
   letter-spacing: 0;
 }
 
+.ppg-pinned__shortcut {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--ppg-accent-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--ppg-card-border);
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
 .ppg-pinned__clear {
   display: inline-flex;
   align-items: center;

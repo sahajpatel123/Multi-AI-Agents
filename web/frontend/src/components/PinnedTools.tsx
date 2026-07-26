@@ -70,6 +70,9 @@ export function PinnedTools({ heading = 'Pinned tools' }: PinnedToolsProps) {
           <span className="ppg-pinned__count" aria-label={`${paths.length} of 3 slots used`}>
             {paths.length}/3
           </span>
+          <kbd className="ppg-pinned__shortcut" aria-hidden="true">
+            Shift + E
+          </kbd>
         </p>
         <button
           type="button"
