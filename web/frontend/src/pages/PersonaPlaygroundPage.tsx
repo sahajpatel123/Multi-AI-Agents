@@ -96,6 +96,7 @@ export function PersonaPlaygroundPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const isOnIndex = location.pathname === '/persona-playground/index';
+  const isOnCategories = location.pathname === '/persona-playground/categories';
   const { isAuthenticated } = useAuth();
   const [pageVisible, setPageVisible] = useState(false);
   const [query, setQuery] = useState(() => params.get('q') ?? '');
@@ -381,6 +382,28 @@ export function PersonaPlaygroundPage() {
       }
       setShiftTAnnouncement('Opening the all-tools index');
       navigateRef.current('/persona-playground/index');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Global Shift+G — jump to the Categories browse page.
+  // Same-pattern as Shift+A: skip the announce + nav when we're
+  // already on the categories page so the second press is a no-op
+  // (rather than a redundant "Opening categories" + scroll).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'G' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      if (typeof window === 'undefined') return;
+      if (window.location.pathname === '/persona-playground/categories') {
+        setShiftTAnnouncement('You are already on the categories page');
+        return;
+      }
+      setShiftTAnnouncement('Opening the categories page');
+      navigateRef.current('/persona-playground/categories');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -833,8 +856,16 @@ export function PersonaPlaygroundPage() {
               that match your task.
             </p>
           </div>
-          <Link to="/persona-playground/categories" className="ppg-categories-cta__btn">
+          <Link
+            to="/persona-playground/categories"
+            className="ppg-categories-cta__btn"
+            data-route-active={isOnCategories ? 'true' : undefined}
+            aria-current={isOnCategories ? 'page' : undefined}
+          >
             Browse all 7 categories
+            <kbd className="ppg-categories-cta__shortcut" aria-hidden="true">
+              Shift + G
+            </kbd>
             <ArrowRight aria-hidden="true" />
           </Link>
         </Reveal>
