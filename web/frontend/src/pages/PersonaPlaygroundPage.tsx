@@ -28,6 +28,7 @@ import { ToolPinButton } from '../components/ToolPinButton';
 import { SmartSuggestions } from '../components/SmartSuggestions';
 import { HubSearchHistory } from '../components/HubSearchHistory';
 import { CatalogExport } from '../components/CatalogExport';
+import { RecentlyUsedCategories } from '../components/RecentlyUsedCategories';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -214,6 +215,11 @@ export function PersonaPlaygroundPage() {
       else nextParams.set('cat', next);
       if (!nextParams.get('q')) nextParams.delete('q');
       setParams(nextParams, { replace: true });
+      if (next !== DEFAULT_CATEGORY && typeof window !== 'undefined') {
+        import('../lib/recentCategories').then(({ recordRecentCategory }) => {
+          recordRecentCategory(window.localStorage, next);
+        });
+      }
     },
     [params, setParams],
   );
@@ -438,6 +444,19 @@ export function PersonaPlaygroundPage() {
         />
         <HubSearchHistory onReplay={onReplaySearch} />
         <CatalogExport />
+        <RecentlyUsedCategories
+          onPick={(cat) => {
+            const next = new URLSearchParams(params);
+            next.set('cat', cat);
+            if (next.get('q')) next.delete('q');
+            setParams(next, { replace: true });
+            if (typeof window !== 'undefined') {
+              import('../lib/recentCategories').then(({ recordRecentCategory }) => {
+                recordRecentCategory(window.localStorage, cat);
+              });
+            }
+          }}
+        />
 
         {showFeatured && featured && (
           <Reveal as="section" className="ppg-featured" aria-label="Today's pick">

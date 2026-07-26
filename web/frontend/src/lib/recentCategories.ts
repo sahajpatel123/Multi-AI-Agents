@@ -18,6 +18,26 @@ export type { PersonaPlaygroundCategory };
 const STORAGE_KEY = 'arena:persona-playground:recent-categories:v1';
 const MAX_ITEMS = 5;
 
+/**
+ * Notify same-tab listeners that the recent-categories list changed.
+ * The browser `StorageEvent` only fires in OTHER tabs, so without
+ * this signal the RecentlyUsedCategories widget mounted in the
+ * same tab would not refresh until the next page load. Swallows
+ * any dispatch failure (jsdom quirks, locked-down iframes).
+ */
+function notifySameTab(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const event = new StorageEvent('storage', {
+      key: STORAGE_KEY,
+      newValue: window.localStorage.getItem(STORAGE_KEY),
+    });
+    window.dispatchEvent(event);
+  } catch {
+    /* silent */
+  }
+}
+
 const VALID_CATEGORIES = new Set<PersonaPlaygroundCategory>([
   'discover',
   'versus',
@@ -65,7 +85,9 @@ export function writeRecentCategories(
     storage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, MAX_ITEMS)));
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 /**
@@ -92,7 +114,9 @@ export function clearRecentCategories(
     storage.removeItem(STORAGE_KEY);
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 export const RECENT_CATEGORIES_KEY = STORAGE_KEY;
