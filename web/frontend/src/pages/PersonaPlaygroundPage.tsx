@@ -14,6 +14,8 @@ import { ToolsNotYetTried } from '../components/ToolsNotYetTried';
 import { PersonaPlaygroundStats } from '../components/PersonaPlaygroundStats';
 import { RandomToolButton } from '../components/RandomToolButton';
 import { CompareFromCategoryButton } from '../components/CompareFromCategoryButton';
+import { RecentShuffles } from '../components/RecentShuffles';
+import { recordRecentShuffle } from '../lib/recentShuffles';
 import { ToolForPurpose } from '../components/ToolForPurpose';
 import { TryNextButton } from '../components/TryNextButton';
 import { ToolSearchPalette } from '../components/ToolSearchPalette';
@@ -134,6 +136,29 @@ export function PersonaPlaygroundPage() {
   const onReshuffle = useCallback(() => {
     setReshuffleTick((tick) => tick + 1);
   }, []);
+
+  // When the random pick rolls in (initial mount, Reshuffle click, or
+  // day rollover), record it into the recent-shuffles history so the
+  // chip strip can surface "what the shuffle turned up lately".
+  // Uses the same dynamic-import + cancelled-flag pattern as the
+  // Shift+M / Shift+C / Shift+S handlers (cycle 446) — the chunk
+  // may not be loaded yet on first render.
+  useEffect(() => {
+    if (!randomPick) return;
+    if (typeof window === 'undefined') return;
+    let cancelled = false;
+    import('../lib/recentShuffles')
+      .then(({ recordRecentShuffle }) => {
+        if (cancelled) return;
+        recordRecentShuffle(window.localStorage, randomPick.path);
+      })
+      .catch(() => {
+        /* chunk load failed — silently abort */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [randomPick]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !featured) return;
@@ -1021,6 +1046,8 @@ export function PersonaPlaygroundPage() {
           excludePaths={featured ? [featured.path] : []}
           onReshuffle={onReshuffle}
         />
+
+        <RecentShuffles />
 
         <CompareFromCategoryButton excludePaths={featured ? [featured.path] : []} />
 
