@@ -6,6 +6,7 @@ import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
 import { PersonaPlaygroundStats } from '../components/PersonaPlaygroundStats';
 import { RandomToolButton } from '../components/RandomToolButton';
+import { CompareFromCategoryButton } from '../components/CompareFromCategoryButton';
 import { PERSONA_PLAYGROUND_SITEMAP } from '../data/personaPlayground';
 import { prefersReducedMotion } from '../lib/motion';
 import '../styles/persona-sitemap-page.css';
@@ -46,6 +47,8 @@ export function PersonaPlaygroundSitemapPage() {
         <PersonaPlaygroundStats compact />
 
         <RandomToolButton label="Try a random tool" />
+
+        <CompareFromCategoryButton label="Compare two from a category" />
 
         <Reveal as="section" className="psm-grid-wrap" aria-label="All pages">
           <ul className="psm-grid">
