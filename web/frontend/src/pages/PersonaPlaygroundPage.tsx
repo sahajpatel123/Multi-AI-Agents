@@ -97,6 +97,7 @@ export function PersonaPlaygroundPage() {
   const location = useLocation();
   const isOnIndex = location.pathname === '/persona-playground/index';
   const isOnCategories = location.pathname === '/persona-playground/categories';
+  const isOnWhatsNew = location.pathname === '/persona-playground/whats-new';
   const { isAuthenticated } = useAuth();
   const [pageVisible, setPageVisible] = useState(false);
   const [query, setQuery] = useState(() => params.get('q') ?? '');
@@ -404,6 +405,27 @@ export function PersonaPlaygroundPage() {
       }
       setShiftTAnnouncement('Opening the categories page');
       navigateRef.current('/persona-playground/categories');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Global Shift+W — jump to the What's new changelog page.
+  // Same-pattern as Shift+A / Shift+G: forward-declared navigateRef,
+  // "already on this page" short-circuit, aria-live announce.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'W' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      if (typeof window === 'undefined') return;
+      if (window.location.pathname === '/persona-playground/whats-new') {
+        setShiftTAnnouncement('You are already on the what is new page');
+        return;
+      }
+      setShiftTAnnouncement('Opening what is new');
+      navigateRef.current('/persona-playground/whats-new');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -906,8 +928,16 @@ export function PersonaPlaygroundPage() {
               streak, favorites, categories, A-Z index. Catch up on what you've missed.
             </p>
           </div>
-          <Link to="/persona-playground/whats-new" className="ppg-whatsnew-cta__btn">
+          <Link
+            to="/persona-playground/whats-new"
+            className="ppg-whatsnew-cta__btn"
+            data-route-active={isOnWhatsNew ? 'true' : undefined}
+            aria-current={isOnWhatsNew ? 'page' : undefined}
+          >
             See what's new
+            <kbd className="ppg-whatsnew-cta__shortcut" aria-hidden="true">
+              Shift + W
+            </kbd>
             <ArrowRight aria-hidden="true" />
           </Link>
         </Reveal>
