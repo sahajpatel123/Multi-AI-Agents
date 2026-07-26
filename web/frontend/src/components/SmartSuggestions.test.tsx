@@ -95,4 +95,37 @@ describe('SmartSuggestions', () => {
     );
     expect(screen.getByText(/Based on what you/i)).toBeInTheDocument();
   });
+
+  it('surfaces a Why-this hint with the strongest category', () => {
+    const decideTools = PERSONA_PLAYGROUND_ENTRIES.filter(
+      (e) => e.category === 'decide',
+    );
+    toggleFavorite(window.localStorage, decideTools[0].path);
+    toggleFavorite(window.localStorage, decideTools[1].path);
+    toggleFavorite(window.localStorage, '/persona-battle');
+    render(
+      <MemoryRouter>
+        <SmartSuggestions />
+      </MemoryRouter>,
+    );
+    const why = screen.getByText(/Why\?/i);
+    expect(why.getAttribute('title')).toMatch(/strongest category/i);
+  });
+
+  it('renders a Show all button when more eligible tools exist', () => {
+    const decideTools = PERSONA_PLAYGROUND_ENTRIES.filter(
+      (e) => e.category === 'decide',
+    );
+    // Favorite 1 of 3 decide tools; the rest (2) are eligible. With
+    // limit=1 (default is 2), initial=1 < all=2 → button shows.
+    toggleFavorite(window.localStorage, decideTools[0].path);
+    toggleFavorite(window.localStorage, '/persona-battle');
+    render(
+      <MemoryRouter>
+        <SmartSuggestions limit={1} />
+      </MemoryRouter>,
+    );
+    const button = screen.getByRole('button', { name: /Show all/i });
+    expect(button).toBeInTheDocument();
+  });
 });

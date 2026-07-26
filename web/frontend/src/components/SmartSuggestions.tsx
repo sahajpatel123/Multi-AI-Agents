@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Sparkles } from 'lucide-react';
-import { suggestTools, type SmartSuggestion } from '../lib/smartSuggestions';
+import { ArrowRight, ChevronDown, Sparkles } from 'lucide-react';
+import {
+  suggestTools,
+  listEligibleInCategory,
+  type SmartSuggestion,
+} from '../lib/smartSuggestions';
 import { personaPlaygroundCategoryLabel } from '../data/personaPlayground';
 
 export interface SmartSuggestionsProps {
   /** Heading shown above the widget. */
   heading?: string;
-  /** Max suggestions to render. Defaults to 2. */
+  /** Max suggestions to render in the collapsed view. Defaults to 2. */
   limit?: number;
 }
 
@@ -22,19 +26,24 @@ const STORAGE_KEYS = new Set<string>([
  * starred yet. Renders nothing on cold start (no favorites, no
  * recent visits) so first-time visitors don't see a meaningless
  * rec card.
+ *
+ * "Show more" expands to every eligible tool in the same category
+ * without re-querying storage.
  */
 export function SmartSuggestions({
   heading = 'Based on what you’ve tried',
   limit = 2,
 }: SmartSuggestionsProps) {
-  const [suggestions, setSuggestions] = useState<readonly SmartSuggestion[]>([]);
+  const [initial, setInitial] = useState<readonly SmartSuggestion[]>([]);
+  const [expanded, setExpanded] = useState(false);
 
   const refresh = useCallback(() => {
     if (typeof window === 'undefined') {
-      setSuggestions([]);
+      setInitial([]);
       return;
     }
-    setSuggestions(suggestTools(window.localStorage, { limit }));
+    setInitial(suggestTools(window.localStorage, { limit }));
+    setExpanded(false);
   }, [limit]);
 
   useEffect(() => {
@@ -47,7 +56,19 @@ export function SmartSuggestions({
     return () => window.removeEventListener('storage', onStorage);
   }, [refresh]);
 
-  if (suggestions.length === 0) return null;
+  const all = useMemo(() => {
+    if (initial.length === 0) return [];
+    return listEligibleInCategory(
+      initial[0].category,
+      initial[0].affinity,
+    );
+  }, [initial]);
+
+  const visible = expanded ? all : initial;
+
+  if (visible.length === 0) return null;
+
+  const reasonText = `Your strongest category is ${personaPlaygroundCategoryLabel(initial[0].category)} (${initial[0].affinity} affinity).`;
 
   return (
     <section className="ppg-suggest" aria-label={heading}>
@@ -56,11 +77,14 @@ export function SmartSuggestions({
           <Sparkles aria-hidden="true" /> {heading}
         </p>
         <p className="ppg-suggest__sub">
-          Tools in your strongest category that you haven't visited yet.
+          Tools in your strongest category that you haven't visited yet.{' '}
+          <span className="ppg-suggest__reason" title={reasonText}>
+            Why?
+          </span>
         </p>
       </header>
       <ul className="ppg-suggest__list">
-        {suggestions.map(({ entry, category }) => (
+        {visible.map(({ entry, category }) => (
           <li key={entry.path} className="ppg-suggest__item">
             <Link to={entry.path} className="ppg-suggest__chip">
               <span className="ppg-suggest__cat">
@@ -73,6 +97,22 @@ export function SmartSuggestions({
           </li>
         ))}
       </ul>
+      {all.length > initial.length && (
+        <button
+          type="button"
+          className="ppg-suggest__more"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+        >
+          {expanded ? 'Show fewer' : `Show all ${all.length}`}
+          <ChevronDown
+            aria-hidden="true"
+            width={14}
+            height={14}
+            className={`ppg-suggest__more-icon${expanded ? ' ppg-suggest__more-icon--up' : ''}`}
+          />
+        </button>
+      )}
     </section>
   );
 }

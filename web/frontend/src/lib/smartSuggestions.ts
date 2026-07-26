@@ -103,3 +103,23 @@ export function suggestTools(
     affinity: topCategory.score,
   }));
 }
+
+/**
+ * Companion helper used by the widget's "Show more" affordance.
+ * Returns every catalog entry in `category` that isn't already in
+ * the user's favorites or recent set. Reads its own storage so
+ * the widget doesn't need to thread state through.
+ */
+export function listEligibleInCategory(
+  category: PersonaPlaygroundCategory,
+  affinity: number,
+): readonly SmartSuggestion[] {
+  if (typeof window === 'undefined') return [];
+  const seen = uniquePaths([
+    ...readFavoriteEntries(window.localStorage).map((f) => f.path),
+    ...readRecentTools(window.localStorage).map((r) => r.path),
+  ]);
+  return PERSONA_PLAYGROUND_ENTRIES.filter(
+    (entry) => entry.category === category && !seen.has(entry.path),
+  ).map((entry) => ({ entry, category, affinity }));
+}

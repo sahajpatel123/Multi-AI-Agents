@@ -3577,3 +3577,54 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Show-more affordance + Why-this disclosure added in cycle 457. */
+.ppg-suggest__reason {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ppg-accent);
+  background: rgba(196, 149, 106, 0.1);
+  border: 0.5px solid rgba(196, 149, 106, 0.32);
+  border-radius: 999px;
+  cursor: help;
+  letter-spacing: 0;
+}
+
+.ppg-suggest__more {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: transparent;
+  border: 0.5px solid rgba(196, 149, 106, 0.32);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--ppg-accent);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color var(--motion-hover-ms) var(--ease-btn), background var(--motion-hover-ms) var(--ease-btn);
+}
+
+.ppg-suggest__more:hover {
+  border-color: rgba(196, 149, 106, 0.6);
+  background: rgba(196, 149, 106, 0.08);
+}
+
+.ppg-suggest__more:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-suggest__more-icon {
+  transition: transform var(--motion-hover-ms) var(--ease-btn);
+}
+
+.ppg-suggest__more-icon--up {
+  transform: rotate(180deg);
+}
