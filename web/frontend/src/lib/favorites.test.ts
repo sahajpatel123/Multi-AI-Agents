@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   FAVORITES_KEY,
   FAVORITES_LIMIT,
@@ -134,6 +134,52 @@ describe('clearFavorites', () => {
 
   it('is a no-op when storage is null', () => {
     expect(() => clearFavorites(null)).not.toThrow();
+  });
+});
+
+describe('favorites same-tab storage notification', () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('dispatches a synthetic storage event on toggleFavorite (add)', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      toggleFavorite(window.localStorage, '/persona-battle', 1);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(FAVORITES_KEY);
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('dispatches a synthetic storage event on clearFavorites', () => {
+    window.localStorage.setItem(FAVORITES_KEY, JSON.stringify([{ path: '/x', at: 1 }]));
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      clearFavorites(window.localStorage);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(FAVORITES_KEY);
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('does not notify when storage is null', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      writeFavorites(null, []);
+      clearFavorites(null);
+      expect(onStorage).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
   });
 });
 
