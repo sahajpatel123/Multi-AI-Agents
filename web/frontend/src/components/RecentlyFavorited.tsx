@@ -82,19 +82,27 @@ export function RecentlyFavorited({ heading = 'Recently starred' }: RecentlyFavo
         <p className="ppg-recfav__eyebrow">
           <Star aria-hidden="true" /> {heading}
         </p>
-        <button
-          type="button"
-          className="ppg-recfav__clear"
-          onClick={() => {
-            if (typeof window === 'undefined') return;
-            clearFavorites(window.localStorage);
-            setEntries([]);
-          }}
-          aria-label="Clear all favorites"
-        >
-          <Trash2 aria-hidden="true" />
-          <span>Clear all</span>
-        </button>
+        <div className="ppg-recfav__head-meta">
+          <span
+            className="ppg-recfav__count"
+            aria-label={`${visible.length} starred tools`}
+          >
+            {visible.length} starred
+          </span>
+          <button
+            type="button"
+            className="ppg-recfav__clear"
+            onClick={() => {
+              if (typeof window === 'undefined') return;
+              clearFavorites(window.localStorage);
+              setEntries([]);
+            }}
+            aria-label="Clear all favorites"
+          >
+            <Trash2 aria-hidden="true" />
+            <span>Clear all</span>
+          </button>
+        </div>
       </header>
       <ul className="ppg-recfav__list">
         {visible.map(({ entry, tool }) => (
