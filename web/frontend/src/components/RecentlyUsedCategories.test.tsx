@@ -61,6 +61,52 @@ describe('recentCategories (pure helpers)', () => {
   });
 });
 
+describe('recentCategories same-tab storage notification', () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('dispatches a synthetic storage event on recordRecentCategory', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      recordRecentCategory(window.localStorage, 'decide');
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe('arena:persona-playground:recent-categories:v1');
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('dispatches a synthetic storage event on clearRecentCategories', () => {
+    recordRecentCategory(window.localStorage, 'decide');
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      clearRecentCategories(window.localStorage);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe('arena:persona-playground:recent-categories:v1');
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('does not notify when storage is null', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      recordRecentCategory(null, 'decide');
+      clearRecentCategories(null);
+      expect(onStorage).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+});
+
 describe('RecentlyUsedCategories widget', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -96,5 +142,11 @@ describe('RecentlyUsedCategories widget', () => {
     expect(container.firstChild).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Clear recent categories/i }));
     expect(container.firstChild).toBeNull();
+  });
+
+  it('renders a Shift + C shortcut tag in the header', () => {
+    writeRecentCategories(['decide']);
+    render(<RecentlyUsedCategories />);
+    expect(screen.getByText(/Shift \+ C/i)).toBeInTheDocument();
   });
 });
