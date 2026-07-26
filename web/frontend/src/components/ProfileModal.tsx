@@ -23,6 +23,7 @@ import {
 } from '../api';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
+import { safeLocalStorage } from '../lib/safeStorage';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from './Button';
 import { getBrandIcon, PlugIcon } from './BrandIcons';
@@ -465,8 +466,12 @@ export function ProfileModal() {
         expertise_level: level,
         expertise_domain: domain,
       });
-      localStorage.setItem('arena_expertise_level', level);
-      localStorage.setItem('arena_expertise_domain', domain);
+      // Cache the level/domain locally so the next session render
+      // skips a network round-trip. safeLocalStorage swallows throws
+      // (private mode / quota / enterprise storage-disable) — the
+      // server already has the truth; cache is purely a perf hint.
+      safeLocalStorage.setItem('arena_expertise_level', level);
+      safeLocalStorage.setItem('arena_expertise_domain', domain);
       await refreshUser();
       setSaveOk(true);
       if (saveOkTimerRef.current != null) window.clearTimeout(saveOkTimerRef.current);
