@@ -99,6 +99,19 @@ describe('isSafeRedirectPath', () => {
     // browsers normalize `//` in paths to `/`, so this is NOT an
     // open redirect and the validator legitimately allows it.
   });
+
+  it('rejects encoded `?` (`%3F`) used to smuggle a query string past the validator (cycle 445)', () => {
+    // Before the fix, the path-vs-query split ran on the raw string,
+    // so `%3F` kept the entire encoded payload glued to the path.
+    // The browser (and react-router) decodes %3F before parsing, so
+    // `/app%3Fnext=//evil.com` ends up as `/app?next=//evil.com` at
+    // navigate time — bypassing the query-string checks entirely.
+    expect(isSafeRedirectPath('/app%3Fnext=//evil.com')).toBe(false);
+    expect(isSafeRedirectPath('/app%3Fnext=https://evil.com')).toBe(false);
+    expect(isSafeRedirectPath('/app%3Fnext=javascript:alert(1)')).toBe(false);
+    // Sanity: encoded `?` in a safe, non-redirect query still allowed.
+    expect(isSafeRedirectPath('/app%3Ftab=1&q=hello')).toBe(true);
+  });
 });
 
 describe('describeRedirectDestination', () => {

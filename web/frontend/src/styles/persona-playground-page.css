@@ -3217,3 +3217,8 @@
 .ppg-share-btn__label {
   white-space: nowrap;
 }
+
+.ppg-share-btn--inline {
+  align-self: flex-end;
+  margin-bottom: 2px;
+}

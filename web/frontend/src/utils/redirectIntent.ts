@@ -30,24 +30,27 @@ export function isSafeRedirectPath(path: string): boolean {
   // checks but is decoded to a protocol-relative prefix at the
   // browser navigation step.
   let decoded = p;
-  let decodedQs = '';
-  const qIndex = p.indexOf('?');
-  if (qIndex >= 0) {
-    decoded = p.slice(0, qIndex);
-    decodedQs = p.slice(qIndex + 1);
-  }
   try {
-    decoded = decodeURIComponent(decoded);
-    decodedQs = decodeURIComponent(decodedQs);
+    decoded = decodeURIComponent(p);
   } catch {
     // Malformed percent-escape — refuse outright rather than try
     // to interpret it. A malformed escape shouldn't reach navigate().
     return false;
   }
-  if (decoded.startsWith('//')) return false;
-  if (decoded.includes('\\')) return false;
-  if (decoded.includes('://')) return false;
-  const decodedLower = decoded.toLowerCase();
+  // Split path and query AFTER decode so an encoded `%3F` (a `?` that
+  // the browser would otherwise keep glued to the path) cannot smuggle
+  // a query string past the query-string checks below.
+  let decodedPath = decoded;
+  let decodedQs = '';
+  const qIndex = decoded.indexOf('?');
+  if (qIndex >= 0) {
+    decodedPath = decoded.slice(0, qIndex);
+    decodedQs = decoded.slice(qIndex + 1);
+  }
+  if (decodedPath.startsWith('//')) return false;
+  if (decodedPath.includes('\\')) return false;
+  if (decodedPath.includes('://')) return false;
+  const decodedLower = decodedPath.toLowerCase();
   if (decodedLower.includes('javascript:') || decodedLower.includes('data:')) return false;
   // Defense-in-depth: reject any query-string value that contains a
   // protocol-relative prefix, absolute scheme, backslash trick, or

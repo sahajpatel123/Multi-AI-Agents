@@ -111,6 +111,20 @@ export function PersonaPlaygroundPage() {
     return () => window.clearTimeout(id);
   }, []);
 
+  // Global Shift+L — copy the current hub URL to clipboard.
+  const shareBtnRef = useRef<{ trigger: () => Promise<void> } | null>(null);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'L' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      shareBtnRef.current?.trigger();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (searchDebounceRef.current !== null) {
@@ -265,10 +279,15 @@ export function PersonaPlaygroundPage() {
                 /
               </kbd>
             </div>
+            <HubShareButton
+              ref={shareBtnRef}
+              className="ppg-share-btn ppg-share-btn--inline"
+              label="Copy link"
+              hint="Copy this view's URL (with your current search, category, and mood). Shortcut: Shift+L"
+            />
           </div>
 
           <ToolSearchLauncher />
-          <HubShareButton />
         </section>
 
         <ProgressStrip
