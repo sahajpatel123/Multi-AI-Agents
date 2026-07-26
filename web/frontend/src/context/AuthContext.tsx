@@ -7,7 +7,7 @@ import React, {
   useState,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiFetch } from '../lib/apiFetch';
+import { apiFetch, fetchWithTimeout } from '../lib/apiFetch';
 import { clearTokens, getAccessToken, setTokens } from '../lib/tokenStorage';
 import type { User } from '../types';
 import { clearRedirectIntent, getRedirectIntent } from '../utils/redirectIntent';
@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const r = await fetch(`${API}/api/auth/login`, {
+      const r = await fetchWithTimeout(`${API}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -130,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = useCallback(
     async (name: string, email: string, password: string) => {
-      const r = await fetch(`${API}/api/auth/register`, {
+      const r = await fetchWithTimeout(`${API}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password }),
