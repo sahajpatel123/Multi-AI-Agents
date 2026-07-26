@@ -138,6 +138,40 @@ describe('ProgressStrip', () => {
         <ProgressStrip />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/most of the playground/i)).toBeInTheDocument();
+    expect(screen.getByText(/every tool in the playground/i)).toBeInTheDocument();
+  });
+
+  it('marks the strip complete and disables the untried card at 100%', () => {
+    writeLocalStorage({
+      'arena:persona-playground:favorites:v1': JSON.stringify(
+        PERSONA_PLAYGROUND_ENTRIES.map((entry) => ({
+          path: entry.path,
+          at: Date.now(),
+        })),
+      ),
+    });
+    render(
+      <MemoryRouter>
+        <ProgressStrip />
+      </MemoryRouter>,
+    );
+    const untried = screen.getByLabelText(/tools not yet tried/i);
+    expect(untried).toBeDisabled();
+    expect(screen.getByText('100%')).toBeInTheDocument();
+  });
+
+  it('announces the tier message via aria-live', () => {
+    writeLocalStorage({
+      'arena:persona-playground:favorites:v1': JSON.stringify([
+        { path: '/persona-match', at: Date.now() },
+      ]),
+    });
+    render(
+      <MemoryRouter>
+        <ProgressStrip />
+      </MemoryRouter>,
+    );
+    const msg = screen.getByText(/keep building/i);
+    expect(msg.getAttribute('aria-live')).toBe('polite');
   });
 });

@@ -265,7 +265,26 @@ export function PersonaPlaygroundPage() {
           <ToolSearchLauncher />
         </section>
 
-        <ProgressStrip />
+        <ProgressStrip
+          onJumpTried={() => {
+            if (typeof document === 'undefined') return;
+            document
+              .getElementById('ppg-jump-recent')
+              ?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+          }}
+          onJumpFavorited={() => {
+            if (typeof document === 'undefined') return;
+            document
+              .getElementById('ppg-jump-favorites')
+              ?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+          }}
+          onJumpLeft={() => {
+            if (typeof document === 'undefined') return;
+            document
+              .getElementById('ppg-jump-unvisited')
+              ?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+          }}
+        />
 
         {showFeatured && featured && (
           <Reveal as="section" className="ppg-featured" aria-label="Today's pick">
@@ -402,7 +421,7 @@ export function PersonaPlaygroundPage() {
 
         <DailyStreak />
 
-        <RecentTools />
+        <RecentTools sectionId="ppg-jump-recent" />
 
         <PersonaPlaygroundStats />
 
@@ -494,8 +513,9 @@ export function PersonaPlaygroundPage() {
         </Reveal>
 
         <Favorites />
+        <div id="ppg-jump-favorites" />
 
-        <ToolsNotYetTried />
+        <ToolsNotYetTried sectionId="ppg-jump-unvisited" />
 
         <SurpriseButton />
 

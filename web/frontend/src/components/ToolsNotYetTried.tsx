@@ -13,6 +13,8 @@ export interface ToolsNotYetTriedProps {
   heading?: string;
   /** Number of suggestions to render. Defaults to 3. */
   count?: number;
+  /** Optional id for deep-link scrolling from sibling widgets. */
+  sectionId?: string;
 }
 
 /**
@@ -24,6 +26,7 @@ export interface ToolsNotYetTriedProps {
 export function ToolsNotYetTried({
   heading = "Tools you haven't tried",
   count = 3,
+  sectionId,
 }: ToolsNotYetTriedProps) {
   const [recent, setRecent] = useState<readonly RecentTool[]>([]);
 
@@ -40,7 +43,7 @@ export function ToolsNotYetTried({
   if (visible.length === 0) return null;
 
   return (
-    <section className="ppg-unvisited" aria-label={heading}>
+    <section className="ppg-unvisited" aria-label={heading} id={sectionId}>
       <header className="ppg-unvisited__head">
         <p className="ppg-unvisited__eyebrow">
           <Compass aria-hidden="true" /> {heading}

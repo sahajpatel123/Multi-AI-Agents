@@ -2817,3 +2817,43 @@
     transition: none !important;
   }
 }
+
+/* 100% celebration state — bar shifts to a warm gold wash and a
+   "100%" badge appears next to the eyebrow. Untried card disables. */
+.ppg-progress--complete {
+  border-color: rgba(255, 216, 107, 0.6);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 216, 107, 0.12) 0%,
+    rgba(196, 149, 106, 0.05) 100%
+  );
+}
+
+.ppg-progress--complete .ppg-progress__bar-fill {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 216, 107, 0.95) 0%,
+    rgba(196, 149, 106, 0.95) 100%
+  );
+}
+
+.ppg-progress__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #1a1714;
+  background: rgba(255, 216, 107, 0.85);
+  border-radius: 999px;
+  letter-spacing: 0.05em;
+}
+
+.ppg-progress__card[disabled] {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}

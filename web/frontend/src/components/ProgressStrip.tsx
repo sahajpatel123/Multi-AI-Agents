@@ -35,6 +35,15 @@ function uniqueValidPaths(values: Iterable<string>): string[] {
   return out;
 }
 
+function tierMessage(coverage: number, hasFavorites: boolean): string {
+  if (coverage >= 100) return "You've explored every tool in the playground — extraordinary.";
+  if (coverage >= 80) return "You've explored most of the playground — nicely done.";
+  if (coverage >= 50) return 'Halfway there. The mosaic tools are still wide open.';
+  if (coverage >= 20) return 'A solid start. Try a forecast tool next.';
+  if (hasFavorites) return 'You have favorites — keep building your shortlist.';
+  return 'Just getting started. Cmd/Ctrl-K jumps to any tool.';
+}
+
 /**
  * Persistent "Your playground progress" strip — surfaces three
  * counts derived from localStorage: how many tools the user has
@@ -84,22 +93,28 @@ export function ProgressStrip({
   const total = PERSONA_PLAYGROUND_ENTRIES.length;
   const left = Math.max(0, total - triedCount);
   const coverage = total > 0 ? Math.round((triedCount / total) * 100) : 0;
+  const isComplete = triedCount > 0 && coverage >= 100;
   const message = useMemo(() => {
     if (triedCount === 0 && favoritedCount === 0) return null;
     if (triedCount === 0) return 'Pick a featured tool to start your collection.';
-    if (coverage >= 80) return "You've explored most of the playground — nicely done.";
-    if (coverage >= 50) return 'Halfway there. The mosaic tools are still wide open.';
-    if (coverage >= 20) return 'A solid start. Try a forecast tool next.';
-    return 'Just getting started. Cmd/Ctrl-K jumps to any tool.';
+    return tierMessage(coverage, favoritedCount > 0);
   }, [triedCount, favoritedCount, coverage]);
 
   if (triedCount === 0 && favoritedCount === 0) return null;
 
   return (
-    <section className="ppg-progress" aria-label={heading}>
+    <section
+      className={`ppg-progress${isComplete ? ' ppg-progress--complete' : ''}`}
+      aria-label={heading}
+    >
       <header className="ppg-progress__head">
         <p className="ppg-progress__eyebrow">
           <Sparkles aria-hidden="true" /> {heading}
+          {isComplete && (
+            <span className="ppg-progress__badge" aria-label="All tools explored">
+              100%
+            </span>
+          )}
         </p>
       </header>
       <div className="ppg-progress__cards">
@@ -134,6 +149,7 @@ export function ProgressStrip({
           className="ppg-progress__card ppg-progress__card--left"
           onClick={onJumpLeft}
           aria-label={`${left} tools not yet tried`}
+          disabled={left === 0}
         >
           <span className="ppg-progress__icon" aria-hidden>
             <Sparkles width={16} height={16} strokeWidth={1.75} />
@@ -146,17 +162,21 @@ export function ProgressStrip({
       <div
         className="ppg-progress__bar"
         role="progressbar"
-        aria-valuenow={coverage}
+        aria-valuenow={Math.min(coverage, 100)}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={`${coverage}% of the playground explored`}
       >
         <span
           className="ppg-progress__bar-fill"
-          style={{ width: `${coverage}%` }}
+          style={{ width: `${Math.min(coverage, 100)}%` }}
         />
       </div>
-      {message && <p className="ppg-progress__msg">{message}</p>}
+      {message && (
+        <p className="ppg-progress__msg" aria-live="polite">
+          {message}
+        </p>
+      )}
     </section>
   );
 }

@@ -13,6 +13,8 @@ export interface RecentToolsProps {
   heading?: string;
   /** Max items to render. Defaults to 6. */
   limit?: number;
+  /** Optional id for deep-link scrolling from sibling widgets. */
+  sectionId?: string;
 }
 
 const TOOL_BY_PATH = new Map(
@@ -39,6 +41,7 @@ function formatRelative(at: number, now: number): string {
 export function RecentTools({
   heading = 'Recently visited tools',
   limit = 6,
+  sectionId,
 }: RecentToolsProps) {
   const [items, setItems] = useState<readonly RecentTool[]>([]);
   const [now, setNow] = useState(() => Date.now());
@@ -62,7 +65,7 @@ export function RecentTools({
   if (items.length === 0) return null;
 
   return (
-    <section className="ppg-recent-tools" aria-label={heading}>
+    <section className="ppg-recent-tools" aria-label={heading} id={sectionId}>
       <header className="ppg-recent-tools__head">
         <p className="ppg-recent-tools__eyebrow">
           <Compass aria-hidden="true" /> {heading}
