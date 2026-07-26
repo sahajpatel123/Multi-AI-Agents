@@ -16,6 +16,8 @@ import { RandomToolButton } from '../components/RandomToolButton';
 import { CompareFromCategoryButton } from '../components/CompareFromCategoryButton';
 import { ToolForPurpose } from '../components/ToolForPurpose';
 import { TryNextButton } from '../components/TryNextButton';
+import { ToolSearchPalette } from '../components/ToolSearchPalette';
+import { ToolSearchLauncher } from '../components/ToolSearchLauncher';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -258,6 +260,8 @@ export function PersonaPlaygroundPage() {
               </kbd>
             </div>
           </div>
+
+          <ToolSearchLauncher />
         </section>
 
         {showFeatured && featured && (
@@ -501,6 +505,8 @@ export function PersonaPlaygroundPage() {
         <TryNextButton />
 
         <RecentComparisons />
+
+        <ToolSearchPalette />
 
         <Matchups />
 

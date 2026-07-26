@@ -5735,6 +5735,394 @@ canvas {
 }
 
 /* ------------------------------------------------------------------
+   Tool search palette — Cmd/Ctrl-K launcher
+   ------------------------------------------------------------------ */
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: max(72px, 8vh) 16px 16px;
+  background: rgba(26, 23, 20, 0.42);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: palette-overlay-in 160ms var(--ease-out-premium) both;
+}
+
+.palette-overlay--static,
+.palette-panel--static {
+  animation: none !important;
+}
+
+.palette-panel {
+  width: 100%;
+  max-width: 560px;
+  background: #faf7f4;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 16px;
+  box-shadow:
+    0 24px 64px rgba(26, 23, 20, 0.18),
+    0 4px 12px rgba(26, 23, 20, 0.06);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: min(80vh, 640px);
+  animation: palette-panel-in 220ms var(--ease-out-premium) both;
+}
+
+@keyframes palette-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes palette-panel-in {
+  from { opacity: 0; transform: translateY(-12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.palette-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  border-bottom: 0.5px solid rgba(224, 216, 208, 0.7);
+}
+
+.palette-head__icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #c4956a;
+  background: linear-gradient(
+    160deg,
+    rgba(196, 149, 106, 0.18) 0%,
+    rgba(196, 149, 106, 0.05) 100%
+  );
+  border: 0.5px solid rgba(196, 149, 106, 0.28);
+}
+
+.palette-head__title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 500;
+  font-size: 15px;
+  color: #1a1714;
+  letter-spacing: -0.01em;
+}
+
+.palette-head__close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #a89070;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color var(--motion-hover-ms) var(--ease-btn),
+    background var(--motion-hover-ms) var(--ease-btn);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .palette-head__close:hover {
+    background: rgba(224, 216, 208, 0.5);
+    color: #1a1714;
+  }
+}
+
+.palette-head__close:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 2px;
+}
+
+.palette-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 0.5px solid rgba(224, 216, 208, 0.7);
+}
+
+.palette-search__icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: #a89070;
+  margin-right: 10px;
+}
+
+.palette-search__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 15px;
+  color: #1a1714;
+  font-family: inherit;
+  padding: 4px 0;
+}
+
+.palette-search__input::placeholder {
+  color: #a89070;
+}
+
+.palette-search__input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.palette-search__hint {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #6b6460;
+  background: #f0ebe3;
+  border: 0.5px solid #e0d8d0;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+}
+
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.palette-empty {
+  padding: 18px 12px;
+  text-align: center;
+  color: #6b6460;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.palette-empty p {
+  margin: 0;
+}
+
+.palette-empty__hint {
+  margin-top: 4px !important;
+  color: #a89070;
+  font-size: 12px;
+}
+
+.palette-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 120ms var(--ease-btn);
+}
+
+.palette-row + .palette-row {
+  margin-top: 2px;
+}
+
+.palette-row--active {
+  background: rgba(196, 149, 106, 0.14);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .palette-row:hover {
+    background: rgba(240, 235, 227, 0.75);
+  }
+  .palette-row--active:hover {
+    background: rgba(196, 149, 106, 0.18);
+  }
+}
+
+.palette-row__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.palette-row__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1714;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette-row__tagline {
+  font-size: 12px;
+  color: #6b6460;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette-row__meta {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #a89070;
+}
+
+.palette-row__cat {
+  font-size: 11px;
+  color: #6b6460;
+  padding: 2px 8px;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 999px;
+  background: rgba(240, 235, 227, 0.55);
+  white-space: nowrap;
+}
+
+.palette-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 10px 16px;
+  border-top: 0.5px solid rgba(224, 216, 208, 0.7);
+  background: rgba(240, 235, 227, 0.4);
+  font-size: 11px;
+  color: #6b6460;
+}
+
+.palette-foot__keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.palette-foot__kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  min-height: 20px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #1a1714;
+  background: #faf7f4;
+  border: 0.5px solid #e0d8d0;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  line-height: 1;
+}
+
+.palette-foot__shortcut {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #a89070;
+}
+
+@media (max-width: 480px) {
+  .palette-overlay {
+    padding-top: max(40px, 4vh);
+  }
+  .palette-panel {
+    border-radius: 14px;
+    max-height: min(86vh, 720px);
+  }
+  .palette-foot {
+    gap: 10px;
+    font-size: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .palette-overlay,
+  .palette-panel {
+    animation: none !important;
+  }
+}
+
+.palette-launcher {
+  display: flex;
+  justify-content: center;
+  margin: -4px 0 28px;
+}
+
+.palette-launcher__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  background: #faf7f4;
+  border: 0.5px solid #e0d8d0;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #6b6460;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    border-color var(--motion-hover-ms) var(--ease-btn),
+    color var(--motion-hover-ms) var(--ease-btn),
+    transform var(--motion-press-ms) var(--ease-btn),
+    background var(--motion-hover-ms) var(--ease-btn);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .palette-launcher__btn:hover {
+    color: #1a1714;
+    border-color: #c4956a;
+    background: #ffffff;
+  }
+
+  .palette-launcher__btn:active {
+    transform: scale(0.98);
+  }
+}
+
+.palette-launcher__btn:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 2px;
+}
+
+.palette-launcher__hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 22px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #1a1714;
+  background: #f0ebe3;
+  border: 0.5px solid #e0d8d0;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+
+/* ------------------------------------------------------------------
    Share menu — agent take share dropdown
    ------------------------------------------------------------------ */
 .share-menu {
