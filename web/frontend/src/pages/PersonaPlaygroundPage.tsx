@@ -26,6 +26,7 @@ import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { PinnedTools } from '../components/PinnedTools';
 import { ToolPinButton } from '../components/ToolPinButton';
 import { SmartSuggestions } from '../components/SmartSuggestions';
+import { HubSearchHistory } from '../components/HubSearchHistory';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -206,9 +207,30 @@ export function PersonaPlaygroundPage() {
         else nextParams.set('q', trimmed);
         if (nextParams.get('cat') === DEFAULT_CATEGORY) nextParams.delete('cat');
         setParams(nextParams, { replace: true });
+        // Record into the search-history widget's localStorage key.
+        if (trimmed) {
+          import('../lib/hubSearchHistory').then(({ recordSearch }) => {
+            recordSearch(window.localStorage, trimmed);
+          });
+        }
       }, 200);
     },
     [params, setParams],
+  );
+
+  const onReplaySearch = useCallback(
+    (value: string) => {
+      onSearchChange(value);
+      if (typeof document === 'undefined') return;
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+      window.setTimeout(() => {
+        document
+          .getElementById(FILTER_PANEL_ID)
+          ?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+      }, 250);
+    },
+    [onSearchChange],
   );
 
   const onClearSearch = useCallback(() => {
@@ -385,6 +407,7 @@ export function PersonaPlaygroundPage() {
               ?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
           }}
         />
+        <HubSearchHistory onReplay={onReplaySearch} />
 
         {showFeatured && featured && (
           <Reveal as="section" className="ppg-featured" aria-label="Today's pick">

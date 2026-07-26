@@ -3628,3 +3628,113 @@
 .ppg-suggest__more-icon--up {
   transform: rotate(180deg);
 }
+
+/* ------------------------------------------------------------------
+   HubSearchHistory — recent-search chip strip
+   ------------------------------------------------------------------ */
+.ppg-searchhist {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--ppg-radius);
+  background: rgba(196, 149, 106, 0.03);
+  border: 1px dashed rgba(196, 149, 106, 0.22);
+}
+
+.ppg-searchhist__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ppg-searchhist__eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 10px;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-searchhist__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: transparent;
+  border: 0.5px solid rgba(196, 149, 106, 0.28);
+  color: var(--ppg-accent-dim);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color var(--motion-hover-ms) var(--ease-btn), color var(--motion-hover-ms) var(--ease-btn);
+}
+
+.ppg-searchhist__clear:hover {
+  border-color: rgba(196, 149, 106, 0.5);
+  color: var(--ppg-accent);
+}
+
+.ppg-searchhist__clear:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-searchhist__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ppg-searchhist__item {
+  margin: 0;
+}
+
+.ppg-searchhist__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 0.5px solid rgba(196, 149, 106, 0.22);
+  border-radius: 999px;
+  font-size: 12px;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-hover-ms) var(--ease-btn),
+    background var(--motion-hover-ms) var(--ease-btn),
+    transform var(--motion-press-ms) var(--ease-btn);
+}
+
+.ppg-searchhist__chip:hover {
+  border-color: rgba(196, 149, 106, 0.5);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.ppg-searchhist__chip:active {
+  transform: scale(0.97);
+}
+
+.ppg-searchhist__chip:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-searchhist__icon {
+  width: 12px;
+  height: 12px;
+  color: var(--ppg-accent-dim);
+}
+
+.ppg-searchhist__query {
+  color: #1a1714;
+}
