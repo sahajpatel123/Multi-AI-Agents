@@ -29,7 +29,10 @@ export async function fetchWithTimeout(
   init: RequestInit,
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<Response> {
-  if (timeoutMs <= 0) return fetch(input, init);
+  // Three exit paths: negative → disable (callers can opt out), 0 →
+  // disable, NaN/Infinity → disable (setTimeout would treat as 0 or
+  // max-int, neither is what the caller intended).
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return fetch(input, init);
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   // If the caller passed their own signal, abort ours when theirs fires.

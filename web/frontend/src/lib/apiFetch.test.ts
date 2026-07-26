@@ -192,4 +192,20 @@ describe('apiFetch', () => {
     ).rejects.toBeInstanceOf(DOMException);
     expect(abortSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('treats non-finite timeoutMs as disabled (cycle 406)', async () => {
+    // NaN / Infinity / negative would otherwise be passed to
+    // setTimeout which silently coerces to 0 or max-int — neither
+    // is what the caller intended. Treat any non-finite or
+    // non-positive value as "no timeout" so the fetch falls
+    // through to the raw fetch().
+    const fetchMock = vi.fn().mockResolvedValue(buildResponse(200));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiFetch('/api/protected', { timeoutMs: NaN })).resolves.toBeDefined();
+    await expect(apiFetch('/api/protected', { timeoutMs: Infinity })).resolves.toBeDefined();
+    await expect(apiFetch('/api/protected', { timeoutMs: -1 })).resolves.toBeDefined();
+    // And the existing positive path still works.
+    await expect(apiFetch('/api/protected', { timeoutMs: 5000 })).resolves.toBeDefined();
+  });
 });
