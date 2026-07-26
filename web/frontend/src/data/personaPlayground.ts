@@ -677,10 +677,11 @@ export function dayOfYear(date: Date): number {
 // unit is named where the math is.
 const MS_PER_DAY = 86_400_000;
 
-// All tool paths share this prefix; buildCompareShareUrl uses it
-// to reject non-persona routes (a defense against the share link
-// silently pointing at an arbitrary user-supplied path).
-const PERSONA_PATH_PREFIX = '/persona-';
+// All tool paths share this prefix. Exported so the lib layer
+// (favorites, recentTools, recentComparisons, featuredArchive) can
+// normalize user-supplied paths without re-declaring the literal —
+// a constant change here is picked up by every consumer in one PR.
+export const PERSONA_PATH_PREFIX = '/persona-';
 
 /**
  * Deterministic pick from the catalog for the given date. Same day →

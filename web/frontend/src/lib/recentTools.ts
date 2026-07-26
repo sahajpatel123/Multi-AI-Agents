@@ -10,6 +10,8 @@
  * can render names without a separate lookup.
  */
 
+import { PERSONA_PATH_PREFIX } from '../data/personaPlayground';
+
 const STORAGE_KEY = 'arena:persona-playground:recent-tools:v1';
 const MAX_ITEMS = 8;
 
@@ -22,7 +24,7 @@ export interface RecentTool {
 
 function normalize(path: string): string | null {
   if (typeof path !== 'string') return null;
-  if (!path.startsWith('/persona-')) return null;
+  if (!path.startsWith(PERSONA_PATH_PREFIX)) return null;
   return path;
 }
 

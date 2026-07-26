@@ -8,6 +8,8 @@
  * return visits land on the pair the user was last working with.
  */
 
+import { PERSONA_PATH_PREFIX } from '../data/personaPlayground';
+
 const STORAGE_KEY = 'arena:persona-playground:recent-comparisons:v1';
 const MAX_ITEMS = 6;
 
@@ -22,7 +24,7 @@ export interface RecentComparison {
 
 function normalize(path: string): string | null {
   if (typeof path !== 'string') return null;
-  if (!path.startsWith('/persona-')) return null;
+  if (!path.startsWith(PERSONA_PATH_PREFIX)) return null;
   return path;
 }
 

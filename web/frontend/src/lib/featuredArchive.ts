@@ -8,6 +8,8 @@
  * users who missed yesterday's pick can see it (and the 6 before).
  */
 
+import { PERSONA_PATH_PREFIX } from '../data/personaPlayground';
+
 const STORAGE_KEY = 'arena:persona-playground:featured-archive:v1';
 const MAX_ITEMS = 7;
 
@@ -20,7 +22,7 @@ export interface FeaturedArchiveEntry {
 
 function normalizePath(path: string): string | null {
   if (typeof path !== 'string') return null;
-  if (!path.startsWith('/persona-')) return null;
+  if (!path.startsWith(PERSONA_PATH_PREFIX)) return null;
   return path;
 }
 
