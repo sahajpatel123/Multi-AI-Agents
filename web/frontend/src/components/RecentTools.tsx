@@ -69,6 +69,9 @@ export function RecentTools({
       <header className="ppg-recent-tools__head">
         <p className="ppg-recent-tools__eyebrow">
           <Compass aria-hidden="true" /> {heading}
+          <kbd className="ppg-recent-tools__shortcut" aria-hidden="true">
+            Shift + T
+          </kbd>
         </p>
         <button
           type="button"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, GitCompare, Layers, ListOrdered, Map, Search, Sparkles, Star, X } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
@@ -92,6 +92,7 @@ function matchesFilter(
 
 export function PersonaPlaygroundPage() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [pageVisible, setPageVisible] = useState(false);
   const [query, setQuery] = useState(() => params.get('q') ?? '');
@@ -210,6 +211,29 @@ export function PersonaPlaygroundPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Global Shift+T — jump to the most recently visited tool.
+  // Uses `useNavigate` (set up below) via a forward-declared ref to
+  // avoid the forward-reference / stale-closure trap. The effect
+  // registers a synthetic storage listener so two tabs that share
+  // localStorage agree on which tool is "most recent".
+  const navigateRef = useRef<(path: string) => void>(() => {});
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'T' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      if (typeof window === 'undefined') return;
+      import('../lib/recentTools').then(({ readRecentTools }) => {
+        const top = readRecentTools(window.localStorage)[0];
+        if (!top) return;
+        navigateRef.current(top.path);
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (searchDebounceRef.current !== null) {
@@ -288,6 +312,13 @@ export function PersonaPlaygroundPage() {
   useEffect(() => {
     onReplaySearchRef.current = onReplaySearch;
   }, [onReplaySearch]);
+
+  // Keep the Shift+T navigate ref pointing at the latest navigate
+  // function so the keydown handler (registered earlier) always
+  // routes to the current router context.
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
 
   const onClearSearch = useCallback(() => {
     if (searchDebounceRef.current !== null) {
