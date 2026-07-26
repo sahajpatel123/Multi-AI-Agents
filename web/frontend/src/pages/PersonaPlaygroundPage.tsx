@@ -95,6 +95,11 @@ export function PersonaPlaygroundPage() {
   const [moodId, setMoodId] = useState<MoodId | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<number | null>(null);
+  // Forward-declared ref so the Shift+S effect (registered before
+  // the onReplaySearch callback is defined) can call it without a
+  // forward-reference or stale closure. Updated each render via the
+  // effect below.
+  const onReplaySearchRef = useRef<(value: string) => void>(() => {});
 
   const category = readCategoryFromUrl(params.get('cat'));
 
@@ -162,6 +167,24 @@ export function PersonaPlaygroundPage() {
       cancelled = true;
       window.removeEventListener('keydown', onKey);
     };
+  }, []);
+
+  // Global Shift+S — replay the most recent search query.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'S' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      if (typeof window === 'undefined') return;
+      import('../lib/hubSearchHistory').then(({ readSearchHistory }) => {
+        const top = readSearchHistory(window.localStorage)[0];
+        if (!top) return;
+        onReplaySearchRef.current(top.query);
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   useEffect(() => {
@@ -232,6 +255,11 @@ export function PersonaPlaygroundPage() {
     },
     [onSearchChange],
   );
+
+  // Keep the forward-declared ref in sync with the latest callback.
+  useEffect(() => {
+    onReplaySearchRef.current = onReplaySearch;
+  }, [onReplaySearch]);
 
   const onClearSearch = useCallback(() => {
     if (searchDebounceRef.current !== null) {

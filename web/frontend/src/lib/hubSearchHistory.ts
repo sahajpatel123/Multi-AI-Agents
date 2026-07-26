@@ -12,6 +12,26 @@
 const STORAGE_KEY = 'arena:persona-playground:search-history:v1';
 const MAX_ITEMS = 5;
 
+/**
+ * Notify same-tab listeners that the search history changed.
+ * The browser `StorageEvent` only fires in OTHER tabs, so without
+ * this signal the HubSearchHistory widget mounted in the same tab
+ * would not refresh until the next page load. Swallows any
+ * dispatch failure (jsdom quirks, locked-down iframes).
+ */
+function notifySameTab(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const event = new StorageEvent('storage', {
+      key: STORAGE_KEY,
+      newValue: window.localStorage.getItem(STORAGE_KEY),
+    });
+    window.dispatchEvent(event);
+  } catch {
+    /* silent */
+  }
+}
+
 export interface SearchHistoryEntry {
   /** Normalized query string (trimmed, collapsed whitespace). */
   readonly query: string;
@@ -66,7 +86,9 @@ export function writeSearchHistory(
     storage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, MAX_ITEMS)));
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 /**
@@ -98,7 +120,9 @@ export function clearSearchHistory(
     storage.removeItem(STORAGE_KEY);
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 export const SEARCH_HISTORY_KEY = STORAGE_KEY;

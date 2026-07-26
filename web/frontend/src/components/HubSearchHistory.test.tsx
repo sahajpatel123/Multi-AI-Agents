@@ -57,6 +57,52 @@ describe('hubSearchHistory (pure helpers)', () => {
   });
 });
 
+describe('hubSearchHistory same-tab storage notification', () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('dispatches a synthetic storage event on recordSearch', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      recordSearch(window.localStorage, 'mosaic', 1);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe('arena:persona-playground:search-history:v1');
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('dispatches a synthetic storage event on clearSearchHistory', () => {
+    recordSearch(window.localStorage, 'mosaic');
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      clearSearchHistory(window.localStorage);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe('arena:persona-playground:search-history:v1');
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('does not notify when storage is null', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      recordSearch(null, 'mosaic', 1);
+      clearSearchHistory(null);
+      expect(onStorage).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+});
+
 describe('HubSearchHistory', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -97,5 +143,27 @@ describe('HubSearchHistory', () => {
     expect(container.firstChild).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Clear search history/i }));
     expect(container.firstChild).toBeNull();
+  });
+
+  it('rotates focus between chips with ArrowRight and ArrowLeft (with wrap)', () => {
+    writeSearchHistory([
+      { query: 'mosaic', at: 1 },
+      { query: 'battle', at: 2 },
+      { query: 'wheel', at: 3 },
+    ]);
+    render(<HubSearchHistory />);
+    const first = screen.getByRole('button', { name: /Re-run search: mosaic/i });
+    first.focus();
+    fireEvent.keyDown(first, { key: 'ArrowRight' });
+    expect(screen.getByRole('button', { name: /Re-run search: battle/i })).toHaveFocus();
+    // Wrap from last to first.
+    fireEvent.keyDown(screen.getByRole('button', { name: /Re-run search: wheel/i }), { key: 'ArrowRight' });
+    expect(screen.getByRole('button', { name: /Re-run search: mosaic/i })).toHaveFocus();
+  });
+
+  it('renders a Shift+S shortcut tag in the header', () => {
+    writeSearchHistory([{ query: 'mosaic', at: Date.now() }]);
+    render(<HubSearchHistory />);
+    expect(screen.getByText(/Shift \+ S/i)).toBeInTheDocument();
   });
 });
