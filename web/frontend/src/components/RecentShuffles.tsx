@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Shuffle, X } from 'lucide-react';
+import { Pin, PinOff, Shuffle, X } from 'lucide-react';
 import {
   RECENT_SHUFFLES_KEY,
   clearRecentShuffles,
   readRecentShuffles,
   type RecentShuffle,
 } from '../lib/recentShuffles';
+import {
+  PINNED_TOOLS_LIMIT,
+  isPinned,
+  togglePinnedTool,
+} from '../lib/pinnedTools';
 import { PERSONA_PLAYGROUND_ENTRIES } from '../data/personaPlayground';
 import { prefersReducedMotion } from '../lib/motion';
 
@@ -26,25 +31,45 @@ export interface RecentShufflesProps {
  * chip strip answers "what did the shuffle turn up lately?"
  * without re-showing tools the user navigated to manually.
  *
+ * Each chip carries a small Pin action — one click promotes a
+ * recent reshuffle to a pinned tool (capped at 3, same as the
+ * full Pin system). The pin state is reflected in the icon and
+ * is kept in sync with the PinnedTools widget via the storage
+ * event.
+ *
  * Subscribes to the storage event so multiple tabs stay in sync.
  */
 export function RecentShuffles({ limit = 5 }: RecentShufflesProps) {
   const [items, setItems] = useState<readonly RecentShuffle[]>([]);
+  const [pinned, setPinned] = useState<readonly string[]>([]);
   const [announcement, setAnnouncement] = useState('');
   const [entered, setEntered] = useState(false);
   const firstItemRef = useRef<HTMLLIElement | null>(null);
   const reduceMotion = prefersReducedMotion();
+  const PINNED_TOOLS_KEY = 'arena:persona-playground:pinned-tools:v1';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const refresh = () => {
       setItems(readRecentShuffles(window.localStorage).slice(0, limit));
     };
+    const refreshPins = () => {
+      // Lazy import so we don't pull pinnedTools into the initial
+      // chunk for users who never reach the shuffle strip.
+      import('../lib/pinnedTools').then(({ readPinnedTools }) => {
+        setPinned(readPinnedTools(window.localStorage));
+      });
+    };
     refresh();
+    refreshPins();
     const onStorage = (event: StorageEvent) => {
-      if (event.key === null || event.key === RECENT_SHUFFLES_KEY) {
+      if (event.key === null) {
         refresh();
+        refreshPins();
+        return;
       }
+      if (event.key === RECENT_SHUFFLES_KEY) refresh();
+      if (event.key === PINNED_TOOLS_KEY) refreshPins();
     };
     window.addEventListener('storage', onStorage);
     return () => {
@@ -79,6 +104,22 @@ export function RecentShuffles({ limit = 5 }: RecentShufflesProps) {
     }
     prevHeadRef.current = head;
   }, [items]);
+
+  const onPinToggle = (path: string, name: string) => {
+    if (typeof window === 'undefined') return;
+    const wasPinned = isPinned(window.localStorage, path);
+    // togglePinnedTool returns false both when (a) the pin was
+    // successfully removed and (b) the cap was hit. Check the
+    // pre-state to disambiguate: if wasPinned, the false return
+    // means "successfully removed"; if not wasPinned, the false
+    // return means "cap was hit".
+    const nowPinned = togglePinnedTool(window.localStorage, path);
+    if (!nowPinned && !wasPinned) {
+      setAnnouncement(`Pin limit reached (${PINNED_TOOLS_LIMIT}). Unpin a tool first.`);
+      return;
+    }
+    setAnnouncement(nowPinned ? `Pinned ${name}` : `Unpinned ${name}`);
+  };
 
   if (items.length === 0) return null;
 
@@ -123,6 +164,7 @@ export function RecentShuffles({ limit = 5 }: RecentShufflesProps) {
           );
           if (!tool) return null;
           const isLatest = index === 0;
+          const isPinnedNow = pinned.includes(item.path);
           return (
             <li
               key={item.path}
@@ -131,11 +173,39 @@ export function RecentShuffles({ limit = 5 }: RecentShufflesProps) {
             >
               <Link
                 to={tool.path}
-                className="ppg-recent-shuffles__chip"
+                className={`ppg-recent-shuffles__chip${
+                  isPinnedNow ? ' ppg-recent-shuffles__chip--pinned' : ''
+                }`}
                 aria-label={`Re-open recent random pick: ${tool.name}`}
               >
                 <span className="ppg-recent-shuffles__chip-name">{tool.name}</span>
                 <span className="ppg-recent-shuffles__chip-meta">{tool.format}</span>
+                <button
+                  type="button"
+                  className="ppg-recent-shuffles__pin"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onPinToggle(item.path, tool.name);
+                  }}
+                  aria-label={
+                    isPinnedNow
+                      ? `Unpin ${tool.name} from your shortlist`
+                      : `Pin ${tool.name} to your shortlist`
+                  }
+                  aria-pressed={isPinnedNow}
+                  title={
+                    isPinnedNow
+                      ? `Unpin ${tool.name}`
+                      : `Pin ${tool.name}`
+                  }
+                >
+                  {isPinnedNow ? (
+                    <PinOff aria-hidden="true" width={12} height={12} />
+                  ) : (
+                    <Pin aria-hidden="true" width={12} height={12} />
+                  )}
+                </button>
               </Link>
             </li>
           );

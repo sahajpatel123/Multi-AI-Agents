@@ -2251,13 +2251,16 @@
   flex-direction: column;
   gap: 2px;
   padding: 8px 14px;
+  padding-right: 36px;
   border-radius: 12px;
   background: rgba(200, 185, 255, 0.08);
   border: 1px solid rgba(200, 185, 255, 0.32);
   color: var(--ppg-accent);
   text-decoration: none;
   min-width: 0;
-  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+  position: relative;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease,
+    box-shadow 200ms ease;
 }
 
 .ppg-recent-shuffles__chip:hover {
@@ -2269,6 +2272,55 @@
 .ppg-recent-shuffles__chip:focus-visible {
   outline: 2px solid var(--ppg-accent);
   outline-offset: 2px;
+}
+
+.ppg-recent-shuffles__chip--pinned {
+  background: rgba(255, 209, 102, 0.14);
+  border-color: rgba(255, 209, 102, 0.45);
+  box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.18) inset;
+}
+
+.ppg-recent-shuffles__pin {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ppg-accent-dim);
+  cursor: pointer;
+  padding: 0;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.ppg-recent-shuffles__pin:hover {
+  background: rgba(241, 233, 216, 0.1);
+  color: var(--ppg-accent);
+  border-color: rgba(241, 233, 216, 0.24);
+  transform: scale(1.05);
+}
+
+.ppg-recent-shuffles__pin:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 1px;
+}
+
+.ppg-recent-shuffles__chip--pinned .ppg-recent-shuffles__pin {
+  color: #ffd166;
+  background: rgba(255, 209, 102, 0.12);
+  border-color: rgba(255, 209, 102, 0.4);
+}
+
+.ppg-recent-shuffles__chip--pinned .ppg-recent-shuffles__pin:hover {
+  background: rgba(255, 209, 102, 0.2);
+  color: #ffd166;
+  border-color: rgba(255, 209, 102, 0.6);
 }
 
 .ppg-recent-shuffles__chip-name {
