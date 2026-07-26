@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   FEATURED_ARCHIVE_KEY,
   FEATURED_ARCHIVE_LIMIT,
@@ -148,5 +148,54 @@ describe('clearFeaturedArchive', () => {
 
   it('is a no-op when storage is null', () => {
     expect(() => clearFeaturedArchive(null)).not.toThrow();
+  });
+});
+
+describe('featuredArchive same-tab storage notification', () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('dispatches a synthetic storage event on recordFeaturedPick', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      recordFeaturedPick(window.localStorage, '/persona-battle', '2026-07-25');
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(FEATURED_ARCHIVE_KEY);
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('dispatches a synthetic storage event on clearFeaturedArchive', () => {
+    window.localStorage.setItem(
+      FEATURED_ARCHIVE_KEY,
+      JSON.stringify([{ path: '/x', date: '2026-07-25' }]),
+    );
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      clearFeaturedArchive(window.localStorage);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(FEATURED_ARCHIVE_KEY);
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('does not notify when storage is null', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      writeFeaturedArchive(null, []);
+      clearFeaturedArchive(null);
+      expect(onStorage).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
   });
 });
