@@ -73,6 +73,15 @@ describe('vercel.json security headers', () => {
     expect(headerValue(rule, 'X-Content-Type-Options')).toBe('nosniff');
   });
 
+  it('isolates the browsing context via Cross-Origin-Opener-Policy (cycle 394)', () => {
+    // COOP same-origin prevents cross-origin windows opened by the
+    // app from holding a reference back to the browsing context
+    // (Spectre-style side-channel hardening). Razorpay opens its
+    // own iframe via frame-src, not window.open, so this doesn't
+    // break the checkout flow.
+    expect(headerValue(rule, 'Cross-Origin-Opener-Policy')).toBe('same-origin');
+  });
+
   it('still emits the CSP from cycle 374 unchanged', () => {
     const csp = headerValue(rule, 'Content-Security-Policy');
     expect(csp).toContain("default-src 'self'");
