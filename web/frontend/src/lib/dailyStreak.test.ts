@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   DAILY_STREAK_KEY,
   DAILY_STREAK_VERSION,
@@ -147,6 +147,67 @@ describe('clearDailyStreak', () => {
 
   it('is a no-op when storage is null', () => {
     expect(() => clearDailyStreak(null)).not.toThrow();
+  });
+});
+
+describe('dailyStreak same-tab storage notification', () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('dispatches a synthetic storage event on recordDailyStreak (bump)', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      recordDailyStreak(window.localStorage, '2026-07-25');
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(DAILY_STREAK_KEY);
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('does not dispatch when recordDailyStreak is a no-op (same-day)', () => {
+    recordDailyStreak(window.localStorage, '2026-07-25');
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      recordDailyStreak(window.localStorage, '2026-07-25');
+      expect(onStorage).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('dispatches a synthetic storage event on clearDailyStreak', () => {
+    window.localStorage.setItem(
+      DAILY_STREAK_KEY,
+      JSON.stringify({ v: 1, lastVisit: 'x', current: 5, longest: 5 }),
+    );
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      clearDailyStreak(window.localStorage);
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe(DAILY_STREAK_KEY);
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('does not notify when storage is null', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      recordDailyStreak(null, '2026-07-25');
+      clearDailyStreak(null);
+      expect(onStorage).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
   });
 });
 

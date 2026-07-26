@@ -19,6 +19,26 @@
 const STORAGE_KEY = 'arena:persona-playground:daily-streak:v1';
 const STATE_VERSION = 1 as const;
 
+/**
+ * Notify same-tab listeners that the daily-streak state changed.
+ * The browser `StorageEvent` only fires in OTHER tabs, so without
+ * this signal the DailyStreak widget mounted in the same tab would
+ * not refresh until the next page load. Swallows any dispatch
+ * failure (jsdom quirks, locked-down iframes).
+ */
+function notifySameTab(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const event = new StorageEvent('storage', {
+      key: STORAGE_KEY,
+      newValue: window.localStorage.getItem(STORAGE_KEY),
+    });
+    window.dispatchEvent(event);
+  } catch {
+    /* silent */
+  }
+}
+
 export interface DailyStreakState {
   /** Schema version — bump if the shape changes. */
   readonly v: typeof STATE_VERSION;
@@ -81,7 +101,9 @@ export function writeDailyStreak(
     storage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 export function recordDailyStreak(
@@ -120,7 +142,9 @@ export function clearDailyStreak(
     storage.removeItem(STORAGE_KEY);
   } catch {
     /* silent */
+    return;
   }
+  notifySameTab();
 }
 
 export const DAILY_STREAK_KEY = STORAGE_KEY;
