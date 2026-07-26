@@ -56,6 +56,7 @@ describe('keyboardShortcuts', () => {
     expect(list.some((s) => s.keys.toLowerCase().includes('shift + a'))).toBe(true);
     expect(list.some((s) => s.keys.toLowerCase().includes('shift + g'))).toBe(true);
     expect(list.some((s) => s.keys.toLowerCase().includes('shift + w'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + p'))).toBe(true);
     expect(list.some((s) => s.keys === '←  →')).toBe(true);
     expect(list.some((s) => s.keys === 'Esc')).toBe(true);
     expect(list.some((s) => s.keys === '?')).toBe(true);

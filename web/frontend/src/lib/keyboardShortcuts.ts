@@ -78,6 +78,7 @@ const PERSONA_PLAYGROUND: ShortcutHint[] = [
   { keys: 'Shift + A', action: 'Open the all-tools index' },
   { keys: 'Shift + G', action: 'Browse tools by category' },
   { keys: 'Shift + W', action: 'See what is new on the playground' },
+  { keys: 'Shift + P', action: 'Open the sitemap' },
   { keys: '←  →', action: 'Rotate through mood chips' },
   { keys: 'Esc', action: 'Close the command palette' },
   { keys: '?', action: 'Toggle this shortcuts list' },

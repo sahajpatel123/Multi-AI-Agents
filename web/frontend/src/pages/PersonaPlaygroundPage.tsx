@@ -98,6 +98,7 @@ export function PersonaPlaygroundPage() {
   const isOnIndex = location.pathname === '/persona-playground/index';
   const isOnCategories = location.pathname === '/persona-playground/categories';
   const isOnWhatsNew = location.pathname === '/persona-playground/whats-new';
+  const isOnSitemap = location.pathname === '/persona-playground/sitemap';
   const { isAuthenticated } = useAuth();
   const [pageVisible, setPageVisible] = useState(false);
   const [query, setQuery] = useState(() => params.get('q') ?? '');
@@ -426,6 +427,29 @@ export function PersonaPlaygroundPage() {
       }
       setShiftTAnnouncement('Opening what is new');
       navigateRef.current('/persona-playground/whats-new');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Global Shift+P — jump to the Sitemap page.
+  // Completes the hub-destination shortcut cluster (A / F / G / W / P).
+  // Same-pattern as Shift+A / Shift+G / Shift+W: forward-declared
+  // navigateRef, "already on this page" short-circuit, aria-live
+  // announce.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'P' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      if (typeof window === 'undefined') return;
+      if (window.location.pathname === '/persona-playground/sitemap') {
+        setShiftTAnnouncement('You are already on the sitemap page');
+        return;
+      }
+      setShiftTAnnouncement('Opening the sitemap');
+      navigateRef.current('/persona-playground/sitemap');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -971,8 +995,16 @@ export function PersonaPlaygroundPage() {
               description — the table of contents for the hub.
             </p>
           </div>
-          <Link to="/persona-playground/sitemap" className="ppg-sitemap-cta__btn">
+          <Link
+            to="/persona-playground/sitemap"
+            className="ppg-sitemap-cta__btn"
+            data-route-active={isOnSitemap ? 'true' : undefined}
+            aria-current={isOnSitemap ? 'page' : undefined}
+          >
             View sitemap
+            <kbd className="ppg-sitemap-cta__shortcut" aria-hidden="true">
+              Shift + P
+            </kbd>
             <ArrowRight aria-hidden="true" />
           </Link>
         </Reveal>
