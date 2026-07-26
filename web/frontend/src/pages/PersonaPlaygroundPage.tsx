@@ -21,6 +21,7 @@ import { ToolSearchLauncher } from '../components/ToolSearchLauncher';
 import { ProgressStrip } from '../components/ProgressStrip';
 import { MoodMatcher } from '../components/MoodMatcher';
 import { MoodMatcherHistory } from '../components/MoodMatcherHistory';
+import { HubShareButton } from '../components/HubShareButton';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -267,6 +268,7 @@ export function PersonaPlaygroundPage() {
           </div>
 
           <ToolSearchLauncher />
+          <HubShareButton />
         </section>
 
         <ProgressStrip

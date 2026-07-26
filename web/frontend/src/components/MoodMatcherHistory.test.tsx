@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MoodMatcherHistory } from './MoodMatcherHistory';
 import {
@@ -132,5 +132,38 @@ describe('MoodMatcherHistory', () => {
     expect(container.firstChild).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Clear mood history/i }));
     expect(container.firstChild).toBeNull();
+  });
+
+  it('refreshes when recordMoodPick fires in the same tab', async () => {
+    // First render: empty, returns null.
+    const { container } = render(
+      <MemoryRouter>
+        <MoodMatcherHistory />
+      </MemoryRouter>,
+    );
+    expect(container.firstChild).toBeNull();
+    // Same-tab write — the browser's storage event only fires in
+    // OTHER tabs, so the lib must self-notify to refresh this tab.
+    recordMoodPick(window.localStorage, 'stuck', 1);
+    await waitFor(() => {
+      expect(container.firstChild).not.toBeNull();
+    });
+    expect(
+      screen.getByRole('button', { name: /Replay I.m stuck mood/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('clearMoodHistory notifies same-tab listeners', async () => {
+    writeMoodHistory([{ id: 'stuck', at: 1 }]);
+    const { container } = render(
+      <MemoryRouter>
+        <MoodMatcherHistory />
+      </MemoryRouter>,
+    );
+    expect(container.firstChild).not.toBeNull();
+    clearMoodHistory(window.localStorage);
+    await waitFor(() => {
+      expect(container.firstChild).toBeNull();
+    });
   });
 });
