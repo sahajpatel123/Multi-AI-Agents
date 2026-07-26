@@ -124,7 +124,18 @@ function renderPage() {
 describe('WatchlistPage', () => {
   beforeEach(() => {
     navigateMock.mockReset();
-    tierState.canUseFeature.mockClear();
+    // mockClear wipes call history but PRESERVES the mock
+    // implementation. The 'blocks rendering when feature is gated'
+    // test below swaps the implementation to () => false; without a
+    // reset here, that swap would leak into the next test in the
+    // file and the page would render the watchlist-gate instead of
+    // the data, breaking the rest of the suite (the test runs in
+    // arbitrary order, so this is a real flake, not a one-off).
+    tierState.canUseFeature.mockReset();
+    tierState.canUseFeature.mockImplementation((feature: string) => {
+      if (feature === 'agent_watchlist') return true;
+      return false;
+    });
     getAgentWatchlistMock.mockReset();
     getAgentWatchlistMock.mockResolvedValue({
       items: [baseItem],
