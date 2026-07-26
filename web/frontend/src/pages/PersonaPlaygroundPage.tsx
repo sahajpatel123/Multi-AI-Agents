@@ -171,6 +171,26 @@ export function PersonaPlaygroundPage() {
     };
   }, []);
 
+  // Global Shift+C — replay the most recent category filter.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'C' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!shouldCaptureSlashFocus(event.target)) return;
+      event.preventDefault();
+      if (typeof window === 'undefined') return;
+      import('../lib/recentCategories').then(({ readRecentCategories }) => {
+        const top = readRecentCategories(window.localStorage)[0];
+        if (!top) return;
+        const next = new URLSearchParams(params);
+        next.set('cat', top);
+        setParams(next, { replace: true });
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [params, setParams]);
+
   // Global Shift+S — replay the most recent search query.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

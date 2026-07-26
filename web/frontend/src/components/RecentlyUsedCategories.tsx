@@ -53,6 +53,9 @@ export function RecentlyUsedCategories({
       <header className="ppg-recentcats__head">
         <p className="ppg-recentcats__eyebrow">
           <Clock aria-hidden="true" /> {heading}
+          <kbd className="ppg-recentcats__shortcut" aria-hidden="true">
+            Shift + C
+          </kbd>
         </p>
         <button
           type="button"
