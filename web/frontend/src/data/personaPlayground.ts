@@ -811,6 +811,60 @@ export function matchToolForPurpose(
 }
 
 /**
+ * Personalized "what should I try next" picker. Scores each
+ * catalog entry by:
+ *   + recent visits to its category (more weight)
+ *   + recent visits to itself
+ *   - already starred (heavy discount)
+ *   - already recently visited (light discount, so we don't
+ *     suggest something the user just looked at)
+ *
+ * Returns the top-scoring entry, or null when nothing qualifies
+ * (e.g. all entries are starred). Deterministic for the same
+ * inputs (uses dayOfYear + a salt to break ties).
+ */
+export function tryNextTool(
+  starredPaths: readonly string[],
+  recentPaths: readonly string[],
+  salt: number = 0,
+  date: Date = new Date(),
+  entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+): PersonaPlaygroundEntry | null {
+  if (entries.length === 0) return null;
+  const starred = new Set(starredPaths);
+  const recent = new Set(recentPaths);
+
+  // Build category-experience scores from recent visits.
+  const categoryScore = new Map<PersonaPlaygroundCategory, number>();
+  for (const path of recent) {
+    const entry = entries.find((e) => e.path === path);
+    if (entry) {
+      categoryScore.set(entry.category, (categoryScore.get(entry.category) ?? 0) + 3);
+    }
+  }
+
+  // Score every entry.
+  const scored = entries
+    .map((entry) => {
+      let score = categoryScore.get(entry.category) ?? 0;
+      if (recent.has(entry.path)) score += 2;
+      if (starred.has(entry.path)) score -= 100;
+      return { entry, score };
+    })
+    .filter((s) => s.score > 0);
+
+  if (scored.length === 0) return null;
+
+  // Highest score wins; tie-breaks on dayOfYear + salt for stable output.
+  const day = dayOfYear(date) + salt;
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return (day % entries.length) - (entries.indexOf(a.entry) - entries.indexOf(b.entry));
+  });
+  return scored[0]?.entry ?? null;
+}
+
+/**
  * True when the dismiss state is still valid for the given date.
  * A state is "valid" when it was dismissed on the same calendar day as
  * `today` — the next day the banner is allowed to show again.

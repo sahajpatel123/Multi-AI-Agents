@@ -45,6 +45,7 @@ import {
   readFeaturedDismissState,
   relatedTools,
   relatedToolsDefaultHeading,
+  tryNextTool,
   unvisitedTools,
   writeFeaturedDismissState,
   type PersonaPlaygroundEntry,
@@ -869,5 +870,45 @@ describe('matchToolForPurpose', () => {
       const haystack = `${result.name} ${result.tagline} ${result.blurb} ${result.format}`.toLowerCase();
       expect(haystack).toContain('forecast');
     }
+  });
+});
+
+describe('tryNextTool', () => {
+  it('returns a non-starred entry from the catalog', () => {
+    const result = tryNextTool(
+      ['/persona-match'],
+      ['/persona-battle'],
+      0,
+      new Date(2026, 6, 25),
+    );
+    expect(result).not.toBeNull();
+    if (result) {
+      expect(result.path).not.toBe('/persona-match');
+    }
+  });
+
+  it('prefers tools in a category the user has explored', () => {
+    // The user has visited /persona-battle (versus) recently.
+    // tryNextTool should prefer another versus tool.
+    const result = tryNextTool([], ['/persona-battle'], 0, new Date(2026, 6, 25));
+    expect(result?.category).toBe('versus');
+  });
+
+  it('returns null when all entries are starred', () => {
+    const allPaths = PERSONA_PLAYGROUND_ENTRIES.map((e) => e.path);
+    expect(tryNextTool(allPaths, [], 0, new Date(2026, 6, 25))).toBeNull();
+  });
+
+  it('returns null for an empty catalog', () => {
+    expect(tryNextTool([], [], 0, new Date(2026, 6, 25), [])).toBeNull();
+  });
+
+  it('is deterministic for the same inputs', () => {
+    const date = new Date(2026, 6, 25);
+    const starred = ['/persona-match'];
+    const recent = ['/persona-battle'];
+    const a = tryNextTool(starred, recent, 0, date);
+    const b = tryNextTool(starred, recent, 0, date);
+    expect(a?.path).toBe(b?.path);
   });
 });
