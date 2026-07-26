@@ -22,6 +22,25 @@ export function isSafeRedirectPath(path: string): boolean {
   // Block encoded tricks that still resolve off-site in some browsers
   const lower = p.toLowerCase();
   if (lower.includes('javascript:') || lower.includes('data:')) return false;
+  // Defense-in-depth: reject any query-string value that contains a
+  // protocol-relative prefix, absolute scheme, backslash trick, or
+  // js:/data: payload. A downstream component reading `?next=//evil.com`
+  // and passing it to window.location is an open redirect even if the
+  // outer path is safe — refuse at the source.
+  const qIndex = p.indexOf('?');
+  if (qIndex >= 0) {
+    const qs = p.slice(qIndex + 1);
+    const qsLower = qs.toLowerCase();
+    if (
+      qs.includes('//') ||
+      qs.includes('://') ||
+      qs.includes('\\') ||
+      qsLower.includes('javascript:') ||
+      qsLower.includes('data:')
+    ) {
+      return false;
+    }
+  }
   return true;
 }
 

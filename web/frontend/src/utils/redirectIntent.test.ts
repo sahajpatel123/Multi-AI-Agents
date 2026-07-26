@@ -64,6 +64,21 @@ describe('isSafeRedirectPath', () => {
     expect(isSafeRedirectPath('javascript:alert(1)')).toBe(false);
     expect(isSafeRedirectPath('')).toBe(false);
   });
+
+  it('rejects open-redirect payloads smuggled inside query-string values (cycle 395)', () => {
+    // Top-level path is safe, but the `?next=//evil.com` value would
+    // become an open redirect if a downstream consumer reads the
+    // query string and passes it to window.location. Reject at the
+    // source — the path-level check can't see inside the query value.
+    expect(isSafeRedirectPath('/app?next=//evil.com')).toBe(false);
+    expect(isSafeRedirectPath('/app?next=https://evil.com')).toBe(false);
+    expect(isSafeRedirectPath('/app?next=javascript:alert(1)')).toBe(false);
+    expect(isSafeRedirectPath('/app?next=data:text/html,<script>')).toBe(false);
+    expect(isSafeRedirectPath('/app?next=/\\evil.com')).toBe(false);
+    // Sanity: ordinary query strings still allowed.
+    expect(isSafeRedirectPath('/app?next=/app/safe')).toBe(true);
+    expect(isSafeRedirectPath('/app?tab=1&q=hello')).toBe(true);
+  });
 });
 
 describe('describeRedirectDestination', () => {
