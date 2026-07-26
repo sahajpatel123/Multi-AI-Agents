@@ -71,7 +71,17 @@ function asLocalExecutionDetail(data: unknown): LocalExecutionRequiredError['det
 }
 
 async function parseJsonSafely<T>(response: Response): Promise<T | null> {
-  const text = await response.text();
+  // Wrap both the body read AND the parse in try/catch — a hung
+  // stream that aborts mid-read (network blip, devtools interrupt,
+  // backend SIGPIPE) would otherwise throw a TypeError straight up
+  // to the caller's catch. Returning null keeps the failure mode
+  // uniform: caller treats it as "empty / unparseable response".
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    return null;
+  }
   if (!text) return null;
 
   try {
