@@ -20,6 +20,7 @@ import {
 } from '../lib/commandPalette';
 import { shouldCaptureSlashFocus } from '../lib/slashFocus';
 import { prefersReducedMotion } from '../lib/motion';
+import { HighlightQuery } from './HighlightQuery';
 
 export interface ToolSearchPaletteProps {
   /** Heading shown in the palette header. */
@@ -133,6 +134,20 @@ export function ToolSearchPalette({
   useEffect(() => {
     setActive((cur) => clampIndex(cur, matches.length, 0));
   }, [matches.length]);
+
+  // Scroll the active row into view as the user navigates with the
+  // keyboard. Mouse hover already drives `active`; this effect keeps
+  // both input sources in sync with the visible viewport. Guarded for
+  // jsdom environments that don't implement scrollIntoView.
+  useEffect(() => {
+    if (!open) return;
+    const node = listRef.current?.querySelector<HTMLElement>(
+      `#palette-result-${CSS.escape(matches[active]?.entry.path ?? '')}`,
+    );
+    if (!node) return;
+    if (typeof node.scrollIntoView !== 'function') return;
+    node.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+  }, [active, matches, open, reduceMotion]);
 
   const onInputKey = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -256,8 +271,12 @@ export function ToolSearchPalette({
                   onClick={() => goToMatch(index)}
                 >
                   <div className="palette-row__copy">
-                    <span className="palette-row__name">{match.entry.name}</span>
-                    <span className="palette-row__tagline">{match.entry.tagline}</span>
+                    <span className="palette-row__name">
+                      <HighlightQuery text={match.entry.name} query={query} />
+                    </span>
+                    <span className="palette-row__tagline">
+                      <HighlightQuery text={match.entry.tagline} query={query} />
+                    </span>
                   </div>
                   <span className="palette-row__meta">
                     <span className="palette-row__cat">

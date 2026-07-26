@@ -170,4 +170,44 @@ describe('ToolSearchPalette', () => {
     // No throw means wrap-around kept the active row inside bounds.
     expect(screen.getAllByRole('option').length).toBe(initial);
   });
+
+  it('highlights the matching substring inside name and tagline', () => {
+    render(
+      <MemoryRouter>
+        <ToolSearchPalette />
+      </MemoryRouter>,
+    );
+    fireEvent.keyDown(window, { key: 'k' });
+    const input = screen.getByRole('searchbox') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'mosaic' } });
+    const marks = document.querySelectorAll('.palette-row mark');
+    expect(marks.length).toBeGreaterThan(0);
+    for (const mark of Array.from(marks)) {
+      expect(mark.textContent?.toLowerCase()).toContain('mosaic');
+    }
+  });
+
+  it('does not render any marks for an empty query', () => {
+    render(
+      <MemoryRouter>
+        <ToolSearchPalette />
+      </MemoryRouter>,
+    );
+    fireEvent.keyDown(window, { key: 'k' });
+    expect(document.querySelectorAll('.palette-row mark').length).toBe(0);
+  });
+
+  it('renders exactly one selected option after the first ArrowDown', () => {
+    render(
+      <MemoryRouter>
+        <ToolSearchPalette />
+      </MemoryRouter>,
+    );
+    fireEvent.keyDown(window, { key: 'k' });
+    const input = screen.getByRole('searchbox') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'a' } });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    const selected = screen.getAllByRole('option', { selected: true });
+    expect(selected.length).toBe(1);
+  });
 });
