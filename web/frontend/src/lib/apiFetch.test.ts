@@ -208,4 +208,49 @@ describe('apiFetch', () => {
     // And the existing positive path still works.
     await expect(apiFetch('/api/protected', { timeoutMs: 5000 })).resolves.toBeDefined();
   });
+
+  it('dedupes concurrent refresh attempts (cycle 409)', async () => {
+    // Two simultaneous 401s must share a single refresh round-trip —
+    // otherwise the backend gets two refresh POSTs, the second of which
+    // might race with the token rotation. Pin the dedupe.
+    localStorage.setItem('arena_access_token', 'old-tok');
+    localStorage.setItem('arena_refresh_token', 'ref');
+
+    let refreshCalls = 0;
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.endsWith('/api/auth/refresh')) {
+        refreshCalls++;
+        return new Promise((resolve) => {
+          // Hold the refresh open so both 401s race in.
+          setTimeout(
+            () =>
+              resolve(
+                buildResponse(200, {
+                  access_token: 'new-tok',
+                  refresh_token: 'new-ref',
+                }),
+              ),
+            10,
+          );
+        });
+      }
+      // Initial: both protected endpoints 401. After refresh resolves
+      // and tokens rotate, retries succeed.
+      const isFirst = refreshCalls === 0;
+      return Promise.resolve(
+        buildResponse(isFirst || refreshCalls === 0 ? 401 : 200),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    // Kick off two 401-protected endpoints in parallel.
+    const [r1, r2] = await Promise.all([
+      apiFetch('/api/protected/a'),
+      apiFetch('/api/protected/b'),
+    ]);
+    expect(r1.ok).toBe(true);
+    expect(r2.ok).toBe(true);
+    // Critical: only ONE refresh round-trip happened.
+    expect(refreshCalls).toBe(1);
+  });
 });
