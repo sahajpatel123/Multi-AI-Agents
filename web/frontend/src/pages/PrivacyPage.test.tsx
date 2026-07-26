@@ -140,56 +140,65 @@ describe('PrivacyPage', () => {
   it('auto-advances data routes while the inspector is in view', () => {
     stubInspectorVisible();
     vi.useFakeTimers();
-    renderPage();
+    try {
+      renderPage();
 
-    const selector = screen.getByRole('group', { name: 'Select a data route' });
-    expect(
-      within(selector).getByRole('button', { name: /01\s*Account/i }),
-    ).toHaveAttribute('aria-pressed', 'true');
+      const selector = screen.getByRole('group', { name: 'Select a data route' });
+      expect(
+        within(selector).getByRole('button', { name: /01\s*Account/i }),
+      ).toHaveAttribute('aria-pressed', 'true');
 
-    act(() => {
-      vi.advanceTimersByTime(4000);
-    });
+      act(() => {
+        vi.advanceTimersByTime(4000);
+      });
 
-    expect(
-      within(selector).getByRole('button', { name: /02\s*Conversation/i }),
-    ).toHaveAttribute('aria-pressed', 'true');
-    expect(
-      screen.getByRole('heading', { name: 'Prompts, context, and answers' }),
-    ).toBeInTheDocument();
+      expect(
+        within(selector).getByRole('button', { name: /02\s*Conversation/i }),
+      ).toHaveAttribute('aria-pressed', 'true');
+      expect(
+        screen.getByRole('heading', { name: 'Prompts, context, and answers' }),
+      ).toBeInTheDocument();
 
-    act(() => {
-      vi.advanceTimersByTime(4000);
-    });
+      act(() => {
+        vi.advanceTimersByTime(4000);
+      });
 
-    expect(
-      within(selector).getByRole('button', { name: /03\s*Billing/i }),
-    ).toHaveAttribute('aria-pressed', 'true');
-
-    vi.useRealTimers();
+      expect(
+        within(selector).getByRole('button', { name: /03\s*Billing/i }),
+      ).toHaveAttribute('aria-pressed', 'true');
+    } finally {
+      // Always restore real timers so a failing assertion can't leak
+      // fake timers into the next test in the file (which would
+      // make any other test using waitFor hang).
+      vi.useRealTimers();
+    }
   });
 
   it('pauses autoplay after a manual route pick', () => {
     stubInspectorVisible();
     vi.useFakeTimers();
-    renderPage();
+    try {
+      renderPage();
 
-    const selector = screen.getByRole('group', { name: 'Select a data route' });
-    const billing = within(selector).getByRole('button', { name: /03\s*Billing/i });
-    fireEvent.click(billing);
+      const selector = screen.getByRole('group', { name: 'Select a data route' });
+      const billing = within(selector).getByRole('button', { name: /03\s*Billing/i });
+      fireEvent.click(billing);
 
-    expect(billing).toHaveAttribute('aria-pressed', 'true');
+      expect(billing).toHaveAttribute('aria-pressed', 'true');
 
-    act(() => {
-      vi.advanceTimersByTime(4000);
-    });
+      act(() => {
+        vi.advanceTimersByTime(4000);
+      });
 
-    expect(billing).toHaveAttribute('aria-pressed', 'true');
-    expect(
-      within(selector).getByRole('button', { name: /04\s*Integrations/i }),
-    ).toHaveAttribute('aria-pressed', 'false');
-
-    vi.useRealTimers();
+      expect(billing).toHaveAttribute('aria-pressed', 'true');
+      expect(
+        within(selector).getByRole('button', { name: /04\s*Integrations/i }),
+      ).toHaveAttribute('aria-pressed', 'false');
+    } finally {
+      // Always restore real timers so a failing assertion can't leak
+      // fake timers into the next test in the file.
+      vi.useRealTimers();
+    }
   });
 
   it('animates route panel stages when motion is allowed', () => {
