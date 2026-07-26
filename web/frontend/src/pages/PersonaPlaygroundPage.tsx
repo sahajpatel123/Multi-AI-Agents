@@ -128,25 +128,36 @@ export function PersonaPlaygroundPage() {
 
   // Global Shift+M — replay the most recent mood from history.
   useEffect(() => {
+    let cancelled = false;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'M' || !event.shiftKey) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (!shouldCaptureSlashFocus(event.target)) return;
       event.preventDefault();
       if (typeof window === 'undefined') return;
-      // Lazily import to avoid a hard cycle.
-      import('../lib/moodHistory').then(({ readMoodHistory }) => {
-        const recent = readMoodHistory(window.localStorage);
-        const top = recent[0]?.id;
-        if (!top) return;
-        setMoodId(top);
-        document
-          .getElementById('ppg-jump-mood')
-          ?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
-      });
+      // Lazily import to avoid a hard cycle. The `cancelled` guard
+      // suppresses a state update if the user navigates away while
+      // the chunk is still being fetched.
+      import('../lib/moodHistory')
+        .then(({ readMoodHistory }) => {
+          if (cancelled) return;
+          const recent = readMoodHistory(window.localStorage);
+          const top = recent[0]?.id;
+          if (!top) return;
+          setMoodId(top);
+          document
+            .getElementById('ppg-jump-mood')
+            ?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+        })
+        .catch(() => {
+          /* chunk load failed — nothing to replay */
+        });
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   useEffect(() => {
@@ -272,6 +283,21 @@ export function PersonaPlaygroundPage() {
           <p className="ppg-hero__lede">
             {PERSONA_PLAYGROUND_ENTRIES.length} ways to put the sixteen Arena minds to work. Pick
             one, run the experiment, take the verdict back to your real prompt.
+          </p>
+
+          <p className="ppg-hero__shortcut-hint">
+            <button
+              type="button"
+              className="ppg-hero__shortcut-btn"
+              onClick={() => {
+                window.dispatchEvent(
+                  new KeyboardEvent('keydown', { key: '?', bubbles: true }),
+                );
+              }}
+              aria-label="Show all keyboard shortcuts"
+            >
+              Press <kbd className="ppg-hero__kbd">?</kbd> for shortcuts
+            </button>
           </p>
 
           <div className="ppg-hero__search">

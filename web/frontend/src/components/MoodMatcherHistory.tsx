@@ -76,6 +76,9 @@ export function MoodMatcherHistory({
       <header className="ppg-moodhist__head">
         <p className="ppg-moodhist__eyebrow">
           <Clock aria-hidden="true" /> {heading}
+          <kbd className="ppg-moodhist__shortcut" aria-hidden="true">
+            Shift + M
+          </kbd>
         </p>
         <div className="ppg-moodhist__head-meta">
           <span className="ppg-moodhist__count" aria-label={`${entries.length} recent moods`}>

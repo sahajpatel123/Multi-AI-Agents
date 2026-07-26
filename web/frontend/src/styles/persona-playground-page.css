@@ -3222,3 +3222,66 @@
   align-self: flex-end;
   margin-bottom: 2px;
 }
+
+/* ------------------------------------------------------------------
+   Hero shortcut hint + MoodMatcherHistory shortcut tag
+   ------------------------------------------------------------------ */
+.ppg-hero__shortcut-hint {
+  margin: 0 0 8px;
+}
+
+.ppg-hero__shortcut-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 0.5px dashed rgba(196, 149, 106, 0.45);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--ppg-accent-dim);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color var(--motion-hover-ms) var(--ease-btn), color var(--motion-hover-ms) var(--ease-btn);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ppg-hero__shortcut-btn:hover {
+    color: var(--ppg-accent);
+    border-color: rgba(196, 149, 106, 0.8);
+  }
+}
+
+.ppg-hero__shortcut-btn:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-hero__kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  min-height: 18px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #1a1714;
+  background: #faf7f4;
+  border: 0.5px solid rgba(196, 149, 106, 0.45);
+  border-radius: 4px;
+}
+
+.ppg-moodhist__shortcut {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--ppg-accent-dim);
+  background: rgba(196, 149, 106, 0.08);
+  border: 0.5px solid rgba(196, 149, 106, 0.28);
+  border-radius: 4px;
+}
