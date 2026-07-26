@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { RandomToolButton } from './RandomToolButton';
@@ -116,5 +116,39 @@ describe('RandomToolButton', () => {
     const link = screen.getByRole('link');
     expect(link.getAttribute('href')).toBe(entry.path);
     expect(link.getAttribute('aria-label')).toContain(entry.name);
+  });
+
+  it('does not render a Reshuffle button when onReshuffle is omitted', () => {
+    render(
+      <MemoryRouter>
+        <RandomToolButton />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('button', { name: /reshuffle/i })).toBeNull();
+  });
+
+  it('renders a Reshuffle button when onReshuffle is provided and fires on click', () => {
+    const onReshuffle = vi.fn();
+    render(
+      <MemoryRouter>
+        <RandomToolButton onReshuffle={onReshuffle} />
+      </MemoryRouter>,
+    );
+    const btn = screen.getByRole('button', { name: /reshuffle/i });
+    expect(btn).toBeInTheDocument();
+    btn.click();
+    expect(onReshuffle).toHaveBeenCalledTimes(1);
+  });
+
+  it('honors a custom reshuffle aria label', () => {
+    render(
+      <MemoryRouter>
+        <RandomToolButton
+          onReshuffle={() => {}}
+          reshuffleAriaLabel="Pick a different tool"
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: /Pick a different tool/i })).toBeInTheDocument();
   });
 });

@@ -116,10 +116,17 @@ export function PersonaPlaygroundPage() {
   // pass it down. `randomPickSalt` is a per-day value so the pick
   // only changes when the user's date rolls over.
   const randomPickSalt = useMemo(() => Math.floor(today.getTime() / 86_400_000), [today]);
+  // Reshuffle counter — incremented by the inline Reshuffle button.
+  // Lets the user cycle through random tools without losing their
+  // current page context.
+  const [reshuffleTick, setReshuffleTick] = useState(0);
   const randomPick = useMemo(
-    () => pickRandomTool(featured ? [featured.path] : [], randomPickSalt, today),
-    [featured, randomPickSalt, today],
+    () => pickRandomTool(featured ? [featured.path] : [], randomPickSalt + reshuffleTick, today),
+    [featured, randomPickSalt, reshuffleTick, today],
   );
+  const onReshuffle = useCallback(() => {
+    setReshuffleTick((tick) => tick + 1);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !featured) return;
@@ -799,7 +806,11 @@ export function PersonaPlaygroundPage() {
 
         <SurpriseButton />
 
-        <RandomToolButton pick={randomPick} excludePaths={featured ? [featured.path] : []} />
+        <RandomToolButton
+          pick={randomPick}
+          excludePaths={featured ? [featured.path] : []}
+          onReshuffle={onReshuffle}
+        />
 
         <CompareFromCategoryButton excludePaths={featured ? [featured.path] : []} />
 

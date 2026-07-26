@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Shuffle } from 'lucide-react';
+import { RefreshCw, Shuffle } from 'lucide-react';
 import { pickRandomTool, type PersonaPlaygroundEntry } from '../data/personaPlayground';
 
 export interface RandomToolButtonProps {
@@ -20,6 +20,15 @@ export interface RandomToolButtonProps {
   pick?: PersonaPlaygroundEntry | null;
   /** Show the Shift + R shortcut chip in the label. Defaults to true. */
   showShortcut?: boolean;
+  /**
+   * Optional reshuffle handler. When provided, renders a small
+   * inline "Reshuffle" button next to the link. The handler is
+   * expected to update the parent's `pick` (e.g. by incrementing
+   * a salt) so the displayed pick changes.
+   */
+  onReshuffle?: () => void;
+  /** Accessible label for the reshuffle button. */
+  reshuffleAriaLabel?: string;
 }
 
 /**
@@ -38,26 +47,41 @@ export function RandomToolButton({
   size = 'sm',
   pick: pickProp,
   showShortcut = true,
+  onReshuffle,
+  reshuffleAriaLabel = 'Reshuffle the random tool',
 }: RandomToolButtonProps) {
   const pick = pickProp ?? pickRandomTool(excludePaths, 0, date);
   if (!pick) return null;
   const sizeClass = size === 'md' ? 'ppg-randombtn--md' : 'ppg-randombtn--sm';
   return (
-    <Link
-      to={pick.path}
-      className={`ppg-randombtn ${sizeClass}`}
-      aria-label={`${label}: ${pick.name}${showShortcut ? ' (Shift + R)' : ''}`}
-    >
-      <Shuffle aria-hidden="true" />
-      <span>
-        {label}
-        <strong>{pick.name}</strong>
-      </span>
-      {showShortcut ? (
-        <kbd className="ppg-randombtn__shortcut" aria-hidden="true">
-          Shift + R
-        </kbd>
+    <span className={`ppg-randombtn-wrap ${sizeClass}`}>
+      <Link
+        to={pick.path}
+        className={`ppg-randombtn ${sizeClass}`}
+        aria-label={`${label}: ${pick.name}${showShortcut ? ' (Shift + R)' : ''}`}
+      >
+        <Shuffle aria-hidden="true" />
+        <span>
+          {label}
+          <strong>{pick.name}</strong>
+        </span>
+        {showShortcut ? (
+          <kbd className="ppg-randombtn__shortcut" aria-hidden="true">
+            Shift + R
+          </kbd>
+        ) : null}
+      </Link>
+      {onReshuffle ? (
+        <button
+          type="button"
+          className="ppg-randombtn__reshuffle"
+          onClick={onReshuffle}
+          aria-label={reshuffleAriaLabel}
+          title={reshuffleAriaLabel}
+        >
+          <RefreshCw aria-hidden="true" />
+        </button>
       ) : null}
-    </Link>
+    </span>
   );
 }
