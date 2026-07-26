@@ -24,6 +24,7 @@ import { MoodMatcherHistory } from '../components/MoodMatcherHistory';
 import { HubShareButton } from '../components/HubShareButton';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { PinnedTools } from '../components/PinnedTools';
+import { ToolPinButton } from '../components/ToolPinButton';
 import { FeaturedArchive } from '../components/FeaturedArchive';
 import { RecentShares } from '../components/RecentShares';
 import { Favorites } from '../components/Favorites';
@@ -502,6 +503,7 @@ export function PersonaPlaygroundPage() {
                     <Link to="/personas" className="ppg-card__browse">
                       Browse minds
                     </Link>
+                    <ToolPinButton path={entry.path} />
                   </div>
                 </li>
               ))}

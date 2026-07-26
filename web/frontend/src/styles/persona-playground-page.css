@@ -3423,3 +3423,44 @@
   outline: 2px solid var(--ppg-accent);
   outline-offset: -2px;
 }
+
+/* ------------------------------------------------------------------
+   ToolPinButton — compact pin toggle inside tool cards
+   ------------------------------------------------------------------ */
+.ppg-pin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin-left: auto;
+  background: transparent;
+  border: 0.5px solid rgba(196, 149, 106, 0.32);
+  border-radius: 8px;
+  color: var(--ppg-accent-dim);
+  cursor: pointer;
+  transition:
+    color var(--motion-hover-ms) var(--ease-btn),
+    border-color var(--motion-hover-ms) var(--ease-btn),
+    background var(--motion-hover-ms) var(--ease-btn);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ppg-pin-btn:hover {
+    color: #b8923e;
+    border-color: rgba(255, 216, 107, 0.6);
+    background: rgba(255, 216, 107, 0.12);
+  }
+}
+
+.ppg-pin-btn:focus-visible {
+  outline: 2px solid var(--ppg-accent);
+  outline-offset: 2px;
+}
+
+.ppg-pin-btn--on {
+  color: #b8923e;
+  background: rgba(255, 216, 107, 0.22);
+  border-color: rgba(255, 216, 107, 0.7);
+}
