@@ -48,6 +48,7 @@ import {
   type PersonaPlaygroundCategory,
   type PersonaPlaygroundEntry,
 } from '../data/personaPlayground';
+import type { MoodId } from '../lib/moodMatcher';
 import '../styles/persona-playground-page.css';
 
 const ALL_CATEGORIES: readonly PersonaPlaygroundCategory[] = personaPlaygroundCategories();
@@ -85,6 +86,7 @@ export function PersonaPlaygroundPage() {
   const { isAuthenticated } = useAuth();
   const [pageVisible, setPageVisible] = useState(false);
   const [query, setQuery] = useState(() => params.get('q') ?? '');
+  const [moodId, setMoodId] = useState<MoodId | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<number | null>(null);
 
@@ -288,8 +290,21 @@ export function PersonaPlaygroundPage() {
           }}
         />
 
-        <MoodMatcher syncUrl />
-        <MoodMatcherHistory />
+        <MoodMatcher
+          syncUrl
+          sectionId="ppg-jump-mood"
+          activeId={moodId}
+          onActiveChange={setMoodId}
+        />
+        <MoodMatcherHistory
+          onReplay={(id) => {
+            setMoodId(id);
+            if (typeof document === 'undefined') return;
+            document
+              .getElementById('ppg-jump-mood')
+              ?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+          }}
+        />
 
         {showFeatured && featured && (
           <Reveal as="section" className="ppg-featured" aria-label="Today's pick">

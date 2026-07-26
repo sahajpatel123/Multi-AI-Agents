@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MoodMatcher } from './MoodMatcher';
@@ -152,5 +152,38 @@ describe('MoodMatcher', () => {
       </MemoryRouter>,
     );
     expect(screen.queryByText(/Try it/)).toBeNull();
+  });
+
+  it('controlled mode: ignores internal clicks when activeId is provided', () => {
+    render(
+      <MemoryRouter>
+        <MoodMatcher activeId="stuck" onActiveChange={() => {}} />
+      </MemoryRouter>,
+    );
+    // Initial pick shows because activeId is 'stuck'.
+    expect(screen.getByText(/Persona Battle/i)).toBeInTheDocument();
+    // Clicking another chip should not change the active pick.
+    fireEvent.click(screen.getByRole('radio', { name: /Need a verdict/i }));
+    expect(screen.getByText(/Persona Battle/i)).toBeInTheDocument();
+  });
+
+  it('controlled mode: emits onActiveChange when a chip is clicked', () => {
+    const onChange = vi.fn();
+    render(
+      <MemoryRouter>
+        <MoodMatcher activeId={null} onActiveChange={onChange} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('radio', { name: /Just curious/i }));
+    expect(onChange).toHaveBeenCalledWith('curious');
+  });
+
+  it('renders a sectionId when provided', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <MoodMatcher sectionId="ppg-jump-mood" />
+      </MemoryRouter>,
+    );
+    expect(container.querySelector('#ppg-jump-mood')).not.toBeNull();
   });
 });

@@ -18,6 +18,12 @@ export interface MoodMatcherProps {
   heading?: string;
   /** When true, sync the active mood to the `?mood=` URL param. */
   syncUrl?: boolean;
+  /** Optional id for deep-link scrolling from sibling widgets. */
+  sectionId?: string;
+  /** Controlled active mood. When omitted, the widget manages its own state. */
+  activeId?: MoodId | null;
+  /** Fired whenever the active mood changes (controlled mode). */
+  onActiveChange?: (id: MoodId | null) => void;
 }
 
 const TOOL_BY_PATH = new Map(
@@ -40,13 +46,25 @@ function clampMoodIndex(next: number): number {
 export function MoodMatcher({
   heading = "What's your mood?",
   syncUrl = false,
+  sectionId,
+  activeId,
+  onActiveChange,
 }: MoodMatcherProps) {
   const [params, setParams] = useSearchParams();
-  const [active, setActive] = useState<MoodId | null>(() => {
+  const isControlled = activeId !== undefined;
+  const [internalActive, setInternalActive] = useState<MoodId | null>(() => {
     if (!syncUrl) return null;
     const fromUrl = params.get('mood');
     return isMoodId(fromUrl) ? fromUrl : null;
   });
+  const active = isControlled ? (activeId ?? null) : internalActive;
+  const setActive = useCallback(
+    (next: MoodId | null) => {
+      if (!isControlled) setInternalActive(next);
+      onActiveChange?.(next);
+    },
+    [isControlled, onActiveChange],
+  );
   const chipRefs = useRef<Record<MoodId, HTMLButtonElement | null>>(
     {} as Record<MoodId, HTMLButtonElement | null>,
   );
@@ -112,11 +130,11 @@ export function MoodMatcher({
         return;
       }
     },
-    [focusMood],
+    [focusMood, setActive],
   );
 
   return (
-    <section className="ppg-mood" aria-label={heading}>
+    <section className="ppg-mood" aria-label={heading} id={sectionId}>
       <header className="ppg-mood__head">
         <p className="ppg-mood__eyebrow">
           <Sparkles aria-hidden="true" /> {heading}
