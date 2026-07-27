@@ -83,12 +83,35 @@ class PromptRequest(BaseModel):
 
     prompt: str = Field(..., min_length=1, max_length=2000, description="User's prompt")
     session_id: str | None = Field(None, description="Optional session ID for continuity")
-    persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
+    # persona_ids is bounded at the Pydantic level: the list has
+    # max 4 entries (matching the 4-slot agent design) and each
+    # string is max 50 chars (persona ids are short slugs like
+    # "philosopher" or "claude_opus"). The downstream
+    # validate_persona_access call rejects unknown ids, but a
+    # user could submit 1000 unknown 10K-char strings to amplify
+    # the validation cost and the DB write cost before
+    # _enforce_persona_access returns. The Pydantic cap closes
+    # the gap at parse time.
+    persona_ids: list[str] | None = Field(
+        None, max_length=4,
+        description="Optional active persona ids for slots 1-4 (max 4 entries)",
+    )
 
     @field_validator("prompt")
     @classmethod
     def validate_prompt(cls, v: str) -> str:
         return sanitize_model_text(v, max_length=2000, field_name="prompt")
+
+    @field_validator("persona_ids")
+    @classmethod
+    def validate_persona_ids(cls, v: list[str] | None) -> list[str] | None:
+        # Per-element cap: persona_ids are short slugs (e.g.
+        # "philosopher", "claude_opus"). 50 chars is generous.
+        # The list-length cap is enforced by the Field(max_length=4)
+        # above. Both caps together prevent a 1000 * 10K DoS.
+        if v is None:
+            return v
+        return [s[:50] for s in v]
 
 
 class IntegrityReport(BaseModel):
