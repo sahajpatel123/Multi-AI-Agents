@@ -170,7 +170,23 @@ def _validate_password_strength(password: str) -> tuple[bool, str]:
         return False, "Password must contain at least one uppercase letter"
     if not any(c.isdigit() for c in password):
         return False, "Password must contain at least one number"
-    if password.lower() in _COMMON_PASSWORDS:
+    # Strip surrounding whitespace before the common-password lookup.
+    # Pydantic's str field preserves the user's input verbatim (no
+    # auto-strip), so a password like " password1 " is 10 chars long
+    # (passes length), has an uppercase 'P' and a digit '1' (passes
+    # the structural checks), and `password.lower()` is " password1 "
+    # (with spaces) — NOT in the allowlist. The user has effectively
+    # bypassed the credential-stuffing block by typing whitespace
+    # around a known common password. We reject the password here
+    # (the validator returns False before hash_password runs), but
+    # we do NOT mutate the password — create_user() below still
+    # hashes the user's full input including spaces, so the
+    # stored hash matches what the user typed. Rejecting "padded"
+    # common passwords is the right call: the user is signaling
+    # they have nothing better than the credential-stuffing list
+    # to choose from, and the bcrypt cost factor of the resulting
+    # hash is identical regardless of whitespace.
+    if password.strip().lower() in _COMMON_PASSWORDS:
         return False, "Password is too common. Please choose a stronger one"
     return True, ""
 
