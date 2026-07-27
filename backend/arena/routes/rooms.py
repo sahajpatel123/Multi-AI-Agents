@@ -13,6 +13,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import desc, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
@@ -775,7 +776,22 @@ async def add_task_to_room(
             user_id=user.id,
         )
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Race: two concurrent add-task requests for the same
+        # (room_id, task_id) pair both passed the dup check above,
+        # and the RoomTask unique constraint (`uq_room_task_room_task`)
+        # rejected the second INSERT. The first one is already in the
+        # table; treat the second as "already in room" so the
+        # client gets the same response shape as the pre-check path
+        # above (no 500, no duplicate synthesis run). The previously
+        # bound error budget (15/hr) on the synthesis scope is also
+        # NOT consumed by the losing race — losing requests must not
+        # burn quota the way successful inserts do.
+        db.rollback()
+        db.refresh(room)
+        return _build_room_payload(db, room)
 
     _schedule_synthesis(background_tasks, room.slug)
 
