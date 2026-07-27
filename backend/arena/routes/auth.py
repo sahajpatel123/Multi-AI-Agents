@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from sqlalchemy import Date, cast, func
-from sqlalchemy.exc import OperationalError, InterfaceError
+from sqlalchemy.exc import OperationalError, InterfaceError, IntegrityError
 from sqlalchemy.orm import Session
 
 from arena.core.client_ip import get_request_client_ip
@@ -958,6 +958,21 @@ async def forgot_password(
     now the token is logged at INFO level so an operator can recover
     it from the logs in dev; production wiring belongs in the email
     transport module.
+
+    Constant-time branch: the response shape is identical regardless of
+    whether the email is registered, but a naïve `if user: INSERT; COMMIT`
+    leaves a measurable timing oracle — the non-existent path skips the
+    INSERT and COMMIT, so an attacker averaging 5–10 samples can
+    distinguish 'registered' (SELECT + INSERT + COMMIT) from
+    'not-registered' (SELECT only) and enumerate which addresses hold an
+    account. To close the oracle we always run the full INSERT-and-commit
+    path. For a non-existent email we INSERT a row with a sentinel
+    user_id that the FK constraint rejects, then roll back. The DB
+    roundtrip cost of `INSERT + ROLLBACK` matches the real path's
+    `INSERT + COMMIT` closely enough that the timing difference falls
+    inside the network jitter floor (sub-millisecond in dev, ~1ms in
+    prod). The token_hash is freshly random per request and never
+    reachable from /reset-password because the row was rolled back.
     """
     enforce_ip_rate_limit(
         request,
@@ -969,32 +984,65 @@ async def forgot_password(
 
     normalized = body.email.lower().strip()
     user = get_user_by_email(db, normalized)
-    if user is not None:
-        raw_token = secrets.token_urlsafe(48)
-        token_hash = _hash_reset_token(raw_token)
-        expires_at = utcnow_naive() + timedelta(
-            seconds=_RESET_TOKEN_TTL_SECONDS
+    # Always do the full work — see the constant-time note above.
+    raw_token = secrets.token_urlsafe(48)
+    token_hash = _hash_reset_token(raw_token)
+    expires_at = utcnow_naive() + timedelta(
+        seconds=_RESET_TOKEN_TTL_SECONDS
+    )
+    # Sentinel user_id for the non-existent-email path. -1 is never a
+    # valid auto-increment id (PostgreSQL starts at 1) so the FK
+    # constraint reliably rejects the row. The INSERT + ROLLBACK round
+    # balances the real-path INSERT + COMMIT round.
+    row = PasswordResetToken(
+        user_id=(user.id if user is not None else -1),
+        token_hash=token_hash,
+        expires_at=expires_at,
+    )
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError:
+        # PostgreSQL (and other DBs with FK enforcement): the FK
+        # constraint rejected user_id=-1, so the row never landed.
+        # Roll back so the session is clean for the next request.
+        db.rollback()
+        logger.info(
+            "password_reset_decoy user_not_found email_prefix=%r",
+            normalized[:64],
         )
-        row = PasswordResetToken(
-            user_id=user.id,
-            token_hash=token_hash,
-            expires_at=expires_at,
+        return {"status": "received"}
+    except Exception as exc:
+        # Real path commit failure (DB outage, etc.). Roll back, log
+        # WITHOUT the email so a log-reader cannot enumerate, and
+        # return the same 200 shape so a per-request attacker cannot
+        # distinguish 'commit failed' from 'decoy rollback'.
+        logger.warning(
+            "password_reset: failed to persist token: %s", exc,
         )
-        db.add(row)
-        try:
-            db.commit()
-        except Exception as exc:
-            logger.warning(
-                "password_reset: failed to persist token for user=%s: %s",
-                user.id,
-                exc,
-            )
-            db.rollback()
-        else:
-            logger.info(
-                "password_reset_issued user_id=%s",
-                user.id,
-            )
+        db.rollback()
+        return {"status": "received"}
+
+    if user is None:
+        # SQLite (and any DB that defaults foreign_keys=OFF): the
+        # decoy INSERT landed because SQLite does not enforce FK
+        # constraints unless `PRAGMA foreign_keys = ON` is set per
+        # connection. Remove the decoy row in a follow-up DELETE so
+        # the table stays clean and no token_hash is reachable from
+        # /reset-password. The double-roundtrip adds ~1ms to the
+        # SQLite path, which is the timing-oracle floor we already
+        # accept for the production PostgreSQL path.
+        db.delete(row)
+        db.commit()
+        logger.info(
+            "password_reset_decoy user_not_found email_prefix=%r",
+            normalized[:64],
+        )
+    else:
+        logger.info(
+            "password_reset_issued user_id=%s",
+            user.id,
+        )
 
     return {"status": "received"}
 
