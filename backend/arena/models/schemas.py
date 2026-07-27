@@ -150,7 +150,17 @@ class DebateRequest(BaseModel):
     challenged_agent_id: str = Field(..., description="Agent being challenged")
     challenged_verdict: str = Field(..., description="The challenged agent's verdict")
     round_number: int = Field(1, ge=1, le=4, description="Current round (1-3 standard, optional 4th follow-up)")
-    debate_history: list[DebateMessage] = Field(default_factory=list, description="Previous debate messages")
+    # debate_history is capped at 32 entries. The debate has at
+    # most 4 active agents and 4 rounds, so the natural upper
+    # bound is 16 messages. 32 is a generous ceiling that
+    # accommodates future per-agent or per-round expansions
+    # without a schema migration. Combined with the per-message
+    # 20K cap on DebateMessage.content (cycle 14 fix), the
+    # maximum history is 32 * 20K = 640K chars.
+    debate_history: list[DebateMessage] = Field(
+        default_factory=list, max_length=32,
+        description="Previous debate messages (max 32 entries)",
+    )
     user_interjection: str | None = Field(None, description="Optional user message to redirect the debate")
     session_id: str | None = Field(None, description="Session ID for continuity")
     persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
@@ -214,7 +224,18 @@ class DiscussRequest(BaseModel):
     """Request to send a message in a 1-on-1 discussion"""
     agent_id: str = Field(..., description="Which agent to talk to")
     message: str = Field(..., min_length=1, max_length=2000, description="User's message")
-    conversation_history: list[DiscussChatMessage] = Field(default_factory=list, description="Full conversation so far")
+    # conversation_history is capped at 500 entries. The per-message
+    # cap on DiscussChatMessage.content (cycle 13 fix, 20K) bounds
+    # the per-message memory cost; this cap bounds the total list
+    # length so a user cannot submit 100K * 20K = 2GB of history.
+    # The same 500-entry cap is enforced for the durable thread
+    # record by SaveThreadBody's validate_messages field validator
+    # (line ~604: `for m in v[:500]`). 500 is generous — most
+    # active discuss threads are 10-50 messages.
+    conversation_history: list[DiscussChatMessage] = Field(
+        default_factory=list, max_length=500,
+        description="Full conversation so far (max 500 entries)",
+    )
     original_verdict: str = Field(..., description="Agent's original verdict for context")
     original_prompt: str = Field(..., description="The original arena prompt for context")
     session_id: str | None = Field(None, description="Session ID for continuity")
