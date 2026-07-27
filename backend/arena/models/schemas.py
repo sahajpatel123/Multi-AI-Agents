@@ -186,7 +186,17 @@ class DebateRequest(BaseModel):
     )
     user_interjection: str | None = Field(None, description="Optional user message to redirect the debate")
     session_id: str | None = Field(None, description="Session ID for continuity")
-    persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
+    # persona_ids is bounded at the Pydantic level: the list has
+    # max 4 entries (matching the 4-slot agent design) and each
+    # string is sliced to 50 chars (per-element cap, matching
+    # the PromptRequest cycle 16 fix). The downstream
+    # validate_persona_access rejects unknown ids, but a
+    # user could submit 1000 unknown 10K-char strings to
+    # amplify the validation cost before the rejection fires.
+    persona_ids: list[str] | None = Field(
+        None, max_length=4,
+        description="Optional active persona ids for slots 1-4 (max 4 entries)",
+    )
 
     @field_validator("original_prompt", "challenged_verdict")
     @classmethod
@@ -197,6 +207,14 @@ class DebateRequest(BaseModel):
     @classmethod
     def validate_user_interjection(cls, v: str | None) -> str | None:
         return sanitize_model_optional_text(v, max_length=2000, field_name="user_interjection")
+
+    @field_validator("persona_ids")
+    @classmethod
+    def validate_persona_ids(cls, v: list[str] | None) -> list[str] | None:
+        # Per-element cap matching PromptRequest cycle 16 fix.
+        if v is None:
+            return v
+        return [s[:50] for s in v]
 
 
 class DebateReaction(BaseModel):
@@ -262,12 +280,27 @@ class DiscussRequest(BaseModel):
     original_verdict: str = Field(..., description="Agent's original verdict for context")
     original_prompt: str = Field(..., description="The original arena prompt for context")
     session_id: str | None = Field(None, description="Session ID for continuity")
-    persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
+    # persona_ids is bounded at the Pydantic level: the list has
+    # max 4 entries (matching the 4-slot agent design) and each
+    # string is sliced to 50 chars (per-element cap, matching
+    # the PromptRequest cycle 16 fix).
+    persona_ids: list[str] | None = Field(
+        None, max_length=4,
+        description="Optional active persona ids for slots 1-4 (max 4 entries)",
+    )
 
     @field_validator("message", "original_verdict", "original_prompt")
     @classmethod
     def validate_discuss_text(cls, v: str, info) -> str:
         return sanitize_model_text(v, max_length=2000, field_name=info.field_name)
+
+    @field_validator("persona_ids")
+    @classmethod
+    def validate_persona_ids(cls, v: list[str] | None) -> list[str] | None:
+        # Per-element cap matching PromptRequest cycle 16 fix.
+        if v is None:
+            return v
+        return [s[:50] for s in v]
 
 
 class DiscussResponse(BaseModel):
