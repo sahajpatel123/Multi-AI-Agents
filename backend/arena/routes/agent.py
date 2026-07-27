@@ -10,6 +10,8 @@ from arena.core.datetime_utils import utcnow_naive
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Path, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -269,7 +271,7 @@ def _persisted_agent_task_result_dict(
 
 class AgentTaskRequest(BaseModel):
     task: str
-    expertise_level: str = "curious"
+    expertise_level: Literal["none", "curious", "practitioner", "expert", "researcher"] = "curious"
     expertise_domain: str = ""
     # attachment_ids is bounded at the Pydantic level (max 32
     # entries). The route handler also slices to 32 — defense-in-
@@ -406,7 +408,7 @@ class MarkLiveReadBody(BaseModel):
 
 class OrchestrateRequest(BaseModel):
     questions: list[str]
-    expertise_level: str = "curious"
+    expertise_level: Literal["none", "curious", "practitioner", "expert", "researcher"] = "curious"
     expertise_domain: str = ""
 
     @field_validator("questions")
@@ -430,7 +432,7 @@ class WatchlistCreateBody(BaseModel):
     # overflow the next_run_at calculation) to amplify the
     # scheduler work.
     interval_hours: int = Field(..., ge=1, le=168)
-    expertise_level: str = "curious"
+    expertise_level: Literal["none", "curious", "practitioner", "expert", "researcher"] = "curious"
     expertise_domain: str = ""
 
     @field_validator("question")
@@ -815,7 +817,7 @@ async def run_agent_pipeline_background(
     task_id: str,
     user_id: int,
     task: str,
-    expertise_level: str = "curious",
+    expertise_level: Literal["none", "curious", "practitioner", "expert", "researcher"] = "curious",
     expertise_domain: str = "",
     orchestration_id: Optional[str] = None,
     watchlist_item_id: Optional[str] = None,
