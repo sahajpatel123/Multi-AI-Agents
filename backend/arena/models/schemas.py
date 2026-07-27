@@ -458,9 +458,17 @@ class SubscribePlanRequest(BaseModel):
 
 
 class VerifyPaymentRequest(BaseModel):
-    razorpay_payment_id: str
-    razorpay_subscription_id: str
-    razorpay_signature: str
+    # Razorpay fields are bounded at the Pydantic level.
+    # Razorpay payment/subscription IDs are short
+    # ("pay_XXXXXXXXXXXXX" ~18 chars, "sub_..." ~18 chars);
+    # 64 chars is generous. Razorpay signatures are
+    # HMAC-SHA256 hex strings (~64 chars); 256 chars is
+    # generous. The Pydantic cap closes the gap so a user
+    # cannot submit a 1MB string to amplify the verify-payment
+    # work before the route handler's ID validation runs.
+    razorpay_payment_id: str = Field(..., max_length=64)
+    razorpay_subscription_id: str = Field(..., max_length=64)
+    razorpay_signature: str = Field(..., max_length=256)
 
 
 # ─────────────────────────────────────────────────
