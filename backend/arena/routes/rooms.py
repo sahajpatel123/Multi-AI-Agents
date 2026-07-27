@@ -640,7 +640,21 @@ async def join_room(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
-    room = db.query(Room).filter(Room.slug == slug, Room.is_active.is_(True)).first()
+    room = (
+        db.query(Room)
+        .filter(Room.slug == slug, Room.is_active.is_(True))
+        # Lock the room row for the duration of the join transaction so two
+        # concurrent joins to the same room serialize on the cap check below.
+        # Without this, a count-then-insert TOCTOU race lets N+1 concurrent
+        # joins all see n=MAX_ROOM_MEMBERS-1 and all INSERT, pushing the
+        # real member count to MAX_ROOM_MEMBERS+N and over the documented
+        # cap. with_for_update() on the room row (not the count query) is
+        # the cheapest fix — concurrent joins to *different* rooms still
+        # run in parallel, and concurrent joins to the *same* room just
+        # queue briefly on the row lock.
+        .with_for_update()
+        .first()
+    )
     if not room:
         raise HTTPException(
             status_code=404,
