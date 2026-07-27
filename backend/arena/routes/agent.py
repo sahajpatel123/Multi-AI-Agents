@@ -403,7 +403,15 @@ class LiveToggleBody(BaseModel):
 
 
 class MarkLiveReadBody(BaseModel):
-    update_id: Optional[str] = None
+    # update_id is bounded at the Pydantic level (max 100
+    # chars). Live update IDs are UUIDs (~36 chars); 100 chars
+    # is generous. The Pydantic cap closes the gap so a user
+    # cannot submit a 1MB update_id to amplify the pydantic
+    # memory cost before the route handler's strip+compare.
+    update_id: Optional[str] = Field(
+        default=None, max_length=100,
+        description="Optional update ID (UUID) to mark as read",
+    )
 
 
 class OrchestrateRequest(BaseModel):
