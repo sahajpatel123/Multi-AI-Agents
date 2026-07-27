@@ -90,6 +90,30 @@ def _filter_assumptions_keys(value: Any) -> dict:
 _GENERIC_DICT_MAX_KEYS = 10
 _GENERIC_DICT_MAX_VALUE_CHARS = 100
 
+# Cap on the list length of to_dict() fields that grow via
+# the agent pipeline. A buggy LLM (or a malicious user
+# submitting a crafted agent task) could cause unbounded
+# growth on any of these lists. The cap bounds the per-list
+# response size to a fixed maximum.
+_LIST_MAX_ITEMS = 100
+
+
+def _cap_list(value: Any, *, max_items: int = _LIST_MAX_ITEMS) -> list:
+    """Cap a list to the first max_items entries.
+
+    The list fields in to_dict() (sources, flags, caveats)
+    grow via the agent pipeline. A buggy LLM response or a
+    malicious user task could append thousands of items to
+    any of these lists. The to_dict() cap bounds the per-list
+    response size to a fixed maximum (the first max_items
+    entries are returned; excess are silently dropped).
+    """
+    if not isinstance(value, list):
+        return []
+    if len(value) <= max_items:
+        return value
+    return value[:max_items]
+
 
 def _filter_generic_dict_keys(value: Any) -> dict:
     """Apply a generic cap to a dict field that doesn't have a
@@ -284,9 +308,9 @@ class Blackboard:
             "final_answer": self.final_answer,
             "final_confidence": self.final_confidence,
             "final_score": self.final_score,
-            "sources": self.sources,
-            "flags": self.flags,
-            "caveats": self.caveats,
+            "sources": _cap_list(self.sources),
+            "flags": _cap_list(self.flags),
+            "caveats": _cap_list(self.caveats),
             "source_integrity": _filter_generic_dict_keys(self.source_integrity),
             "contradictions": _filter_generic_dict_keys(self.contradictions),
             "intelligence_score": _filter_intelligence_score_keys(self.intelligence_score),
