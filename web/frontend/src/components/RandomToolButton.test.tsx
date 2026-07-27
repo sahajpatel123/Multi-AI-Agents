@@ -151,4 +151,31 @@ describe('RandomToolButton', () => {
     );
     expect(screen.getByRole('button', { name: /Pick a different tool/i })).toBeInTheDocument();
   });
+
+  it('shows the active mood label and matching accessibility context', () => {
+    const entry = PERSONA_PLAYGROUND_ENTRIES[0];
+    render(
+      <MemoryRouter>
+        <RandomToolButton
+          pick={entry}
+          categoryFilter="decide"
+          moodLabel="Need a verdict"
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Need a verdict')).toBeInTheDocument();
+    const link = screen.getByRole('link');
+    expect(link.className).toContain('ppg-randombtn--mood');
+    expect(link.getAttribute('aria-label')).toContain('mood-matched to "Need a verdict"');
+  });
+
+  it('does not show a mood treatment without a mood label', () => {
+    render(
+      <MemoryRouter>
+        <RandomToolButton pick={PERSONA_PLAYGROUND_ENTRIES[0]} categoryFilter="decide" />
+      </MemoryRouter>,
+    );
+    expect(document.querySelector('.ppg-randombtn--mood')).toBeNull();
+    expect(document.querySelector('.ppg-randombtn__mood-chip')).toBeNull();
+  });
 });
