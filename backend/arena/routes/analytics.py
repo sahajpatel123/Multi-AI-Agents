@@ -5,7 +5,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -46,10 +46,20 @@ VALID_EVENT_TYPES = {
 
 
 class UXEventRequest(BaseModel):
-    session_id: str
-    event_type: str
-    persona_id: str | None = None
-    agent_id: str | None = None
+    # All str fields are bounded at the Pydantic level
+    # (max 100 chars). The field validators below still run
+    # (and slice the trimmed value), so the per-field cap
+    # is enforced at both the schema level (parse-time 422)
+    # and the validator level (defense-in-depth). The
+    # Pydantic cap closes the gap on this anonymous-writable
+    # endpoint, where a 1MB string in any of these fields
+    # would otherwise be accepted by Pydantic and amplified
+    # through the validate_required_text / validate_optional_text
+    # validators.
+    session_id: str = Field(..., max_length=100)
+    event_type: str = Field(..., max_length=100)
+    persona_id: str | None = Field(default=None, max_length=100)
+    agent_id: str | None = Field(default=None, max_length=100)
     metadata: dict | None = None
 
     @field_validator("session_id", "event_type")
