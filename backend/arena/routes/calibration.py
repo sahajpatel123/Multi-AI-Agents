@@ -151,14 +151,31 @@ async def post_calibration_rate(
     )
     if existing:
         stats = build_calibration_stats(db, user.id)
+        # Clamp system_score and delta to sane ranges at the
+        # read side. The column types in the DB are unbounded
+        # int (per the cycle 49 revert at the user's request),
+        # so a row written before any future write-side clamp
+        # could contain a huge value. The clamp here is the
+        # read-side defense: even if the write side is
+        # unbounded, the response is bounded.
+        try:
+            sys_raw = int(existing.system_score or 0)
+        except (TypeError, ValueError):
+            sys_raw = 0
+        system_score = max(0, min(100, sys_raw))
+        try:
+            delta_raw = int(existing.delta or 0)
+        except (TypeError, ValueError):
+            delta_raw = 0
+        delta = max(-100, min(100, delta_raw))
         return JSONResponse(
             status_code=200,
             content={
                 "already_rated": True,
-                "delta": existing.delta,
-                "verdict": _verdict_for_delta(existing.delta),
+                "delta": delta,
+                "verdict": _verdict_for_delta(delta),
                 "user_rating": existing.user_rating,
-                "system_score": existing.system_score,
+                "system_score": system_score,
                 "calibration_stats": stats,
             },
         )
@@ -206,13 +223,20 @@ async def post_calibration_rate(
 
     db.refresh(row)
     stats = build_calibration_stats(db, user.id)
+    # Clamp system_score and delta to sane ranges at the
+    # read side. The _system_score_from_task helper reads
+    # unbounded data (per the cycle 49 revert at the user's
+    # request), so we clamp the response here to bound the
+    # JSON output.
+    sys_raw = max(0, min(100, int(system_score or 0)))
+    delta_bounded = max(-100, min(100, int(delta or 0)))
     return JSONResponse(
         content={
             "already_rated": False,
-            "delta": delta,
-            "verdict": _verdict_for_delta(delta),
+            "delta": delta_bounded,
+            "verdict": _verdict_for_delta(delta_bounded),
             "user_rating": int(body.rating),
-            "system_score": system_score,
+            "system_score": sys_raw,
             "calibration_stats": stats,
         }
     )
@@ -263,9 +287,11 @@ async def get_calibration_rating_for_task(
             "rated": True,
             "data": {
                 "user_rating": row.user_rating,
-                "system_score": row.system_score,
-                "delta": row.delta,
-                "verdict": _verdict_for_delta(row.delta),
+                "system_score": max(0, min(100, int(row.system_score or 0))),
+                "delta": max(-100, min(100, int(row.delta or 0))),
+                "verdict": _verdict_for_delta(
+                    max(-100, min(100, int(row.delta or 0)))
+                ),
                 "created_at": row.created_at.isoformat() if row.created_at else "",
             },
         }
@@ -276,13 +302,33 @@ async def get_calibration_rating_for_task(
 
 
 def _serialize_rating(row: ConfidenceRating) -> dict:
+    # system_score and delta are clamped to sane ranges at
+    # the read side. The column types in the DB are unbounded
+    # int (per the cycle 49 revert at the user's request), so
+    # a row written before any future write-side clamp could
+    # contain a huge value. The clamp here is the read-side
+    # defense: even if the write side is unbounded, the
+    # response is bounded.
+    #   system_score: clamped to [0, 100] (the Arena score range)
+    #   delta: clamped to [-100, 100] (system_score - user_scaled,
+    #     where user_scaled is in [20, 100])
+    try:
+        sys_raw = int(row.system_score or 0)
+    except (TypeError, ValueError):
+        sys_raw = 0
+    system_score = max(0, min(100, sys_raw))
+    try:
+        delta_raw = int(row.delta or 0)
+    except (TypeError, ValueError):
+        delta_raw = 0
+    delta = max(-100, min(100, delta_raw))
     return {
         "id": row.id,
         "task_id": row.task_id,
         "user_rating": row.user_rating,
-        "system_score": row.system_score,
-        "delta": row.delta,
-        "verdict": _verdict_for_delta(row.delta),
+        "system_score": system_score,
+        "delta": delta,
+        "verdict": _verdict_for_delta(delta),
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
 
