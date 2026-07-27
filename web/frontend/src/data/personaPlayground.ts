@@ -733,16 +733,30 @@ export function pickSurpriseTool(
  * the same pick for the same exclude set, but consecutive days
  * surface different tools. Returns null when catalog is empty or
  * when the only entries are all excluded.
+ *
+ * When `category` is provided, the candidate pool is filtered to
+ * that category first — this is the lever that powers the mood-
+ * matched reshuffle (cycle 480): a "Need a verdict" mood biases
+ * the random pick to the `decide` category. When the filtered
+ * pool is empty (e.g. the only matching entries are excluded),
+ * falls back to the full non-excluded catalog so the user is
+ * never left without a pick.
  */
 export function pickRandomTool(
   excludePaths: readonly string[] = [],
   salt: number = 0,
   date: Date = new Date(),
   entries: readonly PersonaPlaygroundEntry[] = PERSONA_PLAYGROUND_ENTRIES,
+  category?: PersonaPlaygroundCategory | null,
 ): PersonaPlaygroundEntry | null {
   if (entries.length === 0) return null;
   const excluded = new Set(excludePaths);
-  const candidates = entries.filter((e) => !excluded.has(e.path));
+  const filterByCategory = category
+    ? entries.filter((e) => e.category === category && !excluded.has(e.path))
+    : null;
+  const candidates = (filterByCategory && filterByCategory.length > 0)
+    ? filterByCategory
+    : entries.filter((e) => !excluded.has(e.path));
   if (candidates.length === 0) return null;
   const idx = (dayOfYear(date) + salt) % candidates.length;
   return candidates[idx];

@@ -2105,6 +2105,41 @@
   font-size: 15px;
 }
 
+/* Mood-matched variant — the random pick is biased to the user's
+ * active mood. The button gets a small "Mood: <label>" chip so
+ * the user can see why the shuffle is picking a specific tool.
+ * cycle 480. */
+.ppg-randombtn--mood {
+  background: linear-gradient(
+    120deg,
+    rgba(200, 185, 255, 0.22),
+    rgba(155, 227, 194, 0.18) 80%
+  );
+  border: 1px solid rgba(155, 227, 194, 0.45);
+}
+
+.ppg-randombtn--mood strong {
+  color: #9be3c2;
+}
+
+.ppg-randombtn__mood-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #0b0b10;
+  background: #9be3c2;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .ppg-randombtn__shortcut {
   margin-left: auto;
   display: inline-flex;

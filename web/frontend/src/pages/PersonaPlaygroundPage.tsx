@@ -15,7 +15,6 @@ import { PersonaPlaygroundStats } from '../components/PersonaPlaygroundStats';
 import { RandomToolButton } from '../components/RandomToolButton';
 import { CompareFromCategoryButton } from '../components/CompareFromCategoryButton';
 import { RecentShuffles } from '../components/RecentShuffles';
-import { recordRecentShuffle } from '../lib/recentShuffles';
 import { ToolForPurpose } from '../components/ToolForPurpose';
 import { TryNextButton } from '../components/TryNextButton';
 import { ToolSearchPalette } from '../components/ToolSearchPalette';
@@ -129,13 +128,54 @@ export function PersonaPlaygroundPage() {
   // Lets the user cycle through random tools without losing their
   // current page context.
   const [reshuffleTick, setReshuffleTick] = useState(0);
+
+  // When a mood is active, bias the random pick to that mood's
+  // category. Resolved via a lazy import so the moodMatcher chunk
+  // isn't pulled into the initial render for users who never
+  // pick a mood. cycle 480.
+  //
+  // Declared BEFORE the randomPick useMemo that depends on it so
+  // the variable is in scope when the useMemo closes over it.
+  const [moodCategory, setMoodCategory] = useState<PersonaPlaygroundCategory | null>(null);
+  const [moodLabel, setMoodLabel] = useState<string | null>(null);
   const randomPick = useMemo(
-    () => pickRandomTool(featured ? [featured.path] : [], randomPickSalt + reshuffleTick, today),
-    [featured, randomPickSalt, reshuffleTick, today],
+    () => pickRandomTool(
+      featured ? [featured.path] : [],
+      randomPickSalt + reshuffleTick,
+      today,
+      undefined,
+      moodCategory,
+    ),
+    [featured, randomPickSalt, reshuffleTick, today, moodCategory],
   );
   const onReshuffle = useCallback(() => {
     setReshuffleTick((tick) => tick + 1);
   }, []);
+  useEffect(() => {
+    if (!moodId) {
+      setMoodCategory(null);
+      setMoodLabel(null);
+      return;
+    }
+    let cancelled = false;
+    import('../lib/moodMatcher')
+      .then(({ MOODS }) => {
+        if (cancelled) return;
+        const mood = MOODS.find((m) => m.id === moodId);
+        setMoodCategory(mood?.category ?? null);
+        setMoodLabel(mood?.label ?? null);
+      })
+      .catch(() => {
+        /* chunk load failed — silently default to no filter */
+        if (!cancelled) {
+          setMoodCategory(null);
+          setMoodLabel(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [moodId]);
 
   // When the random pick rolls in (initial mount, Reshuffle click, or
   // day rollover), record it into the recent-shuffles history so the
@@ -1045,6 +1085,8 @@ export function PersonaPlaygroundPage() {
           pick={randomPick}
           excludePaths={featured ? [featured.path] : []}
           onReshuffle={onReshuffle}
+          categoryFilter={moodCategory}
+          moodLabel={moodLabel ?? undefined}
         />
 
         <RecentShuffles />

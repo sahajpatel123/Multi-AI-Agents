@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { RefreshCw, Shuffle } from 'lucide-react';
-import { pickRandomTool, type PersonaPlaygroundEntry } from '../data/personaPlayground';
+import { RefreshCw, Shuffle, Sparkles } from 'lucide-react';
+import { pickRandomTool, type PersonaPlaygroundCategory, type PersonaPlaygroundEntry } from '../data/personaPlayground';
 
 export interface RandomToolButtonProps {
   /** Paths to exclude from the random pick (e.g. the daily featured, the surprise pick). */
@@ -29,6 +29,19 @@ export interface RandomToolButtonProps {
   onReshuffle?: () => void;
   /** Accessible label for the reshuffle button. */
   reshuffleAriaLabel?: string;
+  /**
+   * When set, the random pick is taken from the tools in this
+   * category only (cycle 480 — mood-matched reshuffle). When the
+   * filtered pool is empty the picker falls back to the full
+   * catalog so the user is never left without a pick.
+   */
+  categoryFilter?: PersonaPlaygroundCategory | null;
+  /**
+   * Label for the mood that produced `categoryFilter`. When set,
+   * a small "Mood-matched" chip is shown on the button so the
+   * user can see the shuffle is biased to their current mood.
+   */
+  moodLabel?: string;
 }
 
 /**
@@ -49,22 +62,35 @@ export function RandomToolButton({
   showShortcut = true,
   onReshuffle,
   reshuffleAriaLabel = 'Reshuffle the random tool',
+  categoryFilter = null,
+  moodLabel,
 }: RandomToolButtonProps) {
-  const pick = pickProp ?? pickRandomTool(excludePaths, 0, date);
+  const pick = pickProp ?? pickRandomTool(excludePaths, 0, date, undefined, categoryFilter);
   if (!pick) return null;
   const sizeClass = size === 'md' ? 'ppg-randombtn--md' : 'ppg-randombtn--sm';
+  const isMoodMatched = Boolean(moodLabel);
   return (
     <span className={`ppg-randombtn-wrap ${sizeClass}`}>
       <Link
         to={pick.path}
-        className={`ppg-randombtn ${sizeClass}`}
-        aria-label={`${label}: ${pick.name}${showShortcut ? ' (Shift + R)' : ''}`}
+        className={`ppg-randombtn ${sizeClass}${isMoodMatched ? ' ppg-randombtn--mood' : ''}`}
+        aria-label={
+          `${label}: ${pick.name}` +
+          (isMoodMatched ? ` (mood-matched to "${moodLabel}")` : '') +
+          (showShortcut ? ' (Shift + R)' : '')
+        }
       >
         <Shuffle aria-hidden="true" />
         <span>
           {label}
           <strong>{pick.name}</strong>
         </span>
+        {isMoodMatched ? (
+          <span className="ppg-randombtn__mood-chip" aria-hidden="true">
+            <Sparkles width={11} height={11} strokeWidth={2} />
+            <span>{moodLabel}</span>
+          </span>
+        ) : null}
         {showShortcut ? (
           <kbd className="ppg-randombtn__shortcut" aria-hidden="true">
             Shift + R
