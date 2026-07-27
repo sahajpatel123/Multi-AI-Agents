@@ -335,7 +335,12 @@ class AgentFeedbackRequest(BaseModel):
     # prevents a per-field DoS where a user submits a 5MB
     # feedback string.
     feedback: str = Field(..., max_length=2000)
-    note: Optional[str] = None
+    # note is bounded at the Pydantic level (max 1000 chars).
+    # The field validator below still runs (and slices the
+    # trimmed value), so the per-field cap is enforced at both
+    # the schema level (parse-time 422) and the validator
+    # level (defense-in-depth).
+    note: Optional[str] = Field(default=None, max_length=1000)
 
     @field_validator("note")
     @classmethod
@@ -349,7 +354,9 @@ class AnswerAccuracyFeedbackBody(BaseModel):
     # the realistic feedback length (a single paragraph) and
     # prevents a per-field DoS.
     verdict: str = Field(..., max_length=2000)
-    note: Optional[str] = None
+    # note is bounded at the Pydantic level (max 1000 chars).
+    # Same rationale as AgentFeedbackRequest.note above.
+    note: Optional[str] = Field(default=None, max_length=1000)
 
     @field_validator("note")
     @classmethod
