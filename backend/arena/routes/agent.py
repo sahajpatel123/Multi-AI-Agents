@@ -271,8 +271,21 @@ class AgentTaskRequest(BaseModel):
     task: str
     expertise_level: str = "curious"
     expertise_domain: str = ""
-    attachment_ids: list[str] = Field(default_factory=list)
-    mcp_integration_ids: list[int] = Field(default_factory=list)
+    # attachment_ids is bounded at the Pydantic level (max 32
+    # entries). The route handler also slices to 32 — defense-in-
+    # depth: the Pydantic cap closes the gap at parse time so
+    # a user cannot submit 1000 attachment IDs to amplify the
+    # per-id validation cost before the slice runs.
+    attachment_ids: list[str] = Field(
+        default_factory=list, max_length=32,
+        description="Optional attachment IDs (max 32 entries)",
+    )
+    # mcp_integration_ids is bounded at the Pydantic level
+    # (max 20 entries). The route handler also slices to 20.
+    mcp_integration_ids: list[int] = Field(
+        default_factory=list, max_length=20,
+        description="Optional MCP integration IDs (max 20 entries)",
+    )
 
     @field_validator("task")
     @classmethod
