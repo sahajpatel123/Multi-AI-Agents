@@ -52,6 +52,8 @@ def sanitize_input(text: str) -> str:
 # Prompt injection detection
 # ──────────────────────────────────────────────────────────────
 
+import unicodedata
+
 _INJECTION_PATTERNS: list[str] = [
     "ignore previous instructions",
     "ignore all instructions",
@@ -73,9 +75,67 @@ _INJECTION_PATTERNS: list[str] = [
 ]
 
 
+# Characters that visually contribute nothing to a substring scan but
+# can be inserted to bypass a naïve equality check. NFKC normalization
+# (see _normalize_for_injection_scan below) handles fullwidth forms,
+# ligatures, and combining marks, but NFKC does NOT remove zero-width
+# or bidi-control characters. Strip them explicitly so "ig​nore
+# previous instructions" cannot bypass the gate.
+_INVISIBLE_CODEPOINTS = frozenset({
+    0x200B,  # ZERO WIDTH SPACE
+    0x200C,  # ZERO WIDTH NON-JOINER
+    0x200D,  # ZERO WIDTH JOINER
+    0x2060,  # WORD JOINER
+    0xFEFF,  # ZERO WIDTH NO-BREAK SPACE / BOM
+    0x202A, 0x202B, 0x202C, 0x202D, 0x202E,  # bidi LRE/RLE/PDF/LRO/RLO
+    0x2066, 0x2067, 0x2068, 0x2069,  # bidi LRI/RLI/FSI/PDI
+})
+
+
+def _normalize_for_injection_scan(prompt: str) -> str:
+    """Canonicalize the prompt before the substring scan.
+
+    Three passes in order:
+    1. NFKC normalization — collapses fullwidth Latin (e.g. 'Ｉ'
+       → 'I'), ligatures ('ﬁ' → 'fi'), and combining marks
+       ('á' decomposed → 'á' precomposed). This is stdlib
+       (unicodedata.normalize) and turns the most common
+       visual-confusable bypass into a literal-character match.
+    2. Strip zero-width and bidi-control characters — these have
+       zero rendered width but break naïve `in` substring scans
+       when interleaved between letters. NFKC does not remove them.
+    3. ASCII lowercase — the final comparison layer.
+
+    Note: NFKC does NOT transliterate cross-script homoglyphs
+    (Cyrillic 'о' U+043E stays as Cyrillic 'о' even after NFKC,
+    because it is already in its canonical form). A determined
+    attacker can still craft Cyrillic-look-alike phrases; the
+    LLM-based toxicity check downstream is the second line of
+    defence for those, and the new patterns on _INJECTION_PATTERNS
+    are reviewed for Cyrillic-resilient variants in cycle
+    reviews. The NFKC + zero-width pass closes the
+    *accidental* bypass (a user pasting a phrase from a Word
+    doc where the autocorrect has applied fullwidth conversion,
+    or a Markdown editor that inserted a zero-width joiner
+    between letters) and the *low-effort* bypass (fullwidth
+    Unicode, ligatures, accent-decomposed copy-paste).
+    """
+    nfkc = unicodedata.normalize("NFKC", prompt)
+    return "".join(c for c in nfkc if ord(c) not in _INVISIBLE_CODEPOINTS).lower()
+
+
 def detect_prompt_injection(prompt: str) -> bool:
-    """Return True if the prompt contains a known injection pattern."""
-    lower = prompt.lower()
+    """Return True if the prompt contains a known injection pattern.
+
+    The prompt is canonicalized through _normalize_for_injection_scan
+    before the substring scan so that:
+    - fullwidth Latin (e.g. 'Ｉｇｎｏｒｅ') matches 'ignore'
+    - ligatures ('ﬁ') decompose so 'f' + 'i' substring checks work
+    - accent-decomposed copy-paste ('á' = 'á') matches 'á'
+    - zero-width / bidi-control characters between letters
+      cannot split a pattern into two non-matching halves
+    """
+    lower = _normalize_for_injection_scan(prompt)
     return any(pattern in lower for pattern in _INJECTION_PATTERNS)
 
 
