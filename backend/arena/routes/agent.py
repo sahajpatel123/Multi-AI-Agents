@@ -272,7 +272,12 @@ def _persisted_agent_task_result_dict(
 class AgentTaskRequest(BaseModel):
     task: str
     expertise_level: Literal["none", "curious", "practitioner", "expert", "researcher"] = "curious"
-    expertise_domain: str = ""
+    # expertise_domain is bounded at the Pydantic level
+    # (max 100 chars). The field validator still runs (and
+    # slices the trimmed value), so the per-field cap is
+    # enforced at both the schema level (parse-time 422)
+    # and the validator level (defense-in-depth).
+    expertise_domain: str = Field("", max_length=100)
     # attachment_ids is bounded at the Pydantic level (max 32
     # entries). The route handler also slices to 32 — defense-in-
     # depth: the Pydantic cap closes the gap at parse time so
