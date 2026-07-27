@@ -426,7 +426,12 @@ class BridgeRequest(BaseModel):
     arena_answer: str = Field(..., max_length=2000)
     original_question: str = Field(..., max_length=2000)
     winning_persona: str = Field("", max_length=100)
-    arena_score: int = 0
+    # arena_score is bounded at the Pydantic level (ge=0,
+    # le=100). Arena scores are always in [0, 100]; a user
+    # could otherwise submit 999999999999 and amplify the
+    # downstream score-handling work. The Pydantic cap closes
+    # the gap at parse time.
+    arena_score: int = Field(default=0, ge=0, le=100)
 
     @field_validator("arena_answer", "original_question")
     @classmethod
