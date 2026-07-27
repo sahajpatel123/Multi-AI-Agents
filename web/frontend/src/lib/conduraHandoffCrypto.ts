@@ -95,8 +95,13 @@ export async function buildSignedHandoff(input: {
 }): Promise<import('../types/condura').HandoffPayload> {
   const { publicKeyJwk, privateKey } = await getOrCreateSigningKey();
   const nonce = randomNonce();
-  const issuedAt = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  // Use a single Date.now() so issued_at and expires_at share the
+  // same millisecond — previously the two calls could tick across
+  // a millisecond boundary and flake the "expires_at exactly 24h
+  // after issued_at" test (off by one ms).
+  const issuedAtMs = Date.now();
+  const issuedAt = new Date(issuedAtMs).toISOString();
+  const expiresAt = new Date(issuedAtMs + 24 * 60 * 60 * 1000).toISOString();
   const intent = {
     capability: input.capability,
     summary: input.summary,
