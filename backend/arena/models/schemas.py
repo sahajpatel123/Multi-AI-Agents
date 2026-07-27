@@ -191,7 +191,15 @@ class DiscussChatMessage(BaseModel):
     # Literal check rejects the bad value at request parse time
     # (422) so the LLM never sees it.
     role: Literal["user", "agent"] = Field(..., description="'user' or 'agent'")
-    content: str = Field(..., description="Message content")
+    # Content is capped at 20K chars per message. The same cap
+    # is enforced by SaveThreadBody's validate_messages field
+    # validator (line ~604) for the durable thread record. The
+    # cap matches the realistic LLM context budget (most prompts
+    # are 1-10K chars; 20K is a generous ceiling) and prevents
+    # a per-message DoS where a user submits a single 5MB message
+    # that pydantic stores in memory and the LLM API then
+    # rejects (waste of server memory + LLM-side processing).
+    content: str = Field(..., max_length=20000, description="Message content (max 20K chars)")
     timestamp: datetime = Field(default_factory=utcnow_naive)
 
 
