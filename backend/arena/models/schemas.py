@@ -454,7 +454,13 @@ class AuthResponse(BaseModel):
 
 
 class SubscribePlanRequest(BaseModel):
-    plan_key: str
+    # plan_key is bounded at the Pydantic level (max 50
+    # chars). Real values are like "plus_monthly" (~12 chars);
+    # 50 chars is generous. The Pydantic cap closes the gap
+    # so a user cannot submit a 1MB plan_key to amplify the
+    # pydantic memory cost before the route handler's dict
+    # lookup runs.
+    plan_key: str = Field(..., max_length=50)
 
 
 class VerifyPaymentRequest(BaseModel):
