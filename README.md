@@ -121,6 +121,9 @@ POST /api/payments/addon/agent/subscribe|cancel|reactivate
 POST /api/calibration/rate  Rate your own confidence
 GET  /api/calibration/stats | /api/calibration/rating/:task
 
+GET  /api/analytics/summary|engagement|activity
+GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
+
 GET  /api/user/usage|tier|answer-feedback-stats
 PATCH /api/user/profile
 ```
