@@ -301,9 +301,16 @@ class AgentTaskRequest(BaseModel):
 
 
 class AgentChallengeRequest(BaseModel):
-    task_id: str = ""
-    answer: str = ""
-    task: str = ""
+    # task_id is bounded at the Pydantic level (max 100 chars).
+    # Same rationale as RefinementRequest.task_id.
+    task_id: str = Field("", max_length=100)
+    # answer and task are bounded at the Pydantic level
+    # (max 2000 chars). The field validator still runs (and
+    # slices the trimmed value), so the per-field cap is
+    # enforced at both the schema level (parse-time 422)
+    # and the validator level (defense-in-depth).
+    answer: str = Field("", max_length=2000)
+    task: str = Field("", max_length=2000)
 
     @field_validator("answer", "task")
     @classmethod
@@ -394,9 +401,15 @@ class RefinementRequest(BaseModel):
 
 
 class BridgeRequest(BaseModel):
-    arena_answer: str
-    original_question: str
-    winning_persona: str = ""
+    # arena_answer, original_question, winning_persona are
+    # bounded at the Pydantic level. The field validators
+    # below still run (and slice the trimmed value), so the
+    # per-field cap is enforced at both the schema level
+    # (parse-time 422) and the validator level
+    # (defense-in-depth).
+    arena_answer: str = Field(..., max_length=2000)
+    original_question: str = Field(..., max_length=2000)
+    winning_persona: str = Field("", max_length=100)
     arena_score: int = 0
 
     @field_validator("arena_answer", "original_question")
