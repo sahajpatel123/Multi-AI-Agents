@@ -2977,7 +2977,17 @@ async def verify_arena_answer(
 
 class CrossPollinateRequest(BaseModel):
     task_id: str
-    persona_ids: list[str] = Field(default_factory=list)
+    # persona_ids is bounded at the Pydantic level: the list has
+    # max 4 entries (matching the 4-slot agent design, same
+    # cap as PromptRequest / DiscussRequest / DebateRequest
+    # in cycles 16/17). Each string is sliced to 100 chars
+    # by the validate_persona_ids field validator below. The
+    # Pydantic cap closes the gap before _enforce_persona_access
+    # runs (which iterates the list).
+    persona_ids: list[str] = Field(
+        default_factory=list, max_length=4,
+        description="Optional persona ids to cross-pollinate (max 4 entries)",
+    )
 
     @field_validator("task_id")
     @classmethod
