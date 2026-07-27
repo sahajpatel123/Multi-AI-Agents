@@ -132,7 +132,14 @@ class PromptResponse(BaseModel):
 class DebateMessage(BaseModel):
     """A single message in a debate thread"""
     agent_id: str = Field(..., description="Agent or 'user' who sent this message")
-    content: str = Field(..., description="Message content")
+    # Content is capped at 20K chars per message. Same cap as
+    # DiscussChatMessage.content (cycle 13 fix) — matches the
+    # realistic LLM context budget and prevents a per-message
+    # DoS where a user submits a single 5MB message in
+    # debate_history that gets amplified into _build_debate_context
+    # (and forwarded to the LLM API, which then rejects the
+    # request after the server has already paid the memory cost).
+    content: str = Field(..., max_length=20000, description="Message content (max 20K chars)")
     round_number: int = Field(..., ge=0, description="Which debate round this belongs to")
     timestamp: datetime = Field(default_factory=utcnow_naive)
 
