@@ -314,9 +314,15 @@ class AgentChallengeRequest(BaseModel):
 
 
 class AgentRebuttalRequest(BaseModel):
-    task: str = ""
-    answer: str = ""
-    challenge: str = ""
+    # task, answer, challenge are bounded at the Pydantic
+    # level (max 2000 chars each). The field validator below
+    # still runs (and slices the trimmed value), so the
+    # per-field cap is enforced at both the schema level
+    # (parse-time 422) and the validator level
+    # (defense-in-depth).
+    task: str = Field("", max_length=2000)
+    answer: str = Field("", max_length=2000)
+    challenge: str = Field("", max_length=2000)
 
     @field_validator("task", "answer", "challenge")
     @classmethod
