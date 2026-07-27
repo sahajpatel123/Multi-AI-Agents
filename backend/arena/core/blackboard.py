@@ -83,6 +83,44 @@ def _filter_assumptions_keys(value: Any) -> dict:
     return {k: value[k] for k in value if k in _ASSUMPTIONS_KEYS}
 
 
+# Generic cap for the remaining dict fields in to_dict() that
+# don't have a clear key allowlist. The cap bounds the per-field
+# response size to (MAX_KEYS * MAX_VALUE_CHARS) and applies a
+# truncation to the str representation of each value.
+_GENERIC_DICT_MAX_KEYS = 10
+_GENERIC_DICT_MAX_VALUE_CHARS = 100
+
+
+def _filter_generic_dict_keys(value: Any) -> dict:
+    """Apply a generic cap to a dict field that doesn't have a
+    known allowlist.
+
+    Used for source_integrity, dissent_report, temporal_profile,
+    contradictions — these don't have a clear allowlist in the
+    code (they're produced by various scoring engines with
+    dynamic keys), but a maliciously-injected value (e.g. via
+    a corrupted row in the DB) could include arbitrary keys.
+    The cap bounds the per-field response size.
+
+    The cap is a soft bound:
+    - At most _GENERIC_DICT_MAX_KEYS keys (10) are returned
+    - Each str value is sliced to at most
+      _GENERIC_DICT_MAX_VALUE_CHARS chars (100)
+    - Non-str values (int, list, dict, bool) are kept as-is
+    - Excess keys and over-length values are silently dropped
+    """
+    if not isinstance(value, dict):
+        return {}
+    out: dict = {}
+    for i, (k, v) in enumerate(value.items()):
+        if i >= _GENERIC_DICT_MAX_KEYS:
+            break
+        if isinstance(v, str) and len(v) > _GENERIC_DICT_MAX_VALUE_CHARS:
+            v = v[:_GENERIC_DICT_MAX_VALUE_CHARS]
+        out[k] = v
+    return out
+
+
 @dataclass
 class StageResult:
     stage_name: str
@@ -249,12 +287,12 @@ class Blackboard:
             "sources": self.sources,
             "flags": self.flags,
             "caveats": self.caveats,
-            "source_integrity": self.source_integrity,
-            "contradictions": self.contradictions,
+            "source_integrity": _filter_generic_dict_keys(self.source_integrity),
+            "contradictions": _filter_generic_dict_keys(self.contradictions),
             "intelligence_score": _filter_intelligence_score_keys(self.intelligence_score),
             "assumptions": _filter_assumptions_keys(self.assumptions),
-            "dissent_report": self.dissent_report,
-            "temporal_profile": self.temporal_profile,
+            "dissent_report": _filter_generic_dict_keys(self.dissent_report),
+            "temporal_profile": _filter_generic_dict_keys(self.temporal_profile),
             "memory_saved": self.memory_saved,
             "expertise_level": self.expertise_level,
             "expertise_domain": self.expertise_domain,
