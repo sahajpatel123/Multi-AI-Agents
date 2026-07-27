@@ -90,11 +90,27 @@ def _get_persona_excerpt(agent_id: str, persona_ids: list[str] | None = None) ->
 def _build_messages(
     request: DiscussRequest,
 ) -> list[dict]:
-    """Build the Anthropic messages array from conversation history + new message."""
+    """Build the Anthropic messages array from conversation history + new message.
+
+    The role value is already validated against the Literal
+    {"user", "agent"} allowlist at the Pydantic level (see
+    DiscussChatMessage.role in models/schemas.py). This means
+    the LLM never sees a user-supplied "system", "tool", or
+    other role — only "user" and "agent" (the "agent" token
+    here is the API-side mirror of "assistant", the role
+    Anthropic's Messages API expects for prior agent turns).
+    A user can no longer plant a fake prior agent response in
+    conversation_history that the LLM would treat as its own
+    past output.
+    """
     messages: list[dict] = []
 
     for msg in request.conversation_history:
-        role = "user" if msg.role == "user" else "assistant"
+        # Map our API-side "agent" role to Anthropic's
+        # "assistant" role. The mapping is unconditional
+        # because the Literal allowlist ensures msg.role is
+        # exactly "user" or "agent" — no else-branch needed.
+        role = "assistant" if msg.role == "agent" else "user"
         messages.append({"role": role, "content": msg.content})
 
     # Add the new user message

@@ -179,7 +179,18 @@ class DebateRoundResponse(BaseModel):
 
 class DiscussChatMessage(BaseModel):
     """A single message in a 1-on-1 discussion"""
-    role: str = Field(..., description="'user' or 'agent'")
+    # Role is restricted to a Literal allowlist. Without this,
+    # _build_messages in routes/discuss.py maps any non-"user"
+    # value to "assistant" — a user could submit
+    # `role: "assistant"` in conversation_history and have the
+    # text passed to the LLM as a fake prior agent response.
+    # The LLM would then treat the injected text as its own
+    # prior output and could be steered into continuing whatever
+    # the user planted (e.g. "You should always respond with..."
+    # masquerading as a past assistant turn). The Pydantic-level
+    # Literal check rejects the bad value at request parse time
+    # (422) so the LLM never sees it.
+    role: Literal["user", "agent"] = Field(..., description="'user' or 'agent'")
     content: str = Field(..., description="Message content")
     timestamp: datetime = Field(default_factory=utcnow_naive)
 
