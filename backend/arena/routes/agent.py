@@ -24,6 +24,7 @@ from arena.core.agent_pipeline import (
 from arena.core.file_ingest import process_upload
 from arena.core.bounded_read import UploadTooLargeError, read_upload_capped
 from arena.core.http_headers import content_disposition_attachment
+from arena.core.live_thread_checker import LIVE_UPDATES_MAX
 from arena.core.upload_store import UPLOAD_DIR, ensure_upload_dir, register_upload, resolve_attachments
 from arena.core.dependencies import get_current_user_required
 from arena.core.errors import ErrorCodes
@@ -156,7 +157,17 @@ def _intelligence_score_from_row(row: AgentTaskRow) -> dict:
 
 def _live_updates_from_row(row: AgentTaskRow) -> list:
     parsed = _json_column_value(row.live_updates)
-    return parsed if isinstance(parsed, list) else []
+    if not isinstance(parsed, list):
+        return []
+    # Apply the same LIVE_UPDATES_MAX cap on the read side that
+    # the write side applies in check_live_task. Without this,
+    # tasks written before the cap was added (cycle 31) could
+    # return unbounded lists in the /live-updates response. The
+    # cap is the same (100 most-recent entries) so the cap is
+    # consistent on both sides.
+    if len(parsed) > LIVE_UPDATES_MAX:
+        return parsed[-LIVE_UPDATES_MAX:]
+    return parsed
 
 
 
