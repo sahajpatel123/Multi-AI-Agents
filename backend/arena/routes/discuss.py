@@ -591,14 +591,28 @@ class SaveThreadBody(BaseModel):
     @field_validator("messages")
     @classmethod
     def validate_messages(cls, v: list[dict]) -> list[dict]:
-        # Cap each message's content so a 100KB blob can't slip in via
-        # a single field. Bounded list length prevents an unbounded
-        # JSON column.
+        # Cap each message's content so a 100KB blob can't slip
+        # in via a single field. Bounded list length prevents an
+        # unbounded JSON column. Role is normalized to the
+        # {"user", "agent"} allowlist — anything else is dropped
+        # (defense-in-depth: a malicious client cannot persist
+        # role="system" or role="admin" that the read path
+        # would later emit in the GET /discuss/threads/{id}
+        # response, which would then be rendered to other
+        # clients in the room view).
         out: list[dict] = []
         for m in v[:500]:
             if not isinstance(m, dict):
                 continue
-            role = str(m.get("role", ""))[:20]
+            raw_role = str(m.get("role", ""))[:20]
+            if raw_role == "agent":
+                role = "agent"
+            else:
+                # Default to "user" for any value other than
+                # "agent" (the two valid values). This includes
+                # "user", empty, "system", "admin", etc. — only
+                # "agent" is preserved verbatim.
+                role = "user"
             content = str(m.get("content", ""))[:20000]
             out.append({"role": role, "content": content, "timestamp": m.get("timestamp")})
         return out
