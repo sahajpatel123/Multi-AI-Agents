@@ -35,6 +35,7 @@ from arena.core.input_validation import (
     sanitize_model_text,
     sanitize_text,
 )
+from arena.core.input_pipeline import detect_prompt_injection
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.tier_config import UserTier, get_credit_budget, get_tier_str, has_feature, normalize_tier
 from arena.core.agent_orchestration import synthesise_tasks
@@ -1730,6 +1731,26 @@ async def run_agent_task(
         )
 
     task = sanitize_text(body.task, max_length=2000, field_name="task")
+    # Apply the same prompt-injection gate that /prompt uses (input_pipeline.py).
+    # The 8-stage Agent pipeline fans the user's task out to planner, researcher,
+    # solver, critic, verifier, synthesizer, and judge. Each stage is an LLM
+    # call whose system prompt is anchored to the user-supplied task text, so
+    # an injection in `task` ("ignore your instructions and ...") is a real
+    # bypass vector. Cheaper to reject up front than to chase the bad output
+    # through the full pipeline + memory save.
+    if detect_prompt_injection(task):
+        logger.warning(
+            "[AGENT] /run rejected prompt-injection attempt user_id=%s task_prefix=%r",
+            user.id,
+            task[:80],
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_prompt",
+                "message": "This prompt contains content that cannot be processed.",
+            },
+        )
     _enforce_capability_gate(capability_id="agent.research", task_text=task)
 
     expertise_level = (body.expertise_level or "curious").strip().lower() or "curious"
@@ -2787,6 +2808,23 @@ async def refine_agent_answer(
     )
 
     message = sanitize_text(body.message, max_length=1000, field_name="message")
+    # Same prompt-injection gate as /agent/run above — the refinement message
+    # is appended to the in-memory Blackboard's conversation and folded into
+    # the LLM system context for the next stage run, so a 'reveal your
+    # instructions' follow-up reaches the same bypass surface.
+    if detect_prompt_injection(message):
+        logger.warning(
+            "[AGENT] /refine rejected prompt-injection attempt user_id=%s message_prefix=%r",
+            user.id,
+            message[:80],
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_prompt",
+                "message": "This prompt contains content that cannot be processed.",
+            },
+        )
     _enforce_capability_gate(capability_id="agent.refine", task_text=message)
 
     bb = get_blackboard(body.task_id.strip())
