@@ -150,7 +150,12 @@ def _schedule_synthesis(background_tasks: BackgroundTasks, slug: str) -> None:
 
 class CreateRoomBody(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    task_id: Optional[str] = None
+    # task_id is bounded at the Pydantic level (max 100 chars).
+    # Real values are UUIDs (~36 chars); 100 chars is generous.
+    # The Pydantic cap closes the gap so a user cannot submit
+    # a 1MB task_id to amplify the pydantic memory cost before
+    # the route handler's ownership check runs.
+    task_id: Optional[str] = Field(default=None, max_length=100)
 
     @field_validator("name")
     @classmethod
@@ -159,7 +164,9 @@ class CreateRoomBody(BaseModel):
 
 
 class AddTaskBody(BaseModel):
-    task_id: str = Field(..., min_length=1)
+    # task_id is bounded at the Pydantic level (max 100 chars).
+    # Same rationale as CreateRoomBody.task_id above.
+    task_id: str = Field(..., min_length=1, max_length=100)
 
 
 def _ensure_unique_slug(db: Session, base_slug: str) -> str:
