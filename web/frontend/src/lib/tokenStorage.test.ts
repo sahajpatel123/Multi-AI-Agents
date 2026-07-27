@@ -47,21 +47,37 @@ describe('tokenStorage', () => {
     // bubble — otherwise the apiFetch refresh round-trip crashes
     // mid-flight and the user is stuck in a 401 loop with a freshly
     // rotated token that never made it to disk.
-    const setSpy = vi
-      .spyOn(window.localStorage, 'setItem')
-      .mockImplementation(() => {
+    //
+    // Replace the storage object entirely with a throwing stub
+    // rather than vi.spyOn on individual methods. vi.spyOn requires
+    // the prototype methods to be configurable; on some jsdom
+    // versions or after a previous test file's mockRestore partially
+    // cleans up, the spy silently no-ops and the real setItem
+    // writes through. Replacing the whole object is robust.
+    const realStorage = window.localStorage;
+    const throwingStorage = {
+      getItem: () => {
+        throw new Error('SecurityError');
+      },
+      setItem: () => {
         throw new Error('QuotaExceededError');
-      });
-    const getSpy = vi
-      .spyOn(window.localStorage, 'getItem')
-      .mockImplementation(() => {
+      },
+      removeItem: () => {
         throw new Error('SecurityError');
-      });
-    const removeSpy = vi
-      .spyOn(window.localStorage, 'removeItem')
-      .mockImplementation(() => {
+      },
+      clear: () => {
         throw new Error('SecurityError');
-      });
+      },
+      get length() {
+        return 0;
+      },
+      key: () => null,
+    };
+    Object.defineProperty(window, 'localStorage', {
+      value: throwingStorage,
+      configurable: true,
+      writable: true,
+    });
     try {
       // setTokens swallows the throw.
       expect(() => setTokens('a', 'b')).not.toThrow();
@@ -71,9 +87,11 @@ describe('tokenStorage', () => {
       // clearTokens swallows the throw.
       expect(() => clearTokens()).not.toThrow();
     } finally {
-      setSpy.mockRestore();
-      getSpy.mockRestore();
-      removeSpy.mockRestore();
+      Object.defineProperty(window, 'localStorage', {
+        value: realStorage,
+        configurable: true,
+        writable: true,
+      });
     }
   });
 });
