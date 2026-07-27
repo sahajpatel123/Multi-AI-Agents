@@ -407,7 +407,16 @@ class MarkLiveReadBody(BaseModel):
 
 
 class OrchestrateRequest(BaseModel):
-    questions: list[str]
+    # questions is bounded at the Pydantic level (max 4 entries).
+    # The route handler validates 2-4 non-empty questions; the
+    # Pydantic cap closes the gap at parse time so a user cannot
+    # submit 1000 questions to amplify the per-question validation
+    # cost. Each question is sanitized to 2000 chars by the
+    # field validator below.
+    questions: list[str] = Field(
+        default_factory=list, max_length=4,
+        description="2-4 questions to orchestrate (max 4 entries)",
+    )
     expertise_level: Literal["none", "curious", "practitioner", "expert", "researcher"] = "curious"
     expertise_domain: str = ""
 
