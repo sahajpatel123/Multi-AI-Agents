@@ -313,7 +313,13 @@ class AgentRebuttalRequest(BaseModel):
 
 class AgentFeedbackRequest(BaseModel):
     task_id: str
-    feedback: str
+    # feedback is capped at 2000 chars. Same bound as the
+    # rebuttal text (line 311) and the existing pattern for
+    # free-form text fields in this file. The cap matches the
+    # realistic feedback length (a single paragraph) and
+    # prevents a per-field DoS where a user submits a 5MB
+    # feedback string.
+    feedback: str = Field(..., max_length=2000)
     note: Optional[str] = None
 
     @field_validator("note")
@@ -323,7 +329,11 @@ class AgentFeedbackRequest(BaseModel):
 
 
 class AnswerAccuracyFeedbackBody(BaseModel):
-    verdict: str
+    # verdict is capped at 2000 chars. Same bound as
+    # AgentFeedbackRequest.feedback above — the cap matches
+    # the realistic feedback length (a single paragraph) and
+    # prevents a per-field DoS.
+    verdict: str = Field(..., max_length=2000)
     note: Optional[str] = None
 
     @field_validator("note")
