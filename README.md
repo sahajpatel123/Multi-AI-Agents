@@ -111,6 +111,7 @@ GET  /api/panel             / POST /api/panel/save — your 4-slot panel
 
 POST /api/agent/run|orchestrate|refine|challenge|rebuttal|feedback
 GET  /api/agent/status/:id|result/:id|history|templates
+GET  /api/agent/feedback/calibration   Display-only confidence adjustment based on caller's verdict history
 POST /api/agent/watchlist   Recurring research questions
 POST /api/agent/upload      File attachment (max 10 MB)
 POST /api/agent/memory/context

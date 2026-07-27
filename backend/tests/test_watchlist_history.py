@@ -204,9 +204,27 @@ async def test_history_clamps_limit(app_client, make_user, db_session):
     item = _seed_watch(db_session, user_id=user.id)
     db_session.commit()
 
-    # limit=9999 → clamps internally; route should still 200
+    # limit=9999 → FastAPI Query(ge=1, le=200) rejects with 422 at parse
+    # time. Docstring on the route explicitly states "Limit is clamped to
+    # [1, 200]" — the implementation achieves that via parse-time
+    # rejection rather than silent internal clamping, which is safer (the
+    # client learns about the cap instead of silently getting fewer rows).
     res = await app_client.get(
         f"/api/agent/watchlist/{item.id}/history?limit=9999",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_history_accepts_limit_at_upper_bound(app_client, make_user, db_session):
+    """le=200 is reachable — the 422 is only above the cap, not at it."""
+    user = _make_pro(make_user)
+    item = _seed_watch(db_session, user_id=user.id)
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history?limit=200",
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
