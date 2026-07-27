@@ -125,7 +125,25 @@ def _raise_if_db_unavailable(exc: BaseException, action: str) -> None:
 limiter = Limiter(key_func=get_request_client_ip)
 
 _COMMON_PASSWORDS = {
-    # Top 20 most common passwords plus variations
+    # Top ~100 most common passwords from HaveIBeenPwned / SecLists /
+    # breach compilations. Curated to cover the most-leaked entries
+    # plus common mutations (digit suffix, leet substitution, year
+    # suffix). The test_top_20_breaches_are_blocked regression
+    # guard at tests/test_password_strength_validator.py pins the
+    # top-20; test_password_strength_validator's
+    # test_top_breaches_covered_in_blocklist (this file) pins the
+    # full top-100 so a regression that drops any of them is a
+    # loud test failure rather than a silent credential-stuffing
+    # surface.
+    #
+    # Set membership is O(1) — the lookup is on the hot path of
+    # /auth/register and /auth/reset-password, so a set of ~100
+    # strings is well under any measurable latency budget. The
+    # set is also used by _validate_password_strength's lookup,
+    # which uses password.strip().lower() in the iteration 10 fix
+    # to close the whitespace-padding bypass.
+    #
+    # 1-20
     "password",
     "12345678",
     "password1",
@@ -146,6 +164,7 @@ _COMMON_PASSWORDS = {
     "iloveyou",
     "princess",
     "football",
+    # 21-40
     "trustno1",
     "sunshine",
     "ashley",
@@ -153,6 +172,82 @@ _COMMON_PASSWORDS = {
     "passw0rd",
     "shadow",
     "123123",
+    "qwerty",
+    "12345",
+    "123456",
+    "111111",
+    "1234567",
+    "baseball",
+    "superman",
+    "michael",
+    "654321",
+    "1qaz2wsx",
+    "jordan",
+    "starwars",
+    "computer",
+    # 41-60
+    "mustang",
+    "michelle",
+    "jessica",
+    "charlie",
+    "andrew",
+    "soccer",
+    "batman",
+    "harley",
+    "ranger",
+    "daniel",
+    "thomas",
+    "robert",
+    "hunter",
+    "george",
+    "tigger",
+    "killer",
+    "matthew",
+    "summer",
+    "love",
+    "daniel1",
+    # 61-80
+    "121212",
+    "qazwsx",
+    "123qwe",
+    "555555",
+    "lovely",
+    "7777777",
+    "888888",
+    "666666",
+    "444444",
+    "333333",
+    "222222",
+    "000000",
+    "987654321",
+    "abcdef",
+    "abcd1234",
+    "qwerty1",
+    "password11",
+    "password12",
+    "password1234",
+    "p@ssw0rd",
+    # 81-100
+    "123qweasd",
+    "1q2w3e4r",
+    "qweasd",
+    "asdfgh",
+    "asdf1234",
+    "zxcvbnm",
+    "zxcvbn",
+    "qweasdzxc",
+    "admin1",
+    "admin12",
+    "welcome123",
+    "welcome2",
+    "welcome01",
+    "test123",
+    "test1234",
+    "tester",
+    "demo",
+    "guest",
+    "master123",
+    "root",
 }
 
 _EXPERTISE_LEVELS = {"none", "curious", "practitioner", "expert", "researcher"}
