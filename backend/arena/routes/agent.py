@@ -358,8 +358,21 @@ class AnswerAccuracyFeedbackBody(BaseModel):
 
 
 class RefinementRequest(BaseModel):
-    task_id: str
-    message: str
+    # task_id is bounded at the Pydantic level (min_length=1,
+    # max 100 chars). Real values are UUIDs (~36 chars);
+    # 100 chars is generous. The Pydantic cap closes the gap
+    # so a user cannot submit a 1MB task_id to amplify the
+    # pydantic memory cost before the route handler's
+    # ownership check runs. min_length=1 also rejects empty
+    # strings (the route handler would also reject, but the
+    # Pydantic cap closes the gap at parse time).
+    task_id: str = Field(..., min_length=1, max_length=100)
+    # message is bounded at the Pydantic level (min_length=1,
+    # max 1000 chars). The field validator below still runs
+    # (and slices the trimmed value), so the per-field cap
+    # is enforced at both the schema level (parse-time 422)
+    # and the validator level (defense-in-depth).
+    message: str = Field(..., min_length=1, max_length=1000)
 
     @field_validator("message")
     @classmethod
