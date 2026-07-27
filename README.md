@@ -123,6 +123,7 @@ GET  /api/calibration/stats | /api/calibration/rating/:task
 
 GET  /api/analytics/summary|engagement|activity
 GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
+GET  /api/analytics/persona-win-rate/export.csv   Same data as text/csv attachment
 
 GET  /api/user/usage|tier|answer-feedback-stats
 PATCH /api/user/profile

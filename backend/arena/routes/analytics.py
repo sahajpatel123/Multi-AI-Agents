@@ -4,7 +4,7 @@ import logging
 from collections import Counter, defaultdict
 from datetime import datetime, time, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -822,6 +822,92 @@ async def analytics_persona_win_rate(
         "best_persona_id": best["persona_id"] if best else None,
         "best_win_rate": best["win_rate"] if best else None,
     }
+
+
+@router.get("/analytics/persona-win-rate/export.csv")
+async def analytics_persona_win_rate_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+) -> Response:
+    """CSV export of the persona win-rate table.
+
+    Same computation as /analytics/persona-win-rate — reuses the route's
+    shape rather than reimplementing it, so the export and the JSON
+    response can never drift. CSV is the format dashboards + spreadsheets
+    consume directly; the JSON endpoint remains the canonical shape for
+    the web UI.
+
+    Columns mirror the JSON personas[] rows in the same order:
+      persona_id, name, appearances, wins, win_rate, low_confidence
+
+    No pagination: the response is bounded by min_appearances (≥ 1) and
+    by the 16-persona catalog, so the worst-case payload is one row per
+    persona. Anyone exporting "all personas that ever appeared on a
+    panel" will see at most 16 rows — well within CSV-row size limits
+    even with naive Excel handling.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate export requests. Limit is 60 per hour.",
+    )
+
+    payload = await analytics_persona_win_rate(
+        window_days=window_days,
+        min_appearances=min_appearances,
+        user=user,
+        db=db,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    # RFC 4180 quoting + Excel-friendly \r\n line endings. The header row
+    # is intentional — a downstream consumer should never have to guess
+    # which column is which, and the column order is part of the contract.
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(
+        ["persona_id", "name", "appearances", "wins", "win_rate", "low_confidence"]
+    )
+    for row in payload["personas"]:
+        writer.writerow(
+            [
+                row["persona_id"],
+                row["name"],
+                row["appearances"],
+                row["wins"],
+                row["win_rate"],
+                "true" if row["low_confidence"] else "false",
+            ]
+        )
+
+    filename = (
+        f"arena-persona-win-rate-"
+        f"{payload['window_start']}-to-{payload['window_end']}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.get("/admin/routes")
