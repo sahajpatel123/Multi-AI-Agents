@@ -444,11 +444,31 @@ async def test_window_excludes_older_exchanges(app_client, make_user, db_session
 @pytest.mark.asyncio
 async def test_window_bounds_rejected(app_client, make_user):
     user = make_user(email="pwr-bounds@test.com", tier=UserTier.PRO)
-    for qs in ("window_days=0", "window_days=400", "min_appearances=0"):
+    # Both bounds are pinned: min_appearances has le=200 (4-slot panels
+    # mean anything above that is unreachable in practice), and window_days
+    # stays at 365 to keep the indexed scan bounded.
+    for qs in (
+        "window_days=0",
+        "window_days=400",
+        "min_appearances=0",
+        "min_appearances=201",
+    ):
         res = await app_client.get(
             f"/api/analytics/persona-win-rate?{qs}", headers=_pro_headers(user)
         )
         assert res.status_code == 422, qs
+
+
+@pytest.mark.asyncio
+async def test_min_appearances_accepts_upper_bound(app_client, make_user):
+    """le=200 is reachable — the 422 is only above the cap."""
+    user = make_user(email="pwr-bound-ok@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-win-rate?min_appearances=200",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert res.json()["min_appearances"] == 200
 
 
 # ─── Empty state / isolation / auth ─────────────────────────────────────────
