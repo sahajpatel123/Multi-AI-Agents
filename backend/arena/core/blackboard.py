@@ -45,6 +45,15 @@ _INTELLIGENCE_SCORE_KEYS: frozenset = frozenset({
     "one_line_verdict",
 })
 
+# Allowlist of assumptions keys. The assumption_surfacer
+# produces 3 known keys; any other key would be a legacy
+# field or a maliciously-injected one.
+_ASSUMPTIONS_KEYS: frozenset = frozenset({
+    "summary",
+    "assumptions",  # list of assumption dicts
+    "assumption_count",  # int
+})
+
 
 def _filter_intelligence_score_keys(value: Any) -> dict:
     """Return only the known intelligence_score keys.
@@ -60,6 +69,18 @@ def _filter_intelligence_score_keys(value: Any) -> dict:
     if not isinstance(value, dict):
         return {}
     return {k: value[k] for k in value if k in _INTELLIGENCE_SCORE_KEYS}
+
+
+def _filter_assumptions_keys(value: Any) -> dict:
+    """Return only the known assumptions keys.
+
+    Same rationale as _filter_intelligence_score_keys. The
+    assumption_surfacer produces 3 known keys; any other key
+    is dropped.
+    """
+    if not isinstance(value, dict):
+        return {}
+    return {k: value[k] for k in value if k in _ASSUMPTIONS_KEYS}
 
 
 @dataclass
@@ -231,7 +252,7 @@ class Blackboard:
             "source_integrity": self.source_integrity,
             "contradictions": self.contradictions,
             "intelligence_score": _filter_intelligence_score_keys(self.intelligence_score),
-            "assumptions": self.assumptions,
+            "assumptions": _filter_assumptions_keys(self.assumptions),
             "dissent_report": self.dissent_report,
             "temporal_profile": self.temporal_profile,
             "memory_saved": self.memory_saved,
