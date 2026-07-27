@@ -373,12 +373,33 @@ class LoginRequest(BaseModel):
 
 
 class FeedbackCalibrationInfo(BaseModel):
+    """Display-only confidence adjustment derived from a user's verdict history.
+
+    Field bounds pin the contract so a malformed helper or a downstream
+    client can never silently smuggle absurd values into the UI:
+
+    - adjustment is in [-15, 0]. The helper's formula is
+      ``-(wrong_rate*15) - (partial_rate*7)`` rounded to an int. Worst
+      case is every row wrong → -15. The lower bound also prevents the
+      UI from ever being told to subtract more confidence than the 0-100
+      score range can express.
+    - reliable flips at 10 verdicts (see feedback_calibrator.get_feedback_calibration).
+    - wrong_rate is a percentage in [0, 100], integer-rounded.
+    - total_feedback is the raw count of verdict rows that fed the
+      computation. Capped at 10_000 only as a sanity bound — a single
+      user with >10k verdicts is almost certainly a test or an
+      amplification bug; either way the calibration math is identical.
+
+    Bounds are enforced at the Pydantic level (parse-time 422) so a
+    bad payload cannot reach the response serializer.
+    """
+
     model_config = ConfigDict(extra="ignore")
 
-    adjustment: int = 0
+    adjustment: int = Field(0, ge=-15, le=0)
     reliable: bool = False
-    total_feedback: int = 0
-    wrong_rate: int = 0
+    total_feedback: int = Field(0, ge=0, le=10_000)
+    wrong_rate: int = Field(0, ge=0, le=100)
 
 
 class UserResponse(BaseModel):
