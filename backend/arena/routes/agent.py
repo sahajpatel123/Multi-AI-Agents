@@ -2843,6 +2843,35 @@ async def refine_agent_answer(
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
         )
 
+    # Race guard: if the original 8-stage pipeline (or a prior refinement) is
+    # still mutating this Blackboard, refuse the new refinement with 409
+    # instead of starting a second concurrent pipeline against the same
+    # in-memory state. Two concurrent pipelines against one Blackboard race
+    # on conversation.append, final_answer, status, refinement_count, and
+    # token counters — the second one silently overwrites the first's
+    # intermediate state. Status is set to RUNNING both at the start of the
+    # main pipeline (run_agent_pipeline:168) and at the start of every
+    # refinement (run_refinement_pipeline:425), and to a terminal state
+    # (COMPLETE / FAILED) right before remove_blackboard runs in the
+    # background task's finally block. So RUNNING means "another writer
+    # is currently active on this Blackboard".
+    if bb.status == AgentStatus.RUNNING:
+        logger.info(
+            "[AGENT] /refine rejected — pipeline still running task_id=%s user_id=%s",
+            bb.task_id,
+            user.id,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "agent_pipeline_running",
+                "message": (
+                    "Agent task is still running. Wait for it to finish "
+                    "before requesting a refinement."
+                ),
+            },
+        )
+
     if bb.refinement_count >= 10:
         raise HTTPException(
             status_code=400,
