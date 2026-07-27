@@ -782,8 +782,13 @@ async def analytics_persona_win_rate(
     min_appearances: int = Query(
         1,
         ge=1,
-        le=1000,
-        description="Drop personas that appeared on fewer than N panels.",
+        le=200,
+        description=(
+            "Drop personas that appeared on fewer than N panels. "
+            "Capped at 200 — the max useful floor is well below that, "
+            "and a higher cap would only let clients silence results "
+            "by accident."
+        ),
     ),
     include_fallback: bool = Query(
         False,
