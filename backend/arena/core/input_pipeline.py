@@ -91,37 +91,99 @@ _INVISIBLE_CODEPOINTS = frozenset({
     0x2066, 0x2067, 0x2068, 0x2069,  # bidi LRI/RLI/FSI/PDI
 })
 
+# Cyrillic (and a few related-script) homoglyphs that NFKC does NOT
+# fold to their Latin visual equivalents — because each Cyrillic
+# codepoint is already in its canonical form, NFKC leaves them
+# alone. Without an explicit transliteration pass, a prompt like
+# "ignоre previоus instructiоns" (with Cyrillic 'o'
+# U+043E in place of Latin 'o') would not match any of the 17
+# patterns.
+#
+# Only Cyrillic chars that visually map to a Latin letter AND that
+# a low-effort attacker would plausibly use as a 1:1 replacement
+# in an injection phrase are listed. The table is intentionally
+# narrow: transliterating every Cyrillic char would mangle
+# legitimate Cyrillic-language user input. A user typing
+# Cyrillic prose that incidentally contains a single Latin char
+# matched by these 17 patterns would still flag — but Cyrillic
+# prose is overwhelmingly Cyrillic-script, and the homoglyph
+# count for any non-target sentence is zero, so the false-
+# positive surface is small. A genuine Cyrillic-language user
+# who happens to type the English phrase "ignore previous
+# instructions" embedded in Cyrillic prose would not be
+# affected unless they replaced 7+ Latin letters with Cyrillic
+# homoglyphs.
+_HOMOGLYPH_TRANSLIT = str.maketrans({
+    # Lowercase Cyrillic -> Latin lowercase
+    "а": "a",  # a
+    "е": "e",  # e
+    "о": "o",  # o
+    "р": "p",  # p
+    "с": "c",  # c
+    "у": "y",  # y (visually identical)
+    "х": "x",  # x
+    "ѕ": "s",  # s (Macedonian)
+    "і": "i",  # i (Ukrainian)
+    "ј": "j",  # j (Serbian)
+    "н": "h",  # h (Cyrillic lowercase en)
+    "ӏ": "l",  # l (Cyrillic palochka)
+    # Uppercase Cyrillic -> Latin uppercase
+    "А": "A",
+    "В": "B",
+    "С": "C",
+    "Е": "E",
+    "Н": "H",
+    "К": "K",
+    "М": "M",
+    "О": "O",
+    "Р": "P",
+    "Т": "T",
+    "Х": "X",
+    "У": "Y",
+    "Ӏ": "I",  # I (Cyrillic palochka uppercase)
+})
+
 
 def _normalize_for_injection_scan(prompt: str) -> str:
     """Canonicalize the prompt before the substring scan.
 
-    Three passes in order:
-    1. NFKC normalization — collapses fullwidth Latin (e.g. 'Ｉ'
-       → 'I'), ligatures ('ﬁ' → 'fi'), and combining marks
-       ('á' decomposed → 'á' precomposed). This is stdlib
-       (unicodedata.normalize) and turns the most common
-       visual-confusable bypass into a literal-character match.
-    2. Strip zero-width and bidi-control characters — these have
-       zero rendered width but break naïve `in` substring scans
-       when interleaved between letters. NFKC does not remove them.
-    3. ASCII lowercase — the final comparison layer.
+    Four passes in order:
+    1. NFKC normalization - collapses fullwidth Latin (e.g. 'I'
+       fullwidth to 'I'), ligatures (fi ligature to 'fi'), and
+       combining marks. Stdlib (unicodedata.normalize).
+    2. Strip zero-width and bidi-control characters - these
+       have zero rendered width but break naive 'in' substring
+       scans when interleaved between letters. NFKC does not
+       remove them.
+    3. Cyrillic homoglyph transliteration - NFKC does NOT fold
+       cross-script homoglyphs (Cyrillic 'o' U+043E stays as
+       Cyrillic 'o' because it is already in canonical form), so
+       an explicit str.maketrans() pass maps the ~20 commonly
+       abused Cyrillic letters to their Latin visual equivalents.
+       Only Cyrillic->Latin is mapped; legitimate Cyrillic prose
+       that contains zero homoglyph chars is unaffected, and
+       prose with one or two homoglyphs reads coherently in
+       Latin after the transliteration (which is exactly what the
+       attacker relied on). The original prompt is NOT mutated -
+       only this helper sees the transliterated form. The
+       downstream enriched_prompt uses the original (untransliterated)
+       prompt, so a Cyrillic-language user is not silently
+       mangle-translated at storage.
+    4. ASCII lowercase - the final comparison layer.
 
-    Note: NFKC does NOT transliterate cross-script homoglyphs
-    (Cyrillic 'о' U+043E stays as Cyrillic 'о' even after NFKC,
-    because it is already in its canonical form). A determined
-    attacker can still craft Cyrillic-look-alike phrases; the
-    LLM-based toxicity check downstream is the second line of
-    defence for those, and the new patterns on _INJECTION_PATTERNS
-    are reviewed for Cyrillic-resilient variants in cycle
-    reviews. The NFKC + zero-width pass closes the
-    *accidental* bypass (a user pasting a phrase from a Word
-    doc where the autocorrect has applied fullwidth conversion,
-    or a Markdown editor that inserted a zero-width joiner
-    between letters) and the *low-effort* bypass (fullwidth
-    Unicode, ligatures, accent-decomposed copy-paste).
+    Note: NFKC + homoglyph transliteration closes the
+    accidental bypass (Word doc fullwidth conversion, zero-width
+    joiner from a Markdown editor) and the low-effort bypass
+    (fullwidth Unicode, ligatures, accent-decomposed copy-paste,
+    single-char Cyrillic substitutions). The LLM-based toxicity
+    check downstream remains the second line of defence for
+    higher-effort cross-script bypasses (mixed Cyrillic+Latin,
+    rare Cyrillic letters not in the table, etc.).
     """
     nfkc = unicodedata.normalize("NFKC", prompt)
-    return "".join(c for c in nfkc if ord(c) not in _INVISIBLE_CODEPOINTS).lower()
+    no_invisible = "".join(c for c in nfkc if ord(c) not in _INVISIBLE_CODEPOINTS)
+    transliterated = no_invisible.translate(_HOMOGLYPH_TRANSLIT)
+    return transliterated.lower()
 
 
 def detect_prompt_injection(prompt: str) -> bool:
