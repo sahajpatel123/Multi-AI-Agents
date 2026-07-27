@@ -422,7 +422,14 @@ class OrchestrateRequest(BaseModel):
 
 class WatchlistCreateBody(BaseModel):
     question: str
-    interval_hours: int
+    # interval_hours is bounded at the Pydantic level (ge=1,
+    # le=168). The route handler also validates against
+    # WATCHLIST_INTERVALS={24, 72, 168} — defense-in-depth.
+    # The Pydantic cap closes the gap at parse time so a
+    # user cannot submit a 999999999 interval (which would
+    # overflow the next_run_at calculation) to amplify the
+    # scheduler work.
+    interval_hours: int = Field(..., ge=1, le=168)
     expertise_level: str = "curious"
     expertise_domain: str = ""
 
@@ -438,7 +445,10 @@ class WatchlistCreateBody(BaseModel):
 
 
 class WatchlistPatchBody(BaseModel):
-    interval_hours: Optional[int] = None
+    # Same bound as WatchlistCreateBody.interval_hours. The
+    # Pydantic cap closes the gap at parse time for the
+    # PATCH path too.
+    interval_hours: Optional[int] = Field(default=None, ge=1, le=168)
     is_active: Optional[bool] = None
 
 
