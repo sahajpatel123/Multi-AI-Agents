@@ -45,6 +45,38 @@ VALID_EVENT_TYPES = {
 }
 
 
+# Personas seated on a panel, as recorded in ScoringAudit.persona_ids_used.
+# A pathological or corrupted row must not be able to inflate the win-rate
+# denominators, so the panel is capped at a sane multiple of the real 4-slot
+# panel rather than trusted as-is.
+_MAX_PANEL_SIZE = 16
+
+
+def _coerce_persona_panel(raw) -> list[str]:
+    """Normalize a persisted ``persona_ids_used`` value into a list of ids.
+
+    The column is JSON, but the concrete shape varies by write path and
+    backend: SQLAlchemy's JSON type round-trips a real list on PostgreSQL,
+    while some rows were written as a JSON *string* and come back needing a
+    second decode. Anything that isn't a usable list of ids degrades to an
+    empty list, which callers treat as "no denominator recorded" rather than
+    guessing at a panel.
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        import json
+
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            return []
+    if not isinstance(raw, (list, tuple)):
+        return []
+    panel = [str(item).strip() for item in raw if isinstance(item, str) and str(item).strip()]
+    return panel[:_MAX_PANEL_SIZE]
+
+
 class UXEventRequest(BaseModel):
     # All str fields are bounded at the Pydantic level
     # (max 100 chars). The field validators below still run
@@ -626,6 +658,169 @@ async def analytics_activity(
         "longest_streak": longest_streak,
         "busiest_day": busiest_day,
         "busiest_day_count": busiest_count,
+    }
+
+
+@router.get("/analytics/persona-win-rate")
+async def analytics_persona_win_rate(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=1000,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned. Off by default — see the docstring."
+        ),
+    ),
+) -> dict:
+    """Per-persona win rate: wins divided by panel appearances.
+
+    ``/analytics/summary`` already returns ``persona_wins``, but a raw win
+    count is not comparable across personas — a persona that sat on 50 panels
+    and won 10 is weaker than one that sat on 12 and won 9, yet the count
+    ranks it higher. The denominator is what makes the number meaningful, and
+    it was already being persisted: ``ScoringAudit.persona_ids_used`` records
+    the full 4-persona panel for every scored exchange, and
+    ``idx_scoring_audits_winner_persona`` was already indexed for exactly this
+    read. This endpoint closes that gap.
+
+    Honesty rules baked into the math:
+
+    - **Fallback exchanges are excluded by default.** When the scorer LLM call
+      fails, ``scorer.py`` assigns ``is_winner`` to whichever response happens
+      to be at index 0 and gives everyone score=50. That is an arbitrary
+      winner, not a judged one, so counting it would silently reward whichever
+      persona occupies the first panel slot. Pass ``include_fallback=true`` to
+      see the unfiltered numbers.
+
+    - **Rows with no recorded panel cannot contribute a denominator.** Audit
+      rows written before ``persona_ids_used`` was populated still carry a
+      winner. Counting their win without their appearance would push win rates
+      above 100%, so those rows are skipped entirely and reported separately as
+      ``unattributed_exchanges`` rather than being quietly folded in.
+
+    - **Small samples are flagged, not hidden.** A persona with 2 appearances
+      and 2 wins is 100% and means nothing. Each row carries
+      ``low_confidence`` (fewer than ``LOW_CONFIDENCE_APPEARANCES``
+      appearances) so a dashboard can grey it out instead of celebrating noise.
+
+    Scoped to the caller — this is "which minds win for *me*", not a global
+    leaderboard. Bounded like the sibling analytics endpoints: capped window,
+    two-column projection, and a per-user hourly limit.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate requests. Limit is 60 per hour.",
+    )
+
+    from arena.core.agents import PERSONA_METADATA
+
+    LOW_CONFIDENCE_APPEARANCES = 5
+
+    now_utc = utcnow_naive()
+    window_start_day = (now_utc - timedelta(days=window_days - 1)).date()
+    window_start = datetime.combine(window_start_day, time.min)
+
+    # Project only the three columns the math needs. Pulling whole ORM rows
+    # here would load prompt snippets and score blobs for every exchange in a
+    # year-long window purely to throw them away.
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.persona_ids_used,
+            ScoringAudit.fallback_used,
+        )
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= window_start,
+        )
+        .all()
+    )
+
+    appearances: Counter = Counter()
+    wins: Counter = Counter()
+    scored_exchanges = 0
+    unattributed_exchanges = 0
+    fallback_exchanges = 0
+
+    for winner_persona_id, persona_ids_used, fallback_used in rows:
+        if fallback_used:
+            fallback_exchanges += 1
+            if not include_fallback:
+                continue
+
+        panel = _coerce_persona_panel(persona_ids_used)
+        if not panel:
+            # No denominator available — see the docstring. Count it so the
+            # caller can see the gap instead of wondering why the totals
+            # don't reconcile.
+            unattributed_exchanges += 1
+            continue
+
+        scored_exchanges += 1
+        # De-duplicate within a panel: a persona seated twice in one exchange
+        # still only had one chance to win it.
+        for persona_id in set(panel):
+            appearances[persona_id] += 1
+        if winner_persona_id and winner_persona_id in panel:
+            wins[winner_persona_id] += 1
+
+    personas = []
+    for persona_id, appearance_count in appearances.items():
+        if appearance_count < min_appearances:
+            continue
+        win_count = wins.get(persona_id, 0)
+        metadata = PERSONA_METADATA.get(persona_id) or {}
+        personas.append(
+            {
+                "persona_id": persona_id,
+                "name": str(metadata.get("name") or persona_id),
+                "color": str(metadata.get("color") or ""),
+                "appearances": appearance_count,
+                "wins": win_count,
+                "win_rate": round(win_count / appearance_count, 3),
+                "low_confidence": appearance_count < LOW_CONFIDENCE_APPEARANCES,
+            }
+        )
+
+    # Deterministic ordering: strongest first, then the better-evidenced of two
+    # equal rates, then persona_id so the list never shuffles between refreshes
+    # for a tie the data can't break.
+    personas.sort(key=lambda row: (-row["win_rate"], -row["appearances"], row["persona_id"]))
+
+    # "Best" deliberately ignores low-confidence rows — surfacing a 1-of-1
+    # persona as the user's strongest mind would be a lie dressed as a stat.
+    confident = [row for row in personas if not row["low_confidence"]]
+    best = confident[0] if confident else None
+
+    return {
+        "window_days": window_days,
+        "window_start": window_start_day.isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "min_appearances": min_appearances,
+        "include_fallback": include_fallback,
+        "low_confidence_threshold": LOW_CONFIDENCE_APPEARANCES,
+        "scored_exchanges": scored_exchanges,
+        "unattributed_exchanges": unattributed_exchanges,
+        "fallback_exchanges": fallback_exchanges,
+        "personas": personas,
+        "best_persona_id": best["persona_id"] if best else None,
+        "best_win_rate": best["win_rate"] if best else None,
     }
 
 

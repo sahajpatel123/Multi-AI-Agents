@@ -2323,7 +2323,7 @@ async def delete_watchlist_item(
 @router.get("/watchlist/{item_id}/history")
 async def get_watchlist_item_history(
     item_id: str,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200, description="Max number of history rows to return."),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
