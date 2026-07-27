@@ -760,6 +760,29 @@ describe('pickRandomTool', () => {
     expect(pickRandomTool([], 0, new Date(2026, 6, 25), [])).toBeNull();
   });
 
+  it('biases picks to the requested category', () => {
+    const entries: PersonaPlaygroundEntry[] = [
+      {
+        path: '/versus-a',
+        name: 'Versus A',
+        tagline: '',
+        blurb: '',
+        category: 'versus',
+        format: '',
+      },
+      {
+        path: '/decide-a',
+        name: 'Decide A',
+        tagline: '',
+        blurb: '',
+        category: 'decide',
+        format: '',
+      },
+    ];
+    const result = pickRandomTool([], 0, new Date(2026, 6, 25), entries, 'decide');
+    expect(result?.path).toBe('/decide-a');
+  });
+
   it('is deterministic for the same date + salt + exclude set', () => {
     const a = pickRandomTool(['/persona-match'], 0, new Date(2026, 6, 25));
     const b = pickRandomTool(['/persona-match'], 0, new Date(2026, 6, 25));
