@@ -29,6 +29,39 @@ def _json_enum(v: Any) -> Any:
     return v
 
 
+# Allowlist of intelligence_score keys. calculate_intelligence_score
+# produces 7 known keys; any other key in the JSON column is
+# either legacy data, a future schema change, or — in the worst
+# case — a maliciously-injected key that would be returned in
+# every to_dict() call. The cap bounds the response size and
+# closes the injection surface.
+_INTELLIGENCE_SCORE_KEYS: frozenset = frozenset({
+    "research_depth",
+    "logical_soundness",
+    "consensus_level",
+    "answer_durability",
+    "total_score",
+    "score_label",
+    "one_line_verdict",
+})
+
+
+def _filter_intelligence_score_keys(value: Any) -> dict:
+    """Return only the known intelligence_score keys.
+
+    The intelligence_score JSON column is populated by
+    calculate_intelligence_score. A user-injected value (e.g.
+    via a corrupted pipeline or a maliciously-modified row in
+    the DB) could include arbitrary keys. The to_dict() call
+    returns this dict verbatim, so the injection would be
+    emitted in every GET /tasks/{id}/detail response. The
+    allowlist cap closes that surface.
+    """
+    if not isinstance(value, dict):
+        return {}
+    return {k: value[k] for k in value if k in _INTELLIGENCE_SCORE_KEYS}
+
+
 @dataclass
 class StageResult:
     stage_name: str
@@ -197,7 +230,7 @@ class Blackboard:
             "caveats": self.caveats,
             "source_integrity": self.source_integrity,
             "contradictions": self.contradictions,
-            "intelligence_score": self.intelligence_score,
+            "intelligence_score": _filter_intelligence_score_keys(self.intelligence_score),
             "assumptions": self.assumptions,
             "dissent_report": self.dissent_report,
             "temporal_profile": self.temporal_profile,
