@@ -40,19 +40,27 @@ def _verdict_for_delta(delta: int) -> str:
 
 def _system_score_from_task(row: AgentTask) -> int:
     raw = row.intelligence_score
+    # total_score and final_score are bounded to [0, 100] in
+    # the Arena score range. A maliciously-injected value
+    # (e.g. via a corrupted row in the DB) outside this range
+    # is clamped. The clamping closes a path where a
+    # `intelligence_score: {total_score: 999999999999}` value
+    # would amplify the delta returned to the user (delta =
+    # system_score - user_rating*20, which could be a huge
+    # value) and skew the calibration score math downstream.
     if isinstance(raw, dict):
         try:
-            return int(raw.get("total_score") or 0)
+            return max(0, min(100, int(raw.get("total_score") or 0)))
         except (TypeError, ValueError):
             pass
     if isinstance(raw, str) and raw.strip():
         try:
             d = json.loads(raw)
-            return int(d.get("total_score") or 0)
+            return max(0, min(100, int(d.get("total_score") or 0)))
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
     try:
-        return int(row.final_score or 0)
+        return max(0, min(100, int(row.final_score or 0)))
     except (TypeError, ValueError):
         return 0
 
