@@ -11,14 +11,29 @@ from fastapi import HTTPException, Request, status
 
 class InMemoryRateLimiter:
     def __init__(self) -> None:
-        self._events: dict[str, deque[float]] = defaultdict(deque)
+        # _events is keyed by "<scope>:<key>" (e.g. "ip:room_join:1.2.3.4"
+        # or "user:agent_run:42"). A malicious actor with a large IP
+        # pool could create unbounded keys; we use a plain dict and
+        # del the entry when the bucket becomes empty in hit(),
+        # so a key's lifetime is bounded by window_seconds after
+        # its last event. The previous default-dict would leave an
+        # empty deque for every new key ever seen (memory leak).
+        self._events: dict[str, deque[float]] = {}
         self._lock = Lock()
 
     def hit(self, key: str, *, limit: int, window_seconds: int, message: str) -> None:
         now = time.time()
         cutoff = now - window_seconds
         with self._lock:
-            bucket = self._events[key]
+            bucket = self._events.get(key)
+            if bucket is None:
+                bucket = deque()
+                self._events[key] = bucket
+            # Pop entries older than the window. If the bucket
+            # becomes empty (e.g. the previous event is older than
+            # the window) AND the current hit is rate-limited, we
+            # would otherwise leave the empty bucket in the dict
+            # forever. Detect this and clean up below.
             while bucket and bucket[0] <= cutoff:
                 bucket.popleft()
             if len(bucket) >= limit:
