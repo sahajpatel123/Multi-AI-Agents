@@ -949,6 +949,140 @@ async def analytics_persona_win_rate_csv(
     )
 
 
+@router.get("/analytics/persona-stats/{persona_id}")
+async def analytics_persona_stats(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+) -> dict:
+    """Per-persona stats for the caller: deep-dive on one persona.
+
+    Companion to /analytics/persona-win-rate (which returns the full
+    panel) — this endpoint scopes to one persona and adds three extra
+    signals the aggregate view doesn't surface:
+
+    - avg_winning_score: the average ``winner_score`` across this
+      persona's winning exchanges. A persona with 5/10 wins at an avg
+      score of 90 is a different story than 5/10 at 51. The aggregate
+      view hides this.
+    - last_win_at / last_appearance_at: ISO dates so the UI can render
+      "last won 3 days ago" without recomputing client-side.
+    - best_prompt_category: the category (``question``, ``command``,
+      etc.) where this persona wins the most, so the dashboard can
+      suggest "Analyst is strongest on X".
+
+    Returns 404 for unknown persona_ids so a typo or retired persona
+    surfaces a clear error rather than zero stats that look like a bug.
+
+    Scoped to the caller, bounded like the sibling endpoints.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats",
+        limit=120,
+        window_seconds=3600,
+        message="Too many persona-stats requests. Limit is 120 per hour.",
+    )
+
+    now_utc = utcnow_naive()
+    window_start = now_utc - timedelta(days=window_days - 1)
+
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.winner_score,
+            ScoringAudit.persona_ids_used,
+            ScoringAudit.prompt_category,
+            ScoringAudit.created_at,
+            ScoringAudit.fallback_used,
+        )
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= window_start,
+        )
+        .all()
+    )
+
+    appearances = 0
+    wins = 0
+    winning_scores: list[int] = []
+    last_win_at = None
+    last_appearance_at = None
+    wins_by_category: Counter = Counter()
+    appearances_by_category: Counter = Counter()
+
+    for winner, winner_score, raw_panel, category, created_at, fallback_used in rows:
+        panel = _coerce_persona_panel(raw_panel)
+        if not panel or pid not in panel:
+            continue
+        # Fallback wins are not judged — exclude from the win count.
+        if fallback_used:
+            continue
+        appearances += 1
+        if category:
+            appearances_by_category[category] += 1
+        if created_at and (last_appearance_at is None or created_at > last_appearance_at):
+            last_appearance_at = created_at
+        if winner == pid:
+            wins += 1
+            if isinstance(winner_score, (int, float)):
+                winning_scores.append(int(winner_score))
+            if category:
+                wins_by_category[category] += 1
+            if created_at and (last_win_at is None or created_at > last_win_at):
+                last_win_at = created_at
+
+    win_rate = round(wins / appearances, 4) if appearances else 0.0
+    avg_winning_score = (
+        round(sum(winning_scores) / len(winning_scores), 1) if winning_scores else None
+    )
+    # Best category = highest win rate within the window, only counting
+    # categories where the persona actually appeared. A category with
+    # 1 appearance and 1 win is 100% but may be noise — the caller can
+    # decide how to render it.
+    best_category = None
+    best_category_rate = 0.0
+    for category, cat_apps in appearances_by_category.items():
+        cat_wins = wins_by_category.get(category, 0)
+        if cat_wins > 0:  # skip zero-win categories
+            rate = cat_wins / cat_apps if cat_apps else 0
+            if rate > best_category_rate:
+                best_category_rate = rate
+                best_category = category
+
+    metadata = PERSONA_METADATA[pid]
+    return {
+        "persona_id": pid,
+        "name": str(metadata.get("name") or pid),
+        "color": str(metadata.get("color") or ""),
+        "window_days": window_days,
+        "window_start": window_start.date().isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "appearances": appearances,
+        "wins": wins,
+        "win_rate": win_rate,
+        "avg_winning_score": avg_winning_score,
+        "last_win_at": last_win_at.isoformat() if last_win_at else None,
+        "last_appearance_at": last_appearance_at.isoformat() if last_appearance_at else None,
+        "best_prompt_category": best_category,
+    }
+
+
 @router.get("/admin/routes")
 async def admin_routes_summary(
     user: UserResponse = Depends(get_current_user_required),
