@@ -949,6 +949,190 @@ async def analytics_persona_win_rate_csv(
     )
 
 
+@router.get("/analytics/category-stats")
+async def analytics_category_stats(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+) -> dict:
+    """All-categories aggregate: how the caller's exchanges distribute
+    across prompt categories.
+
+    Companion to the by-category endpoint, which is per-persona. This
+    one is across-all-personas — "which categories do I engage with
+    most, and how do they perform?"
+
+    Same shape contract as the by-category rows, plus per-category
+    best_persona (the persona that wins most in that category) so
+    the dashboard can render "questions are best answered by Analyst"
+    without a second pass.
+
+    Sort order matches the by-category endpoint's: recognized
+    PromptCategory values in enum order, unknown categories
+    alphabetically, uncategorized bucket last.
+
+    Scoped to the caller, bounded like the sibling endpoints.
+    """
+    from arena.models.schemas import PromptCategory
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_category_stats",
+        limit=60,
+        window_seconds=3600,
+        message="Too many category-stats requests. Limit is 60 per hour.",
+    )
+
+    now_utc = utcnow_naive()
+    window_start = now_utc - timedelta(days=window_days - 1)
+
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.winner_score,
+            ScoringAudit.prompt_category,
+            ScoringAudit.created_at,
+            ScoringAudit.fallback_used,
+        )
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= window_start,
+        )
+        .all()
+    )
+
+    # Per-category counters. Keyed by category string (server-set
+    # so we don't need to coerce the dict).
+    appearances: dict[str, int] = {}
+    wins: dict[str, int] = {}
+    winning_scores: dict[str, list[int]] = {}
+    last_exchange_at: dict[str, object] = {}
+    wins_by_persona: dict[str, dict[str, int]] = {}
+    appearances_by_persona: dict[str, dict[str, int]] = {}
+
+    for winner, winner_score, category, created_at, fallback_used in rows:
+        bucket = category if category not in (None, "") else "(uncategorized)"
+        appearances[bucket] = appearances.get(bucket, 0) + 1
+        if created_at and (
+            last_exchange_at.get(bucket) is None
+            or created_at > last_exchange_at[bucket]
+        ):
+            last_exchange_at[bucket] = created_at
+
+        # Fallback wins are arbitrary — exclude from wins but still
+        # count the appearance. Same rule as the persona-stats family.
+        if not fallback_used and winner:
+            wins.setdefault(bucket, 0)
+            winning_scores.setdefault(bucket, [])
+            wins[bucket] += 1
+            if isinstance(winner_score, (int, float)):
+                winning_scores[bucket].append(int(winner_score))
+            wins_by_persona.setdefault(bucket, {})
+            appearances_by_persona.setdefault(bucket, {})
+            wins_by_persona[bucket][winner] = (
+                wins_by_persona[bucket].get(winner, 0) + 1
+            )
+        # Count appearances-by-persona for both real and fallback
+        # so the best_persona signal isn't biased by fallback noise.
+        appearances_by_persona.setdefault(bucket, {})
+        appearances_by_persona[bucket][winner] = (
+            appearances_by_persona[bucket].get(winner, 0) + 1
+        )
+
+    # Sort: recognized PromptCategory values in enum order, unknown
+    # categories alphabetically, uncategorized last.
+    recognized = {c.value for c in PromptCategory}
+    recognized_order = {c.value: i for i, c in enumerate(PromptCategory)}
+
+    def _sort_key(label: str) -> tuple[int, str]:
+        if label in recognized_order:
+            return (0, chr(ord("a") + recognized_order[label]))
+        if label == "(uncategorized)":
+            return (2, label)
+        return (1, label)
+
+    category_rows = []
+    for label, app_count in appearances.items():
+        win_count = wins.get(label, 0)
+        ws = winning_scores.get(label, [])
+        rate = round(win_count / app_count, 4) if app_count else 0.0
+
+        # Best persona in this category: highest win count, ties
+        # broken by appearances, then persona_id for stability. Only
+        # consider personas with at least one win (0/N isn't a
+        # "best" — a category where nobody wins isn't a strength).
+        persona_apps = appearances_by_persona.get(label, {})
+        persona_wins = wins_by_persona.get(label, {})
+        best_p = None
+        best_p_wins = 0
+        best_p_apps = 0
+        for p, p_wins in persona_wins.items():
+            if p_wins <= 0:
+                continue
+            p_apps = persona_apps.get(p, 0)
+            if (
+                p_wins > best_p_wins
+                or (p_wins == best_p_wins and p_apps > best_p_apps)
+                or (p_wins == best_p_wins and p_apps == best_p_apps and p < (best_p or ""))
+            ):
+                best_p = p
+                best_p_wins = p_wins
+                best_p_apps = p_apps
+
+        category_rows.append(
+            {
+                "category": label,
+                "is_known_category": label in recognized,
+                "is_uncategorized": label == "(uncategorized)",
+                "appearances": app_count,
+                "wins": win_count,
+                "win_rate": rate,
+                "avg_winning_score": (
+                    round(sum(ws) / len(ws), 1) if ws else None
+                ),
+                "last_exchange_at": (
+                    last_exchange_at[label].isoformat()
+                    if last_exchange_at.get(label)
+                    else None
+                ),
+                "best_persona_id": best_p,
+            }
+        )
+    category_rows.sort(key=lambda r: _sort_key(r["category"]))
+
+    total_appearances = sum(appearances.values())
+    total_wins = sum(wins.values())
+    # Most-active category = highest appearances. Ties broken by
+    # wins, then category name alphabetically.
+    most_active = None
+    most_active_apps = 0
+    for row in category_rows:
+        if (
+            row["appearances"] > most_active_apps
+            or (
+                row["appearances"] == most_active_apps
+                and row["wins"] > (most_active["wins"] if most_active else -1)
+            )
+        ):
+            most_active = row
+            most_active_apps = row["appearances"]
+
+    return {
+        "window_days": window_days,
+        "window_start": window_start.date().isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "total_appearances": total_appearances,
+        "total_wins": total_wins,
+        "most_active_category": most_active["category"] if most_active else None,
+        "categories": category_rows,
+    }
+
+
 @router.get("/analytics/persona-stats")
 async def analytics_persona_stats_all(
     user: UserResponse = Depends(get_current_user_required),

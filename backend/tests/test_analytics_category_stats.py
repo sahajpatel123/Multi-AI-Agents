@@ -1,0 +1,346 @@
+"""Integration tests for GET /api/analytics/category-stats.
+
+All-categories aggregate: how the caller's exchanges distribute
+across prompt categories, plus per-category best persona.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import timedelta
+
+import pytest
+
+from arena.core.datetime_utils import utcnow_naive
+from arena.db_models import ScoringAudit, UserTier
+
+
+def _seed_audit(
+    db,
+    *,
+    user_id: int,
+    winner_persona_id: str,
+    panel: list[str],
+    category: str | None = "question",
+    score: int = 80,
+    hours_ago: int = 1,
+    fallback_used: bool = False,
+) -> ScoringAudit:
+    rec = ScoringAudit(
+        session_id=str(uuid.uuid4()),
+        user_id=user_id,
+        prompt_snippet="x",
+        winner_agent_id="agent-1",
+        winner_persona_id=winner_persona_id,
+        winner_score=score,
+        scores={"agent-1": score},
+        persona_ids_used=panel,
+        prompt_category=category,
+        fallback_used=fallback_used,
+        created_at=utcnow_naive() - timedelta(hours=hours_ago),
+    )
+    db.add(rec)
+    db.flush()
+    return rec
+
+
+# ─── Happy path ────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_category_stats_empty_for_new_user(app_client, make_user):
+    user = make_user(email="cat-empty@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    body = res.json()
+    assert res.status_code == 200
+    assert body["categories"] == []
+    assert body["total_appearances"] == 0
+    assert body["total_wins"] == 0
+    assert body["most_active_category"] is None
+
+
+@pytest.mark.asyncio
+async def test_category_stats_groups_by_category(app_client, make_user, db_session):
+    user = make_user(email="cat-group@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # 3 question wins, 1 task win.
+    for _ in range(3):
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst",
+            panel=panel,
+            category="question",
+        )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="philosopher",
+        panel=panel,
+        category="task",
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    body = res.json()
+    by_cat = {r["category"]: r for r in body["categories"]}
+    assert by_cat["question"]["appearances"] == 3
+    assert by_cat["question"]["wins"] == 3
+    assert by_cat["question"]["win_rate"] == 1.0
+    assert by_cat["task"]["appearances"] == 1
+    assert by_cat["task"]["wins"] == 1
+    assert by_cat["task"]["win_rate"] == 1.0
+
+
+@pytest.mark.asyncio
+async def test_category_stats_sort_order(app_client, make_user, db_session):
+    """Recognized PromptCategory values appear first in enum order,
+    then unknown categories alphabetically, then uncategorized last."""
+    user = make_user(email="cat-sort@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    for cat in [None, "alpha_thing", "task", "question"]:
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst",
+            panel=panel,
+            category=cat,
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    categories = [r["category"] for r in res.json()["categories"]]
+    assert categories == ["question", "task", "alpha_thing", "(uncategorized)"]
+
+
+@pytest.mark.asyncio
+async def test_category_stats_avg_winning_score(app_client, make_user, db_session):
+    user = make_user(email="cat-avg@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    for score in [80, 90, 100]:
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst",
+            panel=panel,
+            category="question",
+            score=score,
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    by_cat = {r["category"]: r for r in res.json()["categories"]}
+    assert by_cat["question"]["avg_winning_score"] == 90.0
+
+
+@pytest.mark.asyncio
+async def test_category_stats_best_persona(app_client, make_user, db_session):
+    """best_persona_id is the persona with the most wins in the category,
+    with ties broken by appearances, then persona_id."""
+    user = make_user(email="cat-best@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher", "pragmatist"]
+    # In "question": analyst wins 3, philosopher wins 1, pragmatist 0.
+    for _ in range(3):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+            category="question",
+        )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
+        category="question",
+    )
+    # In "task": philosopher wins 2 of 3.
+    for _ in range(2):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
+            category="task",
+        )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+        category="task",
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    by_cat = {r["category"]: r for r in res.json()["categories"]}
+    assert by_cat["question"]["best_persona_id"] == "analyst"
+    assert by_cat["task"]["best_persona_id"] == "philosopher"
+
+
+@pytest.mark.asyncio
+async def test_category_stats_most_active(app_client, make_user, db_session):
+    user = make_user(email="cat-active@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    for _ in range(5):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+            category="question",
+        )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
+        category="task",
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    assert res.json()["most_active_category"] == "question"
+
+
+# ─── Honesty rules ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_category_stats_excludes_fallback_wins(
+    app_client, make_user, db_session
+):
+    """Fallback wins are arbitrary — exclude from wins but count
+    the appearance. Same rule as the by-category endpoint."""
+    user = make_user(email="cat-fb@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+        category="question",
+    )
+    for _ in range(3):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+            category="question", fallback_used=True,
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    by_cat = {r["category"]: r for r in res.json()["categories"]}
+    assert by_cat["question"]["wins"] == 1
+    assert by_cat["question"]["appearances"] == 4
+
+
+@pytest.mark.asyncio
+async def test_category_stats_null_category_is_uncategorized(
+    app_client, make_user, db_session
+):
+    user = make_user(email="cat-null@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"],
+        category=None,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    by_cat = {r["category"]: r for r in res.json()["categories"]}
+    assert by_cat["(uncategorized)"]["appearances"] == 1
+    assert by_cat["(uncategorized)"]["is_uncategorized"] is True
+    assert by_cat["(uncategorized)"]["is_known_category"] is False
+
+
+# ─── Tenant + auth + input ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_category_stats_scoped_to_caller(app_client, make_user, db_session):
+    alice = make_user(email="cat-alice@test.com", tier=UserTier.PRO)
+    bob = make_user(email="cat-bob@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=alice.id, winner_persona_id="analyst", panel=["analyst"],
+        category="question",
+    )
+    for _ in range(4):
+        _seed_audit(
+            db_session, user_id=bob.id, winner_persona_id="analyst", panel=["analyst"],
+            category="question",
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(alice)
+    )
+    body = res.json()
+    assert body["total_appearances"] == 1
+    assert body["total_wins"] == 1
+
+
+@pytest.mark.asyncio
+async def test_category_stats_requires_auth(app_client):
+    res = await app_client.get("/api/analytics/category-stats")
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_category_stats_window_bounds_rejected(app_client, make_user):
+    user = make_user(email="cat-bounds@test.com", tier=UserTier.PRO)
+    for qs in ("window_days=0", "window_days=400"):
+        res = await app_client.get(
+            f"/api/analytics/category-stats?{qs}", headers=_pro_headers(user)
+        )
+        assert res.status_code == 422, qs
+
+
+# ─── Reconciliation ────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_category_stats_totals_match_sum_of_rows(
+    app_client, make_user, db_session
+):
+    """total_appearances and total_wins must equal the sum across
+    the categories[] array. Pin the rollup invariant so a future
+    pre-aggregation can't drift."""
+    user = make_user(email="cat-recon@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    for cat in ("question", "task", "debate"):
+        for _ in range(3):
+            _seed_audit(
+                db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+                category=cat,
+            )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    body = res.json()
+    summed_apps = sum(r["appearances"] for r in body["categories"])
+    summed_wins = sum(r["wins"] for r in body["categories"])
+    assert body["total_appearances"] == summed_apps
+    assert body["total_wins"] == summed_wins
+    # 3 categories × 3 exchanges = 9.
+    assert body["total_appearances"] == 9
+    assert body["total_wins"] == 9
+
+
+@pytest.mark.asyncio
+async def test_category_stats_window_excludes_older_exchanges(
+    app_client, make_user, db_session
+):
+    user = make_user(email="cat-window@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"],
+        category="question", hours_ago=24,
+    )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"],
+        category="question", hours_ago=24 * 30,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats?window_days=7", headers=_pro_headers(user)
+    )
+    body = res.json()
+    assert body["total_appearances"] == 1
+    assert body["total_wins"] == 1

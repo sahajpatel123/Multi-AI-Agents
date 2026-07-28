@@ -459,13 +459,20 @@ async def retract_and_rerate(
     db.refresh(existing)
 
     stats = build_calibration_stats(db, user.id)
+    # Clamp system_score and delta to sane ranges at the
+    # read side. The _system_score_from_task helper reads
+    # unbounded data (per the cycle 49 revert at the user's
+    # request), so we clamp the response here to bound the
+    # JSON output.
+    sys_raw = max(0, min(100, int(system_score or 0)))
+    delta_bounded = max(-100, min(100, int(delta or 0)))
     return {
         "status": "replaced",
         "id": existing.id,
-        "delta": delta,
-        "verdict": _verdict_for_delta(delta),
+        "delta": delta_bounded,
+        "verdict": _verdict_for_delta(delta_bounded),
         "user_rating": existing.user_rating,
-        "system_score": system_score,
+        "system_score": sys_raw,
         "calibration_stats": stats,
     }
 
