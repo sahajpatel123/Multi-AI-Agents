@@ -435,3 +435,267 @@ async def test_timeline_totals_match_sum_of_days(
     assert body["total_appearances"] == summed_apps
     assert summed_wins == 5
     assert summed_apps == 6  # 5 analyst wins + 1 philosopher win (still an appearance)
+
+
+# ─── Edge cases (polish pass) ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_timeline_best_day_win_rate_is_rolled_up(
+    app_client, make_user, db_session
+):
+    """The new best_day_win_rate + best_day_appearances fields surface
+    the peak day's win rate and count so the UI can render
+    'peak day: 3/3 = 100%' without a second pass over the timeline."""
+    user = make_user(email="ptl-bdwr@test.com", tier=UserTier.PRO)
+    # Day 0: 3 wins from 3 appearances (100%).
+    for _ in range(3):
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst",
+            panel=["analyst"],
+            hours_ago=1,
+        )
+    # Day -1: 1 win from 4 appearances (25%) — should NOT be the best.
+    for hours_ago in [25, 26, 27, 28]:
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst" if hours_ago == 25 else "philosopher",
+            panel=["analyst"],
+            hours_ago=hours_ago,
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline?days=7",
+        headers=_pro_headers(user),
+    )
+    body = res.json()
+    assert body["best_day_wins"] == 3
+    assert body["best_day_appearances"] == 3
+    assert body["best_day_win_rate"] == 1.0
+
+
+@pytest.mark.asyncio
+async def test_timeline_all_fallback_wins_yields_null_best_day(
+    app_client, make_user, db_session
+):
+    """A persona whose ONLY wins are fallback wins has no real peak —
+    best_day must stay null even though appearances are nonzero."""
+    user = make_user(email="ptl-fb-only@test.com", tier=UserTier.PRO)
+    for _ in range(5):
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst",
+            panel=["analyst"],
+            fallback_used=True,
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline?days=7",
+        headers=_pro_headers(user),
+    )
+    body = res.json()
+    # Fallback appearances still count; wins do not.
+    assert body["total_appearances"] == 5
+    assert body["total_wins"] == 0
+    assert body["best_day"] is None
+    assert body["best_day_wins"] == 0
+    assert body["best_day_appearances"] == 0
+    assert body["best_day_win_rate"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_timeline_no_appearance_on_today(
+    app_client, make_user, db_session
+):
+    """A persona whose last activity was N days ago: today's bucket is
+    still emitted, just with zeros. The timeline is contiguous."""
+    user = make_user(email="ptl-stale@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst"],
+        hours_ago=24 * 5,  # 5 days ago
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline?days=7",
+        headers=_pro_headers(user),
+    )
+    body = res.json()
+    # 7 days emitted, only one with any data.
+    assert len(body["timeline"]) == 7
+    last_day = body["timeline"][-1]  # today
+    assert last_day["wins"] == 0
+    assert last_day["appearances"] == 0
+    # The 5-days-ago bucket is the only one with data.
+    win_buckets = [r for r in body["timeline"] if r["wins"] > 0]
+    assert len(win_buckets) == 1
+    assert body["best_day"] == win_buckets[0]["date"]
+
+
+@pytest.mark.asyncio
+async def test_timeline_window_end_equals_today(
+    app_client, make_user
+):
+    """window_end is always today (UTC), not the day after — the
+    inclusive-of-today contract the docs promise."""
+    user = make_user(email="ptl-today@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline?days=30",
+        headers=_pro_headers(user),
+    )
+    from datetime import date
+
+    assert res.json()["window_end"] == date.today().isoformat()
+    # And the timeline's last row is window_end.
+    assert res.json()["timeline"][-1]["date"] == res.json()["window_end"]
+
+
+@pytest.mark.asyncio
+async def test_timeline_window_start_is_window_days_ago(
+    app_client, make_user
+):
+    """window_start = today - (days - 1). The days param is INCLUSIVE
+    of both endpoints, so days=30 spans 30 rows, not 31."""
+    user = make_user(email="ptl-start@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline?days=30",
+        headers=_pro_headers(user),
+    )
+    from datetime import date, timedelta
+
+    body = res.json()
+    end = date.fromisoformat(body["window_end"])
+    start = date.fromisoformat(body["window_start"])
+    assert (end - start).days == 29  # 30 days inclusive
+    assert len(body["timeline"]) == 30
+
+
+@pytest.mark.asyncio
+async def test_timeline_excludes_out_of_window_rows(
+    app_client, make_user, db_session
+):
+    """Rows timestamped before the window's start must not be bucketed.
+    A 30-day timeline must not pick up a row from 31 days ago, even
+    if the row's persona matches."""
+    user = make_user(email="ptl-out@test.com", tier=UserTier.PRO)
+    # hours_ago=24*31 = 31 days ago — outside a 30-day window.
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst"],
+        hours_ago=24 * 31,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline?days=30",
+        headers=_pro_headers(user),
+    )
+    body = res.json()
+    # 31-days-ago row is outside the 30-day window, so it gets dropped.
+    assert body["total_appearances"] == 0
+    assert body["total_wins"] == 0
+    assert body["best_day"] is None
+
+
+@pytest.mark.asyncio
+async def test_timeline_excludes_other_users_rows(
+    app_client, make_user, db_session
+):
+    """The user_id filter is the only thing keeping Alice's data out
+    of Bob's timeline. Pin that isolation at the timeline level."""
+    alice = make_user(email="ptl-iso-alice@test.com", tier=UserTier.PRO)
+    bob = make_user(email="ptl-iso-bob@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=alice.id, winner_persona_id="analyst", panel=["analyst"]
+    )
+    for _ in range(5):
+        _seed_audit(
+            db_session, user_id=bob.id, winner_persona_id="analyst", panel=["analyst"]
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline?days=7",
+        headers=_pro_headers(alice),
+    )
+    body = res.json()
+    assert body["total_wins"] == 1
+    assert body["total_appearances"] == 1
+
+
+@pytest.mark.asyncio
+async def test_timeline_days_1_single_bucket(
+    app_client, make_user, db_session
+):
+    """days=1 returns exactly one bucket (today). The minimum bound
+    is reachable, not just the max."""
+    user = make_user(email="ptl-1d@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"]
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline?days=1",
+        headers=_pro_headers(user),
+    )
+    body = res.json()
+    assert body["days"] == 1
+    assert len(body["timeline"]) == 1
+    assert body["total_wins"] == 1
+    assert body["total_appearances"] == 1
+
+
+@pytest.mark.asyncio
+async def test_timeline_best_day_win_rate_consistent_with_per_day(
+    app_client, make_user, db_session
+):
+    """best_day_win_rate must equal timeline[best_day].win_rate —
+    pin the rollup math against the per-day shape so they can't
+    silently drift."""
+    user = make_user(email="ptl-wr-consist@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # Mixed: 1 win / 2 apps on day 0, 0 / 3 on day 1, 3 / 5 on day 2.
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+        hours_ago=1,
+    )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
+        hours_ago=1,
+    )
+    for _ in range(3):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
+            hours_ago=25,
+        )
+    for i in range(5):
+        _seed_audit(
+            db_session, user_id=user.id,
+            winner_persona_id="analyst" if i < 3 else "philosopher",
+            panel=panel, hours_ago=49,
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline?days=7",
+        headers=_pro_headers(user),
+    )
+    body = res.json()
+    # Locate the row matching best_day and verify the rolled-up
+    # win_rate matches that row's win_rate exactly.
+    best_row = next(r for r in body["timeline"] if r["date"] == body["best_day"])
+    assert body["best_day_win_rate"] == best_row["win_rate"]
+    assert body["best_day_appearances"] == best_row["appearances"]
+    assert body["best_day_wins"] == best_row["wins"]

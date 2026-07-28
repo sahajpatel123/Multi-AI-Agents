@@ -1335,13 +1335,17 @@ async def analytics_persona_stats_timeline(
 
     # Roll-up: best day by wins (with a minimum of 1 — a 0/0 day isn't
     # a "best" anything). Ties broken by earliest date so the rollup
-    # is stable.
+    # is stable. We also capture the best day's win_rate + appearances
+    # so the UI can render "peak day: 3/3 = 100%" alongside the date
+    # without a second pass over the timeline.
     best_day = None
     best_wins = 0
+    best_day_apps = 0
     for row in timeline:
         if row["wins"] > best_wins:
             best_wins = row["wins"]
             best_day = row["date"]
+            best_day_apps = row["appearances"]
 
     return {
         "persona_id": pid,
@@ -1353,6 +1357,10 @@ async def analytics_persona_stats_timeline(
         "total_wins": sum(row["wins"] for row in timeline),
         "best_day": best_day,
         "best_day_wins": best_wins,
+        "best_day_appearances": best_day_apps,
+        "best_day_win_rate": (
+            round(best_wins / best_day_apps, 4) if best_day_apps else 0.0
+        ),
         "timeline": timeline,
     }
 
