@@ -1222,6 +1222,141 @@ async def analytics_persona_stats_by_category(
     }
 
 
+@router.get("/analytics/persona-stats/{persona_id}/timeline")
+async def analytics_persona_stats_timeline(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=90,
+        description="Window length in days, ending today (UTC). Capped at 90 to keep the timeline compact.",
+    ),
+) -> dict:
+    """Per-persona daily timeline of wins and appearances.
+
+    Third axis in the persona-stats family (deep-dive + per-category +
+    per-day). Returns one row per UTC day in the window with wins and
+    appearances for the specified persona, plus a rolling best_day /
+    best_win_rate summary so the dashboard can render a sparkline
+    with a peak badge.
+
+    Day buckets are inclusive of today and anchored in UTC, matching
+    the /analytics/activity endpoint. Days where the persona had no
+    exchanges are emitted as zeros so the timeline is contiguous — a
+    dashboard doesn't have to fill gaps client-side.
+
+    Capped at 90 days because timelines longer than that don't render
+    well in a sparkline anyway, and capping the row scan protects the
+    user_id index from a multi-month query.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_timeline",
+        limit=120,
+        window_seconds=3600,
+        message="Too many persona-stats-timeline requests. Limit is 120 per hour.",
+    )
+
+    now_utc = utcnow_naive()
+    end_day = now_utc.date()
+    start_day = end_day - timedelta(days=days - 1)
+    start_dt = datetime.combine(start_day, time.min)
+    # Exclusive upper bound: anything timestamped after this belongs to
+    # tomorrow's bucket and is correctly excluded from this window.
+    end_dt = datetime.combine(end_day + timedelta(days=1), time.min)
+
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.persona_ids_used,
+            ScoringAudit.created_at,
+            ScoringAudit.fallback_used,
+        )
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= start_dt,
+            ScoringAudit.created_at < end_dt,
+        )
+        .all()
+    )
+
+    # Zero-fill the buckets first so the timeline is contiguous even on
+    # quiet days. days=1, 30, 90 → 1, 30, 90 buckets respectively.
+    daily: dict[str, dict[str, int]] = {
+        (start_day + timedelta(days=offset)).isoformat(): {
+            "wins": 0,
+            "appearances": 0,
+        }
+        for offset in range(days)
+    }
+
+    for winner, raw_panel, created_at, fallback_used in rows:
+        panel = _coerce_persona_panel(raw_panel)
+        if not panel or pid not in panel:
+            continue
+        bucket_key = created_at.date().isoformat() if created_at else None
+        if not bucket_key or bucket_key not in daily:
+            continue
+        daily[bucket_key]["appearances"] += 1
+        # Fallback wins are arbitrary — exclude from wins but still
+        # count the appearance. Same rule as the parent endpoint.
+        if not fallback_used and winner == pid:
+            daily[bucket_key]["wins"] += 1
+
+    # Stable order: oldest first. The dashboard's sparkline library
+    # expects chronological data; reversing client-side is an easy
+    # mistake. The endpoint returns a list (not a dict) so order is
+    # part of the contract.
+    timeline = []
+    for offset in range(days):
+        day = start_day + timedelta(days=offset)
+        bucket = daily[day.isoformat()]
+        wins = bucket["wins"]
+        apps = bucket["appearances"]
+        timeline.append(
+            {
+                "date": day.isoformat(),
+                "appearances": apps,
+                "wins": wins,
+                "win_rate": round(wins / apps, 4) if apps else 0.0,
+            }
+        )
+
+    # Roll-up: best day by wins (with a minimum of 1 — a 0/0 day isn't
+    # a "best" anything). Ties broken by earliest date so the rollup
+    # is stable.
+    best_day = None
+    best_wins = 0
+    for row in timeline:
+        if row["wins"] > best_wins:
+            best_wins = row["wins"]
+            best_day = row["date"]
+
+    return {
+        "persona_id": pid,
+        "name": str(PERSONA_METADATA[pid].get("name") or pid),
+        "days": days,
+        "window_start": start_day.isoformat(),
+        "window_end": end_day.isoformat(),
+        "total_appearances": sum(row["appearances"] for row in timeline),
+        "total_wins": sum(row["wins"] for row in timeline),
+        "best_day": best_day,
+        "best_day_wins": best_wins,
+        "timeline": timeline,
+    }
+
+
 @router.get("/admin/routes")
 async def admin_routes_summary(
     user: UserResponse = Depends(get_current_user_required),

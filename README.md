@@ -126,6 +126,7 @@ GET  /api/analytics/summary|engagement|activity
 GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
 GET  /api/analytics/persona-stats/:persona_id   Deep-dive on one persona (avg winning score, last activity, best category)
 GET  /api/analytics/persona-stats/:persona_id/by-category   Full per-category breakdown for one persona (one row per category with appearances/wins/win_rate)
+GET  /api/analytics/persona-stats/:persona_id/timeline   Per-persona daily timeline of wins and appearances (sparkline-ready, contiguous zero-fill)
 
 GET  /api/user/usage|tier|answer-feedback-stats
 PATCH /api/user/profile
