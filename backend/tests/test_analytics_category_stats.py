@@ -572,3 +572,99 @@ async def test_csv_scoped_to_caller(app_client, make_user, db_session):
     # header + 1 data row (question) + footer
     assert len(rows) == 3
     assert rows[1][3] == "1"  # alice's 1 appearance in question
+
+
+@pytest.mark.asyncio
+async def test_csv_sort_order_matches_json(app_client, make_user, db_session):
+    """CSV data rows must be sorted identically to the JSON
+    categories array — recognized PromptCategory values in enum
+    order, then unknown alphabetically, then uncategorized last."""
+    user = make_user(email="cat-sort-csv@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    for cat in [None, "alpha_thing", "task", "question"]:
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+            category=cat,
+        )
+    db_session.commit()
+
+    json_res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    csv_res = await app_client.get(
+        "/api/analytics/category-stats/export.csv", headers=_pro_headers(user)
+    )
+
+    json_cats = [r["category"] for r in json_res.json()["categories"]]
+    csv_rows = _parse_csv(csv_res.text)
+    data_rows = csv_rows[1:-1]  # strip header + footer
+    csv_cats = [row[0] for row in data_rows]
+    assert csv_cats == json_cats
+
+
+@pytest.mark.asyncio
+async def test_csv_footer_matches_sum_of_data_rows(
+    app_client, make_user, db_session
+):
+    """CSV footer total must equal the arithmetic sum of data
+    rows so a future pre-aggregation optimization can't silently
+    break the reconciliation invariant."""
+    user = make_user(email="cat-ftr-sum@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    for _ in range(3):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+            category="question",
+        )
+    for _ in range(2):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
+            category="task",
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats/export.csv", headers=_pro_headers(user)
+    )
+    rows = _parse_csv(res.text)
+    data_rows = rows[1:-1]  # strip header + footer
+    footer = rows[-1]
+    sum_apps = sum(int(r[3]) for r in data_rows)
+    sum_wins = sum(int(r[4]) for r in data_rows)
+    assert f"# total_appearances={sum_apps}" in footer[0]
+    assert f"total_wins={sum_wins}" in footer[1]
+
+
+@pytest.mark.asyncio
+async def test_csv_header_only_when_no_data(app_client, make_user):
+    """When a user has no exchanges in the window, the CSV
+    must return just the header and the footer — never a crash
+    on empty iteration."""
+    user = make_user(email="cat-empty-csv@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/category-stats/export.csv", headers=_pro_headers(user)
+    )
+    rows = _parse_csv(res.text)
+    assert len(rows) == 2  # header + footer only
+    assert rows[0][0] == "category"
+    assert rows[1][0].startswith("# total_appearances=0")
+
+
+@pytest.mark.asyncio
+async def test_csv_security_headers(app_client, make_user, db_session):
+    """CSV responses must carry the same security headers as
+    JSON analytics responses — X-Content-Type-Options blocks
+    MIME sniffing and Cache-Control prevents stale file reuse."""
+    user = make_user(email="cat-headers@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"],
+        category="question",
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats/export.csv", headers=_pro_headers(user)
+    )
+    assert res.headers.get("x-content-type-options") == "nosniff"
+    assert res.headers.get("cache-control") == "no-store"
+    assert "attachment" in res.headers.get("content-disposition", "")
