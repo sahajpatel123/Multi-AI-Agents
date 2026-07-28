@@ -1365,6 +1365,104 @@ async def analytics_persona_stats_timeline(
     }
 
 
+@router.get("/analytics/persona-stats/{persona_id}/timeline/export.csv")
+async def analytics_persona_stats_timeline_csv(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=90,
+        description="Window length in days, ending today (UTC). Capped at 90 to keep the timeline compact.",
+    ),
+) -> Response:
+    """CSV export of the persona timeline.
+
+    Same computation as the JSON timeline endpoint — reuses the
+    underlying aggregation rather than reimplementing it, so the CSV
+    cannot drift from the dashboard's view.
+
+    CSV is the format BI tools (Excel, Sheets, Tableau) consume
+    directly. A sparkline is nice for in-app, but an analyst who
+    wants to run their own numbers needs the raw rows. This is the
+    export that lets them.
+
+    Columns: date, appearances, wins, win_rate. Plus a footer
+    comment row (# total_appearances, # total_wins, # best_day) so
+    the CSV is self-describing when opened in isolation.
+
+    Same bounds as the JSON endpoint: days 1-90, persona_id must
+    be a known persona, 120/hr/user rate limit. The persona_id
+    filename suffix lets multiple downloads sit in the same
+    directory without overwriting each other.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_timeline_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many timeline CSV exports. Limit is 60 per hour.",
+    )
+
+    # Reuse the JSON route so the math cannot drift.
+    payload = await analytics_persona_stats_timeline(
+        persona_id=pid,
+        user=user,
+        db=db,
+        days=days,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(["date", "appearances", "wins", "win_rate"])
+    for row in payload["timeline"]:
+        # date and win_rate are server-computed, no CSV-injection risk,
+        # but route them through _csv_safe anyway for defense-in-depth.
+        writer.writerow(
+            [
+                _csv_safe(row["date"]),
+                row["appearances"],
+                row["wins"],
+                row["win_rate"],
+            ]
+        )
+    # Footer rollup so the file is self-describing when opened in
+    # isolation. '#' prefix matches the de-facto CSV comment convention
+    # (Excel, Sheets, and most BI tools skip these rows).
+    writer.writerow(
+        [
+            f"# total_appearances={payload['total_appearances']}",
+            f"total_wins={payload['total_wins']}",
+            f"best_day={payload['best_day'] or ''}",
+            f"best_day_wins={payload['best_day_wins']}",
+        ]
+    )
+
+    filename = f"arena-timeline-{pid}-{payload['window_start']}-to-{payload['window_end']}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/admin/routes")
 async def admin_routes_summary(
     user: UserResponse = Depends(get_current_user_required),
