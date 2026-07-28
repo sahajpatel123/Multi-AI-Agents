@@ -425,3 +425,198 @@ async def test_all_rows_reconcile_to_single_endpoint(
         assert all_by_id[pid]["win_rate"] == single["win_rate"]
         assert all_by_id[pid]["avg_winning_score"] == single["avg_winning_score"]
         assert all_by_id[pid]["last_appearance_at"] == single["last_appearance_at"]
+
+
+# ─── Polish pass ──────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_all_last_win_at_per_persona(
+    app_client, make_user, db_session
+):
+    """last_win_at is the most recent win date per persona — separate
+    from last_appearance_at (which is the most recent panel seat).
+    A persona can have appearances after their last win."""
+    user = make_user(email="pall-lwa@test.com", tier=UserTier.PRO)
+    # analyst won 72h ago, then appeared again 1h ago (loss).
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst"],
+        hours_ago=72,
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="philosopher",
+        panel=["analyst"],
+        hours_ago=1,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats", headers=_pro_headers(user)
+    )
+    by_id = {r["persona_id"]: r for r in res.json()["personas"]}
+    # last_appearance_at is 1h ago (the loss); last_win_at is 72h ago.
+    assert by_id["analyst"]["last_win_at"] is not None
+    assert by_id["analyst"]["last_appearance_at"] > by_id["analyst"]["last_win_at"]
+    # A persona that never won has last_win_at = None.
+    assert by_id["scientist"]["last_win_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_all_top_level_rollup_totals(
+    app_client, make_user, db_session
+):
+    """total_appearances, total_wins, and best_persona_id are surfaced
+    at the top level so the dashboard can render a summary header
+    without iterating personas[]."""
+    user = make_user(email="pall-rollup@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    for _ in range(3):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel
+        )
+    for _ in range(2):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats", headers=_pro_headers(user)
+    )
+    body = res.json()
+    # Both personas on the panel have 5 appearances each; only the
+    # unseen personas (the other 14) have 0.
+    assert body["total_appearances"] == 10
+    assert body["total_wins"] == 5
+    # analyst (3/5 = 0.6) beats philosopher (2/5 = 0.4).
+    assert body["best_persona_id"] == "analyst"
+
+
+@pytest.mark.asyncio
+async def test_all_rollup_totals_match_sum_of_rows(
+    app_client, make_user, db_session
+):
+    """Pin the rollup invariant: total_appearances and total_wins must
+    equal the sum of the corresponding per-persona fields. A future
+    optimization that pre-aggregates the totals can't silently
+    drift them from the row data."""
+    user = make_user(email="pall-rollup-sum@test.com", tier=UserTier.PRO)
+    for persona in ("analyst", "philosopher", "pragmatist"):
+        for _ in range(3):
+            _seed_audit(
+                db_session,
+                user_id=user.id,
+                winner_persona_id=persona,
+                panel=[persona],
+            )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats", headers=_pro_headers(user)
+    )
+    body = res.json()
+    summed_apps = sum(r["appearances"] for r in body["personas"])
+    summed_wins = sum(r["wins"] for r in body["personas"])
+    assert body["total_appearances"] == summed_apps
+    assert body["total_wins"] == summed_wins
+    # 3 personas × 3 appearances = 9. Same for wins.
+    assert body["total_appearances"] == 9
+    assert body["total_wins"] == 9
+
+
+@pytest.mark.asyncio
+async def test_all_rollup_totals_for_new_user(
+    app_client, make_user
+):
+    """A new user with no exchanges has total_appearances=0,
+    total_wins=0. best_persona_id is the first sorted row (alphabetical
+    tiebreak → "analyst") — even with zero data, the sort produces a
+    deterministic first row. The dashboard can decide to ignore the
+    best field when total_appearances is 0."""
+    user = make_user(email="pall-rollup-empty@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-stats", headers=_pro_headers(user)
+    )
+    body = res.json()
+    assert body["total_appearances"] == 0
+    assert body["total_wins"] == 0
+    # All personas tie at 0/0 → alphabetical tiebreak → analyst is first.
+    assert body["best_persona_id"] == "analyst"
+
+
+@pytest.mark.asyncio
+async def test_all_best_persona_id_is_first_sorted_row(
+    app_client, make_user, db_session
+):
+    """best_persona_id is the top of the sort order (win_rate desc,
+    then appearances, then persona_id). Pin the tie-breaking so a
+    future sort change doesn't silently shift the best."""
+    user = make_user(email="pall-best@test.com", tier=UserTier.PRO)
+    # Two personas tied at 1/1. The tiebreak is persona_id ascending
+    # (both at 0.0 wins so it's just alphabetical).
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="stoic", panel=["stoic"]
+    )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"]
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats", headers=_pro_headers(user)
+    )
+    body = res.json()
+    # analyst < stoic alphabetically → analyst is best.
+    assert body["best_persona_id"] == "analyst"
+    assert body["personas"][0]["persona_id"] == "analyst"
+
+
+@pytest.mark.asyncio
+async def test_all_min_appearances_upper_bound_reachable(
+    app_client, make_user
+):
+    """le=200 is reachable — 422 is only above the cap, not at it."""
+    user = make_user(email="pall-min-200@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-stats?min_appearances=200",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_all_min_appearances_lower_bound_reachable(
+    app_client, make_user
+):
+    """ge=1 is reachable — the lower bound is usable, not just the upper."""
+    user = make_user(email="pall-min-1@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-stats?min_appearances=1",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_all_total_personas_uses_catalog_size(
+    app_client, make_user
+):
+    """total_personas is the catalog size, not the returned count.
+    Pin the contract that the dashboard can rely on the catalog
+    size being reported even when rows are filtered (we don't
+    filter rows, but the field exists for the catalog-size contract)."""
+    user = make_user(email="pall-catalog-size@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-stats", headers=_pro_headers(user)
+    )
+    body = res.json()
+    # total_personas is the catalog size from PERSONA_METADATA, not
+    # the number of personas in the response (they're equal here
+    # because the all-endpoint emits the full catalog).
+    assert body["total_personas"] == len(PERSONA_METADATA)
+    assert body["returned_personas"] == body["total_personas"]

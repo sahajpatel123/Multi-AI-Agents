@@ -1018,6 +1018,7 @@ async def analytics_persona_stats_all(
     wins: dict[str, int] = {pid: 0 for pid in PERSONA_METADATA}
     winning_scores: dict[str, list[int]] = {pid: [] for pid in PERSONA_METADATA}
     last_appearance_at: dict[str, object] = {pid: None for pid in PERSONA_METADATA}
+    last_win_at: dict[str, object] = {pid: None for pid in PERSONA_METADATA}
 
     for winner, winner_score, raw_panel, created_at, fallback_used in rows:
         panel = _coerce_persona_panel(raw_panel)
@@ -1039,6 +1040,10 @@ async def analytics_persona_stats_all(
             wins[winner] += 1
             if isinstance(winner_score, (int, float)):
                 winning_scores[winner].append(int(winner_score))
+            if created_at and (
+                last_win_at[winner] is None or created_at > last_win_at[winner]
+            ):
+                last_win_at[winner] = created_at
 
     personas: list[dict] = []
     for pid in PERSONA_METADATA:
@@ -1066,12 +1071,23 @@ async def analytics_persona_stats_all(
                     if last_appearance_at[pid]
                     else None
                 ),
+                "last_win_at": (
+                    last_win_at[pid].isoformat() if last_win_at[pid] else None
+                ),
                 "below_min_appearances": seated < min_appearances,
             }
         )
 
     # Strongest first; ties broken by appearances then persona_id.
     personas.sort(key=lambda r: (-r["win_rate"], -r["appearances"], r["persona_id"]))
+
+    # Top-level rollup so the dashboard can render a summary without
+    # iterating the personas[] array. Pin these as the canonical
+    # totals — a future "let's pre-aggregate" optimization can't
+    # drift them.
+    total_appearances = sum(appearances.values())
+    total_wins = sum(wins.values())
+    best = personas[0] if personas else None
 
     return {
         "window_days": window_days,
@@ -1080,6 +1096,9 @@ async def analytics_persona_stats_all(
         "min_appearances": min_appearances,
         "total_personas": len(PERSONA_METADATA),
         "returned_personas": len(personas),
+        "total_appearances": total_appearances,
+        "total_wins": total_wins,
+        "best_persona_id": best["persona_id"] if best else None,
         "personas": personas,
     }
 
