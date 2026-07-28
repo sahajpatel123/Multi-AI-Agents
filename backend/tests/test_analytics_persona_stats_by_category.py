@@ -412,3 +412,298 @@ async def test_by_category_is_known_category_flag(app_client, make_user, db_sess
     by_cat = {row["category"]: row for row in res.json()["categories"]}
     assert by_cat["question"]["is_known_category"] is True
     assert by_cat["weird_legacy_category"]["is_known_category"] is False
+
+
+# ─── Edge cases (polish pass) ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_by_category_all_four_recognized_categories(
+    app_client, make_user, db_session
+):
+    """All four PromptCategory values in one response, each with its
+    own win rate. Pins the per-category math across the full enum."""
+    user = make_user(email="pbc-all4@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # 2/2 question wins, 1/2 task wins, 0/2 statement, 2/2 debate wins.
+    for _ in range(2):
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst",
+            panel=panel,
+            category="question",
+        )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        category="task",
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="philosopher",
+        panel=panel,
+        category="task",
+    )
+    for _ in range(2):
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="philosopher",
+            panel=panel,
+            category="statement",
+        )
+    for _ in range(2):
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst",
+            panel=panel,
+            category="debate",
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/by-category",
+        headers=_pro_headers(user),
+    )
+    by_cat = {row["category"]: row for row in res.json()["categories"]}
+    # 4 recognized categories, in enum order, none flagged as uncategorized.
+    categories = [row["category"] for row in res.json()["categories"]]
+    assert categories == ["question", "task", "statement", "debate"]
+    assert by_cat["question"]["win_rate"] == 1.0  # 2/2
+    assert by_cat["task"]["win_rate"] == 0.5  # 1/2
+    assert by_cat["statement"]["win_rate"] == 0.0  # 0/2
+    assert by_cat["debate"]["win_rate"] == 1.0  # 2/2
+    # Appearances per category: 2 + 2 + 2 + 2 = 8. Wins: 2 + 1 + 0 + 2 = 5.
+    assert res.json()["total_appearances"] == 8
+    assert res.json()["total_wins"] == 5
+    # Statement has 0 wins — must NOT be the "best" anywhere.
+    assert by_cat["statement"]["wins"] == 0
+
+
+@pytest.mark.asyncio
+async def test_by_category_mixed_known_unknown_uncategorized(
+    app_client, make_user, db_session
+):
+    """All three category flavors in one response, in the right slots.
+    Pin the sort order: known → unknown alphabetical → uncategorized."""
+    user = make_user(email="pbc-mixed@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # Seed in a deliberately mixed order.
+    for cat in [None, "alpha_thing", "question", "zeta_thing", "task", ""]:
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst",
+            panel=panel,
+            category=cat,
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/by-category",
+        headers=_pro_headers(user),
+    )
+    body = res.json()
+    categories = [row["category"] for row in body["categories"]]
+    # 4 known → 2 unknown alphabetical → 1 uncategorized last.
+    assert categories == [
+        "question",
+        "task",
+        "alpha_thing",
+        "zeta_thing",
+        "(uncategorized)",
+    ]
+    # Uncat bucket holds both null and empty-string rows.
+    by_cat = {row["category"]: row for row in body["categories"]}
+    assert by_cat["(uncategorized)"]["appearances"] == 2
+    assert body["uncategorized_appearances"] == 2
+    # All wins here are real (no fallback), so every appearance is a win.
+    assert by_cat["(uncategorized)"]["wins"] == 2
+
+
+@pytest.mark.asyncio
+async def test_by_category_fallback_reconciliation(
+    app_client, make_user, db_session
+):
+    """Fallback wins: appearance counts, no win credit. Pin the math
+    across multiple categories simultaneously so a future 'fix' to the
+    fallback rule can't silently break one category and not another."""
+    user = make_user(email="pbc-fb-recon@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # 1 real question win, 2 fallback question wins.
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        category="question",
+    )
+    for _ in range(2):
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="analyst",
+            panel=panel,
+            category="question",
+            fallback_used=True,
+        )
+    # 1 real task win, 1 fallback task win.
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        category="task",
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        category="task",
+        fallback_used=True,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/by-category",
+        headers=_pro_headers(user),
+    )
+    by_cat = {row["category"]: row for row in res.json()["categories"]}
+    # question: 3 appearances (1 real + 2 fallback), 1 win.
+    assert by_cat["question"]["appearances"] == 3
+    assert by_cat["question"]["wins"] == 1
+    assert by_cat["question"]["win_rate"] == round(1 / 3, 4)
+    # task: 2 appearances (1 real + 1 fallback), 1 win.
+    assert by_cat["task"]["appearances"] == 2
+    assert by_cat["task"]["wins"] == 1
+    assert by_cat["task"]["win_rate"] == 0.5
+    # Total: 5 appearances, 2 wins.
+    assert res.json()["total_appearances"] == 5
+    assert res.json()["total_wins"] == 2
+
+
+@pytest.mark.asyncio
+async def test_by_category_win_rate_rounding(
+    app_client, make_user, db_session
+):
+    """win_rate is rounded to 4 decimals so it fits cleanly in a JSON
+    number without 16-digit float noise. Pin the rounding behavior."""
+    user = make_user(email="pbc-round@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # 1 win / 3 appearances = 0.3333... → rounds to 0.3333.
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        category="question",
+    )
+    for _ in range(2):
+        _seed_audit(
+            db_session,
+            user_id=user.id,
+            winner_persona_id="philosopher",
+            panel=panel,
+            category="question",
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/by-category",
+        headers=_pro_headers(user),
+    )
+    by_cat = {row["category"]: row for row in res.json()["categories"]}
+    rate = by_cat["question"]["win_rate"]
+    assert rate == round(1 / 3, 4)
+    assert rate == 0.3333
+    # And the total_appearances still reconciles.
+    assert by_cat["question"]["appearances"] == 3
+
+
+@pytest.mark.asyncio
+async def test_by_category_window_365_accepts_max(
+    app_client, make_user, db_session
+):
+    """le=365 is reachable — the 422 is only above the cap, not at it."""
+    user = make_user(email="pbc-365@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst"],
+        hours_ago=24 * 300,  # 300 days ago — inside 365-day window
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/by-category?window_days=365",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["window_days"] == 365
+    assert body["total_appearances"] == 1
+
+
+@pytest.mark.asyncio
+async def test_by_category_long_category_string_handled(
+    app_client, make_user, db_session
+):
+    """A category string can be arbitrarily long (the column is unbounded).
+    The endpoint must accept and surface it without truncation or 500."""
+    user = make_user(email="pbc-long@test.com", tier=UserTier.PRO)
+    long_cat = "x" * 200
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=["analyst"],
+        category=long_cat,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/by-category",
+        headers=_pro_headers(user),
+    )
+    body = res.json()
+    by_cat = {row["category"]: row for row in body["categories"]}
+    assert by_cat[long_cat]["appearances"] == 1
+    assert by_cat[long_cat]["is_known_category"] is False  # not in the enum
+
+
+@pytest.mark.asyncio
+async def test_by_category_per_category_appearances_sum_to_total(
+    app_client, make_user, db_session
+):
+    """Pin: sum(categories[].appearances) == total_appearances. A future
+    optimization that filters categories must not silently drop rows."""
+    user = make_user(email="pbc-sum@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # Mix known, unknown, null.
+    for cat, n in [("question", 3), ("task", 2), ("legacy", 1), (None, 4)]:
+        for _ in range(n):
+            _seed_audit(
+                db_session,
+                user_id=user.id,
+                winner_persona_id="analyst",
+                panel=panel,
+                category=cat,
+            )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/by-category",
+        headers=_pro_headers(user),
+    )
+    body = res.json()
+    summed = sum(row["appearances"] for row in body["categories"])
+    assert summed == body["total_appearances"]
+    # 3 + 2 + 1 + 4 = 10.
+    assert body["total_appearances"] == 10
