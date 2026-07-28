@@ -125,6 +125,7 @@ GET  /api/calibration/stats | /api/calibration/rating/:task
 GET  /api/analytics/summary|engagement|activity
 GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
 GET  /api/analytics/persona-stats/:persona_id   Deep-dive on one persona (avg winning score, last activity, best category)
+GET  /api/analytics/persona-stats/:persona_id/by-category   Full per-category breakdown for one persona (one row per category with appearances/wins/win_rate)
 
 GET  /api/user/usage|tier|answer-feedback-stats
 PATCH /api/user/profile

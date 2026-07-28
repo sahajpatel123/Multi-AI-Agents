@@ -1083,6 +1083,145 @@ async def analytics_persona_stats(
     }
 
 
+@router.get("/analytics/persona-stats/{persona_id}/by-category")
+async def analytics_persona_stats_by_category(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+) -> dict:
+    """Per-category breakdown for one persona.
+
+    Companion to /analytics/persona-stats/{persona_id} — that endpoint
+    collapses the category dimension into a single "best" field. This
+    one returns the full distribution: one row per category the persona
+    has appeared in within the window, with appearances, wins, and
+    win_rate. Lets the dashboard render "Analyst is 80% on questions,
+    50% on tasks, 100% on debate" instead of just the top line.
+
+    Categories:
+    - Recognized PromptCategory values (question, task, statement,
+      debate) get a stable sort order so the UI can render them in
+      a known sequence.
+    - Unknown / older categories land at the end, sorted alphabetically.
+    - Rows with no recorded category land at the end with
+      category="(uncategorized)" so they're not silently dropped.
+    - Rows with a null/empty category string are treated as the
+      uncategorized bucket so the breakdown still reconciles to the
+      parent endpoint's total appearances.
+
+    Returns 404 for unknown persona_id (same contract as the parent
+    stats endpoint).
+    """
+    from arena.core.agents import PERSONA_METADATA
+    from arena.models.schemas import PromptCategory
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_by_category",
+        limit=120,
+        window_seconds=3600,
+        message="Too many persona-stats-by-category requests. Limit is 120 per hour.",
+    )
+
+    now_utc = utcnow_naive()
+    window_start = now_utc - timedelta(days=window_days - 1)
+
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.persona_ids_used,
+            ScoringAudit.prompt_category,
+            ScoringAudit.fallback_used,
+        )
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= window_start,
+        )
+        .all()
+    )
+
+    appearances: Counter = Counter()
+    wins: Counter = Counter()
+    uncategorized_appearances = 0
+    uncategorized_wins = 0
+
+    for winner, raw_panel, category, fallback_used in rows:
+        panel = _coerce_persona_panel(raw_panel)
+        if not panel or pid not in panel:
+            continue
+        # Fallback wins are not judged — exclude from wins, but DO
+        # count the appearance. The parent endpoint's "fallback
+        # excluded" rule applies the same way here.
+        appearances[category or "(uncategorized)"] += 1
+        if not fallback_used and winner == pid:
+            wins[category or "(uncategorized)"] += 1
+        # Track the uncategorized bucket explicitly so the totals
+        # section can surface it without a dict lookup.
+        if category is None or category == "":
+            uncategorized_appearances += 1
+            if not fallback_used and winner == pid:
+                uncategorized_wins += 1
+
+    # Stable sort: recognized PromptCategory values first in enum order,
+    # then unknown categories alphabetically, with the uncategorized
+    # bucket pinned last so the UI can render it as "Other".
+    recognized = {c.value for c in PromptCategory}
+    recognized_order = {c.value: i for i, c in enumerate(PromptCategory)}
+
+    def _sort_key(label: str) -> tuple[int, str]:
+        if label in recognized_order:
+            return (0, chr(ord("a") + recognized_order[label]))
+        if label == "(uncategorized)":
+            return (2, label)
+        return (1, label)
+
+    category_rows = []
+    for label, app_count in appearances.items():
+        win_count = wins.get(label, 0)
+        rate = round(win_count / app_count, 4) if app_count else 0.0
+        is_recognized = label in recognized
+        category_rows.append(
+            {
+                "category": label,
+                "is_uncategorized": label == "(uncategorized)",
+                "is_known_category": is_recognized,
+                "appearances": app_count,
+                "wins": win_count,
+                "win_rate": rate,
+            }
+        )
+    category_rows.sort(key=lambda r: _sort_key(r["category"]))
+
+    total_appearances = sum(appearances.values())
+    total_wins = sum(wins.values())
+
+    return {
+        "persona_id": pid,
+        "name": str(PERSONA_METADATA[pid].get("name") or pid),
+        "window_days": window_days,
+        "window_start": window_start.date().isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "total_appearances": total_appearances,
+        "total_wins": total_wins,
+        "uncategorized_appearances": uncategorized_appearances,
+        "uncategorized_wins": uncategorized_wins,
+        "categories": category_rows,
+    }
+
+
 @router.get("/admin/routes")
 async def admin_routes_summary(
     user: UserResponse = Depends(get_current_user_required),
