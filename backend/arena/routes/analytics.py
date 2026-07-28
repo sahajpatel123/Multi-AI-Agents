@@ -393,6 +393,114 @@ async def analytics_summary(
     }
 
 
+@router.get("/analytics/summary/export.csv")
+async def analytics_summary_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        30,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Must match the JSON endpoint.",
+    ),
+    topic_limit: int = Query(
+        10,
+        ge=1,
+        le=50,
+        description="Max number of topics in the topic_distribution section.",
+    ),
+) -> Response:
+    """CSV export of the analytics summary.
+
+    Reuses the JSON route so the CSV and the API response
+    cannot drift. Each metric becomes a row (metric, value)
+    with persona_wins and topic_distribution as sub-rows.
+
+    Follows the same defenses as the other CSV exports:
+    rate-limit scoped, security headers, RFC 4180 quoting,
+    and formula-injection defense via _csv_safe.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_summary_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many summary CSV exports. Limit is 60 per hour.",
+    )
+
+    payload = await analytics_summary(
+        window_days=window_days,
+        topic_limit=topic_limit,
+        user=user,
+        db=db,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(["metric", "value"])
+
+    # Top-level scalar metrics
+    scalar_metrics = [
+        ("window_days", payload["window_days"]),
+        ("window_start", payload["window_start"]),
+        ("window_end", payload["window_end"]),
+        ("total_prompts", payload["total_prompts"]),
+        ("total_debates", payload["total_debates"]),
+        ("total_discusses", payload["total_discusses"]),
+        ("total_saved", payload["total_saved"]),
+        ("top_persona_by_wins", payload["top_persona_by_wins"] or ""),
+        ("most_used_event", payload["most_used_event"] or ""),
+        ("engagement_rate", payload["engagement_rate"]),
+        ("current_streak", payload["current_streak"]),
+        ("longest_streak", payload["longest_streak"]),
+        ("avg_session_prompts", payload["avg_session_prompts"]),
+        ("avg_winning_score", payload["avg_winning_score"]),
+        ("drift_rate", payload["drift_rate"]),
+    ]
+    for metric, value in scalar_metrics:
+        writer.writerow([_csv_safe(metric), _csv_safe(value)])
+
+    # Persona wins section
+    for pid, wins in payload["persona_wins"].items():
+        writer.writerow([_csv_safe(f"persona_wins:{pid}"), wins])
+
+    # Topic distribution section
+    for topic_entry in payload["topic_distribution"]:
+        writer.writerow(
+            [
+                _csv_safe(f"topic:{topic_entry['topic']}"),
+                topic_entry["count"],
+            ]
+        )
+
+    # Footer rollup
+    writer.writerow(
+        [
+            f"# total_prompts={payload['total_prompts']}",
+            f"total_debates={payload['total_debates']}",
+            f"total_discusses={payload['total_discusses']}",
+            f"total_saved={payload['total_saved']}",
+        ]
+    )
+
+    filename = (
+        f"arena-summary-"
+        f"{payload['window_start']}-to-{payload['window_end']}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/engagement")
 async def analytics_engagement(
     user: UserResponse = Depends(get_current_user_required),

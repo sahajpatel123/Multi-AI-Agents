@@ -122,7 +122,8 @@ POST /api/payments/addon/agent/subscribe|cancel|reactivate
 POST /api/calibration/rate  Rate your own confidence
 GET  /api/calibration/stats | /api/calibration/rating/:task
 
-GET  /api/analytics/summary|engagement|activity
+GET  /api/analytics/summary        Per-user analytics summary (prompts, debates, streaks, engagement)
+GET  /api/analytics/summary/export.csv  CSV export of the summary (mirrors the JSON shape)
 GET  /api/analytics/category-stats   All-categories aggregate (which categories do I engage with most, per-category best persona)
 GET  /api/analytics/category-stats/export.csv   CSV export of the same (mirrors the JSON shape, footer rollup included)
 GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
