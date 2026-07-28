@@ -1811,6 +1811,92 @@ async def export_task_pdf(
     )
 
 
+@router.get("/tasks/{task_id}/export.json")
+async def export_task_json(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download a single task as a JSON file.
+
+    Mirrors the PDF export's data flow but emits the raw result payload
+    instead of rendering HTML. Useful for piping an Agent Mode result into
+    other tools (jq, scripts, CI dashboards) without re-fetching the
+    /result endpoint and parsing JSON by hand.
+
+    Output shape is the same as /api/agent/result/{task_id} — the route
+    delegates to the same loaders so a future schema change in the
+    result endpoint automatically lands in the export.
+
+    Filename includes the task_id prefix so multiple downloads don't
+    overwrite each other in the browser downloads folder.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_export_json",
+        limit=120,
+        window_seconds=3600,
+        message="Too many task JSON exports. Limit is 120 per hour.",
+    )
+    tid = task_id.strip()
+    if not tid:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "task_id is required"},
+        )
+
+    # Reuse the same fetch path the /result endpoint uses so the export
+    # can never drift from the live result. Either the in-memory
+    # blackboard is still live (pipeline still warm) or we read from
+    # AgentTaskRow + persisted contradictions.
+    bb = get_blackboard(tid)
+    if bb:
+        _ensure_task_owner(bb, user)
+        out = bb.to_dict()
+        row = (
+            db.query(AgentTaskRow)
+            .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+            .first()
+        )
+        if row:
+            _merge_db_task_into_result_payload(out, row)
+    else:
+        row = (
+            db.query(AgentTaskRow)
+            .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+            .first()
+        )
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+            )
+        contra = _load_task_contradictions(db, tid, user.id)
+        out = _persisted_agent_task_result_dict(row, contra)
+
+    # Pretty-print so the file is diff-friendly when a user checks it
+    # into a repo or pastes a snippet into a bug report. The /result
+    # endpoint returns compact JSON; the export is for humans.
+    import json
+
+    body = json.dumps(out, indent=2, default=str, sort_keys=True)
+    filename = f"arena-task-{tid[:8]}.json"
+    return Response(
+        content=body,
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "Cache-Control": "no-store",
+            # X-Content-Type-Options is set globally by SecurityHeadersMiddleware,
+            # but the export endpoint also benefits from the explicit
+            # declaration so any future middleware reorder doesn't
+            # accidentally drop the guarantee on a downloaded file.
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.post("/run")
 async def run_agent_task(
     body: AgentTaskRequest,
