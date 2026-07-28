@@ -1133,6 +1133,104 @@ async def analytics_category_stats(
     }
 
 
+@router.get("/analytics/category-stats/export.csv")
+async def analytics_category_stats_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+) -> Response:
+    """CSV export of the all-categories aggregate.
+
+    Same computation as /api/analytics/category-stats — reuses the
+    JSON route so the CSV and the API response can never drift.
+
+    Columns mirror the JSON categories[] rows in the same order:
+      category, is_known_category, is_uncategorized, appearances,
+      wins, win_rate, avg_winning_score, last_exchange_at, best_persona_id
+
+    A footer rollup row (# total_appearances, total_wins) makes the
+    file self-describing when opened in isolation, matching the
+    footer pattern from the timeline and by-category CSV exports.
+
+    Bounded like the sibling endpoints: 1-365 day window,
+    60 requests/hour/user rate limit.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_category_stats_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many category-stats CSV exports. Limit is 60 per hour.",
+    )
+
+    # Reuse the JSON route so the math cannot drift.
+    payload = await analytics_category_stats(
+        window_days=window_days,
+        user=user,
+        db=db,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(
+        [
+            "category",
+            "is_known_category",
+            "is_uncategorized",
+            "appearances",
+            "wins",
+            "win_rate",
+            "avg_winning_score",
+            "last_exchange_at",
+            "best_persona_id",
+        ]
+    )
+    for row in payload["categories"]:
+        writer.writerow(
+            [
+                _csv_safe(row["category"]),
+                "true" if row["is_known_category"] else "false",
+                "true" if row["is_uncategorized"] else "false",
+                row["appearances"],
+                row["wins"],
+                row["win_rate"],
+                row["avg_winning_score"] if row["avg_winning_score"] is not None else "",
+                row["last_exchange_at"] or "",
+                row["best_persona_id"] or "",
+            ]
+        )
+    # Footer rollup so the file is self-describing.
+    writer.writerow(
+        [
+            f"# total_appearances={payload['total_appearances']}",
+            f"total_wins={payload['total_wins']}",
+            f"most_active_category={payload['most_active_category'] or ''}",
+        ]
+    )
+
+    filename = (
+        f"arena-category-stats-"
+        f"{payload['window_start']}-to-{payload['window_end']}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-stats")
 async def analytics_persona_stats_all(
     user: UserResponse = Depends(get_current_user_required),

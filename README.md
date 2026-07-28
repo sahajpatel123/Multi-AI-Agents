@@ -124,6 +124,7 @@ GET  /api/calibration/stats | /api/calibration/rating/:task
 
 GET  /api/analytics/summary|engagement|activity
 GET  /api/analytics/category-stats   All-categories aggregate (which categories do I engage with most, per-category best persona)
+GET  /api/analytics/category-stats/export.csv   CSV export of the same (mirrors the JSON shape, footer rollup included)
 GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
 GET  /api/analytics/persona-stats/:persona_id   Deep-dive on one persona (avg winning score, last activity, best category)
 GET  /api/analytics/persona-stats   All-personas summary (full 16-persona grid in one call, sorted strongest-first)

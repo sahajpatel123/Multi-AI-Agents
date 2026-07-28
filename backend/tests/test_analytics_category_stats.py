@@ -6,6 +6,8 @@ across prompt categories, plus per-category best persona.
 
 from __future__ import annotations
 
+import csv
+import io
 import uuid
 from datetime import timedelta
 
@@ -42,6 +44,10 @@ def _seed_audit(
     db.add(rec)
     db.flush()
     return rec
+
+
+def _parse_csv(text: str) -> list[list[str]]:
+    return list(csv.reader(io.StringIO(text)))
 
 
 # ─── Happy path ────────────────────────────────────────────────────────────
@@ -459,3 +465,110 @@ async def test_category_stats_window_days_1_reachable(
     assert res.status_code == 200
     body = res.json()
     assert body["total_appearances"] >= 0
+
+
+# ─── CSV export ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_csv_rows_match_json(app_client, make_user, db_session):
+    """CSV rows (excluding header and footer) must match the JSON
+    categories array row-for-row so the export and the API
+    response can never drift."""
+    user = make_user(email="cat-csv@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    for _ in range(2):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+            category="question", score=80,
+        )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
+        category="task", score=90,
+    )
+    db_session.commit()
+
+    json_res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    csv_res = await app_client.get(
+        "/api/analytics/category-stats/export.csv", headers=_pro_headers(user)
+    )
+
+    json_categories = json_res.json()["categories"]
+    rows = _parse_csv(csv_res.text)
+    # header + data rows + footer
+    assert len(rows) == 1 + len(json_categories) + 1
+    header = rows[0]
+    assert header == [
+        "category", "is_known_category", "is_uncategorized",
+        "appearances", "wins", "win_rate",
+        "avg_winning_score", "last_exchange_at", "best_persona_id",
+    ]
+    for i, jrow in enumerate(json_categories):
+        crow = rows[1 + i]
+        assert crow[0] == jrow["category"]
+        assert crow[1] == "true" if jrow["is_known_category"] else "false"
+        assert crow[2] == "true" if jrow["is_uncategorized"] else "false"
+        assert int(crow[3]) == jrow["appearances"]
+        assert int(crow[4]) == jrow["wins"]
+        assert float(crow[5]) == jrow["win_rate"]
+        assert crow[6] == (
+            str(jrow["avg_winning_score"]) if jrow["avg_winning_score"] is not None else ""
+        )
+        assert crow[7] == (jrow["last_exchange_at"] or "")
+        assert crow[8] == (jrow["best_persona_id"] or "")
+
+
+@pytest.mark.asyncio
+async def test_csv_footer_matches_json_rollup(app_client, make_user, db_session):
+    """CSV footer rollup (# total_appearances, total_wins) must
+    match the JSON top-level totals."""
+    user = make_user(email="cat-csv-ftr@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    for _ in range(3):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+            category="question",
+        )
+    db_session.commit()
+
+    json_res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    csv_res = await app_client.get(
+        "/api/analytics/category-stats/export.csv", headers=_pro_headers(user)
+    )
+
+    json_body = json_res.json()
+    rows = _parse_csv(csv_res.text)
+    footer = rows[-1]
+    assert f"# total_appearances={json_body['total_appearances']}" in footer[0]
+    assert f"total_wins={json_body['total_wins']}" in footer[1]
+
+
+@pytest.mark.asyncio
+async def test_csv_scoped_to_caller(app_client, make_user, db_session):
+    """CSV export must be scoped to the authenticated caller —
+    another user's data must not appear."""
+    alice = make_user(email="cat-csv-alice@test.com", tier=UserTier.PRO)
+    bob = make_user(email="cat-csv-bob@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    _seed_audit(
+        db_session, user_id=alice.id, winner_persona_id="analyst", panel=panel,
+        category="question",
+    )
+    for _ in range(4):
+        _seed_audit(
+            db_session, user_id=bob.id, winner_persona_id="analyst", panel=panel,
+            category="question",
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats/export.csv", headers=_pro_headers(alice)
+    )
+    rows = _parse_csv(res.text)
+    # header + 1 data row (question) + footer
+    assert len(rows) == 3
+    assert rows[1][3] == "1"  # alice's 1 appearance in question
