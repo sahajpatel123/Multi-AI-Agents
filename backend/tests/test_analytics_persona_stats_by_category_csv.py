@@ -352,3 +352,107 @@ async def test_csv_uppercase_persona_id_normalized(
     assert res.status_code == 200
     # Filename uses canonical lowercase form.
     assert "arena-by-category-analyst-" in res.headers["content-disposition"]
+
+
+# ─── Polish pass ──────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_csv_whitespace_persona_id_normalized(
+    app_client, make_user, db_session
+):
+    """Whitespace around persona_id is stripped before lookup, matching
+    the JSON endpoint's normalization contract. Without this, a
+    trailing space from a copy-paste would 404."""
+    user = make_user(email="pbcc-ws@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"]
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/%20analyst%20/by-category/export.csv?window_days=7",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "arena-by-category-analyst-" in res.headers["content-disposition"]
+
+
+@pytest.mark.asyncio
+async def test_csv_unknown_persona_error_envelope_shape(app_client, make_user):
+    """404 follows the project's standard error envelope:
+    {"detail": {"error": <code>, "message": <human-readable>}}.
+    FastAPI wraps HTTPException details inside `detail`."""
+    user = make_user(email="pbcc-env@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-stats/retired_mind/by-category/export.csv",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 404
+    body = res.json()
+    assert "detail" in body
+    assert "error" in body["detail"]
+    assert "message" in body["detail"]
+    assert body["detail"]["error"] == "unknown_persona"
+
+
+@pytest.mark.asyncio
+async def test_csv_footer_matches_sum_of_data_rows(
+    app_client, make_user, db_session
+):
+    """Pin the reconciliation invariant: sum(categories[].appearances)
+    + uncategorized_appearances == total_appearances, same for wins.
+    A future 'let's also count fallback rows' or 'let's drop the
+    footer field' change must not silently break this."""
+    user = make_user(email="pbcc-recon@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # 3 question wins, 1 task win, 1 task loss, 2 uncat (1 win + 1 loss).
+    for _ in range(3):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+            category="question",
+        )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+        category="task",
+    )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
+        category="task",
+    )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+        category=None,
+    )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
+        category=None,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/by-category/export.csv?window_days=7",
+        headers=_pro_headers(user),
+    )
+    rows = _parse_csv(res.text)
+    footer = rows[-1]
+    data_rows = rows[1:-1]
+    # Sum data rows + uncategorized = total.
+    sum_apps = sum(int(r[3]) for r in data_rows)
+    sum_wins = sum(int(r[4]) for r in data_rows)
+    # The uncategorized row IS one of the data rows (not separate).
+    # Total = sum(data rows). The footer surfaces the same total.
+    assert f"total_appearances={sum_apps}" in footer[0]
+    assert f"total_wins={sum_wins}" in footer[1]
+
+
+@pytest.mark.asyncio
+async def test_csv_window_min_reachable(app_client, make_user):
+    """ge=1 is reachable, not just the le=365 cap. The full Query
+    range is usable."""
+    user = make_user(email="pbcc-min@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/by-category/export.csv?window_days=1",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
