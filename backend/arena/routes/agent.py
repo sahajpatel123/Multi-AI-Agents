@@ -1851,9 +1851,11 @@ async def export_task_json(
     # blackboard is still live (pipeline still warm) or we read from
     # AgentTaskRow + persisted contradictions.
     bb = get_blackboard(tid)
+    final_answer = ""
     if bb:
         _ensure_task_owner(bb, user)
         out = bb.to_dict()
+        final_answer = (bb.final_answer or "").strip() if hasattr(bb, "final_answer") else ""
         row = (
             db.query(AgentTaskRow)
             .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
@@ -1861,6 +1863,11 @@ async def export_task_json(
         )
         if row:
             _merge_db_task_into_result_payload(out, row)
+            # The DB row is the source of truth for the final answer
+            # once the pipeline has flushed it. Prefer it over the
+            # blackboard's possibly-stale copy.
+            if (row.final_answer or "").strip():
+                final_answer = row.final_answer
     else:
         row = (
             db.query(AgentTaskRow)
@@ -1874,6 +1881,18 @@ async def export_task_json(
             )
         contra = _load_task_contradictions(db, tid, user.id)
         out = _persisted_agent_task_result_dict(row, contra)
+        final_answer = (row.final_answer or "").strip()
+
+    # Mirror the PDF export's behavior: a task with no final answer
+    # has nothing useful to download. /result still returns the empty
+    # shell (some clients poll it for status), but an export that
+    # would be a 200 with an empty body is a worse experience than
+    # an explicit 400 telling the caller the task isn't ready yet.
+    if not final_answer:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Nothing to export yet for this task"},
+        )
 
     # Pretty-print so the file is diff-friendly when a user checks it
     # into a repo or pastes a snippet into a bug report. The /result

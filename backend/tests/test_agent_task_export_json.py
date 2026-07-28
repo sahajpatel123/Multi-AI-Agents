@@ -259,3 +259,67 @@ async def test_export_json_filename_includes_task_prefix(
     cd = res.headers["content-disposition"]
     # 8-char prefix so multiple downloads don't overwrite each other.
     assert "arena-task-abcdef12.json" in cd
+
+
+# ─── Empty-answer guard (mirrors PDF export) ─────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_export_json_400_when_task_has_no_final_answer(
+    app_client, make_user, db_session
+):
+    """A task that hasn't produced a final answer yet has nothing to
+    download — explicit 400 instead of a 200 with an empty body."""
+    user = make_user(email="jsonexp-empty-answer@test.com", tier=UserTier.PRO)
+    row = _seed_task(db_session, user_id=user.id, final_answer="")
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/agent/tasks/{row.task_id}/export.json",
+        headers=_headers(user),
+    )
+    assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_export_json_400_when_final_answer_is_whitespace(
+    app_client, make_user, db_session
+):
+    """Whitespace-only final_answer is the same as empty — strip and reject."""
+    user = make_user(email="jsonexp-ws-answer@test.com", tier=UserTier.PRO)
+    row = _seed_task(db_session, user_id=user.id, final_answer="   \n\t  ")
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/agent/tasks/{row.task_id}/export.json",
+        headers=_headers(user),
+    )
+    assert res.status_code == 400
+
+
+# ─── Filename safety ───────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_export_json_filename_does_not_leak_task_id(
+    app_client, make_user, db_session
+):
+    """Filename uses only the 8-char task prefix — full UUID must NOT
+    appear in the Content-Disposition so a shared downloads folder
+    doesn't leak the full id."""
+    user = make_user(email="jsonexp-noleak@test.com", tier=UserTier.PRO)
+    full_id = "abcdef12-3456-7890-abcd-ef1234567890"
+    row = _seed_task(
+        db_session, user_id=user.id, task_id=full_id
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/agent/tasks/{row.task_id}/export.json",
+        headers=_headers(user),
+    )
+    cd = res.headers["content-disposition"]
+    # Prefix present.
+    assert "arena-task-abcdef12.json" in cd
+    # Full id absent — only the 8-char prefix.
+    assert full_id not in cd
