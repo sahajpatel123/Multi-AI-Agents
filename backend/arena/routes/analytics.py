@@ -949,6 +949,141 @@ async def analytics_persona_win_rate_csv(
     )
 
 
+@router.get("/analytics/persona-stats")
+async def analytics_persona_stats_all(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Hide personas that appeared on fewer than N panels (noise floor).",
+    ),
+) -> dict:
+    """All-personas summary: the deep-dive data for every catalog persona.
+
+    Lets a dashboard render a 16-persona grid in one call instead of
+    16 separate /persona-stats/{id} requests. Same per-persona shape
+    the single endpoint returns, sorted strongest-first.
+
+    The full catalog (16 personas) is always emitted — personas the
+    caller never saw in the window are included with zeros so the UI
+    can render the full grid without a second pass. min_appearances
+    filters the rows but never the metadata; the dashboard can still
+    show "Analyst: 0/0 in window" with a confidence flag if it wants.
+
+    Sorted by win_rate descending, then by appearances descending for
+    ties, then by persona_id alphabetically for stable ordering.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_all",
+        limit=60,
+        window_seconds=3600,
+        message="Too many all-personas stats requests. Limit is 60 per hour.",
+    )
+
+    now_utc = utcnow_naive()
+    window_start = now_utc - timedelta(days=window_days - 1)
+
+    # Project only the columns needed for the math. Pulling whole ORM
+    # rows would load prompt snippets and score blobs for every
+    # exchange purely to throw them away.
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.winner_score,
+            ScoringAudit.persona_ids_used,
+            ScoringAudit.created_at,
+            ScoringAudit.fallback_used,
+        )
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= window_start,
+        )
+        .all()
+    )
+
+    # Same counters as the single-persona endpoint, aggregated across
+    # all 16 personas in one pass.
+    appearances: dict[str, int] = {pid: 0 for pid in PERSONA_METADATA}
+    wins: dict[str, int] = {pid: 0 for pid in PERSONA_METADATA}
+    winning_scores: dict[str, list[int]] = {pid: [] for pid in PERSONA_METADATA}
+    last_appearance_at: dict[str, object] = {pid: None for pid in PERSONA_METADATA}
+
+    for winner, winner_score, raw_panel, created_at, fallback_used in rows:
+        panel = _coerce_persona_panel(raw_panel)
+        if not panel:
+            continue
+        # Fallback wins are arbitrary — exclude from wins but count
+        # the appearance. Same rule as the single-persona endpoint.
+        seen_in_panel = set()
+        for pid in panel:
+            if pid not in appearances or pid in seen_in_panel:
+                continue
+            seen_in_panel.add(pid)
+            appearances[pid] += 1
+            if created_at and (
+                last_appearance_at[pid] is None or created_at > last_appearance_at[pid]
+            ):
+                last_appearance_at[pid] = created_at
+        if not fallback_used and winner in wins:
+            wins[winner] += 1
+            if isinstance(winner_score, (int, float)):
+                winning_scores[winner].append(int(winner_score))
+
+    personas: list[dict] = []
+    for pid in PERSONA_METADATA:
+        seated = appearances[pid]
+        # Always emit the persona (the grid must show the full catalog)
+        # but tag the row as below the noise floor if it doesn't meet
+        # the min_appearances threshold. The dashboard can choose to
+        # dim or hide such rows without a second pass.
+        metadata = PERSONA_METADATA[pid]
+        ws = winning_scores[pid]
+        win_count = wins[pid]
+        personas.append(
+            {
+                "persona_id": pid,
+                "name": str(metadata.get("name") or pid),
+                "color": str(metadata.get("color") or ""),
+                "appearances": seated,
+                "wins": win_count,
+                "win_rate": round(win_count / seated, 4) if seated else 0.0,
+                "avg_winning_score": (
+                    round(sum(ws) / len(ws), 1) if ws else None
+                ),
+                "last_appearance_at": (
+                    last_appearance_at[pid].isoformat()
+                    if last_appearance_at[pid]
+                    else None
+                ),
+                "below_min_appearances": seated < min_appearances,
+            }
+        )
+
+    # Strongest first; ties broken by appearances then persona_id.
+    personas.sort(key=lambda r: (-r["win_rate"], -r["appearances"], r["persona_id"]))
+
+    return {
+        "window_days": window_days,
+        "window_start": window_start.date().isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "min_appearances": min_appearances,
+        "total_personas": len(PERSONA_METADATA),
+        "returned_personas": len(personas),
+        "personas": personas,
+    }
+
+
 @router.get("/analytics/persona-stats/{persona_id}")
 async def analytics_persona_stats(
     persona_id: str,
