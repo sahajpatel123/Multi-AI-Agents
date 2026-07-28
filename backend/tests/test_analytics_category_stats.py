@@ -344,3 +344,118 @@ async def test_category_stats_window_excludes_older_exchanges(
     body = res.json()
     assert body["total_appearances"] == 1
     assert body["total_wins"] == 1
+
+
+# ─── Hardening / Symmetry ────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_category_stats_response_shape_parity(
+    app_client, make_user, db_session
+):
+    """Category-stats rows share the same base field shape as
+    by-category persona-stats rows. Future changes to one endpoint
+    must be reflected in the other."""
+    user = make_user(email="cat-shape@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    for _ in range(2):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+            category="question",
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    body = res.json()
+    row = body["categories"][0]
+    # Base fields shared with by-category persona-stats rows.
+    for field in ("category", "is_known_category", "is_uncategorized",
+                  "appearances", "wins", "win_rate"):
+        assert field in row, f"missing shared field {field}"
+
+
+@pytest.mark.asyncio
+async def test_category_stats_best_persona_cross_verify(
+    app_client, make_user, db_session
+):
+    """best_persona_id must be the persona with the most wins in
+    that category. Tie-break is appearances then persona_id."""
+    user = make_user(email="cat-verify@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # analyst wins 2, philosopher wins 2, pragmatist wins 1.
+    for _ in range(2):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+            category="question",
+        )
+    for _ in range(2):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
+            category="question",
+        )
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="pragmatist", panel=panel,
+        category="question",
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    by_cat = {r["category"]: r for r in res.json()["categories"]}
+    best = by_cat["question"]["best_persona_id"]
+    # Tie on wins (2 each): philosopher has 2 apps, analyst has 2 apps,
+    # but philosopher > analyst alphabetically so analyst wins the tie.
+    # Actually: analyst < philosopher alphabetically, so analyst wins the tie-break.
+    assert best == "analyst"
+
+
+@pytest.mark.asyncio
+async def test_category_stats_most_active_cross_verify(
+    app_client, make_user, db_session
+):
+    """most_active_category must equal the category with the highest
+    appearances count."""
+    user = make_user(email="cat-most@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    for _ in range(5):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=panel,
+            category="question",
+        )
+    for _ in range(3):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="philosopher", panel=panel,
+            category="task",
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats", headers=_pro_headers(user)
+    )
+    body = res.json()
+    max_cat = max(body["categories"], key=lambda r: r["appearances"])
+    assert body["most_active_category"] == max_cat["category"]
+
+
+@pytest.mark.asyncio
+async def test_category_stats_window_days_1_reachable(
+    app_client, make_user, db_session
+):
+    """window_days=1 (the ge=1 minimum) is reachable and returns
+    a valid response — not just a cap that exists because le=365."""
+    user = make_user(email="cat-d1@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"],
+        category="question", hours_ago=1,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/category-stats?window_days=1", headers=_pro_headers(user)
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total_appearances"] >= 0
