@@ -189,13 +189,43 @@ async def test_csv_footer_rollup_contains_totals(
     )
     rows = _parse_csv(res.text)
     footer = rows[-1]
-    # Footer is one row with 4 cells; the first is "# total_appearances=N".
+    # Footer is one row with 6 cells (4 + 2 added in the polish pass).
     assert footer[0].startswith("# total_appearances=")
     assert "total_wins=" in footer[1]
     assert "best_day=" in footer[2]
     assert "best_day_wins=" in footer[3]
     # 3 wins seeded → best_day_wins must reflect that.
     assert "best_day_wins=3" in footer[3]
+    # The two additional rollup fields added in the polish pass.
+    assert "best_day_appearances=" in footer[4]
+    assert "best_day_win_rate=" in footer[5]
+
+
+@pytest.mark.asyncio
+async def test_csv_footer_includes_all_best_day_fields(
+    app_client, make_user, db_session
+):
+    """The footer is a complete parallel of the JSON rollup — all three
+    best_day fields must be present, not just best_day_wins. Pin the
+    symmetry so a future 'let's also include X' change to the JSON
+    endpoint automatically widens the CSV footer."""
+    user = make_user(email="ptlc-bd-fields@test.com", tier=UserTier.PRO)
+    for _ in range(2):
+        _seed_audit(
+            db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"]
+        )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline/export.csv?days=7",
+        headers=_pro_headers(user),
+    )
+    rows = _parse_csv(res.text)
+    footer = rows[-1]
+    # All three best_day_* keys present.
+    assert any("best_day_appearances=" in c for c in footer)
+    assert any("best_day_win_rate=" in c for c in footer)
+    assert any("best_day_wins=" in c for c in footer)
 
 
 @pytest.mark.asyncio
@@ -228,6 +258,9 @@ async def test_csv_footer_rollup_matches_json(
     assert f"total_wins={json_body['total_wins']}" in footer[1]
     assert f"best_day={json_body['best_day']}" in footer[2]
     assert f"best_day_wins={json_body['best_day_wins']}" in footer[3]
+    # The two additional rollup fields (polish pass).
+    assert f"best_day_appearances={json_body['best_day_appearances']}" in footer[4]
+    assert f"best_day_win_rate={json_body['best_day_win_rate']}" in footer[5]
 
 
 # ─── Tenant + auth + input ────────────────────────────────────────────────
@@ -272,6 +305,94 @@ async def test_csv_unknown_persona_404(app_client, make_user):
         headers=_pro_headers(user),
     )
     assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_csv_unknown_persona_error_envelope_shape(
+    app_client, make_user
+):
+    """The 404 follows the project's standard error envelope:
+    {"detail": {"error": <code>, "message": <human-readable>}}.
+    FastAPI wraps HTTPException details inside `detail`."""
+    user = make_user(email="ptlc-env@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-stats/retired_mind/timeline/export.csv",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 404
+    body = res.json()
+    assert "detail" in body
+    assert "error" in body["detail"]
+    assert "message" in body["detail"]
+    assert body["detail"]["error"] == "unknown_persona"
+
+
+@pytest.mark.asyncio
+async def test_csv_uppercase_persona_id_normalized(
+    app_client, make_user, db_session
+):
+    """persona_id is lowercased + stripped before lookup, so
+    /ANALYST and /analyst resolve to the same record. The filename
+    must use the canonical (lowercase) form."""
+    user = make_user(email="ptlc-case@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"]
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/ANALYST/timeline/export.csv?days=7",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    cd = res.headers["content-disposition"]
+    # Filename uses canonical lowercase form.
+    assert "arena-timeline-analyst-" in cd
+    # And the body is the same as /analyst (wins=1).
+    rows = _parse_csv(res.text)
+    data_rows = rows[1:-1]  # strip header + footer
+    assert sum(int(r[2]) for r in data_rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_csv_whitespace_persona_id_normalized(
+    app_client, make_user, db_session
+):
+    """Whitespace around persona_id is stripped before lookup.
+    Matches the JSON endpoint's normalization contract."""
+    user = make_user(email="ptlc-ws@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"]
+    )
+    db_session.commit()
+
+    # %20 = URL-encoded space. /analytics/persona-stats/%20analyst%20/...
+    # path is unusual but the route should accept it after strip().
+    res = await app_client.get(
+        "/api/analytics/persona-stats/%20analyst%20/timeline/export.csv?days=7",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    cd = res.headers["content-disposition"]
+    assert "analyst" in cd
+
+
+@pytest.mark.asyncio
+async def test_csv_days_1_minimum_reachable(
+    app_client, make_user
+):
+    """days=1 returns exactly one data row. The ge=1 bound is
+    reachable, not just the le=90 bound."""
+    user = make_user(email="ptlc-1d@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-stats/analyst/timeline/export.csv?days=1",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    rows = _parse_csv(res.text)
+    # Header + 1 data row + 1 footer row.
+    assert len(rows) == 3
+    assert rows[0][0] == "date"
 
 
 @pytest.mark.asyncio

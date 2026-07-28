@@ -1441,13 +1441,17 @@ async def analytics_persona_stats_timeline_csv(
         )
     # Footer rollup so the file is self-describing when opened in
     # isolation. '#' prefix matches the de-facto CSV comment convention
-    # (Excel, Sheets, and most BI tools skip these rows).
+    # (Excel, Sheets, and most BI tools skip these rows). Includes all
+    # three best_day fields the JSON endpoint exposes, so the CSV
+    # footer is a complete parallel of the JSON rollup.
     writer.writerow(
         [
             f"# total_appearances={payload['total_appearances']}",
             f"total_wins={payload['total_wins']}",
             f"best_day={payload['best_day'] or ''}",
             f"best_day_wins={payload['best_day_wins']}",
+            f"best_day_appearances={payload['best_day_appearances']}",
+            f"best_day_win_rate={payload['best_day_win_rate']}",
         ]
     )
 
