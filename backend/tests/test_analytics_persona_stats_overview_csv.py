@@ -200,3 +200,93 @@ async def test_persona_stats_overview_csv_window_days_filtering(app_client, make
     assert footer[0] == "# total_appearances=2"
     assert footer[1] == "total_wins=1"
     assert footer[2] == "best_persona_id=analyst"
+
+
+@pytest.mark.asyncio
+async def test_persona_stats_overview_csv_csv_injection_sanitization(app_client, make_user, monkeypatch):
+    """Formula triggers (=, +, -, @) in cell text are prepended with a single quote."""
+    from arena.core import agents
+
+    user = make_user(email="csv-overview-inj@test.com", tier=UserTier.PRO)
+    
+    # Inject a temporary trigger-prefixed persona name in PERSONA_METADATA to test _csv_safe
+    custom_meta = dict(agents.PERSONA_METADATA)
+    custom_meta["analyst"] = {"name": "=cmd|' /c calc'!A1", "color": "#123456", "temperature": 0.2}
+    monkeypatch.setattr(agents, "PERSONA_METADATA", custom_meta)
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/export.csv", headers=_pro_headers(user)
+    )
+    assert res.status_code == 200
+    rows = _parse_csv(res.text)
+    row_map = {r[0]: r for r in rows[1:-1]}
+
+    # Name must start with ' to neutralize Excel formula execution
+    assert row_map["analyst"][1] == "'=cmd|' /c calc'!A1"
+
+
+@pytest.mark.asyncio
+async def test_persona_stats_overview_csv_invalid_window_days(app_client, make_user):
+    """window_days parameters outside [1, 365] return 422 Unprocessable Entity."""
+    user = make_user(email="csv-overview-inv@test.com", tier=UserTier.PRO)
+    
+    res0 = await app_client.get(
+        "/api/analytics/persona-stats/export.csv?window_days=0",
+        headers=_pro_headers(user),
+    )
+    assert res0.status_code == 422
+
+    res366 = await app_client.get(
+        "/api/analytics/persona-stats/export.csv?window_days=366",
+        headers=_pro_headers(user),
+    )
+    assert res366.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_persona_stats_overview_csv_fallback_wins_excluded(app_client, make_user, db_session):
+    """Audits marked with fallback_used=True increment appearances but not wins."""
+    user = make_user(email="csv-overview-fallback@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        fallback_used=True,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-stats/export.csv", headers=_pro_headers(user)
+    )
+    assert res.status_code == 200
+    rows = _parse_csv(res.text)
+    row_map = {r[0]: r for r in rows[1:-1]}
+
+    # Analyst appeared once but fallback win is excluded
+    analyst_row = row_map["analyst"]
+    assert analyst_row[2] == "1"  # 1 appearance
+    assert analyst_row[3] == "0"  # 0 wins
+    assert analyst_row[4] == "0.0"  # 0 win_rate
+
+    footer = rows[-1]
+    assert footer[0] == "# total_appearances=2"
+    assert footer[1] == "total_wins=0"
+
+
+@pytest.mark.asyncio
+async def test_persona_stats_overview_csv_rate_limiting(app_client, make_user):
+    """60 requests per hour limit triggers HTTP 429 when exceeded."""
+    user = make_user(email="csv-overview-rl@test.com", tier=UserTier.PRO)
+    headers = _pro_headers(user)
+
+    for i in range(60):
+        res = await app_client.get("/api/analytics/persona-stats/export.csv", headers=headers)
+        assert res.status_code == 200, f"Request {i+1} failed"
+
+    res_blocked = await app_client.get("/api/analytics/persona-stats/export.csv", headers=headers)
+    assert res_blocked.status_code == 429
+    assert "Too many persona-stats CSV exports" in res_blocked.json()["detail"]["message"]
+
