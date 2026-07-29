@@ -1493,6 +1493,104 @@ async def analytics_persona_stats_all(
     }
 
 
+@router.get("/analytics/persona-stats/export.csv")
+async def analytics_persona_stats_all_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Hide personas that appeared on fewer than N panels (noise floor).",
+    ),
+) -> Response:
+    """CSV export of the all-personas summary catalog.
+
+    Reuses the JSON route ``analytics_persona_stats_all`` so the math and
+    sorting order (win_rate desc, appearances desc, persona_id asc) stay
+    identical and cannot drift between CSV and API.
+
+    Columns: persona_id, name, appearances, wins, win_rate, avg_winning_score,
+             last_appearance_at, last_win_at, below_min_appearances.
+
+    Includes a footer rollup row (# total_appearances, total_wins, best_persona_id)
+    to make the file self-describing when opened in Excel or python-pandas.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_all_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona-stats CSV exports. Limit is 60 per hour.",
+    )
+
+    payload = await analytics_persona_stats_all(
+        window_days=window_days,
+        min_appearances=min_appearances,
+        user=user,
+        db=db,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(
+        [
+            "persona_id",
+            "name",
+            "appearances",
+            "wins",
+            "win_rate",
+            "avg_winning_score",
+            "last_appearance_at",
+            "last_win_at",
+            "below_min_appearances",
+        ]
+    )
+    for row in payload["personas"]:
+        writer.writerow(
+            [
+                _csv_safe(row["persona_id"]),
+                _csv_safe(row["name"]),
+                row["appearances"],
+                row["wins"],
+                row["win_rate"],
+                row["avg_winning_score"] if row["avg_winning_score"] is not None else "",
+                row["last_appearance_at"] or "",
+                row["last_win_at"] or "",
+                "true" if row["below_min_appearances"] else "false",
+            ]
+        )
+
+    # Footer rollup row
+    writer.writerow(
+        [
+            f"# total_appearances={payload['total_appearances']}",
+            f"total_wins={payload['total_wins']}",
+            f"best_persona_id={payload['best_persona_id'] or ''}",
+        ]
+    )
+
+    filename = f"arena-persona-stats-overview-{payload['window_start']}-to-{payload['window_end']}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-stats/{persona_id}")
 async def analytics_persona_stats(
     persona_id: str,
