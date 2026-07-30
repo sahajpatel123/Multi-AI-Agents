@@ -7,6 +7,10 @@ import {
   cancelAgentAddon,
   cancelSubscription,
   deleteMcpIntegration,
+  exportAnalyticsCategoryStatsCsv,
+  exportAnalyticsPersonaStatsOverviewCsv,
+  exportAnalyticsPersonaWinRateCsv,
+  exportAnalyticsSummaryCsv,
   getCalibrationStats,
   getMcpIntegrations,
   getRecentAgentFeedback,
@@ -21,6 +25,7 @@ import {
   type SubscriptionStatusResponse,
   type UserUsageResponse,
 } from '../api';
+import { downloadBlobFile } from '../lib/downloadTextFile';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
 import { safeLocalStorage } from '../lib/safeStorage';
@@ -1163,6 +1168,116 @@ export function ProfileModal() {
                   <span style={{ color: '#C4A882' }}>14 days ago</span>
                   <span style={{ color: '#C4A882' }}>Today</span>
                 </div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    color: '#A0A39A',
+                    letterSpacing: '0.10em',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  Analytics exports (CSV)
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                  <button
+                    type="button"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                    onClick={async () => {
+                      try {
+                        const blob = await exportAnalyticsSummaryCsv(30);
+                        downloadBlobFile(blob, 'arena-analytics-summary-30d.csv');
+                      } catch {
+                        // ignore error
+                      }
+                    }}
+                  >
+                    📊 Summary Export
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                    onClick={async () => {
+                      try {
+                        const blob = await exportAnalyticsPersonaWinRateCsv(30);
+                        downloadBlobFile(blob, 'arena-persona-win-rates-30d.csv');
+                      } catch {
+                        // ignore error
+                      }
+                    }}
+                  >
+                    🏆 Win Rates Export
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                    onClick={async () => {
+                      try {
+                        const blob = await exportAnalyticsCategoryStatsCsv(30);
+                        downloadBlobFile(blob, 'arena-category-stats-30d.csv');
+                      } catch {
+                        // ignore error
+                      }
+                    }}
+                  >
+                    📂 Categories Export
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                    }}
+                    onClick={async () => {
+                      try {
+                        const blob = await exportAnalyticsPersonaStatsOverviewCsv(30);
+                        downloadBlobFile(blob, 'arena-persona-overview-30d.csv');
+                      } catch {
+                        // ignore error
+                      }
+                    }}
+                  >
+                    🤖 Persona Stats Export
+                  </button>
+                </div>
+
                 <div
                   style={{
                     fontSize: 10,
