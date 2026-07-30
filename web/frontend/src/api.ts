@@ -1907,3 +1907,62 @@ export async function deleteRoom(slug: string): Promise<void> {
     throw new ApiError(getErrorMessage(data || {}, 'Could not delete room'), response.status, data);
   }
 }
+
+// ──────────────────────────────────────────────────────────────
+// Analytics CSV Exports
+// ──────────────────────────────────────────────────────────────
+
+export async function exportAnalyticsSummaryCsv(windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/summary/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export analytics summary CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function exportAnalyticsPersonaWinRateCsv(windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/persona-win-rate/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export persona win rate CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function exportAnalyticsCategoryStatsCsv(windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/category-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export category stats CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function exportAnalyticsPersonaStatsOverviewCsv(windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/persona-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export persona stats overview CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function exportAnalyticsPersonaStatsTimelineCsv(personaId: string, windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(personaId)}/timeline/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export persona timeline CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function exportAnalyticsPersonaStatsByCategoryCsv(personaId: string, windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(personaId)}/by-category/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export persona category stats CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
