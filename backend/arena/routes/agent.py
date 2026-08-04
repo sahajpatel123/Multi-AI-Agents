@@ -2567,6 +2567,86 @@ async def get_watchlist_statistics(
     return JSONResponse(content={"success": True, **stats})
 
 
+@router.get("/watchlist/statistics/export.csv")
+async def get_watchlist_statistics_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of watchlist statistics.
+
+    Streams a CSV with formula-injection defense (_csv_safe).
+    Includes summary statistics and per-item breakdown.
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_statistics_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait a moment.",
+    )
+    
+    from arena.core.agent_memory import get_watchlist_statistics
+    from arena.routes.analytics import _csv_safe
+    import csv
+    import io
+    
+    stats = get_watchlist_statistics(db, user.id)
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write summary row
+    writer.writerow(["Watchlist Statistics Summary"])
+    writer.writerow(["Metric", "Value"])
+    writer.writerow(["Total Watchlist Items", stats["total_items"]])
+    writer.writerow(["Active Items", stats["active_items"]])
+    writer.writerow(["Total Runs", stats["total_runs"]])
+    writer.writerow(["Scored Runs", stats["scored_runs"]])
+    writer.writerow(["Average Score", stats["avg_score"] if stats["avg_score"] is not None else ""])
+    writer.writerow(["Minimum Score", stats["min_score"] if stats["min_score"] is not None else ""])
+    writer.writerow(["Maximum Score", stats["max_score"] if stats["max_score"] is not None else ""])
+    writer.writerow(["Success Rate (%)", stats["success_rate"]])
+    writer.writerow([])
+    
+    # Write per-item statistics
+    writer.writerow(["Per-Item Statistics"])
+    writer.writerow([
+        "Item ID",
+        "Question",
+        "Active",
+        "Interval (hours)",
+        "Run Count",
+        "Scored Run Count",
+        "Average Score",
+        "Last Run At",
+    ])
+    
+    for item_id, item_stats in stats["per_item_stats"].items():
+        writer.writerow([
+            _csv_safe(item_id),
+            _csv_safe(item_stats["question"]),
+            _csv_safe("Yes" if item_stats["is_active"] else "No"),
+            _csv_safe(item_stats["interval_hours"]),
+            _csv_safe(item_stats["run_count"]),
+            _csv_safe(item_stats["scored_run_count"]),
+            _csv_safe(item_stats["avg_score"] if item_stats["avg_score"] is not None else ""),
+            _csv_safe(item_stats["last_run_at"] if item_stats["last_run_at"] else ""),
+        ])
+    
+    filename = f"arena-watchlist-stats-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/metrics")
 async def get_agent_metrics(
     window_days: int = Query(30, ge=1, le=90),

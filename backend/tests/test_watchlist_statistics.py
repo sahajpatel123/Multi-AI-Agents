@@ -176,3 +176,53 @@ async def test_watchlist_statistics_403_for_guest(app_client, make_user, db_sess
     # Guest users should get 403 (Forbidden) or 401 (Unauthorized)
     # The endpoint checks for watchlist access which requires Plus/Pro
     assert res.status_code in [403, 401]
+
+
+@pytest.mark.asyncio
+async def test_watchlist_statistics_csv_export(app_client, make_user, db_session):
+    """Test CSV export of watchlist statistics."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    item1 = _seed_watch(db_session, user.id, question="Bitcoin trends?")
+    item2 = _seed_watch(db_session, user.id, question="Ethereum news?")
+    _seed_task(db_session, user.id, item1.id, score=90)
+    _seed_task(db_session, user.id, item1.id, score=85)
+    _seed_task(db_session, user.id, item2.id, score=75)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/watchlist/statistics/export.csv",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "text/csv" in res.headers["content-type"]
+    text = res.text
+    # Check summary section
+    assert "Watchlist Statistics Summary" in text
+    assert "Total Watchlist Items" in text
+    assert "2" in text  # 2 items
+    assert "Total Runs" in text
+    assert "3" in text  # 3 runs
+    # Check per-item section
+    assert "Per-Item Statistics" in text
+    assert "Bitcoin trends?" in text
+    assert "Ethereum news?" in text
+
+
+@pytest.mark.asyncio
+async def test_watchlist_statistics_csv_formula_injection_defense(app_client, make_user, db_session):
+    """Test CSV export defends against formula injection."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    item = _seed_watch(db_session, user.id, question="=cmd|'/c calc'!A1")
+    _seed_task(db_session, user.id, item.id, score=90)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/watchlist/statistics/export.csv",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    text = res.text
+    # Formula should be quoted/escaped
+    assert "'=cmd|'/c calc'!A1" in text or "=cmd" not in text
