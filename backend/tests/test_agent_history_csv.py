@@ -112,3 +112,67 @@ async def test_agent_history_csv_empty(app_client, make_user, db_session):
     text = res.text
     assert "task_id" in text  # Header should be present
     assert "Test Task" not in text  # No data rows
+
+
+@pytest.mark.asyncio
+async def test_agent_history_json_export(app_client, make_user, db_session):
+    """Test JSON export of agent history."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_task(db_session, user.id, "1", score=90, title="Bitcoin Analysis", task_text="Analyze Bitcoin trends")
+    _seed_task(db_session, user.id, "2", score=85, title="Ethereum Analysis", task_text="Analyze Ethereum trends")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/history/export.json",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "application/json" in res.headers["content-type"]
+    import json
+    tasks = json.loads(res.text)
+    assert len(tasks) == 2
+    titles = [t["title"] for t in tasks]
+    assert "Bitcoin Analysis" in titles
+    assert "Ethereum Analysis" in titles
+
+
+@pytest.mark.asyncio
+async def test_agent_history_json_with_search(app_client, make_user, db_session):
+    """Test JSON export with search filter."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_task(db_session, user.id, "1", score=90, title="Bitcoin Analysis")
+    _seed_task(db_session, user.id, "2", score=85, title="Ethereum Analysis")
+    _seed_task(db_session, user.id, "3", score=75, title="Bitcoin Price")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/history/export.json?search=Bitcoin",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    import json
+    tasks = json.loads(res.text)
+    assert len(tasks) == 2
+    titles = [t["title"] for t in tasks]
+    assert "Bitcoin Analysis" in titles
+    assert "Bitcoin Price" in titles
+
+
+@pytest.mark.asyncio
+async def test_agent_history_json_empty(app_client, make_user, db_session):
+    """Test JSON export when user has no tasks."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/history/export.json",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    import json
+    tasks = json.loads(res.text)
+    assert tasks == []

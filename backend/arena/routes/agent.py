@@ -2943,6 +2943,67 @@ async def export_agent_history_csv(
     )
 
 
+@router.get("/history/export.json")
+async def export_agent_history_json(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(200, ge=1, le=500),
+    search: str | None = Query(None, max_length=100),
+    feedback: str | None = Query(None),
+    orchestration_id: str | None = Query(None),
+    sort: str = Query("newest"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """JSON export of agent task history.
+
+    Returns all matching tasks as a JSON array with the same filters as /api/agent/history.
+    Useful for programmatic access to full history data.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_history_json",
+        limit=60,
+        window_seconds=60,
+        message="Too many JSON exports. Please wait.",
+    )
+    
+    from arena.core.agent_memory import get_user_task_history
+    from arena.core.tier_config import normalize_tier, get_tier_str
+    import json
+    
+    tier = normalize_tier(get_tier_str(user))
+    retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
+    
+    # Get all matching tasks
+    history = get_user_task_history(
+        db=db,
+        user_id=user.id,
+        page=1,
+        per_page=500,  # Max per page for export
+        retention_days=retention_days,
+        search=search,
+        feedback=feedback,
+        orchestration_id=orchestration_id,
+        sort=sort,
+    )
+    
+    # Return tasks as JSON array
+    tasks = history.get("tasks", [])
+    
+    filename = f"arena-history-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=json.dumps(tasks, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.patch("/tasks/{task_id}/rename")
 async def rename_agent_task(
     task_id: str,
