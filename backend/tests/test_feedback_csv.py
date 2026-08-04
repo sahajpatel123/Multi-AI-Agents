@@ -146,3 +146,74 @@ async def test_feedback_csv_empty(app_client, make_user, db_session):
     text = res.text
     assert "task_id" in text  # Header should be present
     assert "task-1" not in text  # No data rows
+
+
+@pytest.mark.asyncio
+async def test_feedback_json_export(app_client, make_user, db_session):
+    """Test JSON export of feedback."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_feedback(db_session, user.id, "task-1", verdict="correct", note="Good answer")
+    _seed_feedback(db_session, user.id, "task-2", verdict="partial", note="Partial answer")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/feedback/export.json",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "application/json" in res.headers["content-type"]
+    import json
+    items = json.loads(res.text)
+    assert len(items) == 2
+    task_ids = [item["task_id"] for item in items]
+    assert "task-1" in task_ids
+    assert "task-2" in task_ids
+    # Check fields
+    assert "id" in items[0]
+    assert "title" in items[0]
+    assert "verdict" in items[0]
+    assert "note" in items[0]
+    assert "created_at" in items[0]
+
+
+@pytest.mark.asyncio
+async def test_feedback_json_with_verdict_filter(app_client, make_user, db_session):
+    """Test JSON export with verdict filter."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_feedback(db_session, user.id, "task-1", verdict="correct")
+    _seed_feedback(db_session, user.id, "task-2", verdict="partial")
+    _seed_feedback(db_session, user.id, "task-3", verdict="correct")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/feedback/export.json?verdict=correct",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    import json
+    items = json.loads(res.text)
+    assert len(items) == 2
+    task_ids = [item["task_id"] for item in items]
+    assert "task-1" in task_ids
+    assert "task-3" in task_ids
+    assert "task-2" not in task_ids
+
+
+@pytest.mark.asyncio
+async def test_feedback_json_export_empty(app_client, make_user, db_session):
+    """Test JSON export when user has no feedback."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/feedback/export.json",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    import json
+    items = json.loads(res.text)
+    assert items == []

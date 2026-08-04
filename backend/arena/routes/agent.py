@@ -2994,6 +2994,75 @@ async def export_feedback_csv(
     )
 
 
+@router.get("/feedback/export.json")
+async def export_feedback_json(
+    verdict: Optional[str] = Query(
+        None,
+        description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """JSON export of all feedback for a user.
+
+    Returns all feedback as a JSON array.
+    Supports filtering by verdict.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_json",
+        limit=30,
+        window_seconds=60,
+        message="Too many JSON exports. Please wait.",
+    )
+    
+    from arena.db_models import AnswerFeedback, AgentTask
+    from arena.core.datetime_utils import utcnow_naive
+    from fastapi.responses import Response
+    from arena.core.http_headers import content_disposition_attachment
+    import json
+    
+    # Get all feedback with task title
+    q = (
+        db.query(AnswerFeedback, AgentTask)
+        .outerjoin(AgentTask, AnswerFeedback.task_id == AgentTask.task_id)
+        .filter(AnswerFeedback.user_id == user.id)
+    )
+    
+    if verdict is not None:
+        if verdict in {"correct", "partial", "wrong"}:
+            q = q.filter(AnswerFeedback.verdict == verdict)
+        else:
+            q = q.filter(False)  # Return empty result for unknown verdict
+    
+    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
+    
+    # Format items
+    items = []
+    for feedback, task in rows:
+        items.append({
+            "id": feedback.id,
+            "task_id": feedback.task_id,
+            "title": task.title if task else None,
+            "verdict": feedback.verdict,
+            "note": feedback.note,
+            "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
+        })
+    
+    filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=json.dumps(items, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/tasks/export.jsonl")
 async def export_tasks_jsonl(
     retention_days: int = Query(30, ge=1, le=365),
