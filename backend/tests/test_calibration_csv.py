@@ -89,3 +89,48 @@ async def test_calibration_csv_formula_injection_defense(app_client, make_user, 
     text = res.text
     # Formula should be quoted/escaped
     assert "'=cmd|'/c calc'!A1" in text or "=cmd" not in text
+
+
+@pytest.mark.asyncio
+async def test_calibration_json_export(app_client, make_user, db_session):
+    """Test JSON export of calibration history."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_calibration_rating(db_session, user.id, "task-1", user_rating=80, system_score=85)
+    _seed_calibration_rating(db_session, user.id, "task-2", user_rating=75, system_score=90)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/calibration/history/export.json",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "application/json" in res.headers["content-type"]
+    import json
+    items = json.loads(res.text)
+    assert len(items) == 2
+    task_ids = [item["task_id"] for item in items]
+    assert "task-1" in task_ids
+    assert "task-2" in task_ids
+    # Check fields
+    assert "user_rating" in items[0]
+    assert "system_score" in items[0]
+    assert "delta" in items[0]
+    assert "verdict" in items[0]
+
+
+@pytest.mark.asyncio
+async def test_calibration_json_export_empty(app_client, make_user, db_session):
+    """Test JSON export when user has no calibration ratings."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/calibration/history/export.json",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    import json
+    items = json.loads(res.text)
+    assert items == []
