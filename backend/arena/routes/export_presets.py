@@ -43,6 +43,7 @@ EXPORT_PRESET_TEMPLATES = [
         "search": None,
         "persona_id": None,
         "min_score": 80,
+        "max_score": None,
         "sort": "score",
     },
     {
@@ -54,6 +55,7 @@ EXPORT_PRESET_TEMPLATES = [
         "search": None,
         "persona_id": None,
         "min_score": None,
+        "max_score": None,
         "sort": "newest",
     },
     {
@@ -65,6 +67,7 @@ EXPORT_PRESET_TEMPLATES = [
         "search": "Bitcoin",
         "persona_id": None,
         "min_score": None,
+        "max_score": None,
         "sort": "newest",
     },
     {
@@ -76,6 +79,7 @@ EXPORT_PRESET_TEMPLATES = [
         "search": None,
         "persona_id": None,
         "min_score": 90,
+        "max_score": None,
         "sort": "score",
     },
     {
@@ -87,6 +91,7 @@ EXPORT_PRESET_TEMPLATES = [
         "search": None,
         "persona_id": None,
         "min_score": None,
+        "max_score": None,
         "sort": "newest",
     },
     {
@@ -98,6 +103,7 @@ EXPORT_PRESET_TEMPLATES = [
         "search": "Ethereum",
         "persona_id": None,
         "min_score": None,
+        "max_score": None,
         "sort": "newest",
     },
     {
@@ -109,6 +115,7 @@ EXPORT_PRESET_TEMPLATES = [
         "search": None,
         "persona_id": None,
         "min_score": 95,
+        "max_score": None,
         "sort": "score",
     },
     {
@@ -120,6 +127,7 @@ EXPORT_PRESET_TEMPLATES = [
         "search": None,
         "persona_id": None,
         "min_score": None,
+        "max_score": 49,
         "sort": "score",
     },
 ]
@@ -133,6 +141,7 @@ class ExportPresetCreate(BaseModel):
     search: Optional[str] = Field(None, max_length=100)
     persona_id: Optional[str] = Field(None, max_length=50)
     min_score: Optional[int] = Field(None, ge=0, le=100)
+    max_score: Optional[int] = Field(None, ge=0, le=100)
     sort: str = Field(default="newest", min_length=1, max_length=20)
     position: Optional[int] = Field(None, ge=0, le=999)
     is_default: bool = Field(default=False)
@@ -145,6 +154,7 @@ class ExportPresetUpdate(BaseModel):
     search: Optional[str] = Field(None, max_length=100)
     persona_id: Optional[str] = Field(None, max_length=50)
     min_score: Optional[int] = Field(None, ge=0, le=100)
+    max_score: Optional[int] = Field(None, ge=0, le=100)
     sort: Optional[str] = Field(None, min_length=1, max_length=20)
     position: Optional[int] = Field(None, ge=0, le=999)
     is_default: Optional[bool] = Field(None)
@@ -218,6 +228,7 @@ async def list_export_presets(
                 "search": p.search,
                 "persona_id": p.persona_id,
                 "min_score": p.min_score,
+                "max_score": p.max_score,
                 "sort": p.sort,
                 "position": p.position,
                 "is_default": p.is_default,
@@ -304,6 +315,7 @@ async def create_export_preset(
         search=body.search,
         persona_id=body.persona_id,
         min_score=body.min_score,
+        max_score=body.max_score,
         sort=body.sort,
         position=position,
         is_default=body.is_default,
@@ -323,6 +335,7 @@ async def create_export_preset(
         "search": preset.search,
         "persona_id": preset.persona_id,
         "min_score": preset.min_score,
+        "max_score": preset.max_score,
         "sort": preset.sort,
         "position": preset.position,
         "is_default": preset.is_default,
@@ -370,6 +383,7 @@ async def get_default_export_preset(
         "search": preset.search,
         "persona_id": preset.persona_id,
         "min_score": preset.min_score,
+        "max_score": preset.max_score,
         "sort": preset.sort,
         "position": preset.position,
         "is_default": preset.is_default,
@@ -426,6 +440,7 @@ async def export_export_presets(
                 "search": p.search,
                 "persona_id": p.persona_id,
                 "min_score": p.min_score,
+                "max_score": p.max_score,
                 "sort": p.sort,
             }
             for p in presets
@@ -552,6 +567,7 @@ async def create_preset_from_template(
         search=template["search"],
         persona_id=template["persona_id"],
         min_score=template["min_score"],
+        max_score=template["max_score"],
         sort=template["sort"],
         position=position,
         is_default=False,
@@ -572,6 +588,7 @@ async def create_preset_from_template(
         "search": preset.search,
         "persona_id": preset.persona_id,
         "min_score": preset.min_score,
+        "max_score": preset.max_score,
         "sort": preset.sort,
         "position": preset.position,
         "is_default": preset.is_default,
@@ -630,6 +647,7 @@ async def get_export_preset(
         "search": preset.search,
         "persona_id": preset.persona_id,
         "min_score": preset.min_score,
+        "max_score": preset.max_score,
         "sort": preset.sort,
         "position": preset.position,
         "is_default": preset.is_default,
@@ -693,6 +711,8 @@ async def update_export_preset(
         preset.persona_id = body.persona_id
     if body.min_score is not None:
         preset.min_score = body.min_score
+    if body.max_score is not None:
+        preset.max_score = body.max_score
     if body.sort is not None:
         preset.sort = body.sort
     if body.position is not None:
@@ -723,6 +743,7 @@ async def update_export_preset(
         "search": preset.search,
         "persona_id": preset.persona_id,
         "min_score": preset.min_score,
+        "max_score": preset.max_score,
         "sort": preset.sort,
         "position": preset.position,
         "is_default": preset.is_default,

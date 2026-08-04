@@ -385,6 +385,7 @@ class ExportPreset(Base):
     search = Column(String(100), nullable=True)
     persona_id = Column(String(50), nullable=True)
     min_score = Column(Integer, nullable=True)
+    max_score = Column(Integer, nullable=True)
     sort = Column(String(20), nullable=False, default="newest")
     position = Column(Integer, nullable=False, default=0)  # For custom ordering
     is_default = Column(Boolean, nullable=False, default=False)  # Mark as default preset

@@ -1769,3 +1769,93 @@ async def test_create_preset_from_template_uses_custom_name(app_client, make_use
     data2 = res2.json()
     # Whitespace should be stripped
     assert data2["name"] == "My Preset"
+
+
+@pytest.mark.asyncio
+async def test_create_export_preset_with_max_score(app_client, make_user, db_session, cleanup_export_presets):
+    """Test creating an export preset with max_score."""
+    user = cleanup_export_presets
+    
+    res = await app_client.post(
+        "/api/export-presets",
+        json={
+            "name": "Medium Score Responses",
+            "format": "csv",
+            "min_score": 50,
+            "max_score": 80,
+            "sort": "score",
+        },
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "created"
+    assert data["name"] == "Medium Score Responses"
+    assert data["min_score"] == 50
+    assert data["max_score"] == 80
+
+
+@pytest.mark.asyncio
+async def test_update_export_preset_max_score(app_client, make_user, db_session, cleanup_export_presets):
+    """Test updating an export preset max_score."""
+    user = cleanup_export_presets
+    
+    # Create a preset
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Test Preset", "format": "csv"},
+        headers=_pro_headers(user),
+    )
+    assert create_res.status_code == 200
+    preset_id = create_res.json()["id"]
+    
+    # Update with max_score
+    update_res = await app_client.put(
+        f"/api/export-presets/{preset_id}",
+        json={"max_score": 75},
+        headers=_pro_headers(user),
+    )
+    assert update_res.status_code == 200
+    data = update_res.json()
+    assert data["status"] == "updated"
+    assert data["max_score"] == 75
+
+
+@pytest.mark.asyncio
+async def test_create_preset_from_template_with_max_score(app_client, make_user, db_session, cleanup_export_presets):
+    """Test creating a preset from the low_score template which has max_score=49."""
+    user = cleanup_export_presets
+    
+    res = await app_client.post(
+        "/api/export-presets/from-template?template_id=low_score",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "created_from_template"
+    assert data["template_id"] == "low_score"
+    assert data["max_score"] == 49
+    assert data["min_score"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_export_presets_includes_max_score(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that list endpoint includes max_score in response."""
+    user = cleanup_export_presets
+    
+    # Create preset with max_score
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Test Preset", "format": "csv", "max_score": 90},
+        headers=_pro_headers(user),
+    )
+    
+    # List presets
+    res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["presets"][0]["max_score"] == 90
