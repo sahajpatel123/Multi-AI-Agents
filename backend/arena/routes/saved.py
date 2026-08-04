@@ -14,6 +14,9 @@ Functionality:
 - DELETE /saved/bulk accepts a JSON list of ids for one-shot cleanup.
 """
 
+import csv
+import io
+import json
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -380,26 +383,28 @@ async def delete_saved(
     return {"status": "deleted", "id": saved_id}
 
 
-@router.get("/saved/export.csv")
-async def export_saved_csv(
+@router.get("/saved/export")
+async def export_saved(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on prompt + one_liner."),
     persona_id: Optional[str] = Query(None, max_length=50, description="Restrict to one persona."),
     min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score (inclusive)."),
     sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', or 'score'."),
+    format: str = Query("csv", description="Export format: 'csv' (default) or 'json'."),
 ):
-    """CSV export of all saved responses for a user.
+    """Export saved responses in CSV or JSON format.
 
-    Streams saved response data with formula-injection defense.
     Supports the same filters as /api/saved.
+    CSV format includes formula-injection defense.
+    JSON format provides structured data for programmatic use.
     """
     enforce_user_rate_limit(
         user.id,
-        scope="saved_export_csv",
+        scope="saved_export",
         limit=30,
         window_seconds=60,
-        message="Too many CSV exports. Please wait.",
+        message="Too many exports. Please wait.",
     )
     
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
@@ -448,12 +453,59 @@ async def export_saved_csv(
             return "'" + s
         return s
     
-    import csv
-    import io
     from arena.core.datetime_utils import utcnow_naive
     from fastapi.responses import Response
     from arena.core.http_headers import content_disposition_attachment
     
+    export_timestamp = utcnow_naive()
+    
+    if format == "json":
+        # JSON export format
+        items = []
+        for item in saved_items:
+            items.append({
+                "id": item.id,
+                "session_id": item.session_id,
+                "agent_id": item.agent_id,
+                "persona_id": item.persona_id,
+                "persona_name": item.persona_name,
+                "persona_color": item.persona_color,
+                "prompt": item.prompt,
+                "one_liner": item.one_liner,
+                "verdict": item.verdict,
+                "score": item.score,
+                "confidence": item.confidence,
+                "saved_at": item.saved_at.isoformat() if item.saved_at else None,
+            })
+        
+        export_data = {
+            "metadata": {
+                "export_format": "json",
+                "exported_at": export_timestamp.isoformat(),
+                "total_count": len(items),
+                "filters": {
+                    "search": search,
+                    "persona_id": persona_id,
+                    "min_score": min_score,
+                    "sort": sort,
+                },
+            },
+            "data": items,
+        }
+        
+        filename = f"arena-saved-{user.id}-{export_timestamp.strftime('%Y%m%d-%H%M%S')}.json"
+        headers = {
+            "Content-Disposition": content_disposition_attachment(filename),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        }
+        return Response(
+            content=json.dumps(export_data, indent=2, default=str),
+            media_type="application/json; charset=utf-8",
+            headers=headers,
+        )
+    
+    # CSV export format (default)
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
     
@@ -464,6 +516,7 @@ async def export_saved_csv(
         "agent_id",
         "persona_id",
         "persona_name",
+        "persona_color",
         "prompt",
         "one_liner",
         "verdict",
@@ -480,6 +533,7 @@ async def export_saved_csv(
             _csv_safe(item.agent_id),
             _csv_safe(item.persona_id),
             _csv_safe(item.persona_name),
+            _csv_safe(item.persona_color),
             _csv_safe(item.prompt[:500] if item.prompt else ""),  # Truncate long prompts
             _csv_safe(item.one_liner),
             _csv_safe(item.verdict[:500] if item.verdict else ""),  # Truncate long verdicts
@@ -488,7 +542,7 @@ async def export_saved_csv(
             _csv_safe(item.saved_at.isoformat() if item.saved_at else ""),
         ])
     
-    filename = f"arena-saved-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    filename = f"arena-saved-{user.id}-{export_timestamp.strftime('%Y%m%d-%H%M%S')}.csv"
     headers = {
         "Content-Disposition": content_disposition_attachment(filename),
         "X-Content-Type-Options": "nosniff",
@@ -499,3 +553,33 @@ async def export_saved_csv(
         media_type="text/csv; charset=utf-8",
         headers=headers,
     )
+
+
+# Keep backward compatibility with old CSV-only endpoint
+@router.get("/saved/export.csv")
+async def export_saved_csv_legacy(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    search: Optional[str] = Query(None, max_length=100),
+    persona_id: Optional[str] = Query(None, max_length=50),
+    min_score: Optional[int] = Query(None, ge=0, le=100),
+    sort: str = Query("newest"),
+):
+    """Legacy CSV-only export endpoint - redirects to new unified export with format=csv."""
+    from fastapi import Request
+    from fastapi.responses import RedirectResponse
+    
+    # Build query parameters for redirect
+    params = []
+    if search:
+        params.append(f"search={search}")
+    if persona_id:
+        params.append(f"persona_id={persona_id}")
+    if min_score is not None:
+        params.append(f"min_score={min_score}")
+    if sort != "newest":
+        params.append(f"sort={sort}")
+    params.append("format=csv")
+    
+    query_string = "&".join(params) if params else "format=csv"
+    return RedirectResponse(url=f"/api/saved/export?{query_string}", status_code=307)

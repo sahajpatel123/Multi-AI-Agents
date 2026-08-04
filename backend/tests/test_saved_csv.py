@@ -35,7 +35,7 @@ def _seed_saved(db_session, user_id, saved_id, prompt="Test prompt", one_liner="
 
 @pytest.mark.asyncio
 async def test_saved_csv_export(app_client, make_user, db_session):
-    """Test CSV export of saved responses."""
+    """Test CSV export of saved responses using new unified endpoint."""
     user = _make_pro(make_user)
     db_session.commit()
     
@@ -44,7 +44,7 @@ async def test_saved_csv_export(app_client, make_user, db_session):
     db_session.commit()
 
     res = await app_client.get(
-        "/api/saved/export.csv",
+        "/api/saved/export?format=csv",
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
@@ -56,6 +56,7 @@ async def test_saved_csv_export(app_client, make_user, db_session):
     assert "one_liner" in text
     assert "verdict" in text
     assert "score" in text
+    assert "persona_color" in text  # Added in polish
     assert "sess-save-1" in text
     assert "sess-save-2" in text
 
@@ -72,7 +73,7 @@ async def test_saved_csv_with_search_filter(app_client, make_user, db_session):
     db_session.commit()
 
     res = await app_client.get(
-        "/api/saved/export.csv?search=Bitcoin",
+        "/api/saved/export?format=csv&search=Bitcoin",
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
@@ -94,7 +95,7 @@ async def test_saved_csv_with_persona_filter(app_client, make_user, db_session):
     db_session.commit()
 
     res = await app_client.get(
-        "/api/saved/export.csv?persona_id=analyst",
+        "/api/saved/export?format=csv&persona_id=analyst",
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
@@ -116,7 +117,7 @@ async def test_saved_csv_with_min_score_filter(app_client, make_user, db_session
     db_session.commit()
 
     res = await app_client.get(
-        "/api/saved/export.csv?min_score=85",
+        "/api/saved/export?format=csv&min_score=85",
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
@@ -139,7 +140,7 @@ async def test_saved_csv_with_sort(app_client, make_user, db_session):
 
     # Test score sort (descending)
     res = await app_client.get(
-        "/api/saved/export.csv?sort=score",
+        "/api/saved/export?format=csv&sort=score",
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
@@ -159,7 +160,7 @@ async def test_saved_csv_formula_injection_defense(app_client, make_user, db_ses
     db_session.commit()
 
     res = await app_client.get(
-        "/api/saved/export.csv",
+        "/api/saved/export?format=csv",
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
@@ -175,12 +176,13 @@ async def test_saved_csv_empty(app_client, make_user, db_session):
     db_session.commit()
 
     res = await app_client.get(
-        "/api/saved/export.csv",
+        "/api/saved/export?format=csv",
         headers=_pro_headers(user),
     )
     assert res.status_code == 200
     text = res.text
     assert "id" in text  # Header should be present
+    assert "persona_color" in text  # New field from polish
     assert "sess-save" not in text  # No data rows
 
 
@@ -192,8 +194,141 @@ async def test_saved_csv_403_for_guest(app_client, make_user, db_session):
     db_session.commit()
 
     res = await app_client.get(
-        "/api/saved/export.csv",
+        "/api/saved/export?format=csv",
         headers={"Authorization": f"Bearer {create_access_token(user.id, user.email)}"},
     )
     # Guest users should get 403 (Forbidden) - saved responses require Plus/Pro
     assert res.status_code == 403
+
+
+# JSON Export Tests (added in Loop 15 - POLISH phase)
+@pytest.mark.asyncio
+async def test_saved_json_export(app_client, make_user, db_session):
+    """Test JSON export of saved responses."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_saved(db_session, user.id, "save-1", prompt="Bitcoin question", score=90)
+    _seed_saved(db_session, user.id, "save-2", prompt="Ethereum question", score=85)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=json",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "application/json" in res.headers["content-type"]
+    
+    data = res.json()
+    assert "metadata" in data
+    assert "data" in data
+    assert data["metadata"]["export_format"] == "json"
+    assert data["metadata"]["total_count"] == 2
+    assert "exported_at" in data["metadata"]
+    assert len(data["data"]) == 2
+    
+    # Check first item structure
+    item = data["data"][0]
+    assert "id" in item
+    assert "session_id" in item
+    assert "prompt" in item
+    assert "persona_color" in item  # Should be included in JSON
+
+
+@pytest.mark.asyncio
+async def test_saved_json_export_with_filters(app_client, make_user, db_session):
+    """Test JSON export with filters."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_saved(db_session, user.id, "save-1", prompt="Bitcoin analysis", persona_id="analyst")
+    _seed_saved(db_session, user.id, "save-2", prompt="Ethereum analysis", persona_id="researcher")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=json&persona_id=analyst",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    
+    data = res.json()
+    assert data["metadata"]["total_count"] == 1
+    assert data["metadata"]["filters"]["persona_id"] == "analyst"
+    assert len(data["data"]) == 1
+    assert data["data"][0]["persona_id"] == "analyst"
+
+
+@pytest.mark.asyncio
+async def test_saved_json_export_empty(app_client, make_user, db_session):
+    """Test JSON export when user has no saved responses."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=json",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["metadata"]["total_count"] == 0
+    assert data["data"] == []
+
+
+@pytest.mark.asyncio
+async def test_saved_json_export_403_for_guest(app_client, make_user, db_session):
+    """Test that guest users get 403 for JSON export."""
+    from arena.db_models import UserTier as DBUserTier
+    user = make_user(email="guest_json@example.com", tier=DBUserTier.GUEST)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=json",
+        headers={"Authorization": f"Bearer {create_access_token(user.id, user.email)}"},
+    )
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_saved_export_default_format_is_csv(app_client, make_user, db_session):
+    """Test that default format is CSV when not specified."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_saved(db_session, user.id, "save-1", prompt="Test")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "text/csv" in res.headers["content-type"]
+
+
+@pytest.mark.asyncio
+async def test_saved_export_filename_has_timestamp(app_client, make_user, db_session):
+    """Test that export filename includes timestamp for uniqueness."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_saved(db_session, user.id, "save-1", prompt="Test")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=csv",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    content_disposition = res.headers["content-disposition"]
+    # Should contain timestamp pattern like 20260804-145600
+    assert "-" in content_disposition
+    assert ".csv" in content_disposition
+
+    res_json = await app_client.get(
+        "/api/saved/export?format=json",
+        headers=_pro_headers(user),
+    )
+    assert res_json.status_code == 200
+    content_disposition_json = res_json.headers["content-disposition"]
+    assert "-" in content_disposition_json
+    assert ".json" in content_disposition_json
