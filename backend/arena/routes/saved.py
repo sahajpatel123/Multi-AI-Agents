@@ -378,3 +378,124 @@ async def delete_saved(
     db.delete(row)
     db.commit()
     return {"status": "deleted", "id": saved_id}
+
+
+@router.get("/saved/export.csv")
+async def export_saved_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on prompt + one_liner."),
+    persona_id: Optional[str] = Query(None, max_length=50, description="Restrict to one persona."),
+    min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score (inclusive)."),
+    sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', or 'score'."),
+):
+    """CSV export of all saved responses for a user.
+
+    Streams saved response data with formula-injection defense.
+    Supports the same filters as /api/saved.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="saved_export_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "feature_not_allowed", "message": "Saved responses require Plus or Pro."},
+        )
+    
+    # Build query with same filters as get_saved
+    q = db.query(SavedResponse).filter(SavedResponse.user_id == user.id)
+    
+    if search:
+        safe_search = sanitize_model_optional_text(search, max_length=100, field_name="search")
+        if safe_search:
+            escaped = _escape_like(safe_search)
+            pattern = f"%{escaped}%"
+            q = q.filter(
+                or_(
+                    SavedResponse.prompt.ilike(pattern, escape="\\"),
+                    SavedResponse.one_liner.ilike(pattern, escape="\\"),
+                )
+            )
+    
+    if persona_id:
+        q = q.filter(SavedResponse.persona_id == persona_id)
+    
+    if min_score is not None:
+        q = q.filter(SavedResponse.score >= min_score)
+    
+    # Apply sort
+    if sort == "oldest":
+        q = q.order_by(SavedResponse.saved_at.asc())
+    elif sort == "score":
+        q = q.order_by(SavedResponse.score.desc().nullslast())
+    else:  # newest (default)
+        q = q.order_by(SavedResponse.saved_at.desc())
+    
+    saved_items = q.all()
+    
+    def _csv_safe(value) -> str:
+        """Escape value for CSV to prevent formula injection."""
+        if value is None:
+            return ""
+        s = str(value)
+        if s.startswith(("=", "+", "-", "@")):
+            return "'" + s
+        return s
+    
+    import csv
+    import io
+    from arena.core.datetime_utils import utcnow_naive
+    from fastapi.responses import Response
+    from arena.core.http_headers import content_disposition_attachment
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "id",
+        "session_id",
+        "agent_id",
+        "persona_id",
+        "persona_name",
+        "prompt",
+        "one_liner",
+        "verdict",
+        "score",
+        "confidence",
+        "saved_at",
+    ])
+    
+    # Write rows
+    for item in saved_items:
+        writer.writerow([
+            _csv_safe(item.id),
+            _csv_safe(item.session_id),
+            _csv_safe(item.agent_id),
+            _csv_safe(item.persona_id),
+            _csv_safe(item.persona_name),
+            _csv_safe(item.prompt[:500] if item.prompt else ""),  # Truncate long prompts
+            _csv_safe(item.one_liner),
+            _csv_safe(item.verdict[:500] if item.verdict else ""),  # Truncate long verdicts
+            _csv_safe(item.score),
+            _csv_safe(item.confidence),
+            _csv_safe(item.saved_at.isoformat() if item.saved_at else ""),
+        ])
+    
+    filename = f"arena-saved-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
