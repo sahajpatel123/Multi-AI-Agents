@@ -59,8 +59,12 @@ class ExportPresetUpdate(BaseModel):
 async def list_export_presets(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
+    search: Optional[str] = Query(None, max_length=100, description="Search term to filter presets by name or description"),
 ):
-    """List all export presets for the current user."""
+    """List all export presets for the current user.
+    
+    Supports optional search query parameter to filter presets by name or description.
+    """
     enforce_user_rate_limit(
         user.id,
         scope="export_presets_list",
@@ -72,12 +76,20 @@ async def list_export_presets(
     if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
         return {"presets": [], "total": 0}
     
-    presets = (
-        db.query(ExportPreset)
-        .filter(ExportPreset.user_id == user.id)
-        .order_by(ExportPreset.position.asc(), ExportPreset.updated_at.desc())
-        .all()
-    )
+    query = db.query(ExportPreset).filter(ExportPreset.user_id == user.id)
+    
+    # Apply search filter if provided
+    if search:
+        from sqlalchemy import or_
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            or_(
+                ExportPreset.name.ilike(search_pattern),
+                ExportPreset.description.ilike(search_pattern),
+            )
+        )
+    
+    presets = query.order_by(ExportPreset.position.asc(), ExportPreset.updated_at.desc()).all()
     
     return {
         "presets": [

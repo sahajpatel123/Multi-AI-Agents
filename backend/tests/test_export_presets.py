@@ -810,3 +810,138 @@ async def test_export_preset_description_update_to_empty(app_client, make_user, 
     assert update_res.status_code == 200
     # Empty string gets sanitized to None
     assert update_res.json()["description"] in [None, ""]
+
+
+# Search functionality tests (added in Loop 22 - ADD phase)
+@pytest.mark.asyncio
+async def test_export_presets_search_by_name(app_client, make_user, db_session, cleanup_export_presets):
+    """Test searching presets by name."""
+    user = cleanup_export_presets
+    
+    # Create presets with different names
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Bitcoin Exports", "description": "For Bitcoin"},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Ethereum Exports", "description": "For Ethereum"},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Solana Exports", "description": "For Solana"},
+        headers=_pro_headers(user),
+    )
+    
+    # Search for Bitcoin
+    res = await app_client.get(
+        "/api/export-presets?search=Bitcoin",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["presets"][0]["name"] == "Bitcoin Exports"
+
+
+@pytest.mark.asyncio
+async def test_export_presets_search_by_description(app_client, make_user, db_session, cleanup_export_presets):
+    """Test searching presets by description."""
+    user = cleanup_export_presets
+    
+    # Create presets with different descriptions
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Preset 1", "description": "Daily export preset"},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Preset 2", "description": "Weekly export preset"},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Preset 3", "description": "Monthly export preset"},
+        headers=_pro_headers(user),
+    )
+    
+    # Search for "export" (appears in all descriptions)
+    res = await app_client.get(
+        "/api/export-presets?search=export",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 3
+
+
+@pytest.mark.asyncio
+async def test_export_presets_search_case_insensitive(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that search is case-insensitive."""
+    user = cleanup_export_presets
+    
+    # Create preset with lowercase name
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "bitcoin exports", "description": "for bitcoin"},
+        headers=_pro_headers(user),
+    )
+    
+    # Search with uppercase
+    res = await app_client.get(
+        "/api/export-presets?search=BITCOIN",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["presets"][0]["name"] == "bitcoin exports"
+
+
+@pytest.mark.asyncio
+async def test_export_presets_search_no_results(app_client, make_user, db_session, cleanup_export_presets):
+    """Test search with no matching results."""
+    user = cleanup_export_presets
+    
+    # Create a preset
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Bitcoin Exports"},
+        headers=_pro_headers(user),
+    )
+    
+    # Search for something that doesn't exist
+    res = await app_client.get(
+        "/api/export-presets?search=NonExistent",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 0
+    assert data["presets"] == []
+
+
+@pytest.mark.asyncio
+async def test_export_presets_search_partial_match(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that search performs partial matching."""
+    user = cleanup_export_presets
+    
+    # Create preset
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Bitcoin Price Analysis"},
+        headers=_pro_headers(user),
+    )
+    
+    # Search for partial match
+    res = await app_client.get(
+        "/api/export-presets?search=Price",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["presets"][0]["name"] == "Bitcoin Price Analysis"
