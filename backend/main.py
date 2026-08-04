@@ -34,6 +34,7 @@ from arena.routes.debate import router as debate_router
 from arena.routes.discuss import router as discuss_router
 from arena.routes.memory import memory_router
 from arena.routes.saved import router as saved_router
+from arena.routes.export_presets import router as export_presets_router
 from arena.routes.session import router as session_router
 from arena.routes.payments import router as payments_router
 from arena.routes.agent import router as agent_router
@@ -292,6 +293,7 @@ def create_app() -> FastAPI:
     app.include_router(personas_router, prefix="/api")
     app.include_router(panels_router, prefix="/api")
     app.include_router(saved_router, prefix="/api")
+    app.include_router(export_presets_router, prefix="/api")
     app.include_router(analytics_router, prefix="/api")
     app.include_router(payments_router, prefix="/api/payments")
     app.include_router(agent_router, prefix="/api/agent")
