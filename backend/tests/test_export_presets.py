@@ -1086,3 +1086,145 @@ async def test_export_presets_search_sanitization(app_client, make_user, db_sess
     # Should not cause any errors and should handle the input safely
     data = res.json()
     assert "presets" in data
+
+
+# Bulk delete tests (added in Loop 24 - ADD phase)
+@pytest.mark.asyncio
+async def test_bulk_delete_export_presets(app_client, make_user, db_session, cleanup_export_presets):
+    """Test bulk deleting multiple export presets."""
+    user = cleanup_export_presets
+    
+    # Create multiple presets
+    preset_ids = []
+    for i in range(5):
+        res = await app_client.post(
+            "/api/export-presets",
+            json={"name": f"Bulk Preset {i}"},
+            headers=_pro_headers(user),
+        )
+        preset_ids.append(res.json()["id"])
+    
+    # Bulk delete them
+    res = await app_client.post(
+        "/api/export-presets/bulk-delete",
+        json={"ids": preset_ids},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "bulk_deleted"
+    assert data["deleted_count"] == 5
+    assert len(data["deleted_ids"]) == 5
+    
+    # Verify they are actually deleted
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    assert list_res.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_export_presets_partial(app_client, make_user, db_session, cleanup_export_presets):
+    """Test bulk delete with some valid and some invalid IDs."""
+    user = cleanup_export_presets
+    
+    # Create 3 presets
+    preset_ids = []
+    for i in range(3):
+        res = await app_client.post(
+            "/api/export-presets",
+            json={"name": f"Partial Preset {i}"},
+            headers=_pro_headers(user),
+        )
+        preset_ids.append(res.json()["id"])
+    
+    # Bulk delete with some valid and some invalid IDs
+    # preset_ids[0] and preset_ids[1] are valid, 99999 and 99998 don't exist
+    res = await app_client.post(
+        "/api/export-presets/bulk-delete",
+        json={"ids": [preset_ids[0], preset_ids[1], 99999, 99998]},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["deleted_count"] == 2
+    assert data["not_found_count"] == 2
+    assert len(data["not_found_ids"]) == 2
+    assert 99999 in data["not_found_ids"]
+    assert 99998 in data["not_found_ids"]
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_export_presets_foreign_user(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that bulk delete doesn't delete other users' presets."""
+    user = cleanup_export_presets
+    
+    # Create a preset for the test user
+    res1 = await app_client.post(
+        "/api/export-presets",
+        json={"name": "My Preset"},
+        headers=_pro_headers(user),
+    )
+    my_preset_id = res1.json()["id"]
+    
+    # Create another user with a preset
+    other_user = make_user(email="other_bulk@example.com", tier=UserTier.PRO)
+    db_session.commit()
+    
+    res2 = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Other User Preset"},
+        headers={"Authorization": f"Bearer {create_access_token(other_user.id, other_user.email)}"},
+    )
+    other_preset_id = res2.json()["id"]
+    
+    # Try to bulk delete both presets as the first user
+    # Should only delete my_preset_id, not other_preset_id
+    res = await app_client.post(
+        "/api/export-presets/bulk-delete",
+        json={"ids": [my_preset_id, other_preset_id]},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["deleted_count"] == 1
+    assert data["foreign_count"] == 1
+    assert my_preset_id in data["deleted_ids"]
+    assert other_preset_id in data["foreign_ids"]
+    
+    # Verify the other user's preset still exists
+    get_res = await app_client.get(
+        f"/api/export-presets/{other_preset_id}",
+        headers={"Authorization": f"Bearer {create_access_token(other_user.id, other_user.email)}"},
+    )
+    assert get_res.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_export_presets_empty_list(app_client, make_user, db_session, cleanup_export_presets):
+    """Test bulk delete with empty list (should be rejected by Pydantic)."""
+    user = cleanup_export_presets
+    
+    res = await app_client.post(
+        "/api/export-presets/bulk-delete",
+        json={"ids": []},
+        headers=_pro_headers(user),
+    )
+    # Pydantic validation should reject empty list
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_export_presets_too_many(app_client, make_user, db_session, cleanup_export_presets):
+    """Test bulk delete with too many IDs (should be rejected by Pydantic)."""
+    user = cleanup_export_presets
+    
+    # Try to delete 51 presets (max is 50)
+    res = await app_client.post(
+        "/api/export-presets/bulk-delete",
+        json={"ids": list(range(1, 52))},
+        headers=_pro_headers(user),
+    )
+    # Pydantic validation should reject
+    assert res.status_code == 422

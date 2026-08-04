@@ -55,6 +55,10 @@ class ExportPresetUpdate(BaseModel):
     is_default: Optional[bool] = Field(None)
 
 
+class ExportPresetBulkDelete(BaseModel):
+    ids: list[int] = Field(..., min_items=1, max_items=50, description="List of preset IDs to delete")
+
+
 @router.get("/export-presets")
 async def list_export_presets(
     user: UserResponse = Depends(get_current_user_required),
@@ -688,4 +692,75 @@ async def reorder_export_presets(
     return {
         "status": "reordered",
         "updated_count": len([item for item in body if item.get("id")]),
+    }
+
+
+@router.post("/export-presets/bulk-delete")
+async def bulk_delete_export_presets(
+    body: ExportPresetBulkDelete,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Delete multiple export presets in a single request."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="export_presets_bulk_delete",
+        limit=30,
+        window_seconds=60,
+        message="Too many bulk delete requests. Please slow down.",
+    )
+    
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Export presets require Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+    
+    # Get the list of preset IDs to delete (Pydantic validates min_items=1, max_items=50)
+    preset_ids = body.ids
+    
+    # Find all presets that belong to the user and are in the provided list
+    presets_to_delete = (
+        db.query(ExportPreset)
+        .filter(
+            ExportPreset.id.in_(preset_ids),
+            ExportPreset.user_id == user.id,
+        )
+        .all()
+    )
+    
+    deleted_ids = []
+    not_found_ids = []
+    foreign_ids = []
+    
+    for preset_id in preset_ids:
+        preset_exists = any(p.id == preset_id for p in presets_to_delete)
+        if preset_exists:
+            deleted_ids.append(preset_id)
+        else:
+            # Check if preset exists but belongs to another user
+            preset = db.query(ExportPreset).filter(ExportPreset.id == preset_id).first()
+            if preset:
+                foreign_ids.append(preset_id)
+            else:
+                not_found_ids.append(preset_id)
+    
+    # Delete the valid presets
+    for preset in presets_to_delete:
+        db.delete(preset)
+    
+    db.commit()
+    
+    return {
+        "status": "bulk_deleted",
+        "deleted_count": len(deleted_ids),
+        "deleted_ids": deleted_ids,
+        "not_found_count": len(not_found_ids),
+        "not_found_ids": not_found_ids,
+        "foreign_count": len(foreign_ids),
+        "foreign_ids": foreign_ids,
     }
