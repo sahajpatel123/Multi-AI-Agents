@@ -1829,6 +1829,77 @@ async def list_orchestrations(
     })
 
 
+@router.get("/orchestrations/export.csv")
+async def export_orchestrations_csv(
+    status: str | None = Query(None, description="Filter by status: 'running', 'complete', 'failed'"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of all orchestrations for a user.
+
+    Streams orchestration data with formula-injection defense (_csv_safe).
+    Supports filtering by status.
+    """
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    from arena.routes.analytics import _csv_safe
+    import csv
+    import io
+    
+    # Get all orchestrations (not paginated for CSV)
+    query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
+    
+    if status:
+        query = query.filter(Orchestration.status == status)
+    
+    orchestrations = query.order_by(Orchestration.created_at.desc()).all()
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "id",
+        "status",
+        "created_at",
+        "task_count",
+        "task_ids",
+        "synthesis_preview",
+    ])
+    
+    # Write rows
+    for orch in orchestrations:
+        task_ids = list(orch.task_ids or [])
+        writer.writerow([
+            _csv_safe(orch.id),
+            _csv_safe(orch.status),
+            _csv_safe(orch.created_at.isoformat() if orch.created_at else ""),
+            _csv_safe(len(task_ids)),
+            _csv_safe(";".join(task_ids)),
+            _csv_safe((orch.synthesis or "")[:200]),
+        ])
+    
+    filename = f"arena-orchestrations-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/tasks/{task_id}/export/pdf")
 async def export_task_pdf(
     task_id: str,
