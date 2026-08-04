@@ -2891,6 +2891,109 @@ async def list_recent_feedback(
     return JSONResponse(content={"success": True, "items": items, "count": len(items)})
 
 
+@router.get("/feedback/export.csv")
+async def export_feedback_csv(
+    verdict: Optional[str] = Query(
+        None,
+        description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of all feedback for a user.
+
+    Streams feedback data with formula-injection defense.
+    Supports filtering by verdict.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    from arena.db_models import AnswerFeedback, AgentTask
+    from arena.core.http_headers import content_disposition_attachment
+    from fastapi.responses import Response
+    from arena.core.datetime_utils import utcnow_naive
+    import csv
+    import io
+    
+    def _csv_safe(value) -> str:
+        """Escape value for CSV to prevent formula injection."""
+        if value is None:
+            return ""
+        s = str(value)
+        if s.startswith(("=", "+", "-", "@")):
+            return "'" + s
+        return s
+    
+    # Get all feedback with task title
+    q = (
+        db.query(AnswerFeedback, AgentTask)
+        .outerjoin(AgentTask, AnswerFeedback.task_id == AgentTask.task_id)
+        .filter(AnswerFeedback.user_id == user.id)
+    )
+    
+    if verdict is not None:
+        if verdict in {"correct", "partial", "wrong"}:
+            q = q.filter(AnswerFeedback.verdict == verdict)
+        else:
+            q = q.filter(False)  # Return empty result for unknown verdict
+    
+    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
+    
+    # Format items
+    items = []
+    for feedback, task in rows:
+        items.append({
+            "id": feedback.id,
+            "task_id": feedback.task_id,
+            "title": task.title if task else None,
+            "verdict": feedback.verdict,
+            "note": feedback.note,
+            "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
+        })
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "id",
+        "task_id",
+        "title",
+        "verdict",
+        "note",
+        "created_at",
+    ])
+    
+    # Write rows
+    for item in items:
+        writer.writerow([
+            _csv_safe(item.get("id")),
+            _csv_safe(item.get("task_id")),
+            _csv_safe(item.get("title")),
+            _csv_safe(item.get("verdict")),
+            _csv_safe(item.get("note")),
+            _csv_safe(item.get("created_at")),
+        ])
+    
+    filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/tasks/export.jsonl")
 async def export_tasks_jsonl(
     retention_days: int = Query(30, ge=1, le=365),
