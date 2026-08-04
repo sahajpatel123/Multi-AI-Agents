@@ -1720,7 +1720,7 @@ async def test_create_preset_from_template_all_templates(app_client, make_user, 
     user = cleanup_export_presets
     
     template_ids = ["high_score", "recent", "bitcoin_all", "high_score_json", "all_responses", 
-                   "ethereum_all", "top_scoring", "low_score"]
+                   "ethereum_all", "top_scoring", "low_score", "medium_score"]
     
     for template_id in template_ids:
         res = await app_client.post(
@@ -1859,3 +1859,96 @@ async def test_list_export_presets_includes_max_score(app_client, make_user, db_
     data = res.json()
     assert data["total"] == 1
     assert data["presets"][0]["max_score"] == 90
+
+
+@pytest.mark.asyncio
+async def test_create_preset_invalid_score_range(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that creating a preset with min_score > max_score fails."""
+    user = cleanup_export_presets
+    
+    res = await app_client.post(
+        "/api/export-presets",
+        json={
+            "name": "Invalid Range",
+            "format": "csv",
+            "min_score": 80,
+            "max_score": 50,
+        },
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422  # Validation error
+    assert "max_score must be greater than or equal to min_score" in res.text
+
+
+@pytest.mark.asyncio
+async def test_update_preset_invalid_score_range(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that updating a preset with min_score > max_score fails."""
+    user = cleanup_export_presets
+    
+    # Create a preset first
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Test Preset", "format": "csv"},
+        headers=_pro_headers(user),
+    )
+    preset_id = create_res.json()["id"]
+    
+    # Try to update with invalid range
+    res = await app_client.put(
+        f"/api/export-presets/{preset_id}",
+        json={"min_score": 80, "max_score": 50},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422
+    assert "max_score must be greater than or equal to min_score" in res.text
+
+
+@pytest.mark.asyncio
+async def test_create_preset_from_medium_score_template(app_client, make_user, db_session, cleanup_export_presets):
+    """Test creating a preset from the medium_score template which has both min and max."""
+    user = cleanup_export_presets
+    
+    res = await app_client.post(
+        "/api/export-presets/from-template?template_id=medium_score",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "created_from_template"
+    assert data["template_id"] == "medium_score"
+    assert data["min_score"] == 50
+    assert data["max_score"] == 80
+
+
+@pytest.mark.asyncio
+async def test_list_export_presets_filter_by_max_score(app_client, make_user, db_session, cleanup_export_presets):
+    """Test filtering presets by max_score."""
+    user = cleanup_export_presets
+    
+    # Create presets with different max_scores
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Preset 1", "format": "csv", "max_score": 50},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Preset 2", "format": "csv", "max_score": 80},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Preset 3", "format": "csv"},
+        headers=_pro_headers(user),
+    )
+    
+    # Filter by max_score=50
+    res = await app_client.get(
+        "/api/export-presets?max_score=50",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["presets"][0]["name"] == "Preset 1"
+    assert data["presets"][0]["max_score"] == 50

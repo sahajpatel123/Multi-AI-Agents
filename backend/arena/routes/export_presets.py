@@ -12,7 +12,7 @@ Security:
 from typing import Optional
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -130,6 +130,18 @@ EXPORT_PRESET_TEMPLATES = [
         "max_score": 49,
         "sort": "score",
     },
+    {
+        "id": "medium_score",
+        "name": "Medium Score Responses (50-80)",
+        "description": "Export responses with score between 50 and 80",
+        "preset_type": "saved",
+        "format": "json",
+        "search": None,
+        "persona_id": None,
+        "min_score": 50,
+        "max_score": 80,
+        "sort": "score",
+    },
 ]
 
 
@@ -146,6 +158,13 @@ class ExportPresetCreate(BaseModel):
     position: Optional[int] = Field(None, ge=0, le=999)
     is_default: bool = Field(default=False)
 
+    @model_validator(mode='after')
+    def validate_score_range(self) -> 'ExportPresetCreate':
+        """Ensure min_score <= max_score when both are provided."""
+        if self.min_score is not None and self.max_score is not None and self.min_score > self.max_score:
+            raise ValueError('max_score must be greater than or equal to min_score')
+        return self
+
 
 class ExportPresetUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -158,6 +177,13 @@ class ExportPresetUpdate(BaseModel):
     sort: Optional[str] = Field(None, min_length=1, max_length=20)
     position: Optional[int] = Field(None, ge=0, le=999)
     is_default: Optional[bool] = Field(None)
+
+    @model_validator(mode='after')
+    def validate_score_range(self) -> 'ExportPresetUpdate':
+        """Ensure min_score <= max_score when both are provided."""
+        if self.min_score is not None and self.max_score is not None and self.min_score > self.max_score:
+            raise ValueError('max_score must be greater than or equal to min_score')
+        return self
 
 
 class ExportPresetBulkDelete(BaseModel):
@@ -172,6 +198,8 @@ async def list_export_presets(
     search: Optional[str] = Query(None, max_length=100, description="Search term to filter presets by name or description"),
     preset_type: Optional[str] = Query(None, max_length=20, description="Filter by preset type (e.g., 'saved')"),
     format: Optional[str] = Query(None, max_length=10, description="Filter by export format (e.g., 'csv', 'json', 'xlsx')"),
+    min_score: Optional[int] = Query(None, ge=0, le=100, description="Filter by minimum score"),
+    max_score: Optional[int] = Query(None, ge=0, le=100, description="Filter by maximum score"),
 ):
     """List all export presets for the current user.
     
@@ -179,6 +207,8 @@ async def list_export_presets(
     - search: Filter by name or description (case-insensitive, partial match)
     - preset_type: Filter by preset type
     - format: Filter by export format
+    - min_score: Filter by minimum score
+    - max_score: Filter by maximum score
     """
     enforce_user_rate_limit(
         user.id,
@@ -214,6 +244,14 @@ async def list_export_presets(
     # Apply format filter if provided
     if format:
         query = query.filter(ExportPreset.format == format)
+    
+    # Apply min_score filter if provided
+    if min_score is not None:
+        query = query.filter(ExportPreset.min_score == min_score)
+    
+    # Apply max_score filter if provided
+    if max_score is not None:
+        query = query.filter(ExportPreset.max_score == max_score)
     
     presets = query.order_by(ExportPreset.position.asc(), ExportPreset.updated_at.desc()).all()
     
