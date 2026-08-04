@@ -1466,6 +1466,7 @@ async def test_export_import_roundtrip(app_client, make_user, db_session, cleanu
         headers=_pro_headers(user),
     )
     exported_data = export_res.json()
+    assert "version" in exported_data
     
     # Get all preset IDs to delete them
     list_res_before = await app_client.get(
@@ -1506,3 +1507,68 @@ async def test_export_import_roundtrip(app_client, make_user, db_session, cleanu
     restored_names = [p["name"] for p in list_res.json()["presets"]]
     for name in original_names:
         assert name in restored_names
+
+
+@pytest.mark.asyncio
+async def test_export_presets_import_duplicate_names(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that importing presets with duplicate names appends a suffix."""
+    user = cleanup_export_presets
+    
+    # Create a preset with a specific name
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "My Preset"},
+        headers=_pro_headers(user),
+    )
+    
+    # Import a preset with the same name
+    from datetime import datetime
+    today_str = datetime.utcnow().strftime('%Y%m%d')
+    
+    res = await app_client.post(
+        "/api/export-presets/import",
+        json={"presets": [{"name": "My Preset"}]},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["imported_count"] == 1
+    assert "My Preset" in data["duplicated_names"]
+    
+    # Verify the imported preset has a modified name
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    presets = list_res.json()["presets"]
+    assert len(presets) == 2
+    
+    # One should be "My Preset" (original) and one should have the suffix
+    names = [p["name"] for p in presets]
+    assert "My Preset" in names
+    # The duplicate should have the imported suffix
+    imported_name = f"My Preset (Imported {today_str})"
+    assert imported_name in names
+
+
+@pytest.mark.asyncio
+async def test_export_presets_import_version_metadata(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that export includes version metadata."""
+    user = cleanup_export_presets
+    
+    # Create a preset
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Test Preset"},
+        headers=_pro_headers(user),
+    )
+    
+    # Export presets
+    res = await app_client.get(
+        "/api/export-presets/export",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert "version" in data
+    assert data["version"] == "1.0"

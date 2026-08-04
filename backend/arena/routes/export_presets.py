@@ -29,6 +29,9 @@ router = APIRouter(tags=["export_presets"])
 # Max presets per user to prevent abuse
 EXPORT_PRESETS_MAX_PER_USER = 50
 
+# Export format version
+EXPORT_PRESETS_FORMAT_VERSION = "1.0"
+
 
 class ExportPresetCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -318,6 +321,7 @@ async def export_export_presets(
     from arena.core.datetime_utils import utcnow_naive
     return {
         "status": "exported",
+        "version": EXPORT_PRESETS_FORMAT_VERSION,
         "user_id": user.id,
         "exported_at": utcnow_naive().isoformat(),
         "total_presets": len(presets),
@@ -900,10 +904,30 @@ async def import_export_presets(
     )
     next_position = (max_position.position + 1) if max_position else 0
     
+    # Build a set of existing preset names for duplicate detection
+    existing_names = {
+        p.name for p in (
+            db.query(ExportPreset)
+            .filter(ExportPreset.user_id == user.id)
+            .all()
+        )
+    }
+    
+    duplicated_names = []
+    
     for preset_data in body.presets:
         try:
             # Validate and sanitize inputs
             name = sanitize_model_text(preset_data.get("name", "Unnamed Preset"), max_length=100, field_name="name")
+            
+            # Handle duplicate names by appending a suffix
+            original_name = name
+            if name in existing_names or name in duplicated_names:
+                from arena.core.datetime_utils import utcnow_naive
+                timestamp = utcnow_naive().strftime('%Y%m%d')
+                name = f"{name} (Imported {timestamp})"
+                duplicated_names.append(original_name)
+            
             description = sanitize_model_text(preset_data.get("description"), max_length=500, field_name="description") if preset_data.get("description") else None
             
             preset = ExportPreset(
@@ -941,4 +965,5 @@ async def import_export_presets(
         "imported_ids": imported_ids,
         "skipped_count": skipped_count,
         "errors": errors,
+        "duplicated_names": duplicated_names,
     }
