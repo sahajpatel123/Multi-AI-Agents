@@ -6,6 +6,7 @@ import {
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaStatsTimelineCsv,
   exportAnalyticsPersonaStatsByCategoryCsv,
+  exportAgentWatchlistHistoryCsv,
 } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
@@ -101,4 +102,19 @@ describe('Analytics CSV export frontend API helpers', () => {
       {}
     );
   });
+
+  it('exportAgentWatchlistHistoryCsv encodes item ID and clamps limit', async () => {
+    const mockBlob = new Blob(['task_id,question,status'], { type: 'text/csv' });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(mockBlob, { status: 200 })
+    );
+
+    const res = await exportAgentWatchlistHistoryCsv('item-123/abc', 100);
+    expect(res).toBeInstanceOf(Blob);
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/agent/watchlist/item-123%2Fabc/history/export.csv?limit=100',
+      {}
+    );
+  });
 });
+

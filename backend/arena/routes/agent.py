@@ -2461,6 +2461,83 @@ async def get_watchlist_item_history(
     return JSONResponse(content={"success": True, **payload})
 
 
+@router.get("/watchlist/{item_id}/history/export.csv")
+async def get_watchlist_item_history_csv(
+    item_id: str,
+    limit: int = Query(100, ge=1, le=500, description="Max history rows to export."),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of run history for a single watchlist item.
+
+    Streams rows in CSV format with formula-injection defense (_csv_safe).
+    Includes task_id, status, created_at, intelligence_score, and final_answer snippet.
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_history_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait a moment.",
+    )
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
+    payload = get_watchlist_history(db, user.id, item.id, limit=limit)
+    items = payload.get("items", [])
+
+    import csv
+    import io
+    from arena.routes.analytics import _csv_safe
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+
+    writer.writerow([
+        "task_id",
+        "question",
+        "status",
+        "created_at",
+        "intelligence_score",
+        "final_answer_snippet",
+    ])
+
+    for row in items:
+        answer_raw = str(row.get("final_answer") or "")
+        snippet = answer_raw.replace("\n", " ").strip()[:150]
+        writer.writerow([
+            _csv_safe(row.get("task_id")),
+            _csv_safe(item.question),
+            _csv_safe(row.get("status")),
+            _csv_safe(row.get("created_at")),
+            _csv_safe(row.get("intelligence_score") if row.get("intelligence_score") is not None else ""),
+            _csv_safe(snippet),
+        ])
+
+    clean_question = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in item.question[:30]).strip("_") or "watchlist-item"
+    filename = f"arena-watch-history-{clean_question}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
+
 @router.get("/metrics")
 async def get_agent_metrics(
     window_days: int = Query(30, ge=1, le=90),

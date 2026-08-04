@@ -1328,6 +1328,19 @@ export async function getAgentWatchlistHistory(
   };
 }
 
+export async function exportAgentWatchlistHistoryCsv(itemId: string, limit = 100): Promise<Blob> {
+  const cap = Math.max(1, Math.min(500, Math.floor(limit)));
+  const response = await apiFetch(
+    `/api/agent/watchlist/${encodeURIComponent(itemId)}/history/export.csv?limit=${encodeURIComponent(String(cap))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export watch history CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+
 export async function postCalibrationRate(
   taskId: string,
   rating: number,
