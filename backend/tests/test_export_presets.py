@@ -1611,6 +1611,7 @@ async def test_create_preset_from_template(app_client, make_user, db_session, cl
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "created_from_template"
+    assert data["template_id"] == "high_score"
     assert "High Score" in data["name"]
     assert data["min_score"] == 80
     assert data["format"] == "csv"
@@ -1661,3 +1662,110 @@ async def test_create_preset_from_template_at_limit(app_client, make_user, db_se
     )
     assert res.status_code == 400
     assert "preset_limit_reached" in res.json()["detail"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_create_preset_from_template_with_custom_name(app_client, make_user, db_session, cleanup_export_presets):
+    """Test creating a preset from a template with a custom name override."""
+    user = cleanup_export_presets
+    
+    # Create preset from template with custom name
+    custom_name = "My Custom High Score Preset"
+    res = await app_client.post(
+        "/api/export-presets/from-template",
+        params={"template_id": "high_score", "name": custom_name},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "created_from_template"
+    assert data["name"] == custom_name
+    assert data["template_id"] == "high_score"
+    assert data["min_score"] == 80
+    assert data["format"] == "csv"
+    
+    # Verify the preset was created with the custom name
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    presets = list_res.json()["presets"]
+    assert len(presets) == 1
+    assert presets[0]["name"] == custom_name
+
+
+@pytest.mark.asyncio
+async def test_create_preset_from_template_without_custom_name(app_client, make_user, db_session, cleanup_export_presets):
+    """Test creating a preset from a template without custom name generates timestamp-suffixed name."""
+    user = cleanup_export_presets
+    
+    # Create preset from template without custom name
+    res = await app_client.post(
+        "/api/export-presets/from-template?template_id=high_score",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "created_from_template"
+    assert data["template_id"] == "high_score"
+    assert "High Score Responses" in data["name"]
+    # Name should have timestamp suffix
+    assert "(" in data["name"] and ")" in data["name"]
+    assert len(data["name"]) > len("High Score Responses")
+
+
+@pytest.mark.asyncio
+async def test_create_preset_from_template_all_templates(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that all template IDs are valid and can create presets."""
+    user = cleanup_export_presets
+    
+    template_ids = ["high_score", "recent", "bitcoin_all", "high_score_json", "all_responses", 
+                   "ethereum_all", "top_scoring", "low_score"]
+    
+    for template_id in template_ids:
+        res = await app_client.post(
+            "/api/export-presets/from-template",
+            params={"template_id": template_id},
+            headers=_pro_headers(user),
+        )
+        assert res.status_code == 200, f"Failed for template {template_id}"
+        data = res.json()
+        assert data["status"] == "created_from_template"
+        assert data["template_id"] == template_id
+    
+    # Verify all presets were created
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    assert list_res.json()["total"] == len(template_ids)
+
+
+@pytest.mark.asyncio
+async def test_create_preset_from_template_uses_custom_name(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that custom name is used exactly as provided (after basic sanitization)."""
+    user = cleanup_export_presets
+    
+    # Create with a specific custom name
+    custom_name = "My Special Preset"
+    res = await app_client.post(
+        "/api/export-presets/from-template",
+        params={"template_id": "high_score", "name": custom_name},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    # The name should be exactly what we provided
+    assert data["name"] == custom_name
+    
+    # Also test with whitespace that should be stripped
+    custom_name_with_spaces = "  My Preset  "
+    res2 = await app_client.post(
+        "/api/export-presets/from-template",
+        params={"template_id": "recent", "name": custom_name_with_spaces},
+        headers=_pro_headers(user),
+    )
+    assert res2.status_code == 200
+    data2 = res2.json()
+    # Whitespace should be stripped
+    assert data2["name"] == "My Preset"

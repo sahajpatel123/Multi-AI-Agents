@@ -89,6 +89,39 @@ EXPORT_PRESET_TEMPLATES = [
         "min_score": None,
         "sort": "newest",
     },
+    {
+        "id": "ethereum_all",
+        "name": "All Ethereum Responses",
+        "description": "Export all responses containing Ethereum",
+        "preset_type": "saved",
+        "format": "csv",
+        "search": "Ethereum",
+        "persona_id": None,
+        "min_score": None,
+        "sort": "newest",
+    },
+    {
+        "id": "top_scoring",
+        "name": "Top Scoring (95+)",
+        "description": "Export only the highest quality responses",
+        "preset_type": "saved",
+        "format": "json",
+        "search": None,
+        "persona_id": None,
+        "min_score": 95,
+        "sort": "score",
+    },
+    {
+        "id": "low_score",
+        "name": "Low Score Responses",
+        "description": "Export responses with score < 50 for review",
+        "preset_type": "saved",
+        "format": "csv",
+        "search": None,
+        "persona_id": None,
+        "min_score": None,
+        "sort": "score",
+    },
 ]
 
 
@@ -423,13 +456,21 @@ async def list_export_preset_templates(
     }
 
 
+class CreateFromTemplateQuery(BaseModel):
+    template_id: str = Field(..., min_length=1, max_length=50, description="ID of the template to use")
+    name: Optional[str] = Field(None, max_length=100, description="Optional custom name for the preset")
+
+
 @router.post("/export-presets/from-template")
 async def create_preset_from_template(
-    template_id: str = Query(..., description="ID of the template to use"),
+    query: CreateFromTemplateQuery = Depends(),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Create an export preset from a template."""
+    """Create an export preset from a template.
+    
+    Supports optional name override via query parameter.
+    """
     enforce_user_rate_limit(
         user.id,
         scope="export_presets_from_template",
@@ -447,6 +488,9 @@ async def create_preset_from_template(
                 "upgrade_required": "plus",
             },
         )
+    
+    template_id = query.template_id
+    custom_name = query.name
     
     # Find the template
     template = None
@@ -489,12 +533,20 @@ async def create_preset_from_template(
     
     # Create the preset from the template
     from arena.core.datetime_utils import utcnow_naive
-    timestamp = utcnow_naive().strftime('%Y%m%d-%H%M%S')
+    
+    # Use custom name if provided, otherwise generate timestamp-suffixed name
+    if custom_name:
+        name = sanitize_model_text(custom_name, max_length=100, field_name="name")
+    else:
+        timestamp = utcnow_naive().strftime('%Y%m%d-%H%M%S')
+        name = f"{template['name']} ({timestamp})"
+    
+    description = sanitize_model_text(template["description"], max_length=500, field_name="description") if template["description"] else None
     
     preset = ExportPreset(
         user_id=user.id,
-        name=f"{template['name']} ({timestamp})",
-        description=template["description"],
+        name=name,
+        description=description,
         preset_type=template["preset_type"],
         format=template["format"],
         search=template["search"],
@@ -512,6 +564,7 @@ async def create_preset_from_template(
     return {
         "status": "created_from_template",
         "id": preset.id,
+        "template_id": template_id,
         "name": preset.name,
         "description": preset.description,
         "preset_type": preset.preset_type,
