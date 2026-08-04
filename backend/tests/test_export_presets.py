@@ -90,9 +90,15 @@ async def test_list_export_presets(app_client, make_user, db_session, cleanup_ex
     assert data["total"] == 2
     assert len(data["presets"]) == 2
     
-    # Should be ordered by updated_at desc (newest first)
-    assert data["presets"][0]["name"] == "JSON Exports"
-    assert data["presets"][1]["name"] == "Bitcoin Exports"
+    # Check both presets are present (order may vary based on position)
+    preset_names = [p["name"] for p in data["presets"]]
+    assert "JSON Exports" in preset_names
+    assert "Bitcoin Exports" in preset_names
+    
+    # Check that positions are set correctly (0 and 1)
+    preset_positions = [p["position"] for p in data["presets"]]
+    assert 0 in preset_positions
+    assert 1 in preset_positions
 
 
 @pytest.mark.asyncio
@@ -318,3 +324,292 @@ async def test_use_export_preset_redirects(app_client, make_user, db_session, cl
     assert "format=json" in res.headers["location"]
     assert "search=Bitcoin" in res.headers["location"]
     assert "sort=score" in res.headers["location"]
+
+
+# Enhanced Features Tests (added in Loop 19 - POLISH phase)
+@pytest.mark.asyncio
+async def test_export_preset_position_auto_increment(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that presets get auto-incremented positions."""
+    user = cleanup_export_presets
+    
+    # Create first preset - should get position 0
+    res1 = await app_client.post(
+        "/api/export-presets",
+        json={"name": "First"},
+        headers=_pro_headers(user),
+    )
+    assert res1.json()["position"] == 0
+    
+    # Create second preset - should get position 1
+    res2 = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Second"},
+        headers=_pro_headers(user),
+    )
+    assert res2.json()["position"] == 1
+    
+    # Create third preset - should get position 2
+    res3 = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Third"},
+        headers=_pro_headers(user),
+    )
+    assert res3.json()["position"] == 2
+
+
+@pytest.mark.asyncio
+async def test_export_preset_default_flag(app_client, make_user, db_session, cleanup_export_presets):
+    """Test default preset functionality."""
+    user = cleanup_export_presets
+    
+    # Create first preset as default
+    res1 = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Default Preset", "is_default": True},
+        headers=_pro_headers(user),
+    )
+    assert res1.json()["is_default"] == True
+    
+    # Create second preset - should not be default
+    res2 = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Regular Preset"},
+        headers=_pro_headers(user),
+    )
+    assert res2.json()["is_default"] == False
+    
+    # Check that first preset is still default
+    res = await app_client.get(
+        f"/api/export-presets/{res1.json()['id']}",
+        headers=_pro_headers(user),
+    )
+    assert res.json()["is_default"] == True
+    
+    # Get default preset endpoint
+    default_res = await app_client.get(
+        "/api/export-presets/default",
+        headers=_pro_headers(user),
+    )
+    default_data = default_res.json()
+    assert default_data is not None, "Default preset should exist"
+    assert default_data["id"] == res1.json()["id"]
+    
+    # Set second preset as default - should un-set first
+    update_res = await app_client.put(
+        f"/api/export-presets/{res2.json()['id']}",
+        json={"is_default": True},
+        headers=_pro_headers(user),
+    )
+    assert update_res.json()["is_default"] == True
+    
+    # Check that first preset is no longer default
+    res = await app_client.get(
+        f"/api/export-presets/{res1.json()['id']}",
+        headers=_pro_headers(user),
+    )
+    assert res.json()["is_default"] == False
+    
+    # Check default endpoint now returns second preset
+    default_res2 = await app_client.get(
+        "/api/export-presets/default",
+        headers=_pro_headers(user),
+    )
+    default_data2 = default_res2.json()
+    assert default_data2 is not None, "Default preset should exist"
+    assert default_data2["id"] == res2.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_export_preset_last_used_at(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that last_used_at is updated when preset is used."""
+    user = cleanup_export_presets
+    
+    # Create a preset
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Test Preset"},
+        headers=_pro_headers(user),
+    )
+    preset_id = create_res.json()["id"]
+    
+    # Check that last_used_at is None initially
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}",
+        headers=_pro_headers(user),
+    )
+    assert res.json()["last_used_at"] is None
+    
+    # Use the preset
+    await app_client.post(
+        f"/api/export-presets/{preset_id}/use",
+        headers=_pro_headers(user),
+    )
+    
+    # Check that last_used_at is now set
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}",
+        headers=_pro_headers(user),
+    )
+    assert res.json()["last_used_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_duplicate_export_preset(app_client, make_user, db_session, cleanup_export_presets):
+    """Test duplicating an export preset."""
+    user = cleanup_export_presets
+    
+    # Create original preset
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Original", "format": "json", "position": 5},
+        headers=_pro_headers(user),
+    )
+    original_id = create_res.json()["id"]
+    
+    # Duplicate the preset
+    dup_res = await app_client.post(
+        f"/api/export-presets/{original_id}/duplicate",
+        headers=_pro_headers(user),
+    )
+    assert dup_res.status_code == 200
+    dup_data = dup_res.json()
+    assert dup_data["status"] == "duplicated"
+    assert dup_data["original_id"] == original_id
+    assert dup_data["new_id"] != original_id
+    assert "Copy" in dup_data["name"]
+    assert dup_data["position"] == 6  # Should be original position + 1
+    assert dup_data["is_default"] == False  # Duplicates are never default
+    
+    # Verify the duplicated preset has the same settings
+    get_res = await app_client.get(
+        f"/api/export-presets/{dup_data['new_id']}",
+        headers=_pro_headers(user),
+    )
+    dup_preset = get_res.json()
+    assert dup_preset["format"] == "json"
+
+
+@pytest.mark.asyncio
+async def test_reorder_export_presets(app_client, make_user, db_session, cleanup_export_presets):
+    """Test reordering export presets."""
+    user = cleanup_export_presets
+    
+    # Create three presets
+    preset_ids = []
+    for i in range(3):
+        res = await app_client.post(
+            "/api/export-presets",
+            json={"name": f"Preset {i}"},
+            headers=_pro_headers(user),
+        )
+        preset_ids.append(res.json()["id"])
+    
+    # Reorder them in reverse order
+    reorder_body = [
+        {"id": preset_ids[2]},  # Third preset -> position 0
+        {"id": preset_ids[1]},  # Second preset -> position 1
+        {"id": preset_ids[0]},  # First preset -> position 2
+    ]
+    
+    reorder_res = await app_client.post(
+        "/api/export-presets/reorder",
+        json=reorder_body,
+        headers=_pro_headers(user),
+    )
+    assert reorder_res.status_code == 200
+    assert reorder_res.json()["status"] == "reordered"
+    assert reorder_res.json()["updated_count"] == 3
+    
+    # Check the order is updated
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    presets = list_res.json()["presets"]
+    
+    # Should be ordered by position ascending
+    assert presets[0]["id"] == preset_ids[2]
+    assert presets[1]["id"] == preset_ids[1]
+    assert presets[2]["id"] == preset_ids[0]
+    
+    # Check positions are updated
+    assert presets[0]["position"] == 0
+    assert presets[1]["position"] == 1
+    assert presets[2]["position"] == 2
+
+
+@pytest.mark.asyncio
+async def test_export_preset_new_fields_in_response(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that new fields (position, is_default, last_used_at) are in responses."""
+    user = cleanup_export_presets
+    
+    # Create a preset
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Test"},
+        headers=_pro_headers(user),
+    )
+    preset_id = create_res.json()["id"]
+    
+    # Check create response has new fields
+    data = create_res.json()
+    assert "position" in data
+    assert "is_default" in data
+    assert "last_used_at" in data
+    
+    # Check list response has new fields
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    preset_data = list_res.json()["presets"][0]
+    assert "position" in preset_data
+    assert "is_default" in preset_data
+    assert "last_used_at" in preset_data
+    
+    # Check get response has new fields
+    get_res = await app_client.get(
+        f"/api/export-presets/{preset_id}",
+        headers=_pro_headers(user),
+    )
+    get_data = get_res.json()
+    assert "position" in get_data
+    assert "is_default" in get_data
+    assert "last_used_at" in get_data
+
+
+@pytest.mark.asyncio
+async def test_export_presets_ordered_by_position(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that presets are ordered by position then updated_at."""
+    user = cleanup_export_presets
+    
+    # Create presets with specific positions
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Zebra", "position": 2},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Apple", "position": 0},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Mango", "position": 1},
+        headers=_pro_headers(user),
+    )
+    
+    # List should be ordered by position
+    res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    presets = res.json()["presets"]
+    
+    assert presets[0]["name"] == "Apple"
+    assert presets[0]["position"] == 0
+    assert presets[1]["name"] == "Mango"
+    assert presets[1]["position"] == 1
+    assert presets[2]["name"] == "Zebra"
+    assert presets[2]["position"] == 2

@@ -385,6 +385,9 @@ class ExportPreset(Base):
     persona_id = Column(String(50), nullable=True)
     min_score = Column(Integer, nullable=True)
     sort = Column(String(20), nullable=False, default="newest")
+    position = Column(Integer, nullable=False, default=0)  # For custom ordering
+    is_default = Column(Boolean, nullable=False, default=False)  # Mark as default preset
+    last_used_at = Column(DateTime, nullable=True)  # Track when preset was last used
     created_at = Column(DateTime, default=_now, nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 
@@ -393,6 +396,7 @@ class ExportPreset(Base):
     __table_args__ = (
         Index("idx_export_presets_user", "user_id"),
         Index("idx_export_presets_user_created", "user_id", "created_at"),
+        Index("idx_export_presets_user_position", "user_id", "position"),
     )
 
 
