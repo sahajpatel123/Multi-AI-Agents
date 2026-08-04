@@ -1767,6 +1767,68 @@ async def export_orchestration_pdf(
     )
 
 
+@router.get("/orchestrations")
+async def list_orchestrations(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    status: str | None = Query(None, description="Filter by status: 'running', 'complete', 'failed'"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """List all orchestrations for a user with pagination.
+
+    Returns orchestration metadata including id, status, created_at, task_count,
+    synthesis preview, and child task IDs.
+    """
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_list",
+        limit=60,
+        window_seconds=60,
+        message="Too many orchestration list requests. Please slow down.",
+    )
+    
+    offset = (page - 1) * per_page
+    
+    # Base query
+    query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
+    
+    # Apply status filter
+    if status:
+        query = query.filter(Orchestration.status == status)
+    
+    # Get total count
+    total = query.count()
+    
+    # Get paginated results
+    orchestrations = query.order_by(Orchestration.created_at.desc())
+    orchestrations = orchestrations.offset(offset).limit(per_page).all()
+    
+    # Format results
+    items = []
+    for orch in orchestrations:
+        task_ids = list(orch.task_ids or [])
+        items.append({
+            "id": orch.id,
+            "status": orch.status,
+            "created_at": orch.created_at.isoformat() if orch.created_at else None,
+            "task_count": len(task_ids),
+            "task_ids": task_ids,
+            "synthesis_preview": orch.synthesis[:200] if orch.synthesis else None,
+        })
+    
+    return JSONResponse(content={
+        "success": True,
+        "orchestrations": items,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+    })
+
+
 @router.get("/tasks/{task_id}/export/pdf")
 async def export_task_pdf(
     task_id: str,
