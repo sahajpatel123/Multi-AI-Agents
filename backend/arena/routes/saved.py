@@ -525,15 +525,71 @@ async def export_saved(
             )
         
         wb = Workbook()
-        ws = wb.active
-        ws.title = "Saved Responses"
+        
+        # Add Summary sheet first
+        summary_ws = wb.active
+        summary_ws.title = "Summary"
+        
+        # Summary information
+        summary_ws.append(["Arena Saved Responses Export"])
+        summary_ws.append([""])
+        summary_ws.append(["Export Details:"])
+        summary_ws.append(["Format:", "XLSX"])
+        summary_ws.append(["Exported At:", export_timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')])
+        summary_ws.append(["Total Records:", len(saved_items)])
+        summary_ws.append([""])
+        summary_ws.append(["Filters Applied:"])
+        summary_ws.append(["Search:", search or "None"])
+        summary_ws.append(["Persona:", persona_id or "All"])
+        summary_ws.append(["Min Score:", str(min_score) if min_score is not None else "None"])
+        summary_ws.append(["Sort:", sort])
+        summary_ws.append([""])
+        summary_ws.append(["User ID:", user.id])
+        
+        # Style summary sheet
+        from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+        from openpyxl.styles.colors import Color
+        
+        bold_font = Font(bold=True)
+        gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+        
+        # Style summary header
+        summary_ws["A1"].font = Font(bold=True, size=14, color=Color("0066CC"))
+        summary_ws["A1"].alignment = Alignment(horizontal='center')
+        
+        # Style key-value pairs
+        for row in summary_ws.iter_rows(min_row=3, max_row=13, min_col=1, max_col=2):
+            for cell in row:
+                cell.border = thin_border
+                if cell.column == 1:  # Key column
+                    cell.font = bold_font
+                    cell.fill = gray_fill
+        
+        # Set column widths for summary
+        summary_ws.column_dimensions["A"].width = 20
+        summary_ws.column_dimensions["B"].width = 30
+        
+        # Add Data sheet
+        data_ws = wb.create_sheet(title="Data")
         
         # Write header
         headers_row = [
-            "id", "session_id", "agent_id", "persona_id", "persona_name", "persona_color",
-            "prompt", "one_liner", "verdict", "score", "confidence", "saved_at"
+            "ID", "Session ID", "Agent ID", "Persona ID", "Persona Name", "Persona Color",
+            "Prompt", "One Liner", "Verdict", "Score", "Confidence", "Saved At"
         ]
-        ws.append(headers_row)
+        data_ws.append(headers_row)
+        
+        # Style header row
+        header_fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
+        header_font = Font(bold=True, color=Color("FFFFFF"))
+        header_alignment = Alignment(horizontal='center')
+        
+        for cell in data_ws[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
         
         # Write data rows
         for item in saved_items:
@@ -551,20 +607,38 @@ async def export_saved(
                 item.confidence,
                 item.saved_at.isoformat() if item.saved_at else "",
             ]
-            ws.append(row)
+            data_ws.append(row)
         
-        # Auto-adjust column widths
-        for col in ws.columns:
+        # Style data cells
+        for row in data_ws.iter_rows(min_row=2):  # Skip header
+            for cell in row:
+                cell.border = thin_border
+                # Right align numbers
+                if cell.column in [9, 10, 11]:  # Score, Confidence, Saved At
+                    cell.alignment = Alignment(horizontal='right')
+                # Left align text
+                else:
+                    cell.alignment = Alignment(horizontal='left', wrap_text=True)
+        
+        # Auto-adjust column widths for data sheet
+        for col in data_ws.columns:
             max_length = 0
             column = col[0].column_letter  # Get the column name
             for cell in col:
                 try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
+                    cell_length = len(str(cell.value)) if cell.value else 0
+                    if cell_length > max_length:
+                        max_length = cell_length
                 except:
                     pass
             adjusted_width = (max_length + 2) * 1.2
-            ws.column_dimensions[column].width = max(10, min(adjusted_width, 80))  # Cap at 80
+            data_ws.column_dimensions[column].width = max(10, min(adjusted_width, 80))  # Cap at 80
+        
+        # Freeze header row
+        data_ws.freeze_panes = "A2"
+        
+        # Set data sheet as active (more intuitive for users)
+        wb.active = data_ws
         
         # Save workbook to bytes
         xlsx_buffer = io.BytesIO()

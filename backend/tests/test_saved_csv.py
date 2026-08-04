@@ -1,3 +1,4 @@
+import io
 import pytest
 from arena.core.datetime_utils import utcnow_naive
 from arena.core.auth import create_access_token
@@ -431,3 +432,104 @@ async def test_saved_xlsx_export_filename_has_timestamp(app_client, make_user, d
     content_disposition = res.headers["content-disposition"]
     assert "-" in content_disposition
     assert ".xlsx" in content_disposition
+
+
+# Enhanced XLSX Tests (added in Loop 17 - POLISH phase)
+@pytest.mark.asyncio
+async def test_saved_xlsx_has_multiple_sheets(app_client, make_user, db_session):
+    """Test that XLSX export has Summary and Data sheets."""
+    try:
+        import openpyxl
+    except ImportError:
+        pytest.skip("openpyxl not available")
+    
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_saved(db_session, user.id, "save-1", prompt="Test prompt")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=xlsx",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    
+    # Load the XLSX file and check sheets
+    wb = openpyxl.load_workbook(io.BytesIO(res.content))
+    sheet_names = wb.sheetnames
+    
+    assert "Summary" in sheet_names
+    assert "Data" in sheet_names
+    
+    # Check summary sheet content
+    summary_ws = wb["Summary"]
+    summary_content = [[cell.value for cell in row] for row in summary_ws.iter_rows()]
+    
+    # Should contain export details
+    assert any("Arena Saved Responses Export" in str(row) for row in summary_content)
+    assert any("XLSX" in str(row) for row in summary_content)
+    assert any("Total Records:" in str(row) for row in summary_content)
+
+
+@pytest.mark.asyncio
+async def test_saved_xlsx_has_styled_headers(app_client, make_user, db_session):
+    """Test that XLSX data sheet has styled headers."""
+    try:
+        import openpyxl
+    except ImportError:
+        pytest.skip("openpyxl not available")
+    
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_saved(db_session, user.id, "save-1", prompt="Test prompt")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=xlsx",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    
+    # Load and check header styling
+    wb = openpyxl.load_workbook(io.BytesIO(res.content))
+    data_ws = wb["Data"]
+    
+    # Header should be in row 1
+    header_cell = data_ws["A1"]
+    assert header_cell.value == "ID"
+    
+    # Check that header has bold font and fill (check attributes directly)
+    assert hasattr(header_cell.font, 'bold')
+    assert header_cell.font.bold
+    assert hasattr(header_cell.fill, 'start_color')
+    assert header_cell.fill.start_color.rgb is not None
+
+
+@pytest.mark.asyncio
+async def test_saved_xlsx_has_frozen_panes(app_client, make_user, db_session):
+    """Test that XLSX data sheet has frozen header row."""
+    try:
+        import openpyxl
+    except ImportError:
+        pytest.skip("openpyxl not available")
+    
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_saved(db_session, user.id, "save-1", prompt="Test prompt")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=xlsx",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    
+    # Load and check frozen panes
+    wb = openpyxl.load_workbook(io.BytesIO(res.content))
+    data_ws = wb["Data"]
+    
+    # Should have frozen panes at A2 (header row frozen)
+    assert data_ws.freeze_panes == "A2"
