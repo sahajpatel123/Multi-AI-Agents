@@ -945,3 +945,144 @@ async def test_export_presets_search_partial_match(app_client, make_user, db_ses
     data = res.json()
     assert data["total"] == 1
     assert data["presets"][0]["name"] == "Bitcoin Price Analysis"
+
+
+# Filter tests (added in Loop 23 - POLISH phase)
+@pytest.mark.asyncio
+async def test_export_presets_filter_by_format(app_client, make_user, db_session, cleanup_export_presets):
+    """Test filtering presets by format."""
+    user = cleanup_export_presets
+    
+    # Create presets with different formats
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "CSV Preset", "format": "csv"},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "JSON Preset", "format": "json"},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "XLSX Preset", "format": "xlsx"},
+        headers=_pro_headers(user),
+    )
+    
+    # Filter by csv format
+    res = await app_client.get(
+        "/api/export-presets?format=csv",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["presets"][0]["name"] == "CSV Preset"
+
+
+@pytest.mark.asyncio
+async def test_export_presets_filter_by_preset_type(app_client, make_user, db_session, cleanup_export_presets):
+    """Test filtering presets by preset_type."""
+    user = cleanup_export_presets
+    
+    # Create presets with different types
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Saved Preset", "preset_type": "saved"},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Session Preset", "preset_type": "sessions"},
+        headers=_pro_headers(user),
+    )
+    
+    # Filter by saved type
+    res = await app_client.get(
+        "/api/export-presets?preset_type=saved",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["presets"][0]["name"] == "Saved Preset"
+
+
+@pytest.mark.asyncio
+async def test_export_presets_combined_filters(app_client, make_user, db_session, cleanup_export_presets):
+    """Test combining search and format filters."""
+    user = cleanup_export_presets
+    
+    # Create various presets
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Bitcoin CSV", "format": "csv", "description": "Bitcoin exports in CSV"},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Bitcoin JSON", "format": "json", "description": "Bitcoin exports in JSON"},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Ethereum CSV", "format": "csv", "description": "Ethereum exports in CSV"},
+        headers=_pro_headers(user),
+    )
+    
+    # Search for Bitcoin AND filter by csv format
+    res = await app_client.get(
+        "/api/export-presets?search=Bitcoin&format=csv",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["presets"][0]["name"] == "Bitcoin CSV"
+
+
+@pytest.mark.asyncio
+async def test_export_presets_filter_no_match(app_client, make_user, db_session, cleanup_export_presets):
+    """Test filter with no matching results."""
+    user = cleanup_export_presets
+    
+    # Create only json presets
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "JSON Preset", "format": "json"},
+        headers=_pro_headers(user),
+    )
+    
+    # Filter by csv (no matches)
+    res = await app_client.get(
+        "/api/export-presets?format=csv",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 0
+    assert data["presets"] == []
+
+
+@pytest.mark.asyncio
+async def test_export_presets_search_sanitization(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that search input is properly sanitized."""
+    user = cleanup_export_presets
+    
+    # Create a preset
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Test Preset"},
+        headers=_pro_headers(user),
+    )
+    
+    # Search with potentially problematic input (should be sanitized)
+    res = await app_client.get(
+        "/api/export-presets?search=<script>alert('xss')</script>",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    # Should not cause any errors and should handle the input safely
+    data = res.json()
+    assert "presets" in data

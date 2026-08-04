@@ -60,10 +60,15 @@ async def list_export_presets(
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
     search: Optional[str] = Query(None, max_length=100, description="Search term to filter presets by name or description"),
+    preset_type: Optional[str] = Query(None, max_length=20, description="Filter by preset type (e.g., 'saved')"),
+    format: Optional[str] = Query(None, max_length=10, description="Filter by export format (e.g., 'csv', 'json', 'xlsx')"),
 ):
     """List all export presets for the current user.
     
-    Supports optional search query parameter to filter presets by name or description.
+    Supports optional query parameters:
+    - search: Filter by name or description (case-insensitive, partial match)
+    - preset_type: Filter by preset type
+    - format: Filter by export format
     """
     enforce_user_rate_limit(
         user.id,
@@ -81,13 +86,24 @@ async def list_export_presets(
     # Apply search filter if provided
     if search:
         from sqlalchemy import or_
-        search_pattern = f"%{search}%"
-        query = query.filter(
-            or_(
-                ExportPreset.name.ilike(search_pattern),
-                ExportPreset.description.ilike(search_pattern),
+        # Sanitize search input
+        sanitized_search = sanitize_model_text(search, max_length=100, field_name="search")
+        if sanitized_search:
+            search_pattern = f"%{sanitized_search}%"
+            query = query.filter(
+                or_(
+                    ExportPreset.name.ilike(search_pattern),
+                    ExportPreset.description.ilike(search_pattern),
+                )
             )
-        )
+    
+    # Apply preset_type filter if provided
+    if preset_type:
+        query = query.filter(ExportPreset.preset_type == preset_type)
+    
+    # Apply format filter if provided
+    if format:
+        query = query.filter(ExportPreset.format == format)
     
     presets = query.order_by(ExportPreset.position.asc(), ExportPreset.updated_at.desc()).all()
     
