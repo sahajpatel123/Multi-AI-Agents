@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
-from arena.core.input_validation import sanitize_model_text
+from arena.core.input_validation import sanitize_model_text, sanitize_model_optional_text
 from arena.core.memory import get_memory_manager
 from arena.core.preferences import infer_preferences_from_session
 from arena.core.rate_limits import enforce_user_rate_limit
@@ -317,6 +317,112 @@ async def list_summaries(
     }
 
 
+@memory_router.get("/summaries/export.csv")
+async def export_summaries_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
+    persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
+    search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+):
+    """CSV export of all session summaries for a user.
+
+    Streams compressed session data with formula-injection defense.
+    Supports the same filters as /api/memory/summaries.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="memory_summaries_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "feature_not_allowed", "message": "Memory export requires Plus or Pro."},
+        )
+    
+    def _csv_safe(value) -> str:
+        """Escape value for CSV to prevent formula injection."""
+        if value is None:
+            return ""
+        s = str(value)
+        if s.startswith(("=", "+", "-", "@")):
+            return "'" + s
+        return s
+    
+    # Get all summaries (not paginated for CSV)
+    q = db.query(SessionSummary).filter(SessionSummary.user_id == user.id)
+    
+    if category:
+        q = q.filter(SessionSummary.dominant_category == category)
+    
+    if persona_id:
+        q = q.filter(SessionSummary.trusted_persona == persona_id)
+    
+    if search:
+        from sqlalchemy import or_
+        safe_search = sanitize_model_optional_text(search, max_length=100, field_name="search")
+        if safe_search:
+            q = q.filter(
+                or_(
+                    SessionSummary.session_summary.ilike(f"%{safe_search}%", escape="\\"),
+                    SessionSummary.main_topics.ilike(f"%{safe_search}%", escape="\\"),
+                )
+            )
+    
+    summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
+    
+    import csv
+    import io
+    from arena.core.datetime_utils import utcnow_naive
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "id",
+        "session_id",
+        "session_summary",
+        "dominant_category",
+        "preferred_depth",
+        "trusted_persona",
+        "exchange_count",
+        "main_topics",
+        "compressed_at",
+    ])
+    
+    # Write rows
+    for row in summaries:
+        writer.writerow([
+            _csv_safe(row.id),
+            _csv_safe(row.session_id),
+            _csv_safe((row.session_summary or "")[:500]),
+            _csv_safe(row.dominant_category),
+            _csv_safe(row.preferred_depth),
+            _csv_safe(row.trusted_persona),
+            _csv_safe(row.exchange_count),
+            _csv_safe(";".join(row.main_topics or [])),
+            _csv_safe(row.compressed_at.isoformat() if row.compressed_at else ""),
+        ])
+    
+    filename = f"arena-memory-summaries-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    from fastapi.responses import Response
+    from arena.core.http_headers import content_disposition_attachment
+    
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
 @memory_router.get("/summaries/{summary_id}")
 async def get_summary(
     summary_id: int,
@@ -390,3 +496,5 @@ async def delete_summary(
     db.delete(row)
     db.commit()
     return {"status": "deleted", "id": summary_id}
+
+
