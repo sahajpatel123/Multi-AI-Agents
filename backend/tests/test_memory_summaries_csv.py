@@ -147,3 +147,58 @@ async def test_memory_summaries_csv_403_for_guest(app_client, make_user, db_sess
     )
     # Guest users should get 403 (Forbidden) - memory requires Plus/Pro
     assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_memory_summaries_json_export(app_client, make_user, db_session):
+    """Test JSON export of memory summaries."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_summary(db_session, user.id, "sess-1", summary_text="Bitcoin analysis")
+    _seed_summary(db_session, user.id, "sess-2", summary_text="Ethereum research")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/memory/summaries/export.json",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "application/json" in res.headers["content-type"]
+    import json
+    items = json.loads(res.text)
+    assert len(items) == 2
+    session_ids = [item["session_id"] for item in items]
+    assert "sess-1" in session_ids
+    assert "sess-2" in session_ids
+
+
+@pytest.mark.asyncio
+async def test_memory_summaries_json_export_empty(app_client, make_user, db_session):
+    """Test JSON export when user has no summaries."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/memory/summaries/export.json",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    import json
+    items = json.loads(res.text)
+    assert items == []
+
+
+@pytest.mark.asyncio
+async def test_memory_summaries_json_403_for_guest(app_client, make_user, db_session):
+    """Test that guest users without memory access get 403 for JSON export."""
+    from arena.db_models import UserTier as DBUserTier
+    user = make_user(email="guest_memory_json@example.com", tier=DBUserTier.GUEST)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/memory/summaries/export.json",
+        headers={"Authorization": f"Bearer {create_access_token(user.id, user.email)}"},
+    )
+    # Guest users should get 403 (Forbidden) - memory requires Plus/Pro
+    assert res.status_code == 403

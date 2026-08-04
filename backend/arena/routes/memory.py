@@ -423,6 +423,91 @@ async def export_summaries_csv(
         media_type="text/csv; charset=utf-8",
         headers=headers,
     )
+
+
+@memory_router.get("/summaries/export.json")
+async def export_summaries_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    category: Optional[str] = Query(None, max_length=50, description="Filter by dominant_category."),
+    persona_id: Optional[str] = Query(None, max_length=50, description="Filter to summaries where trusted_persona matches."),
+    search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on session_summary text."),
+):
+    """JSON export of all session summaries for a user.
+
+    Returns all session summaries as a JSON array.
+    Supports the same filters as /api/memory/summaries.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="memory_summaries_json",
+        limit=30,
+        window_seconds=60,
+        message="Too many JSON exports. Please wait.",
+    )
+    
+    if not has_feature(normalize_tier(get_tier_str(user)), "memory"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "feature_not_allowed", "message": "Memory export requires Plus or Pro."},
+        )
+    
+    # Get all summaries (not paginated for export)
+    q = db.query(SessionSummary).filter(SessionSummary.user_id == user.id)
+    
+    if category:
+        q = q.filter(SessionSummary.dominant_category == category)
+    
+    if persona_id:
+        q = q.filter(SessionSummary.trusted_persona == persona_id)
+    
+    if search:
+        from sqlalchemy import or_
+        safe_search = sanitize_model_optional_text(search, max_length=100, field_name="search")
+        if safe_search:
+            q = q.filter(
+                or_(
+                    SessionSummary.session_summary.ilike(f"%{safe_search}%", escape="\\"),
+                    SessionSummary.main_topics.ilike(f"%{safe_search}%", escape="\\"),
+                )
+            )
+    
+    summaries = q.order_by(SessionSummary.compressed_at.desc()).all()
+    
+    import json
+    from arena.core.datetime_utils import utcnow_naive
+    
+    # Format as JSON-serializable list
+    items = []
+    for row in summaries:
+        items.append({
+            "id": row.id,
+            "session_id": row.session_id,
+            "session_summary": row.session_summary,
+            "dominant_category": row.dominant_category,
+            "preferred_depth": row.preferred_depth,
+            "trusted_persona": row.trusted_persona,
+            "exchange_count": row.exchange_count,
+            "main_topics": list(row.main_topics or []),
+            "compressed_at": row.compressed_at.isoformat() if row.compressed_at else None,
+        })
+    
+    filename = f"arena-memory-summaries-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
+    from fastapi.responses import Response
+    from arena.core.http_headers import content_disposition_attachment
+    
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=json.dumps(items, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
+
+
 @memory_router.get("/summaries/{summary_id}")
 async def get_summary(
     summary_id: int,
