@@ -379,6 +379,7 @@ class ExportPreset(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
+    description = Column(String(500), nullable=True)  # Optional description of the preset
     preset_type = Column(String(20), nullable=False, default="saved")  # saved, sessions, etc.
     format = Column(String(10), nullable=False, default="csv")  # csv, json, xlsx
     search = Column(String(100), nullable=True)

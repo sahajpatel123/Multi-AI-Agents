@@ -32,6 +32,7 @@ EXPORT_PRESETS_MAX_PER_USER = 50
 
 class ExportPresetCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
     preset_type: str = Field(default="saved", min_length=1, max_length=20)
     format: str = Field(default="csv", min_length=1, max_length=10)
     search: Optional[str] = Field(None, max_length=100)
@@ -44,6 +45,7 @@ class ExportPresetCreate(BaseModel):
 
 class ExportPresetUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
     format: Optional[str] = Field(None, min_length=1, max_length=10)
     search: Optional[str] = Field(None, max_length=100)
     persona_id: Optional[str] = Field(None, max_length=50)
@@ -82,6 +84,7 @@ async def list_export_presets(
             {
                 "id": p.id,
                 "name": p.name,
+                "description": p.description,
                 "preset_type": p.preset_type,
                 "format": p.format,
                 "search": p.search,
@@ -144,6 +147,7 @@ async def create_export_preset(
     
     # Sanitize inputs
     name = sanitize_model_text(body.name, max_length=100, field_name="name")
+    description = sanitize_model_text(body.description, max_length=500, field_name="description") if body.description else None
     
     # If this is set as default, un-set any existing default preset for this user
     if body.is_default:
@@ -166,6 +170,7 @@ async def create_export_preset(
     preset = ExportPreset(
         user_id=user.id,
         name=name,
+        description=description,
         preset_type=body.preset_type,
         format=body.format,
         search=body.search,
@@ -184,6 +189,7 @@ async def create_export_preset(
         "status": "created",
         "id": preset.id,
         "name": preset.name,
+        "description": preset.description,
         "preset_type": preset.preset_type,
         "format": preset.format,
         "search": preset.search,
@@ -230,6 +236,7 @@ async def get_default_export_preset(
     return {
         "id": preset.id,
         "name": preset.name,
+        "description": preset.description,
         "preset_type": preset.preset_type,
         "format": preset.format,
         "search": preset.search,
@@ -287,6 +294,7 @@ async def get_export_preset(
     return {
         "id": preset.id,
         "name": preset.name,
+        "description": preset.description,
         "preset_type": preset.preset_type,
         "format": preset.format,
         "search": preset.search,
@@ -345,6 +353,8 @@ async def update_export_preset(
     # Update fields
     if body.name is not None:
         preset.name = sanitize_model_text(body.name, max_length=100, field_name="name")
+    if body.description is not None:
+        preset.description = sanitize_model_text(body.description, max_length=500, field_name="description") if body.description else None
     if body.format is not None:
         preset.format = body.format
     if body.search is not None:
@@ -377,6 +387,7 @@ async def update_export_preset(
         "status": "updated",
         "id": preset.id,
         "name": preset.name,
+        "description": preset.description,
         "preset_type": preset.preset_type,
         "format": preset.format,
         "search": preset.search,
@@ -575,6 +586,7 @@ async def duplicate_export_preset(
     duplicated = ExportPreset(
         user_id=user.id,
         name=f"{original.name} (Copy {timestamp})",
+        description=original.description,
         preset_type=original.preset_type,
         format=original.format,
         search=original.search,

@@ -613,3 +613,131 @@ async def test_export_presets_ordered_by_position(app_client, make_user, db_sess
     assert presets[1]["position"] == 1
     assert presets[2]["name"] == "Zebra"
     assert presets[2]["position"] == 2
+
+
+# Description field tests (added in Loop 20 - ADD phase)
+@pytest.mark.asyncio
+async def test_export_preset_description_create(app_client, make_user, db_session, cleanup_export_presets):
+    """Test creating an export preset with description."""
+    user = cleanup_export_presets
+    
+    res = await app_client.post(
+        "/api/export-presets",
+        json={
+            "name": "My Bitcoin Exports",
+            "description": "Exports all Bitcoin-related responses in CSV format",
+            "format": "csv",
+            "search": "Bitcoin",
+        },
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["description"] == "Exports all Bitcoin-related responses in CSV format"
+
+
+@pytest.mark.asyncio
+async def test_export_preset_description_update(app_client, make_user, db_session, cleanup_export_presets):
+    """Test updating an export preset description."""
+    user = cleanup_export_presets
+    
+    # Create preset without description
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Test Preset"},
+        headers=_pro_headers(user),
+    )
+    preset_id = create_res.json()["id"]
+    assert create_res.json()["description"] is None
+    
+    # Update with description
+    update_res = await app_client.put(
+        f"/api/export-presets/{preset_id}",
+        json={"description": "Updated description"},
+        headers=_pro_headers(user),
+    )
+    assert update_res.status_code == 200
+    assert update_res.json()["description"] == "Updated description"
+    
+    # Verify via get
+    get_res = await app_client.get(
+        f"/api/export-presets/{preset_id}",
+        headers=_pro_headers(user),
+    )
+    assert get_res.json()["description"] == "Updated description"
+
+
+@pytest.mark.asyncio
+async def test_export_preset_description_in_list(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that description appears in list response."""
+    user = cleanup_export_presets
+    
+    # Create preset with description
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Described Preset", "description": "A preset with description"},
+        headers=_pro_headers(user),
+    )
+    
+    # List presets
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    
+    assert list_res.status_code == 200
+    presets = list_res.json()["presets"]
+    assert len(presets) >= 1
+    # Find the preset we created
+    described_preset = next((p for p in presets if p["name"] == "Described Preset"), None)
+    assert described_preset is not None
+    assert described_preset["description"] == "A preset with description"
+
+
+@pytest.mark.asyncio
+async def test_export_preset_description_duplicate(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that description is copied when duplicating a preset."""
+    user = cleanup_export_presets
+    
+    # Create original preset with description
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Original", "description": "Original description"},
+        headers=_pro_headers(user),
+    )
+    original_id = create_res.json()["id"]
+    
+    # Duplicate the preset
+    dup_res = await app_client.post(
+        f"/api/export-presets/{original_id}/duplicate",
+        headers=_pro_headers(user),
+    )
+    
+    assert dup_res.status_code == 200
+    dup_data = dup_res.json()
+    new_id = dup_data["new_id"]
+    
+    # Verify the duplicate has the same description
+    get_res = await app_client.get(
+        f"/api/export-presets/{new_id}",
+        headers=_pro_headers(user),
+    )
+    dup_preset = get_res.json()
+    assert dup_preset["description"] == "Original description"
+
+
+@pytest.mark.asyncio
+async def test_export_preset_description_null(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that presets without description have null/None description."""
+    user = cleanup_export_presets
+    
+    # Create preset without description
+    res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "No Description"},
+        headers=_pro_headers(user),
+    )
+    
+    assert res.status_code == 200
+    data = res.json()
+    assert data["description"] is None
