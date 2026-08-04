@@ -57,6 +57,7 @@ class ExportPresetUpdate(BaseModel):
 
 class ExportPresetBulkDelete(BaseModel):
     ids: list[int] = Field(..., min_items=1, max_items=50, description="List of preset IDs to delete")
+    force: bool = Field(default=False, description="Set to true to allow deletion of default preset")
 
 
 @router.get("/export-presets")
@@ -722,6 +723,7 @@ async def bulk_delete_export_presets(
     
     # Get the list of preset IDs to delete (Pydantic validates min_items=1, max_items=50)
     preset_ids = body.ids
+    force = body.force
     
     # Find all presets that belong to the user and are in the provided list
     presets_to_delete = (
@@ -733,9 +735,22 @@ async def bulk_delete_export_presets(
         .all()
     )
     
+    # Check if any of the presets being deleted is the user's default preset
+    default_preset_ids = [p.id for p in presets_to_delete if p.is_default]
+    if default_preset_ids and not force:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "default_preset_protected",
+                "message": "Cannot delete default preset(s) without force=true. Set force=true to confirm.",
+                "protected_ids": default_preset_ids,
+            },
+        )
+    
     deleted_ids = []
     not_found_ids = []
     foreign_ids = []
+    blocked_ids = []  # IDs that were blocked (default presets without force)
     
     for preset_id in preset_ids:
         preset_exists = any(p.id == preset_id for p in presets_to_delete)
@@ -763,4 +778,6 @@ async def bulk_delete_export_presets(
         "not_found_ids": not_found_ids,
         "foreign_count": len(foreign_ids),
         "foreign_ids": foreign_ids,
+        "blocked_count": len(blocked_ids),
+        "blocked_ids": blocked_ids,
     }

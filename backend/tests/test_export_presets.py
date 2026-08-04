@@ -1228,3 +1228,108 @@ async def test_bulk_delete_export_presets_too_many(app_client, make_user, db_ses
     )
     # Pydantic validation should reject
     assert res.status_code == 422
+
+
+# Default preset protection tests (added in Loop 25 - POLISH phase)
+@pytest.mark.asyncio
+async def test_bulk_delete_protected_default_preset(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that bulk delete protects default presets without force flag."""
+    user = cleanup_export_presets
+    
+    # Create a preset and set it as default
+    res1 = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Default Preset", "is_default": True},
+        headers=_pro_headers(user),
+    )
+    default_id = res1.json()["id"]
+    
+    # Create another preset
+    res2 = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Regular Preset"},
+        headers=_pro_headers(user),
+    )
+    regular_id = res2.json()["id"]
+    
+    # Try to bulk delete both (without force) - should fail
+    res = await app_client.post(
+        "/api/export-presets/bulk-delete",
+        json={"ids": [default_id, regular_id]},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 400
+    data = res.json()
+    assert data["detail"]["error"] == "default_preset_protected"
+    assert default_id in data["detail"]["protected_ids"]
+    
+    # Verify no presets were deleted
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    assert list_res.json()["total"] == 2
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_default_preset_with_force(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that bulk delete allows deleting default preset with force=true."""
+    user = cleanup_export_presets
+    
+    # Create a preset and set it as default
+    res1 = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Default Preset", "is_default": True},
+        headers=_pro_headers(user),
+    )
+    default_id = res1.json()["id"]
+    
+    # Create another preset
+    res2 = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Regular Preset"},
+        headers=_pro_headers(user),
+    )
+    regular_id = res2.json()["id"]
+    
+    # Bulk delete both with force=true - should succeed
+    res = await app_client.post(
+        "/api/export-presets/bulk-delete",
+        json={"ids": [default_id, regular_id], "force": True},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["deleted_count"] == 2
+    assert default_id in data["deleted_ids"]
+    assert regular_id in data["deleted_ids"]
+    
+    # Verify both presets were deleted
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    assert list_res.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_force_default_false(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that force=false (or omitted) still protects default preset."""
+    user = cleanup_export_presets
+    
+    # Create a default preset
+    res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Default Preset", "is_default": True},
+        headers=_pro_headers(user),
+    )
+    default_id = res.json()["id"]
+    
+    # Try to delete with force=false - should still fail
+    res = await app_client.post(
+        "/api/export-presets/bulk-delete",
+        json={"ids": [default_id], "force": False},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 400
+    assert res.json()["detail"]["error"] == "default_preset_protected"
