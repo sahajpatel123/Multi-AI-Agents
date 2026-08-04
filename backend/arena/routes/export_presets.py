@@ -284,6 +284,59 @@ async def get_default_export_preset(
     }
 
 
+@router.get("/export-presets/export")
+async def export_export_presets(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Export all of the user's presets as a JSON backup."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="export_presets_export",
+        limit=30,
+        window_seconds=60,
+        message="Too many export requests. Please slow down.",
+    )
+    
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Export presets require Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+    
+    presets = (
+        db.query(ExportPreset)
+        .filter(ExportPreset.user_id == user.id)
+        .order_by(ExportPreset.position.asc())
+        .all()
+    )
+    
+    from arena.core.datetime_utils import utcnow_naive
+    return {
+        "status": "exported",
+        "user_id": user.id,
+        "exported_at": utcnow_naive().isoformat(),
+        "total_presets": len(presets),
+        "presets": [
+            {
+                "name": p.name,
+                "description": p.description,
+                "preset_type": p.preset_type,
+                "format": p.format,
+                "search": p.search,
+                "persona_id": p.persona_id,
+                "min_score": p.min_score,
+                "sort": p.sort,
+            }
+            for p in presets
+        ],
+    }
+
+
 @router.get("/export-presets/{preset_id}")
 async def get_export_preset(
     preset_id: int,
@@ -780,4 +833,112 @@ async def bulk_delete_export_presets(
         "foreign_ids": foreign_ids,
         "blocked_count": len(blocked_ids),
         "blocked_ids": blocked_ids,
+    }
+
+
+
+
+class ExportPresetImport(BaseModel):
+    presets: list[dict] = Field(..., min_items=1, max_items=50, description="List of preset configurations to import")
+
+
+@router.post("/export-presets/import")
+async def import_export_presets(
+    body: ExportPresetImport,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Import presets from a JSON backup."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="export_presets_import",
+        limit=30,
+        window_seconds=60,
+        message="Too many import requests. Please slow down.",
+    )
+    
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Export presets require Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+    
+    # Check existing count + new presets won't exceed limit
+    existing_count = (
+        db.query(ExportPreset)
+        .filter(ExportPreset.user_id == user.id)
+        .count()
+    )
+    
+    if existing_count + len(body.presets) > EXPORT_PRESETS_MAX_PER_USER:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "preset_limit_reached",
+                "message": f"Import would exceed preset limit ({EXPORT_PRESETS_MAX_PER_USER}). Delete some before importing.",
+                "active_cap": EXPORT_PRESETS_MAX_PER_USER,
+            },
+        )
+    
+    from arena.core.datetime_utils import utcnow_naive
+    
+    imported_count = 0
+    skipped_count = 0
+    errors = []
+    imported_ids = []
+    
+    # Find the next available position
+    max_position = (
+        db.query(ExportPreset)
+        .filter(ExportPreset.user_id == user.id)
+        .order_by(ExportPreset.position.desc())
+        .first()
+    )
+    next_position = (max_position.position + 1) if max_position else 0
+    
+    for preset_data in body.presets:
+        try:
+            # Validate and sanitize inputs
+            name = sanitize_model_text(preset_data.get("name", "Unnamed Preset"), max_length=100, field_name="name")
+            description = sanitize_model_text(preset_data.get("description"), max_length=500, field_name="description") if preset_data.get("description") else None
+            
+            preset = ExportPreset(
+                user_id=user.id,
+                name=name,
+                description=description,
+                preset_type=preset_data.get("preset_type", "saved"),
+                format=preset_data.get("format", "csv"),
+                search=preset_data.get("search"),
+                persona_id=preset_data.get("persona_id"),
+                min_score=preset_data.get("min_score"),
+                sort=preset_data.get("sort", "newest"),
+                position=next_position,
+                is_default=False,  # Imported presets are never default
+            )
+            
+            db.add(preset)
+            db.flush()  # Get the ID
+            imported_ids.append(preset.id)
+            imported_count += 1
+            next_position += 1
+            
+        except Exception as e:
+            errors.append({
+                "index": len(imported_ids) + skipped_count,
+                "error": str(e),
+            })
+            skipped_count += 1
+    
+    db.commit()
+    
+    return {
+        "status": "imported",
+        "imported_count": imported_count,
+        "imported_ids": imported_ids,
+        "skipped_count": skipped_count,
+        "errors": errors,
     }

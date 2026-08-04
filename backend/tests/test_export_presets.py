@@ -1333,3 +1333,176 @@ async def test_bulk_delete_force_default_false(app_client, make_user, db_session
     )
     assert res.status_code == 400
     assert res.json()["detail"]["error"] == "default_preset_protected"
+
+
+# Export/Import tests (added in Loop 26 - ADD phase)
+@pytest.mark.asyncio
+async def test_export_presets_export_all(app_client, make_user, db_session, cleanup_export_presets):
+    """Test exporting all presets as JSON."""
+    user = cleanup_export_presets
+    
+    # Create some presets
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Preset 1", "description": "First preset", "format": "csv"},
+        headers=_pro_headers(user),
+    )
+    await app_client.post(
+        "/api/export-presets",
+        json={"name": "Preset 2", "description": "Second preset", "format": "json"},
+        headers=_pro_headers(user),
+    )
+    
+    # Export all presets
+    res = await app_client.get(
+        "/api/export-presets/export",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "exported"
+    assert data["user_id"] == user.id
+    assert data["total_presets"] == 2
+    assert len(data["presets"]) == 2
+    
+    # Verify preset data is correct
+    preset_names = [p["name"] for p in data["presets"]]
+    assert "Preset 1" in preset_names
+    assert "Preset 2" in preset_names
+
+
+@pytest.mark.asyncio
+async def test_export_presets_export_empty(app_client, make_user, db_session, cleanup_export_presets):
+    """Test exporting when user has no presets."""
+    user = cleanup_export_presets
+    
+    # Export with no presets
+    res = await app_client.get(
+        "/api/export-presets/export",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "exported"
+    assert data["total_presets"] == 0
+    assert data["presets"] == []
+
+
+@pytest.mark.asyncio
+async def test_export_presets_import_basic(app_client, make_user, db_session, cleanup_export_presets):
+    """Test importing presets from JSON."""
+    user = cleanup_export_presets
+    
+    # Import presets
+    res = await app_client.post(
+        "/api/export-presets/import",
+        json={
+            "presets": [
+                {"name": "Imported Preset 1", "format": "csv", "search": "Bitcoin"},
+                {"name": "Imported Preset 2", "format": "json", "sort": "score"},
+            ]
+        },
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "imported"
+    assert data["imported_count"] == 2
+    assert data["skipped_count"] == 0
+    assert len(data["imported_ids"]) == 2
+    
+    # Verify presets were created
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    assert list_res.json()["total"] == 2
+
+
+@pytest.mark.asyncio
+async def test_export_presets_import_with_limit(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that import respects the preset limit."""
+    from arena.routes.export_presets import EXPORT_PRESETS_MAX_PER_USER
+    user = cleanup_export_presets
+    
+    # Manually insert presets up to the limit
+    for i in range(EXPORT_PRESETS_MAX_PER_USER):
+        preset = ExportPreset(
+            user_id=user.id,
+            name=f"Preset {i}",
+            preset_type="saved",
+            format="csv",
+        )
+        db_session.add(preset)
+    db_session.commit()
+    
+    # Try to import more presets - should fail
+    res = await app_client.post(
+        "/api/export-presets/import",
+        json={"presets": [{"name": "Extra Preset"}]},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 400
+    assert "preset_limit_reached" in res.json()["detail"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_export_import_roundtrip(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that exported presets can be re-imported."""
+    user = cleanup_export_presets
+    
+    # Create some presets
+    original_names = ["Roundtrip Preset 1", "Roundtrip Preset 2"]
+    for name in original_names:
+        await app_client.post(
+            "/api/export-presets",
+            json={"name": name, "description": f"Description for {name}"},
+            headers=_pro_headers(user),
+        )
+    
+    # Export all presets
+    export_res = await app_client.get(
+        "/api/export-presets/export",
+        headers=_pro_headers(user),
+    )
+    exported_data = export_res.json()
+    
+    # Get all preset IDs to delete them
+    list_res_before = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    preset_ids = [p["id"] for p in list_res_before.json()["presets"]]
+    
+    # Delete all presets
+    await app_client.post(
+        "/api/export-presets/bulk-delete",
+        json={"ids": preset_ids, "force": True},
+        headers=_pro_headers(user),
+    )
+    
+    # Verify all deleted
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    assert list_res.json()["total"] == 0
+    
+    # Re-import the exported presets
+    import_res = await app_client.post(
+        "/api/export-presets/import",
+        json={"presets": exported_data["presets"]},
+        headers=_pro_headers(user),
+    )
+    assert import_res.status_code == 200
+    assert import_res.json()["imported_count"] == 2
+    
+    # Verify presets were restored
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    assert list_res.json()["total"] == 2
+    restored_names = [p["name"] for p in list_res.json()["presets"]]
+    for name in original_names:
+        assert name in restored_names
