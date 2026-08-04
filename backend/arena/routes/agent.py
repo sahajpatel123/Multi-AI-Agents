@@ -2852,6 +2852,97 @@ async def get_agent_history(
     return JSONResponse(content=history)
 
 
+@router.get("/history/export.csv")
+async def export_agent_history_csv(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(200, ge=1, le=500),
+    search: str | None = Query(None, max_length=100),
+    feedback: str | None = Query(None),
+    orchestration_id: str | None = Query(None),
+    sort: str = Query("newest"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of agent task history.
+
+    Streams all matching tasks as CSV with formula-injection defense (_csv_safe).
+    Supports the same filters as /api/agent/history.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_history_csv",
+        limit=60,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    from arena.core.agent_memory import get_user_task_history
+    from arena.routes.analytics import _csv_safe
+    from arena.core.tier_config import normalize_tier, get_tier_str
+    import csv
+    import io
+    
+    tier = normalize_tier(get_tier_str(user))
+    retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
+    
+    # Get all matching tasks (not paginated for CSV export)
+    # Use a large per_page to get all results
+    history = get_user_task_history(
+        db=db,
+        user_id=user.id,
+        page=1,
+        per_page=500,  # Max per page for CSV
+        retention_days=retention_days,
+        search=search,
+        feedback=feedback,
+        orchestration_id=orchestration_id,
+        sort=sort,
+    )
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "task_id",
+        "title",
+        "task_text",
+        "final_score",
+        "final_confidence",
+        "user_feedback",
+        "created_at",
+        "orchestration_id",
+        "watchlist_item_id",
+    ])
+    
+    # Write rows
+    for item in history.get("tasks", []):
+        writer.writerow([
+            _csv_safe(item.get("task_id")),
+            _csv_safe(item.get("title")),
+            _csv_safe(item.get("task_text", "")[:200]),  # Truncate long text
+            _csv_safe(item.get("final_score")),
+            _csv_safe(item.get("final_confidence")),
+            _csv_safe(item.get("user_feedback")),
+            _csv_safe(item.get("created_at")),
+            _csv_safe(item.get("orchestration_id")),
+            _csv_safe(item.get("watchlist_item_id")),
+        ])
+    
+    filename = f"arena-history-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.patch("/tasks/{task_id}/rename")
 async def rename_agent_task(
     task_id: str,
