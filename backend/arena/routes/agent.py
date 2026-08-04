@@ -50,6 +50,7 @@ from arena.core.agent_memory import (
     get_task_detail,
     get_watchlist_history,
     iter_user_task_export,
+    get_watchlist_statistics,
 )
 from arena.core.agent_metrics import (
     compute_user_agent_metrics,
@@ -2536,6 +2537,34 @@ async def get_watchlist_item_history_csv(
         headers=headers,
     )
 
+
+@router.get("/watchlist/statistics")
+async def get_watchlist_statistics(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Aggregate statistics across all watchlist items for a user.
+
+    Returns comprehensive statistics including:
+    - Total and active watchlist item counts
+    - Total runs and scored runs
+    - Score statistics (avg, min, max)
+    - Success rate
+    - Per-item detailed statistics
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_statistics",
+        limit=30,
+        window_seconds=60,
+        message="Too many statistics requests. Please wait a moment.",
+    )
+    
+    from arena.core.agent_memory import get_watchlist_statistics
+    
+    stats = get_watchlist_statistics(db, user.id)
+    return JSONResponse(content={"success": True, **stats})
 
 
 @router.get("/metrics")
