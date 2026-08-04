@@ -1572,3 +1572,92 @@ async def test_export_presets_import_version_metadata(app_client, make_user, db_
     data = res.json()
     assert "version" in data
     assert data["version"] == "1.0"
+
+
+# Template tests (added in Loop 28 - ADD phase)
+@pytest.mark.asyncio
+async def test_list_export_preset_templates(app_client, make_user, db_session, cleanup_export_presets):
+    """Test listing available preset templates."""
+    user = cleanup_export_presets
+    
+    res = await app_client.get(
+        "/api/export-presets/templates",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert "templates" in data
+    assert len(data["templates"]) > 0
+    assert data["total"] > 0
+    
+    # Verify template structure
+    for template in data["templates"]:
+        assert "id" in template
+        assert "name" in template
+        assert "description" in template
+        assert "format" in template
+
+
+@pytest.mark.asyncio
+async def test_create_preset_from_template(app_client, make_user, db_session, cleanup_export_presets):
+    """Test creating a preset from a template."""
+    user = cleanup_export_presets
+    
+    # Create preset from high_score template
+    res = await app_client.post(
+        "/api/export-presets/from-template?template_id=high_score",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "created_from_template"
+    assert "High Score" in data["name"]
+    assert data["min_score"] == 80
+    assert data["format"] == "csv"
+    assert data["sort"] == "score"
+    
+    # Verify the preset was actually created
+    list_res = await app_client.get(
+        "/api/export-presets",
+        headers=_pro_headers(user),
+    )
+    assert list_res.json()["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_create_preset_from_nonexistent_template(app_client, make_user, db_session, cleanup_export_presets):
+    """Test creating a preset from a non-existent template."""
+    user = cleanup_export_presets
+    
+    res = await app_client.post(
+        "/api/export-presets/from-template?template_id=nonexistent",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 404
+    assert res.json()["detail"]["error"] == "template_not_found"
+
+
+@pytest.mark.asyncio
+async def test_create_preset_from_template_at_limit(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that creating from template respects the preset limit."""
+    from arena.routes.export_presets import EXPORT_PRESETS_MAX_PER_USER
+    user = cleanup_export_presets
+    
+    # Manually insert presets up to the limit
+    for i in range(EXPORT_PRESETS_MAX_PER_USER):
+        preset = ExportPreset(
+            user_id=user.id,
+            name=f"Preset {i}",
+            preset_type="saved",
+            format="csv",
+        )
+        db_session.add(preset)
+    db_session.commit()
+    
+    # Try to create from template - should fail
+    res = await app_client.post(
+        "/api/export-presets/from-template?template_id=high_score",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 400
+    assert "preset_limit_reached" in res.json()["detail"]["error"]

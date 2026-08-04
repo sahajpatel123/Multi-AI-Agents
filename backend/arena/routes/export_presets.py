@@ -32,6 +32,65 @@ EXPORT_PRESETS_MAX_PER_USER = 50
 # Export format version
 EXPORT_PRESETS_FORMAT_VERSION = "1.0"
 
+# Preset templates for quick creation
+EXPORT_PRESET_TEMPLATES = [
+    {
+        "id": "high_score",
+        "name": "High Score Responses",
+        "description": "Export responses with score >= 80",
+        "preset_type": "saved",
+        "format": "csv",
+        "search": None,
+        "persona_id": None,
+        "min_score": 80,
+        "sort": "score",
+    },
+    {
+        "id": "recent",
+        "name": "Recent Responses",
+        "description": "Export responses from the last 7 days",
+        "preset_type": "saved",
+        "format": "json",
+        "search": None,
+        "persona_id": None,
+        "min_score": None,
+        "sort": "newest",
+    },
+    {
+        "id": "bitcoin_all",
+        "name": "All Bitcoin Responses",
+        "description": "Export all responses containing Bitcoin",
+        "preset_type": "saved",
+        "format": "csv",
+        "search": "Bitcoin",
+        "persona_id": None,
+        "min_score": None,
+        "sort": "newest",
+    },
+    {
+        "id": "high_score_json",
+        "name": "High Score JSON",
+        "description": "Export high-scoring responses in JSON format",
+        "preset_type": "saved",
+        "format": "json",
+        "search": None,
+        "persona_id": None,
+        "min_score": 90,
+        "sort": "score",
+    },
+    {
+        "id": "all_responses",
+        "name": "All Responses",
+        "description": "Export all saved responses",
+        "preset_type": "saved",
+        "format": "xlsx",
+        "search": None,
+        "persona_id": None,
+        "min_score": None,
+        "sort": "newest",
+    },
+]
+
 
 class ExportPresetCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -338,6 +397,134 @@ async def export_export_presets(
             }
             for p in presets
         ],
+    }
+
+
+@router.get("/export-presets/templates")
+async def list_export_preset_templates(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """List all available export preset templates."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="export_presets_templates",
+        limit=60,
+        window_seconds=60,
+        message="Too many template list requests. Please slow down.",
+    )
+    
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        return {"templates": [], "total": 0}
+    
+    return {
+        "templates": EXPORT_PRESET_TEMPLATES,
+        "total": len(EXPORT_PRESET_TEMPLATES),
+    }
+
+
+@router.post("/export-presets/from-template")
+async def create_preset_from_template(
+    template_id: str = Query(..., description="ID of the template to use"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Create an export preset from a template."""
+    enforce_user_rate_limit(
+        user.id,
+        scope="export_presets_from_template",
+        limit=30,
+        window_seconds=60,
+        message="Too many template creation requests. Please slow down.",
+    )
+    
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Export presets require Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+    
+    # Find the template
+    template = None
+    for t in EXPORT_PRESET_TEMPLATES:
+        if t["id"] == template_id:
+            template = t
+            break
+    
+    if template is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "template_not_found", "message": f"Template '{template_id}' not found."},
+        )
+    
+    # Check existing count
+    existing_count = (
+        db.query(ExportPreset)
+        .filter(ExportPreset.user_id == user.id)
+        .count()
+    )
+    
+    if existing_count >= EXPORT_PRESETS_MAX_PER_USER:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "preset_limit_reached",
+                "message": f"Export preset limit reached ({EXPORT_PRESETS_MAX_PER_USER}). Delete some before creating more.",
+                "active_cap": EXPORT_PRESETS_MAX_PER_USER,
+            },
+        )
+    
+    # Find the next available position
+    max_position = (
+        db.query(ExportPreset)
+        .filter(ExportPreset.user_id == user.id)
+        .order_by(ExportPreset.position.desc())
+        .first()
+    )
+    position = (max_position.position + 1) if max_position else 0
+    
+    # Create the preset from the template
+    from arena.core.datetime_utils import utcnow_naive
+    timestamp = utcnow_naive().strftime('%Y%m%d-%H%M%S')
+    
+    preset = ExportPreset(
+        user_id=user.id,
+        name=f"{template['name']} ({timestamp})",
+        description=template["description"],
+        preset_type=template["preset_type"],
+        format=template["format"],
+        search=template["search"],
+        persona_id=template["persona_id"],
+        min_score=template["min_score"],
+        sort=template["sort"],
+        position=position,
+        is_default=False,
+    )
+    
+    db.add(preset)
+    db.commit()
+    db.refresh(preset)
+    
+    return {
+        "status": "created_from_template",
+        "id": preset.id,
+        "name": preset.name,
+        "description": preset.description,
+        "preset_type": preset.preset_type,
+        "format": preset.format,
+        "search": preset.search,
+        "persona_id": preset.persona_id,
+        "min_score": preset.min_score,
+        "sort": preset.sort,
+        "position": preset.position,
+        "is_default": preset.is_default,
+        "last_used_at": None,
+        "created_at": preset.created_at.isoformat(),
+        "updated_at": preset.updated_at.isoformat(),
     }
 
 
