@@ -510,3 +510,101 @@ async def delete_calibration_rating(
     db.delete(row)
     db.commit()
     return {"status": "deleted", "task_id": clean_id}
+
+
+@router.get("/history/export.csv")
+async def export_calibration_history_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of calibration rating history.
+
+    Streams all calibration ratings with formula-injection defense.
+    Useful for analyzing user's rating patterns over time.
+    """
+    from arena.db_models import User
+    from arena.core.datetime_utils import utcnow_naive
+    from arena.core.http_headers import content_disposition_attachment
+    from fastapi.responses import Response
+    import csv
+    import io
+    
+    orm_user = db.query(User).filter(User.id == user.id).first()
+    if not orm_user:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
+        )
+    
+    enforce_user_rate_limit(
+        user.id,
+        scope="calibration_csv_export",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    def _csv_safe(value) -> str:
+        """Escape value for CSV to prevent formula injection."""
+        if value is None:
+            return ""
+        s = str(value)
+        if s.startswith(("=", "+", "-", "@")):
+            return "'" + s
+        return s
+    
+    # Get all calibration ratings for the user
+    ratings = (
+        db.query(ConfidenceRating)
+        .filter(ConfidenceRating.user_id == user.id)
+        .order_by(ConfidenceRating.created_at.desc())
+        .all()
+    )
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "task_id",
+        "user_rating",
+        "system_score",
+        "delta",
+        "verdict",
+        "created_at",
+    ])
+    
+    # Write rows
+    for row in ratings:
+        try:
+            sys_score = max(0, min(100, int(row.system_score or 0)))
+        except (TypeError, ValueError):
+            sys_score = 0
+        
+        try:
+            delta = max(-100, min(100, int(row.delta or 0)))
+        except (TypeError, ValueError):
+            delta = 0
+        
+        verdict = _verdict_for_delta(delta)
+        
+        writer.writerow([
+            _csv_safe(row.task_id),
+            _csv_safe(row.user_rating),
+            _csv_safe(sys_score),
+            _csv_safe(delta),
+            _csv_safe(verdict),
+            _csv_safe(row.created_at.isoformat() if row.created_at else ""),
+        ])
+    
+    filename = f"arena-calibration-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
