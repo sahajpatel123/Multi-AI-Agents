@@ -332,3 +332,102 @@ async def test_saved_export_filename_has_timestamp(app_client, make_user, db_ses
     content_disposition_json = res_json.headers["content-disposition"]
     assert "-" in content_disposition_json
     assert ".json" in content_disposition_json
+
+
+# XLSX Export Tests (added in Loop 16 - ADD phase)
+@pytest.mark.asyncio
+async def test_saved_xlsx_export(app_client, make_user, db_session):
+    """Test XLSX export of saved responses."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_saved(db_session, user.id, "save-1", prompt="Bitcoin question", score=90)
+    _seed_saved(db_session, user.id, "save-2", prompt="Ethereum question", score=85)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=xlsx",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in res.headers["content-type"]
+    
+    # Verify it's a valid XLSX file by checking magic bytes
+    content = res.content
+    assert len(content) > 0
+    # XLSX files should start with PK magic number (ZIP format)
+    assert content[:2] == b'PK'
+    
+    # Verify filename
+    content_disposition = res.headers["content-disposition"]
+    assert ".xlsx" in content_disposition
+
+
+@pytest.mark.asyncio
+async def test_saved_xlsx_export_with_filters(app_client, make_user, db_session):
+    """Test XLSX export with filters."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_saved(db_session, user.id, "save-1", prompt="Bitcoin analysis", persona_id="analyst")
+    _seed_saved(db_session, user.id, "save-2", prompt="Ethereum analysis", persona_id="researcher")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=xlsx&persona_id=analyst",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert ".xlsx" in res.headers["content-disposition"]
+    
+    # Verify it's valid XLSX
+    content = res.content
+    assert content[:2] == b'PK'
+
+
+@pytest.mark.asyncio
+async def test_saved_xlsx_export_empty(app_client, make_user, db_session):
+    """Test XLSX export when user has no saved responses."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=xlsx",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    content = res.content
+    assert content[:2] == b'PK'  # Still valid XLSX with just headers
+
+
+@pytest.mark.asyncio
+async def test_saved_xlsx_export_403_for_guest(app_client, make_user, db_session):
+    """Test that guest users get 403 for XLSX export."""
+    from arena.db_models import UserTier as DBUserTier
+    user = make_user(email="guest_xlsx@example.com", tier=DBUserTier.GUEST)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=xlsx",
+        headers={"Authorization": f"Bearer {create_access_token(user.id, user.email)}"},
+    )
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_saved_xlsx_export_filename_has_timestamp(app_client, make_user, db_session):
+    """Test that XLSX export filename includes timestamp."""
+    user = _make_pro(make_user)
+    db_session.commit()
+    
+    _seed_saved(db_session, user.id, "save-1", prompt="Test")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=xlsx",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    content_disposition = res.headers["content-disposition"]
+    assert "-" in content_disposition
+    assert ".xlsx" in content_disposition

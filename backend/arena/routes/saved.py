@@ -24,6 +24,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+try:
+    import openpyxl
+    from openpyxl import Workbook
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
+
 from arena.core.dependencies import get_current_user_required
 from arena.core.input_validation import sanitize_model_optional_text, sanitize_model_text
 from arena.core.rate_limits import enforce_user_rate_limit
@@ -391,13 +398,14 @@ async def export_saved(
     persona_id: Optional[str] = Query(None, max_length=50, description="Restrict to one persona."),
     min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score (inclusive)."),
     sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', or 'score'."),
-    format: str = Query("csv", description="Export format: 'csv' (default) or 'json'."),
+    format: str = Query("csv", description="Export format: 'csv' (default), 'json', or 'xlsx'."),
 ):
-    """Export saved responses in CSV or JSON format.
+    """Export saved responses in CSV, JSON, or XLSX format.
 
     Supports the same filters as /api/saved.
     CSV format includes formula-injection defense.
     JSON format provides structured data for programmatic use.
+    XLSX format provides Excel-compatible spreadsheets.
     """
     enforce_user_rate_limit(
         user.id,
@@ -502,6 +510,76 @@ async def export_saved(
         return Response(
             content=json.dumps(export_data, indent=2, default=str),
             media_type="application/json; charset=utf-8",
+            headers=headers,
+        )
+    
+    elif format == "xlsx":
+        # XLSX export format
+        if not OPENPYXL_AVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "xlsx_export_unavailable",
+                    "message": "XLSX export requires openpyxl package. Please install it.",
+                },
+            )
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Saved Responses"
+        
+        # Write header
+        headers_row = [
+            "id", "session_id", "agent_id", "persona_id", "persona_name", "persona_color",
+            "prompt", "one_liner", "verdict", "score", "confidence", "saved_at"
+        ]
+        ws.append(headers_row)
+        
+        # Write data rows
+        for item in saved_items:
+            row = [
+                item.id,
+                item.session_id,
+                item.agent_id,
+                item.persona_id,
+                item.persona_name,
+                item.persona_color,
+                item.prompt[:500] if item.prompt else "",  # Truncate long prompts
+                item.one_liner,
+                item.verdict[:500] if item.verdict else "",  # Truncate long verdicts
+                item.score,
+                item.confidence,
+                item.saved_at.isoformat() if item.saved_at else "",
+            ]
+            ws.append(row)
+        
+        # Auto-adjust column widths
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter  # Get the column name
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2) * 1.2
+            ws.column_dimensions[column].width = max(10, min(adjusted_width, 80))  # Cap at 80
+        
+        # Save workbook to bytes
+        xlsx_buffer = io.BytesIO()
+        wb.save(xlsx_buffer)
+        xlsx_buffer.seek(0)
+        
+        filename = f"arena-saved-{user.id}-{export_timestamp.strftime('%Y%m%d-%H%M%S')}.xlsx"
+        headers = {
+            "Content-Disposition": content_disposition_attachment(filename),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        }
+        return Response(
+            content=xlsx_buffer.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers=headers,
         )
     
