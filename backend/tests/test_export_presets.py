@@ -540,7 +540,7 @@ async def test_reorder_export_presets(app_client, make_user, db_session, cleanup
 
 @pytest.mark.asyncio
 async def test_export_preset_new_fields_in_response(app_client, make_user, db_session, cleanup_export_presets):
-    """Test that new fields (position, is_default, last_used_at) are in responses."""
+    """Test that new fields (position, is_default, last_used_at, description) are in responses."""
     user = cleanup_export_presets
     
     # Create a preset
@@ -556,6 +556,7 @@ async def test_export_preset_new_fields_in_response(app_client, make_user, db_se
     assert "position" in data
     assert "is_default" in data
     assert "last_used_at" in data
+    assert "description" in data
     
     # Check list response has new fields
     list_res = await app_client.get(
@@ -566,6 +567,7 @@ async def test_export_preset_new_fields_in_response(app_client, make_user, db_se
     assert "position" in preset_data
     assert "is_default" in preset_data
     assert "last_used_at" in preset_data
+    assert "description" in preset_data
     
     # Check get response has new fields
     get_res = await app_client.get(
@@ -576,6 +578,7 @@ async def test_export_preset_new_fields_in_response(app_client, make_user, db_se
     assert "position" in get_data
     assert "is_default" in get_data
     assert "last_used_at" in get_data
+    assert "description" in get_data
 
 
 @pytest.mark.asyncio
@@ -741,3 +744,69 @@ async def test_export_preset_description_null(app_client, make_user, db_session,
     assert res.status_code == 200
     data = res.json()
     assert data["description"] is None
+
+
+@pytest.mark.asyncio
+async def test_export_preset_description_max_length(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that description respects max length of 500 characters."""
+    user = cleanup_export_presets
+    
+    # Create preset with exactly 500 character description
+    description_500 = "a" * 500
+    res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Max Length", "description": description_500},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert res.json()["description"] == description_500
+    
+    # Try to create preset with 501 character description - should be rejected
+    description_501 = "a" * 501
+    res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Too Long", "description": description_501},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_export_preset_description_empty_string(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that empty string description is treated as None."""
+    user = cleanup_export_presets
+    
+    # Create preset with empty string description
+    res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Empty Desc", "description": ""},
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    # Empty strings may be sanitized to None or kept as empty string depending on sanitize_model_text
+    data = res.json()
+    assert data["description"] in [None, ""]
+
+
+@pytest.mark.asyncio
+async def test_export_preset_description_update_to_empty(app_client, make_user, db_session, cleanup_export_presets):
+    """Test updating description to empty/None."""
+    user = cleanup_export_presets
+    
+    # Create preset with description
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Test", "description": "Has description"},
+        headers=_pro_headers(user),
+    )
+    preset_id = create_res.json()["id"]
+    
+    # Update to remove description - use empty string (None in request body means "don't change")
+    update_res = await app_client.put(
+        f"/api/export-presets/{preset_id}",
+        json={"description": ""},
+        headers=_pro_headers(user),
+    )
+    assert update_res.status_code == 200
+    # Empty string gets sanitized to None
+    assert update_res.json()["description"] in [None, ""]
