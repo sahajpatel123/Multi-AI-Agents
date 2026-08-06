@@ -26,6 +26,7 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Agent rooms list: live activity time, “New synthesis” meta, copy invite link',
       '[NEW] Agent templates: Recently used strip + sort (local memory of last picks)',
       '[NEW] Arena leaderboard: click a mind to filter session prompts; copy any prompt',
+      '[NEW] Arena: Re-run round — replay the same prompt from the header for fresh takes',
       '[NEW] Room board: Copy question / Copy answer on each task card',
       '[NEW] Room board confidence filter chips + per-card confidence badge',
       '[IMPROVED] Room board live relative timestamps; member online dots tick every 60s',

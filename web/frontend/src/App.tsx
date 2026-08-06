@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { PromptInput } from './components/PromptInput';
 import { FollowUpBar } from './components/FollowUpBar';
 import { FollowUpSuggestions } from './components/FollowUpSuggestions';
+import { ReRunRoundButton } from './components/ReRunRoundButton';
 import { AgentCard } from './components/AgentCard';
 import { DebateMode } from './components/DebateMode';
 import { DiscussMode } from './components/DiscussMode';
@@ -1494,6 +1495,15 @@ function App() {
                   >
                     {exportDownloaded ? 'Downloaded' : 'Download .md'}
                   </button>
+                  {currentPrompt ? (
+                    <ReRunRoundButton
+                      prompt={currentPrompt}
+                      onReRun={() => {
+                        void track('arena_rerun_round');
+                        void handleSubmit(currentPrompt);
+                      }}
+                    />
+                  ) : null}
                 </>
               ) : null}
               {isDone && response && response.all_responses.length >= 2 ? (
