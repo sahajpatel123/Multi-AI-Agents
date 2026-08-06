@@ -118,6 +118,18 @@ class ResponseCache:
         with self._lock:
             self._store.clear()
 
+    def reset(self) -> None:
+        """Clear the store and zero all counters.
+
+        Intended for test isolation and operator resets. The TTL and size
+        configuration stay untouched.
+        """
+        with self._lock:
+            self._store.clear()
+            self._hits = 0
+            self._misses = 0
+            self._evictions = 0
+
     def stats(self) -> dict:
         with self._lock:
             total = self._hits + self._misses

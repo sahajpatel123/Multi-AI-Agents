@@ -103,6 +103,7 @@ def log_request(
     estimated_cost_usd: float,
     errors: Optional[list[str]] = None,
     warnings: Optional[list[str]] = None,
+    cache_status: Optional[str] = None,
 ) -> None:
     """Log a completed request. Never logs prompt content."""
     global _requests_today
@@ -124,6 +125,7 @@ def log_request(
             "estimated_cost_usd": round(estimated_cost_usd, 6),
             "errors": errors or [],
             "warnings": warnings or [],
+            "cache_status": cache_status,
         },
     )
 

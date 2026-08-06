@@ -1,5 +1,6 @@
 """Prompt route — main endpoint for submitting prompts to agents"""
 
+import copy
 import json
 import logging
 import re
@@ -47,6 +48,7 @@ from arena.core.followup_suggestions import (
     parse_suggestions,
 )
 from arena.core.persona_integrity import check_integrity
+from arena.core.response_cache import get_cache, make_cache_key
 from arena.core.response_shaper import assemble_payload
 from arena.core.scorer import Scorer
 from arena.core.tier_config import (
@@ -57,6 +59,7 @@ from arena.core.tier_config import (
     normalize_tier,
     validate_persona_access,
 )
+from arena.core.tools.tool_router import ToolRouter
 from arena.database import get_db
 from arena.models.schemas import (
     ContradictionFlag,
@@ -271,18 +274,61 @@ async def submit_prompt(
             )
 
         agent_timings: dict[str, int] = {}
-        t_agents = time.monotonic()
-        responses, tools_used = await orchestrator.run_all_agents(
-            pipeline_result.enriched_prompt,
-            agents=active_agents,
-            persona_ids=body.persona_ids,
-            user_id=user.id if memory_enabled else None,
-            db=db if memory_enabled else None,
-            session_id=session_id,
-            tracker=tracker,
-            request_context=format_follow_up_context(body.context),
-        )
-        agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
+        cache_status: str | None = None
+        cache_key: str | None = None
+        cache_hit = False
+
+        # In-process response cache: identical stateless requests (same
+        # enriched prompt + persona panel, no session continuation, no
+        # context, no personalized memory) short-circuit the four-model
+        # fan-out. Integrity, scoring, memory, and usage accounting still
+        # run live so cached rounds stay honest with the rest of the
+        # pipeline.
+        if not body.session_id and not body.context and not memory_enabled:
+            cache_key = make_cache_key(
+                pipeline_result.enriched_prompt,
+                body.persona_ids or [],
+            )
+            cached_entry = get_cache().get(cache_key)
+            if cached_entry is not None:
+                # Never serve a stale answer for a prompt that now triggers
+                # a live tool (web search / datetime / calculator): re-run
+                # the cheap trigger check before trusting the cache.
+                tool_router = ToolRouter()
+                tool_results = await tool_router.execute_tools(
+                    pipeline_result.enriched_prompt
+                )
+                if not tool_router.get_tool_summary(tool_results):
+                    responses = copy.deepcopy(cached_entry["responses"])
+                    tools_used = list(cached_entry.get("tools_used", []))
+                    cache_hit = True
+
+        if not cache_hit:
+            t_agents = time.monotonic()
+            responses, tools_used = await orchestrator.run_all_agents(
+                pipeline_result.enriched_prompt,
+                agents=active_agents,
+                persona_ids=body.persona_ids,
+                user_id=user.id if memory_enabled else None,
+                db=db if memory_enabled else None,
+                session_id=session_id,
+                tracker=tracker,
+                request_context=format_follow_up_context(body.context),
+            )
+            agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
+            # Only cache tool-free rounds — a cached web-search answer would
+            # go stale within the TTL.
+            if cache_key is not None and not tools_used:
+                get_cache().set(
+                    cache_key,
+                    {
+                        "responses": copy.deepcopy(responses),
+                        "tools_used": [],
+                    },
+                )
+            cache_status = "miss"
+        else:
+            cache_status = "hit"
 
         integrity_report = await check_integrity(
             responses,
@@ -381,6 +427,7 @@ async def submit_prompt(
             input_tokens=cost.input_tokens,
             output_tokens=cost.output_tokens,
             estimated_cost_usd=cost.estimated_cost_usd,
+            cache_status=cache_status,
         )
 
         record_usage(
@@ -778,7 +825,11 @@ async def prompt_health(request: Request) -> dict:
         window_seconds=60,
         message="Too many health probes. Please slow down.",
     )
-    return {"status": "ok", "service": "arena-prompt"}
+    return {
+        "status": "ok",
+        "service": "arena-prompt",
+        "response_cache": get_cache().stats(),
+    }
 
 
 @router.get("/prompt/readiness")
