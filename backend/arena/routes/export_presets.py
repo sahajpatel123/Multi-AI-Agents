@@ -7,6 +7,11 @@ Security:
 - Per-user scoping - users can only access their own presets.
 - Name length validation to prevent abuse.
 - Rate limiting on creation/deletion.
+
+Functionality:
+- GET /export-presets/{id}/preview is a read-only dry run: it counts and
+  samples the exact rows a real export would return (shared query builder
+  in routes/saved.py) without touching last_used_at.
 """
 
 from typing import Optional

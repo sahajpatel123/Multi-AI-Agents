@@ -532,6 +532,7 @@ async def export_saved(
                     "search": search,
                     "persona_id": persona_id,
                     "min_score": min_score,
+                    "max_score": max_score,
                     "sort": sort,
                 },
             },

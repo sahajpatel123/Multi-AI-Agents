@@ -2025,6 +2025,7 @@ def _seed_saved(
     one_liner="Test answer",
     score=85,
     persona_id=None,
+    saved_at=None,
 ):
     """Seed a SavedResponse row owned by user_id (fresh per-test DB)."""
     saved = SavedResponse(
@@ -2039,7 +2040,7 @@ def _seed_saved(
         verdict=f"This is the verdict for {saved_id}",
         score=score,
         confidence=90,
-        saved_at=utcnow_naive(),
+        saved_at=saved_at if saved_at is not None else utcnow_naive(),
     )
     db_session.add(saved)
     db_session.flush()
@@ -2230,7 +2231,13 @@ async def test_preview_count_matches_actual_export(
     db_session.commit()
 
     preset_id = await _create_preset(
-        app_client, user, search="Bitcoin", min_score=85, sort="score", format="json"
+        app_client,
+        user,
+        search="Bitcoin",
+        min_score=85,
+        max_score=95,
+        sort="score",
+        format="json",
     )
 
     res = await app_client.get(
@@ -2242,10 +2249,112 @@ async def test_preview_count_matches_actual_export(
     assert preview["match_count"] == 1
 
     export_res = await app_client.get(
-        "/api/saved/export?format=json&search=Bitcoin&min_score=85&sort=score",
+        "/api/saved/export?format=json&search=Bitcoin&min_score=85&max_score=95&sort=score",
         headers=_pro_headers(user),
     )
     assert export_res.status_code == 200
     export_data = export_res.json()
     assert export_data["metadata"]["total_count"] == preview["match_count"]
     assert export_data["data"][0]["score"] == 95
+    # The real export metadata must disclose the same filters as the preview,
+    # including max_score (parity contract of the dry run).
+    assert export_data["metadata"]["filters"]["max_score"] == preview["filters"]["max_score"]
+
+
+@pytest.mark.asyncio
+async def test_preview_honors_max_score_filter(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    """Preview match_count + sample respect the preset's max_score bound."""
+    user = cleanup_export_presets
+    _seed_saved(db_session, user.id, "s1", score=90)
+    _seed_saved(db_session, user.id, "s2", score=80)
+    _seed_saved(db_session, user.id, "s3", score=70)
+    db_session.commit()
+
+    preset_id = await _create_preset(app_client, user, min_score=75, max_score=85)
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["match_count"] == 1
+    assert [p["score"] for p in data["preview"]] == [80]
+
+
+@pytest.mark.asyncio
+async def test_preview_honors_oldest_sort(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    """Preview sample ordering follows the preset's sort mode (oldest first)."""
+    from datetime import timedelta
+
+    user = cleanup_export_presets
+    base = utcnow_naive()
+    _seed_saved(db_session, user.id, "s1", score=90, saved_at=base + timedelta(days=2))
+    _seed_saved(db_session, user.id, "s2", score=80, saved_at=base)
+    _seed_saved(db_session, user.id, "s3", score=70, saved_at=base + timedelta(days=1))
+    db_session.commit()
+
+    preset_id = await _create_preset(app_client, user, sort="oldest")
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["match_count"] == 3
+    assert [p["score"] for p in data["preview"]] == [80, 70, 90]
+
+
+@pytest.mark.asyncio
+async def test_preview_search_escapes_like_wildcards(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    """A '%' in the preset search must not match every row (LIKE escaping)."""
+    user = cleanup_export_presets
+    _seed_saved(db_session, user.id, "s1", prompt="100% effort sprint")
+    _seed_saved(db_session, user.id, "s2", prompt="fifty percent")
+    db_session.commit()
+
+    preset_id = await _create_preset(app_client, user, search="100%")
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["match_count"] == 1
+    assert "prompt" not in data["preview"][0]  # sample omits full prompt text
+    assert data["preview"][0]["one_liner"] == "Test answer"
+
+
+@pytest.mark.asyncio
+async def test_preview_rate_limited(app_client, make_user, db_session):
+    """Preview calls share the per-user rate limiter (30/min)."""
+    from arena.core import rate_limits as _rl
+
+    user = make_user(email="preview-rl@example.com", tier=UserTier.PRO)
+    db_session.commit()
+    preset_id = await _create_preset(app_client, user)
+
+    if hasattr(_rl.rate_limiter, "_events"):
+        _rl.rate_limiter._events.clear()
+    key = f"user:export_presets_preview:{user.id}"
+    from collections import deque
+    import time as _time
+
+    _rl.rate_limiter._events[key] = deque([_time.time()] * 30)
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 429
+    detail = res.json().get("detail", {})
+    assert detail.get("error") == "rate_limit_exceeded"
+    _rl.rate_limiter._events.clear()
