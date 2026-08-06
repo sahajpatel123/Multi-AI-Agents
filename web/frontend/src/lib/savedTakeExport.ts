@@ -125,3 +125,38 @@ export function formatSavedTakesListExport(opts: {
   lines.push('_Shared from Arena (saved takes)_');
   return lines.join('\n').trim() + '\n';
 }
+
+
+/**
+ * JSON export of bookmarked takes (full list or current sidebar filter).
+ */
+export function formatSavedTakesJsonExport(opts: {
+  items: SavedTakeListItem[];
+  totalCount?: number | null;
+  filterNote?: string | null;
+  exportedAt?: string;
+}): string {
+  const items = (opts.items || []).map((item) => ({
+    agentName: (item.agentName || 'Arena mind').trim() || 'Arena mind',
+    prompt: (item.prompt || '').trim() || '(no prompt)',
+    oneLiner: (item.oneLiner || '').trim() || null,
+    verdict: (item.verdict || '').trim() || null,
+    score: typeof item.score === 'number' && Number.isFinite(item.score) ? item.score : null,
+    timestamp: item.timestamp || null,
+  }));
+  return JSON.stringify(
+    {
+      exported_from: 'arena',
+      exported_at: opts.exportedAt || new Date().toISOString(),
+      total_saved:
+        typeof opts.totalCount === 'number' && Number.isFinite(opts.totalCount)
+          ? opts.totalCount
+          : null,
+      filter_note: (opts.filterNote || '').trim() || null,
+      count: items.length,
+      items,
+    },
+    null,
+    2,
+  ) + '\n';
+}

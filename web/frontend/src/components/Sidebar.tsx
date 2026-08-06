@@ -35,14 +35,18 @@ import { useProfileModal } from '../context/ProfileModalContext';
 import track from '../utils/track';
 import { filterBySearchQuery, filterTurnsBySearchQuery } from '../lib/sidebarSearch';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from '../lib/downloadTextFile';
 import { formatRelativePast } from '../lib/relativeTime';
 import {
   formatArenaRecentItemCopy,
   formatArenaRecentPromptCopy,
   formatArenaRecentsExport,
 } from '../lib/arenaRecentsExport';
-import { formatSavedTakeExport, formatSavedTakesListExport } from '../lib/savedTakeExport';
+import {
+  formatSavedTakeExport,
+  formatSavedTakesJsonExport,
+  formatSavedTakesListExport,
+} from '../lib/savedTakeExport';
 import { motionDuration } from '../lib/motion';
 import {
   SIDEBAR_RECENTS_SORT_OPTIONS,
@@ -172,6 +176,7 @@ export function Sidebar({
   const [copySavedFailed, setCopySavedFailed] = useState(false);
   const [copyAllSavedStatus, setCopyAllSavedStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadAllSavedStatus, setDownloadAllSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadJsonSavedStatus, setDownloadJsonSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [bulkPinStatus, setBulkPinStatus] = useState<'idle' | 'busy' | 'done' | 'failed' | 'partial'>('idle');
   const [copyRecentsStatus, setCopyRecentsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadRecentsStatus, setDownloadRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -373,6 +378,13 @@ export function Sidebar({
   }, [downloadAllSavedStatus]);
 
   useEffect(() => {
+    if (downloadJsonSavedStatus === 'idle') return;
+    const hold = motionDuration(downloadJsonSavedStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadJsonSavedStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadJsonSavedStatus]);
+
+  useEffect(() => {
     if (bulkPinStatus === 'idle' || bulkPinStatus === 'busy') return;
     const hold = motionDuration(bulkPinStatus === 'failed' ? 2800 : 2000);
     const t = window.setTimeout(() => setBulkPinStatus('idle'), hold > 0 ? hold : 0);
@@ -423,7 +435,7 @@ export function Sidebar({
     }
   };
 
-  const buildSavedTakesMarkdown = () => {
+  const buildSavedTakesFilterNote = () => {
     const q = savedSearchQuery.trim();
     const filterBits: string[] = [];
     if (savedMindFilter !== SIDEBAR_SAVED_MIND_ALL) {
@@ -442,20 +454,27 @@ export function Sidebar({
     }
     if (q) filterBits.push(`search “${q}”`);
     if (savedSort !== 'newest') filterBits.push(`sort: ${sidebarSavedSortLabel(savedSort)}`);
+    return filterBits.length ? filterBits.join(' · ') : undefined;
+  };
+
+  const buildSavedTakesItems = () =>
+    filteredSaved.map((item) => {
+      const agent = AGENTS[item.agent_id];
+      return {
+        agentName: item.persona_name || agent?.name || item.agent_id || 'Mind',
+        prompt: item.prompt,
+        oneLiner: item.one_liner,
+        verdict: item.verdict,
+        score: item.score,
+        timestamp: item.timestamp,
+      };
+    });
+
+  const buildSavedTakesMarkdown = () => {
     return formatSavedTakesListExport({
       totalCount: savedItems.length,
-      filterNote: filterBits.length ? filterBits.join(' · ') : undefined,
-      items: filteredSaved.map((item) => {
-        const agent = AGENTS[item.agent_id];
-        return {
-          agentName: item.persona_name || agent?.name || item.agent_id || 'Mind',
-          prompt: item.prompt,
-          oneLiner: item.one_liner,
-          verdict: item.verdict,
-          score: item.score,
-          timestamp: item.timestamp,
-        };
-      }),
+      filterNote: buildSavedTakesFilterNote(),
+      items: buildSavedTakesItems(),
     });
   };
 
@@ -477,6 +496,20 @@ export function Sidebar({
     const ok = downloadMarkdownFile(md, 'arena-saved-takes');
     setDownloadAllSavedStatus(ok ? 'done' : 'failed');
     if (ok) void track('saved_takes_list_downloaded');
+  };
+
+  const handleDownloadJsonSaved = () => {
+    const json = formatSavedTakesJsonExport({
+      totalCount: savedItems.length,
+      filterNote: buildSavedTakesFilterNote(),
+      items: buildSavedTakesItems(),
+    });
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate('arena-saved-takes')}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    setDownloadJsonSavedStatus(ok ? 'done' : 'failed');
+    if (ok) void track('saved_takes_json_downloaded');
   };
 
   const handleBulkPinSaved = async () => {
@@ -1532,10 +1565,46 @@ export function Sidebar({
                           ? 'Failed'
                           : 'Download'}
                     </button>
+                    <button
+                      type="button"
+                      title="Download all saved takes as JSON"
+                      aria-label={
+                        downloadJsonSavedStatus === 'done'
+                          ? 'Saved takes JSON downloaded'
+                          : downloadJsonSavedStatus === 'failed'
+                            ? 'JSON download failed'
+                            : 'Download all saved takes as JSON'
+                      }
+                      onClick={() => handleDownloadJsonSaved()}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color:
+                          downloadJsonSavedStatus === 'failed'
+                            ? '#D85A30'
+                            : downloadJsonSavedStatus === 'done'
+                              ? '#5A8C6A'
+                              : '#F0B84E',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {downloadJsonSavedStatus === 'done'
+                        ? 'Saved JSON'
+                        : downloadJsonSavedStatus === 'failed'
+                          ? 'Failed'
+                          : 'JSON'}
+                    </button>
                   </div>
                 </div>
                 {copyAllSavedStatus !== 'idle' ||
                 downloadAllSavedStatus !== 'idle' ||
+                downloadJsonSavedStatus !== 'idle' ||
                 (bulkPinStatus !== 'idle' && bulkPinStatus !== 'busy') ? (
                   <div
                     role="status"
@@ -1560,7 +1629,11 @@ export function Sidebar({
                           ? 'Saved takes downloaded'
                         : downloadAllSavedStatus === 'failed'
                           ? 'Could not download saved takes'
-                          : bulkPinStatus === 'done'
+                          : downloadJsonSavedStatus === 'done'
+                            ? 'Saved takes JSON downloaded'
+                            : downloadJsonSavedStatus === 'failed'
+                              ? 'Could not download saved takes JSON'
+                              : bulkPinStatus === 'done'
                             ? savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
                               ? 'Shown saved takes unpinned'
                               : 'Shown saved takes pinned'

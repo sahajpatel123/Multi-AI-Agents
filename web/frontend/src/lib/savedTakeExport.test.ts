@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatSavedTakeExport, formatSavedTakesListExport } from './savedTakeExport';
+import {
+  formatSavedTakeExport,
+  formatSavedTakesJsonExport,
+  formatSavedTakesListExport,
+} from './savedTakeExport';
 
 describe('formatSavedTakeExport', () => {
   it('formats question, one-liner, and verdict', () => {
@@ -70,5 +74,66 @@ describe('formatSavedTakesListExport', () => {
     expect(md).toContain('_Filtered view: search “quantum”_');
     expect(md).toMatch(/No saved takes match this filter/i);
     expect(md).toContain('**0** of **5** saved takes');
+  });
+});
+
+describe('formatSavedTakesJsonExport', () => {
+  it('serializes a filtered saved list as pretty JSON', () => {
+    const json = formatSavedTakesJsonExport({
+      totalCount: 2,
+      filterNote: 'pinned only',
+      exportedAt: '2026-08-07T00:00:00.000Z',
+      items: [
+        {
+          agentName: 'The Analyst',
+          prompt: 'Ship today?',
+          oneLiner: 'Ship small.',
+          verdict: 'Risk is bounded if scope is tight.',
+          score: 90,
+          timestamp: '2026-07-01T12:00:00Z',
+        },
+      ],
+    });
+    const parsed = JSON.parse(json);
+    expect(parsed.exported_from).toBe('arena');
+    expect(parsed.exported_at).toBe('2026-08-07T00:00:00.000Z');
+    expect(parsed.total_saved).toBe(2);
+    expect(parsed.filter_note).toBe('pinned only');
+    expect(parsed.count).toBe(1);
+    expect(parsed.items[0]).toMatchObject({
+      agentName: 'The Analyst',
+      prompt: 'Ship today?',
+      oneLiner: 'Ship small.',
+      verdict: 'Risk is bounded if scope is tight.',
+      score: 90,
+      timestamp: '2026-07-01T12:00:00Z',
+    });
+    expect(json).toContain('\n');
+  });
+
+  it('normalizes missing fields for JSON output', () => {
+    const json = formatSavedTakesJsonExport({
+      exportedAt: '2026-08-07T00:00:00.000Z',
+      items: [
+        {
+          agentName: '',
+          prompt: '',
+          oneLiner: '',
+          verdict: '',
+          score: null,
+          timestamp: null,
+        },
+      ],
+    });
+    const parsed = JSON.parse(json);
+    expect(parsed.items[0]).toMatchObject({
+      agentName: 'Arena mind',
+      prompt: '(no prompt)',
+      oneLiner: null,
+      verdict: null,
+      score: null,
+      timestamp: null,
+    });
+    expect(parsed.filter_note).toBeNull();
   });
 });
