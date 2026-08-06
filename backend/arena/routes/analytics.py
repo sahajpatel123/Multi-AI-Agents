@@ -17,7 +17,7 @@ from arena.core.input_validation import sanitize_model_optional_text, sanitize_m
 from arena.core.model_router import get_all_routes_summary
 from arena.core.observability import log_ux_event
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
-from arena.core.tier_config import get_tier_str, normalize_tier
+from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
 from arena.core.datetime_utils import utcnow_naive
 from arena.db_models import (
@@ -75,6 +75,63 @@ def _coerce_persona_panel(raw) -> list[str]:
         return []
     panel = [str(item).strip() for item in raw if isinstance(item, str) and str(item).strip()]
     return panel[:_MAX_PANEL_SIZE]
+
+
+def _coerce_json_dict(raw) -> dict:
+    """Normalize a JSON column that must be an object.
+
+    The JSON columns on ScoringAudit are written by SQLAlchemy's JSON type,
+    but corrupted or legacy rows can carry a JSON *string* that needs a
+    second decode. Anything that isn't a usable mapping degrades to an empty
+    dict rather than leaking into the response or crashing serialization.
+    """
+    if raw is None:
+        return {}
+    if isinstance(raw, str):
+        import json
+
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            return {}
+    if not isinstance(raw, dict):
+        return {}
+    return raw
+
+
+def _coerce_json_list(raw) -> list:
+    """Normalize a JSON column that must be a list (see ``_coerce_json_dict``)."""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        import json
+
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            return []
+    if not isinstance(raw, list):
+        return []
+    return raw
+
+
+def _scoring_audit_allowed(user: UserResponse) -> bool:
+    """Pro entitlement check for the per-round scoring audit.
+
+    ``scoring_audit`` is Pro-only in the tier matrix. Plus users who bought
+    the Agent add-on inherit the same audit entitlement (mirrors
+    ``entitlements.py``), so the gate checks the add-on explicitly rather
+    than relying only on the static tier lookup.
+    """
+    tier = normalize_tier(get_tier_str(user))
+    if has_feature(tier, "scoring_audit"):
+        return True
+    if tier == UserTier.PLUS:
+        return bool(
+            getattr(user, "agent_addon_active", False)
+            or getattr(user, "agent_addon_cancelling", False)
+        )
+    return False
 
 
 class UXEventRequest(BaseModel):
@@ -2206,6 +2263,99 @@ async def analytics_persona_stats_by_category_csv(
             "X-Content-Type-Options": "nosniff",
         },
     )
+
+
+@router.get("/analytics/scoring-audit/{session_id}")
+async def analytics_scoring_audit_detail(
+    session_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=200,
+        description="Max number of round audits returned, newest kept last.",
+    ),
+) -> dict:
+    """Per-round scoring audit detail for the caller (Pro feature).
+
+    The Scorer persists a ScoringAudit row for every Arena exchange: each
+    mind's score, the winner, self-reported confidence, the criteria
+    breakdown when the judge model supplies one, scoring duration, and a
+    fallback flag for rounds where the LLM judge failed and default scores
+    were used. The analytics endpoints aggregate those rows, but nothing
+    exposed the raw per-round record to the user — this endpoint fills the
+    "Scoring audit" Pro entitlement: open a past session and see exactly
+    how the judge scored each mind and whether the judge had to fall back.
+
+    Ownership-scoped and existence-safe: a missing row or another user's
+    session both return 404 so the endpoint can't be used to probe which
+    session ids exist. Rows are returned oldest-first so a chat's rounds
+    read in order; ``limit`` caps the payload.
+    """
+    if not _scoring_audit_allowed(user):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Scoring audit requires a Pro subscription.",
+                "upgrade_required": "pro",
+            },
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_scoring_audit",
+        limit=120,
+        window_seconds=3600,
+        message="Too many scoring audit reads. Limit is 120 per hour.",
+    )
+
+    sid = session_id.strip()
+    rows = (
+        db.query(ScoringAudit)
+        .filter(
+            ScoringAudit.session_id == sid,
+            ScoringAudit.user_id == user.id,
+        )
+        .order_by(ScoringAudit.created_at.asc())
+        .limit(limit)
+        .all()
+    )
+
+    audits = [
+        {
+            "id": row.id,
+            "prompt_snippet": row.prompt_snippet,
+            "prompt_category": row.prompt_category,
+            "winner_agent_id": row.winner_agent_id,
+            "winner_persona_id": row.winner_persona_id,
+            "winner_score": row.winner_score,
+            "scores": _coerce_json_dict(row.scores),
+            "criteria_breakdown": _coerce_json_dict(row.criteria_breakdown) or None,
+            "confidence_values": _coerce_json_list(row.confidence_values),
+            "persona_ids_used": _coerce_persona_panel(row.persona_ids_used),
+            "scoring_duration_ms": row.scoring_duration_ms,
+            "fallback_used": bool(row.fallback_used),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
+
+    if not audits:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "audit_not_found",
+                "message": "No scoring audit found for this session.",
+            },
+        )
+
+    return {
+        "session_id": sid,
+        "audits": audits,
+        "audit_count": len(audits),
+    }
 
 
 @router.get("/admin/routes")
