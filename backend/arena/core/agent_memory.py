@@ -249,6 +249,11 @@ async def save_task_to_memory(
     insight_report: Optional[dict[str, Any]] = None,
     pipeline_contradictions: Optional[list[Any]] = None,
     intelligence_score: Optional[dict[str, Any]] = None,
+    source_integrity: Optional[dict[str, Any]] = None,
+    assumptions: Optional[dict[str, Any]] = None,
+    dissent_report: Optional[dict[str, Any]] = None,
+    temporal_profile: Optional[dict[str, Any]] = None,
+    steelman: Optional[dict[str, Any]] = None,
     orchestration_id: Optional[str] = None,
     watchlist_item_id: Optional[str] = None,
     bb: Optional[Blackboard] = None,
@@ -290,6 +295,11 @@ async def save_task_to_memory(
         insight_report=insight_report,
         contradictions=pipeline_contradictions,
         intelligence_score=intelligence_score,
+        source_integrity=source_integrity,
+        assumptions=assumptions,
+        dissent_report=dissent_report,
+        temporal_profile=temporal_profile,
+        steelman=steelman,
     )
     db.add(task_record)
     db.commit()

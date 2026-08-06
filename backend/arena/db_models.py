@@ -497,6 +497,16 @@ class AgentTask(Base):
     insight_report = Column(JSON, nullable=True)
     contradictions = Column(JSON, nullable=True)
     intelligence_score = Column(JSON, nullable=True)
+    # Post-pipeline research reports. These are computed while the
+    # blackboard is warm (source integrity, assumptions, dissent,
+    # temporal profile, steelman) and are persisted here so a reloaded
+    # /result or saved-task payload returns the same reports instead of
+    # empty shells once the in-memory blackboard is dropped.
+    source_integrity = Column(JSON, nullable=True)
+    assumptions = Column(JSON, nullable=True)
+    dissent_report = Column(JSON, nullable=True)
+    temporal_profile = Column(JSON, nullable=True)
+    steelman = Column(JSON, nullable=True)
     is_live = Column(Boolean, default=False, nullable=False)
     live_last_checked = Column(DateTime, nullable=True)
     live_next_check = Column(DateTime, nullable=True)
@@ -874,4 +884,3 @@ class DiscussThread(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="discuss_threads", lazy="joined")
-

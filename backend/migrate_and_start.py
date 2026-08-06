@@ -50,6 +50,48 @@ def main():
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
             "intelligence_score JSONB",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
+            "source_integrity JSONB",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
+            "assumptions JSONB",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
+            "dissent_report JSONB",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
+            "temporal_profile JSONB",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
+            "steelman JSONB",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "description VARCHAR(500)",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "name VARCHAR(100)",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "id INTEGER",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "user_id INTEGER",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "preset_type VARCHAR(20) DEFAULT 'saved'",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "format VARCHAR(10) DEFAULT 'csv'",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "search VARCHAR(100)",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "persona_id VARCHAR(50)",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "min_score INTEGER",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "max_score INTEGER",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "sort VARCHAR(20) DEFAULT 'newest'",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "position INTEGER DEFAULT 0",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "is_default BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "last_used_at TIMESTAMP",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "created_at TIMESTAMP",
+            "ALTER TABLE export_presets ADD COLUMN IF NOT EXISTS "
+            "updated_at TIMESTAMP",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
             "is_live BOOLEAN DEFAULT FALSE",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS "
             "live_last_checked TIMESTAMP",
@@ -64,6 +106,11 @@ def main():
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS insight_report TEXT",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS contradictions TEXT",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS intelligence_score TEXT",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS source_integrity TEXT",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS assumptions TEXT",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS dissent_report TEXT",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS temporal_profile TEXT",
+            "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS steelman TEXT",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS is_live BOOLEAN DEFAULT 0",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS live_last_checked TEXT",
             "ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS live_next_check TEXT",

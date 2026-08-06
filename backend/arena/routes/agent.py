@@ -28,7 +28,16 @@ from arena.core.live_thread_checker import LIVE_UPDATES_MAX
 from arena.core.upload_store import UPLOAD_DIR, ensure_upload_dir, register_upload, resolve_attachments
 from arena.core.dependencies import get_current_user_required
 from arena.core.errors import ErrorCodes
-from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard, remove_blackboard
+from arena.core.blackboard import (
+    AgentStatus,
+    Blackboard,
+    StageStatus,
+    _filter_assumptions_keys,
+    _filter_generic_dict_keys,
+    create_blackboard,
+    get_blackboard,
+    remove_blackboard,
+)
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 from arena.core.cost_tracker import get_today_token_usage
@@ -157,6 +166,12 @@ def _intelligence_score_from_row(row: AgentTaskRow) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _report_dict_from_row(value) -> dict | None:
+    """Normalize a persisted JSON report column to a dict (or None)."""
+    parsed = _json_column_value(value)
+    return parsed if isinstance(parsed, dict) else None
+
+
 def _live_updates_from_row(row: AgentTaskRow) -> list:
     parsed = _json_column_value(row.live_updates)
     if not isinstance(parsed, list):
@@ -179,6 +194,26 @@ def _merge_db_task_into_result_payload(payload: dict, row: AgentTaskRow) -> None
     payload["intelligence_score"] = _intelligence_score_from_row(row) or payload.get(
         "intelligence_score", {}
     )
+    # Persisted post-pipeline reports are the source of truth once the
+    # blackboard has been dropped; only overlay them when the row actually
+    # has them so a warm blackboard's fresher copy wins.
+    persisted_source_integrity = _report_dict_from_row(row.source_integrity)
+    if persisted_source_integrity:
+        payload["source_integrity"] = _filter_generic_dict_keys(
+            persisted_source_integrity
+        )
+    persisted_assumptions = _report_dict_from_row(row.assumptions)
+    if persisted_assumptions:
+        payload["assumptions"] = _filter_assumptions_keys(persisted_assumptions)
+    persisted_dissent = _report_dict_from_row(row.dissent_report)
+    if persisted_dissent:
+        payload["dissent_report"] = _filter_generic_dict_keys(persisted_dissent)
+    persisted_temporal = _report_dict_from_row(row.temporal_profile)
+    if persisted_temporal:
+        payload["temporal_profile"] = _filter_generic_dict_keys(persisted_temporal)
+    persisted_steelman = _report_dict_from_row(row.steelman)
+    if persisted_steelman:
+        payload["steelman"] = persisted_steelman
     payload["is_live"] = bool(row.is_live)
     payload["live_last_checked"] = (
         row.live_last_checked.isoformat() if row.live_last_checked else None
@@ -236,6 +271,11 @@ def _persisted_agent_task_result_dict(
     pipe_contra = _pipeline_contradictions_from_row(row)
     insight = _insight_report_from_row(row)
     intel = _intelligence_score_from_row(row)
+    source_integrity = _report_dict_from_row(row.source_integrity)
+    assumptions = _report_dict_from_row(row.assumptions)
+    dissent_report = _report_dict_from_row(row.dissent_report)
+    temporal_profile = _report_dict_from_row(row.temporal_profile)
+    steelman = _report_dict_from_row(row.steelman)
     live_updates = _live_updates_from_row(row)
     return {
         "task_id": row.task_id,
@@ -252,12 +292,14 @@ def _persisted_agent_task_result_dict(
         "sources": sources,
         "flags": [],
         "caveats": [],
-        "source_integrity": {},
+        "source_integrity": _filter_generic_dict_keys(source_integrity),
         "contradictions": pipe_contra,
         "memory_contradictions": memory_contradictions,
         "insight_report": insight,
         "intelligence_score": intel,
-        "assumptions": {},
+        "assumptions": _filter_assumptions_keys(assumptions),
+        "dissent_report": _filter_generic_dict_keys(dissent_report),
+        "temporal_profile": _filter_generic_dict_keys(temporal_profile),
         "memory_saved": True,
         "conversation": [],
         "is_refinement": False,
@@ -270,7 +312,7 @@ def _persisted_agent_task_result_dict(
         "expertise_level": "curious",
         "expertise_domain": "",
         "expertise_modifier": "",
-        "steelman": None,
+        "steelman": steelman,
         "is_live": bool(row.is_live),
         "live_last_checked": row.live_last_checked.isoformat()
         if row.live_last_checked
@@ -798,16 +840,64 @@ def _watchlist_item_api_dict(db: Session, item: WatchlistItem, *, latest_summary
     }
 
 
-def _export_overlay_from_bb(bb: Optional[Blackboard]) -> Optional[dict]:
+def _export_overlay_from_bb(
+    bb: Optional[Blackboard],
+    row: Optional[AgentTaskRow] = None,
+) -> Optional[dict]:
+    """Overlay fields for report exports, preferring persisted row data.
+
+    While a blackboard is warm its in-memory reports are freshest; once
+    it has been dropped (normal completion path), the persisted row
+    columns carry the same reports so PDF/JSON exports don't lose them.
+    """
+    persisted: dict = {}
+    if row is not None:
+        source_integrity = _report_dict_from_row(row.source_integrity)
+        if source_integrity:
+            persisted["source_integrity"] = _filter_generic_dict_keys(
+                source_integrity
+            )
+        assumptions = _report_dict_from_row(row.assumptions)
+        if assumptions:
+            persisted["assumptions"] = _filter_assumptions_keys(assumptions)
+        dissent_report = _report_dict_from_row(row.dissent_report)
+        if dissent_report:
+            persisted["dissent_report"] = _filter_generic_dict_keys(dissent_report)
+        temporal_profile = _report_dict_from_row(row.temporal_profile)
+        if temporal_profile:
+            persisted["temporal_profile"] = _filter_generic_dict_keys(
+                temporal_profile
+            )
+        steelman = _report_dict_from_row(row.steelman)
+        if steelman:
+            persisted["steelman"] = steelman
+        intel = _intelligence_score_from_row(row)
+        if intel:
+            persisted["intelligence_score"] = intel
+        if row.sources_used:
+            try:
+                raw_sources = json.loads(row.sources_used)
+                if isinstance(raw_sources, list):
+                    persisted["sources"] = [str(s) for s in raw_sources]
+            except (json.JSONDecodeError, TypeError):
+                pass
+
     if not bb or bb.status != AgentStatus.COMPLETE:
-        return None
-    return {
+        return persisted or None
+
+    out = {
         "caveats": list(bb.caveats or []),
         "steelman": bb.steelman or {},
         "assumptions": bb.assumptions or {},
         "sources": list(bb.sources or []),
         "intelligence_score": bb.intelligence_score or {},
+        "source_integrity": _filter_generic_dict_keys(bb.source_integrity),
+        "dissent_report": _filter_generic_dict_keys(bb.dissent_report),
+        "temporal_profile": _filter_generic_dict_keys(bb.temporal_profile),
     }
+    for key, value in persisted.items():
+        out[key] = value
+    return out
 
 
 def _orchestration_any_task_failed(task_ids: list[str]) -> bool:
@@ -1006,6 +1096,11 @@ async def _save_completed_task_to_memory(
                 insight_report=bb.insight_report,
                 pipeline_contradictions=bb.cross_task_contradictions or None,
                 intelligence_score=bb.intelligence_score if bb.intelligence_score else None,
+                source_integrity=bb.source_integrity if bb.source_integrity else None,
+                assumptions=bb.assumptions if bb.assumptions else None,
+                dissent_report=bb.dissent_report if bb.dissent_report else None,
+                temporal_profile=bb.temporal_profile if bb.temporal_profile else None,
+                steelman=bb.steelman if bb.steelman else None,
                 orchestration_id=orchestration_id,
                 watchlist_item_id=watchlist_item_id,
                 bb=bb,
@@ -1935,7 +2030,7 @@ async def export_task_pdf(
         )
 
     bb = get_blackboard(tid)
-    overlay = _export_overlay_from_bb(bb)
+    overlay = _export_overlay_from_bb(bb, row)
     html_str = generate_report_html(row, overlay)
     blob, mime, ext = write_pdf_or_html(html_str, f"arena-report-{tid[:8]}")
     filename = f"arena-report-{tid[:8]}.{ext}"
@@ -3614,6 +3709,11 @@ async def get_saved_agent_task(
     pipe_contra = _pipeline_contradictions_from_row(row)
     insight_saved = _insight_report_from_row(row)
     intel = _intelligence_score_from_row(row)
+    source_integrity = _report_dict_from_row(row.source_integrity)
+    assumptions = _report_dict_from_row(row.assumptions)
+    dissent_report = _report_dict_from_row(row.dissent_report)
+    temporal_profile = _report_dict_from_row(row.temporal_profile)
+    steelman = _report_dict_from_row(row.steelman)
     live_updates = _live_updates_from_row(row)
     return JSONResponse(
         content={
@@ -3625,11 +3725,15 @@ async def get_saved_agent_task(
             "topics": json.loads(row.topics or "[]"),
             "user_feedback": row.user_feedback,
             "created_at": row.created_at.isoformat() if row.created_at else "",
-            "source_integrity": {},
+            "source_integrity": _filter_generic_dict_keys(source_integrity),
             "contradictions": pipe_contra,
             "memory_contradictions": memory_contradictions,
             "insight_report": insight_saved,
             "intelligence_score": intel,
+            "assumptions": _filter_assumptions_keys(assumptions),
+            "dissent_report": _filter_generic_dict_keys(dissent_report),
+            "temporal_profile": _filter_generic_dict_keys(temporal_profile),
+            "steelman": steelman,
             "is_live": bool(row.is_live),
             "live_last_checked": row.live_last_checked.isoformat()
             if row.live_last_checked
