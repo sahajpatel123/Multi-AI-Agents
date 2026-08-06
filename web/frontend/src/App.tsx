@@ -2135,6 +2135,7 @@ function App() {
               }}
               draftKey={focusedAgentId ? undefined : 'arena_prompt_draft:v1'}
               clearDraftSignal={arenaPromptClearSignal}
+              polishEnabled
             />
           </div>
         </>

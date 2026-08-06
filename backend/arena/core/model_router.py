@@ -146,6 +146,7 @@ TASK_ROUTES = {
     "persona_drift_check": {"primary": "claude_haiku", "fallback": ["claude_sonnet"], "reason": "Binary check. Does response match persona fingerprint?"},
     "contradiction_detection": {"primary": "claude_haiku", "fallback": ["claude_sonnet"], "reason": "Similarity check with LLM fallback for borderline cases."},
     "session_compression": {"primary": "claude_haiku", "fallback": ["claude_sonnet"], "reason": "Compression is a structured extraction task. Haiku handles well."},
+    "prompt_improve": {"primary": "claude_haiku", "fallback": ["claude_sonnet"], "reason": "Prompt rewriting is a lightweight structured-format task. Haiku is fast and cheap."},
     "planner": {"primary": "claude_sonnet", "fallback": ["claude_haiku"], "reason": "Task decomposition needs structured output. Sonnet is reliable here."},
     "researcher": {"primary": "claude_sonnet", "fallback": ["claude_haiku"], "reason": "Evidence gathering and synthesis. Balanced model needed."},
     "solver": {"primary": "claude_sonnet", "fallback": ["claude_haiku"], "reason": "Main answer generation. Most important stage in Agent mode."},

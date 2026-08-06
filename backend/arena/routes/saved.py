@@ -778,8 +778,17 @@ async def export_saved_csv_legacy(
     sort: str = Query("newest"),
 ):
     """Legacy CSV-only export endpoint - redirects to new unified export with format=csv."""
-    from fastapi import Request
     from fastapi.responses import RedirectResponse
+
+    # Mirror the unified export throttle so the redirect can't be used to
+    # bypass the per-user export rate limit.
+    enforce_user_rate_limit(
+        user.id,
+        scope="saved_export",
+        limit=30,
+        window_seconds=60,
+        message="Too many exports. Please wait.",
+    )
     
     # Build query parameters for redirect
     params = []

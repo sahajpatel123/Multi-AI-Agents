@@ -17,7 +17,7 @@ Functionality:
 from typing import Optional
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -26,7 +26,7 @@ from arena.core.input_validation import sanitize_model_text
 from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
-from arena.db_models import ExportPreset, User
+from arena.db_models import ExportPreset
 from arena.models.schemas import UserResponse
 from arena.routes.saved import build_saved_export_query, normalize_export_search
 

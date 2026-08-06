@@ -1340,6 +1340,30 @@ export async function exportAgentWatchlistHistoryCsv(itemId: string, limit = 100
   return response.blob();
 }
 
+export interface PromptImproveResult {
+  original_prompt: string;
+  improved_prompt: string;
+  refined: boolean;
+  note?: string;
+}
+
+/** Ask the backend to polish a prompt before it is sent to Arena. */
+export async function improvePrompt(prompt: string): Promise<PromptImproveResult> {
+  const response = await apiFetch('/api/prompt/improve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
+  const data = await parseJsonSafely<PromptImproveResult & { detail?: string | { message?: string } }>(
+    response,
+  );
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data, 'Prompt polish failed'), response.status, data);
+  }
+  if (!data) throw new Error('Empty prompt polish response');
+  return data;
+}
+
 
 export async function postCalibrationRate(
   taskId: string,
@@ -1978,4 +2002,3 @@ export async function exportAnalyticsPersonaStatsByCategoryCsv(personaId: string
   }
   return response.blob();
 }
-

@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { improvePrompt } from '../api';
 import { PromptInput } from './PromptInput';
+
+vi.mock('../api', () => ({
+  improvePrompt: vi.fn(),
+}));
+
+const mockedImprovePrompt = vi.mocked(improvePrompt);
 
 describe('PromptInput', () => {
   it('calls onSubmit with the typed prompt when the form is submitted', () => {
@@ -110,5 +117,100 @@ describe('PromptInput', () => {
       />,
     );
     expect(textarea.value).toBe('Second preset');
+  });
+
+  it('hides the polish control when polishEnabled is not set', () => {
+    render(<PromptInput onSubmit={() => {}} isLoading={false} />);
+    expect(
+      screen.queryByRole('button', { name: /polish prompt with ai/i }),
+    ).toBeNull();
+  });
+
+  it('keeps the polish control disabled without content', () => {
+    render(<PromptInput onSubmit={() => {}} isLoading={false} polishEnabled />);
+    const polish = screen.getByRole('button', { name: /polish prompt with ai/i });
+    expect(polish).toBeDisabled();
+  });
+
+  it('polishes the prompt and replaces the textarea value', async () => {
+    mockedImprovePrompt.mockResolvedValueOnce({
+      original_prompt: 'tell me about x',
+      improved_prompt: 'What are the trade-offs of x?',
+      refined: true,
+      note: 'Made the ask specific.',
+    });
+    render(<PromptInput onSubmit={() => {}} isLoading={false} polishEnabled />);
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'tell me about x' } });
+    fireEvent.click(screen.getByRole('button', { name: /polish prompt with ai/i }));
+
+    await waitFor(() => {
+      expect(textarea.value).toBe('What are the trade-offs of x?');
+    });
+    expect(mockedImprovePrompt).toHaveBeenCalledWith('tell me about x');
+    expect(screen.getByRole('status')).toHaveTextContent(/made the ask specific/i);
+  });
+
+  it('keeps the prompt when the polish service declines', async () => {
+    mockedImprovePrompt.mockResolvedValueOnce({
+      original_prompt: 'keep me',
+      improved_prompt: 'keep me',
+      refined: false,
+      note: 'Could not improve this prompt — it was left unchanged.',
+    });
+    render(<PromptInput onSubmit={() => {}} isLoading={false} polishEnabled />);
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'keep me' } });
+    fireEvent.click(screen.getByRole('button', { name: /polish prompt with ai/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/unchanged/i);
+    });
+    expect(textarea.value).toBe('keep me');
+  });
+
+  it('keeps the prompt and shows a notice when the API fails', async () => {
+    mockedImprovePrompt.mockRejectedValueOnce(new Error('boom'));
+    render(<PromptInput onSubmit={() => {}} isLoading={false} polishEnabled />);
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'hold me' } });
+    fireEvent.click(screen.getByRole('button', { name: /polish prompt with ai/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/unavailable/i);
+    });
+    expect(textarea.value).toBe('hold me');
+  });
+
+  it('disables the polish control while polishing', async () => {
+    let resolvePolish!: (value: {
+      original_prompt: string;
+      improved_prompt: string;
+      refined: boolean;
+      note?: string;
+    }) => void;
+    mockedImprovePrompt.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvePolish = resolve;
+        }),
+    );
+    render(<PromptInput onSubmit={() => {}} isLoading={false} polishEnabled />);
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'pending' } });
+    const polish = screen.getByRole('button', { name: /polish prompt with ai/i });
+    fireEvent.click(polish);
+    expect(polish).toBeDisabled();
+
+    await act(async () => {
+      resolvePolish({
+        original_prompt: 'pending',
+        improved_prompt: 'sharpened',
+        refined: true,
+      });
+    });
+    await waitFor(() => {
+      expect(textarea.value).toBe('sharpened');
+    });
   });
 });
