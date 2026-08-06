@@ -123,6 +123,9 @@ async def test_scoring_audit_csv_exports_rounds_for_pro(
     assert '"philosopher"' in rows[1][10]
     assert rows[1][11] == "1240"
     assert rows[1][12] == "false"
+    # Every record (header, rounds, footer) has the same field count so
+    # strict RFC 4180 consumers accept the file.
+    assert {len(row) for row in rows} == {len(rows[0])}
 
     assert rows[2][0] == "2"
     assert rows[2][2] == "Follow-up: what is the riskiest assumption?"
@@ -132,6 +135,42 @@ async def test_scoring_audit_csv_exports_rounds_for_pro(
     assert rows[3][0] == f"# session_id={sid}"
     assert rows[3][1] == "audit_count=2"
     assert rows[3][2] == "total_count=2"
+    assert len(rows[3]) == len(rows[0])
+
+
+@pytest.mark.asyncio
+async def test_scoring_audit_csv_tolerates_legacy_rows_with_missing_fields(
+    app_client, make_user, db_session
+):
+    """Legacy rows (nullable fields NULL, JSON stored as strings) degrade to
+    blank or empty JSON cells, never a crash."""
+    user = make_user(email="csv-legacy@test.com", tier=UserTier.PRO)
+    sid = str(uuid.uuid4())
+    rec = _seed_audit(db_session, user_id=user.id, session_id=sid)
+    rec.prompt_category = None
+    rec.scores = 'null'  # written as a serialized JSON string by a legacy path
+    rec.criteria_breakdown = None
+    rec.confidence_values = None
+    rec.persona_ids_used = None
+    rec.scoring_duration_ms = None
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/analytics/scoring-audit/{sid}/export.csv",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    rows = _rows(res.text)
+    data = rows[1]
+    assert data[1] != ""  # created_at is NOT NULL by schema
+    assert data[3] == ""  # prompt_category
+    assert data[6] == "87"  # winner_score is NOT NULL by schema
+    assert data[7] == "{}"  # scores_json
+    assert data[8] == "{}"  # criteria_breakdown_json
+    assert data[9] == "[]"  # confidence_values_json
+    assert data[10] == "[]"  # persona_ids_used
+    assert data[11] == ""  # scoring_duration_ms
+    assert {len(row) for row in rows} == {len(rows[0])}
 
 
 @pytest.mark.asyncio

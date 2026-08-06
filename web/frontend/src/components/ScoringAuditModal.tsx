@@ -155,10 +155,15 @@ export function ScoringAuditModal({
     setExportError(null);
     try {
       const blob = await exportScoringAuditCsv(sessionId, data.audit_count);
-      downloadBlobFile(
+      const accepted = downloadBlobFile(
         blob,
         `arena-scoring-audit-${sanitizeDownloadFilename(sessionId, 'session')}.csv`,
       );
+      if (!accepted) {
+        setExportError(
+          'Your browser blocked the download. Check your download settings and try again.',
+        );
+      }
     } catch (err) {
       setExportError(
         err instanceof Error

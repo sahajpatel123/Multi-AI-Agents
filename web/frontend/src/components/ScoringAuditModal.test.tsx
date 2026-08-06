@@ -236,4 +236,41 @@ describe('ScoringAuditModal', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Export failed');
     expect(downloadBlobFileMock).not.toHaveBeenCalled();
   });
+
+  it('surfaces a browser-blocked download instead of claiming success', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    exportScoringAuditCsvMock.mockResolvedValue(
+      new Blob(['round,prompt_snippet\n1,Should we launch?'], { type: 'text/csv' }),
+    );
+    downloadBlobFileMock.mockReturnValue(false);
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /export scoring audit as csv/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/blocked/i);
+    expect(downloadBlobFileMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the export button while an export is in flight', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    let resolveExport: (blob: Blob) => void = () => {};
+    exportScoringAuditCsvMock.mockImplementation(
+      () =>
+        new Promise<Blob>((resolve) => {
+          resolveExport = resolve;
+        }),
+    );
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: /export scoring audit as csv/i });
+    fireEvent.click(button);
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent('Exporting…');
+
+    resolveExport(new Blob(['round,prompt_snippet\n1,Should we launch?'], { type: 'text/csv' }));
+    await waitFor(() => expect(button).toBeEnabled());
+  });
 });

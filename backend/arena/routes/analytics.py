@@ -2429,23 +2429,22 @@ async def analytics_scoring_audit_csv(
 
     buf = io.StringIO()
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
-    writer.writerow(
-        [
-            "round",
-            "created_at",
-            "prompt_snippet",
-            "prompt_category",
-            "winner_agent_id",
-            "winner_persona_id",
-            "winner_score",
-            "scores_json",
-            "criteria_breakdown_json",
-            "confidence_values_json",
-            "persona_ids_used",
-            "scoring_duration_ms",
-            "fallback_used",
-        ]
-    )
+    header = [
+        "round",
+        "created_at",
+        "prompt_snippet",
+        "prompt_category",
+        "winner_agent_id",
+        "winner_persona_id",
+        "winner_score",
+        "scores_json",
+        "criteria_breakdown_json",
+        "confidence_values_json",
+        "persona_ids_used",
+        "scoring_duration_ms",
+        "fallback_used",
+    ]
+    writer.writerow(header)
     for round_no, audit in enumerate(payload["audits"], start=1):
         writer.writerow(
             [
@@ -2483,12 +2482,15 @@ async def analytics_scoring_audit_csv(
                 "true" if audit["fallback_used"] else "false",
             ]
         )
-    # Footer rollup so the file is self-describing about truncation.
+    # Footer rollup so the file is self-describing about truncation. It is
+    # padded to the header width so every record in the file has the same
+    # number of fields (RFC 4180) — strict consumers reject ragged rows.
     writer.writerow(
         [
             f"# session_id={payload['session_id']}",
             f"audit_count={payload['audit_count']}",
             f"total_count={payload['total_count']}",
+            *([""] * (len(header) - 3)),
         ]
     )
 
