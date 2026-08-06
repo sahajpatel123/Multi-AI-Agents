@@ -304,6 +304,8 @@ export function Sidebar({
     [reversedSaved],
   );
 
+  const shownSavedPinnedCount = filteredSaved.filter((item) => item.pinned === true).length;
+
   const savedPinFilterUseful = useMemo(
     () => reversedSaved.some((item) => item.pinned === true),
     [reversedSaved],
@@ -1402,7 +1404,13 @@ export function Sidebar({
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
                     <button
                       type="button"
-                      disabled={bulkPinStatus === 'busy' || filteredSaved.length === 0}
+                      disabled={
+                        bulkPinStatus === 'busy' ||
+                        filteredSaved.length === 0 ||
+                        (savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                          ? shownSavedPinnedCount === 0
+                          : shownSavedPinnedCount === filteredSaved.length)
+                      }
                       title={
                         savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
                           ? 'Unpin all shown saved takes'
