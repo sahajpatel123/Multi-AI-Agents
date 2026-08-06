@@ -324,6 +324,14 @@ export function Sidebar({
     }
   }, [savedMindFilter, savedMindOptions]);
 
+  // Drop the pinned-only filter when the last pinned take is unpinned so the
+  // sidebar never leaves the user stranded on an empty pinned-only view.
+  useEffect(() => {
+    if (savedPinFilter === SIDEBAR_SAVED_PIN_ONLY && !savedPinFilterUseful) {
+      setSavedPinFilter(SIDEBAR_SAVED_PIN_ALL);
+    }
+  }, [savedPinFilter, savedPinFilterUseful]);
+
   // Drop winner filter when that winner no longer appears in recents.
   useEffect(() => {
     if (recentsWinnerFilter === SIDEBAR_RECENTS_WINNER_ALL) return;
