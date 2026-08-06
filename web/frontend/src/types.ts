@@ -114,6 +114,8 @@ export interface SavedResponseItem {
   persona_color?: string;
   score?: number | null;
   confidence?: number | null;
+  pinned?: boolean;
+  pinned_at?: string | null;
   one_liner: string;
   verdict: string;
   timestamp: string;

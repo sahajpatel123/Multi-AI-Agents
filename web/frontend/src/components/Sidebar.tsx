@@ -22,6 +22,7 @@ import {
   Trash2,
   Copy,
   Check,
+  Pin,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
@@ -107,6 +108,7 @@ interface SidebarProps {
   onLeaderboardClick: () => void;
   savedItems: SavedResponseItem[];
   onSavedItemClick: (item: SavedResponseItem) => void;
+  onToggleSavedPin?: (item: SavedResponseItem, pinned: boolean) => void;
 }
 
 type FilterValue = 'all' | PromptCategory;
@@ -129,6 +131,7 @@ export function Sidebar({
   onLeaderboardClick,
   savedItems,
   onSavedItemClick,
+  onToggleSavedPin,
 }: SidebarProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -1801,6 +1804,45 @@ export function Sidebar({
                             ) : (
                               <Copy style={{ width: 13, height: 13 }} />
                             )}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={
+                              item.pinned
+                                ? `Unpin ${displayName} take`
+                                : `Pin ${displayName} take`
+                            }
+                            title={item.pinned ? 'Unpin take' : 'Pin take'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const nextPinned = !item.pinned;
+                              if (nextPinned) setSavedSort('pinned');
+                              onToggleSavedPin?.(item, nextPinned);
+                            }}
+                            style={{
+                              flexShrink: 0,
+                              width: 28,
+                              height: 28,
+                              borderRadius: 6,
+                              border: 'none',
+                              background: item.pinned
+                                ? 'rgba(196,149,106,0.15)'
+                                : 'transparent',
+                              color: item.pinned ? '#F0B84E' : '#A0A39A',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 0,
+                            }}
+                          >
+                            <Pin
+                              style={{
+                                width: 13,
+                                height: 13,
+                                fill: item.pinned ? 'currentColor' : 'none',
+                              }}
+                            />
                           </button>
                         </div>
                       );

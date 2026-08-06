@@ -36,6 +36,7 @@ from arena.core.dependencies import get_current_user_required
 from arena.core.input_validation import sanitize_model_optional_text, sanitize_model_text
 from arena.core.rate_limits import enforce_user_rate_limit
 from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
+from arena.core.datetime_utils import utcnow_naive
 from arena.database import get_db
 from arena.db_models import SavedResponse
 from arena.models.schemas import UserResponse
@@ -51,6 +52,10 @@ SAVED_MAX_PER_USER = 200
 # library in a single click; 50 is enough for the "select all visible" UI
 # pattern without becoming a footgun.
 SAVED_BULK_DELETE_MAX = 50
+
+# Pin cap — pinned takes are meant to be a small curated set at the top of
+# the sidebar, not a second list. 50 keeps the query cheap and the UI honest.
+SAVED_PIN_MAX = 50
 
 
 def _escape_like(value: str) -> str:
@@ -121,6 +126,12 @@ def build_saved_export_query(
 
     if sort == "oldest":
         q = q.order_by(SavedResponse.saved_at.asc(), SavedResponse.id.asc())
+    elif sort == "pinned":
+        q = q.order_by(
+            SavedResponse.pinned_at.desc().nullslast(),
+            SavedResponse.saved_at.desc(),
+            SavedResponse.id.desc(),
+        )
     elif sort == "score":
         q = q.order_by(SavedResponse.score.desc().nullslast(), SavedResponse.id.desc())
     else:  # newest (default)
@@ -175,6 +186,11 @@ class BulkDeleteRequest(BaseModel):
     ids: list[int] = Field(..., min_length=1, max_length=SAVED_BULK_DELETE_MAX)
 
 
+class PinRequest(BaseModel):
+    """Body schema for PATCH /saved/{id} — pin or unpin one saved take."""
+    pinned: bool
+
+
 @router.get("/saved")
 async def get_saved(
     user: UserResponse = Depends(get_current_user_required),
@@ -185,7 +201,7 @@ async def get_saved(
     persona_id: Optional[str] = Query(None, max_length=50, description="Restrict to one persona."),
     min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score (inclusive)."),
     max_score: Optional[int] = Query(None, ge=0, le=100, description="Maximum score (inclusive)."),
-    sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', or 'score'."),
+    sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', 'score', or 'pinned'."),
 ) -> dict:
     """List saved responses with optional search, filter, sort, pagination.
 
@@ -250,6 +266,11 @@ async def get_saved(
             SavedResponse.score.desc().nullslast(),
             SavedResponse.saved_at.desc(),
         )
+    elif sort == "pinned":
+        order_clauses = (
+            SavedResponse.pinned_at.desc().nullslast(),
+            SavedResponse.saved_at.desc(),
+        )
     else:
         order_clauses = (SavedResponse.saved_at.desc(),)
 
@@ -274,6 +295,8 @@ async def get_saved(
             "verdict": row.verdict,
             "score": row.score,
             "confidence": row.confidence,
+            "pinned": row.pinned_at is not None,
+            "pinned_at": row.pinned_at.isoformat() if row.pinned_at else None,
             "saved_at": row.saved_at.isoformat() if row.saved_at else None,
         }
         for row in rows
@@ -292,6 +315,77 @@ async def get_saved(
             "max_score": max_score,
             "sort": sort,
         },
+    }
+
+
+@router.patch("/saved/{saved_id}")
+async def set_saved_pinned(
+    saved_id: int,
+    body: PinRequest,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Pin or unpin one saved take.
+
+    Scope by owner so foreign IDs are indistinguishable from missing ones
+    (same 404 contract as DELETE). Pinning is bounded to SAVED_PIN_MAX so
+    a stale UI cannot turn every saved take into a pinned one silently.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="saved_pin",
+        limit=60,
+        window_seconds=3600,
+        message="Too many saved-take pin changes. Limit is 60 per hour.",
+    )
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Saved responses require a Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+
+    row = (
+        db.query(SavedResponse)
+        .filter(SavedResponse.id == saved_id, SavedResponse.user_id == user.id)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": "Saved response not found"},
+        )
+
+    if body.pinned and row.pinned_at is None:
+        pinned_count = (
+            db.query(SavedResponse.id)
+            .filter(
+                SavedResponse.user_id == user.id,
+                SavedResponse.pinned_at.isnot(None),
+            )
+            .count()
+        )
+        if pinned_count >= SAVED_PIN_MAX:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "pin_limit_reached",
+                    "message": f"You can pin up to {SAVED_PIN_MAX} saved takes. Unpin one first.",
+                },
+            )
+        row.pinned_at = utcnow_naive()
+    elif not body.pinned:
+        row.pinned_at = None
+
+    db.commit()
+    db.refresh(row)
+    return {
+        "id": row.id,
+        "pinned": row.pinned_at is not None,
+        "pinned_at": row.pinned_at.isoformat() if row.pinned_at else None,
     }
 
 

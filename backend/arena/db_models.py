@@ -363,6 +363,7 @@ class SavedResponse(Base):
     verdict = Column(Text, nullable=False)
     score = Column(Integer, nullable=True)
     confidence = Column(Integer, nullable=True)
+    pinned_at = Column(DateTime, nullable=True)
     saved_at = Column(DateTime, default=_now, nullable=False)
     user = relationship("User", back_populates="saved_responses", lazy="joined")
 

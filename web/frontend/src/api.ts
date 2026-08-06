@@ -336,6 +336,8 @@ export async function getSavedResponses(): Promise<SavedResponseItem[]> {
     confidence: typeof item.confidence === 'number' ? item.confidence : null,
     one_liner: String(item.one_liner || ''),
     verdict: String(item.verdict || ''),
+    pinned: item.pinned === true || Boolean(item.pinned_at),
+    pinned_at: item.pinned_at ? String(item.pinned_at) : null,
     timestamp: String(item.saved_at || ''),
   }));
 }
@@ -372,6 +374,18 @@ export async function deleteSavedResponse(id: number): Promise<void> {
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
     throw new Error(getErrorMessage(err, 'Failed to delete saved response'));
+  }
+}
+
+export async function setSavedResponsePinned(id: number, pinned: boolean): Promise<void> {
+  const res = await apiFetch(`/api/saved/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pinned }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(getErrorMessage(err, 'Failed to update saved take'));
   }
 }
 

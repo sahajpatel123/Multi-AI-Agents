@@ -26,6 +26,7 @@ import {
   getSavedResponses,
   saveResponse,
   deleteSavedResponse,
+  setSavedResponsePinned,
   verifyArenaAnswerInAgent,
   extractStreamingPreview,
   suggestFollowUps,
@@ -661,6 +662,29 @@ function App() {
       setExpandedAgent(item.agent_id);
     }
   }, [activeTurnId, sessionData]);
+
+  const handleToggleSavedPin = useCallback(
+    async (item: SavedResponseItem, pinned: boolean) => {
+      try {
+        await setSavedResponsePinned(Number(item.id), pinned);
+        setSavedItems((current) =>
+          current.map((saved) =>
+            saved.id === item.id
+              ? {
+                  ...saved,
+                  pinned,
+                  pinned_at: pinned ? new Date().toISOString() : null,
+                }
+              : saved,
+          ),
+        );
+        void track('saved_take_pinned', undefined, item.agent_id);
+      } catch {
+        setSaveSyncMessage(pinned ? "Couldn't pin take — try again." : "Couldn't unpin take — try again.");
+      }
+    },
+    [],
+  );
 
   const handleNewChat = useCallback(async () => {
     void track('new_chat_clicked');
@@ -1397,6 +1421,9 @@ function App() {
           onLeaderboardClick={openLeaderboard}
           savedItems={savedItems}
           onSavedItemClick={handleSavedItemClick}
+          onToggleSavedPin={(item, pinned) => {
+            void handleToggleSavedPin(item, pinned);
+          }}
         />
       )}
 

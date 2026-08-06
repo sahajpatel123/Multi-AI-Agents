@@ -233,6 +233,7 @@ _ALLOWLISTED_OMISSIONS: set[tuple[str, str | None, str]] = {
     ("saved_responses", "verdict", "initial schema at guard-add time"),
     ("saved_responses", "score", "initial schema at guard-add time"),
     ("saved_responses", "confidence", "initial schema at guard-add time"),
+    ("saved_responses", "pinned_at", "pinned saved takes at guard-add time"),
     ("saved_responses", "saved_at", "initial schema at guard-add time"),
     ("scoring_audits", "id", "initial schema at guard-add time"),
     ("scoring_audits", "session_id", "initial schema at guard-add time"),
