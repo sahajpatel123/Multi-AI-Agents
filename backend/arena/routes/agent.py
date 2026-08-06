@@ -2907,6 +2907,12 @@ async def get_feedback_calibration(
     the raw model confidence is the same in both cases. We never mutate the
     stored score — this is a display-only knob.
 
+    The signal is computed over the caller's most recent 20 verdicts
+    (newest first), not their lifetime average, so the knob tracks current
+    behavior instead of being stuck on old mistakes. ``wrong_rate`` and
+    ``partial_rate`` are integer percentages of that window; both feed the
+    adjustment formula (weights 15 and 7 respectively).
+
     Reliability:
       - < 5 feedback rows → adjustment is exactly 0 and ``reliable=False``;
         we don't have enough signal to act on.

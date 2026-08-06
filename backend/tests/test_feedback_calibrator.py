@@ -51,6 +51,7 @@ class _FakeQuery:
         self._rows = rows
         self.filters: list[Any] = []
         self._group_by: list[Any] = []
+        self._limit: Optional[int] = None
 
     def filter(self, *args: Any, **kwargs: Any) -> "_FakeQuery":
         self.filters.extend(args)
@@ -70,6 +71,7 @@ class _FakeQuery:
         return self
 
     def limit(self, *args: Any, **kwargs: Any) -> "_FakeQuery":
+        self._limit = args[0] if args else None
         return self
 
     def all(self) -> list[Any]:
@@ -82,7 +84,10 @@ class _FakeQuery:
                 for r in self._rows:
                     counts[r.verdict] += 1
                 return list(counts.items())
-        return list(self._rows)
+        rows = self._rows
+        if self._limit is not None:
+            rows = rows[: self._limit]
+        return list(rows)
 
 
 class _FakeSession:
@@ -142,7 +147,13 @@ def test_distribution_rounds_to_nearest_percent() -> None:
 def test_calibration_unreliable_below_5_records() -> None:
     rows = [_fb("wrong"), _fb("wrong"), _fb("wrong")]  # only 3, threshold = 5
     out = get_feedback_calibration(user_id=1, db=_FakeSession(rows))
-    assert out == {"adjustment": 0, "reliable": False, "total_feedback": 3, "wrong_rate": 0}
+    assert out == {
+        "adjustment": 0,
+        "reliable": False,
+        "total_feedback": 3,
+        "wrong_rate": 0,
+        "partial_rate": 0,
+    }
 
 
 def test_calibration_adjusts_with_wrong_and_partial_rates() -> None:
@@ -157,6 +168,7 @@ def test_calibration_adjusts_with_wrong_and_partial_rates() -> None:
     assert out["reliable"] is True  # n=10 hits the reliable threshold
     assert out["total_feedback"] == 10
     assert out["wrong_rate"] == 40  # round(0.4 * 100)
+    assert out["partial_rate"] == 30  # round(0.3 * 100)
 
 
 def test_calibration_reliable_threshold_is_10() -> None:
@@ -184,6 +196,24 @@ def test_calibration_unknown_verdicts_do_not_count() -> None:
     assert out["total_feedback"] == 5
     assert out["wrong_rate"] == 20  # 1/5 = 20%
     assert out["adjustment"] == -3  # round(-(0.2 * 15)) = -3
+
+
+def test_calibration_uses_only_most_recent_20_verdicts() -> None:
+    """The knob tracks the last 20 verdicts, not the lifetime average.
+
+    The fake session returns rows in the order the helper's query would
+    produce them (newest first, per order_by(created_at.desc(), id.desc())).
+    Here: 15 correct (newest) then 10 wrong (oldest). The window keeps
+    5 wrong + 15 correct → wrong_rate 25 → adjustment -4, while the
+    all-time average would be 10/25 = 40% → adjustment -6.
+    """
+    rows = [_fb("correct")] * 15 + [_fb("wrong")] * 10
+    out = get_feedback_calibration(user_id=1, db=_FakeSession(rows))
+    assert out["total_feedback"] == 20  # window, not all 25
+    assert out["wrong_rate"] == 25
+    assert out["partial_rate"] == 0
+    assert out["adjustment"] == -4  # round(-(0.25 * 15)) = round(-3.75)
+    assert out["reliable"] is True
 
 
 # ── get_recent_feedback ────────────────────────────────────────────

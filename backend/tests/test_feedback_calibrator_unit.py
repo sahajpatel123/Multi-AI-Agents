@@ -19,6 +19,12 @@ class _Q:
     def filter(self, *a, **k):
         return self
 
+    def order_by(self, *a, **k):
+        return self
+
+    def limit(self, *a, **k):
+        return self
+
     def group_by(self, *a, **k):
         self._group_by.extend(a)
         return self
@@ -84,3 +90,4 @@ def test_calibration_adjustment_and_reliable_flag():
     # wrong_rate=0.4 → -6; partial_rate=0.2 → -1.4 → round(-7.4) = -7
     assert out["adjustment"] == -7
     assert out["wrong_rate"] == 40
+    assert out["partial_rate"] == 20

@@ -40,6 +40,7 @@ def test_defaults_match_unreliable_user():
     assert obj.reliable is False
     assert obj.total_feedback == 0
     assert obj.wrong_rate == 0
+    assert obj.partial_rate == 0
 
 
 # ─── Happy path ────────────────────────────────────────────────────────────
@@ -51,13 +52,15 @@ def test_full_range_constructs_cleanly():
     obj = FeedbackCalibrationInfo(
         adjustment=-15,
         reliable=True,
-        total_feedback=100,
+        total_feedback=20,
         wrong_rate=80,
+        partial_rate=20,
     )
     assert obj.adjustment == -15
     assert obj.reliable is True
-    assert obj.total_feedback == 100
+    assert obj.total_feedback == 20
     assert obj.wrong_rate == 80
+    assert obj.partial_rate == 20
 
 
 def test_all_correct_user_construction():
@@ -65,7 +68,7 @@ def test_all_correct_user_construction():
     obj = FeedbackCalibrationInfo(
         adjustment=0,
         reliable=True,
-        total_feedback=200,
+        total_feedback=20,
         wrong_rate=0,
     )
     assert obj.wrong_rate == 0
@@ -106,17 +109,33 @@ def test_out_of_range_wrong_rate_rejected(rate: int):
 # ─── total_feedback bounds ─────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("n", [0, 1, 5, 10, 100, 1000, 10_000])
+@pytest.mark.parametrize("n", [0, 1, 5, 10, 15, 20])
 def test_valid_total_feedback_values_accepted(n: int):
     FeedbackCalibrationInfo = _schema()
     FeedbackCalibrationInfo(total_feedback=n)
 
 
-@pytest.mark.parametrize("n", [-1, -1000, 10_001, 1_000_000])
+@pytest.mark.parametrize("n", [-1, -1000, 21, 100, 10_001])
 def test_out_of_range_total_feedback_rejected(n: int):
     FeedbackCalibrationInfo = _schema()
     with pytest.raises(ValidationError):
         FeedbackCalibrationInfo(total_feedback=n)
+
+
+# ─── partial_rate bounds ───────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("rate", [0, 25, 50, 75, 100])
+def test_valid_partial_rate_values_accepted(rate: int):
+    FeedbackCalibrationInfo = _schema()
+    FeedbackCalibrationInfo(partial_rate=rate)
+
+
+@pytest.mark.parametrize("rate", [-1, -100, 101, 1000])
+def test_out_of_range_partial_rate_rejected(rate: int):
+    FeedbackCalibrationInfo = _schema()
+    with pytest.raises(ValidationError):
+        FeedbackCalibrationInfo(partial_rate=rate)
 
 
 # ─── Extra fields silently dropped ─────────────────────────────────────────
@@ -150,7 +169,13 @@ def test_extra_fields_are_ignored():
 def test_accepts_helper_return_shape_at_zero():
     """The helper's < 5-row branch returns this exact dict shape."""
     FeedbackCalibrationInfo = _schema()
-    raw = {"adjustment": 0, "reliable": False, "total_feedback": 3, "wrong_rate": 0}
+    raw = {
+        "adjustment": 0,
+        "reliable": False,
+        "total_feedback": 3,
+        "wrong_rate": 0,
+        "partial_rate": 0,
+    }
     obj = FeedbackCalibrationInfo(**raw)
     assert obj.adjustment == 0
     assert obj.reliable is False
@@ -159,7 +184,14 @@ def test_accepts_helper_return_shape_at_zero():
 def test_accepts_helper_return_shape_at_full_penalty():
     """The helper's all-wrong branch (5-9 rows) returns this shape."""
     FeedbackCalibrationInfo = _schema()
-    raw = {"adjustment": -15, "reliable": False, "total_feedback": 5, "wrong_rate": 100}
+    raw = {
+        "adjustment": -15,
+        "reliable": False,
+        "total_feedback": 5,
+        "wrong_rate": 100,
+        "partial_rate": 0,
+    }
     obj = FeedbackCalibrationInfo(**raw)
     assert obj.adjustment == -15
     assert obj.wrong_rate == 100
+    assert obj.partial_rate == 0

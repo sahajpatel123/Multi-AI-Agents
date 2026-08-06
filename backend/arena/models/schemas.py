@@ -384,11 +384,14 @@ class FeedbackCalibrationInfo(BaseModel):
       UI from ever being told to subtract more confidence than the 0-100
       score range can express.
     - reliable flips at 10 verdicts (see feedback_calibrator.get_feedback_calibration).
-    - wrong_rate is a percentage in [0, 100], integer-rounded.
-    - total_feedback is the raw count of verdict rows that fed the
-      computation. Capped at 10_000 only as a sanity bound — a single
-      user with >10k verdicts is almost certainly a test or an
-      amplification bug; either way the calibration math is identical.
+    - wrong_rate / partial_rate are percentages in [0, 100],
+      integer-rounded. partial_rate is surfaced because the formula
+      weights partials at 7 — a payload without it cannot explain the
+      adjustment when wrong_rate is 0.
+    - total_feedback is the number of verdicts in the recent-20 window
+      that fed the computation (max 20 — see CALIBRATION_WINDOW in
+      feedback_calibrator). The window keeps the knob responsive to
+      recent behavior instead of a lifetime average.
 
     Bounds are enforced at the Pydantic level (parse-time 422) so a
     bad payload cannot reach the response serializer.
@@ -398,8 +401,9 @@ class FeedbackCalibrationInfo(BaseModel):
 
     adjustment: int = Field(0, ge=-15, le=0)
     reliable: bool = False
-    total_feedback: int = Field(0, ge=0, le=10_000)
+    total_feedback: int = Field(0, ge=0, le=20)
     wrong_rate: int = Field(0, ge=0, le=100)
+    partial_rate: int = Field(0, ge=0, le=100)
 
 
 class UserResponse(BaseModel):

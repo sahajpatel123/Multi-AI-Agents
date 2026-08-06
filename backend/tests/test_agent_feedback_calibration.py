@@ -3,12 +3,17 @@
 The endpoint surfaces the long-existing ``get_feedback_calibration`` helper,
 which had no route. The contract it pins:
 
-- < 5 feedback rows: adjustment is exactly 0, reliable=False, wrong_rate=0.
+- < 5 feedback rows: adjustment is exactly 0, reliable=False, wrong_rate=0,
+  partial_rate=0.
   We do not act on tiny samples.
 - 5-9 rows: adjustment is the integer floor of the helper's formula
   (-(wrong_rate*15) - (partial_rate*7)). reliable=False — caller may apply
   it but should label it as a soft hint.
 - >= 10 rows: adjustment same formula, reliable=True.
+- The computation only considers the caller's most recent 20 verdicts
+  (newest first), so the knob tracks current behavior rather than a
+  lifetime average. partial_rate is returned alongside wrong_rate because
+  both feed the adjustment formula.
 
 Agent-tier gated (Plus+add-on, Pro), auth-required, and per-user
 rate-limited like the sibling feedback endpoints.
@@ -139,6 +144,7 @@ async def test_mixed_verdicts_combine_correctly(app_client, make_user, db_sessio
     # 6/10 = 60% wrong, 3/10 = 30% partial
     # adjustment = -(0.60 * 15) - (0.30 * 7) = -9 - 2.1 = -11.1 → rounds to -11
     assert body["wrong_rate"] == 60
+    assert body["partial_rate"] == 30
     assert body["adjustment"] == -11
 
 
@@ -171,6 +177,36 @@ async def test_partials_alone_produce_mild_penalty(app_client, make_user, db_ses
     body = res.json()
     assert body["adjustment"] == -7
     assert body["wrong_rate"] == 0
+    assert body["partial_rate"] == 100
+
+
+# ─── Recent-20 window ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_window_excludes_verdicts_older_than_last_20(
+    app_client, make_user, db_session
+):
+    """25 verdicts: the 10 oldest are wrong, the 15 newest are correct.
+
+    The window keeps 5 wrong + 15 correct → wrong_rate 25, adjustment -4.
+    A lifetime average would be 10/25 = 40% → adjustment -6, so this test
+    discriminates between windowed and all-time semantics.
+    """
+    user = make_user(email="fc-window@test.com", tier=UserTier.PRO)
+    _seed_feedback(db_session, user_id=user.id, verdict="wrong", count=10)
+    _seed_feedback(db_session, user_id=user.id, verdict="correct", count=15)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/feedback/calibration", headers=_headers(user)
+    )
+    body = res.json()
+    assert body["total_feedback"] == 20
+    assert body["wrong_rate"] == 25
+    assert body["partial_rate"] == 0
+    assert body["adjustment"] == -4
+    assert body["reliable"] is True
 
 
 # ─── Tenant isolation / auth ───────────────────────────────────────────────
