@@ -679,8 +679,14 @@ function App() {
           ),
         );
         void track(pinned ? 'saved_take_pinned' : 'saved_take_unpinned', undefined, item.agent_id);
-      } catch {
-        setSaveSyncMessage(pinned ? "Couldn't pin take — try again." : "Couldn't unpin take — try again.");
+      } catch (err) {
+        const detail =
+          err instanceof Error && err.message
+            ? err.message
+            : pinned
+              ? "Couldn't pin take — try again."
+              : "Couldn't unpin take — try again.";
+        setSaveSyncMessage(detail);
       }
     },
     [],

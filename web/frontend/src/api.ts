@@ -317,13 +317,26 @@ export async function savePanel(panel: SavedPanel): Promise<SavedPanel> {
 }
 
 export async function getSavedResponses(): Promise<SavedResponseItem[]> {
-  const res = await apiFetch(`/api/saved`);
+  // The backend caps per_page at SAVED_MAX_PER_USER (200). Pulling the full
+  // library keeps the sidebar's local search/filter/sort honest instead of
+  // silently hiding older takes behind the default 50-row page.
+  const res = await apiFetch(`/api/saved?per_page=200`);
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
     throw new Error(getErrorMessage(err, 'Failed to load saved responses'));
   }
-  const data = ((await parseJsonSafely<Array<Record<string, unknown>>>(res)) || []);
-  return data.map((item) => ({
+  const data = await parseJsonSafely<
+    | Array<Record<string, unknown>>
+    | { items?: Array<Record<string, unknown>> }
+  >(res);
+  // Backend now returns an envelope ({items,...}); keep the bare-array shape
+  // accepted for resilience against old cached responses / proxies.
+  const rawItems = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.items)
+      ? data.items
+      : [];
+  return rawItems.map((item) => ({
     id: Number(item.id),
     session_id: String(item.session_id || ''),
     turn_id: `${item.session_id || ''}:${item.agent_id || ''}`,
