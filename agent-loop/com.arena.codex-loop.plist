@@ -8,6 +8,7 @@
     <array>
         <string>/usr/bin/python3</string>
         <string>/Users/sahajpatel/Code/Multi-Agents/agent-loop/run_loop.py</string>
+        <string>--daemon</string>
         <string>--workdir</string>
         <string>/Users/sahajpatel/Code/Multi-Agents</string>
         <string>--branch</string>
@@ -18,15 +19,22 @@
         <string>2</string>
         <string>--timeout</string>
         <string>2700</string>
+        <string>--sandbox</string>
+        <string>danger-full-access</string>
         <string>--codex</string>
         <string>/Users/sahajpatel/.local/bin/codex</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/sahajpatel/Code/Multi-Agents</string>
-    <key>StartInterval</key>
-    <integer>300</integer>
     <key>RunAtLoad</key>
     <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
     <key>ProcessType</key>
     <string>Background</string>
     <key>StandardOutPath</key>

@@ -119,4 +119,5 @@ agent-loop/state.json
 agent-loop/loop.lock
 agent-loop/last_output.md
 agent-loop/stop
+agent-loop/history.jsonl
 agent-loop/logs/

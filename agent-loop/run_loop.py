@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """Autonomous Codex Loop — one bounded completion per pass, forever.
 
-Designed to be launched by launchd every 5 minutes (see
-com.arena.codex-loop.plist in this directory). Each invocation:
+Daemon mode (used by the launchd agent):
+  run one pass -> on completion, the next pass starts `interval` seconds
+  later. Nothing else is needed. launchd KeepAlive restarts the daemon if it
+  ever dies; `touch agent-loop/stop` makes it exit cleanly (no restart).
 
-1. Takes a single lock so passes never overlap.
-2. Reads the standing mission (task.md) and the previous action (state.json).
-3. Runs `codex exec` once with an ADD or POLISH loop-mode prompt.
-4. Classifies the result (DONE / BLOCKED / STOPPED-NO-PROGRESS / FAILED).
-5. Retries up to --max-attempts with --interval backoff.
-6. Writes telemetry to <repo>/.agent_loop_telemetry.json and logs/.
-
-Stop the loop: create agent-loop/stop (or `launchctl unload` the plist).
+Live-time + completed-task tracking:
+  - .agent_loop_telemetry.json is updated at pass start (RUNNING) and pass
+    end, with wall-clock start/end, duration, and next-loop time.
+  - every finished pass is appended to agent-loop/history.jsonl
+    (task_id, mode, started_at, completed_at, duration, status, summary).
 """
 
 from __future__ import annotations
@@ -24,7 +23,7 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -33,6 +32,7 @@ DEFAULT_TASK_FILE = HERE / "task.md"
 DEFAULT_STATE_FILE = HERE / "state.json"
 DEFAULT_TELEMETRY = REPO / ".agent_loop_telemetry.json"
 DEFAULT_LOG_DIR = HERE / "logs"
+HISTORY_FILE = HERE / "history.jsonl"
 LOCK_FILE = HERE / "loop.lock"
 STOP_FILE = HERE / "stop"
 LAST_OUTPUT_FILE = HERE / "last_output.md"
@@ -42,6 +42,16 @@ KEEP_LOGS = 20
 
 def now_text() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def iso_plus(seconds: int) -> str:
+    return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
 
 def log_stamp() -> str:
@@ -173,6 +183,19 @@ def run_pass(args, prompt: str, log_path: Path, timeout: int):
     cmd = [
         args.codex,
         "exec",
+        "-m",
+        args.model,
+        "--skip-git-repo-check",
+        "--sandbox",
+        args.sandbox,
+        "-C",
+        str(args.workdir),
+        "-o",
+        str(LAST_OUTPUT_FILE),
+        "-",
+    ] if args.model else [
+        args.codex,
+        "exec",
         "--skip-git-repo-check",
         "--sandbox",
         args.sandbox,
@@ -182,21 +205,6 @@ def run_pass(args, prompt: str, log_path: Path, timeout: int):
         str(LAST_OUTPUT_FILE),
         "-",
     ]
-    if args.model:
-        cmd = [
-            args.codex,
-            "exec",
-            "-m",
-            args.model,
-            "--skip-git-repo-check",
-            "--sandbox",
-            args.sandbox,
-            "-C",
-            str(args.workdir),
-            "-o",
-            str(LAST_OUTPUT_FILE),
-            "-",
-        ]
 
     timed_out = False
     with open(log_path, "w") as log:
@@ -229,10 +237,11 @@ def run_pass(args, prompt: str, log_path: Path, timeout: int):
     return status, rc, out_text
 
 
-def acquire_lock():
+def acquire_lock(blocking: bool):
     lock = open(LOCK_FILE, "a+")
+    flags = fcntl.LOCK_EX if blocking else fcntl.LOCK_EX | fcntl.LOCK_NB
     try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(lock, flags)
         return lock
     except OSError:
         lock.close()
@@ -241,6 +250,14 @@ def acquire_lock():
 
 def write_telemetry(payload: dict) -> None:
     DEFAULT_TELEMETRY.write_text(json.dumps(payload, indent=2) + "\n")
+
+
+def append_history(entry: dict) -> None:
+    try:
+        with open(HISTORY_FILE, "a") as fh:
+            fh.write(json.dumps(entry) + "\n")
+    except OSError:
+        pass
 
 
 def prune_logs() -> None:
@@ -252,8 +269,87 @@ def prune_logs() -> None:
             pass
 
 
+def read_task(task_file: Path) -> str:
+    if not task_file.exists():
+        task_file.write_text(f"# Task\n\n> {PLACEHOLDER}\n")
+    return task_file.read_text(errors="replace").strip()
+
+
+def run_one_pass(args, task_text: str, mode: str, timeout: int):
+    """Run one bounded pass with retries. Returns a result dict."""
+    started_text = now_text()
+    started_iso = now_iso()
+    attempts = 0
+    status = "UNKNOWN"
+    rc = 0
+    out_text = ""
+    last_log = ""
+
+    while attempts < args.max_attempts:
+        attempts += 1
+        log_path = DEFAULT_LOG_DIR / f"run-{log_stamp()}-attempt{attempts}.log"
+        print(f"[{now_text()}] pass {mode} attempt {attempts} -> {args.codex} exec")
+        status, rc, out_text = run_pass(args, build_prompt(args, task_text, mode), log_path, timeout)
+        print(f"[{now_text()}] attempt {attempts} status={status} rc={rc}")
+        last_log = str(log_path.relative_to(REPO))
+        shutil.copyfile(log_path, DEFAULT_LOG_DIR / "latest.log")
+        if status in ("DONE", "BLOCKED"):
+            break
+        if attempts < args.max_attempts:
+            print(f"[{now_text()}] {status}; retry in {args.interval}s")
+            time.sleep(args.interval)
+
+    summary = extract_summary(out_text) if status == "DONE" else ""
+    action = extract_action(out_text, mode).lower()
+    completed_text = now_text()
+    completed_iso = now_iso()
+    duration = round(time.time() - time.mktime(time.strptime(started_text, "%Y-%m-%d %H:%M:%S")))
+    next_iso = iso_plus(args.interval)
+
+    save_state(
+        {
+            "last_action": action,
+            "last_status": status,
+            "last_summary": summary,
+            "last_run_at": completed_text,
+        }
+    )
+    write_telemetry(
+        {
+            "status": status,
+            "mode": mode,
+            "start_time": started_text,
+            "end_time": completed_text,
+            "started_at": started_iso,
+            "completed_at": completed_iso,
+            "duration_seconds": duration,
+            "next_scheduled_run": completed_text,
+            "next_loop_at": next_iso,
+            "executed_task": summary or f"{mode} pass (attempt {attempts})",
+            "attempts": attempts,
+            "last_attempt": {"status": status, "exit_code": rc, "log": last_log},
+        }
+    )
+    append_history(
+        {
+            "task_id": f"pass-{log_stamp()}",
+            "mode": mode,
+            "status": status,
+            "started_at": started_iso,
+            "completed_at": completed_iso,
+            "duration_seconds": duration,
+            "next_loop_at": next_iso,
+            "summary": summary,
+            "action": action,
+            "exit_code": rc,
+            "log": last_log,
+        }
+    )
+    return {"status": status, "exit_code": rc}
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Autonomous Codex loop pass.")
+    parser = argparse.ArgumentParser(description="Autonomous Codex loop.")
     parser.add_argument("--task", default=str(DEFAULT_TASK_FILE))
     parser.add_argument("--workdir", default=str(REPO))
     parser.add_argument("--interval", type=int, default=300)
@@ -261,30 +357,26 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=2700)
     parser.add_argument("--codex", default="codex")
     parser.add_argument("--model", default=None)
-    parser.add_argument("--sandbox", default="workspace-write")
+    parser.add_argument("--sandbox", default="danger-full-access")
     parser.add_argument("--branch", default="main")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--once", action="store_true")
+    parser.add_argument("--daemon", action="store_true")
     args = parser.parse_args()
 
     args.workdir = str(Path(args.workdir).resolve())
-    if args.once:
-        args.max_attempts = 1
-        args.interval = 0
-
     DEFAULT_LOG_DIR.mkdir(parents=True, exist_ok=True)
-
     task_file = Path(args.task)
-    if not task_file.exists():
-        task_file.write_text(f"# Task\n\n> {PLACEHOLDER}\n")
-    task_text = task_file.read_text(errors="replace").strip()
-
+    task_text = read_task(task_file)
     state = load_state()
     mode = compute_mode(state)
 
     if args.dry_run:
         print(build_prompt(args, task_text, mode))
         return 0
+    if args.once and not args.daemon:
+        args.max_attempts = 1
+        args.interval = 0
 
     if not task_text or PLACEHOLDER in task_text:
         write_telemetry(
@@ -293,7 +385,11 @@ def main() -> int:
                 "mode": mode,
                 "start_time": now_text(),
                 "end_time": now_text(),
+                "started_at": now_iso(),
+                "completed_at": now_iso(),
+                "duration_seconds": 0,
                 "next_scheduled_run": now_text(),
+                "next_loop_at": now_iso(),
                 "executed_task": "No task in agent-loop/task.md yet.",
             }
         )
@@ -307,77 +403,84 @@ def main() -> int:
                 "mode": mode,
                 "start_time": now_text(),
                 "end_time": now_text(),
+                "started_at": now_iso(),
+                "completed_at": now_iso(),
+                "duration_seconds": 0,
                 "next_scheduled_run": None,
+                "next_loop_at": None,
                 "executed_task": "Stopped via agent-loop/stop.",
             }
         )
         print("STOPPED_BY_FLAG: remove agent-loop/stop to resume")
         return 0
 
-    lock = acquire_lock()
+    lock = acquire_lock(blocking=args.daemon)
     if lock is None:
         print("SKIPPED: previous pass still running (lock held)")
         return 0
 
-    started = now_text()
-    final_status = "UNKNOWN"
-    final_rc = 0
-    last_summary = ""
-    last_action = mode
-    attempt = 0
-
     try:
-        while attempt < args.max_attempts:
-            attempt += 1
-            log_path = DEFAULT_LOG_DIR / f"run-{log_stamp()}-attempt{attempt}.log"
-            print(f"[{now_text()}] pass {mode} attempt {attempt} -> {args.codex} exec")
-            status, rc, out_text = run_pass(args, build_prompt(args, task_text, mode), log_path, args.timeout)
-            print(f"[{now_text()}] attempt {attempt} status={status} rc={rc}")
+        while True:
+            state = load_state()
+            mode = compute_mode(state)
+            task_text = read_task(task_file)
 
-            final_status = status
-            final_rc = rc
-            if status == "DONE":
-                last_summary = extract_summary(out_text)
-            last_action = extract_action(out_text, mode)
+            if not task_text or PLACEHOLDER in task_text:
+                print(f"[{now_text()}] WAITING_FOR_TASK")
+                write_telemetry(
+                    {
+                        "status": "WAITING_FOR_TASK",
+                        "mode": mode,
+                        "start_time": now_text(),
+                        "end_time": now_text(),
+                        "started_at": now_iso(),
+                        "completed_at": now_iso(),
+                        "duration_seconds": 0,
+                        "next_scheduled_run": now_text(),
+                        "next_loop_at": now_iso(),
+                        "executed_task": "No task in agent-loop/task.md yet.",
+                    }
+                )
+                return 0
+            if STOP_FILE.exists():
+                print(f"[{now_text()}] STOPPED_BY_FLAG")
+                return 0
 
-            save_state(
-                {
-                    "last_action": last_action.lower(),
-                    "last_status": status,
-                    "last_summary": last_summary,
-                    "last_run_at": now_text(),
-                }
-            )
+            # Live tracking: mark the pass RUNNING immediately at pass start.
             write_telemetry(
                 {
-                    "status": status,
+                    "status": "RUNNING",
                     "mode": mode,
-                    "start_time": started,
-                    "end_time": now_text(),
+                    "start_time": now_text(),
+                    "end_time": None,
+                    "started_at": now_iso(),
+                    "completed_at": None,
+                    "duration_seconds": None,
                     "next_scheduled_run": now_text(),
-                    "executed_task": last_summary or f"{mode} pass (attempt {attempt})",
-                    "attempts": attempt,
-                    "last_attempt": {
-                        "status": status,
-                        "exit_code": rc,
-                        "log": str(log_path.relative_to(REPO)),
-                    },
+                    "next_loop_at": None,
+                    "executed_task": f"{mode} pass in progress",
                 }
             )
-            shutil.copyfile(log_path, DEFAULT_LOG_DIR / "latest.log")
 
-            if status in ("DONE", "BLOCKED"):
-                break
-            if attempt < args.max_attempts:
-                print(f"[{now_text()}] {status}; retry in {args.interval}s")
-                time.sleep(args.interval)
+            result = run_one_pass(args, task_text, mode, args.timeout)
+            status = result["status"]
+            print(f"[{now_text()}] pass finished status={status}")
 
-        prune_logs()
-        if final_status == "DONE":
-            return 0
-        if final_status == "BLOCKED":
-            return 2
-        return 3
+            if not args.daemon:
+                if status == "DONE":
+                    return 0
+                if status == "BLOCKED":
+                    return 2
+                return 3
+
+            if status == "BLOCKED":
+                print(f"[{now_text()}] BLOCKED — exiting cleanly; see telemetry. "
+                      "Resume with launchctl kickstart after unblocking.")
+                return 0
+
+            # Daemon: next pass fires exactly interval after completion.
+            print(f"[{now_text()}] next pass in {args.interval}s (completion + interval)")
+            time.sleep(args.interval)
     finally:
         fcntl.flock(lock, fcntl.LOCK_UN)
         lock.close()
