@@ -2291,7 +2291,10 @@ async def analytics_scoring_audit_detail(
     Ownership-scoped and existence-safe: a missing row or another user's
     session both return 404 so the endpoint can't be used to probe which
     session ids exist. Rows are returned oldest-first so a chat's rounds
-    read in order; ``limit`` caps the payload.
+    read in order. ``limit`` caps the payload at the *most recent* rounds
+    (a long session shows its newest exchanges, not the earliest ones);
+    ``total_count`` reports the full session length so clients can tell
+    when truncation happened.
     """
     if not _scoring_audit_allowed(user):
         raise HTTPException(
@@ -2312,14 +2315,31 @@ async def analytics_scoring_audit_detail(
     )
 
     sid = session_id.strip()
+    base_filters = (
+        ScoringAudit.session_id == sid,
+        ScoringAudit.user_id == user.id,
+    )
+    total_count = (
+        db.query(func.count(ScoringAudit.id))
+        .filter(*base_filters)
+        .scalar()
+        or 0
+    )
+
+    # Pick the newest ``limit`` rows first, then re-fetch them ascending so
+    # the payload stays chronologically ordered. Ties on created_at (bulk
+    # imports, seeded rows) break on id for a deterministic window.
+    newest_ids = (
+        db.query(ScoringAudit.id)
+        .filter(*base_filters)
+        .order_by(ScoringAudit.created_at.desc(), ScoringAudit.id.desc())
+        .limit(limit)
+        .subquery()
+    )
     rows = (
         db.query(ScoringAudit)
-        .filter(
-            ScoringAudit.session_id == sid,
-            ScoringAudit.user_id == user.id,
-        )
-        .order_by(ScoringAudit.created_at.asc())
-        .limit(limit)
+        .filter(ScoringAudit.id.in_(newest_ids))
+        .order_by(ScoringAudit.created_at.asc(), ScoringAudit.id.asc())
         .all()
     )
 
@@ -2355,6 +2375,7 @@ async def analytics_scoring_audit_detail(
         "session_id": sid,
         "audits": audits,
         "audit_count": len(audits),
+        "total_count": total_count,
     }
 
 

@@ -82,6 +82,7 @@ async def test_scoring_audit_returns_rounds_for_pro(app_client, make_user, db_se
     body = res.json()
     assert body["session_id"] == sid
     assert body["audit_count"] == 2
+    assert body["total_count"] == 2
 
     # Oldest round first, so a chat's rounds read in order.
     assert [a["prompt_snippet"] for a in body["audits"]] == [
@@ -101,6 +102,51 @@ async def test_scoring_audit_returns_rounds_for_pro(app_client, make_user, db_se
     assert first["created_at"].endswith("Z") or "T" in first["created_at"]
 
     assert body["audits"][1]["fallback_used"] is True
+
+
+@pytest.mark.asyncio
+async def test_scoring_audit_limit_keeps_newest_rounds_in_order(
+    app_client, make_user, db_session
+):
+    """A long session must surface its most recent exchanges, not the first
+    ones, while still returning them oldest-first."""
+    user = make_user(email="audit-limit@test.com", tier=UserTier.PRO)
+    sid = str(uuid.uuid4())
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        session_id=sid,
+        hours_ago=5,
+        prompt_snippet="round-1",
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        session_id=sid,
+        hours_ago=3,
+        prompt_snippet="round-2",
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        session_id=sid,
+        hours_ago=1,
+        prompt_snippet="round-3",
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/analytics/scoring-audit/{sid}?limit=2",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["audit_count"] == 2
+    assert body["total_count"] == 3
+    assert [a["prompt_snippet"] for a in body["audits"]] == [
+        "round-2",
+        "round-3",
+    ]
 
 
 @pytest.mark.asyncio
