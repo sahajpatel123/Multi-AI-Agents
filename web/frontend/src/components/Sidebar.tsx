@@ -62,6 +62,12 @@ import {
   type SidebarSavedMindFilter,
 } from '../lib/sidebarSavedMindFilter';
 import {
+  SIDEBAR_SAVED_PIN_ALL,
+  SIDEBAR_SAVED_PIN_ONLY,
+  filterSavedByPin,
+  type SavedPinFilterValue,
+} from '../lib/sidebarSavedPinFilter';
+import {
   SIDEBAR_RECENTS_WINNER_ALL,
   collectRecentsWinnerFilterOptions,
   filterRecentsByWinner,
@@ -147,6 +153,8 @@ export function Sidebar({
   const [savedSort, setSavedSort] = useState<SidebarSavedSort>('newest');
   const [savedMindFilter, setSavedMindFilter] =
     useState<SidebarSavedMindFilter>(SIDEBAR_SAVED_MIND_ALL);
+  const [savedPinFilter, setSavedPinFilter] =
+    useState<SavedPinFilterValue>(SIDEBAR_SAVED_PIN_ALL);
   const [savedScoreFilter, setSavedScoreFilter] =
     useState<AgentHistoryScoreFilter>('all');
   const [savedRecencyFilter, setSavedRecencyFilter] =
@@ -252,7 +260,8 @@ export function Sidebar({
   );
   const filteredSaved = useMemo(() => {
     const byMind = filterSavedByMind(reversedSaved, savedMindFilter);
-    const byScore = filterAgentHistoryByScore(byMind, savedScoreFilter);
+    const byPin = filterSavedByPin(byMind, savedPinFilter);
+    const byScore = filterAgentHistoryByScore(byPin, savedScoreFilter);
     const byRecency = filterAgentHistoryByRecency(
       byScore.map((item) => ({
         ...item,
@@ -279,12 +288,18 @@ export function Sidebar({
     savedSearchQuery,
     savedSort,
     savedMindFilter,
+    savedPinFilter,
     savedScoreFilter,
     savedRecencyFilter,
   ]);
 
   const savedScoreFilterUseful = useMemo(
     () => agentHistoryScoreFilterUseful(reversedSaved),
+    [reversedSaved],
+  );
+
+  const savedPinFilterUseful = useMemo(
+    () => reversedSaved.some((item) => item.pinned === true),
     [reversedSaved],
   );
 
@@ -392,6 +407,9 @@ export function Sidebar({
       filterBits.push(
         `mind: ${sidebarSavedMindFilterLabel(savedMindFilter, savedMindOptions)}`,
       );
+    }
+    if (savedPinFilter === SIDEBAR_SAVED_PIN_ONLY) {
+      filterBits.push('pinned only');
     }
     if (savedScoreFilter !== 'all') {
       filterBits.push(`score: ${agentHistoryScoreLabel(savedScoreFilter)}`);
@@ -1336,6 +1354,7 @@ export function Sidebar({
                       {filteredSaved.length}
                       {savedSearchQuery.trim() ||
                       savedMindFilter !== SIDEBAR_SAVED_MIND_ALL ||
+                      savedPinFilter === SIDEBAR_SAVED_PIN_ONLY ||
                       savedScoreFilter !== 'all' ||
                       savedRecencyFilter !== 'all'
                         ? ` / ${savedItems.length}`
@@ -1478,6 +1497,60 @@ export function Sidebar({
                               lineHeight: 1.35,
                             }}
                           >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {savedPinFilterUseful ? (
+                    <div
+                      role="group"
+                      aria-label="Filter saved takes by pin state"
+                      style={{
+                        display: 'flex',
+                        gap: 6,
+                        marginBottom: 8,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {([
+                        { value: SIDEBAR_SAVED_PIN_ALL, label: 'All saved' },
+                        { value: SIDEBAR_SAVED_PIN_ONLY, label: 'Pinned' },
+                      ] as Array<{ value: SavedPinFilterValue; label: string }>).map((opt) => {
+                        const selected = savedPinFilter === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setSavedPinFilter(opt.value)}
+                            aria-pressed={selected}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              background: selected ? '#F0E6DA' : 'transparent',
+                              border: selected
+                                ? '0.5px solid #F0B84E'
+                                : '0.5px solid #E0D8D0',
+                              borderRadius: 999,
+                              padding: '3px 9px',
+                              fontSize: 10,
+                              letterSpacing: '0.03em',
+                              color: selected ? '#4A3728' : '#A0A39A',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--vp-font-sans)',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            <Pin
+                              style={{
+                                width: 11,
+                                height: 11,
+                                fill: selected ? 'currentColor' : 'none',
+                              }}
+                            />
                             {opt.label}
                           </button>
                         );
@@ -1656,8 +1729,14 @@ export function Sidebar({
                               savedRecencyFilter !== 'all'
                                 ? ` · ${agentHistoryRecencyLabel(savedRecencyFilter)}`
                                 : ''
+                            }${
+                              savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                                ? ' · pinned only'
+                                : ''
                             }`
-                          : savedRecencyFilter !== 'all' &&
+                          : savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                            ? 'No pinned saved takes in this view'
+                            : savedRecencyFilter !== 'all' &&
                               savedMindFilter === SIDEBAR_SAVED_MIND_ALL &&
                               savedScoreFilter === 'all'
                             ? `No saved takes from ${agentHistoryRecencyLabel(savedRecencyFilter).toLowerCase()}`
@@ -1673,6 +1752,7 @@ export function Sidebar({
                         onClick={() => {
                           setSavedSearchQuery('');
                           setSavedMindFilter(SIDEBAR_SAVED_MIND_ALL);
+                          setSavedPinFilter(SIDEBAR_SAVED_PIN_ALL);
                           setSavedScoreFilter('all');
                           setSavedRecencyFilter('all');
                           savedSearchInputRef.current?.focus();
@@ -1688,6 +1768,7 @@ export function Sidebar({
                         }}
                       >
                         {(savedMindFilter !== SIDEBAR_SAVED_MIND_ALL ||
+                          savedPinFilter === SIDEBAR_SAVED_PIN_ONLY ||
                           savedScoreFilter !== 'all' ||
                           savedRecencyFilter !== 'all') &&
                         !savedSearchQuery.trim()
