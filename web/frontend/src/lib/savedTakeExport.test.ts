@@ -148,7 +148,6 @@ describe('formatSavedTakesJsonExport', () => {
 describe('formatSavedTakesCsvExport', () => {
   it('writes headers and quoted CSV rows', () => {
     const csv = formatSavedTakesCsvExport({
-      filterNote: 'pinned only',
       items: [
         {
           agentName: 'The Analyst',
@@ -164,9 +163,11 @@ describe('formatSavedTakesCsvExport', () => {
     });
     expect(csv).toContain('"agentName","prompt","oneLiner","verdict","score","pinned","personaId","timestamp"');
     expect(csv).toContain('"Risk, if bounded, is fine."');
-    expect(csv).toContain('"pinned only"');
     expect(csv).toContain('"analyst"');
     expect(csv.endsWith('\n')).toBe(true);
+    const rows = csv.trim().split('\n');
+    expect(rows).toHaveLength(2);
+    expect(rows[1].split(',')).toHaveLength(8);
   });
 
   it('escapes embedded quotes and normalizes missing fields', () => {

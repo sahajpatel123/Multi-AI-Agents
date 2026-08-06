@@ -525,7 +525,6 @@ export function Sidebar({
 
   const handleDownloadCsvSaved = () => {
     const csv = formatSavedTakesCsvExport({
-      filterNote: buildSavedTakesFilterNote(),
       items: buildSavedTakesItems(),
     });
     const ok = downloadTextFile(csv, {

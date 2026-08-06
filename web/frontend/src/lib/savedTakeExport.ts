@@ -174,12 +174,10 @@ function toCsvCell(value: string | number | boolean | null | undefined): string 
 /**
  * CSV export of bookmarked takes (full list or current sidebar filter).
  * The first row is headers; every cell is quoted so commas/newlines in
- * verdict text cannot break the column layout.
+ * verdict text cannot break the column layout. Filter context is deliberately
+ * kept out of the CSV so every row matches the header schema exactly.
  */
-export function formatSavedTakesCsvExport(opts: {
-  items: SavedTakeListItem[];
-  filterNote?: string | null;
-}): string {
+export function formatSavedTakesCsvExport(opts: { items: SavedTakeListItem[] }): string {
   const items = (opts.items || []).map((item) => ({
     agentName: (item.agentName || 'Arena mind').trim() || 'Arena mind',
     prompt: (item.prompt || '').trim() || '(no prompt)',
@@ -201,9 +199,6 @@ export function formatSavedTakesCsvExport(opts: {
     'timestamp',
   ];
   const lines: string[] = [headers.map(toCsvCell).join(',')];
-  if ((opts.filterNote || '').trim()) {
-    lines.push(toCsvCell((opts.filterNote || '').trim()));
-  }
   items.forEach((item) => {
     lines.push(
       [
