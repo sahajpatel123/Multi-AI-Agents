@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatSavedTakesCsvExport,
   formatSavedTakeExport,
   formatSavedTakesJsonExport,
   formatSavedTakesListExport,
@@ -141,5 +142,51 @@ describe('formatSavedTakesJsonExport', () => {
       personaId: null,
     });
     expect(parsed.filter_note).toBeNull();
+  });
+});
+
+describe('formatSavedTakesCsvExport', () => {
+  it('writes headers and quoted CSV rows', () => {
+    const csv = formatSavedTakesCsvExport({
+      filterNote: 'pinned only',
+      items: [
+        {
+          agentName: 'The Analyst',
+          prompt: 'Ship today?',
+          oneLiner: 'Ship small.',
+          verdict: 'Risk, if bounded, is fine.',
+          score: 90,
+          pinned: true,
+          personaId: 'analyst',
+          timestamp: '2026-07-01T12:00:00Z',
+        },
+      ],
+    });
+    expect(csv).toContain('"agentName","prompt","oneLiner","verdict","score","pinned","personaId","timestamp"');
+    expect(csv).toContain('"Risk, if bounded, is fine."');
+    expect(csv).toContain('"pinned only"');
+    expect(csv).toContain('"analyst"');
+    expect(csv.endsWith('\n')).toBe(true);
+  });
+
+  it('escapes embedded quotes and normalizes missing fields', () => {
+    const csv = formatSavedTakesCsvExport({
+      items: [
+        {
+          agentName: '',
+          prompt: '',
+          oneLiner: 'Say "hello"',
+          verdict: '',
+          score: null,
+          pinned: false,
+          personaId: null,
+          timestamp: null,
+        },
+      ],
+    });
+    expect(csv).toContain('"Say ""hello"""');
+    expect(csv).toContain('"Arena mind"');
+    expect(csv).toContain('"(no prompt)"');
+    expect(csv).toContain('"false"');
   });
 });

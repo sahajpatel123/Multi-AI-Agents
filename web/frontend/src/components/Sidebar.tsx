@@ -43,6 +43,7 @@ import {
   formatArenaRecentsExport,
 } from '../lib/arenaRecentsExport';
 import {
+  formatSavedTakesCsvExport,
   formatSavedTakeExport,
   formatSavedTakesJsonExport,
   formatSavedTakesListExport,
@@ -177,6 +178,7 @@ export function Sidebar({
   const [copyAllSavedStatus, setCopyAllSavedStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadAllSavedStatus, setDownloadAllSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [downloadJsonSavedStatus, setDownloadJsonSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadCsvSavedStatus, setDownloadCsvSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const [bulkPinStatus, setBulkPinStatus] = useState<'idle' | 'busy' | 'done' | 'failed' | 'partial'>('idle');
   const [copyRecentsStatus, setCopyRecentsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadRecentsStatus, setDownloadRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -385,6 +387,13 @@ export function Sidebar({
   }, [downloadJsonSavedStatus]);
 
   useEffect(() => {
+    if (downloadCsvSavedStatus === 'idle') return;
+    const hold = motionDuration(downloadCsvSavedStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadCsvSavedStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadCsvSavedStatus]);
+
+  useEffect(() => {
     if (bulkPinStatus === 'idle' || bulkPinStatus === 'busy') return;
     const hold = motionDuration(bulkPinStatus === 'failed' ? 2800 : 2000);
     const t = window.setTimeout(() => setBulkPinStatus('idle'), hold > 0 ? hold : 0);
@@ -512,6 +521,19 @@ export function Sidebar({
     });
     setDownloadJsonSavedStatus(ok ? 'done' : 'failed');
     if (ok) void track('saved_takes_json_downloaded');
+  };
+
+  const handleDownloadCsvSaved = () => {
+    const csv = formatSavedTakesCsvExport({
+      filterNote: buildSavedTakesFilterNote(),
+      items: buildSavedTakesItems(),
+    });
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate('arena-saved-takes')}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    setDownloadCsvSavedStatus(ok ? 'done' : 'failed');
+    if (ok) void track('saved_takes_csv_downloaded');
   };
 
   const handleBulkPinSaved = async () => {
@@ -1602,11 +1624,47 @@ export function Sidebar({
                           ? 'Failed'
                           : 'JSON'}
                     </button>
+                    <button
+                      type="button"
+                      title="Download all saved takes as CSV"
+                      aria-label={
+                        downloadCsvSavedStatus === 'done'
+                          ? 'Saved takes CSV downloaded'
+                          : downloadCsvSavedStatus === 'failed'
+                            ? 'CSV download failed'
+                            : 'Download all saved takes as CSV'
+                      }
+                      onClick={() => handleDownloadCsvSaved()}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color:
+                          downloadCsvSavedStatus === 'failed'
+                            ? '#D85A30'
+                            : downloadCsvSavedStatus === 'done'
+                              ? '#5A8C6A'
+                              : '#F0B84E',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {downloadCsvSavedStatus === 'done'
+                        ? 'Saved CSV'
+                        : downloadCsvSavedStatus === 'failed'
+                          ? 'Failed'
+                          : 'CSV'}
+                    </button>
                   </div>
                 </div>
                 {copyAllSavedStatus !== 'idle' ||
                 downloadAllSavedStatus !== 'idle' ||
                 downloadJsonSavedStatus !== 'idle' ||
+                downloadCsvSavedStatus !== 'idle' ||
                 (bulkPinStatus !== 'idle' && bulkPinStatus !== 'busy') ? (
                   <div
                     role="status"
@@ -1635,7 +1693,11 @@ export function Sidebar({
                             ? 'Saved takes JSON downloaded'
                             : downloadJsonSavedStatus === 'failed'
                               ? 'Could not download saved takes JSON'
-                              : bulkPinStatus === 'done'
+                              : downloadCsvSavedStatus === 'done'
+                                ? 'Saved takes CSV downloaded'
+                                : downloadCsvSavedStatus === 'failed'
+                                  ? 'Could not download saved takes CSV'
+                                  : bulkPinStatus === 'done'
                             ? savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
                               ? 'Shown saved takes unpinned'
                               : 'Shown saved takes pinned'
