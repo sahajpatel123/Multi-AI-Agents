@@ -2276,6 +2276,8 @@ function App() {
           <LeaderboardView
             turns={sessionData?.turns || []}
             onBack={exitToArena}
+            sessionId={sessionData?.session_id}
+            scoringAuditEnabled={canUseFeature('scoring_audit')}
           />
         </div>
       )}

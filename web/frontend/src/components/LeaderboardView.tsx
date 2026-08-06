@@ -12,6 +12,7 @@ import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { copyToClipboard } from '../lib/clipboard';
 import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import { formatLeaderboardExport } from '../lib/leaderboardExport';
+import { ScoringAuditModal } from './ScoringAuditModal';
 import {
   LEADERBOARD_MIND_ALL,
   filterLeaderboardTurnsByMind,
@@ -25,6 +26,10 @@ import '../styles/leaderboard-view.css';
 interface LeaderboardViewProps {
   turns: SessionTurn[];
   onBack: () => void;
+  /** Session id for the Pro scoring audit modal. */
+  sessionId?: string;
+  /** Whether the caller's tier unlocks the scoring audit feature. */
+  scoringAuditEnabled?: boolean;
 }
 
 const RANK_LABELS = ['#1', '#2', '#3', '#4'];
@@ -38,7 +43,12 @@ type LeaderboardRow = {
   percentage: number;
 };
 
-export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
+export function LeaderboardView({
+  turns,
+  onBack,
+  sessionId,
+  scoringAuditEnabled = false,
+}: LeaderboardViewProps) {
   const { panel } = usePanel();
   const [animatedWidths, setAnimatedWidths] = useState<Record<string, number>>({});
   const [showNumbers, setShowNumbers] = useState(false);
@@ -48,6 +58,7 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
   const [expandedTurnId, setExpandedTurnId] = useState<string | null>(null);
   const [mindFilter, setMindFilter] = useState<LeaderboardMindFilter>(LEADERBOARD_MIND_ALL);
   const [rowCopyStatus, setRowCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [auditOpen, setAuditOpen] = useState(false);
 
   const leaderboard = useMemo(() => {
     const winsByAgent = turns.reduce<Record<string, number>>((acc, turn) => {
@@ -324,6 +335,16 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
                   ? 'Download failed'
                   : 'Download .md'}
             </button>
+            {sessionId && scoringAuditEnabled ? (
+              <button
+                type="button"
+                className="lb-ghost-btn"
+                onClick={() => setAuditOpen(true)}
+                title="Inspect how the judge scored every round in this session"
+              >
+                Scoring audit
+              </button>
+            ) : null}
           </div>
         </div>
         <p className="lb-hero__lede">
@@ -554,6 +575,14 @@ export function LeaderboardView({ turns, onBack }: LeaderboardViewProps) {
             {' '}across {totalPrompts} {totalPrompts === 1 ? 'prompt' : 'prompts'}.
           </p>
         </div>
+      ) : null}
+
+      {auditOpen && sessionId ? (
+        <ScoringAuditModal
+          sessionId={sessionId}
+          onClose={() => setAuditOpen(false)}
+          personaNameResolver={(personaId) => panel.find((persona) => persona.id === personaId)?.name}
+        />
       ) : null}
     </div>
   );

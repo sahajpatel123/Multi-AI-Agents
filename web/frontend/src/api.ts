@@ -13,6 +13,7 @@ import {
   User,
   SavedResponseItem,
   TierStatus,
+  ScoringAuditResponse,
 } from './types';
 
 export const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(
@@ -216,6 +217,22 @@ export async function getUserTier(): Promise<TierStatus | null> {
     throw new ApiError(err?.detail || 'Failed to fetch tier', res.status, err);
   }
   return parseJsonSafely<TierStatus>(res);
+}
+
+export async function fetchScoringAudit(
+  sessionId: string,
+  limit = 50,
+): Promise<ScoringAuditResponse> {
+  const response = await apiFetch(
+    `/api/analytics/scoring-audit/${encodeURIComponent(sessionId)}?limit=${encodeURIComponent(String(limit))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to load scoring audit'), response.status, err);
+  }
+  const data = await parseJsonSafely<ScoringAuditResponse>(response);
+  if (!data) throw new Error('Empty scoring audit response');
+  return data;
 }
 
 export async function refreshToken(): Promise<User | null> {

@@ -178,6 +178,34 @@ export interface TierStatus {
   upgrade_to: string | null;
 }
 
+export interface ScoringAuditConfidence {
+  agent_id: string;
+  confidence: number;
+}
+
+export interface ScoringAuditRound {
+  id: number;
+  prompt_snippet: string;
+  prompt_category: string | null;
+  winner_agent_id: string | null;
+  winner_persona_id: string | null;
+  winner_score: number | null;
+  scores: Record<string, number> | null;
+  criteria_breakdown: Record<string, Record<string, number>> | null;
+  confidence_values: ScoringAuditConfidence[] | null;
+  persona_ids_used: string[];
+  scoring_duration_ms: number | null;
+  fallback_used: boolean;
+  created_at: string | null;
+}
+
+export interface ScoringAuditResponse {
+  session_id: string;
+  audits: ScoringAuditRound[];
+  audit_count: number;
+  total_count: number;
+}
+
 export const AGENTS: Record<string, AgentConfig> = {
   agent_1: {
     agent_id: 'agent_1',
