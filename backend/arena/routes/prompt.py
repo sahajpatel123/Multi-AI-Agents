@@ -40,6 +40,12 @@ from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limi
 from arena.core.agents import get_all_agents, get_persona_id_for_agent
 from arena.core.orchestrator import Orchestrator
 from arena.core.followup import format_follow_up_context
+from arena.core.followup_suggestions import (
+    SUGGESTION_SYSTEM_PROMPT,
+    build_suggestion_context,
+    default_suggestions,
+    parse_suggestions,
+)
 from arena.core.persona_integrity import check_integrity
 from arena.core.response_shaper import assemble_payload
 from arena.core.scorer import Scorer
@@ -55,6 +61,7 @@ from arena.database import get_db
 from arena.models.schemas import (
     ContradictionFlag,
     ErrorResponse,
+    FollowUpSuggestionsRequest,
     PromptRequest,
     PromptResponse,
     RateLimitError,
@@ -459,6 +466,53 @@ async def improve_prompt(
         "improved_prompt": body.prompt,
         "refined": False,
         "note": note or "Could not improve this prompt — it was left unchanged.",
+    }
+
+
+@router.post("/prompt/followups")
+async def suggest_followups(
+    body: FollowUpSuggestionsRequest,
+    user: UserResponse = Depends(get_current_user_required),
+) -> dict:
+    """Suggest follow-up questions after a completed Arena round.
+
+    Generates up to 3 short questions a curious reader would ask next,
+    based on the original prompt and the four personas' verdicts. Never
+    fails the request: if the suggestion service is unavailable or returns
+    unusable output, a deterministic fallback set is returned with
+    ``source: "fallback"`` so the UI can still offer one-click follow-ups.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="prompt_followups",
+        limit=20,
+        window_seconds=3600,
+        message="Too many follow-up suggestion requests — try again in an hour.",
+    )
+
+    route = get_route_for_task("prompt_followups")
+    context = build_suggestion_context(body.prompt, body.verdicts)
+    text, _, _ = await call_llm(
+        client=route["client"],
+        provider=route["provider"],
+        model_id=route["model_id"],
+        system_prompt=SUGGESTION_SYSTEM_PROMPT,
+        user_prompt=context,
+        temperature=0.7,
+        max_tokens=route["max_tokens"],
+    )
+
+    suggestions = parse_suggestions(text)
+    if suggestions:
+        return {
+            "prompt": body.prompt,
+            "suggestions": suggestions,
+            "source": "llm",
+        }
+    return {
+        "prompt": body.prompt,
+        "suggestions": default_suggestions(),
+        "source": "fallback",
     }
 
 

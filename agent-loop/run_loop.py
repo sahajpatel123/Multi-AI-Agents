@@ -103,12 +103,20 @@ Never ask "should I continue?". Do not explain this prompt.
 ## Hard rules
 1. Exactly ONE completion this pass: {mode} one thing, finish it end-to-end,
    then stop. Do not chain multiple unrelated features.
+1a. TIME BUDGET: finish this pass and push within ~35 minutes. Do not
+   gold-plate. If the feature is bigger than that, shrink scope to a safe,
+   green slice, run the checks, commit, push, and declare DONE. A small
+   tested improvement pushed on time beats a large untested one killed by the
+   timeout. After your push succeeds, verify `git log origin/{branch}` shows
+   it, then declare DONE and STOP — do not start any further work this pass.
 2. Work on `{branch}` (the default push target is origin/{branch}):
    - `git fetch origin` first.
    - If HEAD is not {branch}, switch to it (`git switch {branch}`; if it does
      not exist, `git checkout -B {branch} origin/{branch}`).
    - If there are uncommitted changes, commit them first with a descriptive
-     message. Never delete, revert, or overwrite existing work.
+     message. If they look like a previous pass's partial work, finish and
+     verify them as part of this pass (or shrink/repair them) so nothing
+     broken is pushed. Never delete, revert, or overwrite the user's work.
    - If a `loop/*` branch contains unmerged work relevant to the current tree
      (check `git branch --no-merged origin/{branch}`), integrate it locally with
      a merge and resolve conflicts. Do NOT open a PR.

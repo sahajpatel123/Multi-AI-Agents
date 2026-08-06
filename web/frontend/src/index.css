@@ -5499,6 +5499,58 @@ canvas {
   color: #8a7a6a;
 }
 
+.followup-suggestions {
+  width: 100%;
+  margin: 2px 0 10px;
+}
+
+.followup-suggestions__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a7a6a;
+}
+
+.followup-suggestions__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.followup-suggestions__chip {
+  max-width: 100%;
+  border: 1px solid #e0d8d0;
+  background: rgba(250, 247, 244, 0.72);
+  color: #3a322b;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-hover-ms) var(--ease-btn),
+    background var(--motion-hover-ms) var(--ease-btn),
+    box-shadow var(--motion-lift-ms) var(--ease-out-premium),
+    transform var(--motion-lift-ms) var(--ease-out-premium);
+}
+
+.followup-suggestions__chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.followup-suggestions__chip:focus-visible {
+  outline: 2px solid #c4956a;
+  outline-offset: 2px;
+}
+
 .followup-bar {
   width: 100%;
   margin: 4px 0 10px;
@@ -5615,6 +5667,13 @@ canvas {
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .followup-suggestions__chip:not(:disabled):hover {
+    transform: translateY(-1px);
+    border-color: #c4956a;
+    background: #fbf8f5;
+    box-shadow: 0 3px 10px rgba(196, 149, 106, 0.18);
+  }
+
   .prompt-input-polish--armed:not(:disabled):hover {
     transform: scale(1.08) translateY(-2px);
     background: linear-gradient(140deg, #a98f56 0%, #c7a768 100%);
@@ -5637,6 +5696,7 @@ canvas {
   .prompt-input-send__icon,
   .prompt-input-polish,
   .prompt-input-polish__icon,
+  .followup-suggestions__chip,
   .followup-bar__row,
   .followup-bar__send {
     transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease,
@@ -5646,6 +5706,7 @@ canvas {
   .prompt-input-send--armed:not(:disabled):hover,
   .prompt-input-send:active:not(:disabled).prompt-input-send--armed,
   .prompt-input-polish--armed:not(:disabled):hover,
+  .followup-suggestions__chip:not(:disabled):hover,
   .followup-bar__send--armed:not(:disabled):hover {
     transform: none !important;
   }

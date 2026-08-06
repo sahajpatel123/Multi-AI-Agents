@@ -175,6 +175,54 @@ class PromptContextItem(BaseModel):
         )
 
 
+class FollowUpSuggestionsRequest(BaseModel):
+    """Ask the panel for follow-up questions after a completed round.
+
+    The request carries the original question plus one short verdict per
+    persona. Bounds mirror the follow-up context budget (see
+    core/followup.py) so a single suggestion request stays cheap for a
+    lightweight model and a hostile client cannot amplify the cost with
+    megabytes of verdict text.
+    """
+
+    prompt: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="The user's original question from the completed round",
+    )
+    verdicts: list[str] = Field(
+        default_factory=list,
+        max_length=FOLLOW_UP_MAX_ITEMS,
+        description="One short verdict per persona (max 8, capped in length)",
+    )
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, v: str) -> str:
+        return sanitize_model_text(v, max_length=2000, field_name="prompt")
+
+    @field_validator("verdicts")
+    @classmethod
+    def validate_verdicts(cls, v: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        total = 0
+        for verdict in v:
+            item = sanitize_model_text(
+                verdict,
+                max_length=FOLLOW_UP_MAX_ITEM_CHARS,
+                field_name="verdicts",
+            )
+            total += len(item)
+            cleaned.append(item)
+        if total > FOLLOW_UP_MAX_TOTAL_CHARS:
+            raise ValueError(
+                f"verdicts content is too long ({total} chars; "
+                f"max {FOLLOW_UP_MAX_TOTAL_CHARS})"
+            )
+        return cleaned
+
+
 class IntegrityReport(BaseModel):
     """Persona integrity report for a set of agent responses"""
     drift_scores: dict[str, float] = Field(default_factory=dict, description="Per-agent drift scores (0=no drift, 1=high drift)")

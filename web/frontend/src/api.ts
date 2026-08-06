@@ -1373,6 +1373,59 @@ export async function improvePrompt(prompt: string): Promise<PromptImproveResult
   return data;
 }
 
+export interface FollowUpSuggestionsResult {
+  prompt: string;
+  suggestions: string[];
+  source: 'llm' | 'fallback';
+}
+
+// Client-side mirror of the backend caps in core/followup_suggestions.py so
+// the UI never sends a payload the API would reject.
+const FOLLOWUP_SUGGESTION_MAX_VERDICTS = 8;
+const FOLLOWUP_SUGGESTION_VERDICT_MAX_CHARS = 1800;
+const FOLLOWUP_SUGGESTION_TOTAL_MAX_CHARS = 12000;
+
+/**
+ * Ask the panel for short follow-up questions after a completed round.
+ * Best-effort by contract: the backend always returns suggestions (LLM or
+ * deterministic fallback), so callers only need to handle network failures.
+ */
+export async function suggestFollowUps(
+  prompt: string,
+  verdicts: string[],
+): Promise<FollowUpSuggestionsResult> {
+  const trimmed = verdicts
+    .map((v) => (v || '').trim().slice(0, FOLLOWUP_SUGGESTION_VERDICT_MAX_CHARS))
+    .filter(Boolean)
+    .slice(0, FOLLOWUP_SUGGESTION_MAX_VERDICTS);
+  // Keep the earliest verdicts when the combined budget is exhausted.
+  let total = 0;
+  const kept: string[] = [];
+  for (const verdict of trimmed) {
+    if (total + verdict.length > FOLLOWUP_SUGGESTION_TOTAL_MAX_CHARS) break;
+    kept.push(verdict);
+    total += verdict.length;
+  }
+
+  const response = await apiFetch('/api/prompt/followups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, verdicts: kept }),
+  });
+  const data = await parseJsonSafely<
+    FollowUpSuggestionsResult & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(
+      getErrorMessage(data, 'Could not suggest follow-ups'),
+      response.status,
+      data,
+    );
+  }
+  if (!data) throw new Error('Empty follow-up suggestions response');
+  return data;
+}
+
 
 export async function postCalibrationRate(
   taskId: string,

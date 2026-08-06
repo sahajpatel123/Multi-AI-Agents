@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PromptInput } from './components/PromptInput';
 import { FollowUpBar } from './components/FollowUpBar';
+import { FollowUpSuggestions } from './components/FollowUpSuggestions';
 import { AgentCard } from './components/AgentCard';
 import { DebateMode } from './components/DebateMode';
 import { DiscussMode } from './components/DiscussMode';
@@ -26,6 +27,7 @@ import {
   deleteSavedResponse,
   verifyArenaAnswerInAgent,
   extractStreamingPreview,
+  suggestFollowUps,
 } from './api';
 import { copyToClipboard } from './lib/clipboard';
 import { downloadMarkdownFile } from './lib/downloadTextFile';
@@ -95,6 +97,8 @@ function App() {
   const [exportCopied, setExportCopied] = useState(false);
   const [exportDownloaded, setExportDownloaded] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
+  const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
+  const [followUpSuggestionsSource, setFollowUpSuggestionsSource] = useState<'llm' | 'fallback'>('llm');
   const [recentPrompts, setRecentPrompts] = useState<RecentPrompt[]>(() => loadRecentPrompts());
   const quotaExhausted = messagesRemaining <= 0;
   const personaIds = panel.map((persona) => persona.id);
@@ -692,6 +696,7 @@ function App() {
     setHighlightedAgentId(null);
     setPendingScrollTarget(null);
     setActiveTurnId(null);
+    setFollowUpSuggestions([]);
     tokenBuffers.current = {};
     focusedTokenBuffer.current = '';
     setIsSidebarOpen(false);
@@ -727,6 +732,7 @@ function App() {
     setCurrentResponses(null);
     setAnimateCurrentResponseBars(false);
     setExpandedAgent(null);
+    setFollowUpSuggestions([]);
     setCurrentPrompt(prompt);
     setDoneAgents(new Set());
     setStreamPreviews({});
@@ -811,6 +817,24 @@ function App() {
           // Save session ID to localStorage
           safeLocalStorage.setItem('arena_session_id', data.session_id);
 
+          // Best-effort: ask the panel for one-click follow-up suggestions.
+          // Never blocks the round — failures just hide the chips.
+          const verdicts = (data.all_responses || [])
+            .map((scored) =>
+              (scored.response?.one_liner || scored.response?.verdict || '').trim(),
+            )
+            .filter(Boolean);
+          void suggestFollowUps(data.prompt, verdicts)
+            .then((result) => {
+              setFollowUpSuggestions(result.suggestions || []);
+              setFollowUpSuggestionsSource(
+                result.source === 'fallback' ? 'fallback' : 'llm',
+              );
+            })
+            .catch(() => {
+              setFollowUpSuggestions([]);
+            });
+
           // Update session data with new turn using functional update
           const currentTimestamp = new Date().toISOString();
           const newTurn: SessionTurn = {
@@ -853,6 +877,7 @@ function App() {
           if (abortController.signal.aborted) return;
           if (flushTimer.current) clearInterval(flushTimer.current);
           setStreamPreviews({});
+          setFollowUpSuggestions([]);
           setError(data.message || data.detail || 'Something went wrong');
           setPhase('idle');
         },
@@ -1183,11 +1208,19 @@ function App() {
       const persona = getPersonaForAgentId(agentId);
       return persona?.name || AGENTS[agentId]?.name;
     });
+    setFollowUpSuggestions([]);
     if (context.length === 0) {
       void handleSubmit(prompt);
       return;
     }
     void handleSubmit(prompt, context);
+  };
+
+  /** Send a suggested follow-up through the same pipeline as the bar. */
+  const handleFollowUpSuggestionPick = (suggestion: string) => {
+    void track('arena_followup_suggestion_used');
+    setFollowUpSuggestions([]);
+    handleFollowUpSubmit(suggestion);
   };
 
   const handleExamplePromptClick = (prompt: string) => {
@@ -2122,11 +2155,20 @@ function App() {
             )}
 
             {isDone && response && !focusedAgentId && (
-              <FollowUpBar
-                onSubmit={handleFollowUpSubmit}
-                disabled={quotaExhausted}
-                disabledTitle="Daily Arena message limit reached"
-              />
+              <>
+                <FollowUpSuggestions
+                  suggestions={followUpSuggestions}
+                  source={followUpSuggestionsSource}
+                  onPick={handleFollowUpSuggestionPick}
+                  disabled={quotaExhausted}
+                  disabledTitle="Daily Arena message limit reached"
+                />
+                <FollowUpBar
+                  onSubmit={handleFollowUpSubmit}
+                  disabled={quotaExhausted}
+                  disabledTitle="Daily Arena message limit reached"
+                />
+              </>
             )}
 
             <PromptInput
