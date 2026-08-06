@@ -76,6 +76,7 @@ class User(Base):
     saved_responses = relationship("SavedResponse", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     persona_drift_logs = relationship("PersonaDriftLog", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     scoring_audits = relationship("ScoringAudit", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    export_presets = relationship("ExportPreset", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     ux_events = relationship("UXEvent", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     agent_tasks = relationship("AgentTask", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     discuss_threads = relationship("DiscussThread", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
@@ -369,6 +370,35 @@ class SavedResponse(Base):
     __table_args__ = (
         Index("idx_saved_responses_user_session", "user_id", "session_id"),
         Index("idx_saved_responses_user_saved_at", "user_id", "saved_at"),
+    )
+
+
+class ExportPreset(Base):
+    __tablename__ = "export_presets"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(100), nullable=False)
+    description = Column(String(500), nullable=True)  # Optional description of the preset
+    preset_type = Column(String(20), nullable=False, default="saved")  # saved, sessions, etc.
+    format = Column(String(10), nullable=False, default="csv")  # csv, json, xlsx
+    search = Column(String(100), nullable=True)
+    persona_id = Column(String(50), nullable=True)
+    min_score = Column(Integer, nullable=True)
+    max_score = Column(Integer, nullable=True)
+    sort = Column(String(20), nullable=False, default="newest")
+    position = Column(Integer, nullable=False, default=0)  # For custom ordering
+    is_default = Column(Boolean, nullable=False, default=False)  # Mark as default preset
+    last_used_at = Column(DateTime, nullable=True)  # Track when preset was last used
+    created_at = Column(DateTime, default=_now, nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
+
+    user = relationship("User", back_populates="export_presets", lazy="joined")
+
+    __table_args__ = (
+        Index("idx_export_presets_user", "user_id"),
+        Index("idx_export_presets_user_created", "user_id", "created_at"),
+        Index("idx_export_presets_user_position", "user_id", "position"),
     )
 
 

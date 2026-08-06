@@ -50,6 +50,7 @@ from arena.core.agent_memory import (
     get_task_detail,
     get_watchlist_history,
     iter_user_task_export,
+    get_watchlist_statistics,
 )
 from arena.core.agent_metrics import (
     compute_user_agent_metrics,
@@ -1766,6 +1767,139 @@ async def export_orchestration_pdf(
     )
 
 
+@router.get("/orchestrations")
+async def list_orchestrations(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    status: str | None = Query(None, description="Filter by status: 'running', 'complete', 'failed'"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """List all orchestrations for a user with pagination.
+
+    Returns orchestration metadata including id, status, created_at, task_count,
+    synthesis preview, and child task IDs.
+    """
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_list",
+        limit=60,
+        window_seconds=60,
+        message="Too many orchestration list requests. Please slow down.",
+    )
+    
+    offset = (page - 1) * per_page
+    
+    # Base query
+    query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
+    
+    # Apply status filter
+    if status:
+        query = query.filter(Orchestration.status == status)
+    
+    # Get total count
+    total = query.count()
+    
+    # Get paginated results
+    orchestrations = query.order_by(Orchestration.created_at.desc())
+    orchestrations = orchestrations.offset(offset).limit(per_page).all()
+    
+    # Format results
+    items = []
+    for orch in orchestrations:
+        task_ids = list(orch.task_ids or [])
+        items.append({
+            "id": orch.id,
+            "status": orch.status,
+            "created_at": orch.created_at.isoformat() if orch.created_at else None,
+            "task_count": len(task_ids),
+            "task_ids": task_ids,
+            "synthesis_preview": orch.synthesis[:200] if orch.synthesis else None,
+        })
+    
+    return JSONResponse(content={
+        "success": True,
+        "orchestrations": items,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+    })
+
+
+@router.get("/orchestrations/export.csv")
+async def export_orchestrations_csv(
+    status: str | None = Query(None, description="Filter by status: 'running', 'complete', 'failed'"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of all orchestrations for a user.
+
+    Streams orchestration data with formula-injection defense (_csv_safe).
+    Supports filtering by status.
+    """
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    from arena.routes.analytics import _csv_safe
+    import csv
+    import io
+    
+    # Get all orchestrations (not paginated for CSV)
+    query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
+    
+    if status:
+        query = query.filter(Orchestration.status == status)
+    
+    orchestrations = query.order_by(Orchestration.created_at.desc()).all()
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "id",
+        "status",
+        "created_at",
+        "task_count",
+        "task_ids",
+        "synthesis_preview",
+    ])
+    
+    # Write rows
+    for orch in orchestrations:
+        task_ids = list(orch.task_ids or [])
+        writer.writerow([
+            _csv_safe(orch.id),
+            _csv_safe(orch.status),
+            _csv_safe(orch.created_at.isoformat() if orch.created_at else ""),
+            _csv_safe(len(task_ids)),
+            _csv_safe(";".join(task_ids)),
+            _csv_safe((orch.synthesis or "")[:200]),
+        ])
+    
+    filename = f"arena-orchestrations-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/tasks/{task_id}/export/pdf")
 async def export_task_pdf(
     task_id: str,
@@ -1808,6 +1942,111 @@ async def export_task_pdf(
         content=blob,
         media_type=mime,
         headers={"Content-Disposition": content_disposition_attachment(filename)},
+    )
+
+
+@router.get("/tasks/{task_id}/export.json")
+async def export_task_json(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download a single task as a JSON file.
+
+    Mirrors the PDF export's data flow but emits the raw result payload
+    instead of rendering HTML. Useful for piping an Agent Mode result into
+    other tools (jq, scripts, CI dashboards) without re-fetching the
+    /result endpoint and parsing JSON by hand.
+
+    Output shape is the same as /api/agent/result/{task_id} — the route
+    delegates to the same loaders so a future schema change in the
+    result endpoint automatically lands in the export.
+
+    Filename includes the task_id prefix so multiple downloads don't
+    overwrite each other in the browser downloads folder.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_export_json",
+        limit=120,
+        window_seconds=3600,
+        message="Too many task JSON exports. Limit is 120 per hour.",
+    )
+    tid = task_id.strip()
+    if not tid:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "task_id is required"},
+        )
+
+    # Reuse the same fetch path the /result endpoint uses so the export
+    # can never drift from the live result. Either the in-memory
+    # blackboard is still live (pipeline still warm) or we read from
+    # AgentTaskRow + persisted contradictions.
+    bb = get_blackboard(tid)
+    final_answer = ""
+    if bb:
+        _ensure_task_owner(bb, user)
+        out = bb.to_dict()
+        final_answer = (bb.final_answer or "").strip() if hasattr(bb, "final_answer") else ""
+        row = (
+            db.query(AgentTaskRow)
+            .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+            .first()
+        )
+        if row:
+            _merge_db_task_into_result_payload(out, row)
+            # The DB row is the source of truth for the final answer
+            # once the pipeline has flushed it. Prefer it over the
+            # blackboard's possibly-stale copy.
+            if (row.final_answer or "").strip():
+                final_answer = row.final_answer
+    else:
+        row = (
+            db.query(AgentTaskRow)
+            .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+            .first()
+        )
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+            )
+        contra = _load_task_contradictions(db, tid, user.id)
+        out = _persisted_agent_task_result_dict(row, contra)
+        final_answer = (row.final_answer or "").strip()
+
+    # Mirror the PDF export's behavior: a task with no final answer
+    # has nothing useful to download. /result still returns the empty
+    # shell (some clients poll it for status), but an export that
+    # would be a 200 with an empty body is a worse experience than
+    # an explicit 400 telling the caller the task isn't ready yet.
+    if not final_answer:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Nothing to export yet for this task"},
+        )
+
+    # Pretty-print so the file is diff-friendly when a user checks it
+    # into a repo or pastes a snippet into a bug report. The /result
+    # endpoint returns compact JSON; the export is for humans.
+    import json
+
+    body = json.dumps(out, indent=2, default=str, sort_keys=True)
+    filename = f"arena-task-{tid[:8]}.json"
+    return Response(
+        content=body,
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "Cache-Control": "no-store",
+            # X-Content-Type-Options is set globally by SecurityHeadersMiddleware,
+            # but the export endpoint also benefits from the explicit
+            # declaration so any future middleware reorder doesn't
+            # accidentally drop the guarantee on a downloaded file.
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -2356,6 +2595,191 @@ async def get_watchlist_item_history(
     return JSONResponse(content={"success": True, **payload})
 
 
+@router.get("/watchlist/{item_id}/history/export.csv")
+async def get_watchlist_item_history_csv(
+    item_id: str,
+    limit: int = Query(100, ge=1, le=500, description="Max history rows to export."),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of run history for a single watchlist item.
+
+    Streams rows in CSV format with formula-injection defense (_csv_safe).
+    Includes task_id, status, created_at, intelligence_score, and final_answer snippet.
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_history_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait a moment.",
+    )
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
+    payload = get_watchlist_history(db, user.id, item.id, limit=limit)
+    items = payload.get("items", [])
+
+    import csv
+    import io
+    from arena.routes.analytics import _csv_safe
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+
+    writer.writerow([
+        "task_id",
+        "question",
+        "status",
+        "created_at",
+        "intelligence_score",
+        "final_answer_snippet",
+    ])
+
+    for row in items:
+        answer_raw = str(row.get("final_answer") or "")
+        snippet = answer_raw.replace("\n", " ").strip()[:150]
+        writer.writerow([
+            _csv_safe(row.get("task_id")),
+            _csv_safe(item.question),
+            _csv_safe(row.get("status")),
+            _csv_safe(row.get("created_at")),
+            _csv_safe(row.get("intelligence_score") if row.get("intelligence_score") is not None else ""),
+            _csv_safe(snippet),
+        ])
+
+    clean_question = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in item.question[:30]).strip("_") or "watchlist-item"
+    filename = f"arena-watch-history-{clean_question}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
+@router.get("/watchlist/statistics")
+async def get_watchlist_statistics(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Aggregate statistics across all watchlist items for a user.
+
+    Returns comprehensive statistics including:
+    - Total and active watchlist item counts
+    - Total runs and scored runs
+    - Score statistics (avg, min, max)
+    - Success rate
+    - Per-item detailed statistics
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_statistics",
+        limit=30,
+        window_seconds=60,
+        message="Too many statistics requests. Please wait a moment.",
+    )
+    
+    from arena.core.agent_memory import get_watchlist_statistics
+    
+    stats = get_watchlist_statistics(db, user.id)
+    return JSONResponse(content={"success": True, **stats})
+
+
+@router.get("/watchlist/statistics/export.csv")
+async def get_watchlist_statistics_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of watchlist statistics.
+
+    Streams a CSV with formula-injection defense (_csv_safe).
+    Includes summary statistics and per-item breakdown.
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_statistics_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait a moment.",
+    )
+    
+    from arena.core.agent_memory import get_watchlist_statistics
+    from arena.routes.analytics import _csv_safe
+    import csv
+    import io
+    
+    stats = get_watchlist_statistics(db, user.id)
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write summary row
+    writer.writerow(["Watchlist Statistics Summary"])
+    writer.writerow(["Metric", "Value"])
+    writer.writerow(["Total Watchlist Items", stats["total_items"]])
+    writer.writerow(["Active Items", stats["active_items"]])
+    writer.writerow(["Total Runs", stats["total_runs"]])
+    writer.writerow(["Scored Runs", stats["scored_runs"]])
+    writer.writerow(["Average Score", stats["avg_score"] if stats["avg_score"] is not None else ""])
+    writer.writerow(["Minimum Score", stats["min_score"] if stats["min_score"] is not None else ""])
+    writer.writerow(["Maximum Score", stats["max_score"] if stats["max_score"] is not None else ""])
+    writer.writerow(["Success Rate (%)", stats["success_rate"]])
+    writer.writerow([])
+    
+    # Write per-item statistics
+    writer.writerow(["Per-Item Statistics"])
+    writer.writerow([
+        "Item ID",
+        "Question",
+        "Active",
+        "Interval (hours)",
+        "Run Count",
+        "Scored Run Count",
+        "Average Score",
+        "Last Run At",
+    ])
+    
+    for item_id, item_stats in stats["per_item_stats"].items():
+        writer.writerow([
+            _csv_safe(item_id),
+            _csv_safe(item_stats["question"]),
+            _csv_safe("Yes" if item_stats["is_active"] else "No"),
+            _csv_safe(item_stats["interval_hours"]),
+            _csv_safe(item_stats["run_count"]),
+            _csv_safe(item_stats["scored_run_count"]),
+            _csv_safe(item_stats["avg_score"] if item_stats["avg_score"] is not None else ""),
+            _csv_safe(item_stats["last_run_at"] if item_stats["last_run_at"] else ""),
+        ])
+    
+    filename = f"arena-watchlist-stats-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/metrics")
 async def get_agent_metrics(
     window_days: int = Query(30, ge=1, le=90),
@@ -2467,6 +2891,178 @@ async def list_recent_feedback(
     return JSONResponse(content={"success": True, "items": items, "count": len(items)})
 
 
+@router.get("/feedback/export.csv")
+async def export_feedback_csv(
+    verdict: Optional[str] = Query(
+        None,
+        description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of all feedback for a user.
+
+    Streams feedback data with formula-injection defense.
+    Supports filtering by verdict.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    from arena.db_models import AnswerFeedback, AgentTask
+    from arena.core.http_headers import content_disposition_attachment
+    from fastapi.responses import Response
+    from arena.core.datetime_utils import utcnow_naive
+    import csv
+    import io
+    
+    def _csv_safe(value) -> str:
+        """Escape value for CSV to prevent formula injection."""
+        if value is None:
+            return ""
+        s = str(value)
+        if s.startswith(("=", "+", "-", "@")):
+            return "'" + s
+        return s
+    
+    # Get all feedback with task title
+    q = (
+        db.query(AnswerFeedback, AgentTask)
+        .outerjoin(AgentTask, AnswerFeedback.task_id == AgentTask.task_id)
+        .filter(AnswerFeedback.user_id == user.id)
+    )
+    
+    if verdict is not None:
+        if verdict in {"correct", "partial", "wrong"}:
+            q = q.filter(AnswerFeedback.verdict == verdict)
+        else:
+            q = q.filter(False)  # Return empty result for unknown verdict
+    
+    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
+    
+    # Format items
+    items = []
+    for feedback, task in rows:
+        items.append({
+            "id": feedback.id,
+            "task_id": feedback.task_id,
+            "title": task.title if task else None,
+            "verdict": feedback.verdict,
+            "note": feedback.note,
+            "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
+        })
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "id",
+        "task_id",
+        "title",
+        "verdict",
+        "note",
+        "created_at",
+    ])
+    
+    # Write rows
+    for item in items:
+        writer.writerow([
+            _csv_safe(item.get("id")),
+            _csv_safe(item.get("task_id")),
+            _csv_safe(item.get("title")),
+            _csv_safe(item.get("verdict")),
+            _csv_safe(item.get("note")),
+            _csv_safe(item.get("created_at")),
+        ])
+    
+    filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
+@router.get("/feedback/export.json")
+async def export_feedback_json(
+    verdict: Optional[str] = Query(
+        None,
+        description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """JSON export of all feedback for a user.
+
+    Returns all feedback as a JSON array.
+    Supports filtering by verdict.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_json",
+        limit=30,
+        window_seconds=60,
+        message="Too many JSON exports. Please wait.",
+    )
+    
+    from arena.db_models import AnswerFeedback, AgentTask
+    from arena.core.datetime_utils import utcnow_naive
+    from fastapi.responses import Response
+    from arena.core.http_headers import content_disposition_attachment
+    import json
+    
+    # Get all feedback with task title
+    q = (
+        db.query(AnswerFeedback, AgentTask)
+        .outerjoin(AgentTask, AnswerFeedback.task_id == AgentTask.task_id)
+        .filter(AnswerFeedback.user_id == user.id)
+    )
+    
+    if verdict is not None:
+        if verdict in {"correct", "partial", "wrong"}:
+            q = q.filter(AnswerFeedback.verdict == verdict)
+        else:
+            q = q.filter(False)  # Return empty result for unknown verdict
+    
+    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
+    
+    # Format items
+    items = []
+    for feedback, task in rows:
+        items.append({
+            "id": feedback.id,
+            "task_id": feedback.task_id,
+            "title": task.title if task else None,
+            "verdict": feedback.verdict,
+            "note": feedback.note,
+            "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
+        })
+    
+    filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=json.dumps(items, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/tasks/export.jsonl")
 async def export_tasks_jsonl(
     retention_days: int = Query(30, ge=1, le=365),
@@ -2559,6 +3155,158 @@ async def get_agent_history(
         sort=sort,
     )
     return JSONResponse(content=history)
+
+
+@router.get("/history/export.csv")
+async def export_agent_history_csv(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(200, ge=1, le=500),
+    search: str | None = Query(None, max_length=100),
+    feedback: str | None = Query(None),
+    orchestration_id: str | None = Query(None),
+    sort: str = Query("newest"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of agent task history.
+
+    Streams all matching tasks as CSV with formula-injection defense (_csv_safe).
+    Supports the same filters as /api/agent/history.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_history_csv",
+        limit=60,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    from arena.core.agent_memory import get_user_task_history
+    from arena.routes.analytics import _csv_safe
+    from arena.core.tier_config import normalize_tier, get_tier_str
+    import csv
+    import io
+    
+    tier = normalize_tier(get_tier_str(user))
+    retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
+    
+    # Get all matching tasks (not paginated for CSV export)
+    # Use a large per_page to get all results
+    history = get_user_task_history(
+        db=db,
+        user_id=user.id,
+        page=1,
+        per_page=500,  # Max per page for CSV
+        retention_days=retention_days,
+        search=search,
+        feedback=feedback,
+        orchestration_id=orchestration_id,
+        sort=sort,
+    )
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "task_id",
+        "title",
+        "task_text",
+        "final_score",
+        "final_confidence",
+        "user_feedback",
+        "created_at",
+        "orchestration_id",
+        "watchlist_item_id",
+    ])
+    
+    # Write rows
+    for item in history.get("tasks", []):
+        writer.writerow([
+            _csv_safe(item.get("task_id")),
+            _csv_safe(item.get("title")),
+            _csv_safe(item.get("task_text", "")[:200]),  # Truncate long text
+            _csv_safe(item.get("final_score")),
+            _csv_safe(item.get("final_confidence")),
+            _csv_safe(item.get("user_feedback")),
+            _csv_safe(item.get("created_at")),
+            _csv_safe(item.get("orchestration_id")),
+            _csv_safe(item.get("watchlist_item_id")),
+        ])
+    
+    filename = f"arena-history-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
+@router.get("/history/export.json")
+async def export_agent_history_json(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(200, ge=1, le=500),
+    search: str | None = Query(None, max_length=100),
+    feedback: str | None = Query(None),
+    orchestration_id: str | None = Query(None),
+    sort: str = Query("newest"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """JSON export of agent task history.
+
+    Returns all matching tasks as a JSON array with the same filters as /api/agent/history.
+    Useful for programmatic access to full history data.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_history_json",
+        limit=60,
+        window_seconds=60,
+        message="Too many JSON exports. Please wait.",
+    )
+    
+    from arena.core.agent_memory import get_user_task_history
+    from arena.core.tier_config import normalize_tier, get_tier_str
+    import json
+    
+    tier = normalize_tier(get_tier_str(user))
+    retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
+    
+    # Get all matching tasks
+    history = get_user_task_history(
+        db=db,
+        user_id=user.id,
+        page=1,
+        per_page=500,  # Max per page for export
+        retention_days=retention_days,
+        search=search,
+        feedback=feedback,
+        orchestration_id=orchestration_id,
+        sort=sort,
+    )
+    
+    # Return tasks as JSON array
+    tasks = history.get("tasks", [])
+    
+    filename = f"arena-history-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=json.dumps(tasks, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
 
 
 @router.patch("/tasks/{task_id}/rename")

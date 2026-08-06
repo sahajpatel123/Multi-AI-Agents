@@ -102,3 +102,41 @@ export function downloadMarkdownFile(
     mimeType: 'text/markdown;charset=utf-8',
   });
 }
+
+/**
+ * Trigger client-side download of a Blob (e.g. CSV file from backend stream).
+ * Safe no-op when document/window is unavailable.
+ */
+export function downloadBlobFile(
+  blob: Blob,
+  filename: string,
+): boolean {
+  if (typeof document === 'undefined' || typeof URL === 'undefined') return false;
+  if (!blob || !(blob instanceof Blob)) return false;
+
+  let safeName = (filename || 'download.csv').trim() || 'download.csv';
+  safeName = safeName.replace(/[/\\?%*:|"<>]/g, '-').replace(/^\.+/, '') || 'download.csv';
+
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        /* ignore */
+      }
+    }, 1500);
+    return true;
+  } catch {
+    return false;
+  }
+}
+

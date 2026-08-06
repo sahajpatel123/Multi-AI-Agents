@@ -4,7 +4,7 @@ import logging
 from collections import Counter, defaultdict
 from datetime import datetime, time, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -391,6 +391,114 @@ async def analytics_summary(
         "avg_winning_score": round(avg_winning_score, 1),
         "drift_rate": round(drift_rate, 2),
     }
+
+
+@router.get("/analytics/summary/export.csv")
+async def analytics_summary_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        30,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Must match the JSON endpoint.",
+    ),
+    topic_limit: int = Query(
+        10,
+        ge=1,
+        le=50,
+        description="Max number of topics in the topic_distribution section.",
+    ),
+) -> Response:
+    """CSV export of the analytics summary.
+
+    Reuses the JSON route so the CSV and the API response
+    cannot drift. Each metric becomes a row (metric, value)
+    with persona_wins and topic_distribution as sub-rows.
+
+    Follows the same defenses as the other CSV exports:
+    rate-limit scoped, security headers, RFC 4180 quoting,
+    and formula-injection defense via _csv_safe.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_summary_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many summary CSV exports. Limit is 60 per hour.",
+    )
+
+    payload = await analytics_summary(
+        window_days=window_days,
+        topic_limit=topic_limit,
+        user=user,
+        db=db,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(["metric", "value"])
+
+    # Top-level scalar metrics
+    scalar_metrics = [
+        ("window_days", payload["window_days"]),
+        ("window_start", payload["window_start"]),
+        ("window_end", payload["window_end"]),
+        ("total_prompts", payload["total_prompts"]),
+        ("total_debates", payload["total_debates"]),
+        ("total_discusses", payload["total_discusses"]),
+        ("total_saved", payload["total_saved"]),
+        ("top_persona_by_wins", payload["top_persona_by_wins"] or ""),
+        ("most_used_event", payload["most_used_event"] or ""),
+        ("engagement_rate", payload["engagement_rate"]),
+        ("current_streak", payload["current_streak"]),
+        ("longest_streak", payload["longest_streak"]),
+        ("avg_session_prompts", payload["avg_session_prompts"]),
+        ("avg_winning_score", payload["avg_winning_score"]),
+        ("drift_rate", payload["drift_rate"]),
+    ]
+    for metric, value in scalar_metrics:
+        writer.writerow([_csv_safe(metric), _csv_safe(value)])
+
+    # Persona wins section
+    for pid, wins in payload["persona_wins"].items():
+        writer.writerow([_csv_safe(f"persona_wins:{pid}"), wins])
+
+    # Topic distribution section
+    for topic_entry in payload["topic_distribution"]:
+        writer.writerow(
+            [
+                _csv_safe(f"topic:{topic_entry['topic']}"),
+                topic_entry["count"],
+            ]
+        )
+
+    # Footer rollup
+    writer.writerow(
+        [
+            f"# total_prompts={payload['total_prompts']}",
+            f"total_debates={payload['total_debates']}",
+            f"total_discusses={payload['total_discusses']}",
+            f"total_saved={payload['total_saved']}",
+        ]
+    )
+
+    filename = (
+        f"arena-summary-"
+        f"{payload['window_start']}-to-{payload['window_end']}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("/analytics/engagement")
@@ -822,6 +930,1277 @@ async def analytics_persona_win_rate(
         "best_persona_id": best["persona_id"] if best else None,
         "best_win_rate": best["win_rate"] if best else None,
     }
+
+
+# Characters that, when they appear as the first character of a CSV cell,
+# cause Excel / Google Sheets / LibreOffice to evaluate the cell as a
+# formula. OWASP CSV Injection guidance: prefix any cell that begins with
+# one of these with a single quote to neutralize the formula.
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value) -> str:
+    """Return ``value`` as a string safe to embed in a CSV cell.
+
+    Defense-in-depth against CSV injection (CWE-1236). Even though the
+    current persona names come from a trusted, code-defined metadata
+    dictionary, a future feature (custom persona renames, admin overrides,
+    prompt-injection-driven tool calls) could let user-controlled bytes
+    land here. Excel would then execute ``=cmd|'/c calc'!A1``-style payloads
+    on the next analyst who opened the file.
+
+    The mitigation is the OWASP-recommended one: prepend a single quote
+    to any cell that starts with a formula trigger. The quote is invisible
+    in Excel's display and prevents the cell from being parsed as a
+    formula. Numbers and booleans stringify through naturally because
+    their first character is never a trigger.
+    """
+    s = str(value) if value is not None else ""
+    if s and s[0] in _CSV_FORMULA_PREFIXES:
+        return "'" + s
+    return s
+
+
+@router.get("/analytics/persona-win-rate/export.csv")
+async def analytics_persona_win_rate_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+) -> Response:
+    """CSV export of the persona win-rate table.
+
+    Same computation as /analytics/persona-win-rate — reuses the route's
+    shape rather than reimplementing it, so the export and the JSON
+    response can never drift. CSV is the format dashboards + spreadsheets
+    consume directly; the JSON endpoint remains the canonical shape for
+    the web UI.
+
+    Columns mirror the JSON personas[] rows in the same order:
+      persona_id, name, appearances, wins, win_rate, low_confidence
+
+    No pagination: the response is bounded by min_appearances (≥ 1) and
+    by the 16-persona catalog, so the worst-case payload is one row per
+    persona. Anyone exporting "all personas that ever appeared on a
+    panel" will see at most 16 rows — well within CSV-row size limits
+    even with naive Excel handling.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate export requests. Limit is 60 per hour.",
+    )
+
+    payload = await analytics_persona_win_rate(
+        window_days=window_days,
+        min_appearances=min_appearances,
+        user=user,
+        db=db,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    # RFC 4180 quoting + Excel-friendly \r\n line endings. The header row
+    # is intentional — a downstream consumer should never have to guess
+    # which column is which, and the column order is part of the contract.
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(
+        ["persona_id", "name", "appearances", "wins", "win_rate", "low_confidence"]
+    )
+    for row in payload["personas"]:
+        writer.writerow(
+            [
+                _csv_safe(row["persona_id"]),
+                _csv_safe(row["name"]),
+                row["appearances"],
+                row["wins"],
+                row["win_rate"],
+                "true" if row["low_confidence"] else "false",
+            ]
+        )
+
+    filename = (
+        f"arena-persona-win-rate-"
+        f"{payload['window_start']}-to-{payload['window_end']}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            # RFC 6266: filename* with charset is the safe way to embed
+            # non-ASCII in Content-Disposition, but our filename is pure
+            # ASCII ISO dates so the legacy form is sufficient and
+            # trivially correct.
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            # Defense-in-depth: refuse to be framed as an HTML doc even
+            # though CSV is downloaded, not rendered. A response with
+            # text/csv *can* be navigated to and rendered as a
+            # poorly-quoted table by some browsers; X-Content-Type-Options
+            # blocks that.
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/category-stats")
+async def analytics_category_stats(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+) -> dict:
+    """All-categories aggregate: how the caller's exchanges distribute
+    across prompt categories.
+
+    Companion to the by-category endpoint, which is per-persona. This
+    one is across-all-personas — "which categories do I engage with
+    most, and how do they perform?"
+
+    Same shape contract as the by-category rows, plus per-category
+    best_persona (the persona that wins most in that category) so
+    the dashboard can render "questions are best answered by Analyst"
+    without a second pass.
+
+    Sort order matches the by-category endpoint's: recognized
+    PromptCategory values in enum order, unknown categories
+    alphabetically, uncategorized bucket last.
+
+    Scoped to the caller, bounded like the sibling endpoints.
+    """
+    from arena.models.schemas import PromptCategory
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_category_stats",
+        limit=60,
+        window_seconds=3600,
+        message="Too many category-stats requests. Limit is 60 per hour.",
+    )
+
+    now_utc = utcnow_naive()
+    window_start = now_utc - timedelta(days=window_days - 1)
+
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.winner_score,
+            ScoringAudit.prompt_category,
+            ScoringAudit.created_at,
+            ScoringAudit.fallback_used,
+        )
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= window_start,
+        )
+        .all()
+    )
+
+    # Per-category counters. Keyed by category string (server-set
+    # so we don't need to coerce the dict).
+    appearances: dict[str, int] = {}
+    wins: dict[str, int] = {}
+    winning_scores: dict[str, list[int]] = {}
+    last_exchange_at: dict[str, object] = {}
+    wins_by_persona: dict[str, dict[str, int]] = {}
+    appearances_by_persona: dict[str, dict[str, int]] = {}
+
+    for winner, winner_score, category, created_at, fallback_used in rows:
+        bucket = category if category not in (None, "") else "(uncategorized)"
+        appearances[bucket] = appearances.get(bucket, 0) + 1
+        if created_at and (
+            last_exchange_at.get(bucket) is None
+            or created_at > last_exchange_at[bucket]
+        ):
+            last_exchange_at[bucket] = created_at
+
+        # Fallback wins are arbitrary — exclude from wins but still
+        # count the appearance. Same rule as the persona-stats family.
+        if not fallback_used and winner:
+            wins.setdefault(bucket, 0)
+            winning_scores.setdefault(bucket, [])
+            wins[bucket] += 1
+            if isinstance(winner_score, (int, float)):
+                winning_scores[bucket].append(int(winner_score))
+            wins_by_persona.setdefault(bucket, {})
+            appearances_by_persona.setdefault(bucket, {})
+            wins_by_persona[bucket][winner] = (
+                wins_by_persona[bucket].get(winner, 0) + 1
+            )
+        # Count appearances-by-persona for both real and fallback
+        # so the best_persona signal isn't biased by fallback noise.
+        appearances_by_persona.setdefault(bucket, {})
+        appearances_by_persona[bucket][winner] = (
+            appearances_by_persona[bucket].get(winner, 0) + 1
+        )
+
+    # Sort: recognized PromptCategory values in enum order, unknown
+    # categories alphabetically, uncategorized last.
+    recognized = {c.value for c in PromptCategory}
+    recognized_order = {c.value: i for i, c in enumerate(PromptCategory)}
+
+    def _sort_key(label: str) -> tuple[int, str]:
+        if label in recognized_order:
+            return (0, chr(ord("a") + recognized_order[label]))
+        if label == "(uncategorized)":
+            return (2, label)
+        return (1, label)
+
+    category_rows = []
+    for label, app_count in appearances.items():
+        win_count = wins.get(label, 0)
+        ws = winning_scores.get(label, [])
+        rate = round(win_count / app_count, 4) if app_count else 0.0
+
+        # Best persona in this category: highest win count, ties
+        # broken by appearances, then persona_id for stability. Only
+        # consider personas with at least one win (0/N isn't a
+        # "best" — a category where nobody wins isn't a strength).
+        persona_apps = appearances_by_persona.get(label, {})
+        persona_wins = wins_by_persona.get(label, {})
+        best_p = None
+        best_p_wins = 0
+        best_p_apps = 0
+        for p, p_wins in persona_wins.items():
+            if p_wins <= 0:
+                continue
+            p_apps = persona_apps.get(p, 0)
+            if (
+                p_wins > best_p_wins
+                or (p_wins == best_p_wins and p_apps > best_p_apps)
+                or (p_wins == best_p_wins and p_apps == best_p_apps and p < (best_p or ""))
+            ):
+                best_p = p
+                best_p_wins = p_wins
+                best_p_apps = p_apps
+
+        category_rows.append(
+            {
+                "category": label,
+                "is_known_category": label in recognized,
+                "is_uncategorized": label == "(uncategorized)",
+                "appearances": app_count,
+                "wins": win_count,
+                "win_rate": rate,
+                "avg_winning_score": (
+                    round(sum(ws) / len(ws), 1) if ws else None
+                ),
+                "last_exchange_at": (
+                    last_exchange_at[label].isoformat()
+                    if last_exchange_at.get(label)
+                    else None
+                ),
+                "best_persona_id": best_p,
+            }
+        )
+    category_rows.sort(key=lambda r: _sort_key(r["category"]))
+
+    total_appearances = sum(appearances.values())
+    total_wins = sum(wins.values())
+    # Most-active category = highest appearances. Ties broken by
+    # wins, then category name alphabetically.
+    most_active = None
+    most_active_apps = 0
+    for row in category_rows:
+        if (
+            row["appearances"] > most_active_apps
+            or (
+                row["appearances"] == most_active_apps
+                and row["wins"] > (most_active["wins"] if most_active else -1)
+            )
+        ):
+            most_active = row
+            most_active_apps = row["appearances"]
+
+    return {
+        "window_days": window_days,
+        "window_start": window_start.date().isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "total_appearances": total_appearances,
+        "total_wins": total_wins,
+        "most_active_category": most_active["category"] if most_active else None,
+        "categories": category_rows,
+    }
+
+
+@router.get("/analytics/category-stats/export.csv")
+async def analytics_category_stats_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+) -> Response:
+    """CSV export of the all-categories aggregate.
+
+    Same computation as /api/analytics/category-stats — reuses the
+    JSON route so the CSV and the API response can never drift.
+
+    Columns mirror the JSON categories[] rows in the same order:
+      category, is_known_category, is_uncategorized, appearances,
+      wins, win_rate, avg_winning_score, last_exchange_at, best_persona_id
+
+    A footer rollup row (# total_appearances, total_wins) makes the
+    file self-describing when opened in isolation, matching the
+    footer pattern from the timeline and by-category CSV exports.
+
+    Bounded like the sibling endpoints: 1-365 day window,
+    60 requests/hour/user rate limit.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_category_stats_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many category-stats CSV exports. Limit is 60 per hour.",
+    )
+
+    # Reuse the JSON route so the math cannot drift.
+    payload = await analytics_category_stats(
+        window_days=window_days,
+        user=user,
+        db=db,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(
+        [
+            "category",
+            "is_known_category",
+            "is_uncategorized",
+            "appearances",
+            "wins",
+            "win_rate",
+            "avg_winning_score",
+            "last_exchange_at",
+            "best_persona_id",
+        ]
+    )
+    for row in payload["categories"]:
+        writer.writerow(
+            [
+                _csv_safe(row["category"]),
+                "true" if row["is_known_category"] else "false",
+                "true" if row["is_uncategorized"] else "false",
+                row["appearances"],
+                row["wins"],
+                row["win_rate"],
+                row["avg_winning_score"] if row["avg_winning_score"] is not None else "",
+                row["last_exchange_at"] or "",
+                row["best_persona_id"] or "",
+            ]
+        )
+    # Footer rollup so the file is self-describing.
+    writer.writerow(
+        [
+            f"# total_appearances={payload['total_appearances']}",
+            f"total_wins={payload['total_wins']}",
+            f"most_active_category={payload['most_active_category'] or ''}",
+        ]
+    )
+
+    filename = (
+        f"arena-category-stats-"
+        f"{payload['window_start']}-to-{payload['window_end']}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-stats")
+async def analytics_persona_stats_all(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Hide personas that appeared on fewer than N panels (noise floor).",
+    ),
+) -> dict:
+    """All-personas summary: the deep-dive data for every catalog persona.
+
+    Lets a dashboard render a 16-persona grid in one call instead of
+    16 separate /persona-stats/{id} requests. Same per-persona shape
+    the single endpoint returns, sorted strongest-first.
+
+    The full catalog (16 personas) is always emitted — personas the
+    caller never saw in the window are included with zeros so the UI
+    can render the full grid without a second pass. min_appearances
+    filters the rows but never the metadata; the dashboard can still
+    show "Analyst: 0/0 in window" with a confidence flag if it wants.
+
+    Sorted by win_rate descending, then by appearances descending for
+    ties, then by persona_id alphabetically for stable ordering.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_all",
+        limit=60,
+        window_seconds=3600,
+        message="Too many all-personas stats requests. Limit is 60 per hour.",
+    )
+
+    now_utc = utcnow_naive()
+    window_start = now_utc - timedelta(days=window_days - 1)
+
+    # Project only the columns needed for the math. Pulling whole ORM
+    # rows would load prompt snippets and score blobs for every
+    # exchange purely to throw them away.
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.winner_score,
+            ScoringAudit.persona_ids_used,
+            ScoringAudit.created_at,
+            ScoringAudit.fallback_used,
+        )
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= window_start,
+        )
+        .all()
+    )
+
+    # Same counters as the single-persona endpoint, aggregated across
+    # all 16 personas in one pass.
+    appearances: dict[str, int] = {pid: 0 for pid in PERSONA_METADATA}
+    wins: dict[str, int] = {pid: 0 for pid in PERSONA_METADATA}
+    winning_scores: dict[str, list[int]] = {pid: [] for pid in PERSONA_METADATA}
+    last_appearance_at: dict[str, object] = {pid: None for pid in PERSONA_METADATA}
+    last_win_at: dict[str, object] = {pid: None for pid in PERSONA_METADATA}
+
+    for winner, winner_score, raw_panel, created_at, fallback_used in rows:
+        panel = _coerce_persona_panel(raw_panel)
+        if not panel:
+            continue
+        # Fallback wins are arbitrary — exclude from wins but count
+        # the appearance. Same rule as the single-persona endpoint.
+        seen_in_panel = set()
+        for pid in panel:
+            if pid not in appearances or pid in seen_in_panel:
+                continue
+            seen_in_panel.add(pid)
+            appearances[pid] += 1
+            if created_at and (
+                last_appearance_at[pid] is None or created_at > last_appearance_at[pid]
+            ):
+                last_appearance_at[pid] = created_at
+        if not fallback_used and winner in wins:
+            wins[winner] += 1
+            if isinstance(winner_score, (int, float)):
+                winning_scores[winner].append(int(winner_score))
+            if created_at and (
+                last_win_at[winner] is None or created_at > last_win_at[winner]
+            ):
+                last_win_at[winner] = created_at
+
+    personas: list[dict] = []
+    for pid in PERSONA_METADATA:
+        seated = appearances[pid]
+        # Always emit the persona (the grid must show the full catalog)
+        # but tag the row as below the noise floor if it doesn't meet
+        # the min_appearances threshold. The dashboard can choose to
+        # dim or hide such rows without a second pass.
+        metadata = PERSONA_METADATA[pid]
+        ws = winning_scores[pid]
+        win_count = wins[pid]
+        personas.append(
+            {
+                "persona_id": pid,
+                "name": str(metadata.get("name") or pid),
+                "color": str(metadata.get("color") or ""),
+                "appearances": seated,
+                "wins": win_count,
+                "win_rate": round(win_count / seated, 4) if seated else 0.0,
+                "avg_winning_score": (
+                    round(sum(ws) / len(ws), 1) if ws else None
+                ),
+                "last_appearance_at": (
+                    last_appearance_at[pid].isoformat()
+                    if last_appearance_at[pid]
+                    else None
+                ),
+                "last_win_at": (
+                    last_win_at[pid].isoformat() if last_win_at[pid] else None
+                ),
+                "below_min_appearances": seated < min_appearances,
+            }
+        )
+
+    # Strongest first; ties broken by appearances then persona_id.
+    personas.sort(key=lambda r: (-r["win_rate"], -r["appearances"], r["persona_id"]))
+
+    # Top-level rollup so the dashboard can render a summary without
+    # iterating the personas[] array. Pin these as the canonical
+    # totals — a future "let's pre-aggregate" optimization can't
+    # drift them.
+    total_appearances = sum(appearances.values())
+    total_wins = sum(wins.values())
+    best = personas[0] if personas else None
+
+    return {
+        "window_days": window_days,
+        "window_start": window_start.date().isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "min_appearances": min_appearances,
+        "total_personas": len(PERSONA_METADATA),
+        "returned_personas": len(personas),
+        "total_appearances": total_appearances,
+        "total_wins": total_wins,
+        "best_persona_id": best["persona_id"] if best else None,
+        "personas": personas,
+    }
+
+
+@router.get("/analytics/persona-stats/export.csv")
+async def analytics_persona_stats_all_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Hide personas that appeared on fewer than N panels (noise floor).",
+    ),
+) -> Response:
+    """CSV export of the all-personas summary catalog.
+
+    Reuses the JSON route ``analytics_persona_stats_all`` so the math and
+    sorting order (win_rate desc, appearances desc, persona_id asc) stay
+    identical and cannot drift between CSV and API.
+
+    Columns: persona_id, name, appearances, wins, win_rate, avg_winning_score,
+             last_appearance_at, last_win_at, below_min_appearances.
+
+    Includes a footer rollup row (# total_appearances, total_wins, best_persona_id)
+    to make the file self-describing when opened in Excel or python-pandas.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_all_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona-stats CSV exports. Limit is 60 per hour.",
+    )
+
+    payload = await analytics_persona_stats_all(
+        window_days=window_days,
+        min_appearances=min_appearances,
+        user=user,
+        db=db,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(
+        [
+            "persona_id",
+            "name",
+            "appearances",
+            "wins",
+            "win_rate",
+            "avg_winning_score",
+            "last_appearance_at",
+            "last_win_at",
+            "below_min_appearances",
+        ]
+    )
+    for row in payload["personas"]:
+        writer.writerow(
+            [
+                _csv_safe(row["persona_id"]),
+                _csv_safe(row["name"]),
+                row["appearances"],
+                row["wins"],
+                row["win_rate"],
+                row["avg_winning_score"] if row["avg_winning_score"] is not None else "",
+                row["last_appearance_at"] or "",
+                row["last_win_at"] or "",
+                "true" if row["below_min_appearances"] else "false",
+            ]
+        )
+
+    # Footer rollup row
+    writer.writerow(
+        [
+            f"# total_appearances={payload['total_appearances']}",
+            f"total_wins={payload['total_wins']}",
+            f"best_persona_id={payload['best_persona_id'] or ''}",
+        ]
+    )
+
+    filename = f"arena-persona-stats-overview-{payload['window_start']}-to-{payload['window_end']}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-stats/{persona_id}")
+async def analytics_persona_stats(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+) -> dict:
+    """Per-persona stats for the caller: deep-dive on one persona.
+
+    Companion to /analytics/persona-win-rate (which returns the full
+    panel) — this endpoint scopes to one persona and adds three extra
+    signals the aggregate view doesn't surface:
+
+    - avg_winning_score: the average ``winner_score`` across this
+      persona's winning exchanges. A persona with 5/10 wins at an avg
+      score of 90 is a different story than 5/10 at 51. The aggregate
+      view hides this.
+    - last_win_at / last_appearance_at: ISO dates so the UI can render
+      "last won 3 days ago" without recomputing client-side.
+    - best_prompt_category: the category (``question``, ``command``,
+      etc.) where this persona wins the most, so the dashboard can
+      suggest "Analyst is strongest on X".
+
+    Returns 404 for unknown persona_ids so a typo or retired persona
+    surfaces a clear error rather than zero stats that look like a bug.
+
+    Scoped to the caller, bounded like the sibling endpoints.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats",
+        limit=120,
+        window_seconds=3600,
+        message="Too many persona-stats requests. Limit is 120 per hour.",
+    )
+
+    now_utc = utcnow_naive()
+    window_start = now_utc - timedelta(days=window_days - 1)
+
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.winner_score,
+            ScoringAudit.persona_ids_used,
+            ScoringAudit.prompt_category,
+            ScoringAudit.created_at,
+            ScoringAudit.fallback_used,
+        )
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= window_start,
+        )
+        .all()
+    )
+
+    appearances = 0
+    wins = 0
+    winning_scores: list[int] = []
+    last_win_at = None
+    last_appearance_at = None
+    wins_by_category: Counter = Counter()
+    appearances_by_category: Counter = Counter()
+
+    for winner, winner_score, raw_panel, category, created_at, fallback_used in rows:
+        panel = _coerce_persona_panel(raw_panel)
+        if not panel or pid not in panel:
+            continue
+        # Fallback wins are not judged — exclude from the win count.
+        if fallback_used:
+            continue
+        appearances += 1
+        if category:
+            appearances_by_category[category] += 1
+        if created_at and (last_appearance_at is None or created_at > last_appearance_at):
+            last_appearance_at = created_at
+        if winner == pid:
+            wins += 1
+            if isinstance(winner_score, (int, float)):
+                winning_scores.append(int(winner_score))
+            if category:
+                wins_by_category[category] += 1
+            if created_at and (last_win_at is None or created_at > last_win_at):
+                last_win_at = created_at
+
+    win_rate = round(wins / appearances, 4) if appearances else 0.0
+    avg_winning_score = (
+        round(sum(winning_scores) / len(winning_scores), 1) if winning_scores else None
+    )
+    # Best category = highest win rate within the window, only counting
+    # categories where the persona actually appeared. A category with
+    # 1 appearance and 1 win is 100% but may be noise — the caller can
+    # decide how to render it.
+    best_category = None
+    best_category_rate = 0.0
+    for category, cat_apps in appearances_by_category.items():
+        cat_wins = wins_by_category.get(category, 0)
+        if cat_wins > 0:  # skip zero-win categories
+            rate = cat_wins / cat_apps if cat_apps else 0
+            if rate > best_category_rate:
+                best_category_rate = rate
+                best_category = category
+
+    metadata = PERSONA_METADATA[pid]
+    return {
+        "persona_id": pid,
+        "name": str(metadata.get("name") or pid),
+        "color": str(metadata.get("color") or ""),
+        "window_days": window_days,
+        "window_start": window_start.date().isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "appearances": appearances,
+        "wins": wins,
+        "win_rate": win_rate,
+        "avg_winning_score": avg_winning_score,
+        "last_win_at": last_win_at.isoformat() if last_win_at else None,
+        "last_appearance_at": last_appearance_at.isoformat() if last_appearance_at else None,
+        "best_prompt_category": best_category,
+    }
+
+
+@router.get("/analytics/persona-stats/{persona_id}/by-category")
+async def analytics_persona_stats_by_category(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC). Caps the row scan.",
+    ),
+) -> dict:
+    """Per-category breakdown for one persona.
+
+    Companion to /analytics/persona-stats/{persona_id} — that endpoint
+    collapses the category dimension into a single "best" field. This
+    one returns the full distribution: one row per category the persona
+    has appeared in within the window, with appearances, wins, and
+    win_rate. Lets the dashboard render "Analyst is 80% on questions,
+    50% on tasks, 100% on debate" instead of just the top line.
+
+    Categories:
+    - Recognized PromptCategory values (question, task, statement,
+      debate) get a stable sort order so the UI can render them in
+      a known sequence.
+    - Unknown / older categories land at the end, sorted alphabetically.
+    - Rows with no recorded category land at the end with
+      category="(uncategorized)" so they're not silently dropped.
+    - Rows with a null/empty category string are treated as the
+      uncategorized bucket so the breakdown still reconciles to the
+      parent endpoint's total appearances.
+
+    Returns 404 for unknown persona_id (same contract as the parent
+    stats endpoint).
+    """
+    from arena.core.agents import PERSONA_METADATA
+    from arena.models.schemas import PromptCategory
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_by_category",
+        limit=120,
+        window_seconds=3600,
+        message="Too many persona-stats-by-category requests. Limit is 120 per hour.",
+    )
+
+    now_utc = utcnow_naive()
+    window_start = now_utc - timedelta(days=window_days - 1)
+
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.persona_ids_used,
+            ScoringAudit.prompt_category,
+            ScoringAudit.fallback_used,
+        )
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= window_start,
+        )
+        .all()
+    )
+
+    appearances: Counter = Counter()
+    wins: Counter = Counter()
+    uncategorized_appearances = 0
+    uncategorized_wins = 0
+
+    for winner, raw_panel, category, fallback_used in rows:
+        panel = _coerce_persona_panel(raw_panel)
+        if not panel or pid not in panel:
+            continue
+        # Fallback wins are not judged — exclude from wins, but DO
+        # count the appearance. The parent endpoint's "fallback
+        # excluded" rule applies the same way here.
+        appearances[category or "(uncategorized)"] += 1
+        if not fallback_used and winner == pid:
+            wins[category or "(uncategorized)"] += 1
+        # Track the uncategorized bucket explicitly so the totals
+        # section can surface it without a dict lookup.
+        if category is None or category == "":
+            uncategorized_appearances += 1
+            if not fallback_used and winner == pid:
+                uncategorized_wins += 1
+
+    # Stable sort: recognized PromptCategory values first in enum order,
+    # then unknown categories alphabetically, with the uncategorized
+    # bucket pinned last so the UI can render it as "Other".
+    recognized = {c.value for c in PromptCategory}
+    recognized_order = {c.value: i for i, c in enumerate(PromptCategory)}
+
+    def _sort_key(label: str) -> tuple[int, str]:
+        if label in recognized_order:
+            return (0, chr(ord("a") + recognized_order[label]))
+        if label == "(uncategorized)":
+            return (2, label)
+        return (1, label)
+
+    category_rows = []
+    for label, app_count in appearances.items():
+        win_count = wins.get(label, 0)
+        rate = round(win_count / app_count, 4) if app_count else 0.0
+        is_recognized = label in recognized
+        category_rows.append(
+            {
+                "category": label,
+                "is_uncategorized": label == "(uncategorized)",
+                "is_known_category": is_recognized,
+                "appearances": app_count,
+                "wins": win_count,
+                "win_rate": rate,
+            }
+        )
+    category_rows.sort(key=lambda r: _sort_key(r["category"]))
+
+    total_appearances = sum(appearances.values())
+    total_wins = sum(wins.values())
+
+    return {
+        "persona_id": pid,
+        "name": str(PERSONA_METADATA[pid].get("name") or pid),
+        "window_days": window_days,
+        "window_start": window_start.date().isoformat(),
+        "window_end": now_utc.date().isoformat(),
+        "total_appearances": total_appearances,
+        "total_wins": total_wins,
+        "uncategorized_appearances": uncategorized_appearances,
+        "uncategorized_wins": uncategorized_wins,
+        "categories": category_rows,
+    }
+
+
+@router.get("/analytics/persona-stats/{persona_id}/timeline")
+async def analytics_persona_stats_timeline(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=90,
+        description="Window length in days, ending today (UTC). Capped at 90 to keep the timeline compact.",
+    ),
+) -> dict:
+    """Per-persona daily timeline of wins and appearances.
+
+    Third axis in the persona-stats family (deep-dive + per-category +
+    per-day). Returns one row per UTC day in the window with wins and
+    appearances for the specified persona, plus a rolling best_day /
+    best_win_rate summary so the dashboard can render a sparkline
+    with a peak badge.
+
+    Day buckets are inclusive of today and anchored in UTC, matching
+    the /analytics/activity endpoint. Days where the persona had no
+    exchanges are emitted as zeros so the timeline is contiguous — a
+    dashboard doesn't have to fill gaps client-side.
+
+    Capped at 90 days because timelines longer than that don't render
+    well in a sparkline anyway, and capping the row scan protects the
+    user_id index from a multi-month query.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_timeline",
+        limit=120,
+        window_seconds=3600,
+        message="Too many persona-stats-timeline requests. Limit is 120 per hour.",
+    )
+
+    now_utc = utcnow_naive()
+    end_day = now_utc.date()
+    start_day = end_day - timedelta(days=days - 1)
+    start_dt = datetime.combine(start_day, time.min)
+    # Exclusive upper bound: anything timestamped after this belongs to
+    # tomorrow's bucket and is correctly excluded from this window.
+    end_dt = datetime.combine(end_day + timedelta(days=1), time.min)
+
+    rows = (
+        db.query(
+            ScoringAudit.winner_persona_id,
+            ScoringAudit.persona_ids_used,
+            ScoringAudit.created_at,
+            ScoringAudit.fallback_used,
+        )
+        .filter(
+            ScoringAudit.user_id == user.id,
+            ScoringAudit.created_at >= start_dt,
+            ScoringAudit.created_at < end_dt,
+        )
+        .all()
+    )
+
+    # Zero-fill the buckets first so the timeline is contiguous even on
+    # quiet days. days=1, 30, 90 → 1, 30, 90 buckets respectively.
+    daily: dict[str, dict[str, int]] = {
+        (start_day + timedelta(days=offset)).isoformat(): {
+            "wins": 0,
+            "appearances": 0,
+        }
+        for offset in range(days)
+    }
+
+    for winner, raw_panel, created_at, fallback_used in rows:
+        panel = _coerce_persona_panel(raw_panel)
+        if not panel or pid not in panel:
+            continue
+        bucket_key = created_at.date().isoformat() if created_at else None
+        if not bucket_key or bucket_key not in daily:
+            continue
+        daily[bucket_key]["appearances"] += 1
+        # Fallback wins are arbitrary — exclude from wins but still
+        # count the appearance. Same rule as the parent endpoint.
+        if not fallback_used and winner == pid:
+            daily[bucket_key]["wins"] += 1
+
+    # Stable order: oldest first. The dashboard's sparkline library
+    # expects chronological data; reversing client-side is an easy
+    # mistake. The endpoint returns a list (not a dict) so order is
+    # part of the contract.
+    timeline = []
+    for offset in range(days):
+        day = start_day + timedelta(days=offset)
+        bucket = daily[day.isoformat()]
+        wins = bucket["wins"]
+        apps = bucket["appearances"]
+        timeline.append(
+            {
+                "date": day.isoformat(),
+                "appearances": apps,
+                "wins": wins,
+                "win_rate": round(wins / apps, 4) if apps else 0.0,
+            }
+        )
+
+    # Roll-up: best day by wins (with a minimum of 1 — a 0/0 day isn't
+    # a "best" anything). Ties broken by earliest date so the rollup
+    # is stable. We also capture the best day's win_rate + appearances
+    # so the UI can render "peak day: 3/3 = 100%" alongside the date
+    # without a second pass over the timeline.
+    best_day = None
+    best_wins = 0
+    best_day_apps = 0
+    for row in timeline:
+        if row["wins"] > best_wins:
+            best_wins = row["wins"]
+            best_day = row["date"]
+            best_day_apps = row["appearances"]
+
+    return {
+        "persona_id": pid,
+        "name": str(PERSONA_METADATA[pid].get("name") or pid),
+        "days": days,
+        "window_start": start_day.isoformat(),
+        "window_end": end_day.isoformat(),
+        "total_appearances": sum(row["appearances"] for row in timeline),
+        "total_wins": sum(row["wins"] for row in timeline),
+        "best_day": best_day,
+        "best_day_wins": best_wins,
+        "best_day_appearances": best_day_apps,
+        "best_day_win_rate": (
+            round(best_wins / best_day_apps, 4) if best_day_apps else 0.0
+        ),
+        "timeline": timeline,
+    }
+
+
+@router.get("/analytics/persona-stats/{persona_id}/timeline/export.csv")
+async def analytics_persona_stats_timeline_csv(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=90,
+        description="Window length in days, ending today (UTC). Capped at 90 to keep the timeline compact.",
+    ),
+) -> Response:
+    """CSV export of the persona timeline.
+
+    Same computation as the JSON timeline endpoint — reuses the
+    underlying aggregation rather than reimplementing it, so the CSV
+    cannot drift from the dashboard's view.
+
+    CSV is the format BI tools (Excel, Sheets, Tableau) consume
+    directly. A sparkline is nice for in-app, but an analyst who
+    wants to run their own numbers needs the raw rows. This is the
+    export that lets them.
+
+    Columns: date, appearances, wins, win_rate. Plus a footer
+    comment row (# total_appearances, # total_wins, # best_day) so
+    the CSV is self-describing when opened in isolation.
+
+    Same bounds as the JSON endpoint: days 1-90, persona_id must
+    be a known persona, 120/hr/user rate limit. The persona_id
+    filename suffix lets multiple downloads sit in the same
+    directory without overwriting each other.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_timeline_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many timeline CSV exports. Limit is 60 per hour.",
+    )
+
+    # Reuse the JSON route so the math cannot drift.
+    payload = await analytics_persona_stats_timeline(
+        persona_id=pid,
+        user=user,
+        db=db,
+        days=days,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(["date", "appearances", "wins", "win_rate"])
+    for row in payload["timeline"]:
+        # date and win_rate are server-computed, no CSV-injection risk,
+        # but route them through _csv_safe anyway for defense-in-depth.
+        writer.writerow(
+            [
+                _csv_safe(row["date"]),
+                row["appearances"],
+                row["wins"],
+                row["win_rate"],
+            ]
+        )
+    # Footer rollup so the file is self-describing when opened in
+    # isolation. '#' prefix matches the de-facto CSV comment convention
+    # (Excel, Sheets, and most BI tools skip these rows). Includes all
+    # three best_day fields the JSON endpoint exposes, so the CSV
+    # footer is a complete parallel of the JSON rollup.
+    writer.writerow(
+        [
+            f"# total_appearances={payload['total_appearances']}",
+            f"total_wins={payload['total_wins']}",
+            f"best_day={payload['best_day'] or ''}",
+            f"best_day_wins={payload['best_day_wins']}",
+            f"best_day_appearances={payload['best_day_appearances']}",
+            f"best_day_win_rate={payload['best_day_win_rate']}",
+        ]
+    )
+
+    filename = f"arena-timeline-{pid}-{payload['window_start']}-to-{payload['window_end']}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-stats/{persona_id}/by-category/export.csv")
+async def analytics_persona_stats_by_category_csv(
+    persona_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+) -> Response:
+    """CSV export of the per-persona per-category breakdown.
+
+    Parallel to the timeline CSV export — same pattern, same defenses.
+    Reuses the JSON by-category route's computation so the CSV cannot
+    drift from the dashboard's view.
+
+    Columns: category, is_known_category, is_uncategorized, appearances,
+    wins, win_rate. Plus a footer rollup row with the totals so the
+    file is self-describing when opened in isolation.
+
+    Filename includes persona_id + window dates so multiple downloads
+    (different personas, different windows) sit in the same directory
+    without overwriting each other.
+    """
+    from arena.core.agents import PERSONA_METADATA
+
+    pid = persona_id.strip().lower()
+    if pid not in PERSONA_METADATA:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "unknown_persona", "message": f"Unknown persona: {persona_id}"},
+        )
+
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_stats_by_category_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many by-category CSV exports. Limit is 60 per hour.",
+    )
+
+    # Reuse the JSON route so the math cannot drift.
+    payload = await analytics_persona_stats_by_category(
+        persona_id=pid,
+        user=user,
+        db=db,
+        window_days=window_days,
+    )
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(
+        ["category", "is_known_category", "is_uncategorized", "appearances", "wins", "win_rate"]
+    )
+    for row in payload["categories"]:
+        # category is server-computed, but route through _csv_safe
+        # anyway for defense-in-depth.
+        writer.writerow(
+            [
+                _csv_safe(row["category"]),
+                "true" if row["is_known_category"] else "false",
+                "true" if row["is_uncategorized"] else "false",
+                row["appearances"],
+                row["wins"],
+                row["win_rate"],
+            ]
+        )
+    # Footer rollup so the file is self-describing.
+    writer.writerow(
+        [
+            f"# total_appearances={payload['total_appearances']}",
+            f"total_wins={payload['total_wins']}",
+            f"uncategorized_appearances={payload['uncategorized_appearances']}",
+            f"uncategorized_wins={payload['uncategorized_wins']}",
+        ]
+    )
+
+    filename = f"arena-by-category-{pid}-{payload['window_start']}-to-{payload['window_end']}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("/admin/routes")

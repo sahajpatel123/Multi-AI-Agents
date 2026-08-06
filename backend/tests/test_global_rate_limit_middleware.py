@@ -25,9 +25,11 @@ from httpx import AsyncClient, ASGITransport
 # Import the middleware class WITHOUT triggering main.py's create_app()
 # (which validates secrets and calls sys.exit). The class is defined at
 # module level in main.py but the import is safe — only the call to
-# create_app() is the side-effect.
 import importlib.util
-_spec = importlib.util.spec_from_file_location("_main_module_for_test", "main.py")
+import pathlib
+
+_main_path = pathlib.Path(__file__).parent.parent / "main.py"
+_spec = importlib.util.spec_from_file_location("_main_module_for_test", _main_path)
 _mod = importlib.util.module_from_spec(_spec)
 
 # We must NOT execute main.py because it calls create_app() at import
@@ -36,7 +38,7 @@ _mod = importlib.util.module_from_spec(_spec)
 import ast
 import pathlib
 
-_main_src = pathlib.Path("main.py").read_text()
+_main_src = _main_path.read_text()
 _tree = ast.parse(_main_src)
 
 # Collect the GlobalRateLimitMiddleware class and its dependencies.

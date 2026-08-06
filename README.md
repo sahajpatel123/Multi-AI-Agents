@@ -111,6 +111,7 @@ GET  /api/panel             / POST /api/panel/save — your 4-slot panel
 
 POST /api/agent/run|orchestrate|refine|challenge|rebuttal|feedback
 GET  /api/agent/status/:id|result/:id|history|templates
+GET  /api/agent/tasks/:id/export.json   Download a single task result as a .json file (pretty-printed)
 POST /api/agent/watchlist   Recurring research questions
 POST /api/agent/upload      File attachment (max 10 MB)
 POST /api/agent/memory/context
@@ -121,8 +122,17 @@ POST /api/payments/addon/agent/subscribe|cancel|reactivate
 POST /api/calibration/rate  Rate your own confidence
 GET  /api/calibration/stats | /api/calibration/rating/:task
 
-GET  /api/analytics/summary|engagement|activity
+GET  /api/analytics/summary        Per-user analytics summary (prompts, debates, streaks, engagement)
+GET  /api/analytics/summary/export.csv  CSV export of the summary (mirrors the JSON shape)
+GET  /api/analytics/category-stats   All-categories aggregate (which categories do I engage with most, per-category best persona)
+GET  /api/analytics/category-stats/export.csv   CSV export of the same (mirrors the JSON shape, footer rollup included)
 GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
+GET  /api/analytics/persona-stats/:persona_id   Deep-dive on one persona (avg winning score, last activity, best category)
+GET  /api/analytics/persona-stats   All-personas summary (full 16-persona grid in one call, sorted strongest-first)
+GET  /api/analytics/persona-stats/:persona_id/by-category   Full per-category breakdown for one persona (one row per category with appearances/wins/win_rate)
+GET  /api/analytics/persona-stats/:persona_id/by-category/export.csv   Same data as text/csv with footer rollup
+GET  /api/analytics/persona-stats/:persona_id/timeline   Per-persona daily timeline of wins and appearances (sparkline-ready, contiguous zero-fill)
+GET  /api/analytics/persona-stats/:persona_id/timeline/export.csv   Same data as text/csv with footer rollup
 
 GET  /api/user/usage|tier|answer-feedback-stats
 PATCH /api/user/profile

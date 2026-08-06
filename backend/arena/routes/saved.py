@@ -14,12 +14,22 @@ Functionality:
 - DELETE /saved/bulk accepts a JSON list of ids for one-shot cleanup.
 """
 
+import csv
+import io
+import json
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+
+try:
+    import openpyxl
+    from openpyxl import Workbook
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
 from arena.core.dependencies import get_current_user_required
 from arena.core.input_validation import sanitize_model_optional_text, sanitize_model_text
@@ -105,6 +115,7 @@ async def get_saved(
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on prompt + one_liner."),
     persona_id: Optional[str] = Query(None, max_length=50, description="Restrict to one persona."),
     min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score (inclusive)."),
+    max_score: Optional[int] = Query(None, ge=0, le=100, description="Maximum score (inclusive)."),
     sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', or 'score'."),
 ) -> dict:
     """List saved responses with optional search, filter, sort, pagination.
@@ -131,7 +142,7 @@ async def get_saved(
             "page": 1,
             "per_page": per_page,
             "total_pages": 0,
-            "filters": {"search": None, "persona_id": None, "min_score": None, "sort": "newest"},
+            "filters": {"search": None, "persona_id": None, "min_score": None, "max_score": None, "sort": "newest"},
         }
 
     q = db.query(SavedResponse).filter(SavedResponse.user_id == user.id)
@@ -156,10 +167,13 @@ async def get_saved(
 
     if min_score is not None:
         q = q.filter(SavedResponse.score >= min_score)
+    
+    if max_score is not None:
+        q = q.filter(SavedResponse.score <= max_score)
 
     # Sort. Unknown values fall back to newest so a stale frontend can't
     # break the endpoint; 'score' puts nulls last so untested takes don't
-    # sink the top of "show me my best answers".
+    # sink the top of "show me my best answers"
     if sort == "oldest":
         order_clauses = (SavedResponse.saved_at.asc(),)
     elif sort == "score":
@@ -206,6 +220,7 @@ async def get_saved(
             "search": search,
             "persona_id": persona_id,
             "min_score": min_score,
+            "max_score": max_score,
             "sort": sort,
         },
     }
@@ -378,3 +393,354 @@ async def delete_saved(
     db.delete(row)
     db.commit()
     return {"status": "deleted", "id": saved_id}
+
+
+@router.get("/saved/export")
+async def export_saved(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on prompt + one_liner."),
+    persona_id: Optional[str] = Query(None, max_length=50, description="Restrict to one persona."),
+    min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score (inclusive)."),
+    max_score: Optional[int] = Query(None, ge=0, le=100, description="Maximum score (inclusive)."),
+    sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', or 'score'."),
+    format: str = Query("csv", description="Export format: 'csv' (default), 'json', or 'xlsx'."),
+):
+    """Export saved responses in CSV, JSON, or XLSX format.
+
+    Supports the same filters as /api/saved plus min_score and max_score.
+    CSV format includes formula-injection defense.
+    JSON format provides structured data for programmatic use.
+    XLSX format provides Excel-compatible spreadsheets.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="saved_export",
+        limit=30,
+        window_seconds=60,
+        message="Too many exports. Please wait.",
+    )
+    
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "feature_not_allowed", "message": "Saved responses require Plus or Pro."},
+        )
+    
+    # Build query with same filters as get_saved
+    q = db.query(SavedResponse).filter(SavedResponse.user_id == user.id)
+    
+    if search:
+        safe_search = sanitize_model_optional_text(search, max_length=100, field_name="search")
+        if safe_search:
+            escaped = _escape_like(safe_search)
+            pattern = f"%{escaped}%"
+            q = q.filter(
+                or_(
+                    SavedResponse.prompt.ilike(pattern, escape="\\"),
+                    SavedResponse.one_liner.ilike(pattern, escape="\\"),
+                )
+            )
+    
+    if persona_id:
+        q = q.filter(SavedResponse.persona_id == persona_id)
+    
+    if min_score is not None:
+        q = q.filter(SavedResponse.score >= min_score)
+    
+    if max_score is not None:
+        q = q.filter(SavedResponse.score <= max_score)
+    
+    # Apply sort
+    if sort == "oldest":
+        q = q.order_by(SavedResponse.saved_at.asc())
+    elif sort == "score":
+        q = q.order_by(SavedResponse.score.desc().nullslast())
+    else:  # newest (default)
+        q = q.order_by(SavedResponse.saved_at.desc())
+    
+    saved_items = q.all()
+    
+    def _csv_safe(value) -> str:
+        """Escape value for CSV to prevent formula injection."""
+        if value is None:
+            return ""
+        s = str(value)
+        if s.startswith(("=", "+", "-", "@")):
+            return "'" + s
+        return s
+    
+    from arena.core.datetime_utils import utcnow_naive
+    from fastapi.responses import Response
+    from arena.core.http_headers import content_disposition_attachment
+    
+    export_timestamp = utcnow_naive()
+    
+    if format == "json":
+        # JSON export format
+        items = []
+        for item in saved_items:
+            items.append({
+                "id": item.id,
+                "session_id": item.session_id,
+                "agent_id": item.agent_id,
+                "persona_id": item.persona_id,
+                "persona_name": item.persona_name,
+                "persona_color": item.persona_color,
+                "prompt": item.prompt,
+                "one_liner": item.one_liner,
+                "verdict": item.verdict,
+                "score": item.score,
+                "confidence": item.confidence,
+                "saved_at": item.saved_at.isoformat() if item.saved_at else None,
+            })
+        
+        export_data = {
+            "metadata": {
+                "export_format": "json",
+                "exported_at": export_timestamp.isoformat(),
+                "total_count": len(items),
+                "filters": {
+                    "search": search,
+                    "persona_id": persona_id,
+                    "min_score": min_score,
+                    "sort": sort,
+                },
+            },
+            "data": items,
+        }
+        
+        filename = f"arena-saved-{user.id}-{export_timestamp.strftime('%Y%m%d-%H%M%S')}.json"
+        headers = {
+            "Content-Disposition": content_disposition_attachment(filename),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        }
+        return Response(
+            content=json.dumps(export_data, indent=2, default=str),
+            media_type="application/json; charset=utf-8",
+            headers=headers,
+        )
+    
+    elif format == "xlsx":
+        # XLSX export format
+        if not OPENPYXL_AVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "xlsx_export_unavailable",
+                    "message": "XLSX export requires openpyxl package. Please install it.",
+                },
+            )
+        
+        wb = Workbook()
+        
+        # Add Summary sheet first
+        summary_ws = wb.active
+        summary_ws.title = "Summary"
+        
+        # Summary information
+        summary_ws.append(["Arena Saved Responses Export"])
+        summary_ws.append([""])
+        summary_ws.append(["Export Details:"])
+        summary_ws.append(["Format:", "XLSX"])
+        summary_ws.append(["Exported At:", export_timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')])
+        summary_ws.append(["Total Records:", len(saved_items)])
+        summary_ws.append([""])
+        summary_ws.append(["Filters Applied:"])
+        summary_ws.append(["Search:", search or "None"])
+        summary_ws.append(["Persona:", persona_id or "All"])
+        summary_ws.append(["Min Score:", str(min_score) if min_score is not None else "None"])
+        summary_ws.append(["Sort:", sort])
+        summary_ws.append([""])
+        summary_ws.append(["User ID:", user.id])
+        
+        # Style summary sheet
+        from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+        from openpyxl.styles.colors import Color
+        
+        bold_font = Font(bold=True)
+        gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+        
+        # Style summary header
+        summary_ws["A1"].font = Font(bold=True, size=14, color=Color("0066CC"))
+        summary_ws["A1"].alignment = Alignment(horizontal='center')
+        
+        # Style key-value pairs
+        for row in summary_ws.iter_rows(min_row=3, max_row=13, min_col=1, max_col=2):
+            for cell in row:
+                cell.border = thin_border
+                if cell.column == 1:  # Key column
+                    cell.font = bold_font
+                    cell.fill = gray_fill
+        
+        # Set column widths for summary
+        summary_ws.column_dimensions["A"].width = 20
+        summary_ws.column_dimensions["B"].width = 30
+        
+        # Add Data sheet
+        data_ws = wb.create_sheet(title="Data")
+        
+        # Write header
+        headers_row = [
+            "ID", "Session ID", "Agent ID", "Persona ID", "Persona Name", "Persona Color",
+            "Prompt", "One Liner", "Verdict", "Score", "Confidence", "Saved At"
+        ]
+        data_ws.append(headers_row)
+        
+        # Style header row
+        header_fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
+        header_font = Font(bold=True, color=Color("FFFFFF"))
+        header_alignment = Alignment(horizontal='center')
+        
+        for cell in data_ws[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+        
+        # Write data rows
+        for item in saved_items:
+            row = [
+                item.id,
+                item.session_id,
+                item.agent_id,
+                item.persona_id,
+                item.persona_name,
+                item.persona_color,
+                item.prompt[:500] if item.prompt else "",  # Truncate long prompts
+                item.one_liner,
+                item.verdict[:500] if item.verdict else "",  # Truncate long verdicts
+                item.score,
+                item.confidence,
+                item.saved_at.isoformat() if item.saved_at else "",
+            ]
+            data_ws.append(row)
+        
+        # Style data cells
+        for row in data_ws.iter_rows(min_row=2):  # Skip header
+            for cell in row:
+                cell.border = thin_border
+                # Right align numbers
+                if cell.column in [9, 10, 11]:  # Score, Confidence, Saved At
+                    cell.alignment = Alignment(horizontal='right')
+                # Left align text
+                else:
+                    cell.alignment = Alignment(horizontal='left', wrap_text=True)
+        
+        # Auto-adjust column widths for data sheet
+        for col in data_ws.columns:
+            max_length = 0
+            column = col[0].column_letter  # Get the column name
+            for cell in col:
+                try:
+                    cell_length = len(str(cell.value)) if cell.value else 0
+                    if cell_length > max_length:
+                        max_length = cell_length
+                except:
+                    pass
+            adjusted_width = (max_length + 2) * 1.2
+            data_ws.column_dimensions[column].width = max(10, min(adjusted_width, 80))  # Cap at 80
+        
+        # Freeze header row
+        data_ws.freeze_panes = "A2"
+        
+        # Set data sheet as active (more intuitive for users)
+        wb.active = data_ws
+        
+        # Save workbook to bytes
+        xlsx_buffer = io.BytesIO()
+        wb.save(xlsx_buffer)
+        xlsx_buffer.seek(0)
+        
+        filename = f"arena-saved-{user.id}-{export_timestamp.strftime('%Y%m%d-%H%M%S')}.xlsx"
+        headers = {
+            "Content-Disposition": content_disposition_attachment(filename),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        }
+        return Response(
+            content=xlsx_buffer.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers,
+        )
+    
+    # CSV export format (default)
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "id",
+        "session_id",
+        "agent_id",
+        "persona_id",
+        "persona_name",
+        "persona_color",
+        "prompt",
+        "one_liner",
+        "verdict",
+        "score",
+        "confidence",
+        "saved_at",
+    ])
+    
+    # Write rows
+    for item in saved_items:
+        writer.writerow([
+            _csv_safe(item.id),
+            _csv_safe(item.session_id),
+            _csv_safe(item.agent_id),
+            _csv_safe(item.persona_id),
+            _csv_safe(item.persona_name),
+            _csv_safe(item.persona_color),
+            _csv_safe(item.prompt[:500] if item.prompt else ""),  # Truncate long prompts
+            _csv_safe(item.one_liner),
+            _csv_safe(item.verdict[:500] if item.verdict else ""),  # Truncate long verdicts
+            _csv_safe(item.score),
+            _csv_safe(item.confidence),
+            _csv_safe(item.saved_at.isoformat() if item.saved_at else ""),
+        ])
+    
+    filename = f"arena-saved-{user.id}-{export_timestamp.strftime('%Y%m%d-%H%M%S')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
+# Keep backward compatibility with old CSV-only endpoint
+@router.get("/saved/export.csv")
+async def export_saved_csv_legacy(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    search: Optional[str] = Query(None, max_length=100),
+    persona_id: Optional[str] = Query(None, max_length=50),
+    min_score: Optional[int] = Query(None, ge=0, le=100),
+    sort: str = Query("newest"),
+):
+    """Legacy CSV-only export endpoint - redirects to new unified export with format=csv."""
+    from fastapi import Request
+    from fastapi.responses import RedirectResponse
+    
+    # Build query parameters for redirect
+    params = []
+    if search:
+        params.append(f"search={search}")
+    if persona_id:
+        params.append(f"persona_id={persona_id}")
+    if min_score is not None:
+        params.append(f"min_score={min_score}")
+    if sort != "newest":
+        params.append(f"sort={sort}")
+    params.append("format=csv")
+    
+    query_string = "&".join(params) if params else "format=csv"
+    return RedirectResponse(url=f"/api/saved/export?{query_string}", status_code=307)

@@ -204,9 +204,10 @@ async def test_history_clamps_limit(app_client, make_user, db_session):
     item = _seed_watch(db_session, user_id=user.id)
     db_session.commit()
 
-    # limit=9999 → clamps internally; route should still 200
+    # limit=9999 → exceeds Query(le=200); FastAPI rejects with 422
     res = await app_client.get(
         f"/api/agent/watchlist/{item.id}/history?limit=9999",
         headers=_pro_headers(user),
     )
-    assert res.status_code == 200
+    assert res.status_code == 422
+
