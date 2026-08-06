@@ -824,14 +824,18 @@ function App() {
               (scored.response?.one_liner || scored.response?.verdict || '').trim(),
             )
             .filter(Boolean);
-          void suggestFollowUps(data.prompt, verdicts)
+          void suggestFollowUps(data.prompt, verdicts, abortController.signal)
             .then((result) => {
+              // A new round, reset, or unmount may have aborted this round —
+              // never let a stale response repopulate the chips.
+              if (abortController.signal.aborted) return;
               setFollowUpSuggestions(result.suggestions || []);
               setFollowUpSuggestionsSource(
                 result.source === 'fallback' ? 'fallback' : 'llm',
               );
             })
             .catch(() => {
+              if (abortController.signal.aborted) return;
               setFollowUpSuggestions([]);
             });
 

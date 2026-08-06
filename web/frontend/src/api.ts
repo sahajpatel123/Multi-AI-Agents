@@ -1393,6 +1393,7 @@ const FOLLOWUP_SUGGESTION_TOTAL_MAX_CHARS = 12000;
 export async function suggestFollowUps(
   prompt: string,
   verdicts: string[],
+  signal?: AbortSignal,
 ): Promise<FollowUpSuggestionsResult> {
   const trimmed = verdicts
     .map((v) => (v || '').trim().slice(0, FOLLOWUP_SUGGESTION_VERDICT_MAX_CHARS))
@@ -1411,6 +1412,7 @@ export async function suggestFollowUps(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt, verdicts: kept }),
+    signal,
   });
   const data = await parseJsonSafely<
     FollowUpSuggestionsResult & { detail?: string | { message?: string } }

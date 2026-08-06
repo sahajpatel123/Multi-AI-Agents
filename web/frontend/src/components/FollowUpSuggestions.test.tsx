@@ -39,7 +39,7 @@ describe('FollowUpSuggestions', () => {
         onPick={() => {}}
       />,
     );
-    expect(screen.getByText(/offline suggestions/i)).toBeInTheDocument();
+    expect(screen.getByText(/built-in suggestions/i)).toBeInTheDocument();
   });
 
   it('fires onPick with the picked suggestion', () => {

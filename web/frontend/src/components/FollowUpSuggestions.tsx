@@ -32,7 +32,7 @@ export function FollowUpSuggestions({
         <Sparkles width={13} height={13} aria-hidden />
         {source === 'llm'
           ? 'Keep digging'
-          : 'Keep digging — offline suggestions'}
+          : 'Keep digging — built-in suggestions'}
       </p>
       <div className="followup-suggestions__chips">
         {suggestions.map((suggestion, index) => (

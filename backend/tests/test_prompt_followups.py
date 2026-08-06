@@ -217,6 +217,30 @@ async def test_followups_falls_back_when_empty(
 
 
 @pytest.mark.asyncio
+async def test_followups_falls_back_when_llm_call_raises(
+    app_client,
+    auth_headers,
+    monkeypatch,
+):
+    """A provider outage must not surface as a 500 — fall back instead."""
+    import arena.routes.prompt as prompt_router
+
+    async def boom(*args, **kwargs):
+        raise RuntimeError("provider outage")
+
+    monkeypatch.setattr(prompt_router, "call_llm", boom)
+    res = await app_client.post(
+        "/api/prompt/followups",
+        json={"prompt": "still me", "verdicts": _verdicts()},
+        headers=auth_headers(),
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["source"] == "fallback"
+    assert body["suggestions"] == FALLBACK_SUGGESTIONS
+
+
+@pytest.mark.asyncio
 async def test_followups_passes_round_as_data_not_instructions(
     app_client,
     auth_headers,

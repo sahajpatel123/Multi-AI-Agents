@@ -492,15 +492,22 @@ async def suggest_followups(
 
     route = get_route_for_task("prompt_followups")
     context = build_suggestion_context(body.prompt, body.verdicts)
-    text, _, _ = await call_llm(
-        client=route["client"],
-        provider=route["provider"],
-        model_id=route["model_id"],
-        system_prompt=SUGGESTION_SYSTEM_PROMPT,
-        user_prompt=context,
-        temperature=0.7,
-        max_tokens=route["max_tokens"],
-    )
+    try:
+        text, _, _ = await call_llm(
+            client=route["client"],
+            provider=route["provider"],
+            model_id=route["model_id"],
+            system_prompt=SUGGESTION_SYSTEM_PROMPT,
+            user_prompt=context,
+            temperature=0.7,
+            max_tokens=route["max_tokens"],
+        )
+    except Exception:  # noqa: BLE001 — provider outages must fall back, never 500
+        logger.warning(
+            "follow-up suggestions: LLM call failed, using deterministic fallback",
+            exc_info=True,
+        )
+        text = None
 
     suggestions = parse_suggestions(text)
     if suggestions:
