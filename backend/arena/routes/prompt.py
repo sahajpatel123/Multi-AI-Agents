@@ -39,6 +39,7 @@ from arena.core.observability import (
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.agents import get_all_agents, get_persona_id_for_agent
 from arena.core.orchestrator import Orchestrator
+from arena.core.followup import format_follow_up_context
 from arena.core.persona_integrity import check_integrity
 from arena.core.response_shaper import assemble_payload
 from arena.core.scorer import Scorer
@@ -272,6 +273,7 @@ async def submit_prompt(
             db=db if memory_enabled else None,
             session_id=session_id,
             tracker=tracker,
+            request_context=format_follow_up_context(body.context),
         )
         agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
 
@@ -525,6 +527,7 @@ async def stream_prompt(
                 db=db if memory_enabled else None,
                 session_id=session_id,
                 tracker=tracker,
+                request_context=format_follow_up_context(body.context),
             )
 
             while True:

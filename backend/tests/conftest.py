@@ -164,6 +164,33 @@ class StubAnthropicClient:
         self.messages = _StubMessagesResource(self)
 
 
+class _StubClaudeStream:
+    """Async context manager stand-in for anthropic's message stream.
+
+    The orchestrator's streaming path calls ``client.messages.stream(...)``
+    then iterates ``stream.text_stream``. The stub records the call like the
+    non-streaming path and replays ``response_text`` as one chunk so SSE
+    token/agent_done events fire without touching the network.
+    """
+
+    def __init__(self, parent: "StubAnthropicClient", text: str):
+        self._parent = parent
+        self._text = text
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def _text_stream(self):
+        yield self._text
+
+    @property
+    def text_stream(self):
+        return self._text_stream()
+
+
 class StubOpenAIClient:
     """Minimal async stand-in for openai.chat.completions.create."""
 
@@ -213,6 +240,10 @@ class _StubMessagesResource:
                 self.usage = type("Usage", (), {"input_tokens": 10, "output_tokens": 10})()
 
         return _Resp(self._parent.response_text)
+
+    def stream(self, **kwargs):
+        self._parent.calls.append(kwargs)
+        return _StubClaudeStream(self._parent, self._parent.response_text)
 
 
 @pytest.fixture

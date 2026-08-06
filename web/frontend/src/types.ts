@@ -40,6 +40,13 @@ export interface PromptResponse {
   timestamp: string;
 }
 
+export interface PromptContextItem {
+  role: 'user' | 'assistant';
+  agent_id?: string;
+  name?: string;
+  content: string;
+}
+
 export interface AgentConfig {
   agent_id: string;
   agent_number: number;

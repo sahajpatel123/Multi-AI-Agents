@@ -14,6 +14,11 @@ from arena.core.input_validation import (
     sanitize_model_optional_text,
     sanitize_model_text,
 )
+from arena.core.followup import (
+    FOLLOW_UP_MAX_ITEMS,
+    FOLLOW_UP_MAX_ITEM_CHARS,
+    FOLLOW_UP_MAX_TOTAL_CHARS,
+)
 
 
 class PromptCategory(str, Enum):
@@ -83,6 +88,15 @@ class PromptRequest(BaseModel):
 
     prompt: str = Field(..., min_length=1, max_length=2000, description="User's prompt")
     session_id: str | None = Field(None, description="Optional session ID for continuity")
+    # Follow-up context is bounded at the Pydantic level: at most 8 prior
+    # round messages, each capped at 1800 chars, with a 12k total budget so a
+    # single follow-up cannot blow up the per-agent context window. The
+    # formatter in core/followup.py re-truncates defensively anyway.
+    context: list["PromptContextItem"] | None = Field(
+        None,
+        max_length=FOLLOW_UP_MAX_ITEMS,
+        description="Optional prior-round messages giving the panel continuity",
+    )
     # persona_ids is bounded at the Pydantic level: the list has
     # max 4 entries (matching the 4-slot agent design) and each
     # string is max 50 chars (persona ids are short slugs like
@@ -112,6 +126,53 @@ class PromptRequest(BaseModel):
         if v is None:
             return v
         return [s[:50] for s in v]
+
+    @field_validator("context")
+    @classmethod
+    def validate_context(
+        cls, v: list["PromptContextItem"] | None
+    ) -> list["PromptContextItem"] | None:
+        if not v:
+            return v
+        total = sum(len(item.content) for item in v)
+        if total > FOLLOW_UP_MAX_TOTAL_CHARS:
+            raise ValueError(
+                f"context content is too long ({total} chars; "
+                f"max {FOLLOW_UP_MAX_TOTAL_CHARS})"
+            )
+        return v
+
+
+class PromptContextItem(BaseModel):
+    """One prior-round message included as context for a follow-up round.
+
+    ``role`` distinguishes the user's original question from each persona's
+    answer. Assistant items may carry ``agent_id``/``name`` so the formatted
+    transcript is readable by the models.
+    """
+
+    role: Literal["user", "assistant"] = Field(
+        ..., description="Speaker role: the user's question or a persona's answer"
+    )
+    agent_id: str | None = Field(
+        None, max_length=64, description="Slot id (agent_1..agent_4) for assistant items"
+    )
+    name: str | None = Field(
+        None, max_length=80, description="Display name for assistant items"
+    )
+    content: str = Field(
+        ...,
+        min_length=1,
+        max_length=FOLLOW_UP_MAX_ITEM_CHARS,
+        description="Message text (capped to keep context cheap)",
+    )
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, v: str) -> str:
+        return sanitize_model_text(
+            v, max_length=FOLLOW_UP_MAX_ITEM_CHARS, field_name="context.content"
+        )
 
 
 class IntegrityReport(BaseModel):

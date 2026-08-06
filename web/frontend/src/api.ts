@@ -3,6 +3,7 @@
 import { apiFetch as bearerApiFetch, fetchWithTimeout, type ApiFetchOptions } from './lib/apiFetch';
 import { clearTokens, getRefreshToken, setTokens } from './lib/tokenStorage';
 import {
+  PromptContextItem,
   PromptResponse,
   DebateRoundResponse,
   DebateMessage,
@@ -361,6 +362,7 @@ export async function submitPrompt(
   prompt: string,
   sessionId?: string,
   personaIds?: string[],
+  context?: PromptContextItem[],
 ): Promise<PromptResponse> {
   const response = await apiFetch(`/api/prompt`, {
     method: 'POST',
@@ -371,6 +373,7 @@ export async function submitPrompt(
       prompt,
       session_id: sessionId,
       persona_ids: personaIds,
+      context,
     }),
   });
 
@@ -455,11 +458,17 @@ export async function streamPrompt(
   sessionId?: string,
   personaIds?: string[],
   signal?: AbortSignal,
+  context?: PromptContextItem[],
 ): Promise<void> {
   const response = await apiFetch(`/api/prompt/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, session_id: sessionId, persona_ids: personaIds }),
+    body: JSON.stringify({
+      prompt,
+      session_id: sessionId,
+      persona_ids: personaIds,
+      context,
+    }),
     signal,
   });
 

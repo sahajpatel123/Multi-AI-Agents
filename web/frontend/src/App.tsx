@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PromptInput } from './components/PromptInput';
+import { FollowUpBar } from './components/FollowUpBar';
 import { AgentCard } from './components/AgentCard';
 import { DebateMode } from './components/DebateMode';
 import { DiscussMode } from './components/DiscussMode';
@@ -30,6 +31,7 @@ import { copyToClipboard } from './lib/clipboard';
 import { downloadMarkdownFile } from './lib/downloadTextFile';
 import { safeLocalStorage } from './lib/safeStorage';
 import { formatArenaExport, formatArenaWinnerExport } from './lib/arenaExport';
+import { buildFollowUpContext } from './lib/followUpContext';
 import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
 import { isScrollNearBottom, shouldAutoScrollChat } from './lib/chatScroll';
 import { scrollBehavior } from './lib/motion';
@@ -60,6 +62,7 @@ import {
   ScoredAgent,
   SessionData,
   SessionTurn,
+  PromptContextItem,
 } from './types';
 
 const AGENT_IDS = ['agent_1', 'agent_2', 'agent_3', 'agent_4'] as const;
@@ -694,7 +697,7 @@ function App() {
     setIsSidebarOpen(false);
   }, [sessionData, user]);
 
-  const handleSubmit = async (prompt: string) => {
+  const handleSubmit = async (prompt: string, followUpContext?: PromptContextItem[]) => {
     if (quotaExhausted) {
       showPlusUpgrade(
         isFree
@@ -853,7 +856,7 @@ function App() {
           setError(data.message || data.detail || 'Something went wrong');
           setPhase('idle');
         },
-      }, existingSessionId, personaIds, abortController.signal);
+      }, existingSessionId, personaIds, abortController.signal, followUpContext);
     } catch (err) {
       if (flushTimer.current) clearInterval(flushTimer.current);
       setStreamPreviews({});
@@ -1171,6 +1174,20 @@ function App() {
       return;
     }
     void handleSubmit(prompt);
+  };
+
+  /** Ask the whole panel a follow-up with the previous round as context. */
+  const handleFollowUpSubmit = (prompt: string) => {
+    if (!response) return;
+    const context = buildFollowUpContext(response, (agentId) => {
+      const persona = getPersonaForAgentId(agentId);
+      return persona?.name || AGENTS[agentId]?.name;
+    });
+    if (context.length === 0) {
+      void handleSubmit(prompt);
+      return;
+    }
+    void handleSubmit(prompt, context);
   };
 
   const handleExamplePromptClick = (prompt: string) => {
@@ -2102,6 +2119,14 @@ function App() {
                 }} />
                 {EXAMPLE_PROMPTS[activeExamplePromptIndex]}
               </button>
+            )}
+
+            {isDone && response && !focusedAgentId && (
+              <FollowUpBar
+                onSubmit={handleFollowUpSubmit}
+                disabled={quotaExhausted}
+                disabledTitle="Daily Arena message limit reached"
+              />
             )}
 
             <PromptInput

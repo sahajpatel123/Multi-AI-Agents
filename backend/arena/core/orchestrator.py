@@ -153,10 +153,14 @@ class Orchestrator:
         tool_context: str = "",
         persona_ids: list[str] | None = None,
         memory_context: str = "",
+        request_context: str = "",
     ) -> AgentResponse:
         """Call a single agent and parse its response"""
         try:
-            base_system_prompt = self._prepend_memory_context(agent.system_prompt, memory_context)
+            base_system_prompt = agent.system_prompt
+            if request_context:
+                base_system_prompt = f"{base_system_prompt}\n\n{request_context}"
+            base_system_prompt = self._prepend_memory_context(base_system_prompt, memory_context)
             # Inject tool context into system prompt if available
             system_prompt = self._inject_tool_context(base_system_prompt, tool_context)
             
@@ -257,6 +261,7 @@ class Orchestrator:
         db: Session | None = None,
         session_id: str | None = None,
         tracker: LatencyTracker | None = None,
+        request_context: str | None = None,
     ) -> tuple[list[AgentResponse], list[str]]:
         """
         Run all agents in parallel and collect responses.
@@ -296,6 +301,7 @@ class Orchestrator:
                 tool_context,
                 persona_ids,
                 memory_contexts.get(agent.agent_id, ""),
+                request_context or "",
             )
             for agent in active_agents
         ]
@@ -371,13 +377,17 @@ class Orchestrator:
         tool_context: str = "",
         persona_ids: list[str] | None = None,
         memory_context: str = "",
+        request_context: str = "",
     ) -> AgentResponse:
         """Stream a single agent's response, pushing tokens to a shared queue."""
         full_text = ""
         start_time = time.monotonic()
         token_count = 0
         try:
-            base_system_prompt = self._prepend_memory_context(agent.system_prompt, memory_context)
+            base_system_prompt = agent.system_prompt
+            if request_context:
+                base_system_prompt = f"{base_system_prompt}\n\n{request_context}"
+            base_system_prompt = self._prepend_memory_context(base_system_prompt, memory_context)
             # Inject tool context into system prompt if available
             system_prompt = self._inject_tool_context(base_system_prompt, tool_context)
 
@@ -469,6 +479,7 @@ class Orchestrator:
         db: Session | None = None,
         session_id: str | None = None,
         tracker: LatencyTracker | None = None,
+        request_context: str | None = None,
     ) -> tuple[asyncio.Queue, list[asyncio.Task], list[str]]:
         """
         Start streaming all agents in parallel.
@@ -514,6 +525,7 @@ class Orchestrator:
                             tool_context,
                             persona_ids,
                             memory_contexts.get(agent.agent_id, ""),
+                            request_context or "",
                         )
                     )
                     for agent in active_agents
