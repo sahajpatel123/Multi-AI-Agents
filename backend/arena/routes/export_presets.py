@@ -191,6 +191,19 @@ class ExportPresetBulkDelete(BaseModel):
     force: bool = Field(default=False, description="Set to true to allow deletion of default preset")
 
 
+class ExportPresetReorderItem(BaseModel):
+    id: int = Field(..., ge=1, description="ID of the preset to reposition")
+
+
+class ExportPresetReorderBody(BaseModel):
+    items: list[ExportPresetReorderItem] = Field(
+        ...,
+        min_items=1,
+        max_items=EXPORT_PRESETS_MAX_PER_USER,
+        description="Ordered list of preset IDs; list index becomes the new position",
+    )
+
+
 @router.get("/export-presets")
 async def list_export_presets(
     user: UserResponse = Depends(get_current_user_required),
@@ -983,6 +996,7 @@ async def duplicate_export_preset(
         search=original.search,
         persona_id=original.persona_id,
         min_score=original.min_score,
+        max_score=original.max_score,
         sort=original.sort,
         position=original.position + 1,  # Place after original
         is_default=False,  # Duplicates are never default
@@ -1005,7 +1019,7 @@ async def duplicate_export_preset(
 
 @router.post("/export-presets/reorder")
 async def reorder_export_presets(
-    body: list[dict],
+    body: ExportPresetReorderBody,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -1028,12 +1042,11 @@ async def reorder_export_presets(
             },
         )
     
-    # Validate that each preset belongs to the user and update positions
-    for i, item in enumerate(body):
-        preset_id = item.get("id")
-        if not preset_id:
-            continue
-        
+    # Validate that each preset belongs to the user and update positions.
+    # Items that don't belong to the caller are skipped (no existence oracle).
+    updated_count = 0
+    for i, item in enumerate(body.items):
+        preset_id = item.id
         preset = (
             db.query(ExportPreset)
             .filter(
@@ -1045,12 +1058,13 @@ async def reorder_export_presets(
         
         if preset:
             preset.position = i
+            updated_count += 1
     
     db.commit()
     
     return {
         "status": "reordered",
-        "updated_count": len([item for item in body if item.get("id")]),
+        "updated_count": updated_count,
     }
 
 
@@ -1240,6 +1254,7 @@ async def import_export_presets(
                 search=preset_data.get("search"),
                 persona_id=preset_data.get("persona_id"),
                 min_score=preset_data.get("min_score"),
+                max_score=preset_data.get("max_score"),
                 sort=preset_data.get("sort", "newest"),
                 position=next_position,
                 is_default=False,  # Imported presets are never default

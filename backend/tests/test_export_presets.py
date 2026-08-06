@@ -490,6 +490,33 @@ async def test_duplicate_export_preset(app_client, make_user, db_session, cleanu
 
 
 @pytest.mark.asyncio
+async def test_duplicate_export_preset_preserves_max_score(app_client, make_user, db_session, cleanup_export_presets):
+    """Test that duplicating a preset preserves the max_score filter."""
+    user = cleanup_export_presets
+
+    create_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Original", "format": "json", "min_score": 50, "max_score": 80},
+        headers=_pro_headers(user),
+    )
+    original_id = create_res.json()["id"]
+
+    dup_res = await app_client.post(
+        f"/api/export-presets/{original_id}/duplicate",
+        headers=_pro_headers(user),
+    )
+    assert dup_res.status_code == 200
+
+    get_res = await app_client.get(
+        f"/api/export-presets/{dup_res.json()['new_id']}",
+        headers=_pro_headers(user),
+    )
+    dup_preset = get_res.json()
+    assert dup_preset["min_score"] == 50
+    assert dup_preset["max_score"] == 80
+
+
+@pytest.mark.asyncio
 async def test_reorder_export_presets(app_client, make_user, db_session, cleanup_export_presets):
     """Test reordering export presets."""
     user = cleanup_export_presets
@@ -513,13 +540,34 @@ async def test_reorder_export_presets(app_client, make_user, db_session, cleanup
     
     reorder_res = await app_client.post(
         "/api/export-presets/reorder",
-        json=reorder_body,
+        json={"items": reorder_body},
         headers=_pro_headers(user),
     )
     assert reorder_res.status_code == 200
     assert reorder_res.json()["status"] == "reordered"
     assert reorder_res.json()["updated_count"] == 3
     
+    # Reorder again with a foreign preset mixed in - only owned presets count
+    foreign_user = make_user(email="pro_presets_foreign@example.com", tier=UserTier.PRO)
+    foreign_res = await app_client.post(
+        "/api/export-presets",
+        json={"name": "Foreign Preset"},
+        headers=_pro_headers(foreign_user),
+    )
+    foreign_id = foreign_res.json()["id"]
+
+    reorder_res = await app_client.post(
+        "/api/export-presets/reorder",
+        json={"items": [{"id": preset_ids[2]}, {"id": preset_ids[1]}, {"id": preset_ids[0]}, {"id": foreign_id}]},
+        headers=_pro_headers(user),
+    )
+    assert reorder_res.status_code == 200
+    assert reorder_res.json()["updated_count"] == 3
+
+    # Remove the foreign preset so it doesn't affect the owned list below
+    db_session.query(ExportPreset).filter(ExportPreset.id == foreign_id).delete()
+    db_session.commit()
+
     # Check the order is updated
     list_res = await app_client.get(
         "/api/export-presets",
@@ -1452,11 +1500,14 @@ async def test_export_import_roundtrip(app_client, make_user, db_session, cleanu
     user = cleanup_export_presets
     
     # Create some presets
-    original_names = ["Roundtrip Preset 1", "Roundtrip Preset 2"]
-    for name in original_names:
+    original_presets = [
+        {"name": "Roundtrip Preset 1", "description": "Description for Roundtrip Preset 1", "min_score": 40, "max_score": 70},
+        {"name": "Roundtrip Preset 2", "description": "Description for Roundtrip Preset 2", "format": "json", "search": "Bitcoin"},
+    ]
+    for preset_data in original_presets:
         await app_client.post(
             "/api/export-presets",
-            json={"name": name, "description": f"Description for {name}"},
+            json=preset_data,
             headers=_pro_headers(user),
         )
     
@@ -1505,8 +1556,15 @@ async def test_export_import_roundtrip(app_client, make_user, db_session, cleanu
     )
     assert list_res.json()["total"] == 2
     restored_names = [p["name"] for p in list_res.json()["presets"]]
-    for name in original_names:
-        assert name in restored_names
+    for preset_data in original_presets:
+        assert preset_data["name"] in restored_names
+
+    # Verify max_score survived the export/import roundtrip
+    restored_presets = {p["name"]: p for p in list_res.json()["presets"]}
+    assert restored_presets["Roundtrip Preset 1"]["min_score"] == 40
+    assert restored_presets["Roundtrip Preset 1"]["max_score"] == 70
+    assert restored_presets["Roundtrip Preset 2"]["format"] == "json"
+    assert restored_presets["Roundtrip Preset 2"]["search"] == "Bitcoin"
 
 
 @pytest.mark.asyncio
