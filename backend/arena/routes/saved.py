@@ -17,6 +17,7 @@ Functionality:
 import csv
 import io
 import json
+import logging
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -38,6 +39,8 @@ from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
 from arena.db_models import SavedResponse
 from arena.models.schemas import UserResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["saved"])
 
@@ -690,7 +693,7 @@ async def export_saved(
                     if cell_length > max_length:
                         max_length = cell_length
                 except:
-                    pass
+                    logger.debug("Cell length measurement failed", exc_info=True)
             adjusted_width = (max_length + 2) * 1.2
             data_ws.column_dimensions[column].width = max(10, min(adjusted_width, 80))  # Cap at 80
         

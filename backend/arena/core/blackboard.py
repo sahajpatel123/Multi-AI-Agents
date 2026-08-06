@@ -1,3 +1,4 @@
+import time
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
@@ -396,3 +397,38 @@ def request_cancel(task_id: str) -> Optional[Blackboard]:
 def remove_blackboard(task_id: str) -> None:
     with _active_tasks_lock:
         active_tasks.pop(task_id, None)
+
+
+# Terminal-cancel registry. Once a pipeline drops its blackboard there is
+# no in-memory record of the outcome; the orchestration watcher needs to
+# know a child stopped as CANCELLED so it can stop the rest of the run
+# instead of polling until its 10-minute deadline. Entries expire after
+# a fixed TTL so this dict stays bounded.
+_CANCELLED_TASK_TTL_S = 15 * 60
+_cancelled_tasks: dict[str, float] = {}
+
+
+def note_task_cancelled(task_id: str) -> None:
+    """Record that a task ended as CANCELLED (survives blackboard removal)."""
+    with _active_tasks_lock:
+        now = time.monotonic()
+        expired = [
+            tid
+            for tid, ts in _cancelled_tasks.items()
+            if now - ts > _CANCELLED_TASK_TTL_S
+        ]
+        for tid in expired:
+            _cancelled_tasks.pop(tid, None)
+        _cancelled_tasks[task_id] = now
+
+
+def is_task_cancelled(task_id: str) -> bool:
+    """True if a task was recorded as CANCELLED within the TTL window."""
+    with _active_tasks_lock:
+        ts = _cancelled_tasks.get(task_id)
+        if ts is None:
+            return False
+        if time.monotonic() - ts > _CANCELLED_TASK_TTL_S:
+            _cancelled_tasks.pop(task_id, None)
+            return False
+        return True

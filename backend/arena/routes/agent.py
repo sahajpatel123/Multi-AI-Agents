@@ -36,6 +36,8 @@ from arena.core.blackboard import (
     _filter_generic_dict_keys,
     create_blackboard,
     get_blackboard,
+    is_task_cancelled,
+    note_task_cancelled,
     request_cancel,
     remove_blackboard,
 )
@@ -909,10 +911,37 @@ def _orchestration_any_task_failed(task_ids: list[str]) -> bool:
     return False
 
 
+def _orchestration_any_task_cancelled(task_ids: list[str]) -> bool:
+    for tid in task_ids:
+        # The blackboard is dropped as soon as a pipeline stops, so the
+        # registry (populated by the background runners) is the durable
+        # signal here; the live blackboard check only covers the narrow
+        # window before removal.
+        if is_task_cancelled(tid):
+            return True
+        bb = get_blackboard(tid)
+        if bb and bb.status == AgentStatus.CANCELLED:
+            return True
+    return False
+
+
 async def run_orchestration_watcher(orch_id: str, user_id: int, task_ids: list[str]) -> None:
     deadline = time.monotonic() + 600.0
     while time.monotonic() < deadline:
         await asyncio.sleep(5.0)
+
+        # An orchestration cancel endpoint (or another terminal path) can
+        # flip the row status out from under the watcher; stop polling as
+        # soon as the run is no longer active.
+        db = SessionLocal()
+        try:
+            orch_now = (
+                db.query(Orchestration).filter(Orchestration.id == orch_id).first()
+            )
+            if orch_now and orch_now.status != "running":
+                return
+        finally:
+            db.close()
 
         if _orchestration_any_task_failed(task_ids):
             db = SessionLocal()
@@ -921,6 +950,22 @@ async def run_orchestration_watcher(orch_id: str, user_id: int, task_ids: list[s
                 if orch:
                     orch.status = "failed"
                     db.commit()
+            finally:
+                db.close()
+            return
+
+        if _orchestration_any_task_cancelled(task_ids):
+            db = SessionLocal()
+            try:
+                orch = db.query(Orchestration).filter(Orchestration.id == orch_id).first()
+                if orch and orch.status == "running":
+                    orch.status = "cancelled"
+                    db.commit()
+                # One cancelled child means the user abandoned the run:
+                # stop the siblings too instead of leaving them to spend
+                # the remaining token budget.
+                for tid in task_ids:
+                    request_cancel(tid)
             finally:
                 db.close()
             return
@@ -1035,6 +1080,8 @@ async def run_agent_pipeline_background(
         # never remove entries — every completed/errored blackboard
         # would otherwise pin a full pipeline state object for the
         # lifetime of the process.
+        if bb.status == AgentStatus.CANCELLED:
+            note_task_cancelled(bb.task_id)
         remove_blackboard(task_id)
 
     if bb.status != AgentStatus.COMPLETE:
@@ -1154,6 +1201,8 @@ async def run_refinement_background(
         # Drop the in-memory blackboard after refinement completes
         # (success or failure). Without this the active_tasks dict
         # grows unbounded for users who refine often.
+        if bb.status == AgentStatus.CANCELLED:
+            note_task_cancelled(bb.task_id)
         remove_blackboard(task_id)
 
 
@@ -1176,6 +1225,8 @@ async def run_bridge_pipeline_background(task_id: str, user_id: int) -> None:
         # completes (success or failure). Mirrors the cycle 17 fix
         # in run_agent_pipeline_background so the active_tasks dict
         # doesn't grow unbounded for verify-from-arena traffic.
+        if bb.status == AgentStatus.CANCELLED:
+            note_task_cancelled(bb.task_id)
         remove_blackboard(task_id)
 
     if bb.status != AgentStatus.COMPLETE:
@@ -1768,10 +1819,18 @@ async def get_orchestration_status(
                 st = "complete"
             elif bb.status == AgentStatus.FAILED:
                 st = "failed"
+            elif bb.status == AgentStatus.CANCELLED:
+                st = "cancelled"
+                stage = "done"
             else:
                 st = "running"
         if row and (row.final_answer or "").strip():
             st = "complete"
+            stage = "done"
+        elif st == "running" and is_task_cancelled(tid):
+            # The blackboard is gone but the terminal registry still knows
+            # this child stopped as cancelled.
+            st = "cancelled"
             stage = "done"
 
         snippet = (text[:50] + "…") if len(text) > 50 else text
@@ -1794,6 +1853,88 @@ async def get_orchestration_status(
             "conflicts": orch.conflicts or [],
             "created_at": orch.created_at.isoformat() if orch.created_at else None,
             "child_tasks": child_tasks,
+        }
+    )
+
+
+@router.post("/orchestrate/{orch_id}/cancel")
+async def cancel_orchestration(
+    orch_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Cancel every in-flight child of a multi-task orchestration run.
+
+    The frontend polls an orchestration as a whole, so its Stop button had
+    no backend handle to stop the child pipelines — a multi-task run kept
+    spending token budget after the user abandoned it. This endpoint flips
+    the orchestration row to ``cancelled`` and sets the cooperative cancel
+    flag on every warm child, letting each pipeline stop at the next stage
+    boundary.
+
+    Idempotent: re-cancelling an already-cancelled run returns 200 and
+    re-requests cancel on any children still warm (e.g. a retry racing a
+    stage boundary).
+    """
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orchestrate_cancel",
+        limit=60,
+        window_seconds=60,
+        message="Too many cancel requests. Please slow down.",
+    )
+
+    orch = (
+        db.query(Orchestration)
+        .filter(Orchestration.id == orch_id.strip())
+        .first()
+    )
+    if not orch or orch.user_id != user.id:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Orchestration not found"},
+        )
+
+    task_ids = list(orch.task_ids or [])
+    if orch.status in ("complete", "failed"):
+        return JSONResponse(
+            content={
+                "orchestration_id": orch.id,
+                "status": orch.status,
+                "task_ids": task_ids,
+                "message": "Orchestration already finished",
+            }
+        )
+
+    if orch.status == "running":
+        orch.status = "cancelled"
+        db.commit()
+
+    cancelled_task_ids: list[str] = []
+    for tid in task_ids:
+        bb = request_cancel(tid)
+        if bb is not None and bb.status not in (
+            AgentStatus.COMPLETE,
+            AgentStatus.FAILED,
+            AgentStatus.CANCELLED,
+        ):
+            cancelled_task_ids.append(tid)
+
+    logger.info(
+        "[AGENT] Orchestration cancel requested orch_id=%s user_id=%s tasks=%d",
+        orch.id,
+        user.id,
+        len(cancelled_task_ids),
+    )
+    return JSONResponse(
+        content={
+            "orchestration_id": orch.id,
+            "status": "cancelled",
+            "task_ids": task_ids,
+            "cancelled_task_ids": cancelled_task_ids,
+            "message": "Cancellation requested for all tasks",
         }
     )
 
@@ -1868,7 +2009,10 @@ async def export_orchestration_pdf(
 async def list_orchestrations(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
-    status: str | None = Query(None, description="Filter by status: 'running', 'complete', 'failed'"),
+    status: str | None = Query(
+        None,
+        description="Filter by status: 'running', 'complete', 'failed', 'cancelled'",
+    ),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):

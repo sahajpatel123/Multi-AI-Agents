@@ -15,6 +15,7 @@ import {
   LocalExecutionRequiredError,
   addRoomTask,
   agentDetailMessage,
+  cancelAgentOrchestration,
   cancelAgentTask,
   challengeAgentAnswer,
   createRoom,
@@ -1491,11 +1492,28 @@ export function AgentPage() {
     runGenerationRef.current += 1;
     const taskId = activeTaskIdRef.current;
     activeTaskIdRef.current = null;
+    const orchId = orchActiveId;
+    setOrchActiveId(null);
+    setOrchPoll(null);
     setIsRunning(false);
     setIsRefining(false);
     setIsChallengingAnswer(false);
     setToastMessage('Stopped.');
-    if (taskId) {
+    if (orchId) {
+      // Multi-task runs are polled as an orchestration rather than per
+      // task, so Stop must ask the backend to cancel every child pipeline
+      // at once — otherwise the whole run keeps spending token budget.
+      void cancelAgentOrchestration(orchId)
+        .then((res) => {
+          if (res.status === 'cancelled') {
+            setToastMessage('Tasks cancelled.');
+          }
+        })
+        .catch(() => {
+          // Best-effort, same contract as task cancel: Stop must never
+          // fail on a network hiccup; the client poll is already gone.
+        });
+    } else if (taskId) {
       // Stop used to only abandon the client poll while the backend kept
       // running every remaining stage and spending token budget. Ask the
       // backend to stop at the next stage boundary too.
@@ -1510,7 +1528,7 @@ export function AgentPage() {
           // already stopped either way. Never fail Stop on a network hiccup.
         });
     }
-  }, []);
+  }, [orchActiveId]);
 
   useEffect(() => {
     if (!bridgeMeta?.taskId || !hasAgentAccess || authLoading) return;
@@ -1702,6 +1720,13 @@ export function AgentPage() {
             setOrchActiveId(null);
             setOrchPoll(null);
             void loadTaskHistory();
+          }
+        } else if (data.status === 'cancelled') {
+          if (!cancelled) {
+            setToastMessage('Multi-task run cancelled.');
+            setIsRunning(false);
+            setOrchActiveId(null);
+            setOrchPoll(null);
           }
         } else if (data.status === 'failed') {
           if (!cancelled) {

@@ -456,7 +456,7 @@ async def logout(request: Request, db: Session = Depends(get_db), user: User = D
         if isinstance(body, dict):
             refresh_token = (body.get("refresh_token") or "").strip()
     except Exception:
-        pass
+        logger.debug("Logout request body is not JSON", exc_info=True)
     if not refresh_token and auth_header.startswith("Bearer "):
         # Header-fallback: also accept a refresh token here so a client that
         # only ever sets one Authorization header can still log out cleanly.
@@ -510,7 +510,7 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
         if isinstance(body, dict):
             refresh_token = (body.get("refresh_token") or "").strip()
     except Exception:
-        pass
+        logger.debug("Refresh request body is not JSON", exc_info=True)
 
     if not refresh_token:
         auth_header = request.headers.get("Authorization", "")

@@ -14,6 +14,7 @@ Functionality:
   in routes/saved.py) without touching last_used_at.
 """
 
+import logging
 from typing import Optional
 from datetime import datetime
 
@@ -29,6 +30,8 @@ from arena.database import get_db
 from arena.db_models import ExportPreset
 from arena.models.schemas import UserResponse
 from arena.routes.saved import build_saved_export_query, normalize_export_search
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["export_presets"])
 
@@ -1380,6 +1383,7 @@ async def import_export_presets(
             next_position += 1
             
         except Exception as e:
+            logger.debug("Preset row import failed", exc_info=True)
             errors.append({
                 "index": len(imported_ids) + skipped_count,
                 "error": str(e),

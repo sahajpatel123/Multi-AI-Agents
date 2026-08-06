@@ -1129,6 +1129,30 @@ export async function getAgentOrchestration(orchId: string): Promise<any> {
   return data;
 }
 
+export type CancelAgentOrchestrationResponse = {
+  orchestration_id: string;
+  status: 'cancelled' | 'complete' | 'failed';
+  task_ids: string[];
+  cancelled_task_ids?: string[];
+  message?: string;
+};
+
+export async function cancelAgentOrchestration(
+  orchId: string,
+): Promise<CancelAgentOrchestrationResponse> {
+  const response = await apiFetch(
+    `/api/agent/orchestrate/${encodeURIComponent(orchId)}/cancel`,
+    { method: 'POST' },
+  );
+  const data = await parseJsonSafely<
+    CancelAgentOrchestrationResponse & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok || !data?.orchestration_id) {
+    throw new ApiError(getErrorMessage(data, 'Cancel failed'), response.status, data);
+  }
+  return data;
+}
+
 export async function exportOrchestrationPdf(orchId: string): Promise<Blob> {
   const response = await apiFetch(
     `/api/agent/orchestrate/${encodeURIComponent(orchId)}/export/pdf`,
