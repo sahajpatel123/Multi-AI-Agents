@@ -60,6 +60,24 @@ def _escape_like(value: str) -> str:
     )
 
 
+def normalize_export_search(value):
+    """Tolerantly normalize a search term for export/preview queries.
+
+    Write-time endpoints sanitize strictly (422 on junk), but presets saved
+    before that rule can hold whitespace-only or otherwise invalid search
+    values. Those must degrade to "no search filter" in the shared query
+    builder instead of raising a 500 for legacy rows.
+    """
+    if value is None:
+        return None
+    try:
+        return sanitize_model_optional_text(
+            value, max_length=100, field_name="search"
+        )
+    except ValueError:
+        return None
+
+
 def build_saved_export_query(
     db: Session,
     user_id: int,
@@ -78,17 +96,16 @@ def build_saved_export_query(
     """
     q = db.query(SavedResponse).filter(SavedResponse.user_id == user_id)
 
-    if search:
-        safe_search = sanitize_model_optional_text(search, max_length=100, field_name="search")
-        if safe_search:
-            escaped = _escape_like(safe_search)
-            pattern = f"%{escaped}%"
-            q = q.filter(
-                or_(
-                    SavedResponse.prompt.ilike(pattern, escape="\\"),
-                    SavedResponse.one_liner.ilike(pattern, escape="\\"),
-                )
+    safe_search = normalize_export_search(search)
+    if safe_search:
+        escaped = _escape_like(safe_search)
+        pattern = f"%{escaped}%"
+        q = q.filter(
+            or_(
+                SavedResponse.prompt.ilike(pattern, escape="\\"),
+                SavedResponse.one_liner.ilike(pattern, escape="\\"),
             )
+        )
 
     if persona_id:
         q = q.filter(SavedResponse.persona_id == persona_id)
@@ -476,11 +493,15 @@ async def export_saved(
             detail={"error": "feature_not_allowed", "message": "Saved responses require Plus or Pro."},
         )
     
+    # Normalize once so disclosed filters always match the query actually run
+    # (same parity contract as the preset preview endpoint).
+    safe_search = normalize_export_search(search)
+
     # Build query with same filters as get_saved (shared with preset preview)
     q = build_saved_export_query(
         db,
         user.id,
-        search=search,
+        search=safe_search,
         persona_id=persona_id,
         min_score=min_score,
         max_score=max_score,
@@ -529,7 +550,7 @@ async def export_saved(
                 "exported_at": export_timestamp.isoformat(),
                 "total_count": len(items),
                 "filters": {
-                    "search": search,
+                    "search": safe_search,
                     "persona_id": persona_id,
                     "min_score": min_score,
                     "max_score": max_score,
@@ -577,7 +598,7 @@ async def export_saved(
         summary_ws.append(["Total Records:", len(saved_items)])
         summary_ws.append([""])
         summary_ws.append(["Filters Applied:"])
-        summary_ws.append(["Search:", search or "None"])
+        summary_ws.append(["Search:", safe_search or "None"])
         summary_ws.append(["Persona:", persona_id or "All"])
         summary_ws.append(["Min Score:", str(min_score) if min_score is not None else "None"])
         summary_ws.append(["Max Score:", str(max_score) if max_score is not None else "None"])

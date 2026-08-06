@@ -28,7 +28,7 @@ from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
 from arena.db_models import ExportPreset, User
 from arena.models.schemas import UserResponse
-from arena.routes.saved import build_saved_export_query
+from arena.routes.saved import build_saved_export_query, normalize_export_search
 
 router = APIRouter(tags=["export_presets"])
 
@@ -992,11 +992,9 @@ async def preview_export_preset(
 
     # Normalize the stored search the same way the export endpoint does so the
     # disclosed filters always match the query actually run (parity contract).
-    safe_search = (
-        sanitize_model_text(preset.search, max_length=100, field_name="search")
-        if preset.search
-        else None
-    )
+    # Tolerant on purpose: presets saved before write-time sanitization may
+    # hold whitespace-only values that must degrade to "no filter", not 500.
+    safe_search = normalize_export_search(preset.search)
 
     q = build_saved_export_query(
         db,
@@ -1108,11 +1106,7 @@ async def duplicate_export_preset(
         description=original.description,
         preset_type=original.preset_type,
         format=original.format,
-        search=(
-            sanitize_model_text(original.search, max_length=100, field_name="search")
-            if original.search
-            else None
-        ),
+        search=normalize_export_search(original.search),
         persona_id=original.persona_id,
         min_score=original.min_score,
         max_score=original.max_score,

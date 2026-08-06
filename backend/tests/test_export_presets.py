@@ -2361,6 +2361,69 @@ async def test_preview_rate_limited(app_client, make_user, db_session):
 
 
 @pytest.mark.asyncio
+async def test_preview_legacy_whitespace_search_degrades_to_no_filter(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    """Legacy presets with whitespace-only search preview cleanly (no 500)."""
+    user = cleanup_export_presets
+    _seed_saved(db_session, user.id, "s1", prompt="Bitcoin question")
+    _seed_saved(db_session, user.id, "s2", prompt="Ethereum question")
+    db_session.commit()
+
+    preset_id = await _create_preset(app_client, user)
+    # Simulate a row written before write-time search sanitization existed.
+    preset = (
+        db_session.query(ExportPreset)
+        .filter(ExportPreset.id == preset_id)
+        .one()
+    )
+    preset.search = "   "
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    # Whitespace-only search must degrade to "no filter", and the disclosed
+    # filters must match what the query actually ran.
+    assert data["filters"]["search"] is None
+    assert data["match_count"] == 2
+    assert data["truncated"] is False
+
+
+@pytest.mark.asyncio
+async def test_duplicate_legacy_whitespace_search_produces_clean_copy(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    """Duplicating a legacy preset with dirty search stores a clean copy."""
+    user = cleanup_export_presets
+    preset_id = await _create_preset(app_client, user)
+    preset = (
+        db_session.query(ExportPreset)
+        .filter(ExportPreset.id == preset_id)
+        .one()
+    )
+    preset.search = "   "
+    db_session.commit()
+
+    res = await app_client.post(
+        f"/api/export-presets/{preset_id}/duplicate",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    new_id = res.json()["new_id"]
+
+    copy = (
+        db_session.query(ExportPreset)
+        .filter(ExportPreset.id == new_id)
+        .one()
+    )
+    assert copy.search is None
+
+
+@pytest.mark.asyncio
 async def test_preview_newest_order_ties_broken_by_id(
     app_client, make_user, db_session, cleanup_export_presets
 ):

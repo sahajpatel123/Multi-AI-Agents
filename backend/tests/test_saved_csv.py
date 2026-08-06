@@ -260,6 +260,31 @@ async def test_saved_json_export_with_filters(app_client, make_user, db_session)
 
 
 @pytest.mark.asyncio
+async def test_saved_json_export_whitespace_search_degrades_to_none(
+    app_client, make_user, db_session
+):
+    """Whitespace-only search must not 500 and must disclose as None (parity
+    with the preset preview contract: disclosed filters == query actually run).
+    """
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    _seed_saved(db_session, user.id, "save-1", prompt="Bitcoin question")
+    _seed_saved(db_session, user.id, "save-2", prompt="Ethereum question")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=json&search=%20%20%20",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["metadata"]["total_count"] == 2
+    assert data["metadata"]["filters"]["search"] is None
+    assert len(data["data"]) == 2
+
+
+@pytest.mark.asyncio
 async def test_saved_json_export_empty(app_client, make_user, db_session):
     """Test JSON export when user has no saved responses."""
     user = _make_pro(make_user)
