@@ -120,8 +120,14 @@ export function sortSidebarSaved<T extends SidebarSavedSortable>(
 
     switch (sort) {
       case 'pinned': {
-        const d = createdMs(b.timestamp) - createdMs(a.timestamp);
-        return d !== 0 ? d : tie(a, b);
+        // Match the backend's pinned sort: most recently pinned first,
+        // then most recently saved as a secondary key.
+        const pa = createdMs(a.pinned_at ?? a.timestamp);
+        const pb = createdMs(b.pinned_at ?? b.timestamp);
+        const d = pb - pa;
+        if (d !== 0) return d;
+        const t = createdMs(b.timestamp) - createdMs(a.timestamp);
+        return t !== 0 ? t : tie(a, b);
       }
       case 'oldest': {
         const d = createdMs(a.timestamp) - createdMs(b.timestamp);

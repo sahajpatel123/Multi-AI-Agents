@@ -10,7 +10,7 @@ Security:
 Functionality:
 - GET /saved supports search (prompt + one_liner substring), persona_id
   filter, score filter (min_score), pagination, and sort modes (newest /
-  oldest / score).
+  oldest / score / pinned).
 - DELETE /saved/bulk accepts a JSON list of ids for one-shot cleanup.
 """
 
@@ -270,6 +270,7 @@ async def get_saved(
         order_clauses = (
             SavedResponse.pinned_at.desc().nullslast(),
             SavedResponse.saved_at.desc(),
+            SavedResponse.id.desc(),
         )
     else:
         order_clauses = (SavedResponse.saved_at.desc(),)

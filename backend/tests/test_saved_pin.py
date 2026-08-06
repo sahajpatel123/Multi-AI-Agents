@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 
 from arena.core.datetime_utils import utcnow_naive
@@ -100,6 +102,36 @@ async def test_pinned_sort_puts_pinned_first(app_client, make_user, db_session):
     prompts = [item["prompt"] for item in res.json()["items"]]
     assert prompts[0] == "pinned"
     assert set(prompts) == {"old", "new", "pinned"}
+
+
+@pytest.mark.asyncio
+async def test_pinned_sort_orders_by_pinned_at_not_saved_at(app_client, make_user, db_session):
+    user = make_user(email="pin-order@test.com", tier=UserTier.PLUS)
+    pinned_later = _seed(
+        db_session,
+        user_id=user.id,
+        prompt="pinned-later",
+        agent_id="agent-A",
+        pinned_at=utcnow_naive(),
+    )
+    pinned_earlier = _seed(
+        db_session,
+        user_id=user.id,
+        prompt="pinned-earlier",
+        agent_id="agent-B",
+        pinned_at=utcnow_naive() - timedelta(days=1),
+    )
+    # Give the later-pinned row the older saved_at so the two orderings
+    # conflict: pinned_at must win over saved_at.
+    pinned_later.saved_at = utcnow_naive() - timedelta(days=7)
+    pinned_earlier.saved_at = utcnow_naive()
+    db_session.add_all([pinned_later, pinned_earlier])
+    db_session.commit()
+
+    res = await app_client.get("/api/saved?sort=pinned", headers=_pro_headers(user))
+    assert res.status_code == 200
+    prompts = [item["prompt"] for item in res.json()["items"]]
+    assert prompts == ["pinned-later", "pinned-earlier"]
 
 
 @pytest.mark.asyncio

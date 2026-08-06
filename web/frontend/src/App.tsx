@@ -666,19 +666,19 @@ function App() {
   const handleToggleSavedPin = useCallback(
     async (item: SavedResponseItem, pinned: boolean) => {
       try {
-        await setSavedResponsePinned(Number(item.id), pinned);
+        const result = await setSavedResponsePinned(Number(item.id), pinned);
         setSavedItems((current) =>
           current.map((saved) =>
             saved.id === item.id
               ? {
                   ...saved,
-                  pinned,
-                  pinned_at: pinned ? new Date().toISOString() : null,
+                  pinned: result.pinned,
+                  pinned_at: result.pinned_at ?? (pinned ? new Date().toISOString() : null),
                 }
               : saved,
           ),
         );
-        void track('saved_take_pinned', undefined, item.agent_id);
+        void track(pinned ? 'saved_take_pinned' : 'saved_take_unpinned', undefined, item.agent_id);
       } catch {
         setSaveSyncMessage(pinned ? "Couldn't pin take — try again." : "Couldn't unpin take — try again.");
       }

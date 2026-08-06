@@ -377,7 +377,15 @@ export async function deleteSavedResponse(id: number): Promise<void> {
   }
 }
 
-export async function setSavedResponsePinned(id: number, pinned: boolean): Promise<void> {
+export type SavedPinResult = {
+  pinned: boolean;
+  pinned_at: string | null;
+};
+
+export async function setSavedResponsePinned(
+  id: number,
+  pinned: boolean,
+): Promise<SavedPinResult> {
   const res = await apiFetch(`/api/saved/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -387,6 +395,13 @@ export async function setSavedResponsePinned(id: number, pinned: boolean): Promi
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
     throw new Error(getErrorMessage(err, 'Failed to update saved take'));
   }
+  const body = await parseJsonSafely<SavedPinResult>(res);
+  return (
+    body ?? {
+      pinned,
+      pinned_at: null,
+    }
+  );
 }
 
 export async function submitPrompt(
