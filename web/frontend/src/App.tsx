@@ -223,6 +223,10 @@ function App() {
   const agentCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const promptAbortRef = useRef<AbortController | null>(null);
   const discussAbortRef = useRef<AbortController | null>(null);
+  /** Context of the most recently started Arena round, so re-run replays it faithfully. */
+  const lastRoundContextRef = useRef<PromptContextItem[] | undefined>(undefined);
+  /** Prevents a double-click from starting two re-run rounds in the same tick. */
+  const rerunInFlightRef = useRef(false);
 
   const flushStreamPreviews = useCallback(() => {
     const next: Record<string, string> = {};
@@ -354,6 +358,9 @@ function App() {
     setCurrentPrompt(turn.prompt);
     setActiveTurnId(turn.turn_id);
     setPhase('done');
+    // A loaded turn has no live follow-up context; re-running it must replay
+    // the prompt alone rather than stale context from a previous round.
+    lastRoundContextRef.current = undefined;
   };
 
   const getResponseKey = useCallback((turnId: string, agentId: string) => `${turnId}:${agentId}`, []);
@@ -698,12 +705,17 @@ function App() {
     setPendingScrollTarget(null);
     setActiveTurnId(null);
     setFollowUpSuggestions([]);
+    lastRoundContextRef.current = undefined;
     tokenBuffers.current = {};
     focusedTokenBuffer.current = '';
     setIsSidebarOpen(false);
   }, [sessionData, user]);
 
-  const handleSubmit = async (prompt: string, followUpContext?: PromptContextItem[]) => {
+  const handleSubmit = async (
+    prompt: string,
+    followUpContext?: PromptContextItem[],
+    onStart?: () => void,
+  ) => {
     if (quotaExhausted) {
       showPlusUpgrade(
         isFree
@@ -713,6 +725,8 @@ function App() {
       return;
     }
 
+    onStart?.();
+    lastRoundContextRef.current = followUpContext ?? undefined;
     setStressFromAgentBanner(false);
     setCrossPollinateSourceTaskId(null);
     setCrossPollinateIntelScore(null);
@@ -1228,6 +1242,17 @@ function App() {
     handleFollowUpSubmit(suggestion);
   };
 
+  /** Replay the last completed round exactly: same prompt, same follow-up context. */
+  const handleReRunRound = () => {
+    if (rerunInFlightRef.current) return;
+    rerunInFlightRef.current = true;
+    void handleSubmit(currentPrompt, lastRoundContextRef.current, () => {
+      void track('arena_rerun_round');
+    }).finally(() => {
+      rerunInFlightRef.current = false;
+    });
+  };
+
   const handleExamplePromptClick = (prompt: string) => {
     setPresetPrompt(prompt);
     setPresetPromptNonce((prev) => prev + 1);
@@ -1498,10 +1523,8 @@ function App() {
                   {currentPrompt ? (
                     <ReRunRoundButton
                       prompt={currentPrompt}
-                      onReRun={() => {
-                        void track('arena_rerun_round');
-                        void handleSubmit(currentPrompt);
-                      }}
+                      compact={isMobile}
+                      onReRun={handleReRunRound}
                     />
                   ) : null}
                 </>

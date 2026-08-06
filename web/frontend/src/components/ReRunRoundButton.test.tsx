@@ -41,4 +41,13 @@ describe('ReRunRoundButton', () => {
     fireEvent.click(button);
     expect(onReRun).not.toHaveBeenCalled();
   });
+
+  it('keeps an accessible label when compact but hides the visible text', () => {
+    const { getByRole } = render(
+      <ReRunRoundButton prompt="Again" compact onReRun={() => {}} />,
+    );
+    const button = getByRole('button', { name: 'Re-run round' });
+    expect(button).not.toHaveTextContent('Re-run round');
+    expect(button).toHaveAttribute('title', 'Again');
+  });
 });

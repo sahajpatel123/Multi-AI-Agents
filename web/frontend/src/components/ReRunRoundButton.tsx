@@ -5,6 +5,8 @@ interface ReRunRoundButtonProps {
   prompt: string;
   /** Disables the button (e.g. while a round is streaming). */
   disabled?: boolean;
+  /** Icon-only presentation for narrow header layouts; keeps its tooltip and label. */
+  compact?: boolean;
   /** Fired when the user asks to run the same prompt again. */
   onReRun: () => void;
 }
@@ -17,6 +19,7 @@ interface ReRunRoundButtonProps {
 export function ReRunRoundButton({
   prompt,
   disabled = false,
+  compact = false,
   onReRun,
 }: ReRunRoundButtonProps) {
   if (!prompt.trim()) return null;
@@ -34,10 +37,11 @@ export function ReRunRoundButton({
         display: 'inline-flex',
         alignItems: 'center',
         gap: 6,
+        ...(compact ? { padding: '7px 10px' } : {}),
       }}
     >
       <RefreshCw width={12} height={12} aria-hidden />
-      Re-run round
+      {!compact ? 'Re-run round' : null}
     </button>
   );
 }
