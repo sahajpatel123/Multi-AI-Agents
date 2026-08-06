@@ -391,6 +391,7 @@ export async function deleteSavedResponse(id: number): Promise<void> {
 }
 
 export type SavedPinResult = {
+  id: number;
   pinned: boolean;
   pinned_at: string | null;
 };
@@ -408,13 +409,12 @@ export async function setSavedResponsePinned(
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
     throw new Error(getErrorMessage(err, 'Failed to update saved take'));
   }
-  const body = await parseJsonSafely<SavedPinResult>(res);
-  return (
-    body ?? {
-      pinned,
-      pinned_at: null,
-    }
-  );
+  const body = await parseJsonSafely<Partial<SavedPinResult>>(res);
+  return {
+    id: typeof body?.id === 'number' ? body.id : id,
+    pinned: typeof body?.pinned === 'boolean' ? body.pinned : pinned,
+    pinned_at: body?.pinned_at ?? null,
+  };
 }
 
 export async function submitPrompt(
