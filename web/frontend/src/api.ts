@@ -1566,6 +1566,28 @@ export async function deleteAgentTask(taskId: string): Promise<{ success: boolea
   return { success: true };
 }
 
+export type CancelAgentTaskResponse = {
+  task_id: string;
+  status: 'cancelling' | 'cancelled' | 'complete' | 'failed';
+  message?: string;
+};
+
+export async function cancelAgentTask(
+  taskId: string,
+): Promise<CancelAgentTaskResponse> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/cancel`,
+    { method: 'POST' },
+  );
+  const data = await parseJsonSafely<
+    CancelAgentTaskResponse & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok || !data?.task_id) {
+    throw new ApiError(getErrorMessage(data, 'Cancel failed'), response.status, data);
+  }
+  return data;
+}
+
 export async function getMemoryContext(task: string = ''): Promise<unknown> {
   const q = encodeURIComponent(task);
   const response = await apiFetch(`/api/agent/memory/context?task=${q}`);

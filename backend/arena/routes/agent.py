@@ -36,6 +36,7 @@ from arena.core.blackboard import (
     _filter_generic_dict_keys,
     create_blackboard,
     get_blackboard,
+    request_cancel,
     remove_blackboard,
 )
 from arena.core.llm_caller import call_llm
@@ -2294,6 +2295,83 @@ async def get_agent_status(
                 "synthesizer": {"status": complete},
                 "judge": {"status": complete},
             },
+        }
+    )
+
+
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_agent_task(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Request cooperative cancellation of an in-flight Agent Mode task.
+
+    Agent runs execute as background pipelines with no user-facing way to
+    stop them — the frontend Stop button only abandons the client poll,
+    while the backend keeps running the remaining 8 stages and spending
+    tokens. This endpoint flips a cancellation flag on the in-memory
+    blackboard; the pipeline checks it between stages and stops at the
+    next safe boundary (the already-running LLM call completes, everything
+    after it is skipped).
+
+    Idempotent: cancelling a task that is already finishing (or already
+    cancelled) returns 200 with the current state instead of an error.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_cancel",
+        limit=60,
+        window_seconds=60,
+        message="Too many cancel requests. Please slow down.",
+    )
+
+    bb = get_blackboard(task_id)
+    if bb is None:
+        # No in-memory blackboard: the task either never existed, belongs
+        # to another user, or already finished and was cleaned up. Only
+        # persisted rows (completed tasks) get a friendly terminal reply;
+        # everything else is a plain 404 to avoid leaking task existence.
+        row = (
+            db.query(AgentTaskRow)
+            .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+            .first()
+        )
+        if row:
+            return JSONResponse(
+                content={
+                    "task_id": row.task_id,
+                    "status": "complete",
+                    "message": "Task already finished",
+                }
+            )
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+
+    _ensure_task_owner(bb, user)
+    if bb.status in (AgentStatus.COMPLETE, AgentStatus.FAILED, AgentStatus.CANCELLED):
+        return JSONResponse(
+            content={
+                "task_id": bb.task_id,
+                "status": _stage_status_value(bb.status),
+                "message": "Task already finished",
+            }
+        )
+
+    request_cancel(task_id)
+    logger.info(
+        "[AGENT] Cancel requested task_id=%s user_id=%s",
+        bb.task_id,
+        user.id,
+    )
+    return JSONResponse(
+        content={
+            "task_id": bb.task_id,
+            "status": "cancelling",
+            "message": "Cancellation requested",
         }
     )
 

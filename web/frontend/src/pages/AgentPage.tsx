@@ -15,6 +15,7 @@ import {
   LocalExecutionRequiredError,
   addRoomTask,
   agentDetailMessage,
+  cancelAgentTask,
   challengeAgentAnswer,
   createRoom,
   crossPollinateAgentAnswer,
@@ -746,6 +747,8 @@ export function AgentPage() {
   const [crossPollinateBusy, setCrossPollinateBusy] = useState(false);
   /** Bumped to cancel in-flight poll loops (run / refine / bridge). */
   const runGenerationRef = useRef(0);
+  /** Task id currently being polled, so Stop can cancel it on the backend. */
+  const activeTaskIdRef = useRef<string | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conduraCtaOpen, setConduraCtaOpen] = useState(false);
@@ -1375,15 +1378,23 @@ export function AgentPage() {
 
   const pollAgentTaskUntilDone = useCallback(async (taskId: string) => {
     const generation = runGenerationRef.current;
+    activeTaskIdRef.current = taskId;
+    const clearActiveTask = () => {
+      if (activeTaskIdRef.current === taskId) activeTaskIdRef.current = null;
+    };
     const maxAttempts = 60;
     for (let attempts = 0; attempts < maxAttempts; attempts++) {
       if (runGenerationRef.current !== generation) {
         // User stopped (or a newer run superseded this poll).
+        clearActiveTask();
         return;
       }
       try {
         const statusData = await getAgentStatus(taskId);
-        if (runGenerationRef.current !== generation) return;
+        if (runGenerationRef.current !== generation) {
+          clearActiveTask();
+          return;
+        }
         const stages = statusData.stages || {};
 
         const next: Partial<Record<StageId, string>> = {};
@@ -1405,11 +1416,25 @@ export function AgentPage() {
         setCompletedStages(STAGE_ORDER.filter((s) => stages[s]?.status === 'complete'));
 
         const st = String(statusData.status || '').toLowerCase();
+        if (st === 'cancelled') {
+          clearActiveTask();
+          setIsRunning(false);
+          setIsRefining(false);
+          setCurrentStage('done');
+          setToastMessage('Task cancelled.');
+          return;
+        }
         if (st === 'complete' || st === 'failed') {
-          if (runGenerationRef.current !== generation) return;
+          if (runGenerationRef.current !== generation) {
+            clearActiveTask();
+            return;
+          }
           try {
             const resultData = (await getAgentResult(taskId)) as AgentResult;
-            if (runGenerationRef.current !== generation) return;
+            if (runGenerationRef.current !== generation) {
+              clearActiveTask();
+              return;
+            }
             if (resultData) {
               setResult(resultData);
               setCompletedStages([...STAGE_ORDER]);
@@ -1424,19 +1449,27 @@ export function AgentPage() {
               }
             }
           } catch (resultErr) {
-            if (runGenerationRef.current !== generation) return;
+            if (runGenerationRef.current !== generation) {
+              clearActiveTask();
+              return;
+            }
             setError(resultErr instanceof Error ? resultErr.message : 'Could not load agent result');
           }
           setIsRunning(false);
           setIsRefining(false);
+          clearActiveTask();
           return;
         }
       } catch (pollErr) {
-        if (runGenerationRef.current !== generation) return;
+        if (runGenerationRef.current !== generation) {
+          clearActiveTask();
+          return;
+        }
         if (pollErr instanceof ApiError && (pollErr.status === 401 || pollErr.status === 403)) {
           setError(pollErr.message || 'Authentication required');
           setIsRunning(false);
           setIsRefining(false);
+          clearActiveTask();
           return;
         }
         await wait(5000);
@@ -1444,18 +1477,39 @@ export function AgentPage() {
       }
       await wait(3000);
     }
-    if (runGenerationRef.current !== generation) return;
+    if (runGenerationRef.current !== generation) {
+      clearActiveTask();
+      return;
+    }
     setError('Task timed out. Please try again.');
     setIsRunning(false);
     setIsRefining(false);
+    clearActiveTask();
   }, []);
 
   const handleStopAgentWork = useCallback(() => {
     runGenerationRef.current += 1;
+    const taskId = activeTaskIdRef.current;
+    activeTaskIdRef.current = null;
     setIsRunning(false);
     setIsRefining(false);
     setIsChallengingAnswer(false);
     setToastMessage('Stopped.');
+    if (taskId) {
+      // Stop used to only abandon the client poll while the backend kept
+      // running every remaining stage and spending token budget. Ask the
+      // backend to stop at the next stage boundary too.
+      void cancelAgentTask(taskId)
+        .then((res) => {
+          if (res.status === 'cancelling' || res.status === 'cancelled') {
+            setToastMessage('Task cancelled.');
+          }
+        })
+        .catch(() => {
+          // The task may have just finished server-side; the poll is
+          // already stopped either way. Never fail Stop on a network hiccup.
+        });
+    }
   }, []);
 
   useEffect(() => {
@@ -1506,6 +1560,7 @@ export function AgentPage() {
     );
     if (t.length < 10 || isRunning) return;
     if (selectedTemplate && !allTemplateSlotsFilled) return;
+    activeTaskIdRef.current = null;
     runGenerationRef.current += 1;
     setError(null);
     setBridgeMeta(null);
@@ -1598,6 +1653,7 @@ export function AgentPage() {
     if (!hasAgentAccess) return;
     const qs = multiTasks.slice(0, activeTaskCount).map((t) => t.trim());
     if (qs.length !== activeTaskCount || qs.some((q) => q.length < 10) || isRunning) return;
+    activeTaskIdRef.current = null;
     runGenerationRef.current += 1;
     try {
       sessionStorage.removeItem('pending_room_slug');
@@ -1800,6 +1856,7 @@ export function AgentPage() {
       );
       return;
     }
+    activeTaskIdRef.current = null;
     runGenerationRef.current += 1;
     // Clear only after we know we'll send; restore on failure so the draft isn't lost.
     setFollowUp('');
@@ -2592,6 +2649,7 @@ export function AgentPage() {
 
   const handleChallengeAnswer = useCallback(async () => {
     if (!result || isChallengingAnswer) return;
+    activeTaskIdRef.current = null;
     const generation = ++runGenerationRef.current;
     setChallengesVisible(true);
     setIsChallengingAnswer(true);

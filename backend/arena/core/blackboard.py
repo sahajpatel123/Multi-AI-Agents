@@ -13,6 +13,7 @@ class AgentStatus(str, Enum):
     COMPLETE = "complete"
     FAILED = "failed"
     NEEDS_REVISION = "needs_revision"
+    CANCELLED = "cancelled"
 
 
 class StageStatus(str, Enum):
@@ -164,6 +165,11 @@ class Blackboard:
     user_id: int = 0
     task: str = ""
     status: AgentStatus = AgentStatus.PENDING
+    # Cooperative cancellation flag. The cancel endpoint sets this on the
+    # in-memory blackboard; the pipeline checks it between stages so an
+    # in-flight task stops at the next safe boundary instead of burning
+    # further LLM calls (and token budget) after the user hits Stop.
+    cancel_requested: bool = False
     current_stage: str = "planner"
     iterations: int = 0
     max_iterations: int = 2
@@ -369,6 +375,22 @@ def create_blackboard(user_id: int, task: str) -> Blackboard:
 def get_blackboard(task_id: str) -> Optional[Blackboard]:
     with _active_tasks_lock:
         return active_tasks.get(task_id)
+
+
+def request_cancel(task_id: str) -> Optional[Blackboard]:
+    """Request cooperative cancellation of an in-memory agent task.
+
+    Sets the ``cancel_requested`` flag on the blackboard (if present) and
+    returns it. The pipeline observes the flag between stages and stops as
+    soon as the current stage yields. Returns None when no active task
+    matches — the caller decides whether that is a 404 or an already-finished
+    task.
+    """
+    with _active_tasks_lock:
+        bb = active_tasks.get(task_id)
+        if bb is not None:
+            bb.cancel_requested = True
+        return bb
 
 
 def remove_blackboard(task_id: str) -> None:
