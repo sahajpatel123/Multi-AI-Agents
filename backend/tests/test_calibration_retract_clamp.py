@@ -26,8 +26,13 @@ from arena.core.auth import orm_user_to_response  # noqa: F401
 
 @pytest.mark.asyncio
 async def test_retract_response_clamps_huge_delta(monkeypatch):
-    """The retract_and_rerate response clamps huge delta to
-    [-100, 100] (the Arena score range)."""
+    """The retract_and_rerate response never leaks huge raw scores.
+
+    _system_score_from_task clamps the raw score to [0, 100] at the
+    source, so a persisted final_score of 999 becomes 100 and the delta
+    (100 - 3*20) is 40. The response then re-clamps defensively to
+    [-100, 100] — both layers together keep the JSON output bounded.
+    """
     from arena.routes import calibration
 
     # Build a fake user
@@ -72,8 +77,9 @@ async def test_retract_response_clamps_huge_delta(monkeypatch):
         db=fake_db,
     )
 
-    # The response clamps the huge delta and system_score
-    assert result["delta"] == 100  # clamped to 100
+    # The response clamps the huge system_score at the source (999 → 100)
+    # and keeps the resulting delta inside the Arena range.
+    assert result["delta"] == 40  # 100 - 3*20, bounded by [-100, 100]
     assert result["system_score"] == 100  # clamped to 100
     assert result["verdict"] == "You underestimated this answer"
     assert result["status"] == "replaced"
@@ -83,8 +89,12 @@ async def test_retract_response_clamps_huge_delta(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_retract_response_clamps_huge_negative(monkeypatch):
-    """The retract_and_rerate response clamps huge negative
-    delta to [-100, 100] (the Arena score range)."""
+    """The retract_and_rerate response clamps huge negative raw scores.
+
+    _system_score_from_task clamps -999 to 0, so the delta (0 - 1*20)
+    is -20 — bounded by the defensive [-100, 100] response clamp and
+    rendered with the matching verdict.
+    """
     from arena.routes import calibration
 
     user = SimpleNamespace(id=1, email="x@x.com")
@@ -122,6 +132,6 @@ async def test_retract_response_clamps_huge_negative(monkeypatch):
         db=fake_db,
     )
 
-    assert result["delta"] == -100  # clamped from -999 to -100
+    assert result["delta"] == -20  # 0 - 1*20, bounded by [-100, 100]
     assert result["system_score"] == 0  # clamped from -999 to 0 (system_score is [0, 100])
     assert result["verdict"] == "You overestimated this answer"
