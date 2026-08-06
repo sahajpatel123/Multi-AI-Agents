@@ -95,6 +95,7 @@ def build_saved_export_query(
     min_score: Optional[int],
     max_score: Optional[int],
     sort: str,
+    pinned: Optional[bool] = None,
 ):
     """Build the saved-response query shared by exports and previews.
 
@@ -123,6 +124,12 @@ def build_saved_export_query(
 
     if max_score is not None:
         q = q.filter(SavedResponse.score <= max_score)
+
+    if pinned is not None:
+        if pinned:
+            q = q.filter(SavedResponse.pinned_at.isnot(None))
+        else:
+            q = q.filter(SavedResponse.pinned_at.is_(None))
 
     if sort == "oldest":
         q = q.order_by(SavedResponse.saved_at.asc(), SavedResponse.id.asc())
@@ -191,6 +198,12 @@ class PinRequest(BaseModel):
     pinned: bool
 
 
+class BulkPinRequest(BaseModel):
+    """Body schema for PATCH /saved/bulk-pin — pin or unpin many takes."""
+    ids: list[int] = Field(..., min_length=1, max_length=SAVED_MAX_PER_USER)
+    pinned: bool
+
+
 @router.get("/saved")
 async def get_saved(
     user: UserResponse = Depends(get_current_user_required),
@@ -201,6 +214,7 @@ async def get_saved(
     persona_id: Optional[str] = Query(None, max_length=50, description="Restrict to one persona."),
     min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score (inclusive)."),
     max_score: Optional[int] = Query(None, ge=0, le=100, description="Maximum score (inclusive)."),
+    pinned: Optional[bool] = Query(None, description="Restrict to pinned (true) or unpinned (false) saved takes."),
     sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', 'score', or 'pinned'."),
 ) -> dict:
     """List saved responses with optional search, filter, sort, pagination.
@@ -227,7 +241,7 @@ async def get_saved(
             "page": 1,
             "per_page": per_page,
             "total_pages": 0,
-            "filters": {"search": None, "persona_id": None, "min_score": None, "max_score": None, "sort": "newest"},
+            "filters": {"search": None, "persona_id": None, "min_score": None, "max_score": None, "pinned": None, "sort": "newest"},
         }
 
     q = db.query(SavedResponse).filter(SavedResponse.user_id == user.id)
@@ -255,6 +269,12 @@ async def get_saved(
     
     if max_score is not None:
         q = q.filter(SavedResponse.score <= max_score)
+
+    if pinned is not None:
+        if pinned:
+            q = q.filter(SavedResponse.pinned_at.isnot(None))
+        else:
+            q = q.filter(SavedResponse.pinned_at.is_(None))
 
     # Sort. Unknown values fall back to newest so a stale frontend can't
     # break the endpoint; 'score' puts nulls last so untested takes don't
@@ -314,8 +334,92 @@ async def get_saved(
             "persona_id": persona_id,
             "min_score": min_score,
             "max_score": max_score,
+            "pinned": pinned,
             "sort": sort,
         },
+    }
+
+
+@router.patch("/saved/bulk-pin")
+async def set_saved_bulk_pinned(
+    body: BulkPinRequest,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Pin or unpin multiple saved takes at once.
+
+    Ownership is scoped the same way as single pin/delete: rows that do not
+    belong to the caller are silently ignored (no 403/404 existence oracle).
+    Pinning respects SAVED_PIN_MAX; once the cap is reached, remaining
+    unpinned rows are skipped and `pin_limit_reached` is set so the UI can
+    tell the user why the bulk action was partial.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="saved_bulk_pin",
+        limit=10,
+        window_seconds=60,
+        message="Too many saved-take bulk pin changes. Please slow down.",
+    )
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Saved responses require a Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+
+    unique_ids = list(dict.fromkeys(body.ids))
+    rows = (
+        db.query(SavedResponse)
+        .filter(
+            SavedResponse.id.in_(unique_ids),
+            SavedResponse.user_id == user.id,
+        )
+        .all()
+    )
+    by_id = {row.id: row for row in rows}
+
+    if body.pinned:
+        pinned_count = (
+            db.query(SavedResponse.id)
+            .filter(
+                SavedResponse.user_id == user.id,
+                SavedResponse.pinned_at.isnot(None),
+            )
+            .count()
+        )
+        unpinned_ids = [
+            i for i in unique_ids if i in by_id and by_id[i].pinned_at is None
+        ]
+        remaining_slots = max(0, SAVED_PIN_MAX - int(pinned_count))
+        to_pin = unpinned_ids[:remaining_slots]
+        pin_limit_reached = len(to_pin) < len(unpinned_ids)
+        for i in to_pin:
+            by_id[i].pinned_at = utcnow_naive()
+        already_pinned_ids = [
+            i for i in unique_ids if i in by_id and by_id[i].pinned_at is not None
+        ]
+        applied_ids = to_pin + [
+            i for i in already_pinned_ids if i not in set(to_pin)
+        ]
+    else:
+        for i in unique_ids:
+            if i in by_id:
+                by_id[i].pinned_at = None
+        applied_ids = [i for i in unique_ids if i in by_id]
+        pin_limit_reached = False
+
+    db.commit()
+    return {
+        "status": "ok",
+        "requested": len(unique_ids),
+        "applied": len(applied_ids),
+        "ids": applied_ids,
+        "pinned": body.pinned,
+        "pin_limit_reached": pin_limit_reached,
     }
 
 
@@ -567,12 +671,14 @@ async def export_saved(
     persona_id: Optional[str] = Query(None, max_length=50, description="Restrict to one persona."),
     min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score (inclusive)."),
     max_score: Optional[int] = Query(None, ge=0, le=100, description="Maximum score (inclusive)."),
+    pinned: Optional[bool] = Query(None, description="Restrict to pinned (true) or unpinned (false) saved takes."),
     sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', or 'score'."),
     format: str = Query("csv", description="Export format: 'csv' (default), 'json', or 'xlsx'."),
 ):
     """Export saved responses in CSV, JSON, or XLSX format.
 
-    Supports the same filters as /api/saved plus min_score and max_score.
+    Supports the same filters as /api/saved plus min_score, max_score, and
+    pinned (true = pinned only, false = unpinned only).
     CSV format includes formula-injection defense.
     JSON format provides structured data for programmatic use.
     XLSX format provides Excel-compatible spreadsheets.
@@ -604,6 +710,7 @@ async def export_saved(
         min_score=min_score,
         max_score=max_score,
         sort=sort,
+        pinned=pinned,
     )
 
     saved_items = q.all()
@@ -652,6 +759,7 @@ async def export_saved(
                     "persona_id": persona_id,
                     "min_score": min_score,
                     "max_score": max_score,
+                    "pinned": pinned,
                     "sort": sort,
                 },
             },
@@ -700,6 +808,7 @@ async def export_saved(
         summary_ws.append(["Persona:", persona_id or "All"])
         summary_ws.append(["Min Score:", str(min_score) if min_score is not None else "None"])
         summary_ws.append(["Max Score:", str(max_score) if max_score is not None else "None"])
+        summary_ws.append(["Pinned:", "pinned only" if pinned is True else ("unpinned only" if pinned is False else "All")])
         summary_ws.append(["Sort:", sort])
         summary_ws.append([""])
         summary_ws.append(["User ID:", user.id])
@@ -717,7 +826,7 @@ async def export_saved(
         summary_ws["A1"].alignment = Alignment(horizontal='center')
         
         # Style key-value pairs
-        for row in summary_ws.iter_rows(min_row=3, max_row=13, min_col=1, max_col=2):
+        for row in summary_ws.iter_rows(min_row=3, max_row=14, min_col=1, max_col=2):
             for cell in row:
                 cell.border = thin_border
                 if cell.column == 1:  # Key column
@@ -873,6 +982,7 @@ async def export_saved_csv_legacy(
     search: Optional[str] = Query(None, max_length=100),
     persona_id: Optional[str] = Query(None, max_length=50),
     min_score: Optional[int] = Query(None, ge=0, le=100),
+    pinned: Optional[bool] = Query(None),
     sort: str = Query("newest"),
 ):
     """Legacy CSV-only export endpoint - redirects to new unified export with format=csv."""
@@ -896,6 +1006,8 @@ async def export_saved_csv_legacy(
         params.append(f"persona_id={persona_id}")
     if min_score is not None:
         params.append(f"min_score={min_score}")
+    if pinned is not None:
+        params.append(f"pinned={'true' if pinned else 'false'}")
     if sort != "newest":
         params.append(f"sort={sort}")
     params.append("format=csv")

@@ -417,6 +417,39 @@ export async function setSavedResponsePinned(
   };
 }
 
+export type SavedBulkPinResult = {
+  status: 'ok';
+  requested: number;
+  applied: number;
+  ids: number[];
+  pinned: boolean;
+  pin_limit_reached: boolean;
+};
+
+export async function setSavedResponsesPinned(
+  ids: number[],
+  pinned: boolean,
+): Promise<SavedBulkPinResult> {
+  const res = await apiFetch(`/api/saved/bulk-pin`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, pinned }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(getErrorMessage(err, 'Failed to update saved takes'));
+  }
+  const body = await parseJsonSafely<Partial<SavedBulkPinResult>>(res);
+  return {
+    status: 'ok',
+    requested: typeof body?.requested === 'number' ? body.requested : ids.length,
+    applied: typeof body?.applied === 'number' ? body.applied : 0,
+    ids: Array.isArray(body?.ids) ? body.ids : [],
+    pinned: typeof body?.pinned === 'boolean' ? body.pinned : pinned,
+    pin_limit_reached: body?.pin_limit_reached === true,
+  };
+}
+
 export async function submitPrompt(
   prompt: string,
   sessionId?: string,

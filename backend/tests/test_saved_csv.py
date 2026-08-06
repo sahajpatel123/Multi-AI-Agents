@@ -14,7 +14,16 @@ def _pro_headers(user):
     return {"Authorization": f"Bearer {create_access_token(user.id, user.email)}"}
 
 
-def _seed_saved(db_session, user_id, saved_id, prompt="Test prompt", one_liner="Test answer", score=85, persona_id=None):
+def _seed_saved(
+    db_session,
+    user_id,
+    saved_id,
+    prompt="Test prompt",
+    one_liner="Test answer",
+    score=85,
+    persona_id=None,
+    pinned_at=None,
+):
     saved = SavedResponse(
         user_id=user_id,
         session_id=f"sess-{saved_id}",
@@ -28,6 +37,7 @@ def _seed_saved(db_session, user_id, saved_id, prompt="Test prompt", one_liner="
         score=score,
         confidence=90,
         saved_at=utcnow_naive(),
+        pinned_at=pinned_at,
     )
     db_session.add(saved)
     db_session.flush()
@@ -257,6 +267,60 @@ async def test_saved_json_export_with_filters(app_client, make_user, db_session)
     assert data["metadata"]["filters"]["persona_id"] == "analyst"
     assert len(data["data"]) == 1
     assert data["data"][0]["persona_id"] == "analyst"
+
+
+@pytest.mark.asyncio
+async def test_saved_csv_pinned_filter(app_client, make_user, db_session):
+    """CSV export with pinned=true must only include pinned takes."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    _seed_saved(
+        db_session,
+        user.id,
+        "save-1",
+        prompt="pinned row",
+        pinned_at=utcnow_naive(),
+    )
+    _seed_saved(db_session, user.id, "save-2", prompt="unpinned row")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=csv&pinned=true",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    text = res.text
+    assert "pinned row" in text
+    assert "unpinned row" not in text
+
+
+@pytest.mark.asyncio
+async def test_saved_json_export_discloses_pinned_filter(
+    app_client, make_user, db_session
+):
+    """JSON export metadata should disclose the pinned filter applied."""
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    _seed_saved(
+        db_session,
+        user.id,
+        "save-1",
+        prompt="pinned row",
+        pinned_at=utcnow_naive(),
+    )
+    _seed_saved(db_session, user.id, "save-2", prompt="unpinned row")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=json&pinned=true",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["metadata"]["filters"]["pinned"] is True
+    assert {row["prompt"] for row in body["data"]} == {"pinned row"}
 
 
 @pytest.mark.asyncio

@@ -27,6 +27,7 @@ import {
   saveResponse,
   deleteSavedResponse,
   setSavedResponsePinned,
+  setSavedResponsesPinned,
   verifyArenaAnswerInAgent,
   extractStreamingPreview,
   suggestFollowUps,
@@ -687,6 +688,48 @@ function App() {
               ? "Couldn't pin take — try again."
               : "Couldn't unpin take — try again.";
         setSaveSyncMessage(detail);
+      }
+    },
+    [],
+  );
+
+  const handleBulkPinSaved = useCallback(
+    async (ids: number[], pinned: boolean) => {
+      const appliedIds = new Set<number>();
+      let pinLimitReached = false;
+      try {
+        const result = await setSavedResponsesPinned(ids, pinned);
+        result.ids.forEach((id) => appliedIds.add(Number(id)));
+        pinLimitReached = result.pin_limit_reached;
+        setSavedItems((current) =>
+          current.map((saved) =>
+            appliedIds.has(Number(saved.id))
+              ? {
+                  ...saved,
+                  pinned,
+                  pinned_at: pinned ? saved.pinned_at ?? new Date().toISOString() : null,
+                }
+              : saved,
+          ),
+        );
+        if (pinLimitReached) {
+          setSaveSyncMessage(
+            pinned
+              ? 'Pin limit reached — some shown takes were not pinned.'
+              : null,
+          );
+        }
+        void track(pinned ? 'saved_takes_bulk_pinned' : 'saved_takes_bulk_unpinned', undefined);
+        return { applied: result.applied, pin_limit_reached: pinLimitReached };
+      } catch (err) {
+        const detail =
+          err instanceof Error && err.message
+            ? err.message
+            : pinned
+              ? "Couldn't pin shown takes — try again."
+              : "Couldn't unpin shown takes — try again.";
+        setSaveSyncMessage(detail);
+        throw err;
       }
     },
     [],
@@ -1430,6 +1473,7 @@ function App() {
           onToggleSavedPin={(item, pinned) => {
             void handleToggleSavedPin(item, pinned);
           }}
+          onBulkPinSaved={handleBulkPinSaved}
         />
       )}
 

@@ -115,6 +115,10 @@ interface SidebarProps {
   savedItems: SavedResponseItem[];
   onSavedItemClick: (item: SavedResponseItem) => void;
   onToggleSavedPin?: (item: SavedResponseItem, pinned: boolean) => void;
+  onBulkPinSaved?: (
+    ids: number[],
+    pinned: boolean,
+  ) => Promise<{ applied: number; pin_limit_reached: boolean }> | void;
 }
 
 type FilterValue = 'all' | PromptCategory;
@@ -138,6 +142,7 @@ export function Sidebar({
   savedItems,
   onSavedItemClick,
   onToggleSavedPin,
+  onBulkPinSaved,
 }: SidebarProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -167,6 +172,7 @@ export function Sidebar({
   const [copySavedFailed, setCopySavedFailed] = useState(false);
   const [copyAllSavedStatus, setCopyAllSavedStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadAllSavedStatus, setDownloadAllSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [bulkPinStatus, setBulkPinStatus] = useState<'idle' | 'busy' | 'done' | 'failed' | 'partial'>('idle');
   const [copyRecentsStatus, setCopyRecentsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadRecentsStatus, setDownloadRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   /** Per-recent row copy feedback: turn_id + kind. */
@@ -365,6 +371,13 @@ export function Sidebar({
   }, [downloadAllSavedStatus]);
 
   useEffect(() => {
+    if (bulkPinStatus === 'idle' || bulkPinStatus === 'busy') return;
+    const hold = motionDuration(bulkPinStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setBulkPinStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [bulkPinStatus]);
+
+  useEffect(() => {
     if (copyRecentsStatus === 'idle') return;
     const hold = motionDuration(copyRecentsStatus === 'failed' ? 2800 : 2000);
     const t = window.setTimeout(() => setCopyRecentsStatus('idle'), hold > 0 ? hold : 0);
@@ -462,6 +475,23 @@ export function Sidebar({
     const ok = downloadMarkdownFile(md, 'arena-saved-takes');
     setDownloadAllSavedStatus(ok ? 'done' : 'failed');
     if (ok) void track('saved_takes_list_downloaded');
+  };
+
+  const handleBulkPinSaved = async () => {
+    if (!onBulkPinSaved) return;
+    const ids = filteredSaved
+      .map((item) => Number(item.id))
+      .filter((id) => Number.isFinite(id));
+    if (ids.length === 0) return;
+    const shouldPin = savedPinFilter !== SIDEBAR_SAVED_PIN_ONLY;
+    setBulkPinStatus('busy');
+    try {
+      const result = await onBulkPinSaved(ids, shouldPin);
+      setBulkPinStatus(result?.pin_limit_reached ? 'partial' : 'done');
+      void track(shouldPin ? 'saved_takes_bulk_pinned' : 'saved_takes_bulk_unpinned');
+    } catch {
+      setBulkPinStatus('failed');
+    }
   };
 
   const buildRecentsMarkdown = () => {
@@ -1372,6 +1402,60 @@ export function Sidebar({
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
                     <button
                       type="button"
+                      disabled={bulkPinStatus === 'busy' || filteredSaved.length === 0}
+                      title={
+                        savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                          ? 'Unpin all shown saved takes'
+                          : 'Pin all shown saved takes'
+                      }
+                      aria-label={
+                        bulkPinStatus === 'busy'
+                          ? savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                            ? 'Unpinning shown saved takes'
+                            : 'Pinning shown saved takes'
+                          : savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                            ? 'Unpin all shown saved takes'
+                            : 'Pin all shown saved takes'
+                      }
+                      onClick={() => void handleBulkPinSaved()}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        cursor: bulkPinStatus === 'busy' ? 'default' : 'pointer',
+                        color:
+                          bulkPinStatus === 'failed'
+                            ? '#D85A30'
+                            : bulkPinStatus === 'partial'
+                              ? '#C9A227'
+                              : bulkPinStatus === 'done'
+                                ? '#5A8C6A'
+                                : '#F0B84E',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {bulkPinStatus === 'busy'
+                        ? savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                          ? 'Unpinning…'
+                          : 'Pinning…'
+                        : bulkPinStatus === 'done'
+                          ? savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                            ? 'Unpinned'
+                            : 'Pinned'
+                          : bulkPinStatus === 'partial'
+                            ? 'Pin limit'
+                            : bulkPinStatus === 'failed'
+                              ? 'Failed'
+                              : savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                                ? 'Unpin all'
+                                : 'Pin all'}
+                    </button>
+                    <button
+                      type="button"
                       title="Copy all saved takes as markdown"
                       aria-label={
                         copyAllSavedStatus === 'copied'
@@ -1442,7 +1526,9 @@ export function Sidebar({
                     </button>
                   </div>
                 </div>
-                {copyAllSavedStatus !== 'idle' || downloadAllSavedStatus !== 'idle' ? (
+                {copyAllSavedStatus !== 'idle' ||
+                downloadAllSavedStatus !== 'idle' ||
+                (bulkPinStatus !== 'idle' && bulkPinStatus !== 'busy') ? (
                   <div
                     role="status"
                     aria-live="polite"
@@ -1464,9 +1550,17 @@ export function Sidebar({
                         ? 'Could not copy saved takes'
                         : downloadAllSavedStatus === 'done'
                           ? 'Saved takes downloaded'
-                          : downloadAllSavedStatus === 'failed'
-                            ? 'Could not download saved takes'
-                            : ''}
+                        : downloadAllSavedStatus === 'failed'
+                          ? 'Could not download saved takes'
+                          : bulkPinStatus === 'done'
+                            ? savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                              ? 'Shown saved takes unpinned'
+                              : 'Shown saved takes pinned'
+                            : bulkPinStatus === 'partial'
+                              ? 'Pin limit reached — some shown takes were not pinned'
+                              : bulkPinStatus === 'failed'
+                                ? 'Could not update saved takes'
+                                : ''}
                   </div>
                 ) : null}
                 <div style={{ marginBottom: 8 }}>

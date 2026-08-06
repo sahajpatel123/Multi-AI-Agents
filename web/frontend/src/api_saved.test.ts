@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getSavedResponses, setSavedResponsePinned } from './api';
+import { getSavedResponses, setSavedResponsePinned, setSavedResponsesPinned } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
 vi.mock('./lib/apiFetch', () => ({
@@ -116,5 +116,59 @@ describe('saved take API helpers', () => {
       pinned: true,
       pinned_at: '2026-08-07T04:00:00Z',
     });
+  });
+
+  it('bulk-pins saved takes and normalizes the response', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: 'ok',
+          requested: 2,
+          applied: 2,
+          ids: [7, 8],
+          pinned: true,
+          pin_limit_reached: false,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await setSavedResponsesPinned([7, 8], true);
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/saved/bulk-pin',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ ids: [7, 8], pinned: true }),
+      }),
+    );
+    expect(result).toEqual({
+      status: 'ok',
+      requested: 2,
+      applied: 2,
+      ids: [7, 8],
+      pinned: true,
+      pin_limit_reached: false,
+    });
+  });
+
+  it('surfaces a partial pin-limit failure', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: 'ok',
+          requested: 3,
+          applied: 1,
+          ids: [9],
+          pinned: true,
+          pin_limit_reached: true,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await setSavedResponsesPinned([9, 10, 11], true);
+    expect(result.applied).toBe(1);
+    expect(result.pin_limit_reached).toBe(true);
+    expect(result.ids).toEqual([9]);
   });
 });

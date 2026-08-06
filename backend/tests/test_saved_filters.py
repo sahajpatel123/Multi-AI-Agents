@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from arena.core.datetime_utils import utcnow_naive
 from arena.db_models import SavedResponse, UserTier
 
 
@@ -462,3 +463,75 @@ async def test_bulk_delete_requires_auth(app_client):
         json={"ids": [1]},
     )
     assert res.status_code == 401
+
+
+# ─── Pinned filter ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_pinned_filter_returns_only_pinned(app_client, make_user, db_session):
+    user = make_user(email="pin-filter@test.com", tier=UserTier.PLUS)
+    pinned = _seed(db_session, user_id=user.id, prompt="pinned-a")
+    pinned.pinned_at = utcnow_naive()
+    unpinned = _seed(db_session, user_id=user.id, prompt="unpinned-b")
+    db_session.add_all([pinned, unpinned])
+    db_session.commit()
+
+    res = await app_client.get("/api/saved?pinned=true", headers=_pro_headers(user))
+    assert res.status_code == 200
+    body = res.json()
+    prompts = {item["prompt"] for item in body["items"]}
+    assert prompts == {"pinned-a"}
+    assert body["filters"]["pinned"] is True
+
+
+@pytest.mark.asyncio
+async def test_unpinned_filter_returns_only_unpinned(app_client, make_user, db_session):
+    user = make_user(email="unpin-filter@test.com", tier=UserTier.PLUS)
+    pinned = _seed(db_session, user_id=user.id, prompt="pinned-a")
+    pinned.pinned_at = utcnow_naive()
+    unpinned = _seed(db_session, user_id=user.id, prompt="unpinned-b")
+    db_session.add_all([pinned, unpinned])
+    db_session.commit()
+
+    res = await app_client.get("/api/saved?pinned=false", headers=_pro_headers(user))
+    assert res.status_code == 200
+    prompts = {item["prompt"] for item in res.json()["items"]}
+    assert prompts == {"unpinned-b"}
+
+
+@pytest.mark.asyncio
+async def test_pinned_filter_composes_with_search_and_persona(
+    app_client, make_user, db_session
+):
+    user = make_user(email="pin-compose@test.com", tier=UserTier.PLUS)
+    pinned = _seed(
+        db_session,
+        user_id=user.id,
+        prompt="quantum pinned",
+        persona_id="analyst",
+    )
+    pinned.pinned_at = utcnow_naive()
+    unpinned = _seed(
+        db_session,
+        user_id=user.id,
+        prompt="quantum unpinned",
+        persona_id="analyst",
+    )
+    other_pinned = _seed(
+        db_session,
+        user_id=user.id,
+        prompt="bitcoin pinned",
+        persona_id="philosopher",
+    )
+    other_pinned.pinned_at = utcnow_naive()
+    db_session.add_all([pinned, unpinned, other_pinned])
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved?pinned=true&search=quantum&persona_id=analyst",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    prompts = {item["prompt"] for item in res.json()["items"]}
+    assert prompts == {"quantum pinned"}
