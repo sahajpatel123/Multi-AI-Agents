@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchScoringAudit } from '../api';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ApiError, fetchScoringAudit } from '../api';
 import {
   AGENTS,
   type ScoringAuditConfidence,
@@ -8,6 +8,9 @@ import {
 } from '../types';
 import MicroLoader from './MicroLoader';
 import '../styles/scoring-audit-modal.css';
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 interface ScoringAuditModalProps {
   sessionId: string;
@@ -39,17 +42,27 @@ export function ScoringAuditModal({
   const [data, setData] = useState<ScoringAuditResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const titleId = useId();
 
   useEffect(() => {
-    closeRef.current?.focus();
+    const opener =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusTimer = window.setTimeout(() => closeRef.current?.focus(), 0);
+    return () => {
+      window.clearTimeout(focusTimer);
+      if (opener?.isConnected) opener.focus();
+    };
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setNotFound(false);
     setData(null);
 
     void fetchScoringAudit(sessionId)
@@ -59,6 +72,10 @@ export function ScoringAuditModal({
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        if (err instanceof ApiError && err.status === 404) {
+          setNotFound(true);
+          return;
+        }
         setError(err instanceof Error ? err.message : 'Could not load scoring audit.');
       })
       .finally(() => {
@@ -70,6 +87,15 @@ export function ScoringAuditModal({
     };
   }, [sessionId, retryKey]);
 
+  // Lock background scroll while the modal is open.
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
@@ -79,6 +105,40 @@ export function ScoringAuditModal({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Keep Tab focus inside the dialog.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const nodes = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ).filter((el) => {
+        if (el.hasAttribute('disabled') || el.getAttribute('aria-hidden') === 'true') {
+          return false;
+        }
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      if (nodes.length === 0) return;
+
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (event.shiftKey) {
+        if (active === first || !dialogRef.current.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !dialogRef.current.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const nameFor = useCallback(
     (id: string) => personaNameResolver?.(id) || agentDisplayName(id),
@@ -92,10 +152,17 @@ export function ScoringAuditModal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="sa-dialog" role="dialog" aria-modal="true" aria-label="Scoring audit">
+      <div
+        ref={dialogRef}
+        className="sa-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-busy={loading}
+      >
         <header className="sa-header">
           <div className="sa-header__copy">
-            <h2>Scoring audit</h2>
+            <h2 id={titleId}>Scoring audit</h2>
             <p>How the judge scored each mind, per round.</p>
           </div>
           <button
@@ -125,6 +192,13 @@ export function ScoringAuditModal({
               >
                 Retry
               </button>
+            </div>
+          ) : notFound ? (
+            <div className="sa-center">
+              <p>No scoring audits recorded for this session.</p>
+              <p className="sa-center__hint">
+                Rounds created before scoring audits were introduced won't have per-round data.
+              </p>
             </div>
           ) : data && data.audits.length === 0 ? (
             <div className="sa-center">

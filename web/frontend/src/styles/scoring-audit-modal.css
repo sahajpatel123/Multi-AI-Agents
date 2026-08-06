@@ -82,6 +82,11 @@
   margin: 10px 0 0;
 }
 
+.sa-center__hint {
+  font-size: 12px;
+  color: #b4aaa0;
+}
+
 .sa-count {
   margin: 0 0 12px;
   font-size: 12px;

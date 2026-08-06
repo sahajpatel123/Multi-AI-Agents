@@ -1,18 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { fetchScoringAudit } from '../api';
+import { ApiError, fetchScoringAudit } from '../api';
 import type { ScoringAuditResponse } from '../types';
 import { ScoringAuditModal } from './ScoringAuditModal';
 
-vi.mock('../api', () => ({
-  fetchScoringAudit: vi.fn(),
-}));
+vi.mock('../api', async () => {
+  const actual = await vi.importActual<typeof import('../api')>('../api');
+  return { ...actual, fetchScoringAudit: vi.fn() };
+});
 
 vi.mock('./MicroLoader', () => ({
   default: () => <div data-testid="micro-loader" />,
 }));
 
 const fetchScoringAuditMock = vi.mocked(fetchScoringAudit);
+const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
 
 const auditResponse: ScoringAuditResponse = {
   session_id: 'session-1',
@@ -42,6 +44,24 @@ function renderModal(props: Partial<React.ComponentProps<typeof ScoringAuditModa
 }
 
 describe('ScoringAuditModal', () => {
+  beforeAll(() => {
+    rectSpy.mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 10,
+      bottom: 10,
+      width: 10,
+      height: 10,
+      toJSON: () => ({}),
+    } as DOMRect);
+  });
+
+  afterAll(() => {
+    rectSpy.mockRestore();
+  });
+
   beforeEach(() => {
     fetchScoringAuditMock.mockReset();
   });
@@ -90,6 +110,22 @@ describe('ScoringAuditModal', () => {
     ).toBeInTheDocument();
   });
 
+  it('treats a 404 audit_not_found response as an empty state instead of an error', async () => {
+    fetchScoringAuditMock.mockRejectedValue(
+      new ApiError('No scoring audit found for this session.', 404, {
+        error: 'audit_not_found',
+        message: 'No scoring audit found for this session.',
+      }),
+    );
+    renderModal();
+
+    expect(
+      await screen.findByText('No scoring audits recorded for this session.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+  });
+
   it('shows the error and retries the request', async () => {
     fetchScoringAuditMock
       .mockRejectedValueOnce(new Error('Could not load scoring audit'))
@@ -101,6 +137,45 @@ describe('ScoringAuditModal', () => {
 
     expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
     expect(fetchScoringAuditMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('traps Tab focus inside the dialog', async () => {
+    fetchScoringAuditMock.mockRejectedValue(new Error('boom'));
+    renderModal();
+    await screen.findByRole('alert');
+
+    const closeButton = screen.getByLabelText('Close scoring audit');
+    const retryButton = screen.getByRole('button', { name: /retry/i });
+
+    retryButton.focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(document.activeElement).toBe(closeButton);
+
+    closeButton.focus();
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(retryButton);
+  });
+
+  it('locks background scroll while open and restores it on close', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    const { unmount } = renderModal();
+
+    expect(document.body.style.overflow).toBe('hidden');
+    unmount();
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('restores focus to the opener when the dialog closes', () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+
+    const { unmount } = renderModal();
+    unmount();
+
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
   });
 
   it('closes on Escape and via the close button', () => {
