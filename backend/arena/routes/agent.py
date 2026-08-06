@@ -44,6 +44,7 @@ from arena.core.tier_config import UserTier, get_credit_budget, get_tier_str, ha
 from arena.core.agent_orchestration import synthesise_tasks
 from arena.core.feedback_calibrator import (
     get_answer_feedback_distribution,
+    get_feedback_calibration as _compute_feedback_calibration,
     get_recent_feedback,
 )
 from arena.core.agent_memory import (
@@ -2889,6 +2890,43 @@ async def list_recent_feedback(
         verdict=verdict,
     )
     return JSONResponse(content={"success": True, "items": items, "count": len(items)})
+
+
+@router.get("/feedback/calibration")
+async def get_feedback_calibration(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """User-level calibration signal for displaying agent confidence.
+
+    Surfaces the existing ``get_feedback_calibration`` helper. It returns a
+    small integer ``adjustment`` (0 to -15) that the UI is meant to *visually*
+    soften the rendered confidence of a persona: a user whose last 20 verdicts
+    are split 14 wrong / 4 partial should see a noticeably more cautious
+    confidence number than a user with 14 correct / 4 partial, even though
+    the raw model confidence is the same in both cases. We never mutate the
+    stored score — this is a display-only knob.
+
+    Reliability:
+      - < 5 feedback rows → adjustment is exactly 0 and ``reliable=False``;
+        we don't have enough signal to act on.
+      - 5-9 rows → adjustment is non-zero, ``reliable=False`` (caller may
+        still apply it, but should label it as a soft hint).
+      - >= 10 rows → ``reliable=True``, full strength.
+
+    Rate-limited like the sibling feedback endpoints; agent-tier gated
+    because feedback is an Agent-Mode surface (Plus+add-on and Pro).
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_calibration",
+        limit=60,
+        window_seconds=60,
+        message="Too many feedback-calibration lookups. Please slow down.",
+    )
+    payload = _compute_feedback_calibration(user.id, db)
+    return JSONResponse(content=payload)
 
 
 @router.get("/feedback/export.csv")
