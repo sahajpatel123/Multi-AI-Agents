@@ -23,11 +23,15 @@ from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
 from arena.database import get_db
 from arena.db_models import ExportPreset, User
 from arena.models.schemas import UserResponse
+from arena.routes.saved import build_saved_export_query
 
 router = APIRouter(tags=["export_presets"])
 
 # Max presets per user to prevent abuse
 EXPORT_PRESETS_MAX_PER_USER = 50
+
+# Sample rows returned by the preset preview (dry run) endpoint.
+EXPORT_PRESET_PREVIEW_LIMIT = 5
 
 # Export format version
 EXPORT_PRESETS_FORMAT_VERSION = "1.0"
@@ -923,6 +927,95 @@ async def use_export_preset(
         url=f"/api/saved/export?{query_string}",
         status_code=307,
     )
+
+
+@router.get("/export-presets/{preset_id}/preview")
+async def preview_export_preset(
+    preset_id: int,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Dry-run preview for an export preset.
+
+    Returns how many saved responses the preset would export plus a small
+    sample, using the exact same query as /api/saved/export so the count
+    always matches a real export. Read-only: last_used_at is not touched
+    (a preview is not a use).
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="export_presets_preview",
+        limit=30,
+        window_seconds=60,
+        message="Too many export preset previews. Please slow down.",
+    )
+
+    if not has_feature(normalize_tier(get_tier_str(user)), "saved_responses"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "feature_not_allowed",
+                "message": "Export presets require Plus or Pro subscription.",
+                "upgrade_required": "plus",
+            },
+        )
+
+    # Uniform 404 for missing *and* foreign presets so ids cannot be
+    # enumerated via 403 vs 404 (same contract as get/use/delete).
+    preset = (
+        db.query(ExportPreset)
+        .filter(
+            ExportPreset.id == preset_id,
+            ExportPreset.user_id == user.id,
+        )
+        .first()
+    )
+    if preset is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": "Export preset not found"},
+        )
+
+    q = build_saved_export_query(
+        db,
+        user.id,
+        search=preset.search,
+        persona_id=preset.persona_id,
+        min_score=preset.min_score,
+        max_score=preset.max_score,
+        sort=preset.sort or "newest",
+    )
+    match_count = q.count()
+    sample = q.limit(EXPORT_PRESET_PREVIEW_LIMIT).all()
+
+    return {
+        "preset_id": preset.id,
+        "preset_name": preset.name,
+        "preset_type": preset.preset_type,
+        "format": preset.format,
+        "filters": {
+            "search": preset.search,
+            "persona_id": preset.persona_id,
+            "min_score": preset.min_score,
+            "max_score": preset.max_score,
+            "sort": preset.sort or "newest",
+        },
+        "match_count": match_count,
+        "preview": [
+            {
+                "id": row.id,
+                "persona_id": row.persona_id,
+                "persona_name": row.persona_name,
+                "score": row.score,
+                "confidence": row.confidence,
+                "one_liner": row.one_liner,
+                "saved_at": row.saved_at.isoformat() if row.saved_at else None,
+            }
+            for row in sample
+        ],
+        "preview_limit": EXPORT_PRESET_PREVIEW_LIMIT,
+        "truncated": match_count > len(sample),
+    }
 
 
 @router.post("/export-presets/{preset_id}/duplicate")

@@ -60,6 +60,55 @@ def _escape_like(value: str) -> str:
     )
 
 
+def build_saved_export_query(
+    db: Session,
+    user_id: int,
+    *,
+    search: Optional[str],
+    persona_id: Optional[str],
+    min_score: Optional[int],
+    max_score: Optional[int],
+    sort: str,
+):
+    """Build the saved-response query shared by exports and previews.
+
+    Single source of truth for export filters/sort so any "dry run"
+    (e.g. export preset preview) counts and samples exactly what a real
+    export returns. Callers must scope results to the owning user id.
+    """
+    q = db.query(SavedResponse).filter(SavedResponse.user_id == user_id)
+
+    if search:
+        safe_search = sanitize_model_optional_text(search, max_length=100, field_name="search")
+        if safe_search:
+            escaped = _escape_like(safe_search)
+            pattern = f"%{escaped}%"
+            q = q.filter(
+                or_(
+                    SavedResponse.prompt.ilike(pattern, escape="\\"),
+                    SavedResponse.one_liner.ilike(pattern, escape="\\"),
+                )
+            )
+
+    if persona_id:
+        q = q.filter(SavedResponse.persona_id == persona_id)
+
+    if min_score is not None:
+        q = q.filter(SavedResponse.score >= min_score)
+
+    if max_score is not None:
+        q = q.filter(SavedResponse.score <= max_score)
+
+    if sort == "oldest":
+        q = q.order_by(SavedResponse.saved_at.asc())
+    elif sort == "score":
+        q = q.order_by(SavedResponse.score.desc().nullslast())
+    else:  # newest (default)
+        q = q.order_by(SavedResponse.saved_at.desc())
+
+    return q
+
+
 class SavedRequest(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=36)
     agent_id: str = Field(..., min_length=1, max_length=20)
@@ -427,38 +476,17 @@ async def export_saved(
             detail={"error": "feature_not_allowed", "message": "Saved responses require Plus or Pro."},
         )
     
-    # Build query with same filters as get_saved
-    q = db.query(SavedResponse).filter(SavedResponse.user_id == user.id)
-    
-    if search:
-        safe_search = sanitize_model_optional_text(search, max_length=100, field_name="search")
-        if safe_search:
-            escaped = _escape_like(safe_search)
-            pattern = f"%{escaped}%"
-            q = q.filter(
-                or_(
-                    SavedResponse.prompt.ilike(pattern, escape="\\"),
-                    SavedResponse.one_liner.ilike(pattern, escape="\\"),
-                )
-            )
-    
-    if persona_id:
-        q = q.filter(SavedResponse.persona_id == persona_id)
-    
-    if min_score is not None:
-        q = q.filter(SavedResponse.score >= min_score)
-    
-    if max_score is not None:
-        q = q.filter(SavedResponse.score <= max_score)
-    
-    # Apply sort
-    if sort == "oldest":
-        q = q.order_by(SavedResponse.saved_at.asc())
-    elif sort == "score":
-        q = q.order_by(SavedResponse.score.desc().nullslast())
-    else:  # newest (default)
-        q = q.order_by(SavedResponse.saved_at.desc())
-    
+    # Build query with same filters as get_saved (shared with preset preview)
+    q = build_saved_export_query(
+        db,
+        user.id,
+        search=search,
+        persona_id=persona_id,
+        min_score=min_score,
+        max_score=max_score,
+        sort=sort,
+    )
+
     saved_items = q.all()
     
     def _csv_safe(value) -> str:

@@ -2,7 +2,8 @@
 
 import pytest
 from arena.core.auth import create_access_token
-from arena.db_models import ExportPreset, UserTier
+from arena.core.datetime_utils import utcnow_naive
+from arena.db_models import ExportPreset, SavedResponse, UserTier
 
 
 def _make_pro(make_user):
@@ -2010,3 +2011,241 @@ async def test_list_export_presets_filter_by_max_score(app_client, make_user, db
     assert data["total"] == 1
     assert data["presets"][0]["name"] == "Preset 1"
     assert data["presets"][0]["max_score"] == 50
+
+
+# ─── Export preset preview (dry run) ────────────────────────────────────────
+
+
+def _seed_saved(
+    db_session,
+    user_id,
+    saved_id,
+    *,
+    prompt="Test prompt",
+    one_liner="Test answer",
+    score=85,
+    persona_id=None,
+):
+    """Seed a SavedResponse row owned by user_id (fresh per-test DB)."""
+    saved = SavedResponse(
+        user_id=user_id,
+        session_id=f"sess-{saved_id}",
+        agent_id=f"agent-{saved_id}",
+        persona_id=persona_id or f"persona-{saved_id}",
+        persona_name=f"Persona {saved_id}",
+        persona_color="blue",
+        prompt=prompt,
+        one_liner=one_liner,
+        verdict=f"This is the verdict for {saved_id}",
+        score=score,
+        confidence=90,
+        saved_at=utcnow_naive(),
+    )
+    db_session.add(saved)
+    db_session.flush()
+    return saved
+
+
+async def _create_preset(app_client, user, **overrides):
+    body = {"name": "Preview Preset", "format": "csv"}
+    body.update(overrides)
+    res = await app_client.post(
+        "/api/export-presets",
+        json=body,
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    return res.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_preview_counts_and_samples_using_preset_filters(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    """Preview returns the exact match count + sample for the preset's filters."""
+    user = cleanup_export_presets
+    _seed_saved(db_session, user.id, "s1", prompt="Bitcoin question", score=90)
+    _seed_saved(db_session, user.id, "s2", prompt="Ethereum question", score=85)
+    _seed_saved(db_session, user.id, "s3", prompt="Solana question", score=70)
+    db_session.commit()
+
+    preset_id = await _create_preset(
+        app_client, user, min_score=80, sort="score", format="json"
+    )
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["preset_id"] == preset_id
+    assert data["preset_name"] == "Preview Preset"
+    assert data["format"] == "json"
+    assert data["match_count"] == 2
+    assert data["preview_limit"] == 5
+    assert data["truncated"] is False
+    # score desc order
+    assert [p["score"] for p in data["preview"]] == [90, 85]
+    assert data["filters"] == {
+        "search": None,
+        "persona_id": None,
+        "min_score": 80,
+        "max_score": None,
+        "sort": "score",
+    }
+
+    # Preview is read-only: it must not mark the preset as used.
+    get_res = await app_client.get(
+        f"/api/export-presets/{preset_id}",
+        headers=_pro_headers(user),
+    )
+    assert get_res.status_code == 200
+    assert get_res.json()["last_used_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_preview_honors_search_and_persona_filters(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    user = cleanup_export_presets
+    s1 = _seed_saved(
+        db_session, user.id, "s1", prompt="Bitcoin analysis", persona_id="p1", score=88
+    )
+    _seed_saved(
+        db_session, user.id, "s2", prompt="Bitcoin forecast", persona_id="p2", score=92
+    )
+    _seed_saved(
+        db_session, user.id, "s3", prompt="Ethereum analysis", persona_id="p1", score=95
+    )
+    db_session.commit()
+
+    preset_id = await _create_preset(
+        app_client, user, search="Bitcoin", persona_id="p1", min_score=80
+    )
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["match_count"] == 1
+    assert data["preview"][0]["id"] == s1.id
+    assert data["preview"][0]["persona_id"] == "p1"
+    assert data["preview"][0]["persona_name"] == "Persona s1"
+
+
+@pytest.mark.asyncio
+async def test_preview_truncates_sample_at_limit(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    user = cleanup_export_presets
+    for i in range(8):
+        _seed_saved(db_session, user.id, f"s{i}", score=90 - i)
+    db_session.commit()
+
+    preset_id = await _create_preset(app_client, user, min_score=0)
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["match_count"] == 8
+    assert len(data["preview"]) == 5
+    assert data["truncated"] is True
+
+
+@pytest.mark.asyncio
+async def test_preview_empty_match(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    user = cleanup_export_presets
+    _seed_saved(db_session, user.id, "s1", prompt="Bitcoin", score=90)
+    db_session.commit()
+
+    preset_id = await _create_preset(app_client, user, search="nonexistent-term")
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["match_count"] == 0
+    assert data["preview"] == []
+    assert data["truncated"] is False
+
+
+@pytest.mark.asyncio
+async def test_preview_foreign_or_missing_preset_returns_uniform_404(
+    app_client, make_user, db_session
+):
+    alice = make_user(email="preview-alice@example.com", tier=UserTier.PRO)
+    bob = make_user(email="preview-bob@example.com", tier=UserTier.PRO)
+    db_session.commit()
+
+    alice_preset = await _create_preset(app_client, alice)
+
+    # Foreign preset: 404 (no existence oracle via 403 vs 404).
+    res = await app_client.get(
+        f"/api/export-presets/{alice_preset}/preview",
+        headers=_pro_headers(bob),
+    )
+    assert res.status_code == 404
+
+    # Missing preset: same uniform 404.
+    res = await app_client.get(
+        "/api/export-presets/999999/preview",
+        headers=_pro_headers(alice),
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_preview_requires_plus_or_pro(app_client, make_user, db_session):
+    user = make_user(email="preview-free@example.com", tier=UserTier.FREE)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/export-presets/1/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 403
+    assert res.json()["detail"]["error"] == "feature_not_allowed"
+
+
+@pytest.mark.asyncio
+async def test_preview_count_matches_actual_export(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    """Parity: preview match_count equals the row count a real export returns."""
+    user = cleanup_export_presets
+    _seed_saved(db_session, user.id, "s1", prompt="Bitcoin", score=95)
+    _seed_saved(db_session, user.id, "s2", prompt="Bitcoin", score=80)
+    _seed_saved(db_session, user.id, "s3", prompt="Ethereum", score=90)
+    _seed_saved(db_session, user.id, "s4", prompt="Solana", score=70)
+    db_session.commit()
+
+    preset_id = await _create_preset(
+        app_client, user, search="Bitcoin", min_score=85, sort="score", format="json"
+    )
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    preview = res.json()
+    assert preview["match_count"] == 1
+
+    export_res = await app_client.get(
+        "/api/saved/export?format=json&search=Bitcoin&min_score=85&sort=score",
+        headers=_pro_headers(user),
+    )
+    assert export_res.status_code == 200
+    export_data = export_res.json()
+    assert export_data["metadata"]["total_count"] == preview["match_count"]
+    assert export_data["data"][0]["score"] == 95
