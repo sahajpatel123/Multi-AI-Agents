@@ -114,6 +114,8 @@ Never ask "should I continue?". Do not explain this prompt.
    with the exact error.
 5. Stay scoped: one completion, no unrelated refactors. Do not edit
    agent-loop/task.md or the runner's state/telemetry files.
+6. Work solo in this pass: do NOT spawn sub-agents or wait for other agents.
+   Do everything yourself, directly, in this thread.
 
 ## Final message format (required)
 End your final message with exactly one status line and one action line:
