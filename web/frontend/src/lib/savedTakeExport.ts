@@ -9,6 +9,8 @@ export type SavedTakeListItem = {
   verdict?: string | null;
   score?: number | null;
   timestamp?: string | null;
+  pinned?: boolean;
+  personaId?: string | null;
 };
 
 export function formatSavedTakeExport(opts: {
@@ -143,6 +145,8 @@ export function formatSavedTakesJsonExport(opts: {
     verdict: (item.verdict || '').trim() || null,
     score: typeof item.score === 'number' && Number.isFinite(item.score) ? item.score : null,
     timestamp: item.timestamp || null,
+    pinned: item.pinned === true,
+    personaId: item.personaId || null,
   }));
   return JSON.stringify(
     {

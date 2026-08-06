@@ -467,6 +467,8 @@ export function Sidebar({
         verdict: item.verdict,
         score: item.score,
         timestamp: item.timestamp,
+        pinned: item.pinned === true,
+        personaId: item.persona_id || null,
       };
     });
 

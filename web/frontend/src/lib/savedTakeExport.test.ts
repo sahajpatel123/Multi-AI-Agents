@@ -91,6 +91,8 @@ describe('formatSavedTakesJsonExport', () => {
           verdict: 'Risk is bounded if scope is tight.',
           score: 90,
           timestamp: '2026-07-01T12:00:00Z',
+          pinned: true,
+          personaId: 'analyst',
         },
       ],
     });
@@ -107,6 +109,8 @@ describe('formatSavedTakesJsonExport', () => {
       verdict: 'Risk is bounded if scope is tight.',
       score: 90,
       timestamp: '2026-07-01T12:00:00Z',
+      pinned: true,
+      personaId: 'analyst',
     });
     expect(json).toContain('\n');
   });
@@ -133,6 +137,8 @@ describe('formatSavedTakesJsonExport', () => {
       verdict: null,
       score: null,
       timestamp: null,
+      pinned: false,
+      personaId: null,
     });
     expect(parsed.filter_note).toBeNull();
   });
