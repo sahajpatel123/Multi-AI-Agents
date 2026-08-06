@@ -473,6 +473,39 @@ async def test_saved_xlsx_has_multiple_sheets(app_client, make_user, db_session)
 
 
 @pytest.mark.asyncio
+async def test_saved_xlsx_summary_includes_max_score_filter(
+    app_client, make_user, db_session
+):
+    """XLSX summary discloses the same filters as JSON/preview, incl. max_score."""
+    try:
+        import openpyxl
+    except ImportError:
+        pytest.skip("openpyxl not available")
+
+    user = _make_pro(make_user)
+    db_session.commit()
+
+    _seed_saved(db_session, user.id, "save-1", prompt="Test prompt", score=90)
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved/export?format=xlsx&min_score=80&max_score=95",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+
+    wb = openpyxl.load_workbook(io.BytesIO(res.content))
+    summary_ws = wb["Summary"]
+    summary_content = [[cell.value for cell in row] for row in summary_ws.iter_rows()]
+    flat = [str(cell) for row in summary_content for cell in row if cell is not None]
+
+    assert "Max Score:" in flat
+    assert "95" in flat
+    assert "Min Score:" in flat
+    assert "80" in flat
+
+
+@pytest.mark.asyncio
 async def test_saved_xlsx_has_styled_headers(app_client, make_user, db_session):
     """Test that XLSX data sheet has styled headers."""
     try:

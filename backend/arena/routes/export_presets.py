@@ -347,6 +347,11 @@ async def create_export_preset(
     # Sanitize inputs
     name = sanitize_model_text(body.name, max_length=100, field_name="name")
     description = sanitize_model_text(body.description, max_length=500, field_name="description") if body.description else None
+    search = (
+        sanitize_model_text(body.search, max_length=100, field_name="search")
+        if body.search
+        else None
+    )
     
     # If this is set as default, un-set any existing default preset for this user
     if body.is_default:
@@ -372,7 +377,7 @@ async def create_export_preset(
         description=description,
         preset_type=body.preset_type,
         format=body.format,
-        search=body.search,
+        search=search,
         persona_id=body.persona_id,
         min_score=body.min_score,
         max_score=body.max_score,
@@ -624,7 +629,11 @@ async def create_preset_from_template(
         description=description,
         preset_type=template["preset_type"],
         format=template["format"],
-        search=template["search"],
+        search=(
+            sanitize_model_text(template["search"], max_length=100, field_name="search")
+            if template["search"]
+            else None
+        ),
         persona_id=template["persona_id"],
         min_score=template["min_score"],
         max_score=template["max_score"],
@@ -766,7 +775,7 @@ async def update_export_preset(
     if body.format is not None:
         preset.format = body.format
     if body.search is not None:
-        preset.search = body.search
+        preset.search = sanitize_model_text(body.search, max_length=100, field_name="search")
     if body.persona_id is not None:
         preset.persona_id = body.persona_id
     if body.min_score is not None:
@@ -981,10 +990,18 @@ async def preview_export_preset(
             detail={"error": "not_found", "message": "Export preset not found"},
         )
 
+    # Normalize the stored search the same way the export endpoint does so the
+    # disclosed filters always match the query actually run (parity contract).
+    safe_search = (
+        sanitize_model_text(preset.search, max_length=100, field_name="search")
+        if preset.search
+        else None
+    )
+
     q = build_saved_export_query(
         db,
         user.id,
-        search=preset.search,
+        search=safe_search,
         persona_id=preset.persona_id,
         min_score=preset.min_score,
         max_score=preset.max_score,
@@ -999,7 +1016,7 @@ async def preview_export_preset(
         "preset_type": preset.preset_type,
         "format": preset.format,
         "filters": {
-            "search": preset.search,
+            "search": safe_search,
             "persona_id": preset.persona_id,
             "min_score": preset.min_score,
             "max_score": preset.max_score,
@@ -1091,7 +1108,11 @@ async def duplicate_export_preset(
         description=original.description,
         preset_type=original.preset_type,
         format=original.format,
-        search=original.search,
+        search=(
+            sanitize_model_text(original.search, max_length=100, field_name="search")
+            if original.search
+            else None
+        ),
         persona_id=original.persona_id,
         min_score=original.min_score,
         max_score=original.max_score,

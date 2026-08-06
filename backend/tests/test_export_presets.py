@@ -2358,3 +2358,84 @@ async def test_preview_rate_limited(app_client, make_user, db_session):
     detail = res.json().get("detail", {})
     assert detail.get("error") == "rate_limit_exceeded"
     _rl.rate_limiter._events.clear()
+
+
+@pytest.mark.asyncio
+async def test_preview_newest_order_ties_broken_by_id(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    """Preview sample is deterministic when saved_at ties (id desc tiebreak)."""
+    user = cleanup_export_presets
+    same_moment = utcnow_naive()
+    _seed_saved(db_session, user.id, "s1", score=80, saved_at=same_moment)
+    _seed_saved(db_session, user.id, "s2", score=90, saved_at=same_moment)
+    _seed_saved(db_session, user.id, "s3", score=70, saved_at=same_moment)
+    db_session.commit()
+
+    preset_id = await _create_preset(app_client, user)
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    # Newest order: s3 (id 3) first, then s2, then s1.
+    assert [p["one_liner"] for p in data["preview"]] == [
+        "Test answer",
+        "Test answer",
+        "Test answer",
+    ]
+    assert data["preview"][0]["id"] > data["preview"][1]["id"] > data["preview"][2]["id"]
+
+
+@pytest.mark.asyncio
+async def test_preview_oldest_order_ties_broken_by_id(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    """Oldest sort preview is deterministic when saved_at ties (id asc)."""
+    user = cleanup_export_presets
+    same_moment = utcnow_naive()
+    _seed_saved(db_session, user.id, "s1", score=80, saved_at=same_moment)
+    _seed_saved(db_session, user.id, "s2", score=90, saved_at=same_moment)
+    _seed_saved(db_session, user.id, "s3", score=70, saved_at=same_moment)
+    db_session.commit()
+
+    preset_id = await _create_preset(app_client, user, sort="oldest")
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["preview"][0]["id"] < data["preview"][1]["id"] < data["preview"][2]["id"]
+
+
+@pytest.mark.asyncio
+async def test_preview_discloses_sanitized_search(
+    app_client, make_user, db_session, cleanup_export_presets
+):
+    """Preview filters echo the normalized search, matching what the query runs."""
+    user = cleanup_export_presets
+    _seed_saved(db_session, user.id, "s1", prompt="Bitcoin rally")
+    _seed_saved(db_session, user.id, "s2", prompt="Ethereum rally")
+    db_session.commit()
+
+    preset_id = await _create_preset(app_client, user, search="  Bitcoin  ")
+
+    res = await app_client.get(
+        f"/api/export-presets/{preset_id}/preview",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["filters"]["search"] == "Bitcoin"
+    assert data["match_count"] == 1
+
+    export_res = await app_client.get(
+        "/api/saved/export?format=json&search=Bitcoin&sort=newest",
+        headers=_pro_headers(user),
+    )
+    assert export_res.status_code == 200
+    assert export_res.json()["metadata"]["filters"]["search"] == "Bitcoin"

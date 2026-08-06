@@ -100,11 +100,11 @@ def build_saved_export_query(
         q = q.filter(SavedResponse.score <= max_score)
 
     if sort == "oldest":
-        q = q.order_by(SavedResponse.saved_at.asc())
+        q = q.order_by(SavedResponse.saved_at.asc(), SavedResponse.id.asc())
     elif sort == "score":
-        q = q.order_by(SavedResponse.score.desc().nullslast())
+        q = q.order_by(SavedResponse.score.desc().nullslast(), SavedResponse.id.desc())
     else:  # newest (default)
-        q = q.order_by(SavedResponse.saved_at.desc())
+        q = q.order_by(SavedResponse.saved_at.desc(), SavedResponse.id.desc())
 
     return q
 
@@ -580,6 +580,7 @@ async def export_saved(
         summary_ws.append(["Search:", search or "None"])
         summary_ws.append(["Persona:", persona_id or "All"])
         summary_ws.append(["Min Score:", str(min_score) if min_score is not None else "None"])
+        summary_ws.append(["Max Score:", str(max_score) if max_score is not None else "None"])
         summary_ws.append(["Sort:", sort])
         summary_ws.append([""])
         summary_ws.append(["User ID:", user.id])
