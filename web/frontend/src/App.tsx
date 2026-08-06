@@ -1473,6 +1473,12 @@ function App() {
           onToggleSavedPin={(item, pinned) => {
             void handleToggleSavedPin(item, pinned);
           }}
+          onReuseSavedPrompt={(item) => {
+            setPresetPrompt(item.prompt);
+            setPresetPromptNonce((prev) => prev + 1);
+            void track('saved_take_reused', undefined, item.agent_id);
+            document.getElementById('arena-prompt')?.focus();
+          }}
           onBulkPinSaved={handleBulkPinSaved}
         />
       )}

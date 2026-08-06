@@ -120,6 +120,7 @@ interface SidebarProps {
   savedItems: SavedResponseItem[];
   onSavedItemClick: (item: SavedResponseItem) => void;
   onToggleSavedPin?: (item: SavedResponseItem, pinned: boolean) => void;
+  onReuseSavedPrompt?: (item: SavedResponseItem) => void;
   onBulkPinSaved?: (
     ids: number[],
     pinned: boolean,
@@ -147,6 +148,7 @@ export function Sidebar({
   savedItems,
   onSavedItemClick,
   onToggleSavedPin,
+  onReuseSavedPrompt,
   onBulkPinSaved,
 }: SidebarProps) {
   const navigate = useNavigate();
@@ -2102,6 +2104,31 @@ export function Sidebar({
                                 })}
                               </p>
                             ) : null}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Re-ask ${displayName} take`}
+                            title="Re-ask this take"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onReuseSavedPrompt?.(item);
+                            }}
+                            style={{
+                              flexShrink: 0,
+                              width: 28,
+                              height: 28,
+                              borderRadius: 6,
+                              border: 'none',
+                              background: 'transparent',
+                              color: '#A0A39A',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 0,
+                            }}
+                          >
+                            <MessageSquare style={{ width: 13, height: 13 }} />
                           </button>
                           <button
                             type="button"
