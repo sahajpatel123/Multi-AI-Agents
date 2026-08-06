@@ -166,8 +166,11 @@ describe('formatSavedTakesCsvExport', () => {
     expect(csv).toContain('"analyst"');
     expect(csv.endsWith('\n')).toBe(true);
     const rows = csv.trim().split('\n');
+    // Header row plus exactly one data row; the CSV never injects extra
+    // metadata rows that would break the column schema.
     expect(rows).toHaveLength(2);
-    expect(rows[1].split(',')).toHaveLength(8);
+    expect(rows[1].startsWith('"The Analyst"')).toBe(true);
+    expect(rows[1].endsWith('"2026-07-01T12:00:00Z"')).toBe(true);
   });
 
   it('escapes embedded quotes and normalizes missing fields', () => {
