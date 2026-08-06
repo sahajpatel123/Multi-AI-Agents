@@ -160,11 +160,20 @@ def build_prompt(args, task_text: str, mode: str) -> str:
 
 def classify(text: str, rc: int) -> str:
     upper = text.upper()
-    if re.search(r"\*\*BLOCKED\*\*|\bBLOCKED\b", upper):
-        return "BLOCKED"
-    if "STOPPED-NO-PROGRESS" in upper:
+    # Explicit status markers first (the prompt requires one of these lines).
+    if re.search(r"\*\*STOPPED-NO-PROGRESS\*\*", upper):
         return "STOPPED_NO_PROGRESS"
-    if re.search(r"\*\*DONE\*\*|\bDONE\b", upper):
+    if re.search(r"\*\*BLOCKED\*\*", upper):
+        return "BLOCKED"
+    if re.search(r"\*\*DONE\*\*", upper):
+        return "DONE"
+    # Fallback: standalone words only — never inside hyphenated prose like
+    # "quota-blocked" or "unblocked", which previously caused false BLOCKEDs.
+    if re.search(r"(?<![A-Z0-9_-])BLOCKED(?![A-Z0-9_-])", upper):
+        return "BLOCKED"
+    if re.search(r"(?<![A-Z0-9_-])STOPPED-NO-PROGRESS(?![A-Z0-9_-])", upper):
+        return "STOPPED_NO_PROGRESS"
+    if re.search(r"(?<![A-Z0-9_-])DONE(?![A-Z0-9_-])", upper):
         return "DONE"
     if rc != 0:
         return "FAILED"
