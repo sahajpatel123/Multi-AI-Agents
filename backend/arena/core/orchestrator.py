@@ -262,17 +262,23 @@ class Orchestrator:
         session_id: str | None = None,
         tracker: LatencyTracker | None = None,
         request_context: str | None = None,
+        tool_results: dict[str, Any] | None = None,
     ) -> tuple[list[AgentResponse], list[str]]:
         """
         Run all agents in parallel and collect responses.
         Returns tuple of (responses, tools_used).
         Tools are executed first and results injected into agent context.
+
+        ``tool_results`` may be supplied by callers (e.g. the response-cache
+        path) that already executed the tool router; when omitted, tools are
+        executed here as before.
         """
         start_time = time.monotonic()
-        # Execute tools first (in parallel)
-        tool_results = await self.tool_router.execute_tools(prompt)
-        if tracker:
-            tracker.mark("tool_router_done")
+        # Execute tools first (in parallel), unless the caller already did.
+        if tool_results is None:
+            tool_results = await self.tool_router.execute_tools(prompt)
+            if tracker:
+                tracker.mark("tool_router_done")
 
         # Format tool context for injection
         tool_context = self.tool_router.format_tool_context(tool_results)

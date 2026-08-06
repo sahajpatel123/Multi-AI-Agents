@@ -48,7 +48,7 @@ from arena.core.followup_suggestions import (
     parse_suggestions,
 )
 from arena.core.persona_integrity import check_integrity
-from arena.core.response_cache import get_cache, make_cache_key
+from arena.core.response_cache import all_responses_healthy, get_cache, make_cache_key
 from arena.core.response_shaper import assemble_payload
 from arena.core.scorer import Scorer
 from arena.core.tier_config import (
@@ -277,6 +277,7 @@ async def submit_prompt(
         cache_status: str | None = None
         cache_key: str | None = None
         cache_hit = False
+        precomputed_tool_results: dict | None = None
 
         # In-process response cache: identical stateless requests (same
         # enriched prompt + persona panel, no session continuation, no
@@ -293,11 +294,15 @@ async def submit_prompt(
             if cached_entry is not None:
                 # Never serve a stale answer for a prompt that now triggers
                 # a live tool (web search / datetime / calculator): re-run
-                # the cheap trigger check before trusting the cache.
+                # the cheap trigger check before trusting the cache. If it
+                # fires, hand the results to the orchestrator so the tool is
+                # not executed twice for the same request.
                 tool_router = ToolRouter()
                 tool_results = await tool_router.execute_tools(
                     pipeline_result.enriched_prompt
                 )
+                tracker.mark("tool_router_done")
+                precomputed_tool_results = tool_results
                 if not tool_router.get_tool_summary(tool_results):
                     responses = copy.deepcopy(cached_entry["responses"])
                     tools_used = list(cached_entry.get("tools_used", []))
@@ -314,11 +319,17 @@ async def submit_prompt(
                 session_id=session_id,
                 tracker=tracker,
                 request_context=format_follow_up_context(body.context),
+                tool_results=precomputed_tool_results,
             )
             agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
-            # Only cache tool-free rounds — a cached web-search answer would
-            # go stale within the TTL.
-            if cache_key is not None and not tools_used:
+            # Only cache tool-free rounds that came back healthy — a cached
+            # web-search answer would go stale within the TTL, and a cached
+            # all-error round would poison the store for an hour.
+            if (
+                cache_key is not None
+                and not tools_used
+                and all_responses_healthy(responses)
+            ):
                 get_cache().set(
                     cache_key,
                     {
