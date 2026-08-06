@@ -2083,3 +2083,21 @@ export async function exportAnalyticsPersonaStatsByCategoryCsv(personaId: string
   }
   return response.blob();
 }
+
+export async function exportScoringAuditCsv(
+  sessionId: string,
+  limit = 50,
+): Promise<Blob> {
+  const response = await apiFetch(
+    `/api/analytics/scoring-audit/${encodeURIComponent(sessionId)}/export.csv?limit=${encodeURIComponent(String(limit))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      getErrorMessage(err, 'Failed to export scoring audit CSV'),
+      response.status,
+      err,
+    );
+  }
+  return response.blob();
+}

@@ -2379,6 +2379,132 @@ async def analytics_scoring_audit_detail(
     }
 
 
+@router.get("/analytics/scoring-audit/{session_id}/export.csv")
+async def analytics_scoring_audit_csv(
+    session_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=200,
+        description="Max number of round audits exported, newest kept last.",
+    ),
+) -> Response:
+    """CSV export of the per-round scoring audit for one session (Pro).
+
+    Reuses the JSON detail route so the export and the API response cannot
+    drift: same ownership scoping (other users' sessions and unknown
+    sessions both 404), same Pro gate, same newest-kept-last windowing, and
+    the same legacy-row coercion. The CSV adds one row per audit round,
+    oldest-first, with nested JSON payloads flattened into compact JSON
+    cells so spreadsheets can still join on round numbers.
+
+    Follows the same defenses as the other CSV exports: its own per-user
+    rate limit, RFC 4180 quoting with ``\\r\\n`` line endings, formula-
+    injection defense via ``_csv_safe``, no-store caching, and
+    ``X-Content-Type-Options: nosniff``. The session id is sanitized before
+    it is embedded in the attachment filename so a crafted id cannot inject
+    header bytes.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_scoring_audit_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many scoring audit exports. Limit is 60 per hour.",
+    )
+
+    payload = await analytics_scoring_audit_detail(
+        session_id=session_id,
+        user=user,
+        db=db,
+        limit=limit,
+    )
+
+    import csv
+    import io
+    import json
+    import re
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(
+        [
+            "round",
+            "created_at",
+            "prompt_snippet",
+            "prompt_category",
+            "winner_agent_id",
+            "winner_persona_id",
+            "winner_score",
+            "scores_json",
+            "criteria_breakdown_json",
+            "confidence_values_json",
+            "persona_ids_used",
+            "scoring_duration_ms",
+            "fallback_used",
+        ]
+    )
+    for round_no, audit in enumerate(payload["audits"], start=1):
+        writer.writerow(
+            [
+                round_no,
+                _csv_safe(audit["created_at"] or ""),
+                _csv_safe(audit["prompt_snippet"]),
+                _csv_safe(audit["prompt_category"]),
+                _csv_safe(audit["winner_agent_id"]),
+                _csv_safe(audit["winner_persona_id"]),
+                audit["winner_score"],
+                _csv_safe(
+                    json.dumps(
+                        audit["scores"],
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                ),
+                _csv_safe(
+                    json.dumps(
+                        audit["criteria_breakdown"] or {},
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                ),
+                _csv_safe(
+                    json.dumps(
+                        audit["confidence_values"],
+                        separators=(",", ":"),
+                    )
+                ),
+                _csv_safe(json.dumps(audit["persona_ids_used"])),
+                audit["scoring_duration_ms"]
+                if audit["scoring_duration_ms"] is not None
+                else "",
+                "true" if audit["fallback_used"] else "false",
+            ]
+        )
+    # Footer rollup so the file is self-describing about truncation.
+    writer.writerow(
+        [
+            f"# session_id={payload['session_id']}",
+            f"audit_count={payload['audit_count']}",
+            f"total_count={payload['total_count']}",
+        ]
+    )
+
+    safe_sid = re.sub(r"[^A-Za-z0-9._-]", "_", payload["session_id"])
+    filename = f"arena-scoring-audit-{safe_sid}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/admin/routes")
 async def admin_routes_summary(
     user: UserResponse = Depends(get_current_user_required),

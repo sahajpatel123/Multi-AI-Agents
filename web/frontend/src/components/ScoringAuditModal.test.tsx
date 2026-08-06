@@ -1,19 +1,29 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { ApiError, fetchScoringAudit } from '../api';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { ApiError, exportScoringAuditCsv, fetchScoringAudit } from '../api';
 import type { ScoringAuditResponse } from '../types';
+import { downloadBlobFile } from '../lib/downloadTextFile';
 import { ScoringAuditModal } from './ScoringAuditModal';
 
 vi.mock('../api', async () => {
   const actual = await vi.importActual<typeof import('../api')>('../api');
-  return { ...actual, fetchScoringAudit: vi.fn() };
+  return { ...actual, fetchScoringAudit: vi.fn(), exportScoringAuditCsv: vi.fn() };
 });
 
 vi.mock('./MicroLoader', () => ({
   default: () => <div data-testid="micro-loader" />,
 }));
 
+vi.mock('../lib/downloadTextFile', async () => {
+  const actual = await vi.importActual<typeof import('../lib/downloadTextFile')>(
+    '../lib/downloadTextFile',
+  );
+  return { ...actual, downloadBlobFile: vi.fn() };
+});
+
 const fetchScoringAuditMock = vi.mocked(fetchScoringAudit);
+const exportScoringAuditCsvMock = vi.mocked(exportScoringAuditCsv);
+const downloadBlobFileMock = vi.mocked(downloadBlobFile);
 const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
 
 const auditResponse: ScoringAuditResponse = {
@@ -64,6 +74,8 @@ describe('ScoringAuditModal', () => {
 
   beforeEach(() => {
     fetchScoringAuditMock.mockReset();
+    exportScoringAuditCsvMock.mockReset();
+    downloadBlobFileMock.mockReset();
   });
 
   it('fetches and renders per-round scores, criteria, and confidence', async () => {
@@ -108,6 +120,9 @@ describe('ScoringAuditModal', () => {
     expect(
       await screen.findByText('No scoring audits found for this session.'),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /export scoring audit as csv/i }),
+    ).toBeDisabled();
   });
 
   it('treats a 404 audit_not_found response as an empty state instead of an error', async () => {
@@ -188,5 +203,37 @@ describe('ScoringAuditModal', () => {
 
     fireEvent.click(screen.getByLabelText('Close scoring audit'));
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('exports the visible rounds as CSV', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    const blob = new Blob(['round,prompt_snippet\n1,Should we launch?'], {
+      type: 'text/csv',
+    });
+    exportScoringAuditCsvMock.mockResolvedValue(blob);
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /export scoring audit as csv/i }));
+
+    await waitFor(() => {
+      expect(exportScoringAuditCsvMock).toHaveBeenCalledWith('session-1', 1);
+    });
+    expect(downloadBlobFileMock).toHaveBeenCalledWith(
+      blob,
+      'arena-scoring-audit-session-1.csv',
+    );
+  });
+
+  it('shows an error when the CSV export fails', async () => {
+    fetchScoringAuditMock.mockResolvedValue(auditResponse);
+    exportScoringAuditCsvMock.mockRejectedValue(new Error('Export failed'));
+    renderModal();
+
+    expect(await screen.findByText('Should we launch?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /export scoring audit as csv/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Export failed');
+    expect(downloadBlobFileMock).not.toHaveBeenCalled();
   });
 });

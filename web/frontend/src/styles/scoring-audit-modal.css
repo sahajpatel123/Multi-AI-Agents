@@ -66,6 +66,43 @@
   border-color: #c4956a;
 }
 
+.sa-export {
+  flex: none;
+  padding: 7px 12px;
+  border: 0.5px solid #d8cfc4;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #4f4944;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
+}
+
+.sa-export:hover:not(:disabled) {
+  color: #1a1714;
+  border-color: #c4956a;
+}
+
+.sa-export:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.sa-export-error {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 0.5px solid #e3b7a8;
+  border-radius: 8px;
+  background: #fdf1ec;
+  color: #9a3f26;
+  font-size: 12px;
+}
+
 .sa-body {
   overflow: auto;
   padding: 18px 22px 24px;

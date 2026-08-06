@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ApiError, fetchScoringAudit } from '../api';
+import { ApiError, exportScoringAuditCsv, fetchScoringAudit } from '../api';
+import { downloadBlobFile, sanitizeDownloadFilename } from '../lib/downloadTextFile';
 import {
   AGENTS,
   type ScoringAuditConfidence,
@@ -44,6 +45,8 @@ export function ScoringAuditModal({
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
@@ -64,6 +67,7 @@ export function ScoringAuditModal({
     setError(null);
     setNotFound(false);
     setData(null);
+    setExportError(null);
 
     void fetchScoringAudit(sessionId)
       .then((result) => {
@@ -145,6 +149,27 @@ export function ScoringAuditModal({
     [personaNameResolver],
   );
 
+  const handleExport = useCallback(async () => {
+    if (!data || exporting) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const blob = await exportScoringAuditCsv(sessionId, data.audit_count);
+      downloadBlobFile(
+        blob,
+        `arena-scoring-audit-${sanitizeDownloadFilename(sessionId, 'session')}.csv`,
+      );
+    } catch (err) {
+      setExportError(
+        err instanceof Error
+          ? err.message
+          : 'Could not export the scoring audit as CSV.',
+      );
+    } finally {
+      setExporting(false);
+    }
+  }, [data, exporting, sessionId]);
+
   return (
     <div
       className="sa-overlay"
@@ -166,6 +191,15 @@ export function ScoringAuditModal({
             <p>How the judge scored each mind, per round.</p>
           </div>
           <button
+            type="button"
+            className="sa-export"
+            onClick={() => void handleExport()}
+            disabled={!data || data.audits.length === 0 || exporting}
+            aria-label="Export scoring audit as CSV"
+          >
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+          <button
             ref={closeRef}
             type="button"
             className="sa-close"
@@ -177,6 +211,11 @@ export function ScoringAuditModal({
         </header>
 
         <div className="sa-body">
+          {exportError ? (
+            <p className="sa-export-error" role="alert">
+              {exportError}
+            </p>
+          ) : null}
           {loading ? (
             <div className="sa-center">
               <MicroLoader />
