@@ -115,6 +115,7 @@ async def get_saved(
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on prompt + one_liner."),
     persona_id: Optional[str] = Query(None, max_length=50, description="Restrict to one persona."),
     min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score (inclusive)."),
+    max_score: Optional[int] = Query(None, ge=0, le=100, description="Maximum score (inclusive)."),
     sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', or 'score'."),
 ) -> dict:
     """List saved responses with optional search, filter, sort, pagination.
@@ -141,7 +142,7 @@ async def get_saved(
             "page": 1,
             "per_page": per_page,
             "total_pages": 0,
-            "filters": {"search": None, "persona_id": None, "min_score": None, "sort": "newest"},
+            "filters": {"search": None, "persona_id": None, "min_score": None, "max_score": None, "sort": "newest"},
         }
 
     q = db.query(SavedResponse).filter(SavedResponse.user_id == user.id)
@@ -166,10 +167,13 @@ async def get_saved(
 
     if min_score is not None:
         q = q.filter(SavedResponse.score >= min_score)
+    
+    if max_score is not None:
+        q = q.filter(SavedResponse.score <= max_score)
 
     # Sort. Unknown values fall back to newest so a stale frontend can't
     # break the endpoint; 'score' puts nulls last so untested takes don't
-    # sink the top of "show me my best answers".
+    # sink the top of "show me my best answers"
     if sort == "oldest":
         order_clauses = (SavedResponse.saved_at.asc(),)
     elif sort == "score":
@@ -216,6 +220,7 @@ async def get_saved(
             "search": search,
             "persona_id": persona_id,
             "min_score": min_score,
+            "max_score": max_score,
             "sort": sort,
         },
     }
@@ -397,12 +402,13 @@ async def export_saved(
     search: Optional[str] = Query(None, max_length=100, description="Case-insensitive substring match on prompt + one_liner."),
     persona_id: Optional[str] = Query(None, max_length=50, description="Restrict to one persona."),
     min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum score (inclusive)."),
+    max_score: Optional[int] = Query(None, ge=0, le=100, description="Maximum score (inclusive)."),
     sort: str = Query("newest", description="Sort mode: 'newest' (default), 'oldest', or 'score'."),
     format: str = Query("csv", description="Export format: 'csv' (default), 'json', or 'xlsx'."),
 ):
     """Export saved responses in CSV, JSON, or XLSX format.
 
-    Supports the same filters as /api/saved.
+    Supports the same filters as /api/saved plus min_score and max_score.
     CSV format includes formula-injection defense.
     JSON format provides structured data for programmatic use.
     XLSX format provides Excel-compatible spreadsheets.
@@ -441,6 +447,9 @@ async def export_saved(
     
     if min_score is not None:
         q = q.filter(SavedResponse.score >= min_score)
+    
+    if max_score is not None:
+        q = q.filter(SavedResponse.score <= max_score)
     
     # Apply sort
     if sort == "oldest":

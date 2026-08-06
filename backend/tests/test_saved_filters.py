@@ -167,6 +167,54 @@ async def test_min_score_rejects_out_of_range(app_client, make_user):
     assert res.status_code == 422
 
 
+# ─── Max Score ─────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_max_score_filter(app_client, make_user, db_session):
+    user = make_user(email="filter-max-score@test.com", tier=UserTier.PLUS)
+    db_session.add(_seed(db_session, user_id=user.id, prompt="a", score=50))
+    db_session.add(_seed(db_session, user_id=user.id, prompt="b", score=85))
+    db_session.add(_seed(db_session, user_id=user.id, prompt="c", score=95))
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved?max_score=80", headers=_pro_headers(user)
+    )
+    body = res.json()
+    prompts = {item["prompt"] for item in body["items"]}
+    assert prompts == {"a"}
+
+
+@pytest.mark.asyncio
+async def test_max_score_rejects_out_of_range(app_client, make_user):
+    user = make_user(email="filter-bad-max-score@test.com", tier=UserTier.PLUS)
+    res = await app_client.get(
+        "/api/saved?max_score=200", headers=_pro_headers(user)
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_score_range_filter(app_client, make_user, db_session):
+    """Test filtering with both min_score and max_score."""
+    user = make_user(email="filter-score-range@test.com", tier=UserTier.PLUS)
+    db_session.add(_seed(db_session, user_id=user.id, prompt="a", score=50))
+    db_session.add(_seed(db_session, user_id=user.id, prompt="b", score=75))
+    db_session.add(_seed(db_session, user_id=user.id, prompt="c", score=85))
+    db_session.add(_seed(db_session, user_id=user.id, prompt="d", score=95))
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved?min_score=60&max_score=90", headers=_pro_headers(user)
+    )
+    body = res.json()
+    prompts = {item["prompt"] for item in body["items"]}
+    assert prompts == {"b", "c"}
+    assert body["filters"]["min_score"] == 60
+    assert body["filters"]["max_score"] == 90
+
+
 # ─── Sort ───────────────────────────────────────────────────────────────────
 
 

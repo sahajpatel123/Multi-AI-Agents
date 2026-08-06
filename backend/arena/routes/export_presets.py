@@ -896,6 +896,8 @@ async def use_export_preset(
         params["persona_id"] = preset.persona_id
     if preset.min_score is not None:
         params["min_score"] = preset.min_score
+    if preset.max_score is not None:
+        params["max_score"] = preset.max_score
     if preset.sort:
         params["sort"] = preset.sort
     
