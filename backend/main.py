@@ -25,6 +25,7 @@ from arena.core.observability import get_health_data, get_health_data_detailed, 
 from arena.core.rate_limits import client_ip, enforce_ip_rate_limit, enforce_user_rate_limit, rate_limiter
 from arena.database import SessionLocal, dispose_engine, get_db, init_db, is_db_connectivity_error
 from arena.models.schemas import UserResponse
+from arena.core.request_id import RequestIDMiddleware
 from arena.routes.auth import router as auth_router, user_router
 from arena.routes.analytics import router as analytics_router
 from arena.routes.personas import router as personas_router
@@ -191,6 +192,7 @@ def create_app() -> FastAPI:
             request.method,
             request.url.path,
             exc,
+            extra={"request_id": getattr(request.state, "request_id", None)},
         )
         return JSONResponse(
             status_code=503,
@@ -215,6 +217,7 @@ def create_app() -> FastAPI:
                 request.method,
                 request.url.path,
                 exc,
+                extra={"request_id": getattr(request.state, "request_id", None)},
             )
             return JSONResponse(
                 status_code=503,
@@ -231,6 +234,7 @@ def create_app() -> FastAPI:
             request.method,
             request.url.path,
             error_detail,
+            extra={"request_id": getattr(request.state, "request_id", None)},
         )
         if settings.is_production:
             return JSONResponse(
@@ -281,6 +285,7 @@ def create_app() -> FastAPI:
     app.add_middleware(GlobalRateLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
     app.add_middleware(RequestSizeLimitMiddleware, max_size=DEFAULT_MAX_BODY_BYTES)
+    app.add_middleware(RequestIDMiddleware)
 
     # ── Routers ───────────────────────────────────────────────
     app.include_router(auth_router)

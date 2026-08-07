@@ -327,6 +327,27 @@ jobs:
           echo "- Status: ${{ job.status }}"
           echo "- Commit: ${{ github.sha }}"
 
+  dependency-review:
+    name: Dependency review (PR vulnerability gate)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v5
+        with:
+          # Fail the PR when it introduces a HIGH or CRITICAL dependency
+          # vulnerability. This complements the pin-floor guards above:
+          # those catch downgrades in our committed floor, this catches
+          # newly-introduced vulnerable transitive versions before merge.
+          fail-on-severity: high
+          # Add a concise PR comment when the gate fails so the author
+          # sees the offending package without leaving Actions.
+          comment-summary-in-pr: on-failure
+
   e2e:
     name: E2E (Playwright smoke)
     runs-on: ubuntu-latest
