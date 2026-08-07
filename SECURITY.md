@@ -51,6 +51,8 @@ This project implements the following security practices:
 - **Dependency scanning**: pip-audit for Python, npm audit for Node.js
 - **Secret scanning**: gitleaks with CI integration
 - **Static code analysis**: GitHub CodeQL (Python and JavaScript/TypeScript)
+- **Request tracing**: every response carries `X-Request-ID`; the same ID is
+  surfaced in SSE streams and error messages for end-to-end correlation
 - **Input validation**: Request size limits, input sanitization
 - **Authentication**: JWT with bcrypt passwords, token revocation
 - **Rate limiting**: IP-based and user-based rate limits
