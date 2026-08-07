@@ -2,10 +2,11 @@ name: Dependabot
 
 on:
   schedule:
-    interval: weekly
+    interval: daily
   open-pull-requests-limit: 10
 
 updates:
+  # Weekly for non-critical dependency updates
   - package-ecosystem: pip
     directory: /backend
     schedule:
@@ -18,7 +19,12 @@ updates:
     labels:
       - dependencies
       - security
+    # Allow updates outside schedule hours for security patches
+    allow:
+      - dependency-type: direct
+      - dependency-type: production
 
+  # Weekly for non-critical dependency updates
   - package-ecosystem: npm
     directory: /web/frontend
     schedule:
@@ -31,3 +37,6 @@ updates:
     labels:
       - dependencies
       - security
+    allow:
+      - dependency-type: direct
+      - dependency-type: production
