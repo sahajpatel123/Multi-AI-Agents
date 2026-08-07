@@ -1414,9 +1414,13 @@ export async function getAgentWatchlist(): Promise<{
     detail?: string | { message?: string };
   }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Watchlist request failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Watchlist request failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty watchlist response');
+  if (!data) throw new Error(withRequestId('Empty watchlist response', response));
   return {
     items: data.items || [],
     active_count: data.active_count ?? 0,
@@ -1437,7 +1441,11 @@ export async function postAgentWatchlist(body: {
   });
   const data = await parseJsonSafely<AgentWatchlistItem & { detail?: string | { message?: string } }>(response);
   if (!data || !response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Could not add to watchlist'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not add to watchlist'), response),
+      response.status,
+      data,
+    );
   }
   return data as AgentWatchlistItem;
 }
@@ -1453,7 +1461,11 @@ export async function patchAgentWatchlist(
   });
   const data = await parseJsonSafely<AgentWatchlistItem & { detail?: string | { message?: string } }>(response);
   if (!data || !response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Watchlist update failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Watchlist update failed'), response),
+      response.status,
+      data,
+    );
   }
   return data as AgentWatchlistItem;
 }
@@ -1464,7 +1476,11 @@ export async function deleteAgentWatchlist(itemId: string): Promise<void> {
   });
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Could not remove watchlist item'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not remove watchlist item'), response),
+      response.status,
+      data,
+    );
   }
 }
 
@@ -1506,9 +1522,13 @@ export async function getAgentWatchlistHistory(
     }
   >(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Could not load watch history'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not load watch history'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty watch history response');
+  if (!data) throw new Error(withRequestId('Empty watch history response', response));
   return {
     items: Array.isArray(data.items) ? data.items : [],
     stats: data.stats || {
@@ -1528,7 +1548,11 @@ export async function exportAgentWatchlistHistoryCsv(itemId: string, limit = 100
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export watch history CSV'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export watch history CSV'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }
