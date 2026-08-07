@@ -889,7 +889,11 @@ export async function postAgentTaskAnswerFeedback(
     { success?: boolean; feedback_stats?: AnswerFeedbackStats; detail?: string } | null
   >(response);
   if (!data || !response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Failed to submit feedback'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to submit feedback'), response),
+      response.status,
+      data,
+    );
   }
   return { success: !!data.success, feedback_stats: data.feedback_stats! };
 }
