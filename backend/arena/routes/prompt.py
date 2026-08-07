@@ -403,6 +403,7 @@ async def submit_prompt(
             winner=winner,
             integrity=integrity_report,
             tools_used=tools_used,
+            request_id=request_id,
         )
         tracker.mark("response_shaped")
 
@@ -721,6 +722,7 @@ async def stream_prompt(
                 winner=winner,
                 integrity=integrity_report,
                 tools_used=tools_used,
+                request_id=request_id,
             )
             tracker.mark("response_shaped")
 

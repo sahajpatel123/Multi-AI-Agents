@@ -29,6 +29,7 @@ export interface IntegrityReport {
 }
 
 export interface PromptResponse {
+  request_id?: string | null;
   session_id: string;
   prompt: string;
   prompt_category: string;

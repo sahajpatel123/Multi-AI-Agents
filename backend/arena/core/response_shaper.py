@@ -140,6 +140,7 @@ async def assemble_payload(
     winner: ScoredAgent,
     integrity: IntegrityReport | None,
     tools_used: list[str] | None = None,
+    request_id: str | None = None,
 ) -> PromptResponse:
     """
     Assemble the final response payload.
@@ -202,6 +203,7 @@ async def assemble_payload(
     )
 
     return PromptResponse(
+        request_id=request_id,
         session_id=final_session_id,
         prompt=prompt,
         prompt_category=prompt_category,

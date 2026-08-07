@@ -70,6 +70,9 @@ class TestPromptResponseCache:
 
         first_data = first.json()
         second_data = second.json()
+        assert first_data["request_id"] == first.headers.get("x-request-id"), (
+            "response request_id must match the X-Request-ID response header"
+        )
         assert first_data["winner"]["agent_id"] == second_data["winner"]["agent_id"]
         assert first_data["all_responses"] == second_data["all_responses"]
 

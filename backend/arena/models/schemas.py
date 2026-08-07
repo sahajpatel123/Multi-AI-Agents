@@ -250,6 +250,7 @@ class ScoredAgent(BaseModel):
 class PromptResponse(BaseModel):
     """Complete response to a prompt request"""
     
+    request_id: str | None = Field(None, description="Request correlation ID (X-Request-ID) for this response")
     session_id: str = Field(..., description="Session ID for this conversation")
     prompt: str = Field(..., description="Original prompt")
     prompt_category: str = Field("", description="Classified category of the prompt")
