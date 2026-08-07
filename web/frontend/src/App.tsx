@@ -1872,6 +1872,16 @@ function App() {
                   >
                     Edit prompt
                   </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      void copyToClipboard(error);
+                      queueFeedbackReset('copy', 'error-banner');
+                    }}
+                  >
+                    {copyFeedback['error-banner'] ? 'Copied' : 'Copy error'}
+                  </button>
                 </div>
               )}
 
