@@ -131,10 +131,16 @@ export async function register(name: string, email: string, password: string): P
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
-    throw new ApiError(getErrorMessage(err, 'Registration failed'), res.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Registration failed'), res),
+      res.status,
+      err,
+    );
   }
   const data = await parseJsonSafely<TokenAuthResponse>(res);
-  if (!data?.user || !data.access_token || !data.refresh_token) throw new Error('Empty response');
+  if (!data?.user || !data.access_token || !data.refresh_token) {
+    throw new Error(withRequestId('Empty response', res));
+  }
   setTokens(data.access_token, data.refresh_token);
   return data.user;
 }
@@ -147,10 +153,16 @@ export async function login(email: string, password: string): Promise<User> {
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
-    throw new ApiError(getErrorMessage(err, 'Login failed'), res.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Login failed'), res),
+      res.status,
+      err,
+    );
   }
   const data = await parseJsonSafely<TokenAuthResponse>(res);
-  if (!data?.user || !data.access_token || !data.refresh_token) throw new Error('Empty response');
+  if (!data?.user || !data.access_token || !data.refresh_token) {
+    throw new Error(withRequestId('Empty response', res));
+  }
   setTokens(data.access_token, data.refresh_token);
   return data.user;
 }
