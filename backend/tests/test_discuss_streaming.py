@@ -35,6 +35,9 @@ class TestDiscussStreamingEndpoint:
 
         assert res.status_code == 200
         assert "text/event-stream" in res.headers.get("content-type", "")
+        assert res.headers.get("x-accel-buffering") == "no", (
+            "SSE responses must disable proxy/nginx buffering"
+        )
 
         events = self._parse_sse_events(res.text)
         event_types = [e["event"] for e in events]

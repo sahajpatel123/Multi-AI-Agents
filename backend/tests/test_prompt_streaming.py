@@ -35,6 +35,9 @@ class TestPromptStreamingEndpoint:
         # Should return SSE stream
         assert res.status_code == 200
         assert res.headers["content-type"] == "text/event-stream; charset=utf-8"
+        assert res.headers.get("x-accel-buffering") == "no", (
+            "SSE responses must disable proxy/nginx buffering"
+        )
 
         # Parse SSE events
         events = self._parse_sse_events(res.text)
