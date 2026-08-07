@@ -1876,6 +1876,16 @@ function App() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm"
                     onClick={() => {
+                      setError(null);
+                      handleReRunRound();
+                    }}
+                  >
+                    Try again
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
                       void copyToClipboard(error);
                       queueFeedbackReset('copy', 'error-banner');
                     }}
