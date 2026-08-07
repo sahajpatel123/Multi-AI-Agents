@@ -1668,9 +1668,13 @@ export async function postCalibrationRate(
   });
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Calibration rating failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Calibration rating failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty calibration response');
+  if (!data) throw new Error(withRequestId('Empty calibration response', response));
   return data;
 }
 
@@ -1678,9 +1682,13 @@ export async function getCalibrationStats(): Promise<unknown> {
   const response = await apiFetch(`/api/calibration/stats`);
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Calibration stats failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Calibration stats failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty calibration stats');
+  if (!data) throw new Error(withRequestId('Empty calibration stats', response));
   return data;
 }
 
@@ -1690,9 +1698,13 @@ export async function getCalibrationRatingForTask(taskId: string): Promise<unkno
   );
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Calibration lookup failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Calibration lookup failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty calibration lookup');
+  if (!data) throw new Error(withRequestId('Empty calibration lookup', response));
   return data;
 }
 
