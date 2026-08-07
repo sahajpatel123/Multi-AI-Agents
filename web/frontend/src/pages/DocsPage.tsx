@@ -290,6 +290,10 @@ export function DocsPage() {
             <section id="api" className="docs-field-chapter" aria-labelledby="docs-api-title">
               <Reveal>
               <ChapterHeading id="docs-api-title" eyebrow="API surface" title="Typed routes. Streaming where time matters." body="The frontend centralizes backend calls in a typed client. Streaming paths use fetch readers so navigation and Stop controls can abort work." />
+              <p style={{ marginTop: 8, fontSize: 13, color: '#A0A39A' }}>
+                Every API response includes an <code>X-Request-ID</code> header; streaming endpoints also emit a
+                <code> request_id</code> SSE event so requests can be traced end-to-end.
+              </p>
               <div className="docs-api-explorer">
                 <div className="docs-api-explorer__tabs" role="group" aria-label="API route group">
                   {API_GROUPS.map((group) => <button key={group.id} type="button" aria-label={`Show ${group.label} endpoints`} aria-pressed={activeApi.id === group.id} className={activeApi.id === group.id ? 'is-active' : ''} onClick={() => setActiveApiId(group.id)}><small>{group.index}</small><span>{group.label}</span></button>)}
