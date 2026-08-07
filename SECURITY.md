@@ -49,6 +49,8 @@ When reporting a vulnerability, please include:
 This project implements the following security practices:
 
 - **Dependency scanning**: pip-audit for Python, npm audit for Node.js
+- **Dependency automation**: Dependabot covers pip, npm, and GitHub Actions
+  on a weekly schedule with security labels
 - **Secret scanning**: gitleaks with CI integration
 - **Static code analysis**: GitHub CodeQL (Python and JavaScript/TypeScript)
 - **Request tracing**: every response carries `X-Request-ID`; the same ID is
