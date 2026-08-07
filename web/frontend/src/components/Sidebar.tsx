@@ -16,6 +16,7 @@ import {
   HelpCircle,
   CheckSquare,
   MessageSquare,
+  Send,
   Swords,
   Bookmark,
   Pencil,
@@ -2128,7 +2129,7 @@ export function Sidebar({
                               padding: 0,
                             }}
                           >
-                            <MessageSquare style={{ width: 13, height: 13 }} />
+                            <Send style={{ width: 13, height: 13 }} />
                           </button>
                           <button
                             type="button"
