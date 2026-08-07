@@ -105,13 +105,22 @@ describe('formatArenaWinnerExport', () => {
 
 describe('formatArenaJsonExport', () => {
   it('serializes the round with winner, scores, and takes', () => {
-    const json = formatArenaJsonExport(sample, (id) => ({
-      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
-    }));
+    const json = formatArenaJsonExport(
+      sample,
+      (id) => ({
+        name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+      }),
+      { exportedAt: '2026-08-07T00:00:00.000Z' },
+    );
     const parsed = JSON.parse(json);
     expect(parsed.exported_from).toBe('arena');
+    expect(parsed.exported_at).toBe('2026-08-07T00:00:00.000Z');
+    expect(parsed.session_id).toBe('s1');
     expect(parsed.prompt).toBe('Should we ship this week?');
+    expect(parsed.prompt_category).toBe('question');
     expect(parsed.winner_agent_id).toBe('agent_1');
+    expect(parsed.tools_used).toEqual([]);
+    expect(parsed.timestamp).toBe('');
     expect(parsed.takes).toHaveLength(2);
     expect(parsed.takes[0]).toMatchObject({
       agent_id: 'agent_1',
@@ -123,5 +132,16 @@ describe('formatArenaJsonExport', () => {
       key_assumption: 'quality bar is fixed',
     });
     expect(json.endsWith('\n')).toBe(true);
+  });
+
+  it('normalizes a missing prompt without crashing', () => {
+    const json = formatArenaJsonExport(
+      { ...sample, prompt: '' },
+      () => ({ name: 'The Analyst' }),
+      { exportedAt: '2026-08-07T00:00:00.000Z' },
+    );
+    const parsed = JSON.parse(json);
+    expect(parsed.prompt).toBe('(no prompt)');
+    expect(parsed.takes).toHaveLength(2);
   });
 });

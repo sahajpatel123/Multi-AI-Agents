@@ -112,6 +112,7 @@ export function formatArenaExport(
 export function formatArenaJsonExport(
   response: PromptResponse,
   resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: { exportedAt?: string },
 ): string {
   const winner = pickArenaWinner(response);
   const sorted = [...response.all_responses].sort((a, b) => {
@@ -120,8 +121,13 @@ export function formatArenaJsonExport(
   });
   const data = {
     exported_from: 'arena',
-    prompt: response.prompt.trim() || '(no prompt)',
+    exported_at: opts?.exportedAt || new Date().toISOString(),
+    session_id: response.session_id,
+    prompt: (response.prompt || '').trim() || '(no prompt)',
+    prompt_category: response.prompt_category,
     winner_agent_id: winner?.response.agent_id ?? response.winner_agent_id ?? null,
+    tools_used: Array.isArray(response.tools_used) ? response.tools_used : [],
+    timestamp: response.timestamp || '',
     takes: sorted.map((scored) => {
       const persona = resolvePersona(scored.response.agent_id);
       return {
