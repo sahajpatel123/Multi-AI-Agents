@@ -328,7 +328,7 @@ export async function getSavedResponses(): Promise<SavedResponseItem[]> {
   const res = await apiFetch(`/api/saved?per_page=200`);
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to load saved responses'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to load saved responses'), res));
   }
   const data = await parseJsonSafely<
     | Array<Record<string, unknown>>
