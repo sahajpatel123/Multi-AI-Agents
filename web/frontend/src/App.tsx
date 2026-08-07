@@ -564,7 +564,12 @@ function App() {
 
   const handleCopyPrompt = useCallback(async () => {
     if (!response) return;
-    const ok = await copyToClipboard(response.prompt);
+    const prompt = (response.prompt || '').trim();
+    if (!prompt) {
+      setError('This round has no question to copy.');
+      return;
+    }
+    const ok = await copyToClipboard(prompt);
     if (ok) {
       setPromptCopied(true);
       window.setTimeout(() => setPromptCopied(false), 1800);
