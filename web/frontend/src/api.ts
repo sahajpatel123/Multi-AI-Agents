@@ -852,9 +852,13 @@ export async function getAgentTemplates(): Promise<AgentTemplatesResponse> {
   const response = await apiFetch(`/api/agent/templates`);
   const data = await parseJsonSafely<AgentTemplatesResponse & { detail?: string }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Failed to load templates'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to load templates'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data?.categories) throw new Error('Invalid templates response');
+  if (!data?.categories) throw new Error(withRequestId('Invalid templates response', response));
   return data;
 }
 
