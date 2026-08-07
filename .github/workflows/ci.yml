@@ -19,6 +19,9 @@ jobs:
   backend:
     name: Backend (pytest + compileall + security)
     runs-on: ubuntu-latest
+    # Guard against a hung test holding the runner hostage indefinitely.
+    # The full pytest suite can take a while, but 45 minutes is generous.
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: backend
