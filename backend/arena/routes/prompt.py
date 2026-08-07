@@ -76,6 +76,17 @@ router = APIRouter(prefix="/api", tags=["prompt"])
 logger = logging.getLogger(__name__)
 
 
+def _correlation_request_id(request: Request) -> str:
+    """Return the middleware-set request ID, falling back to a fresh UUID.
+
+    The RequestIDMiddleware tags every request with ``request.state.request_id``
+    and echoes it as ``X-Request-ID``. Using that same ID for usage records and
+    logs means a client can trace one prompt through the API header, cost rows,
+    and structured logs without extra joins.
+    """
+    return getattr(request.state, "request_id", None) or new_request_id()
+
+
 _PROMPT_IMPROVE_SYSTEM_PROMPT = (
     "You are Arena's prompt polisher. Rewrite the user's question so it is "
     "clearer, more specific, and more likely to draw rigorous multi-perspective "
@@ -237,7 +248,7 @@ async def submit_prompt(
     user: UserResponse = Depends(get_current_user_required),
 ) -> PromptResponse:
     """Submit a prompt to all 4 agents simultaneously."""
-    request_id = new_request_id()
+    request_id = _correlation_request_id(request)
     t_start = time.monotonic()
     tracker = LatencyTracker()
     tracker.mark("pipeline_start")
@@ -589,7 +600,7 @@ async def stream_prompt(
     user: UserResponse = Depends(get_current_user_required),
 ):
     """SSE streaming endpoint — streams agent tokens in real-time."""
-    request_id = new_request_id()
+    request_id = _correlation_request_id(request)
     t_start = time.monotonic()
     tracker = LatencyTracker()
     tracker.mark("pipeline_start")
