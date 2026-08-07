@@ -280,7 +280,7 @@ jobs:
           const fs = require('fs');
           const REQUIRED = {
             'react-router-dom': '7.14.2',
-            'postcss':         '8.5.14',
+            'postcss':         '8.5.23',  # GHSA-fxqj-rqcc-2cmp fixed in 8.5.23+
             'vitest':          '4.1.10',
           };
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
