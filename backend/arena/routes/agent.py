@@ -24,6 +24,7 @@ from arena.core.agent_pipeline import (
 from arena.core.file_ingest import process_upload
 from arena.core.bounded_read import UploadTooLargeError, read_upload_capped
 from arena.core.http_headers import content_disposition_attachment
+from arena.core.observability import correlation_request_id
 from arena.core.live_thread_checker import LIVE_UPDATES_MAX
 from arena.core.upload_store import UPLOAD_DIR, ensure_upload_dir, register_upload, resolve_attachments
 from arena.core.dependencies import get_current_user_required
@@ -2295,6 +2296,7 @@ async def export_task_json(
 async def run_agent_task(
     body: AgentTaskRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -2358,6 +2360,7 @@ async def run_agent_task(
         user_id=user.id,
     )
     bb.mcp_integration_ids = list(body.mcp_integration_ids or [])[:20]
+    request_id = correlation_request_id(http_request)
 
     background_tasks.add_task(
         run_agent_pipeline_background,
@@ -2370,6 +2373,7 @@ async def run_agent_task(
 
     return JSONResponse(
         content={
+            "request_id": request_id,
             "task_id": bb.task_id,
             "status": "running",
             "message": "Pipeline started",
