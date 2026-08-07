@@ -104,6 +104,7 @@ function App() {
   const [exportCopied, setExportCopied] = useState(false);
   const [exportDownloaded, setExportDownloaded] = useState(false);
   const [arenaJsonDownloaded, setArenaJsonDownloaded] = useState(false);
+  const [arenaJsonCopied, setArenaJsonCopied] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
   const [winnerDownloaded, setWinnerDownloaded] = useState(false);
   const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
@@ -544,6 +545,19 @@ function App() {
       void track('arena_download_json');
     } else {
       setError('Could not download the JSON. Try Copy all takes instead.');
+    }
+  }, [resolveArenaPersona, response]);
+
+  const handleCopyArenaJson = useCallback(async () => {
+    if (!response) return;
+    const json = formatArenaJsonExport(response, resolveArenaPersona);
+    const ok = await copyToClipboard(json);
+    if (ok) {
+      setArenaJsonCopied(true);
+      window.setTimeout(() => setArenaJsonCopied(false), 1800);
+      void track('arena_copy_json');
+    } else {
+      setError('Could not copy the JSON. Try Copy all takes instead.');
     }
   }, [resolveArenaPersona, response]);
 
@@ -1646,6 +1660,15 @@ function App() {
                     style={{ fontSize: 12 }}
                   >
                     {exportCopied ? 'Copied comparison' : 'Copy all takes'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => void handleCopyArenaJson()}
+                    title="Copy the full round as JSON"
+                    style={{ fontSize: 12 }}
+                  >
+                    {arenaJsonCopied ? 'JSON copied' : 'Copy JSON'}
                   </button>
                   <button
                     type="button"
