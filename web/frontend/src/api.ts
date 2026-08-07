@@ -107,7 +107,7 @@ function getErrorMessage(
   return fallback;
 }
 
-function withRequestId(message: string, response: Response): string {
+export function withRequestId(message: string, response: Response): string {
   const rid = response.headers.get('x-request-id');
   return rid ? `${message} (Request ID: ${rid})` : message;
 }
