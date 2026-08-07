@@ -105,6 +105,7 @@ function App() {
   const [exportDownloaded, setExportDownloaded] = useState(false);
   const [arenaJsonDownloaded, setArenaJsonDownloaded] = useState(false);
   const [arenaJsonCopied, setArenaJsonCopied] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
   const [winnerDownloaded, setWinnerDownloaded] = useState(false);
   const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
@@ -560,6 +561,18 @@ function App() {
       setError('Could not copy the JSON. Try Copy all takes instead.');
     }
   }, [resolveArenaPersona, response]);
+
+  const handleCopyPrompt = useCallback(async () => {
+    if (!response) return;
+    const ok = await copyToClipboard(response.prompt);
+    if (ok) {
+      setPromptCopied(true);
+      window.setTimeout(() => setPromptCopied(false), 1800);
+      void track('arena_copy_prompt');
+    } else {
+      setError('Could not copy the question. Try selecting it manually.');
+    }
+  }, [response]);
 
   const handleLikeResponse = useCallback((scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
@@ -1630,6 +1643,15 @@ function App() {
               ) : null}
               {isDone && response ? (
                 <>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => void handleCopyPrompt()}
+                    title="Copy the question as text"
+                    style={{ fontSize: 12 }}
+                  >
+                    {promptCopied ? 'Question copied' : 'Copy question'}
+                  </button>
                   <button
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
