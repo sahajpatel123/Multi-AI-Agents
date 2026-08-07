@@ -1782,6 +1782,7 @@ async def start_orchestration(
 @router.get("/orchestrate/{orch_id}")
 async def get_orchestration_status(
     orch_id: str,
+    http_request: Request,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -1851,6 +1852,7 @@ async def get_orchestration_status(
 
     return JSONResponse(
         content={
+            "request_id": correlation_request_id(http_request),
             "id": orch.id,
             "status": orch.status,
             "task_ids": orch.task_ids,
