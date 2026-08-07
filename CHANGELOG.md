@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request ID shown in Arena, Discuss, and Debate stream error messages
 - “Try again” button in the Arena error banner for quick retries
 - “Try again” button in focused-chat error banners for history-safe retries
+- Copy error buttons in Debate Mode error banners
 
 ### Changed
 - Repaired CodeQL action tag after an invalid v5 bump (now pinned to v4)
