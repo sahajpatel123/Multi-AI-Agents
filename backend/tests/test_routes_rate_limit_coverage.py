@@ -33,6 +33,7 @@ Files checked:
   * agent.py    (cycle 48: all 42 routes already defended; suite pins them)
   * auth.py     (cycle 49: login_limiter + user/* rates; dual router/user_router)
   * metrics.py  (cycle 49: admin gate on empty-path GET "")
+  * export_presets.py (cycle 53: per-user rate limits on presets CRUD/preview)
 
 Other route files use different throttling mechanisms:
   * (none remaining in arena/routes — suite covers the full set)
@@ -70,6 +71,7 @@ COVERED_FILES = [
     "agent.py",
     "auth.py",
     "metrics.py",
+    "export_presets.py",
 ]
 
 # Acceptable defenses inside a handler body. Match each as a regex.

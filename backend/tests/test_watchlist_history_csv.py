@@ -8,7 +8,7 @@ def _make_pro(make_user):
     return make_user(email="pro_csv@example.com", tier=UserTier.PRO)
 
 def _auth_headers(user):
-    token = create_access_token({"sub": str(user.id)}, user.email)
+    token = create_access_token(user.id, user.email)
     return {"Authorization": f"Bearer {token}"}
 
 

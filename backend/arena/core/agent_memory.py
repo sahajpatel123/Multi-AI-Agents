@@ -648,6 +648,9 @@ def get_watchlist_history(
         {
             "task_id": t.task_id,
             "title": t.title,
+            "status": "complete" if isinstance(t.final_score, (int, float)) else "",
+            "intelligence_score": t.intelligence_score,
+            "final_answer": t.final_answer,
             "final_score": t.final_score,
             "final_confidence": t.final_confidence,
             "user_feedback": t.user_feedback,
