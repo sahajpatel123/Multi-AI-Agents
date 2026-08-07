@@ -57,6 +57,8 @@ This project implements the following security practices:
   on a weekly schedule with security labels
 - **Secret scanning**: gitleaks with CI integration
 - **Static code analysis**: GitHub CodeQL (Python and JavaScript/TypeScript)
+- **Security headers**: CSP, HSTS (production), X-Frame-Options, COOP/COEP,
+  and other defense-in-depth headers on every response
 - **CI hardening**: every CI/CodeQL/release job has an explicit timeout and
   least-privilege GitHub token permissions where possible
 - **Request tracing**: every response carries `X-Request-ID`; the same ID is
