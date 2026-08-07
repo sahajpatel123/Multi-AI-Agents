@@ -337,6 +337,7 @@ jobs:
   dependency-review:
     name: Dependency review (PR vulnerability gate)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
