@@ -37,6 +37,7 @@ import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from './lib/
 import { safeLocalStorage } from './lib/safeStorage';
 import {
   formatArenaExport,
+  formatArenaCsvExport,
   formatArenaJsonExport,
   formatArenaWinnerExport,
 } from './lib/arenaExport';
@@ -105,6 +106,7 @@ function App() {
   const [exportDownloaded, setExportDownloaded] = useState(false);
   const [arenaJsonDownloaded, setArenaJsonDownloaded] = useState(false);
   const [arenaJsonCopied, setArenaJsonCopied] = useState(false);
+  const [arenaCsvDownloaded, setArenaCsvDownloaded] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
   const [winnerDownloaded, setWinnerDownloaded] = useState(false);
@@ -546,6 +548,23 @@ function App() {
       void track('arena_download_json');
     } else {
       setError('Could not download the JSON. Try Copy all takes instead.');
+    }
+  }, [resolveArenaPersona, response]);
+
+  const handleDownloadArenaCsv = useCallback(() => {
+    if (!response) return;
+    const csv = formatArenaCsvExport(response, resolveArenaPersona);
+    const stem = `arena-${(response.prompt || 'round').slice(0, 48)}`;
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate(stem)}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    if (ok) {
+      setArenaCsvDownloaded(true);
+      window.setTimeout(() => setArenaCsvDownloaded(false), 1800);
+      void track('arena_download_csv');
+    } else {
+      setError('Could not download the CSV. Try Copy all takes instead.');
     }
   }, [resolveArenaPersona, response]);
 
@@ -1714,6 +1733,15 @@ function App() {
                     style={{ fontSize: 12 }}
                   >
                     {arenaJsonDownloaded ? 'Saved JSON' : 'Download .json'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => handleDownloadArenaCsv()}
+                    title="Download the full round as a CSV file"
+                    style={{ fontSize: 12 }}
+                  >
+                    {arenaCsvDownloaded ? 'Saved CSV' : 'Download .csv'}
                   </button>
                   {currentPrompt ? (
                     <ReRunRoundButton

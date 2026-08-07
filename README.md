@@ -4,6 +4,13 @@
 
 ---
 
+## CI Status
+
+[![CI](https://github.com/sahajpatel123/Multi-AI-Agents/actions/workflows/ci.yml/badge.svg)](https://github.com/sahajpatel123/Multi-AI-Agents/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/sahajpatel123/Multi-AI-Agents/actions/workflows/codeql.yml/badge.svg)](https://github.com/sahajpatel123/Multi-AI-Agents/actions/workflows/codeql.yml)
+
+---
+
 ## What it does
 
 Send a prompt. Four AI agents — each with a distinct reasoning style — answer simultaneously, streamed token-by-token. A scorer LLM evaluates every response on relevance, insight, clarity, and intellectual honesty, then surfaces the winner. Drill into any agent's full answer, challenge its reasoning in **Debate Mode**, or have a private follow-up thread in **Focus Mode**.

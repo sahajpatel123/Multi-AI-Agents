@@ -154,6 +154,55 @@ export function formatArenaJsonExport(
   return JSON.stringify(data, null, 2) + '\n';
 }
 
+function toCsvCell(value: string | number | boolean | null | undefined): string {
+  const raw = value == null ? '' : String(value);
+  return `"${raw.replace(/"/g, '""')}"`;
+}
+
+/**
+ * CSV export for a full Arena round (one row per take).
+ */
+export function formatArenaCsvExport(
+  response: PromptResponse,
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+): string {
+  const sorted = [...response.all_responses].sort((a, b) => {
+    if (a.is_winner !== b.is_winner) return a.is_winner ? -1 : 1;
+    return b.score - a.score;
+  });
+  const headers = [
+    'agentName',
+    'prompt',
+    'oneLiner',
+    'verdict',
+    'score',
+    'confidence',
+    'winner',
+    'keyAssumption',
+  ];
+  const lines: string[] = [headers.map(toCsvCell).join(',')];
+  for (const scored of sorted) {
+    const persona = resolvePersona(scored.response.agent_id);
+    lines.push(
+      [
+        persona.name || scored.response.agent_id,
+        (response.prompt || '').trim() || '(no prompt)',
+        (scored.response.one_liner || '').trim(),
+        (scored.response.verdict || '').trim(),
+        typeof scored.score === 'number' && Number.isFinite(scored.score) ? scored.score : '',
+        typeof scored.response.confidence === 'number' && Number.isFinite(scored.response.confidence)
+          ? scored.response.confidence
+          : '',
+        scored.is_winner ? 'yes' : 'no',
+        (scored.response.key_assumption || '').trim(),
+      ]
+        .map(toCsvCell)
+        .join(','),
+    );
+  }
+  return lines.join('\n') + '\n';
+}
+
 function formatAgentBlock(scored: ScoredAgent, persona: ArenaExportPersona): string {
   const name = persona.name || scored.response.agent_id;
   const badge = scored.is_winner ? ' · winner' : '';

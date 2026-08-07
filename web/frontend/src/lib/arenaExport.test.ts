@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatArenaExport,
+  formatArenaCsvExport,
   formatArenaJsonExport,
   formatArenaWinnerExport,
   pickArenaWinner,
@@ -202,5 +203,18 @@ describe('formatArenaJsonExport', () => {
     const parsed = JSON.parse(json);
     expect(parsed.prompt).toBe('(no prompt)');
     expect(parsed.takes).toHaveLength(2);
+  });
+});
+
+describe('formatArenaCsvExport', () => {
+  it('writes one row per take with winner first', () => {
+    const csv = formatArenaCsvExport(sample, (id) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    }));
+    expect(csv).toContain('"agentName","prompt","oneLiner","verdict","score","confidence","winner","keyAssumption"');
+    expect(csv.indexOf('"The Analyst"')).toBeLessThan(csv.indexOf('"The Philosopher"'));
+    expect(csv).toContain('"yes"');
+    expect(csv).toContain('"quality bar is fixed"');
+    expect(csv.endsWith('\n')).toBe(true);
   });
 });
