@@ -1647,12 +1647,12 @@ export async function suggestFollowUps(
   >(response);
   if (!response.ok) {
     throw new ApiError(
-      getErrorMessage(data, 'Could not suggest follow-ups'),
+      withRequestId(getErrorMessage(data, 'Could not suggest follow-ups'), response),
       response.status,
       data,
     );
   }
-  if (!data) throw new Error('Empty follow-up suggestions response');
+  if (!data) throw new Error(withRequestId('Empty follow-up suggestions response', response));
   return data;
 }
 
