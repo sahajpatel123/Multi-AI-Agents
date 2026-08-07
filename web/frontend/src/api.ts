@@ -480,6 +480,7 @@ export async function submitPrompt(
 }
 
 export interface StreamCallbacks {
+  onRequestId?: (data: { request_id: string }) => void;
   onPipeline?: (data: { passed: boolean; category: string; rejection_reason: string | null }) => void;
   onToken?: (data: { agent_id: string; token: string }) => void;
   onAgentDone?: (data: { agent_id: string }) => void;
@@ -584,6 +585,9 @@ export async function streamPrompt(
 
   await consumeSseStream(response.body, signal, (event, data) => {
     switch (event) {
+      case 'request_id':
+        callbacks.onRequestId?.(data);
+        break;
       case 'pipeline':
         callbacks.onPipeline?.(data);
         break;

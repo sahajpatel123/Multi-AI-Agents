@@ -40,6 +40,12 @@ class TestPromptStreamingEndpoint:
         events = self._parse_sse_events(res.text)
         event_types = [e["event"] for e in events]
 
+        # First event must advertise the correlation request ID.
+        request_id_events = [e for e in events if e["event"] == "request_id"]
+        assert len(request_id_events) == 1
+        assert request_id_events[0]["data"]["request_id"]
+        assert event_types[0] == "request_id"
+
         # Should have pipeline event first
         assert "pipeline" in event_types
 

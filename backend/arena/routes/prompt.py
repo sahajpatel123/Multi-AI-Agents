@@ -618,6 +618,10 @@ async def stream_prompt(
     cost = RequestCostAccumulator(request_id=request_id)
 
     async def event_generator():
+        # First event tells the client which request ID this stream maps to.
+        # It lets the frontend correlate the stream with usage/cost logs and
+        # support requests, matching the X-Request-ID response header.
+        yield _sse_event("request_id", {"request_id": request_id})
         gather_task = None
         try:
             try:
