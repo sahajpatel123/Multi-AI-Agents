@@ -424,13 +424,20 @@ jobs:
       - name: PR diff size check
         if: github.event_name == 'pull_request'
         run: |
-          # Fail PRs with more than 1000 lines changed to encourage smaller,
-          # more reviewable PRs. Use `git diff --stat` to see breakdown.
-          diff_size=$(git diff --stat origin/main...HEAD | wc -l | tr -d ' ')
-          if [ "$diff_size" -gt 50 ]; then
-            echo "::warning::PR diff is large ($diff_size lines); consider breaking into smaller changes"
+          # Check PR diff size for visibility. Large PRs (>50 changed files)
+          # are flagged as warnings to encourage smaller, more reviewable changes.
+          # Uses GitHub's compare API to get accurate file count.
+          base_sha=${{ github.event.pull_request.base.sha }}
+          head_sha=${{ github.event.pull_request.head.sha }}
+          file_count=$(curl -sSL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/compare/${base_sha}...${head_sha}" \
+            | jq '.files | length')
+          echo "Files changed: $file_count"
+          if [ "$file_count" -gt 50 ]; then
+            echo "::warning::PR diff is large ($file_count files); consider breaking into smaller changes"
           fi
-          git diff --stat origin/main...HEAD
+          # Show detailed diff stats
+          git diff --stat "${base_sha}...${head_sha}"
 
       - name: Summary
         if: always()
