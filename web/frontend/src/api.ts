@@ -1201,10 +1201,14 @@ export async function getAgentTaskDetail(taskId: string): Promise<AgentTaskDetai
     AgentTaskDetailPayload & { detail?: string | { message?: string } }
   >(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Task detail request failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Task detail request failed'), response),
+      response.status,
+      data,
+    );
   }
   if (!data || !data.task || !data.task.task_id) {
-    throw new Error('Empty or invalid task detail response');
+    throw new Error(withRequestId('Empty or invalid task detail response', response));
   }
   return {
     task: data.task,
