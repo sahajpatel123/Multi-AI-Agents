@@ -1,0 +1,30 @@
+# CODEOWNERS - Default reviewers for repository files
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global default
+*                       @sahajpatel123
+
+# Backend code
+/backend/                @sahajpatel123
+/backend/arena/          @sahajpatel123
+/backend/tests/          @sahajpatel123
+
+# Frontend code
+/web/frontend/           @sahajpatel123
+/web/frontend/src/      @sahajpatel123
+
+# CI/CD configuration
+/.github/workflows/     @sahajpatel123
+/.github/dependabot.yml  @sahajpatel123
+
+# Security
+/.gitleaks.toml         @sahajpatel123
+/SECURITY.md            @sahajpatel123
+
+# Documentation
+/README.md              @sahajpatel123
+/AGENTS.md              @sahajpatel123
+/TASKS.md               @sahajpatel123
+
+# Environment configuration
+/backend/.env.example   @sahajpatel123
