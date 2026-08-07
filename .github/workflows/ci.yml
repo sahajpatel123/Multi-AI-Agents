@@ -367,6 +367,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [backend, frontend]
+    permissions:
+      contents: read
+      actions: write
     defaults:
       run:
         working-directory: web/frontend
