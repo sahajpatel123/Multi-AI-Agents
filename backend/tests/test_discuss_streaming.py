@@ -39,6 +39,11 @@ class TestDiscussStreamingEndpoint:
         events = self._parse_sse_events(res.text)
         event_types = [e["event"] for e in events]
 
+        request_id_events = [e for e in events if e["event"] == "request_id"]
+        assert len(request_id_events) == 1
+        assert request_id_events[0]["data"]["request_id"]
+        assert event_types[0] == "request_id"
+
         # Should have token events (streaming)
         token_events = [e for e in events if e["event"] == "token"]
         assert len(token_events) > 0

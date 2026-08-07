@@ -90,6 +90,16 @@ def new_request_id() -> str:
     return str(uuid.uuid4())
 
 
+def correlation_request_id(request) -> str:
+    """Return the middleware-set request ID, falling back to a fresh UUID.
+
+    The RequestIDMiddleware tags every request with ``request.state.request_id``
+    and echoes it as ``X-Request-ID``. Using that same ID for usage records,
+    logs, and stream events means a client can trace one request end-to-end.
+    """
+    return getattr(request.state, "request_id", None) or new_request_id()
+
+
 def log_request(
     request_id: str,
     user_id: str,

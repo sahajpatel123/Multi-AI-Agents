@@ -31,11 +31,11 @@ from arena.core.memory import SessionOwnershipError, get_memory_manager
 from arena.core.model_router import get_route_for_task
 from arena.core.observability import (
     LatencyTracker,
+    correlation_request_id,
     log_rate_limit_hit,
     log_request,
     log_toxicity_rejection,
     log_unhandled_exception,
-    new_request_id,
 )
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.agents import get_all_agents, get_persona_id_for_agent
@@ -74,17 +74,6 @@ from arena.models.schemas import (
 router = APIRouter(prefix="/api", tags=["prompt"])
 
 logger = logging.getLogger(__name__)
-
-
-def _correlation_request_id(request: Request) -> str:
-    """Return the middleware-set request ID, falling back to a fresh UUID.
-
-    The RequestIDMiddleware tags every request with ``request.state.request_id``
-    and echoes it as ``X-Request-ID``. Using that same ID for usage records and
-    logs means a client can trace one prompt through the API header, cost rows,
-    and structured logs without extra joins.
-    """
-    return getattr(request.state, "request_id", None) or new_request_id()
 
 
 _PROMPT_IMPROVE_SYSTEM_PROMPT = (
@@ -248,7 +237,7 @@ async def submit_prompt(
     user: UserResponse = Depends(get_current_user_required),
 ) -> PromptResponse:
     """Submit a prompt to all 4 agents simultaneously."""
-    request_id = _correlation_request_id(request)
+    request_id = correlation_request_id(request)
     t_start = time.monotonic()
     tracker = LatencyTracker()
     tracker.mark("pipeline_start")
@@ -601,7 +590,7 @@ async def stream_prompt(
     user: UserResponse = Depends(get_current_user_required),
 ):
     """SSE streaming endpoint — streams agent tokens in real-time."""
-    request_id = _correlation_request_id(request)
+    request_id = correlation_request_id(request)
     t_start = time.monotonic()
     tracker = LatencyTracker()
     tracker.mark("pipeline_start")

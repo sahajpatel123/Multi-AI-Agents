@@ -35,6 +35,7 @@ from arena.core.agents import (
     get_model_for_persona,
 )
 from arena.core.model_router import get_route_for_persona
+from arena.core.observability import correlation_request_id
 
 
 logger = logging.getLogger(__name__)
@@ -332,12 +333,16 @@ async def stream_debate_round(
         )
 
     session_id = request.session_id or str(uuid.uuid4())
+    request_id = correlation_request_id(http_request)
 
     reacting_ids = [agent.agent_id for agent in active_agents if agent.agent_id != request.challenged_agent_id]
     # Auth is resolved once, before the stream starts. Do not re-validate inside the generator.
     authenticated_user = user
 
     async def event_generator():
+        # First event tells the client which request ID this stream maps to,
+        # matching the X-Request-ID response header for support correlation.
+        yield _sse_event("request_id", {"request_id": request_id})
         run_task = None
         try:
             _ = authenticated_user
