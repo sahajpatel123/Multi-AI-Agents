@@ -319,6 +319,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Frontend CI Summary"
+          echo "- Job: ${{ github.job }}"
+          echo "- Status: ${{ job.status }}"
+          echo "- Commit: ${{ github.sha }}"
+
   e2e:
     name: E2E (Playwright smoke)
     runs-on: ubuntu-latest
