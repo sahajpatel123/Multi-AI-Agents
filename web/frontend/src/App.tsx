@@ -105,6 +105,7 @@ function App() {
   const [exportDownloaded, setExportDownloaded] = useState(false);
   const [arenaJsonDownloaded, setArenaJsonDownloaded] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
+  const [winnerDownloaded, setWinnerDownloaded] = useState(false);
   const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
   const [followUpSuggestionsSource, setFollowUpSuggestionsSource] = useState<'llm' | 'fallback'>('llm');
   const [recentPrompts, setRecentPrompts] = useState<RecentPrompt[]>(() => loadRecentPrompts());
@@ -497,6 +498,20 @@ function App() {
       setError('Could not copy the winner. Try again or copy from the winning card.');
     }
   }, [buildArenaWinnerMarkdown]);
+
+  const handleDownloadWinner = useCallback(() => {
+    const md = buildArenaWinnerMarkdown();
+    if (!md) return;
+    const stem = `arena-winner-${(response?.prompt || 'take').slice(0, 48)}`;
+    const ok = downloadMarkdownFile(md, stem);
+    if (ok) {
+      setWinnerDownloaded(true);
+      window.setTimeout(() => setWinnerDownloaded(false), 1800);
+      void track('arena_download_winner');
+    } else {
+      setError('Could not download the winner. Try Copy winner instead.');
+    }
+  }, [buildArenaWinnerMarkdown, response?.prompt]);
 
   const handleDownloadAllTakes = useCallback(() => {
     const md = buildArenaComparisonMarkdown();
@@ -1608,6 +1623,15 @@ function App() {
                     style={{ fontSize: 12 }}
                   >
                     {winnerCopied ? 'Winner copied' : 'Copy winner'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => handleDownloadWinner()}
+                    title="Download the winning take as markdown"
+                    style={{ fontSize: 12 }}
+                  >
+                    {winnerDownloaded ? 'Winner saved' : 'Download winner'}
                   </button>
                   <button
                     type="button"
