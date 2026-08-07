@@ -1082,9 +1082,12 @@ export async function uploadAgentFile(file: File): Promise<{
   }>(response);
   if (!response.ok || !data?.file_id) {
     throw new ApiError(
-      getErrorMessage(
-        data as { detail?: string | { message?: string } },
-        response.status === 413 ? 'File too large (max 10MB)' : 'Upload failed',
+      withRequestId(
+        getErrorMessage(
+          data as { detail?: string | { message?: string } },
+          response.status === 413 ? 'File too large (max 10MB)' : 'Upload failed',
+        ),
+        response,
       ),
       response.status,
       data,
