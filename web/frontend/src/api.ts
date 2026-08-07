@@ -1702,9 +1702,13 @@ export async function toggleAgentTaskLive(
   );
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Live toggle failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Live toggle failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty live toggle response');
+  if (!data) throw new Error(withRequestId('Empty live toggle response', response));
   return data;
 }
 
@@ -1722,9 +1726,13 @@ export async function markAgentLiveUpdatesRead(
   );
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Mark read failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Mark read failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty mark-read response');
+  if (!data) throw new Error(withRequestId('Empty mark-read response', response));
   return data;
 }
 
@@ -1744,10 +1752,14 @@ export async function renameAgentTask(
     { success?: boolean; title?: string; detail?: string | { message?: string } }
   >(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Rename failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Rename failed'), response),
+      response.status,
+      data,
+    );
   }
   if (!data || data.success !== true || typeof data.title !== 'string') {
-    throw new Error('Invalid rename response');
+    throw new Error(withRequestId('Invalid rename response', response));
   }
   return { success: true, title: data.title };
 }
@@ -1761,10 +1773,14 @@ export async function deleteAgentTask(taskId: string): Promise<{ success: boolea
     response,
   );
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Delete failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Delete failed'), response),
+      response.status,
+      data,
+    );
   }
   if (!data || data.success !== true) {
-    throw new Error('Invalid delete response');
+    throw new Error(withRequestId('Invalid delete response', response));
   }
   return { success: true };
 }
@@ -1786,7 +1802,11 @@ export async function cancelAgentTask(
     CancelAgentTaskResponse & { detail?: string | { message?: string } }
   >(response);
   if (!response.ok || !data?.task_id) {
-    throw new ApiError(getErrorMessage(data, 'Cancel failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Cancel failed'), response),
+      response.status,
+      data,
+    );
   }
   return data;
 }
