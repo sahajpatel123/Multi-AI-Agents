@@ -233,10 +233,14 @@ export async function fetchScoringAudit(
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to load scoring audit'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load scoring audit'), response),
+      response.status,
+      err,
+    );
   }
   const data = await parseJsonSafely<ScoringAuditResponse>(response);
-  if (!data) throw new Error('Empty scoring audit response');
+  if (!data) throw new Error(withRequestId('Empty scoring audit response', response));
   return data;
 }
 
@@ -2315,7 +2319,7 @@ export async function exportScoringAuditCsv(
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
     throw new ApiError(
-      getErrorMessage(err, 'Failed to export scoring audit CSV'),
+      withRequestId(getErrorMessage(err, 'Failed to export scoring audit CSV'), response),
       response.status,
       err,
     );
