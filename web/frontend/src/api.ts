@@ -391,7 +391,7 @@ export async function deleteSavedResponse(id: number): Promise<void> {
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to delete saved response'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to delete saved response'), res));
   }
 }
 
