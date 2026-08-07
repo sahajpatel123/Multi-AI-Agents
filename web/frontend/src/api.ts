@@ -266,7 +266,7 @@ export async function saveMemory(sessionId: string, trigger: 'session_end' | 'ne
   });
 
   if (!res.ok) {
-    throw new Error('Failed to save memory');
+    throw new Error(withRequestId('Failed to save memory', res));
   }
 }
 
@@ -1760,9 +1760,13 @@ export async function getMemoryContext(task: string = ''): Promise<unknown> {
   const response = await apiFetch(`/api/agent/memory/context?task=${q}`);
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Memory context failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Memory context failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty memory context');
+  if (!data) throw new Error(withRequestId('Empty memory context', response));
   return data;
 }
 
