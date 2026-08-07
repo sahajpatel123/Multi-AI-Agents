@@ -2384,6 +2384,7 @@ async def run_agent_task(
 @router.get("/status/{task_id}")
 async def get_agent_status(
     task_id: str,
+    http_request: Request,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -2402,6 +2403,7 @@ async def get_agent_status(
         _ensure_task_owner(bb, user)
         return JSONResponse(
             content={
+                "request_id": correlation_request_id(http_request),
                 "task_id": bb.task_id,
                 "status": _stage_status_value(bb.status),
                 "current_stage": bb.current_stage,
@@ -2431,6 +2433,7 @@ async def get_agent_status(
     complete = "complete"
     return JSONResponse(
         content={
+            "request_id": correlation_request_id(http_request),
             "task_id": row.task_id,
             "status": complete,
             "current_stage": "done",

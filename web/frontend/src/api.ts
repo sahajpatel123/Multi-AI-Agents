@@ -936,6 +936,7 @@ export type AgentStartResponse = {
 };
 
 export type AgentStatusPayload = {
+  request_id?: string | null;
   task_id: string;
   status: string;
   current_stage?: string;
