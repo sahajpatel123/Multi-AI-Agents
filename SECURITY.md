@@ -68,6 +68,8 @@ This project implements the following security practices:
   surfaced in SSE streams and error messages for end-to-end correlation
 - **CORS**: locked to an environment allowlist; only `X-Request-ID` is
   exposed for browser-side correlation
+- **Security advisories**: vulnerability reports are handled through GitHub
+  Security Advisories with a 48-hour initial response target
 - **Input validation**: Request size limits, input sanitization
 - **Authentication**: JWT with bcrypt passwords, token revocation
 - **Rate limiting**: IP-based and user-based rate limits
