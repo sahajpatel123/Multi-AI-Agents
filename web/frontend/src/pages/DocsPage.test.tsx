@@ -78,6 +78,12 @@ describe('DocsPage', () => {
     expect(within(explorer as HTMLElement).getByText(/signed webhook lifecycle/i)).toBeInTheDocument();
   });
 
+  it('documents request-id tracing in the API surface chapter', () => {
+    const { container } = renderPage();
+    const notes = Array.from(container.querySelectorAll('#api p'));
+    expect(notes.some((note) => note.textContent?.includes('X-Request-ID header'))).toBe(true);
+  });
+
   it('keeps chapter navigation in the On this page rail without a duplicate hero index', () => {
     const { container } = renderPage();
 
