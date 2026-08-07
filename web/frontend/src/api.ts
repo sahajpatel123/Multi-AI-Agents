@@ -1211,13 +1211,14 @@ export async function postAgentOrchestrate(body: {
   questions: string[];
   expertise_level?: string;
   expertise_domain?: string;
-}): Promise<{ orchestration_id: string; task_ids: string[] }> {
+}): Promise<{ request_id?: string | null; orchestration_id: string; task_ids: string[] }> {
   const response = await apiFetch(`/api/agent/orchestrate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   const data = await parseJsonSafely<{
+    request_id?: string | null;
     orchestration_id?: string;
     task_ids?: string[];
     detail?: string | { message?: string };
@@ -1226,7 +1227,11 @@ export async function postAgentOrchestrate(body: {
     throw new ApiError(getErrorMessage(data, 'Orchestration failed'), response.status, data);
   }
   if (!data.orchestration_id || !data.task_ids) throw new Error('Invalid orchestration response');
-  return { orchestration_id: data.orchestration_id, task_ids: data.task_ids };
+  return {
+    request_id: data.request_id || null,
+    orchestration_id: data.orchestration_id,
+    task_ids: data.task_ids,
+  };
 }
 
 export async function getAgentOrchestration(orchId: string): Promise<any> {
