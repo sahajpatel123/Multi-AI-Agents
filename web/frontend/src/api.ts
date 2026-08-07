@@ -379,7 +379,7 @@ export async function saveResponse(payload: {
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to save response'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to save response'), res));
   }
   const data = (await parseJsonSafely<{ id?: number }>(res)) || {};
   return Number(data.id);
@@ -412,7 +412,7 @@ export async function setSavedResponsePinned(
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to update saved take'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to update saved take'), res));
   }
   const body = await parseJsonSafely<Partial<SavedPinResult>>(res);
   return {
@@ -442,7 +442,7 @@ export async function setSavedResponsesPinned(
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to update saved takes'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to update saved takes'), res));
   }
   const body = await parseJsonSafely<Partial<SavedBulkPinResult>>(res);
   return {
