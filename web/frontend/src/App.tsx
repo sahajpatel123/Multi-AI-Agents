@@ -2212,6 +2212,24 @@ function App() {
                     {focusedChatError && (
                       <div style={{ borderRadius: '10px', border: '0.5px solid rgba(196,149,106,0.3)', background: '#FFFFFF', padding: '0.75rem' }}>
                         <p style={{ fontSize: '11px', color: '#A0A39A' }}>{focusedChatError}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void copyToClipboard(focusedChatError);
+                            queueFeedbackReset('copy', 'focused-error');
+                          }}
+                          style={{
+                            marginTop: 6,
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: 11,
+                            color: '#6B6460',
+                            padding: 0,
+                          }}
+                        >
+                          {copyFeedback['focused-error'] ? 'Copied' : 'Copy error'}
+                        </button>
                       </div>
                     )}
 
