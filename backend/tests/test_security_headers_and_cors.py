@@ -64,6 +64,18 @@ async def test_cors_preflight_allows_known_origin_only(app_client):
     }:
         assert ok.headers.get("access-control-allow-origin") == "http://localhost:5173"
 
+    # Actual cross-origin GET responses must expose X-Request-ID so browser
+    # JS can read the request correlation header.
+    actual = await app_client.get(
+        "/api/health",
+        headers={"Origin": "http://localhost:5173"},
+    )
+    expose = actual.headers.get("access-control-expose-headers") or ""
+    assert "x-request-id" in expose.lower(), (
+        f"GET response must expose X-Request-ID so browser JS can read it; "
+        f"got {expose!r}"
+    )
+
     denied = await app_client.options(
         "/api/health",
         headers={
