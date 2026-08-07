@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from sqlalchemy.orm import Session
+from starlette.requests import Request
 
 from arena.db_models import PersonaDriftLog, ScoringAudit, UXEvent
 
@@ -90,7 +91,7 @@ def new_request_id() -> str:
     return str(uuid.uuid4())
 
 
-def correlation_request_id(request) -> str:
+def correlation_request_id(request: Request) -> str:
     """Return the middleware-set request ID, falling back to a fresh UUID.
 
     The RequestIDMiddleware tags every request with ``request.state.request_id``
