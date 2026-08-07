@@ -59,6 +59,8 @@ This project implements the following security practices:
   least-privilege GitHub token permissions where possible
 - **Request tracing**: every response carries `X-Request-ID`; the same ID is
   surfaced in SSE streams and error messages for end-to-end correlation
+- **CORS**: locked to an environment allowlist; only `X-Request-ID` is
+  exposed for browser-side correlation
 - **Input validation**: Request size limits, input sanitization
 - **Authentication**: JWT with bcrypt passwords, token revocation
 - **Rate limiting**: IP-based and user-based rate limits
