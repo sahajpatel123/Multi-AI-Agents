@@ -88,7 +88,7 @@ export function formatArenaExport(
   const lines: string[] = [];
   lines.push('# Arena — four minds');
   lines.push('');
-  lines.push(`**Question:** ${response.prompt.trim() || '(no prompt)'}`);
+  lines.push(`**Question:** ${(response.prompt || '').trim() || '(no prompt)'}`);
   lines.push('');
 
   const sorted = [...response.all_responses].sort((a, b) => {

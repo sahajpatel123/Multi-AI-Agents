@@ -57,6 +57,14 @@ describe('formatArenaExport', () => {
     expect(md).toContain('Ship the smallest honest slice.');
     expect(md).toContain('Question the deadline first.');
   });
+
+  it('normalizes a missing prompt without crashing', () => {
+    const md = formatArenaExport(
+      { ...sample, prompt: '' },
+      (id) => ({ name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher' }),
+    );
+    expect(md).toContain('(no prompt)');
+  });
 });
 
 describe('pickArenaWinner', () => {
@@ -71,6 +79,15 @@ describe('pickArenaWinner', () => {
       all_responses: sample.all_responses.map((r) => ({ ...r, is_winner: false })),
     };
     expect(pickArenaWinner(unflagged)?.response.agent_id).toBe('agent_1');
+  });
+
+  it('falls back to highest score when neither flag nor winner_agent_id', () => {
+    const byScore: PromptResponse = {
+      ...sample,
+      winner_agent_id: '',
+      all_responses: sample.all_responses.map((r) => ({ ...r, is_winner: false })),
+    };
+    expect(pickArenaWinner(byScore)?.response.agent_id).toBe('agent_1');
   });
 
   it('returns null for empty responses', () => {
@@ -100,6 +117,46 @@ describe('formatArenaWinnerExport', () => {
       () => ({ name: 'X' }),
     );
     expect(md).toContain('No winning take available');
+  });
+
+  it('does not duplicate the full take when verdict matches one_liner', () => {
+    const collapsed: PromptResponse = {
+      ...sample,
+      all_responses: [
+        {
+          is_winner: true,
+          score: 80,
+          response: {
+            agent_id: 'agent_1',
+            agent_number: 1,
+            one_liner: 'Ship it.',
+            verdict: 'Ship it.',
+            confidence: 0.8,
+            key_assumption: '',
+            timestamp: '',
+          },
+        },
+      ],
+    };
+    const md = formatArenaWinnerExport(collapsed, () => ({ name: 'The Analyst' }));
+    expect(md).toContain('> Ship it.');
+    expect(md).not.toContain('## Full take');
+  });
+
+  it('falls back to agent id when persona name is missing', () => {
+    const md = formatArenaWinnerExport(sample, () => ({ name: '' }));
+    expect(md).toContain('# agent_1 · Arena winner');
+  });
+
+  it('omits score line when score is missing', () => {
+    const noScore: PromptResponse = {
+      ...sample,
+      all_responses: sample.all_responses.map((r) => ({ ...r, score: undefined as unknown as number })),
+    };
+    const md = formatArenaWinnerExport(noScore, (id) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    }));
+    expect(md).not.toContain('**Score:**');
   });
 });
 
