@@ -128,6 +128,7 @@ export function formatArenaJsonExport(
     winner_agent_id: winner?.response.agent_id ?? response.winner_agent_id ?? null,
     tools_used: Array.isArray(response.tools_used) ? response.tools_used : [],
     timestamp: response.timestamp || '',
+    integrity: response.integrity || null,
     takes: sorted.map((scored) => {
       const persona = resolvePersona(scored.response.agent_id);
       return {
@@ -146,6 +147,7 @@ export function formatArenaJsonExport(
         one_liner: (scored.response.one_liner || '').trim() || null,
         verdict: (scored.response.verdict || '').trim() || null,
         key_assumption: (scored.response.key_assumption || '').trim() || null,
+        contradiction: scored.contradiction || null,
       };
     }),
   };

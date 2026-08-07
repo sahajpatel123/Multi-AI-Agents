@@ -178,6 +178,7 @@ describe('formatArenaJsonExport', () => {
     expect(parsed.winner_agent_id).toBe('agent_1');
     expect(parsed.tools_used).toEqual([]);
     expect(parsed.timestamp).toBe('');
+    expect(parsed.integrity).toBeNull();
     expect(parsed.takes).toHaveLength(2);
     expect(parsed.takes[0]).toMatchObject({
       agent_id: 'agent_1',
@@ -187,6 +188,7 @@ describe('formatArenaJsonExport', () => {
       confidence: 0.9,
       one_liner: 'Ship the smallest honest slice.',
       key_assumption: 'quality bar is fixed',
+      contradiction: null,
     });
     expect(json.endsWith('\n')).toBe(true);
   });
