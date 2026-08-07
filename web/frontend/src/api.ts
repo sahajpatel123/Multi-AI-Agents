@@ -1130,9 +1130,13 @@ export async function getAgentStatus(taskId: string): Promise<AgentStatusPayload
     response,
   );
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Status request failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Status request failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty status response');
+  if (!data) throw new Error(withRequestId('Empty status response', response));
   return data;
 }
 
@@ -1140,9 +1144,13 @@ export async function getAgentResult(taskId: string): Promise<unknown> {
   const response = await apiFetch(`/api/agent/result/${taskId}`);
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Result request failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Result request failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty result response');
+  if (!data) throw new Error(withRequestId('Empty result response', response));
   return data;
 }
 
