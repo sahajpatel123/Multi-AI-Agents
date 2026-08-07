@@ -502,7 +502,10 @@ function App() {
   const handleDownloadWinner = useCallback(() => {
     const md = buildArenaWinnerMarkdown();
     if (!md) return;
-    const stem = `arena-winner-${(response?.prompt || 'take').slice(0, 48)}`;
+    const winnerName = response?.winner_agent_id
+      ? resolveArenaPersona(response.winner_agent_id).name
+      : 'winner';
+    const stem = `arena-winner-${winnerName}-${(response?.prompt || 'take').slice(0, 40)}`;
     const ok = downloadMarkdownFile(md, stem);
     if (ok) {
       setWinnerDownloaded(true);
@@ -511,7 +514,7 @@ function App() {
     } else {
       setError('Could not download the winner. Try Copy winner instead.');
     }
-  }, [buildArenaWinnerMarkdown, response?.prompt]);
+  }, [buildArenaWinnerMarkdown, resolveArenaPersona, response?.prompt, response?.winner_agent_id]);
 
   const handleDownloadAllTakes = useCallback(() => {
     const md = buildArenaComparisonMarkdown();
