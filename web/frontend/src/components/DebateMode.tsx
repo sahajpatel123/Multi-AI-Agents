@@ -107,6 +107,7 @@ export function DebateMode({
   const [debateHistory, setDebateHistory] = useState<DebateMessage[]>([]);
   const [currentRound, setCurrentRound] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [errorCopied, setErrorCopied] = useState(false);
   const [expandedRounds, setExpandedRounds] = useState<Record<number, boolean>>({});
 
   const [streamingTexts, setStreamingTexts] = useState<Record<string, string>>({});
@@ -972,6 +973,25 @@ export function DebateMode({
               <p style={{ fontSize: '13px', color: '#A0A39A', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
               <button
                 type="button"
+                aria-label="Copy error"
+                onClick={() => {
+                  void copyToClipboard(error);
+                  setErrorCopied(true);
+                  window.setTimeout(() => setErrorCopied(false), 1500);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  color: '#6B6460',
+                  flexShrink: 0,
+                }}
+              >
+                {errorCopied ? 'Copied' : 'Copy'}
+              </button>
+              <button
+                type="button"
                 aria-label="Dismiss error"
                 onClick={() => setError(null)}
                 style={{
@@ -1099,6 +1119,25 @@ export function DebateMode({
                 }}
               >
                 <p style={{ fontSize: '13px', color: '#A0A39A', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
+                <button
+                  type="button"
+                  aria-label="Copy error"
+                  onClick={() => {
+                    void copyToClipboard(error);
+                    setErrorCopied(true);
+                    window.setTimeout(() => setErrorCopied(false), 1500);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    color: '#6B6460',
+                    flexShrink: 0,
+                  }}
+                >
+                  {errorCopied ? 'Copied' : 'Copy'}
+                </button>
                 <button
                   type="button"
                   aria-label="Dismiss error"
