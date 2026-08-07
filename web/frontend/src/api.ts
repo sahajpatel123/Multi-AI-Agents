@@ -1224,9 +1224,15 @@ export async function postAgentOrchestrate(body: {
     detail?: string | { message?: string };
   }>(response);
   if (!data || !response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Orchestration failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Orchestration failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data.orchestration_id || !data.task_ids) throw new Error('Invalid orchestration response');
+  if (!data.orchestration_id || !data.task_ids) {
+    throw new Error(withRequestId('Invalid orchestration response', response));
+  }
   return {
     request_id: data.request_id || null,
     orchestration_id: data.orchestration_id,
@@ -1238,7 +1244,11 @@ export async function getAgentOrchestration(orchId: string): Promise<any> {
   const response = await apiFetch(`/api/agent/orchestrate/${encodeURIComponent(orchId)}`);
   const data = await parseJsonSafely<any>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Failed to load orchestration'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to load orchestration'), response),
+      response.status,
+      data,
+    );
   }
   return data;
 }
@@ -1262,7 +1272,11 @@ export async function cancelAgentOrchestration(
     CancelAgentOrchestrationResponse & { detail?: string | { message?: string } }
   >(response);
   if (!response.ok || !data?.orchestration_id) {
-    throw new ApiError(getErrorMessage(data, 'Cancel failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Cancel failed'), response),
+      response.status,
+      data,
+    );
   }
   return data;
 }
