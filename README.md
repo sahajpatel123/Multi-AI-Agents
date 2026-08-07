@@ -49,7 +49,7 @@ Each prompt picks 4 of these 16 for the panel. The panel is fully editable.
 - **LLM providers**: Anthropic (default), OpenAI, xAI (Grok), DeepSeek — all with automatic Claude fallback when a key is missing
 - **Payments**: Razorpay subscriptions (Plus / Pro / Agent Mode add-on)
 - **External tools**: Model Context Protocol (MCP) — connect Notion, GitHub, etc. as context sources for Agent Mode
-- **Observability**: Daily-rotating JSON logs, per-request latency tracking, scoring audits, persona drift detection
+- **Observability**: Daily-rotating JSON logs, per-request latency tracking, scoring audits, persona drift detection, and `X-Request-ID` tracing across API/SSE responses and UI error messages
 
 ## Tiers
 
