@@ -117,6 +117,7 @@ export function DebateMode({
   const abortRef = useRef<AbortController | null>(null);
   const roundInFlightRef = useRef(false);
   const requestIdRef = useRef<string | null>(null);
+  const lastInterjectionRef = useRef<string | null>(null);
 
   const [interjection, setInterjection] = useState('');
   /** After round 3, user may unlock one bonus follow-up round (max 4). */
@@ -337,6 +338,7 @@ export function DebateMode({
     const nextRound = currentRound + 1;
     if (nextRound > MAX_ROUNDS) return;
     if (roundInFlightRef.current) return;
+    lastInterjectionRef.current = userMessage || null;
 
     abortRef.current?.abort();
     const abortController = new AbortController();
@@ -973,6 +975,23 @@ export function DebateMode({
               <p style={{ fontSize: '13px', color: '#A0A39A', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
               <button
                 type="button"
+                aria-label="Try again"
+                onClick={() => {
+                  void runRound(lastInterjectionRef.current || undefined);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  color: '#6B6460',
+                  flexShrink: 0,
+                }}
+              >
+                Try again
+              </button>
+              <button
+                type="button"
                 aria-label="Copy error"
                 onClick={() => {
                   void copyToClipboard(error);
@@ -1119,6 +1138,23 @@ export function DebateMode({
                 }}
               >
                 <p style={{ fontSize: '13px', color: '#A0A39A', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
+                <button
+                  type="button"
+                  aria-label="Try again"
+                  onClick={() => {
+                    void runRound(lastInterjectionRef.current || undefined);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    color: '#6B6460',
+                    flexShrink: 0,
+                  }}
+                >
+                  Try again
+                </button>
                 <button
                   type="button"
                   aria-label="Copy error"
