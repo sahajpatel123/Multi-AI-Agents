@@ -615,6 +615,7 @@ export async function streamPrompt(
 // ──────────────────────────────────────────────────────────────
 
 export interface DebateStreamCallbacks {
+  onRequestId?: (data: { request_id: string }) => void;
   onReactionToken?: (data: { agent_id: string; token: string }) => void;
   onReactionDone?: (data: { agent_id: string }) => void;
   onResult?: (data: DebateRoundResponse) => void;
@@ -651,6 +652,9 @@ export async function streamDebateRound(
 
   await consumeSseStream(response.body, signal, (event, data) => {
     switch (event) {
+      case 'request_id':
+        callbacks.onRequestId?.(data);
+        break;
       case 'reaction_token':
         callbacks.onReactionToken?.(data);
         break;

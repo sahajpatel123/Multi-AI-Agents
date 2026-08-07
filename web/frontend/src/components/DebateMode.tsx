@@ -115,6 +115,7 @@ export function DebateMode({
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const roundInFlightRef = useRef(false);
+  const requestIdRef = useRef<string | null>(null);
 
   const [interjection, setInterjection] = useState('');
   /** After round 3, user may unlock one bonus follow-up round (max 4). */
@@ -343,6 +344,7 @@ export function DebateMode({
 
     setPhase('streaming');
     setError(null);
+    requestIdRef.current = null;
     setStreamingTexts({});
     setDoneAgents(new Set());
     tokenBuffers.current = {};
@@ -363,6 +365,9 @@ export function DebateMode({
           persona_ids: panel.map((persona) => persona.id),
         },
         {
+          onRequestId: (data) => {
+            requestIdRef.current = data.request_id;
+          },
           onReactionToken: (data) => {
             if (abortController.signal.aborted) return;
             tokenBuffers.current[data.agent_id] =
@@ -396,7 +401,9 @@ export function DebateMode({
           onError: (data) => {
             if (abortController.signal.aborted) return;
             if (flushTimer.current) clearInterval(flushTimer.current);
-            setError(data.message || data.detail || 'Something went wrong');
+            const base = data.message || data.detail || 'Something went wrong';
+            const rid = requestIdRef.current;
+            setError(rid ? `${base} (Request ID: ${rid})` : base);
             setPhase('done');
           },
         },
@@ -407,7 +414,9 @@ export function DebateMode({
       if (abortController.signal.aborted) return;
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (err instanceof Error && err.name === 'AbortError') return;
-      setError(err instanceof Error ? err.message : 'Debate round failed');
+      const base = err instanceof Error ? err.message : 'Debate round failed';
+      const rid = requestIdRef.current;
+      setError(rid ? `${base} (Request ID: ${rid})` : base);
       setPhase('done');
     } finally {
       if (abortRef.current === abortController) {
