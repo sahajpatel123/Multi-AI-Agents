@@ -235,6 +235,7 @@ function App() {
   const agentCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const promptAbortRef = useRef<AbortController | null>(null);
   const discussAbortRef = useRef<AbortController | null>(null);
+  const lastRequestIdRef = useRef<string | null>(null);
   /** Context of the most recently started Arena round, so re-run replays it faithfully. */
   const lastRoundContextRef = useRef<PromptContextItem[] | undefined>(undefined);
   /** Prevents a double-click from starting two re-run rounds in the same tick. */
@@ -891,6 +892,7 @@ function App() {
 
     onStart?.();
     lastRoundContextRef.current = followUpContext ?? undefined;
+    lastRequestIdRef.current = null;
     setStressFromAgentBanner(false);
     setCrossPollinateSourceTaskId(null);
     setCrossPollinateIntelScore(null);
@@ -937,6 +939,9 @@ function App() {
 
     try {
       await streamPrompt(prompt, {
+        onRequestId: (data) => {
+          lastRequestIdRef.current = data.request_id;
+        },
         onPipeline: (data) => {
           if (abortController.signal.aborted) return;
           if (!data.passed) {
@@ -1061,7 +1066,9 @@ function App() {
           if (flushTimer.current) clearInterval(flushTimer.current);
           setStreamPreviews({});
           setFollowUpSuggestions([]);
-          setError(data.message || data.detail || 'Something went wrong');
+          const base = data.message || data.detail || 'Something went wrong';
+          const rid = lastRequestIdRef.current;
+          setError(rid ? `${base} (Request ID: ${rid})` : base);
           setPhase('idle');
         },
       }, existingSessionId, personaIds, abortController.signal, followUpContext);
@@ -1074,6 +1081,7 @@ function App() {
         return;
       }
       const msg = err instanceof Error ? err.message : 'Something went wrong';
+      const rid = lastRequestIdRef.current;
       if (err instanceof DOMException && err.name === 'AbortError') {
         setPhase((prev) => (prev === 'pipeline' || prev === 'streaming' || prev === 'scoring' ? 'idle' : prev));
         return;
@@ -1082,7 +1090,7 @@ function App() {
         setPhase((prev) => (prev === 'pipeline' || prev === 'streaming' || prev === 'scoring' ? 'idle' : prev));
         return;
       }
-      setError(msg);
+      setError(rid ? `${msg} (Request ID: ${rid})` : msg);
       setPhase('idle');
     }
   };
