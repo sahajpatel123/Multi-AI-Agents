@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `X-Request-ID` tracing middleware (request IDs on every response)
 - Request ID surfaced in prompt, debate, and discuss SSE streams
 - Request ID included in non-stream prompt responses and admin health detail
+- Request ID included in Agent Mode run responses and frontend error messages
 - Request ID shown in Arena, Discuss, and Debate stream error messages
 
 ### Changed
