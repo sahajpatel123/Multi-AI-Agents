@@ -6578,6 +6578,16 @@ export function AgentPage() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm"
                     onClick={() => {
+                      setError(null);
+                      void handleRunTask();
+                    }}
+                  >
+                    Try again
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
                       void copyToClipboard(error);
                       setErrorCopied(true);
                       window.setTimeout(() => setErrorCopied(false), 1500);
