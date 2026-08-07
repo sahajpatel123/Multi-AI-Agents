@@ -60,7 +60,8 @@ This project implements the following security practices:
 - **Security headers**: CSP, HSTS (production), X-Frame-Options, COOP/COEP,
   and other defense-in-depth headers on every response
 - **CI hardening**: every CI/CodeQL/release job has an explicit timeout and
-  least-privilege GitHub token permissions where possible
+  least-privilege GitHub token permissions where possible; in-flight runs are
+  not cancelled by newer pushes so each commit gets a trustworthy result
 - **Request tracing**: every response carries `X-Request-ID`; the same ID is
   surfaced in SSE streams and error messages for end-to-end correlation
 - **CORS**: locked to an environment allowlist; only `X-Request-ID` is
