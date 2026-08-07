@@ -1587,9 +1587,13 @@ export async function improvePrompt(prompt: string): Promise<PromptImproveResult
     response,
   );
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Prompt polish failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Prompt polish failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty prompt polish response');
+  if (!data) throw new Error(withRequestId('Empty prompt polish response', response));
   return data;
 }
 
