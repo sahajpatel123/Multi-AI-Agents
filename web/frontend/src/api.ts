@@ -902,7 +902,11 @@ export async function getUserAnswerFeedbackStats(): Promise<AnswerFeedbackStats>
   const response = await apiFetch(`/api/user/answer-feedback-stats`);
   const data = await parseJsonSafely<AnswerFeedbackStats & { detail?: string }>(response);
   if (!response.ok || !data) {
-    throw new ApiError(getErrorMessage(data, 'Failed to load feedback stats'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to load feedback stats'), response),
+      response.status,
+      data,
+    );
   }
   return data;
 }
@@ -924,7 +928,7 @@ export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedback
   const data = raw as { items?: RecentFeedbackItem[] } | null;
   if (!response.ok) {
     throw new ApiError(
-      getErrorMessage(raw as object, 'Failed to load recent feedback'),
+      withRequestId(getErrorMessage(raw as object, 'Failed to load recent feedback'), response),
       response.status,
       raw,
     );
