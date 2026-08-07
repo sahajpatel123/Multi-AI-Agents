@@ -476,11 +476,11 @@ export async function submitPrompt(
 
   if (!response.ok) {
     const error = await parseJsonSafely<{ detail?: string }>(response);
-    throw new Error(getErrorMessage(error, 'Failed to submit prompt'));
+    throw new Error(withRequestId(getErrorMessage(error, 'Failed to submit prompt'), response));
   }
 
   const data = await parseJsonSafely<PromptResponse>(response);
-  if (!data) throw new Error('Empty response');
+  if (!data) throw new Error(withRequestId('Empty response', response));
   return data;
 }
 
