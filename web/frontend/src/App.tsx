@@ -236,6 +236,7 @@ function App() {
   const promptAbortRef = useRef<AbortController | null>(null);
   const discussAbortRef = useRef<AbortController | null>(null);
   const lastRequestIdRef = useRef<string | null>(null);
+  const focusedRequestIdRef = useRef<string | null>(null);
   /** Context of the most recently started Arena round, so re-run replays it faithfully. */
   const lastRoundContextRef = useRef<PromptContextItem[] | undefined>(undefined);
   /** Prevents a double-click from starting two re-run rounds in the same tick. */
@@ -1320,6 +1321,7 @@ function App() {
     discussAbortRef.current = abortController;
 
     setFocusedChatError(null);
+    focusedRequestIdRef.current = null;
     setIsFocusedChatStreaming(true);
     setFocusedStreamingText('');
     focusedTokenBuffer.current = '';
@@ -1349,6 +1351,9 @@ function App() {
           persona_ids: personaIds,
         },
         {
+          onRequestId: (data) => {
+            focusedRequestIdRef.current = data.request_id;
+          },
           onToken: (data) => {
             if (abortController.signal.aborted) return;
             focusedTokenBuffer.current += data.token;
@@ -1368,7 +1373,9 @@ function App() {
           onError: (data) => {
             if (abortController.signal.aborted) return;
             if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
-            setFocusedChatError(data.message || data.detail || 'Something went wrong');
+            const base = data.message || data.detail || 'Something went wrong';
+            const rid = focusedRequestIdRef.current;
+            setFocusedChatError(rid ? `${base} (Request ID: ${rid})` : base);
             setIsFocusedChatStreaming(false);
           },
         },
@@ -1379,7 +1386,9 @@ function App() {
       if (abortController.signal.aborted) return;
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (err instanceof Error && err.name === 'AbortError') return;
-      setFocusedChatError(err instanceof Error ? err.message : 'Failed to message agent');
+      const base = err instanceof Error ? err.message : 'Failed to message agent';
+      const rid = focusedRequestIdRef.current;
+      setFocusedChatError(rid ? `${base} (Request ID: ${rid})` : base);
       setIsFocusedChatStreaming(false);
     }
   };

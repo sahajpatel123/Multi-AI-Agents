@@ -40,3 +40,19 @@ updates:
     allow:
       - dependency-type: direct
       - dependency-type: production
+
+  # Keep GitHub Actions (checkout, setup-*, codeql-action, dependency-review)
+  # on patched releases. Workflow actions are part of the supply-chain surface,
+  # and stale tags have caused CI failures in this repo (CodeQL v5).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/New_York
+    reviewers:
+      - sahajpatel123
+    labels:
+      - dependencies
+      - security

@@ -672,6 +672,7 @@ export async function streamDebateRound(
 // ──────────────────────────────────────────────────────────────
 
 export interface DiscussStreamCallbacks {
+  onRequestId?: (data: { request_id: string }) => void;
   onToken?: (data: { agent_id: string; token: string }) => void;
   onResult?: (data: DiscussResponse) => void;
   onError?: (data: { detail?: string; message?: string; error?: string }) => void;
@@ -706,6 +707,9 @@ export async function streamDiscuss(
 
   await consumeSseStream(response.body, signal, (event, data) => {
     switch (event) {
+      case 'request_id':
+        callbacks.onRequestId?.(data);
+        break;
       case 'token':
         callbacks.onToken?.(data);
         break;
