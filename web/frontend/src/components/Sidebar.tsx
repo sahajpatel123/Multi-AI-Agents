@@ -1459,7 +1459,7 @@ export function Sidebar({
                       savedRecencyFilter !== 'all'
                         ? ` / ${savedItems.length}`
                         : ''}
-                      {totalPinnedSavedCount > 0
+                      {savedPinFilter !== SIDEBAR_SAVED_PIN_ONLY && totalPinnedSavedCount > 0
                         ? ` · pinned ${totalPinnedSavedCount}`
                         : ''}
                     </span>

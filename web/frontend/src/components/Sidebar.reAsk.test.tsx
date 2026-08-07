@@ -126,4 +126,12 @@ describe('Sidebar saved-take re-ask', () => {
     });
     expect(screen.getByText(/pinned 1/i)).toBeTruthy();
   });
+
+  it('hides the redundant pinned count when the pinned-only filter is active', () => {
+    renderSidebar({
+      savedItems: [{ ...savedItem, id: 1, pinned: true }],
+    });
+    fireEvent.click(screen.getByRole('button', { name: /pinned/i }));
+    expect(screen.queryByText(/· pinned 1/i)).toBeNull();
+  });
 });
