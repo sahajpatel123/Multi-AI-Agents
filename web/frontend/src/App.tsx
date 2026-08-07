@@ -237,6 +237,7 @@ function App() {
   const discussAbortRef = useRef<AbortController | null>(null);
   const lastRequestIdRef = useRef<string | null>(null);
   const focusedRequestIdRef = useRef<string | null>(null);
+  const focusedRetryRef = useRef<{ message: string; historyBefore: DiscussChatMessage[] } | null>(null);
   /** Context of the most recently started Arena round, so re-run replays it faithfully. */
   const lastRoundContextRef = useRef<PromptContextItem[] | undefined>(undefined);
   /** Prevents a double-click from starting two re-run rounds in the same tick. */
@@ -1327,6 +1328,7 @@ function App() {
     focusedTokenBuffer.current = '';
 
     const currentHistory = focusedHistories[focusedAgentId] || [];
+    focusedRetryRef.current = { message: trimmed, historyBefore: currentHistory };
     setFocusedHistories((prev) => ({
       ...prev,
       [focusedAgentId]: [
@@ -2222,6 +2224,23 @@ function App() {
                     {focusedChatError && (
                       <div style={{ borderRadius: '10px', border: '0.5px solid rgba(196,149,106,0.3)', background: '#FFFFFF', padding: '0.75rem' }}>
                         <p style={{ fontSize: '11px', color: '#A0A39A' }}>{focusedChatError}</p>
+                        <button
+                          type="button"
+                          className="arena-btn arena-btn--ghost arena-btn--sm"
+                          style={{ marginTop: 6 }}
+                          onClick={() => {
+                            const retry = focusedRetryRef.current;
+                            if (!retry) return;
+                            setFocusedChatError(null);
+                            setFocusedHistories((prev) => ({
+                              ...prev,
+                              [focusedAgentId]: retry.historyBefore,
+                            }));
+                            void handleFocusedAgentSubmit(retry.message);
+                          }}
+                        >
+                          Try again
+                        </button>
                         <button
                           type="button"
                           onClick={() => {
