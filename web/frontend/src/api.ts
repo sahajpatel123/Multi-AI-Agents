@@ -107,6 +107,11 @@ function getErrorMessage(
   return fallback;
 }
 
+function withRequestId(message: string, response: Response): string {
+  const rid = response.headers.get('x-request-id');
+  return rid ? `${message} (Request ID: ${rid})` : message;
+}
+
 // ──────────────────────────────────────────────────────────────
 // Auth
 // ──────────────────────────────────────────────────────────────
@@ -569,16 +574,19 @@ export async function streamPrompt(
     const error = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
     if (response.status === 429) {
       throw new Error(
-        getErrorMessage(
-          error,
-          'Daily message limit reached. Resets at midnight UTC — or upgrade for more headroom.',
+        withRequestId(
+          getErrorMessage(
+            error,
+            'Daily message limit reached. Resets at midnight UTC — or upgrade for more headroom.',
+          ),
+          response,
         ),
       );
     }
     if (response.status === 401 || response.status === 403) {
-      throw new Error(getErrorMessage(error, 'Sign in to run this prompt in Arena.'));
+      throw new Error(withRequestId(getErrorMessage(error, 'Sign in to run this prompt in Arena.'), response));
     }
-    throw new Error(getErrorMessage(error, 'Failed to start stream'));
+    throw new Error(withRequestId(getErrorMessage(error, 'Failed to start stream'), response));
   }
 
   if (!response.body) throw new Error('No response body');
@@ -645,7 +653,7 @@ export async function streamDebateRound(
 
   if (!response.ok) {
     const error = await parseJsonSafely<{ detail?: string }>(response);
-    throw new Error(getErrorMessage(error, 'Failed to start debate stream'));
+    throw new Error(withRequestId(getErrorMessage(error, 'Failed to start debate stream'), response));
   }
 
   if (!response.body) throw new Error('No response body');
@@ -704,7 +712,7 @@ export async function streamDiscuss(
 
   if (!response.ok) {
     const error = await parseJsonSafely<{ detail?: string }>(response);
-    throw new Error(getErrorMessage(error, 'Failed to start discuss stream'));
+    throw new Error(withRequestId(getErrorMessage(error, 'Failed to start discuss stream'), response));
   }
 
   if (!response.body) throw new Error('No response body');
