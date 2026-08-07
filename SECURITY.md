@@ -70,6 +70,8 @@ This project implements the following security practices:
   exposed for browser-side correlation
 - **Security advisories**: vulnerability reports are handled through GitHub
   Security Advisories with a 48-hour initial response target
+- **Password storage**: bcrypt 12-round with SHA-256 prehash; legacy verify
+  paths are kept only for backwards compatibility
 - **Input validation**: Request size limits, input sanitization
 - **Authentication**: JWT with bcrypt passwords, token revocation
 - **Rate limiting**: IP-based and user-based rate limits
