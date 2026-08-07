@@ -71,7 +71,11 @@ const savedItem: SavedResponseItem = {
   pinned: false,
 };
 
-function renderSidebar(overrides?: { onReuseSavedPrompt?: () => void; onSavedItemClick?: () => void }) {
+function renderSidebar(overrides?: {
+  onReuseSavedPrompt?: () => void;
+  onSavedItemClick?: () => void;
+  savedItems?: SavedResponseItem[];
+}) {
   const onReuseSavedPrompt = overrides?.onReuseSavedPrompt ?? vi.fn();
   const onSavedItemClick = overrides?.onSavedItemClick ?? vi.fn();
   render(
@@ -83,7 +87,7 @@ function renderSidebar(overrides?: { onReuseSavedPrompt?: () => void; onSavedIte
       isOpen
       onClose={vi.fn()}
       onLeaderboardClick={vi.fn()}
-      savedItems={[savedItem]}
+      savedItems={overrides?.savedItems ?? [savedItem]}
       onSavedItemClick={onSavedItemClick}
       onReuseSavedPrompt={onReuseSavedPrompt}
     />,
@@ -111,5 +115,15 @@ describe('Sidebar saved-take re-ask', () => {
     const button = screen.getByRole('button', { name: /re-ask the analyst take/i });
     fireEvent.click(button);
     expect(onSavedItemClick).not.toHaveBeenCalled();
+  });
+
+  it('shows the total pinned count in the saved header', () => {
+    renderSidebar({
+      savedItems: [
+        { ...savedItem, id: 1, pinned: true },
+        { ...savedItem, id: 2, pinned: false },
+      ],
+    });
+    expect(screen.getByText(/pinned 1/i)).toBeTruthy();
   });
 });

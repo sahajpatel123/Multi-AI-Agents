@@ -315,6 +315,7 @@ export function Sidebar({
   );
 
   const shownSavedPinnedCount = filteredSaved.filter((item) => item.pinned === true).length;
+  const totalPinnedSavedCount = savedItems.filter((item) => item.pinned === true).length;
 
   const savedPinFilterUseful = useMemo(
     () => reversedSaved.some((item) => item.pinned === true),
@@ -1457,6 +1458,9 @@ export function Sidebar({
                       savedScoreFilter !== 'all' ||
                       savedRecencyFilter !== 'all'
                         ? ` / ${savedItems.length}`
+                        : ''}
+                      {totalPinnedSavedCount > 0
+                        ? ` · pinned ${totalPinnedSavedCount}`
                         : ''}
                     </span>
                   </div>
