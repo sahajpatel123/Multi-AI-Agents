@@ -293,7 +293,7 @@ export interface SavedPanel {
 export async function getPersonas(): Promise<ApiPersona[]> {
   const res = await apiFetch(`/api/personas`);
   if (!res.ok) {
-    throw new Error('Failed to load personas');
+    throw new Error(withRequestId('Failed to load personas', res));
   }
   return (await parseJsonSafely<ApiPersona[]>(res)) || [];
 }
@@ -302,7 +302,7 @@ export async function getPanel(): Promise<SavedPanel> {
   const res = await apiFetch(`/api/panel`);
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to load panel'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to load panel'), res));
   }
   return (await parseJsonSafely<SavedPanel>(res)) || { slot_1: '', slot_2: '', slot_3: '', slot_4: '' };
 }
@@ -315,7 +315,7 @@ export async function savePanel(panel: SavedPanel): Promise<SavedPanel> {
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to save panel'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to save panel'), res));
   }
   const data = (await parseJsonSafely<{ panel?: SavedPanel }>(res)) || {};
   return data.panel || { slot_1: '', slot_2: '', slot_3: '', slot_4: '' };
