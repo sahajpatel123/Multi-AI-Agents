@@ -33,9 +33,13 @@ import {
   suggestFollowUps,
 } from './api';
 import { copyToClipboard } from './lib/clipboard';
-import { downloadMarkdownFile } from './lib/downloadTextFile';
+import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from './lib/downloadTextFile';
 import { safeLocalStorage } from './lib/safeStorage';
-import { formatArenaExport, formatArenaWinnerExport } from './lib/arenaExport';
+import {
+  formatArenaExport,
+  formatArenaJsonExport,
+  formatArenaWinnerExport,
+} from './lib/arenaExport';
 import { buildFollowUpContext } from './lib/followUpContext';
 import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
 import { isScrollNearBottom, shouldAutoScrollChat } from './lib/chatScroll';
@@ -99,6 +103,7 @@ function App() {
   const { openModal: openProfileModal } = useProfileModal();
   const [exportCopied, setExportCopied] = useState(false);
   const [exportDownloaded, setExportDownloaded] = useState(false);
+  const [arenaJsonDownloaded, setArenaJsonDownloaded] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
   const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
   const [followUpSuggestionsSource, setFollowUpSuggestionsSource] = useState<'llm' | 'fallback'>('llm');
@@ -506,6 +511,23 @@ function App() {
       setError('Could not download the comparison. Try Copy all takes instead.');
     }
   }, [buildArenaComparisonMarkdown, response?.prompt]);
+
+  const handleDownloadArenaJson = useCallback(() => {
+    if (!response) return;
+    const json = formatArenaJsonExport(response, resolveArenaPersona);
+    const stem = `arena-${(response.prompt || 'round').slice(0, 48)}`;
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate(stem)}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    if (ok) {
+      setArenaJsonDownloaded(true);
+      window.setTimeout(() => setArenaJsonDownloaded(false), 1800);
+      void track('arena_download_json');
+    } else {
+      setError('Could not download the JSON. Try Copy all takes instead.');
+    }
+  }, [resolveArenaPersona, response]);
 
   const handleLikeResponse = useCallback((scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
@@ -1293,6 +1315,15 @@ function App() {
     void handleSubmit(prompt);
   };
 
+  /** Re-use a saved take's prompt without clobbering a draft with empty text. */
+  const handleReuseSavedPrompt = (item: SavedResponseItem) => {
+    const prompt = (item.prompt || '').trim();
+    if (!prompt) return;
+    setPresetPrompt(prompt);
+    setPresetPromptNonce((prev) => prev + 1);
+    void track('saved_take_reused', undefined, item.agent_id);
+  };
+
   /** Ask the whole panel a follow-up with the previous round as context. */
   const handleFollowUpSubmit = (prompt: string) => {
     if (!response) return;
@@ -1473,12 +1504,7 @@ function App() {
           onToggleSavedPin={(item, pinned) => {
             void handleToggleSavedPin(item, pinned);
           }}
-          onReuseSavedPrompt={(item) => {
-            setPresetPrompt(item.prompt);
-            setPresetPromptNonce((prev) => prev + 1);
-            void track('saved_take_reused', undefined, item.agent_id);
-            document.getElementById('arena-prompt')?.focus();
-          }}
+          onReuseSavedPrompt={handleReuseSavedPrompt}
           onBulkPinSaved={handleBulkPinSaved}
         />
       )}
@@ -1602,6 +1628,15 @@ function App() {
                     style={{ fontSize: 12 }}
                   >
                     {exportDownloaded ? 'Downloaded' : 'Download .md'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => handleDownloadArenaJson()}
+                    title="Download the full round as a JSON file"
+                    style={{ fontSize: 12 }}
+                  >
+                    {arenaJsonDownloaded ? 'Saved JSON' : 'Download .json'}
                   </button>
                   {currentPrompt ? (
                     <ReRunRoundButton

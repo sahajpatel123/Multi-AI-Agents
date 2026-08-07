@@ -106,6 +106,46 @@ export function formatArenaExport(
   return lines.join('\n').trim() + '\n';
 }
 
+/**
+ * Structured JSON for a full Arena round (all takes, winner, scores).
+ */
+export function formatArenaJsonExport(
+  response: PromptResponse,
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+): string {
+  const winner = pickArenaWinner(response);
+  const sorted = [...response.all_responses].sort((a, b) => {
+    if (a.is_winner !== b.is_winner) return a.is_winner ? -1 : 1;
+    return b.score - a.score;
+  });
+  const data = {
+    exported_from: 'arena',
+    prompt: response.prompt.trim() || '(no prompt)',
+    winner_agent_id: winner?.response.agent_id ?? response.winner_agent_id ?? null,
+    takes: sorted.map((scored) => {
+      const persona = resolvePersona(scored.response.agent_id);
+      return {
+        agent_id: scored.response.agent_id,
+        agent_name: persona.name || scored.response.agent_id,
+        is_winner: scored.is_winner,
+        score:
+          typeof scored.score === 'number' && Number.isFinite(scored.score)
+            ? scored.score
+            : null,
+        confidence:
+          typeof scored.response.confidence === 'number' &&
+          Number.isFinite(scored.response.confidence)
+            ? scored.response.confidence
+            : null,
+        one_liner: (scored.response.one_liner || '').trim() || null,
+        verdict: (scored.response.verdict || '').trim() || null,
+        key_assumption: (scored.response.key_assumption || '').trim() || null,
+      };
+    }),
+  };
+  return JSON.stringify(data, null, 2) + '\n';
+}
+
 function formatAgentBlock(scored: ScoredAgent, persona: ArenaExportPersona): string {
   const name = persona.name || scored.response.agent_id;
   const badge = scored.is_winner ? ' · winner' : '';

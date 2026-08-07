@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatArenaExport,
+  formatArenaJsonExport,
   formatArenaWinnerExport,
   pickArenaWinner,
 } from './arenaExport';
@@ -99,5 +100,28 @@ describe('formatArenaWinnerExport', () => {
       () => ({ name: 'X' }),
     );
     expect(md).toContain('No winning take available');
+  });
+});
+
+describe('formatArenaJsonExport', () => {
+  it('serializes the round with winner, scores, and takes', () => {
+    const json = formatArenaJsonExport(sample, (id) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    }));
+    const parsed = JSON.parse(json);
+    expect(parsed.exported_from).toBe('arena');
+    expect(parsed.prompt).toBe('Should we ship this week?');
+    expect(parsed.winner_agent_id).toBe('agent_1');
+    expect(parsed.takes).toHaveLength(2);
+    expect(parsed.takes[0]).toMatchObject({
+      agent_id: 'agent_1',
+      agent_name: 'The Analyst',
+      is_winner: true,
+      score: 91,
+      confidence: 0.9,
+      one_liner: 'Ship the smallest honest slice.',
+      key_assumption: 'quality bar is fixed',
+    });
+    expect(json.endsWith('\n')).toBe(true);
   });
 });
