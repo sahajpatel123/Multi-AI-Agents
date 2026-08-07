@@ -423,3 +423,12 @@ jobs:
             echo "::warning::PR diff is large ($diff_size lines); consider breaking into smaller changes"
           fi
           git diff --stat origin/main...HEAD
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## CI Summary"
+          echo "- Job: ${{ github.job }}"
+          echo "- Status: ${{ job.status }}"
+          echo "- Commit: ${{ github.sha }}"
+          echo "- Triggered by: ${{ github.actor }}"
