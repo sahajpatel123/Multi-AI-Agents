@@ -99,7 +99,7 @@ jobs:
               'pyasn1':        '0.6.4',
               'PyJWT':         '2.13.0',
               'python-multipart': '0.0.32',
-              'cryptography':  '48.0.1',
+              'cryptography':  '50.0.0',
               'Pillow':        '12.3.0',
               'python-dotenv': '1.2.2',
               'markdown':      '3.8.1',
@@ -280,7 +280,7 @@ jobs:
           const fs = require('fs');
           const REQUIRED = {
             'react-router-dom': '7.14.2',
-            'postcss':         '8.5.23',  # GHSA-fxqj-rqcc-2cmp fixed in 8.5.23+
+            'postcss':         '8.5.23',  // GHSA-fxqj-rqcc-2cmp fixed in 8.5.23+
             'vitest':          '4.1.10',
           };
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
