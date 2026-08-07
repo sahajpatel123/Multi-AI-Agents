@@ -72,6 +72,7 @@ export interface DebateReaction {
 }
 
 export interface DebateRoundResponse {
+  request_id?: string | null;
   round_number: number;
   challenged_agent_id: string;
   reactions: DebateReaction[];
@@ -86,6 +87,7 @@ export interface DiscussChatMessage {
 }
 
 export interface DiscussResponse {
+  request_id?: string | null;
   agent_id: string;
   content: string;
   conversation_history: DiscussChatMessage[];

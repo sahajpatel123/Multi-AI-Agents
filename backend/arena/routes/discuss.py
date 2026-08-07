@@ -174,6 +174,7 @@ async def discuss_with_agent(
         )
 
     session_id = request.session_id or str(uuid.uuid4())
+    request_id = correlation_request_id(http_request)
 
     # Get agent's previous responses from memory (ownership-scoped)
     memory = get_memory_manager()
@@ -223,6 +224,7 @@ async def discuss_with_agent(
         new_history.append(DiscussChatMessage(role="agent", content=reply))
 
         return DiscussResponse(
+            request_id=request_id,
             agent_id=request.agent_id,
             content=reply,
             conversation_history=new_history,
@@ -366,6 +368,7 @@ async def stream_discuss(
             new_history.append(DiscussChatMessage(role="agent", content=reply))
 
             final = DiscussResponse(
+                request_id=request_id,
                 agent_id=request.agent_id,
                 content=reply,
                 conversation_history=new_history,

@@ -338,6 +338,7 @@ class DebateReaction(BaseModel):
 
 class DebateRoundResponse(BaseModel):
     """Response for a single debate round"""
+    request_id: str | None = Field(None, description="Request correlation ID (X-Request-ID) for this response")
     round_number: int = Field(..., description="Which round this is")
     challenged_agent_id: str = Field(..., description="Agent being challenged")
     reactions: list[DebateReaction] = Field(..., description="3 agent reactions")
@@ -415,6 +416,7 @@ class DiscussRequest(BaseModel):
 
 class DiscussResponse(BaseModel):
     """Response from a 1-on-1 discussion turn"""
+    request_id: str | None = Field(None, description="Request correlation ID (X-Request-ID) for this response")
     agent_id: str = Field(..., description="Which agent responded")
     content: str = Field(..., description="Agent's reply")
     conversation_history: list[DiscussChatMessage] = Field(..., description="Updated full history")

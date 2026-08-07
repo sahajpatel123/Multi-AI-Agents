@@ -229,6 +229,7 @@ async def run_debate_round(
         )
 
     session_id = request.session_id or str(uuid.uuid4())
+    request_id = correlation_request_id(http_request)
 
     # The 3 agents that are NOT the challenged one
     reacting_ids = [agent.agent_id for agent in active_agents if agent.agent_id != request.challenged_agent_id]
@@ -261,6 +262,7 @@ async def run_debate_round(
             ))
 
         return DebateRoundResponse(
+            request_id=request_id,
             round_number=request.round_number,
             challenged_agent_id=request.challenged_agent_id,
             reactions=list(reactions),
@@ -478,6 +480,7 @@ async def stream_debate_round(
                 ))
 
             final = DebateRoundResponse(
+                request_id=request_id,
                 round_number=request.round_number,
                 challenged_agent_id=request.challenged_agent_id,
                 reactions=reactions,

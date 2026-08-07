@@ -61,6 +61,9 @@ class TestDebateStreamingEndpoint:
         assert len(result_events) == 1
 
         result = result_events[0]["data"]
+        assert result.get("request_id") == request_id_events[0]["data"]["request_id"], (
+            "debate result must carry the same request_id advertised at stream start"
+        )
         assert "round_number" in result
         assert "challenged_agent_id" in result
         assert "reactions" in result
