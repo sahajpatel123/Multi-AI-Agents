@@ -49,6 +49,8 @@ When reporting a vulnerability, please include:
 This project implements the following security practices:
 
 - **Dependency scanning**: pip-audit for Python, npm audit for Node.js
+- **Dependency review**: GitHub Actions dependency-review gate fails PRs that
+  introduce HIGH/CRITICAL dependency vulnerabilities
 - **Pin floors**: CI guards the minimum security-required versions for
   critical Python and Node packages
 - **Dependency automation**: Dependabot covers pip, npm, and GitHub Actions
