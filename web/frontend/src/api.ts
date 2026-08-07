@@ -929,6 +929,7 @@ export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedback
 }
 
 export type AgentStartResponse = {
+  request_id?: string | null;
   task_id: string;
   status: string;
   message?: string;
