@@ -1,0 +1,66 @@
+repos:
+  # General hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        types: [text]
+      - id: end-of-file-fixer
+        types: [text]
+      - id: check-yaml
+        types: [file]
+      - id: check-json
+        types: [file]
+      - id: check-toml
+        types: [file]
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+      - id: check-merge-conflict
+        types: [file]
+
+  # Python hooks
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+
+  # JavaScript/TypeScript hooks
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v3.0.0
+    hooks:
+      - id: eslint
+        files: \.[jt]sx?$
+        types: [file]
+        additional_dependencies:
+          - eslint@9
+          - @eslint/js@9
+          - globals@15
+          - eslint-plugin-react-hooks@5
+
+  # Gitleaks for secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.2
+    hooks:
+      - id: gitleaks
+        args: ['--config', '.gitleaks.toml']
+        pass_filenames: false
+        stages: [pre-commit]
+
+  # Check for debug statements
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key
+      - id: detect-aws-secret-key
+
+  # Check for TODO/FIXME comments that should be addressed
+  - repo: local
+    hooks:
+      - id: check-debug-statements
+        name: check for debug statements
+        entry: grep -rn "console.log\|pdb.set_trace\|breakpoint()" --include="*.py" --include="*.ts" --include="*.tsx" .
+        language: system
+        always_run: true
+        pass_filenames: false
+        verbose: true
