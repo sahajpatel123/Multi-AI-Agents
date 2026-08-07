@@ -377,7 +377,7 @@ def get_health_data(db_connected: bool) -> dict:
     }
 
 
-def get_health_data_detailed(db_connected: bool) -> dict:
+def get_health_data_detailed(db_connected: bool, request_id: str | None = None) -> dict:
     """Authenticated, operator-facing health payload.
 
     Returns the public fields plus app version, process uptime, and the
@@ -398,6 +398,7 @@ def get_health_data_detailed(db_connected: bool) -> dict:
     uptime = int(time.time() - _app_start_time)
     return {
         **get_health_data(db_connected),
+        "request_id": request_id,
         "version": settings.app_version,
         "uptime_seconds": uptime,
         "worker_pid": os.getpid(),

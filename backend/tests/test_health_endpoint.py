@@ -111,6 +111,7 @@ class TestDetailedHealth:
         for required in (
             "status",
             "database",
+            "request_id",
             "version",
             "uptime_seconds",
             "worker_pid",
@@ -183,6 +184,7 @@ class TestGetHealthDataFunctions:
         for required in (
             "status",
             "database",
+            "request_id",
             "version",
             "uptime_seconds",
             "worker_pid",
@@ -205,6 +207,15 @@ class TestGetHealthDataFunctions:
             "worker_pid",
             "legacy_password_hits",
         }
+
+    def test_detailed_helper_echoes_request_id(self):
+        from arena.core.observability import get_health_data_detailed
+
+        body = get_health_data_detailed(db_connected=True, request_id="trace-abc")
+        assert body["request_id"] == "trace-abc"
+
+        default = get_health_data_detailed(db_connected=True)
+        assert default["request_id"] is None
 
 
 class TestPublicHealthRateLimit:

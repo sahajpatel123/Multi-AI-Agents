@@ -440,7 +440,10 @@ def create_app() -> FastAPI:
             db_ok = True
         except Exception:
             pass
-        return get_health_data_detailed(db_connected=db_ok)
+        return get_health_data_detailed(
+            db_connected=db_ok,
+            request_id=getattr(request.state, "request_id", None),
+        )
 
     return app
 
