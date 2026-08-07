@@ -7,10 +7,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Cancel in-flight runs of the same branch when a new commit lands.
+# Keep in-flight runs running when a new commit lands. Cancelling on every
+# rapid push prevented CI from ever reaching a green check (backend pytest was
+# repeatedly killed after a few percent). Each commit still gets its own run;
+# the extra minutes are worth having trustworthy red/green signals.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   backend:
