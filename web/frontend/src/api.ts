@@ -964,13 +964,17 @@ export async function runAgentTask(
   const data = await parseJsonSafely<
     AgentStartResponse & { detail?: string | { message?: string; error?: string } }
   >(response);
-  if (!data) throw new Error('Empty response');
+  if (!data) throw new Error(withRequestId('Empty response', response));
   if (!response.ok) {
     if (response.status === 409) {
       const local = asLocalExecutionDetail(data);
       if (local) throw new LocalExecutionRequiredError(local);
     }
-    throw new ApiError(getErrorMessage(data, 'Agent task failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Agent task failed'), response),
+      response.status,
+      data,
+    );
   }
   return data;
 }
