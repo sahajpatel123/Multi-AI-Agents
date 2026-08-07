@@ -16,12 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `workflow_dispatch` triggers for manual CI runs
 - PR diff size check for large PR warnings
 - Summary steps at end of CI jobs
+- `X-Request-ID` tracing middleware (request IDs on every response)
+- Request ID surfaced in prompt, debate, and discuss SSE streams
+- Request ID included in non-stream prompt responses and admin health detail
+- Request ID shown in Arena, Discuss, and Debate stream error messages
 
 ### Changed
-- Updated CodeQL workflow from v3 to v5
+- Repaired CodeQL action tag after an invalid v5 bump (now pinned to v4)
 - Upgraded actions/checkout from v4 to v7
 - Optimized Dependabot schedule to daily security checks
 - Updated postcss pin floor to 8.5.23 (security fix)
+- Bumped cryptography to 50.0.0 and postcss to 8.5.26 (security fixes)
+- Exposed `X-Request-ID` through CORS for browser clients
 
 ### Security
 - Added gitleaks allowlists for test fixture API keys
