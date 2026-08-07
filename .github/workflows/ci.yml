@@ -139,13 +139,13 @@ jobs:
           # the file-text grep above. pip-audit covers this in the broader
           # scan, but pip-audit's vulnerability DB depends on PyPI metadata
           # being current; this guard does not. After pip install -r
-          # requirements.txt, probe `pip show <pkg>` for every name in
+          # requirements.txt, probe 'pip show <pkg>' for every name in
           # FORBIDDEN and fail if any are installed. The why-message
           # distinguishes 'direct vs resolved' so the committer knows whether
           # to remove a direct pin or chase a transitive reintroducer.
           #
-          # Use `importlib.metadata` to inspect the live venv: a subprocess
-          # call to `python` is not on the CI PATH in some runners and the
+          # Use 'importlib.metadata' to inspect the live venv: a subprocess
+          # call to 'python' is not on the CI PATH in some runners and the
           # guard must not pretend a transient PATH issue is a Security
           # floor violation.
           import importlib.metadata as _md
@@ -158,7 +158,7 @@ jobs:
               metadata = dist.metadata
               version = str(metadata.get('Version') or '?')
               # Walk every distribution in the live venv and collect the
-              # names of those that list `pkg` in their Requires-Dist
+              # names of those that list 'pkg' in their Requires-Dist
               # metadata. importlib.metadata has no 'reverse deps' API,
               # so we iterate distributions() and filter in Python. The
               # iteration is bounded — only a few hundred entries on a
