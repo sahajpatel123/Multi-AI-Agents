@@ -752,6 +752,7 @@ export function AgentPage() {
   const activeTaskIdRef = useRef<string | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCopied, setErrorCopied] = useState(false);
   const [conduraCtaOpen, setConduraCtaOpen] = useState(false);
   const [conduraCtaMessage, setConduraCtaMessage] = useState(
     'Arena cannot control your computer from the browser. Install Condura (free, local-first) for on-device actions.',
@@ -6572,6 +6573,17 @@ export function AgentPage() {
                     }}
                   >
                     Edit compose
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      void copyToClipboard(error);
+                      setErrorCopied(true);
+                      window.setTimeout(() => setErrorCopied(false), 1500);
+                    }}
+                  >
+                    {errorCopied ? 'Copied' : 'Copy error'}
                   </button>
                 </div>
               </div>
