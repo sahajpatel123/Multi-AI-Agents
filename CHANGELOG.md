@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - “Try again” button in the Arena error banner for quick retries
 - “Try again” button in focused-chat error banners for history-safe retries
 - Copy error buttons in Debate Mode error banners
+- Copy error button in Agent Mode banner
 - “Try again” buttons in Debate Mode error banners
 
 ### Changed
