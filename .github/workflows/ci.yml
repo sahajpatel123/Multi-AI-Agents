@@ -412,3 +412,14 @@ jobs:
             web/frontend/test-results
           retention-days: 14
           if-no-files-found: warn
+
+      - name: PR diff size check
+        if: github.event_name == 'pull_request'
+        run: |
+          # Fail PRs with more than 1000 lines changed to encourage smaller,
+          # more reviewable PRs. Use `git diff --stat` to see breakdown.
+          diff_size=$(git diff --stat origin/main...HEAD | wc -l | tr -d ' ')
+          if [ "$diff_size" -gt 50 ]; then
+            echo "::warning::PR diff is large ($diff_size lines); consider breaking into smaller changes"
+          fi
+          git diff --stat origin/main...HEAD
