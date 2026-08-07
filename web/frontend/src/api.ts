@@ -1202,7 +1202,11 @@ export async function exportAgentTaskPdf(taskId: string): Promise<Blob> {
   const response = await apiFetch(`/api/agent/tasks/${encodeURIComponent(taskId)}/export/pdf`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Export failed'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Export failed'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }
@@ -1287,7 +1291,11 @@ export async function exportOrchestrationPdf(orchId: string): Promise<Blob> {
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Export failed'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Export failed'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }
