@@ -212,6 +212,12 @@ Multi-Agents/
 - Passwords: bcrypt 12-round with SHA-256 prehash; legacy verify path retained for backwards compatibility
 - Prompt-injection detection (17 known phrases) + two-tier toxicity gate (rules + LLM)
 
+## Troubleshooting
+
+If something fails, copy the request ID shown in the error (or look for the
+`X-Request-ID` header in the API response) and include it when reporting the
+issue — it lets us trace the exact request through logs and usage records.
+
 ## License
 
 Private project.
