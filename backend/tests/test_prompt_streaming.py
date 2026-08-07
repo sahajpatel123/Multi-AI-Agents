@@ -65,6 +65,9 @@ class TestPromptStreamingEndpoint:
         assert len(result_events) == 1
 
         result = result_events[0]["data"]
+        assert result.get("request_id") == request_id_events[0]["data"]["request_id"], (
+            "result event must carry the same request_id advertised at stream start"
+        )
         assert "session_id" in result
         assert "winner" in result
         assert "all_responses" in result
