@@ -2015,6 +2015,7 @@ async def export_orchestration_pdf(
 
 @router.get("/orchestrations")
 async def list_orchestrations(
+    http_request: Request,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     status: str | None = Query(
@@ -2069,6 +2070,7 @@ async def list_orchestrations(
         })
     
     return JSONResponse(content={
+        "request_id": correlation_request_id(http_request),
         "success": True,
         "orchestrations": items,
         "page": page,
