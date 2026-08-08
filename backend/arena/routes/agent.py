@@ -3191,6 +3191,7 @@ async def get_feedback_summary(
 
 @router.get("/feedback/recent")
 async def list_recent_feedback(
+    http_request: Request,
     limit: int = Query(20, ge=1, le=200),
     verdict: Optional[str] = Query(
         None,
@@ -3224,7 +3225,14 @@ async def list_recent_feedback(
         limit=limit,
         verdict=verdict,
     )
-    return JSONResponse(content={"success": True, "items": items, "count": len(items)})
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            "success": True,
+            "items": items,
+            "count": len(items),
+        }
+    )
 
 
 @router.get("/feedback/calibration")
