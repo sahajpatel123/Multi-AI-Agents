@@ -50,6 +50,34 @@ def _reset_settings_cache():
 
 
 @pytest.fixture(autouse=True)
+def _reset_logger_propagate():
+    """Restore `propagate=True` on loggers that integration tests flip.
+
+    `setup_logging()` (called by `create_app()` in app-bound tests) sets
+    `arena.propagate = False` so production logs don't double-write to
+    stderr. That state leaks across the suite; tests that rely on
+    `caplog` (a root-handler capture mechanism) can't see records from
+    any `arena.*` logger until the next setup_logging() runs.
+
+    Resetting propagate=True after every test keeps caplog working for
+    contract tests like `test_rooms_touch_member_safe` that run
+    alphabetically after app-bound tests like `test_revoked_tokens_purge`.
+    """
+    import logging
+    arena = logging.getLogger("arena")
+    arena_routes_rooms = logging.getLogger("arena.routes.rooms")
+    saved_arena_propagate = arena.propagate
+    saved_room_propagate = arena_routes_rooms.propagate
+    yield
+    arena.propagate = True
+    arena_routes_rooms.propagate = True
+    # Suppress 'unused' warnings on the locals — they're kept for
+    # debugging if a future test needs to know the original state.
+    _ = saved_arena_propagate
+    _ = saved_room_propagate
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limiters():
     """Reset slowapi + InMemoryRateLimiter buckets between tests so
     tests added in the same run don't trip the per-IP 20/hour limit on
@@ -136,6 +164,33 @@ class StubAnthropicClient:
         self.messages = _StubMessagesResource(self)
 
 
+class _StubClaudeStream:
+    """Async context manager stand-in for anthropic's message stream.
+
+    The orchestrator's streaming path calls ``client.messages.stream(...)``
+    then iterates ``stream.text_stream``. The stub records the call like the
+    non-streaming path and replays ``response_text`` as one chunk so SSE
+    token/agent_done events fire without touching the network.
+    """
+
+    def __init__(self, parent: "StubAnthropicClient", text: str):
+        self._parent = parent
+        self._text = text
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def _text_stream(self):
+        yield self._text
+
+    @property
+    def text_stream(self):
+        return self._text_stream()
+
+
 class StubOpenAIClient:
     """Minimal async stand-in for openai.chat.completions.create."""
 
@@ -185,6 +240,10 @@ class _StubMessagesResource:
                 self.usage = type("Usage", (), {"input_tokens": 10, "output_tokens": 10})()
 
         return _Resp(self._parent.response_text)
+
+    def stream(self, **kwargs):
+        self._parent.calls.append(kwargs)
+        return _StubClaudeStream(self._parent, self._parent.response_text)
 
 
 @pytest.fixture

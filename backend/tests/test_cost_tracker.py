@@ -97,7 +97,7 @@ class TestUserRateLimit:
         db = SessionLocal()
         try:
             with pytest.raises(RateLimitExceeded):
-                check_and_increment_user(db, user.id, "free")
+                check_and_increment_user(db, user.id)
         finally:
             db.close()
 
@@ -108,7 +108,7 @@ class TestUserRateLimit:
         user = make_user(tier=UserTier.FREE, prompt_count_today=0)
         db = SessionLocal()
         try:
-            check_and_increment_user(db, user.id, "free")
+            check_and_increment_user(db, user.id)
             db.commit()
             refreshed = db.query(User).filter(User.id == user.id).first()
             assert refreshed.prompt_count_today == 1
@@ -117,7 +117,7 @@ class TestUserRateLimit:
 
     def test_missing_user_does_not_raise(self, db_session):
         # Should silently return; never crashes.
-        check_and_increment_user(db_session, 99999, "free")
+        check_and_increment_user(db_session, 99999)
 
 
 class TestProWindowLimit:

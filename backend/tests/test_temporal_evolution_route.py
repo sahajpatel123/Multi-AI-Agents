@@ -74,3 +74,32 @@ async def test_evolution_403_for_free_tier(app_client, make_user, db_session):
 async def test_evolution_requires_auth(app_client):
     res = await app_client.get("/api/agent/history/anything/evolution")
     assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_evolution_rejects_oversized_related_limit(
+    app_client, make_user, db_session
+):
+    user = make_user(email="evo-relbound@test.com", tier=UserTier.PRO)
+    _seed(db_session, user_id=user.id, task_id="evo-bound")
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/agent/history/evo-bound/evolution?related_limit=400",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_evolution_rejects_oversized_task_id_path(
+    app_client, make_user
+):
+    user = make_user(email="evo-path@test.com", tier=UserTier.PRO)
+    long_id = "x" * 200
+
+    res = await app_client.get(
+        f"/api/agent/history/{long_id}/evolution",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422

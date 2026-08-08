@@ -8,8 +8,10 @@ from datetime import datetime, timedelta
 from typing import Optional
 from arena.core.datetime_utils import utcnow_naive
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Path, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -20,11 +22,26 @@ from arena.core.agent_pipeline import (
     run_refinement_pipeline,
 )
 from arena.core.file_ingest import process_upload
+from arena.core.bounded_read import UploadTooLargeError, read_upload_capped
 from arena.core.http_headers import content_disposition_attachment
+from arena.core.observability import correlation_request_id
+from arena.core.live_thread_checker import LIVE_UPDATES_MAX
 from arena.core.upload_store import UPLOAD_DIR, ensure_upload_dir, register_upload, resolve_attachments
 from arena.core.dependencies import get_current_user_required
 from arena.core.errors import ErrorCodes
-from arena.core.blackboard import AgentStatus, Blackboard, StageStatus, create_blackboard, get_blackboard, remove_blackboard
+from arena.core.blackboard import (
+    AgentStatus,
+    Blackboard,
+    StageStatus,
+    _filter_assumptions_keys,
+    _filter_generic_dict_keys,
+    create_blackboard,
+    get_blackboard,
+    is_task_cancelled,
+    note_task_cancelled,
+    request_cancel,
+    remove_blackboard,
+)
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
 from arena.core.cost_tracker import get_today_token_usage
@@ -34,17 +51,20 @@ from arena.core.input_validation import (
     sanitize_model_text,
     sanitize_text,
 )
+from arena.core.input_pipeline import detect_prompt_injection
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.tier_config import UserTier, get_credit_budget, get_tier_str, has_feature, normalize_tier
 from arena.core.agent_orchestration import synthesise_tasks
 from arena.core.feedback_calibrator import (
     get_answer_feedback_distribution,
+    get_feedback_calibration as _compute_feedback_calibration,
     get_recent_feedback,
 )
 from arena.core.agent_memory import (
     get_task_detail,
     get_watchlist_history,
     iter_user_task_export,
+    get_watchlist_statistics,
 )
 from arena.core.agent_metrics import (
     compute_user_agent_metrics,
@@ -150,9 +170,25 @@ def _intelligence_score_from_row(row: AgentTaskRow) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _report_dict_from_row(value) -> dict | None:
+    """Normalize a persisted JSON report column to a dict (or None)."""
+    parsed = _json_column_value(value)
+    return parsed if isinstance(parsed, dict) else None
+
+
 def _live_updates_from_row(row: AgentTaskRow) -> list:
     parsed = _json_column_value(row.live_updates)
-    return parsed if isinstance(parsed, list) else []
+    if not isinstance(parsed, list):
+        return []
+    # Apply the same LIVE_UPDATES_MAX cap on the read side that
+    # the write side applies in check_live_task. Without this,
+    # tasks written before the cap was added (cycle 31) could
+    # return unbounded lists in the /live-updates response. The
+    # cap is the same (100 most-recent entries) so the cap is
+    # consistent on both sides.
+    if len(parsed) > LIVE_UPDATES_MAX:
+        return parsed[-LIVE_UPDATES_MAX:]
+    return parsed
 
 
 
@@ -162,6 +198,26 @@ def _merge_db_task_into_result_payload(payload: dict, row: AgentTaskRow) -> None
     payload["intelligence_score"] = _intelligence_score_from_row(row) or payload.get(
         "intelligence_score", {}
     )
+    # Persisted post-pipeline reports are the source of truth once the
+    # blackboard has been dropped; only overlay them when the row actually
+    # has them so a warm blackboard's fresher copy wins.
+    persisted_source_integrity = _report_dict_from_row(row.source_integrity)
+    if persisted_source_integrity:
+        payload["source_integrity"] = _filter_generic_dict_keys(
+            persisted_source_integrity
+        )
+    persisted_assumptions = _report_dict_from_row(row.assumptions)
+    if persisted_assumptions:
+        payload["assumptions"] = _filter_assumptions_keys(persisted_assumptions)
+    persisted_dissent = _report_dict_from_row(row.dissent_report)
+    if persisted_dissent:
+        payload["dissent_report"] = _filter_generic_dict_keys(persisted_dissent)
+    persisted_temporal = _report_dict_from_row(row.temporal_profile)
+    if persisted_temporal:
+        payload["temporal_profile"] = _filter_generic_dict_keys(persisted_temporal)
+    persisted_steelman = _report_dict_from_row(row.steelman)
+    if persisted_steelman:
+        payload["steelman"] = persisted_steelman
     payload["is_live"] = bool(row.is_live)
     payload["live_last_checked"] = (
         row.live_last_checked.isoformat() if row.live_last_checked else None
@@ -219,6 +275,11 @@ def _persisted_agent_task_result_dict(
     pipe_contra = _pipeline_contradictions_from_row(row)
     insight = _insight_report_from_row(row)
     intel = _intelligence_score_from_row(row)
+    source_integrity = _report_dict_from_row(row.source_integrity)
+    assumptions = _report_dict_from_row(row.assumptions)
+    dissent_report = _report_dict_from_row(row.dissent_report)
+    temporal_profile = _report_dict_from_row(row.temporal_profile)
+    steelman = _report_dict_from_row(row.steelman)
     live_updates = _live_updates_from_row(row)
     return {
         "task_id": row.task_id,
@@ -235,12 +296,14 @@ def _persisted_agent_task_result_dict(
         "sources": sources,
         "flags": [],
         "caveats": [],
-        "source_integrity": {},
+        "source_integrity": _filter_generic_dict_keys(source_integrity),
         "contradictions": pipe_contra,
         "memory_contradictions": memory_contradictions,
         "insight_report": insight,
         "intelligence_score": intel,
-        "assumptions": {},
+        "assumptions": _filter_assumptions_keys(assumptions),
+        "dissent_report": _filter_generic_dict_keys(dissent_report),
+        "temporal_profile": _filter_generic_dict_keys(temporal_profile),
         "memory_saved": True,
         "conversation": [],
         "is_refinement": False,
@@ -253,7 +316,7 @@ def _persisted_agent_task_result_dict(
         "expertise_level": "curious",
         "expertise_domain": "",
         "expertise_modifier": "",
-        "steelman": None,
+        "steelman": steelman,
         "is_live": bool(row.is_live),
         "live_last_checked": row.live_last_checked.isoformat()
         if row.live_last_checked
@@ -267,10 +330,28 @@ def _persisted_agent_task_result_dict(
 
 class AgentTaskRequest(BaseModel):
     task: str
-    expertise_level: str = "curious"
-    expertise_domain: str = ""
-    attachment_ids: list[str] = Field(default_factory=list)
-    mcp_integration_ids: list[int] = Field(default_factory=list)
+    expertise_level: Literal["none", "curious", "practitioner", "expert", "researcher"] = "curious"
+    # expertise_domain is bounded at the Pydantic level
+    # (max 100 chars). The field validator still runs (and
+    # slices the trimmed value), so the per-field cap is
+    # enforced at both the schema level (parse-time 422)
+    # and the validator level (defense-in-depth).
+    expertise_domain: str = Field("", max_length=100)
+    # attachment_ids is bounded at the Pydantic level (max 32
+    # entries). The route handler also slices to 32 — defense-in-
+    # depth: the Pydantic cap closes the gap at parse time so
+    # a user cannot submit 1000 attachment IDs to amplify the
+    # per-id validation cost before the slice runs.
+    attachment_ids: list[str] = Field(
+        default_factory=list, max_length=32,
+        description="Optional attachment IDs (max 32 entries)",
+    )
+    # mcp_integration_ids is bounded at the Pydantic level
+    # (max 20 entries). The route handler also slices to 20.
+    mcp_integration_ids: list[int] = Field(
+        default_factory=list, max_length=20,
+        description="Optional MCP integration IDs (max 20 entries)",
+    )
 
     @field_validator("task")
     @classmethod
@@ -284,9 +365,16 @@ class AgentTaskRequest(BaseModel):
 
 
 class AgentChallengeRequest(BaseModel):
-    task_id: str = ""
-    answer: str = ""
-    task: str = ""
+    # task_id is bounded at the Pydantic level (max 100 chars).
+    # Same rationale as RefinementRequest.task_id.
+    task_id: str = Field("", max_length=100)
+    # answer and task are bounded at the Pydantic level
+    # (max 2000 chars). The field validator still runs (and
+    # slices the trimmed value), so the per-field cap is
+    # enforced at both the schema level (parse-time 422)
+    # and the validator level (defense-in-depth).
+    answer: str = Field("", max_length=2000)
+    task: str = Field("", max_length=2000)
 
     @field_validator("answer", "task")
     @classmethod
@@ -297,9 +385,15 @@ class AgentChallengeRequest(BaseModel):
 
 
 class AgentRebuttalRequest(BaseModel):
-    task: str = ""
-    answer: str = ""
-    challenge: str = ""
+    # task, answer, challenge are bounded at the Pydantic
+    # level (max 2000 chars each). The field validator below
+    # still runs (and slices the trimmed value), so the
+    # per-field cap is enforced at both the schema level
+    # (parse-time 422) and the validator level
+    # (defense-in-depth).
+    task: str = Field("", max_length=2000)
+    answer: str = Field("", max_length=2000)
+    challenge: str = Field("", max_length=2000)
 
     @field_validator("task", "answer", "challenge")
     @classmethod
@@ -311,8 +405,19 @@ class AgentRebuttalRequest(BaseModel):
 
 class AgentFeedbackRequest(BaseModel):
     task_id: str
-    feedback: str
-    note: Optional[str] = None
+    # feedback is capped at 2000 chars. Same bound as the
+    # rebuttal text (line 311) and the existing pattern for
+    # free-form text fields in this file. The cap matches the
+    # realistic feedback length (a single paragraph) and
+    # prevents a per-field DoS where a user submits a 5MB
+    # feedback string.
+    feedback: str = Field(..., max_length=2000)
+    # note is bounded at the Pydantic level (max 1000 chars).
+    # The field validator below still runs (and slices the
+    # trimmed value), so the per-field cap is enforced at both
+    # the schema level (parse-time 422) and the validator
+    # level (defense-in-depth).
+    note: Optional[str] = Field(default=None, max_length=1000)
 
     @field_validator("note")
     @classmethod
@@ -321,8 +426,14 @@ class AgentFeedbackRequest(BaseModel):
 
 
 class AnswerAccuracyFeedbackBody(BaseModel):
-    verdict: str
-    note: Optional[str] = None
+    # verdict is capped at 2000 chars. Same bound as
+    # AgentFeedbackRequest.feedback above — the cap matches
+    # the realistic feedback length (a single paragraph) and
+    # prevents a per-field DoS.
+    verdict: str = Field(..., max_length=2000)
+    # note is bounded at the Pydantic level (max 1000 chars).
+    # Same rationale as AgentFeedbackRequest.note above.
+    note: Optional[str] = Field(default=None, max_length=1000)
 
     @field_validator("note")
     @classmethod
@@ -331,8 +442,21 @@ class AnswerAccuracyFeedbackBody(BaseModel):
 
 
 class RefinementRequest(BaseModel):
-    task_id: str
-    message: str
+    # task_id is bounded at the Pydantic level (min_length=1,
+    # max 100 chars). Real values are UUIDs (~36 chars);
+    # 100 chars is generous. The Pydantic cap closes the gap
+    # so a user cannot submit a 1MB task_id to amplify the
+    # pydantic memory cost before the route handler's
+    # ownership check runs. min_length=1 also rejects empty
+    # strings (the route handler would also reject, but the
+    # Pydantic cap closes the gap at parse time).
+    task_id: str = Field(..., min_length=1, max_length=100)
+    # message is bounded at the Pydantic level (min_length=1,
+    # max 1000 chars). The field validator below still runs
+    # (and slices the trimmed value), so the per-field cap
+    # is enforced at both the schema level (parse-time 422)
+    # and the validator level (defense-in-depth).
+    message: str = Field(..., min_length=1, max_length=1000)
 
     @field_validator("message")
     @classmethod
@@ -341,10 +465,21 @@ class RefinementRequest(BaseModel):
 
 
 class BridgeRequest(BaseModel):
-    arena_answer: str
-    original_question: str
-    winning_persona: str = ""
-    arena_score: int = 0
+    # arena_answer, original_question, winning_persona are
+    # bounded at the Pydantic level. The field validators
+    # below still run (and slice the trimmed value), so the
+    # per-field cap is enforced at both the schema level
+    # (parse-time 422) and the validator level
+    # (defense-in-depth).
+    arena_answer: str = Field(..., max_length=2000)
+    original_question: str = Field(..., max_length=2000)
+    winning_persona: str = Field("", max_length=100)
+    # arena_score is bounded at the Pydantic level (ge=0,
+    # le=100). Arena scores are always in [0, 100]; a user
+    # could otherwise submit 999999999999 and amplify the
+    # downstream score-handling work. The Pydantic cap closes
+    # the gap at parse time.
+    arena_score: int = Field(default=0, ge=0, le=100)
 
     @field_validator("arena_answer", "original_question")
     @classmethod
@@ -376,12 +511,29 @@ class LiveToggleBody(BaseModel):
 
 
 class MarkLiveReadBody(BaseModel):
-    update_id: Optional[str] = None
+    # update_id is bounded at the Pydantic level (max 100
+    # chars). Live update IDs are UUIDs (~36 chars); 100 chars
+    # is generous. The Pydantic cap closes the gap so a user
+    # cannot submit a 1MB update_id to amplify the pydantic
+    # memory cost before the route handler's strip+compare.
+    update_id: Optional[str] = Field(
+        default=None, max_length=100,
+        description="Optional update ID (UUID) to mark as read",
+    )
 
 
 class OrchestrateRequest(BaseModel):
-    questions: list[str]
-    expertise_level: str = "curious"
+    # questions is bounded at the Pydantic level (max 4 entries).
+    # The route handler validates 2-4 non-empty questions; the
+    # Pydantic cap closes the gap at parse time so a user cannot
+    # submit 1000 questions to amplify the per-question validation
+    # cost. Each question is sanitized to 2000 chars by the
+    # field validator below.
+    questions: list[str] = Field(
+        default_factory=list, max_length=4,
+        description="2-4 questions to orchestrate (max 4 entries)",
+    )
+    expertise_level: Literal["none", "curious", "practitioner", "expert", "researcher"] = "curious"
     expertise_domain: str = ""
 
     @field_validator("questions")
@@ -397,8 +549,15 @@ class OrchestrateRequest(BaseModel):
 
 class WatchlistCreateBody(BaseModel):
     question: str
-    interval_hours: int
-    expertise_level: str = "curious"
+    # interval_hours is bounded at the Pydantic level (ge=1,
+    # le=168). The route handler also validates against
+    # WATCHLIST_INTERVALS={24, 72, 168} — defense-in-depth.
+    # The Pydantic cap closes the gap at parse time so a
+    # user cannot submit a 999999999 interval (which would
+    # overflow the next_run_at calculation) to amplify the
+    # scheduler work.
+    interval_hours: int = Field(..., ge=1, le=168)
+    expertise_level: Literal["none", "curious", "practitioner", "expert", "researcher"] = "curious"
     expertise_domain: str = ""
 
     @field_validator("question")
@@ -413,7 +572,10 @@ class WatchlistCreateBody(BaseModel):
 
 
 class WatchlistPatchBody(BaseModel):
-    interval_hours: Optional[int] = None
+    # Same bound as WatchlistCreateBody.interval_hours. The
+    # Pydantic cap closes the gap at parse time for the
+    # PATCH path too.
+    interval_hours: Optional[int] = Field(default=None, ge=1, le=168)
     is_active: Optional[bool] = None
 
 
@@ -552,6 +714,7 @@ Challenge this answer now.
             "status": "complete",
         }
     except Exception as e:
+        logger.exception("agent challenge failed", extra={"model_key": model_key})
         return {
             "challenger": challenger_name,
             "challenge": f"Challenge failed: {e}",
@@ -641,7 +804,30 @@ def _watchlist_latest_summary(db: Session, user_id: int, latest_task_id: Optiona
     }
 
 
-def _watchlist_item_api_dict(db: Session, item: WatchlistItem) -> dict:
+def _batch_watchlist_latest_summaries(db: Session, user_id: int, task_ids: list[str]) -> dict[str, dict]:
+    """Batch-fetch latest task summaries for a list of task_ids."""
+    if not task_ids:
+        return {}
+    rows = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id.in_(task_ids), AgentTaskRow.user_id == user_id)
+        .all()
+    )
+    result = {}
+    for row in rows:
+        title = (row.title or "").strip() or (row.task_text or "")[:80]
+        result[row.task_id] = {
+            "task_id": row.task_id,
+            "title": title,
+            "created_at": row.created_at.isoformat() if row.created_at else "",
+            "final_score": row.final_score,
+        }
+    return result
+
+
+def _watchlist_item_api_dict(db: Session, item: WatchlistItem, *, latest_summary: Optional[dict] = None) -> dict:
+    if latest_summary is None:
+        latest_summary = _watchlist_latest_summary(db, item.user_id, item.latest_task_id)
     return {
         "id": item.id,
         "question": item.question,
@@ -654,20 +840,68 @@ def _watchlist_item_api_dict(db: Session, item: WatchlistItem) -> dict:
         "run_count": int(item.run_count or 0),
         "is_active": bool(item.is_active),
         "created_at": item.created_at.isoformat() if item.created_at else "",
-        "latest_task": _watchlist_latest_summary(db, item.user_id, item.latest_task_id),
+        "latest_task": latest_summary,
     }
 
 
-def _export_overlay_from_bb(bb: Optional[Blackboard]) -> Optional[dict]:
+def _export_overlay_from_bb(
+    bb: Optional[Blackboard],
+    row: Optional[AgentTaskRow] = None,
+) -> Optional[dict]:
+    """Overlay fields for report exports, preferring persisted row data.
+
+    While a blackboard is warm its in-memory reports are freshest; once
+    it has been dropped (normal completion path), the persisted row
+    columns carry the same reports so PDF/JSON exports don't lose them.
+    """
+    persisted: dict = {}
+    if row is not None:
+        source_integrity = _report_dict_from_row(row.source_integrity)
+        if source_integrity:
+            persisted["source_integrity"] = _filter_generic_dict_keys(
+                source_integrity
+            )
+        assumptions = _report_dict_from_row(row.assumptions)
+        if assumptions:
+            persisted["assumptions"] = _filter_assumptions_keys(assumptions)
+        dissent_report = _report_dict_from_row(row.dissent_report)
+        if dissent_report:
+            persisted["dissent_report"] = _filter_generic_dict_keys(dissent_report)
+        temporal_profile = _report_dict_from_row(row.temporal_profile)
+        if temporal_profile:
+            persisted["temporal_profile"] = _filter_generic_dict_keys(
+                temporal_profile
+            )
+        steelman = _report_dict_from_row(row.steelman)
+        if steelman:
+            persisted["steelman"] = steelman
+        intel = _intelligence_score_from_row(row)
+        if intel:
+            persisted["intelligence_score"] = intel
+        if row.sources_used:
+            try:
+                raw_sources = json.loads(row.sources_used)
+                if isinstance(raw_sources, list):
+                    persisted["sources"] = [str(s) for s in raw_sources]
+            except (json.JSONDecodeError, TypeError):
+                pass
+
     if not bb or bb.status != AgentStatus.COMPLETE:
-        return None
-    return {
+        return persisted or None
+
+    out = {
         "caveats": list(bb.caveats or []),
         "steelman": bb.steelman or {},
         "assumptions": bb.assumptions or {},
         "sources": list(bb.sources or []),
         "intelligence_score": bb.intelligence_score or {},
+        "source_integrity": _filter_generic_dict_keys(bb.source_integrity),
+        "dissent_report": _filter_generic_dict_keys(bb.dissent_report),
+        "temporal_profile": _filter_generic_dict_keys(bb.temporal_profile),
     }
+    for key, value in persisted.items():
+        out[key] = value
+    return out
 
 
 def _orchestration_any_task_failed(task_ids: list[str]) -> bool:
@@ -678,10 +912,37 @@ def _orchestration_any_task_failed(task_ids: list[str]) -> bool:
     return False
 
 
+def _orchestration_any_task_cancelled(task_ids: list[str]) -> bool:
+    for tid in task_ids:
+        # The blackboard is dropped as soon as a pipeline stops, so the
+        # registry (populated by the background runners) is the durable
+        # signal here; the live blackboard check only covers the narrow
+        # window before removal.
+        if is_task_cancelled(tid):
+            return True
+        bb = get_blackboard(tid)
+        if bb and bb.status == AgentStatus.CANCELLED:
+            return True
+    return False
+
+
 async def run_orchestration_watcher(orch_id: str, user_id: int, task_ids: list[str]) -> None:
     deadline = time.monotonic() + 600.0
     while time.monotonic() < deadline:
         await asyncio.sleep(5.0)
+
+        # An orchestration cancel endpoint (or another terminal path) can
+        # flip the row status out from under the watcher; stop polling as
+        # soon as the run is no longer active.
+        db = SessionLocal()
+        try:
+            orch_now = (
+                db.query(Orchestration).filter(Orchestration.id == orch_id).first()
+            )
+            if orch_now and orch_now.status != "running":
+                return
+        finally:
+            db.close()
 
         if _orchestration_any_task_failed(task_ids):
             db = SessionLocal()
@@ -690,6 +951,22 @@ async def run_orchestration_watcher(orch_id: str, user_id: int, task_ids: list[s
                 if orch:
                     orch.status = "failed"
                     db.commit()
+            finally:
+                db.close()
+            return
+
+        if _orchestration_any_task_cancelled(task_ids):
+            db = SessionLocal()
+            try:
+                orch = db.query(Orchestration).filter(Orchestration.id == orch_id).first()
+                if orch and orch.status == "running":
+                    orch.status = "cancelled"
+                    db.commit()
+                # One cancelled child means the user abandoned the run:
+                # stop the siblings too instead of leaving them to spend
+                # the remaining token budget.
+                for tid in task_ids:
+                    request_cancel(tid)
             finally:
                 db.close()
             return
@@ -756,7 +1033,7 @@ async def run_agent_pipeline_background(
     task_id: str,
     user_id: int,
     task: str,
-    expertise_level: str = "curious",
+    expertise_level: Literal["none", "curious", "practitioner", "expert", "researcher"] = "curious",
     expertise_domain: str = "",
     orchestration_id: Optional[str] = None,
     watchlist_item_id: Optional[str] = None,
@@ -804,6 +1081,8 @@ async def run_agent_pipeline_background(
         # never remove entries — every completed/errored blackboard
         # would otherwise pin a full pipeline state object for the
         # lifetime of the process.
+        if bb.status == AgentStatus.CANCELLED:
+            note_task_cancelled(bb.task_id)
         remove_blackboard(task_id)
 
     if bb.status != AgentStatus.COMPLETE:
@@ -836,7 +1115,7 @@ async def _save_completed_task_to_memory(
                         if s not in sources:
                             sources.append(s)
             except Exception:
-                pass
+                logger.warning("Failed to parse final_answer sources", exc_info=True)
 
             stage_pairs = [
                 ("planner", bb.plan),
@@ -866,6 +1145,11 @@ async def _save_completed_task_to_memory(
                 insight_report=bb.insight_report,
                 pipeline_contradictions=bb.cross_task_contradictions or None,
                 intelligence_score=bb.intelligence_score if bb.intelligence_score else None,
+                source_integrity=bb.source_integrity if bb.source_integrity else None,
+                assumptions=bb.assumptions if bb.assumptions else None,
+                dissent_report=bb.dissent_report if bb.dissent_report else None,
+                temporal_profile=bb.temporal_profile if bb.temporal_profile else None,
+                steelman=bb.steelman if bb.steelman else None,
                 orchestration_id=orchestration_id,
                 watchlist_item_id=watchlist_item_id,
                 bb=bb,
@@ -918,6 +1202,8 @@ async def run_refinement_background(
         # Drop the in-memory blackboard after refinement completes
         # (success or failure). Without this the active_tasks dict
         # grows unbounded for users who refine often.
+        if bb.status == AgentStatus.CANCELLED:
+            note_task_cancelled(bb.task_id)
         remove_blackboard(task_id)
 
 
@@ -940,6 +1226,8 @@ async def run_bridge_pipeline_background(task_id: str, user_id: int) -> None:
         # completes (success or failure). Mirrors the cycle 17 fix
         # in run_agent_pipeline_background so the active_tasks dict
         # doesn't grow unbounded for verify-from-arena traffic.
+        if bb.status == AgentStatus.CANCELLED:
+            note_task_cancelled(bb.task_id)
         remove_blackboard(task_id)
 
     if bb.status != AgentStatus.COMPLETE:
@@ -969,13 +1257,22 @@ async def upload_agent_attachment(
         message="Too many file uploads. Limit is 30 per hour.",
     )
     ensure_upload_dir()
-    data = await file.read()
     max_bytes = 10 * 1024 * 1024
-    if len(data) > max_bytes:
+    # Fast-reject when the client declared an oversize Content-Length so we
+    # never start buffering chunks for a doomed upload.
+    declared = getattr(file, "size", None)
+    if isinstance(declared, int) and declared > max_bytes:
         raise HTTPException(
             status_code=413,
             detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "File too large (max 10MB)"},
         )
+    try:
+        data = await read_upload_capped(file, max_bytes)
+    except UploadTooLargeError:
+        raise HTTPException(
+            status_code=413,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "File too large (max 10MB)"},
+        ) from None
     orig = (file.filename or "upload").strip() or "upload"
     file_id = str(uuid.uuid4())
     safe_name = "".join(c for c in orig if c.isalnum() or c in "._- ")[:180] or "file"
@@ -985,7 +1282,10 @@ async def upload_agent_attachment(
     try:
         record = process_upload(filename=orig, content_type=ct, data=data, dest_path=dest_path)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_upload", "message": str(e)},
+        ) from e
     record["file_id"] = file_id
     # Bind to the uploader so resolve_attachments cannot be used for IDOR.
     register_upload(file_id, record, user_id=user.id)
@@ -1405,6 +1705,7 @@ async def post_task_answer_feedback(
 async def start_orchestration(
     body: OrchestrateRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -1470,13 +1771,18 @@ async def start_orchestration(
     background_tasks.add_task(run_orchestration_watcher, orch_id, user.id, task_ids)
 
     return JSONResponse(
-        content={"orchestration_id": orch_id, "task_ids": task_ids},
+        content={
+            "request_id": correlation_request_id(http_request),
+            "orchestration_id": orch_id,
+            "task_ids": task_ids,
+        },
     )
 
 
 @router.get("/orchestrate/{orch_id}")
 async def get_orchestration_status(
     orch_id: str,
+    http_request: Request,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -1520,10 +1826,18 @@ async def get_orchestration_status(
                 st = "complete"
             elif bb.status == AgentStatus.FAILED:
                 st = "failed"
+            elif bb.status == AgentStatus.CANCELLED:
+                st = "cancelled"
+                stage = "done"
             else:
                 st = "running"
         if row and (row.final_answer or "").strip():
             st = "complete"
+            stage = "done"
+        elif st == "running" and is_task_cancelled(tid):
+            # The blackboard is gone but the terminal registry still knows
+            # this child stopped as cancelled.
+            st = "cancelled"
             stage = "done"
 
         snippet = (text[:50] + "…") if len(text) > 50 else text
@@ -1538,6 +1852,7 @@ async def get_orchestration_status(
 
     return JSONResponse(
         content={
+            "request_id": correlation_request_id(http_request),
             "id": orch.id,
             "status": orch.status,
             "task_ids": orch.task_ids,
@@ -1546,6 +1861,88 @@ async def get_orchestration_status(
             "conflicts": orch.conflicts or [],
             "created_at": orch.created_at.isoformat() if orch.created_at else None,
             "child_tasks": child_tasks,
+        }
+    )
+
+
+@router.post("/orchestrate/{orch_id}/cancel")
+async def cancel_orchestration(
+    orch_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Cancel every in-flight child of a multi-task orchestration run.
+
+    The frontend polls an orchestration as a whole, so its Stop button had
+    no backend handle to stop the child pipelines — a multi-task run kept
+    spending token budget after the user abandoned it. This endpoint flips
+    the orchestration row to ``cancelled`` and sets the cooperative cancel
+    flag on every warm child, letting each pipeline stop at the next stage
+    boundary.
+
+    Idempotent: re-cancelling an already-cancelled run returns 200 and
+    re-requests cancel on any children still warm (e.g. a retry racing a
+    stage boundary).
+    """
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orchestrate_cancel",
+        limit=60,
+        window_seconds=60,
+        message="Too many cancel requests. Please slow down.",
+    )
+
+    orch = (
+        db.query(Orchestration)
+        .filter(Orchestration.id == orch_id.strip())
+        .first()
+    )
+    if not orch or orch.user_id != user.id:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Orchestration not found"},
+        )
+
+    task_ids = list(orch.task_ids or [])
+    if orch.status in ("complete", "failed"):
+        return JSONResponse(
+            content={
+                "orchestration_id": orch.id,
+                "status": orch.status,
+                "task_ids": task_ids,
+                "message": "Orchestration already finished",
+            }
+        )
+
+    if orch.status == "running":
+        orch.status = "cancelled"
+        db.commit()
+
+    cancelled_task_ids: list[str] = []
+    for tid in task_ids:
+        bb = request_cancel(tid)
+        if bb is not None and bb.status not in (
+            AgentStatus.COMPLETE,
+            AgentStatus.FAILED,
+            AgentStatus.CANCELLED,
+        ):
+            cancelled_task_ids.append(tid)
+
+    logger.info(
+        "[AGENT] Orchestration cancel requested orch_id=%s user_id=%s tasks=%d",
+        orch.id,
+        user.id,
+        len(cancelled_task_ids),
+    )
+    return JSONResponse(
+        content={
+            "orchestration_id": orch.id,
+            "status": "cancelled",
+            "task_ids": task_ids,
+            "cancelled_task_ids": cancelled_task_ids,
+            "message": "Cancellation requested for all tasks",
         }
     )
 
@@ -1616,6 +2013,144 @@ async def export_orchestration_pdf(
     )
 
 
+@router.get("/orchestrations")
+async def list_orchestrations(
+    http_request: Request,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    status: str | None = Query(
+        None,
+        description="Filter by status: 'running', 'complete', 'failed', 'cancelled'",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """List all orchestrations for a user with pagination.
+
+    Returns orchestration metadata including id, status, created_at, task_count,
+    synthesis preview, and child task IDs.
+    """
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_list",
+        limit=60,
+        window_seconds=60,
+        message="Too many orchestration list requests. Please slow down.",
+    )
+    
+    offset = (page - 1) * per_page
+    
+    # Base query
+    query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
+    
+    # Apply status filter
+    if status:
+        query = query.filter(Orchestration.status == status)
+    
+    # Get total count
+    total = query.count()
+    
+    # Get paginated results
+    orchestrations = query.order_by(Orchestration.created_at.desc())
+    orchestrations = orchestrations.offset(offset).limit(per_page).all()
+    
+    # Format results
+    items = []
+    for orch in orchestrations:
+        task_ids = list(orch.task_ids or [])
+        items.append({
+            "id": orch.id,
+            "status": orch.status,
+            "created_at": orch.created_at.isoformat() if orch.created_at else None,
+            "task_count": len(task_ids),
+            "task_ids": task_ids,
+            "synthesis_preview": orch.synthesis[:200] if orch.synthesis else None,
+        })
+    
+    return JSONResponse(content={
+        "request_id": correlation_request_id(http_request),
+        "success": True,
+        "orchestrations": items,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 0,
+    })
+
+
+@router.get("/orchestrations/export.csv")
+async def export_orchestrations_csv(
+    status: str | None = Query(None, description="Filter by status: 'running', 'complete', 'failed'"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of all orchestrations for a user.
+
+    Streams orchestration data with formula-injection defense (_csv_safe).
+    Supports filtering by status.
+    """
+    _ensure_agent_access(user, db)
+    _ensure_agent_orchestrate_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_orch_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    from arena.routes.analytics import _csv_safe
+    import csv
+    import io
+    
+    # Get all orchestrations (not paginated for CSV)
+    query = db.query(Orchestration).filter(Orchestration.user_id == user.id)
+    
+    if status:
+        query = query.filter(Orchestration.status == status)
+    
+    orchestrations = query.order_by(Orchestration.created_at.desc()).all()
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "id",
+        "status",
+        "created_at",
+        "task_count",
+        "task_ids",
+        "synthesis_preview",
+    ])
+    
+    # Write rows
+    for orch in orchestrations:
+        task_ids = list(orch.task_ids or [])
+        writer.writerow([
+            _csv_safe(orch.id),
+            _csv_safe(orch.status),
+            _csv_safe(orch.created_at.isoformat() if orch.created_at else ""),
+            _csv_safe(len(task_ids)),
+            _csv_safe(";".join(task_ids)),
+            _csv_safe((orch.synthesis or "")[:200]),
+        ])
+    
+    filename = f"arena-orchestrations-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/tasks/{task_id}/export/pdf")
 async def export_task_pdf(
     task_id: str,
@@ -1650,7 +2185,7 @@ async def export_task_pdf(
         )
 
     bb = get_blackboard(tid)
-    overlay = _export_overlay_from_bb(bb)
+    overlay = _export_overlay_from_bb(bb, row)
     html_str = generate_report_html(row, overlay)
     blob, mime, ext = write_pdf_or_html(html_str, f"arena-report-{tid[:8]}")
     filename = f"arena-report-{tid[:8]}.{ext}"
@@ -1661,10 +2196,116 @@ async def export_task_pdf(
     )
 
 
+@router.get("/tasks/{task_id}/export.json")
+async def export_task_json(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download a single task as a JSON file.
+
+    Mirrors the PDF export's data flow but emits the raw result payload
+    instead of rendering HTML. Useful for piping an Agent Mode result into
+    other tools (jq, scripts, CI dashboards) without re-fetching the
+    /result endpoint and parsing JSON by hand.
+
+    Output shape is the same as /api/agent/result/{task_id} — the route
+    delegates to the same loaders so a future schema change in the
+    result endpoint automatically lands in the export.
+
+    Filename includes the task_id prefix so multiple downloads don't
+    overwrite each other in the browser downloads folder.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_export_json",
+        limit=120,
+        window_seconds=3600,
+        message="Too many task JSON exports. Limit is 120 per hour.",
+    )
+    tid = task_id.strip()
+    if not tid:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "task_id is required"},
+        )
+
+    # Reuse the same fetch path the /result endpoint uses so the export
+    # can never drift from the live result. Either the in-memory
+    # blackboard is still live (pipeline still warm) or we read from
+    # AgentTaskRow + persisted contradictions.
+    bb = get_blackboard(tid)
+    final_answer = ""
+    if bb:
+        _ensure_task_owner(bb, user)
+        out = bb.to_dict()
+        final_answer = (bb.final_answer or "").strip() if hasattr(bb, "final_answer") else ""
+        row = (
+            db.query(AgentTaskRow)
+            .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+            .first()
+        )
+        if row:
+            _merge_db_task_into_result_payload(out, row)
+            # The DB row is the source of truth for the final answer
+            # once the pipeline has flushed it. Prefer it over the
+            # blackboard's possibly-stale copy.
+            if (row.final_answer or "").strip():
+                final_answer = row.final_answer
+    else:
+        row = (
+            db.query(AgentTaskRow)
+            .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+            .first()
+        )
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+            )
+        contra = _load_task_contradictions(db, tid, user.id)
+        out = _persisted_agent_task_result_dict(row, contra)
+        final_answer = (row.final_answer or "").strip()
+
+    # Mirror the PDF export's behavior: a task with no final answer
+    # has nothing useful to download. /result still returns the empty
+    # shell (some clients poll it for status), but an export that
+    # would be a 200 with an empty body is a worse experience than
+    # an explicit 400 telling the caller the task isn't ready yet.
+    if not final_answer:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Nothing to export yet for this task"},
+        )
+
+    # Pretty-print so the file is diff-friendly when a user checks it
+    # into a repo or pastes a snippet into a bug report. The /result
+    # endpoint returns compact JSON; the export is for humans.
+    import json
+
+    body = json.dumps(out, indent=2, default=str, sort_keys=True)
+    filename = f"arena-task-{tid[:8]}.json"
+    return Response(
+        content=body,
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "Cache-Control": "no-store",
+            # X-Content-Type-Options is set globally by SecurityHeadersMiddleware,
+            # but the export endpoint also benefits from the explicit
+            # declaration so any future middleware reorder doesn't
+            # accidentally drop the guarantee on a downloaded file.
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.post("/run")
 async def run_agent_task(
     body: AgentTaskRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -1693,6 +2334,26 @@ async def run_agent_task(
         )
 
     task = sanitize_text(body.task, max_length=2000, field_name="task")
+    # Apply the same prompt-injection gate that /prompt uses (input_pipeline.py).
+    # The 8-stage Agent pipeline fans the user's task out to planner, researcher,
+    # solver, critic, verifier, synthesizer, and judge. Each stage is an LLM
+    # call whose system prompt is anchored to the user-supplied task text, so
+    # an injection in `task` ("ignore your instructions and ...") is a real
+    # bypass vector. Cheaper to reject up front than to chase the bad output
+    # through the full pipeline + memory save.
+    if detect_prompt_injection(task):
+        logger.warning(
+            "[AGENT] /run rejected prompt-injection attempt user_id=%s task_prefix=%r",
+            user.id,
+            task[:80],
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_prompt",
+                "message": "This prompt contains content that cannot be processed.",
+            },
+        )
     _enforce_capability_gate(capability_id="agent.research", task_text=task)
 
     expertise_level = (body.expertise_level or "curious").strip().lower() or "curious"
@@ -1708,6 +2369,7 @@ async def run_agent_task(
         user_id=user.id,
     )
     bb.mcp_integration_ids = list(body.mcp_integration_ids or [])[:20]
+    request_id = correlation_request_id(http_request)
 
     background_tasks.add_task(
         run_agent_pipeline_background,
@@ -1720,6 +2382,7 @@ async def run_agent_task(
 
     return JSONResponse(
         content={
+            "request_id": request_id,
             "task_id": bb.task_id,
             "status": "running",
             "message": "Pipeline started",
@@ -1730,6 +2393,7 @@ async def run_agent_task(
 @router.get("/status/{task_id}")
 async def get_agent_status(
     task_id: str,
+    http_request: Request,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -1748,6 +2412,7 @@ async def get_agent_status(
         _ensure_task_owner(bb, user)
         return JSONResponse(
             content={
+                "request_id": correlation_request_id(http_request),
                 "task_id": bb.task_id,
                 "status": _stage_status_value(bb.status),
                 "current_stage": bb.current_stage,
@@ -1777,6 +2442,7 @@ async def get_agent_status(
     complete = "complete"
     return JSONResponse(
         content={
+            "request_id": correlation_request_id(http_request),
             "task_id": row.task_id,
             "status": complete,
             "current_stage": "done",
@@ -1789,6 +2455,83 @@ async def get_agent_status(
                 "synthesizer": {"status": complete},
                 "judge": {"status": complete},
             },
+        }
+    )
+
+
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_agent_task(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Request cooperative cancellation of an in-flight Agent Mode task.
+
+    Agent runs execute as background pipelines with no user-facing way to
+    stop them — the frontend Stop button only abandons the client poll,
+    while the backend keeps running the remaining 8 stages and spending
+    tokens. This endpoint flips a cancellation flag on the in-memory
+    blackboard; the pipeline checks it between stages and stops at the
+    next safe boundary (the already-running LLM call completes, everything
+    after it is skipped).
+
+    Idempotent: cancelling a task that is already finishing (or already
+    cancelled) returns 200 with the current state instead of an error.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_cancel",
+        limit=60,
+        window_seconds=60,
+        message="Too many cancel requests. Please slow down.",
+    )
+
+    bb = get_blackboard(task_id)
+    if bb is None:
+        # No in-memory blackboard: the task either never existed, belongs
+        # to another user, or already finished and was cleaned up. Only
+        # persisted rows (completed tasks) get a friendly terminal reply;
+        # everything else is a plain 404 to avoid leaking task existence.
+        row = (
+            db.query(AgentTaskRow)
+            .filter(AgentTaskRow.task_id == task_id, AgentTaskRow.user_id == user.id)
+            .first()
+        )
+        if row:
+            return JSONResponse(
+                content={
+                    "task_id": row.task_id,
+                    "status": "complete",
+                    "message": "Task already finished",
+                }
+            )
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+
+    _ensure_task_owner(bb, user)
+    if bb.status in (AgentStatus.COMPLETE, AgentStatus.FAILED, AgentStatus.CANCELLED):
+        return JSONResponse(
+            content={
+                "task_id": bb.task_id,
+                "status": _stage_status_value(bb.status),
+                "message": "Task already finished",
+            }
+        )
+
+    request_cancel(task_id)
+    logger.info(
+        "[AGENT] Cancel requested task_id=%s user_id=%s",
+        bb.task_id,
+        user.id,
+    )
+    return JSONResponse(
+        content={
+            "task_id": bb.task_id,
+            "status": "cancelling",
+            "message": "Cancellation requested",
         }
     )
 
@@ -1961,10 +2704,11 @@ Respond to this challenge now.
         )
         return JSONResponse(content={"rebuttal": response, "status": "complete"})
     except Exception:
+        logger.exception("rebuttal generation failed")
         raise HTTPException(
             status_code=500,
             detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Rebuttal generation failed"},
-        )
+        ) from None
 
 
 @router.post("/watchlist")
@@ -2023,6 +2767,9 @@ async def create_watchlist_item(
 
 @router.get("/watchlist")
 async def list_watchlist_items(
+    http_request: Request,
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -2036,10 +2783,13 @@ async def list_watchlist_items(
         window_seconds=60,
         message="Too many watchlist lookups. Please slow down.",
     )
+    base_query = db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id)
+    total = base_query.count()
     items = (
-        db.query(WatchlistItem)
-        .filter(WatchlistItem.user_id == user.id)
+        base_query
         .order_by(WatchlistItem.next_run_at.asc())
+        .offset(offset)
+        .limit(limit)
         .all()
     )
     active_n = (
@@ -2047,9 +2797,16 @@ async def list_watchlist_items(
         .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
         .count()
     )
+    latest_task_ids = [i.latest_task_id for i in items if i.latest_task_id]
+    latest_summaries = _batch_watchlist_latest_summaries(db, user.id, latest_task_ids) if latest_task_ids else {}
     return JSONResponse(
         content={
-            "items": [_watchlist_item_api_dict(db, i) for i in items],
+            "request_id": correlation_request_id(http_request),
+            "items": [_watchlist_item_api_dict(db, i, latest_summary=latest_summaries.get(i.latest_task_id)) for i in items],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + len(items) < total,
             "active_count": active_n,
             "active_cap": WATCHLIST_MAX_ACTIVE,
         }
@@ -2141,7 +2898,7 @@ async def delete_watchlist_item(
 @router.get("/watchlist/{item_id}/history")
 async def get_watchlist_item_history(
     item_id: str,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200, description="Max number of history rows to return."),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -2172,6 +2929,191 @@ async def get_watchlist_item_history(
         )
     payload = get_watchlist_history(db, user.id, item.id, limit=limit)
     return JSONResponse(content={"success": True, **payload})
+
+
+@router.get("/watchlist/{item_id}/history/export.csv")
+async def get_watchlist_item_history_csv(
+    item_id: str,
+    limit: int = Query(100, ge=1, le=500, description="Max history rows to export."),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of run history for a single watchlist item.
+
+    Streams rows in CSV format with formula-injection defense (_csv_safe).
+    Includes task_id, status, created_at, intelligence_score, and final_answer snippet.
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_history_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait a moment.",
+    )
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
+    payload = get_watchlist_history(db, user.id, item.id, limit=limit)
+    items = payload.get("items", [])
+
+    import csv
+    import io
+    from arena.routes.analytics import _csv_safe
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+
+    writer.writerow([
+        "task_id",
+        "question",
+        "status",
+        "created_at",
+        "intelligence_score",
+        "final_answer_snippet",
+    ])
+
+    for row in items:
+        answer_raw = str(row.get("final_answer") or "")
+        snippet = answer_raw.replace("\n", " ").strip()[:150]
+        writer.writerow([
+            _csv_safe(row.get("task_id")),
+            _csv_safe(item.question),
+            _csv_safe(row.get("status")),
+            _csv_safe(row.get("created_at")),
+            _csv_safe(row.get("intelligence_score") if row.get("intelligence_score") is not None else ""),
+            _csv_safe(snippet),
+        ])
+
+    clean_question = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in item.question[:30]).strip("_") or "watchlist-item"
+    filename = f"arena-watch-history-{clean_question}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
+@router.get("/watchlist/statistics")
+async def get_watchlist_statistics(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Aggregate statistics across all watchlist items for a user.
+
+    Returns comprehensive statistics including:
+    - Total and active watchlist item counts
+    - Total runs and scored runs
+    - Score statistics (avg, min, max)
+    - Success rate
+    - Per-item detailed statistics
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_statistics",
+        limit=30,
+        window_seconds=60,
+        message="Too many statistics requests. Please wait a moment.",
+    )
+    
+    from arena.core.agent_memory import get_watchlist_statistics
+    
+    stats = get_watchlist_statistics(db, user.id)
+    return JSONResponse(content={"success": True, **stats})
+
+
+@router.get("/watchlist/statistics/export.csv")
+async def get_watchlist_statistics_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of watchlist statistics.
+
+    Streams a CSV with formula-injection defense (_csv_safe).
+    Includes summary statistics and per-item breakdown.
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_watchlist_statistics_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait a moment.",
+    )
+    
+    from arena.core.agent_memory import get_watchlist_statistics
+    from arena.routes.analytics import _csv_safe
+    import csv
+    import io
+    
+    stats = get_watchlist_statistics(db, user.id)
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write summary row
+    writer.writerow(["Watchlist Statistics Summary"])
+    writer.writerow(["Metric", "Value"])
+    writer.writerow(["Total Watchlist Items", stats["total_items"]])
+    writer.writerow(["Active Items", stats["active_items"]])
+    writer.writerow(["Total Runs", stats["total_runs"]])
+    writer.writerow(["Scored Runs", stats["scored_runs"]])
+    writer.writerow(["Average Score", stats["avg_score"] if stats["avg_score"] is not None else ""])
+    writer.writerow(["Minimum Score", stats["min_score"] if stats["min_score"] is not None else ""])
+    writer.writerow(["Maximum Score", stats["max_score"] if stats["max_score"] is not None else ""])
+    writer.writerow(["Success Rate (%)", stats["success_rate"]])
+    writer.writerow([])
+    
+    # Write per-item statistics
+    writer.writerow(["Per-Item Statistics"])
+    writer.writerow([
+        "Item ID",
+        "Question",
+        "Active",
+        "Interval (hours)",
+        "Run Count",
+        "Scored Run Count",
+        "Average Score",
+        "Last Run At",
+    ])
+    
+    for item_id, item_stats in stats["per_item_stats"].items():
+        writer.writerow([
+            _csv_safe(item_id),
+            _csv_safe(item_stats["question"]),
+            _csv_safe("Yes" if item_stats["is_active"] else "No"),
+            _csv_safe(item_stats["interval_hours"]),
+            _csv_safe(item_stats["run_count"]),
+            _csv_safe(item_stats["scored_run_count"]),
+            _csv_safe(item_stats["avg_score"] if item_stats["avg_score"] is not None else ""),
+            _csv_safe(item_stats["last_run_at"] if item_stats["last_run_at"] else ""),
+        ])
+    
+    filename = f"arena-watchlist-stats-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
 
 
 @router.get("/metrics")
@@ -2249,6 +3191,7 @@ async def get_feedback_summary(
 
 @router.get("/feedback/recent")
 async def list_recent_feedback(
+    http_request: Request,
     limit: int = Query(20, ge=1, le=200),
     verdict: Optional[str] = Query(
         None,
@@ -2282,7 +3225,229 @@ async def list_recent_feedback(
         limit=limit,
         verdict=verdict,
     )
-    return JSONResponse(content={"success": True, "items": items, "count": len(items)})
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            "success": True,
+            "items": items,
+            "count": len(items),
+        }
+    )
+
+
+@router.get("/feedback/calibration")
+async def get_feedback_calibration(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """User-level calibration signal for displaying agent confidence.
+
+    Surfaces the existing ``get_feedback_calibration`` helper. It returns a
+    small integer ``adjustment`` (0 to -15) that the UI is meant to *visually*
+    soften the rendered confidence of a persona: a user whose last 20 verdicts
+    are split 14 wrong / 4 partial should see a noticeably more cautious
+    confidence number than a user with 14 correct / 4 partial, even though
+    the raw model confidence is the same in both cases. We never mutate the
+    stored score — this is a display-only knob.
+
+    The signal is computed over the caller's most recent 20 verdicts
+    (newest first), not their lifetime average, so the knob tracks current
+    behavior instead of being stuck on old mistakes. ``wrong_rate`` and
+    ``partial_rate`` are integer percentages of that window; both feed the
+    adjustment formula (weights 15 and 7 respectively).
+
+    Reliability:
+      - < 5 feedback rows → adjustment is exactly 0 and ``reliable=False``;
+        we don't have enough signal to act on.
+      - 5-9 rows → adjustment is non-zero, ``reliable=False`` (caller may
+        still apply it, but should label it as a soft hint).
+      - >= 10 rows → ``reliable=True``, full strength.
+
+    Rate-limited like the sibling feedback endpoints; agent-tier gated
+    because feedback is an Agent-Mode surface (Plus+add-on and Pro).
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_calibration",
+        limit=60,
+        window_seconds=60,
+        message="Too many feedback-calibration lookups. Please slow down.",
+    )
+    payload = _compute_feedback_calibration(user.id, db)
+    return JSONResponse(content=payload)
+
+
+@router.get("/feedback/export.csv")
+async def export_feedback_csv(
+    verdict: Optional[str] = Query(
+        None,
+        description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of all feedback for a user.
+
+    Streams feedback data with formula-injection defense.
+    Supports filtering by verdict.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_csv",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    from arena.db_models import AnswerFeedback, AgentTask
+    from arena.core.http_headers import content_disposition_attachment
+    from fastapi.responses import Response
+    from arena.core.datetime_utils import utcnow_naive
+    import csv
+    import io
+    
+    def _csv_safe(value) -> str:
+        """Escape value for CSV to prevent formula injection."""
+        if value is None:
+            return ""
+        s = str(value)
+        if s.startswith(("=", "+", "-", "@")):
+            return "'" + s
+        return s
+    
+    # Get all feedback with task title
+    q = (
+        db.query(AnswerFeedback, AgentTask)
+        .outerjoin(AgentTask, AnswerFeedback.task_id == AgentTask.task_id)
+        .filter(AnswerFeedback.user_id == user.id)
+    )
+    
+    if verdict is not None:
+        if verdict in {"correct", "partial", "wrong"}:
+            q = q.filter(AnswerFeedback.verdict == verdict)
+        else:
+            q = q.filter(False)  # Return empty result for unknown verdict
+    
+    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
+    
+    # Format items
+    items = []
+    for feedback, task in rows:
+        items.append({
+            "id": feedback.id,
+            "task_id": feedback.task_id,
+            "title": task.title if task else None,
+            "verdict": feedback.verdict,
+            "note": feedback.note,
+            "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
+        })
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "id",
+        "task_id",
+        "title",
+        "verdict",
+        "note",
+        "created_at",
+    ])
+    
+    # Write rows
+    for item in items:
+        writer.writerow([
+            _csv_safe(item.get("id")),
+            _csv_safe(item.get("task_id")),
+            _csv_safe(item.get("title")),
+            _csv_safe(item.get("verdict")),
+            _csv_safe(item.get("note")),
+            _csv_safe(item.get("created_at")),
+        ])
+    
+    filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
+@router.get("/feedback/export.json")
+async def export_feedback_json(
+    verdict: Optional[str] = Query(
+        None,
+        description="Filter by verdict: 'correct', 'partial', or 'wrong'.",
+    ),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """JSON export of all feedback for a user.
+
+    Returns all feedback as a JSON array.
+    Supports filtering by verdict.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_feedback_json",
+        limit=30,
+        window_seconds=60,
+        message="Too many JSON exports. Please wait.",
+    )
+    
+    from arena.db_models import AnswerFeedback, AgentTask
+    from arena.core.datetime_utils import utcnow_naive
+    from fastapi.responses import Response
+    from arena.core.http_headers import content_disposition_attachment
+    import json
+    
+    # Get all feedback with task title
+    q = (
+        db.query(AnswerFeedback, AgentTask)
+        .outerjoin(AgentTask, AnswerFeedback.task_id == AgentTask.task_id)
+        .filter(AnswerFeedback.user_id == user.id)
+    )
+    
+    if verdict is not None:
+        if verdict in {"correct", "partial", "wrong"}:
+            q = q.filter(AnswerFeedback.verdict == verdict)
+        else:
+            q = q.filter(False)  # Return empty result for unknown verdict
+    
+    rows = q.order_by(AnswerFeedback.created_at.desc()).all()
+    
+    # Format items
+    items = []
+    for feedback, task in rows:
+        items.append({
+            "id": feedback.id,
+            "task_id": feedback.task_id,
+            "title": task.title if task else None,
+            "verdict": feedback.verdict,
+            "note": feedback.note,
+            "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
+        })
+    
+    filename = f"arena-feedback-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=json.dumps(items, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
 
 
 @router.get("/tasks/export.jsonl")
@@ -2377,6 +3542,158 @@ async def get_agent_history(
         sort=sort,
     )
     return JSONResponse(content=history)
+
+
+@router.get("/history/export.csv")
+async def export_agent_history_csv(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(200, ge=1, le=500),
+    search: str | None = Query(None, max_length=100),
+    feedback: str | None = Query(None),
+    orchestration_id: str | None = Query(None),
+    sort: str = Query("newest"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of agent task history.
+
+    Streams all matching tasks as CSV with formula-injection defense (_csv_safe).
+    Supports the same filters as /api/agent/history.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_history_csv",
+        limit=60,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    from arena.core.agent_memory import get_user_task_history
+    from arena.routes.analytics import _csv_safe
+    from arena.core.tier_config import normalize_tier, get_tier_str
+    import csv
+    import io
+    
+    tier = normalize_tier(get_tier_str(user))
+    retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
+    
+    # Get all matching tasks (not paginated for CSV export)
+    # Use a large per_page to get all results
+    history = get_user_task_history(
+        db=db,
+        user_id=user.id,
+        page=1,
+        per_page=500,  # Max per page for CSV
+        retention_days=retention_days,
+        search=search,
+        feedback=feedback,
+        orchestration_id=orchestration_id,
+        sort=sort,
+    )
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "task_id",
+        "title",
+        "task_text",
+        "final_score",
+        "final_confidence",
+        "user_feedback",
+        "created_at",
+        "orchestration_id",
+        "watchlist_item_id",
+    ])
+    
+    # Write rows
+    for item in history.get("tasks", []):
+        writer.writerow([
+            _csv_safe(item.get("task_id")),
+            _csv_safe(item.get("title")),
+            _csv_safe(item.get("task_text", "")[:200]),  # Truncate long text
+            _csv_safe(item.get("final_score")),
+            _csv_safe(item.get("final_confidence")),
+            _csv_safe(item.get("user_feedback")),
+            _csv_safe(item.get("created_at")),
+            _csv_safe(item.get("orchestration_id")),
+            _csv_safe(item.get("watchlist_item_id")),
+        ])
+    
+    filename = f"arena-history-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
+@router.get("/history/export.json")
+async def export_agent_history_json(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(200, ge=1, le=500),
+    search: str | None = Query(None, max_length=100),
+    feedback: str | None = Query(None),
+    orchestration_id: str | None = Query(None),
+    sort: str = Query("newest"),
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """JSON export of agent task history.
+
+    Returns all matching tasks as a JSON array with the same filters as /api/agent/history.
+    Useful for programmatic access to full history data.
+    """
+    _ensure_agent_access(user, db)
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_history_json",
+        limit=60,
+        window_seconds=60,
+        message="Too many JSON exports. Please wait.",
+    )
+    
+    from arena.core.agent_memory import get_user_task_history
+    from arena.core.tier_config import normalize_tier, get_tier_str
+    import json
+    
+    tier = normalize_tier(get_tier_str(user))
+    retention_days = AGENT_HISTORY_RETENTION_DAYS.get(tier, 30)
+    
+    # Get all matching tasks
+    history = get_user_task_history(
+        db=db,
+        user_id=user.id,
+        page=1,
+        per_page=500,  # Max per page for export
+        retention_days=retention_days,
+        search=search,
+        feedback=feedback,
+        orchestration_id=orchestration_id,
+        sort=sort,
+    )
+    
+    # Return tasks as JSON array
+    tasks = history.get("tasks", [])
+    
+    filename = f"arena-history-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=json.dumps(tasks, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers=headers,
+    )
 
 
 @router.patch("/tasks/{task_id}/rename")
@@ -2640,6 +3957,11 @@ async def get_saved_agent_task(
     pipe_contra = _pipeline_contradictions_from_row(row)
     insight_saved = _insight_report_from_row(row)
     intel = _intelligence_score_from_row(row)
+    source_integrity = _report_dict_from_row(row.source_integrity)
+    assumptions = _report_dict_from_row(row.assumptions)
+    dissent_report = _report_dict_from_row(row.dissent_report)
+    temporal_profile = _report_dict_from_row(row.temporal_profile)
+    steelman = _report_dict_from_row(row.steelman)
     live_updates = _live_updates_from_row(row)
     return JSONResponse(
         content={
@@ -2651,11 +3973,15 @@ async def get_saved_agent_task(
             "topics": json.loads(row.topics or "[]"),
             "user_feedback": row.user_feedback,
             "created_at": row.created_at.isoformat() if row.created_at else "",
-            "source_integrity": {},
+            "source_integrity": _filter_generic_dict_keys(source_integrity),
             "contradictions": pipe_contra,
             "memory_contradictions": memory_contradictions,
             "insight_report": insight_saved,
             "intelligence_score": intel,
+            "assumptions": _filter_assumptions_keys(assumptions),
+            "dissent_report": _filter_generic_dict_keys(dissent_report),
+            "temporal_profile": _filter_generic_dict_keys(temporal_profile),
+            "steelman": steelman,
             "is_live": bool(row.is_live),
             "live_last_checked": row.live_last_checked.isoformat()
             if row.live_last_checked
@@ -2738,6 +4064,23 @@ async def refine_agent_answer(
     )
 
     message = sanitize_text(body.message, max_length=1000, field_name="message")
+    # Same prompt-injection gate as /agent/run above — the refinement message
+    # is appended to the in-memory Blackboard's conversation and folded into
+    # the LLM system context for the next stage run, so a 'reveal your
+    # instructions' follow-up reaches the same bypass surface.
+    if detect_prompt_injection(message):
+        logger.warning(
+            "[AGENT] /refine rejected prompt-injection attempt user_id=%s message_prefix=%r",
+            user.id,
+            message[:80],
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_prompt",
+                "message": "This prompt contains content that cannot be processed.",
+            },
+        )
     _enforce_capability_gate(capability_id="agent.refine", task_text=message)
 
     bb = get_blackboard(body.task_id.strip())
@@ -2754,6 +4097,35 @@ async def refine_agent_answer(
         raise HTTPException(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+
+    # Race guard: if the original 8-stage pipeline (or a prior refinement) is
+    # still mutating this Blackboard, refuse the new refinement with 409
+    # instead of starting a second concurrent pipeline against the same
+    # in-memory state. Two concurrent pipelines against one Blackboard race
+    # on conversation.append, final_answer, status, refinement_count, and
+    # token counters — the second one silently overwrites the first's
+    # intermediate state. Status is set to RUNNING both at the start of the
+    # main pipeline (run_agent_pipeline:168) and at the start of every
+    # refinement (run_refinement_pipeline:425), and to a terminal state
+    # (COMPLETE / FAILED) right before remove_blackboard runs in the
+    # background task's finally block. So RUNNING means "another writer
+    # is currently active on this Blackboard".
+    if bb.status == AgentStatus.RUNNING:
+        logger.info(
+            "[AGENT] /refine rejected — pipeline still running task_id=%s user_id=%s",
+            bb.task_id,
+            user.id,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "agent_pipeline_running",
+                "message": (
+                    "Agent task is still running. Wait for it to finish "
+                    "before requesting a refinement."
+                ),
+            },
         )
 
     if bb.refinement_count >= 10:
@@ -2851,7 +4223,17 @@ async def verify_arena_answer(
 
 class CrossPollinateRequest(BaseModel):
     task_id: str
-    persona_ids: list[str] = Field(default_factory=list)
+    # persona_ids is bounded at the Pydantic level: the list has
+    # max 4 entries (matching the 4-slot agent design, same
+    # cap as PromptRequest / DiscussRequest / DebateRequest
+    # in cycles 16/17). Each string is sliced to 100 chars
+    # by the validate_persona_ids field validator below. The
+    # Pydantic cap closes the gap before _enforce_persona_access
+    # runs (which iterates the list).
+    persona_ids: list[str] = Field(
+        default_factory=list, max_length=4,
+        description="Optional persona ids to cross-pollinate (max 4 entries)",
+    )
 
     @field_validator("task_id")
     @classmethod
@@ -2915,6 +4297,7 @@ async def cross_pollinate_agent_answer(
             try:
                 data = json.loads(raw)
             except Exception:
+                logger.debug("intel total_score JSON parse failed", exc_info=True)
                 return None
         if not isinstance(data, dict):
             return None
@@ -2976,7 +4359,8 @@ async def cross_pollinate_agent_answer(
 
 @router.get("/history/{task_id}/evolution")
 async def get_temporal_evolution(
-    task_id: str,
+    task_id: str = Path(..., max_length=64, description="Agent task identifier (UUID slug)."),
+    related_limit: int = Query(20, ge=1, le=40, description="Max related-task rows to consider (1-40)."),
     db: Session = Depends(get_db),
     user: UserResponse = Depends(get_current_user_required),
 ):
@@ -3030,7 +4414,7 @@ async def get_temporal_evolution(
             AgentTaskRow.final_answer.is_not(None),
         )
         .order_by(AgentTaskRow.created_at.asc())
-        .limit(40)
+        .limit(related_limit)
         .all()
     )
 

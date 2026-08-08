@@ -4,6 +4,13 @@
 
 ---
 
+## CI Status
+
+[![CI](https://github.com/sahajpatel123/Multi-AI-Agents/actions/workflows/ci.yml/badge.svg)](https://github.com/sahajpatel123/Multi-AI-Agents/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/sahajpatel123/Multi-AI-Agents/actions/workflows/codeql.yml/badge.svg)](https://github.com/sahajpatel123/Multi-AI-Agents/actions/workflows/codeql.yml)
+
+---
+
 ## What it does
 
 Send a prompt. Four AI agents — each with a distinct reasoning style — answer simultaneously, streamed token-by-token. A scorer LLM evaluates every response on relevance, insight, clarity, and intellectual honesty, then surfaces the winner. Drill into any agent's full answer, challenge its reasoning in **Debate Mode**, or have a private follow-up thread in **Focus Mode**.
@@ -42,7 +49,7 @@ Each prompt picks 4 of these 16 for the panel. The panel is fully editable.
 - **LLM providers**: Anthropic (default), OpenAI, xAI (Grok), DeepSeek — all with automatic Claude fallback when a key is missing
 - **Payments**: Razorpay subscriptions (Plus / Pro / Agent Mode add-on)
 - **External tools**: Model Context Protocol (MCP) — connect Notion, GitHub, etc. as context sources for Agent Mode
-- **Observability**: Daily-rotating JSON logs, per-request latency tracking, scoring audits, persona drift detection
+- **Observability**: Daily-rotating JSON logs, per-request latency tracking, scoring audits, persona drift detection, and `X-Request-ID` tracing across API/SSE responses and UI error messages
 
 ## Tiers
 
@@ -111,6 +118,8 @@ GET  /api/panel             / POST /api/panel/save — your 4-slot panel
 
 POST /api/agent/run|orchestrate|refine|challenge|rebuttal|feedback
 GET  /api/agent/status/:id|result/:id|history|templates
+GET  /api/agent/feedback/calibration   Display-only confidence adjustment based on caller's verdict history
+GET  /api/agent/tasks/:id/export.json   Download a single task result as a .json file (pretty-printed)
 POST /api/agent/watchlist   Recurring research questions
 POST /api/agent/upload      File attachment (max 10 MB)
 POST /api/agent/memory/context
@@ -120,6 +129,20 @@ POST /api/payments/addon/agent/subscribe|cancel|reactivate
 
 POST /api/calibration/rate  Rate your own confidence
 GET  /api/calibration/stats | /api/calibration/rating/:task
+
+GET  /api/analytics/summary        Per-user analytics summary (prompts, debates, streaks, engagement)
+GET  /api/analytics/summary/export.csv  CSV export of the summary (mirrors the JSON shape)
+GET  /api/analytics/category-stats   All-categories aggregate (which categories do I engage with most, per-category best persona)
+GET  /api/analytics/category-stats/export.csv   CSV export of the same (mirrors the JSON shape, footer rollup included)
+GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
+GET  /api/analytics/persona-stats/:persona_id   Deep-dive on one persona (avg winning score, last activity, best category)
+GET  /api/analytics/persona-stats   All-personas summary (full 16-persona grid in one call, sorted strongest-first)
+GET  /api/analytics/persona-stats/:persona_id/by-category   Full per-category breakdown for one persona (one row per category with appearances/wins/win_rate)
+GET  /api/analytics/persona-stats/:persona_id/by-category/export.csv   Same data as text/csv with footer rollup
+GET  /api/analytics/persona-stats/:persona_id/timeline   Per-persona daily timeline of wins and appearances (sparkline-ready, contiguous zero-fill)
+GET  /api/analytics/persona-stats/:persona_id/timeline/export.csv   Same data as text/csv with footer rollup
+GET  /api/analytics/scoring-audit/:session_id   Pro per-round scoring audit (per-mind scores, criteria, confidence, fallback flag)
+GET  /api/analytics/scoring-audit/:session_id/export.csv   CSV export of the scoring audit (mirrors the JSON shape, footer rollup included)
 
 GET  /api/user/usage|tier|answer-feedback-stats
 PATCH /api/user/profile
@@ -188,6 +211,12 @@ Multi-Agents/
 - Razorpay MCP tokens encrypted at rest with Fernet
 - Passwords: bcrypt 12-round with SHA-256 prehash; legacy verify path retained for backwards compatibility
 - Prompt-injection detection (17 known phrases) + two-tier toxicity gate (rules + LLM)
+
+## Troubleshooting
+
+If something fails, copy the request ID shown in the error (or look for the
+`X-Request-ID` header in the API response) and include it when reporting the
+issue — it lets us trace the exact request through logs and usage records.
 
 ## License
 

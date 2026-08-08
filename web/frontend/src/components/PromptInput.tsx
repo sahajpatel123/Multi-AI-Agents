@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Loader2, Swords, ArrowUp } from 'lucide-react';
+import { Loader2, Swords, ArrowUp, Sparkles } from 'lucide-react';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
+import { improvePrompt } from '../api';
 import {
   ARENA_PROMPT_MAX_CHARS,
   charBudgetLabel,
@@ -58,6 +59,10 @@ interface PromptInputProps {
    * ignore when `draftKey` is not set.
    */
   clearDraftSignal?: number;
+  /** When set, shows the AI "polish my prompt" control in the compose box. */
+  polishEnabled?: boolean;
+  /** Fired after a polish attempt completes (refined or not). */
+  onPolished?: (prompt: string, note?: string) => void;
 }
 
 export function PromptInput({
@@ -75,11 +80,15 @@ export function PromptInput({
   onBlockedAttempt,
   draftKey,
   clearDraftSignal,
+  polishEnabled = false,
+  onPolished,
 }: PromptInputProps) {
   const [prompt, setPrompt] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [placeholderFading, setPlaceholderFading] = useState(false);
+  const [isPolishing, setIsPolishing] = useState(false);
+  const [polishMessage, setPolishMessage] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const budgetId = useId();
 
@@ -171,8 +180,37 @@ export function PromptInput({
     });
   };
 
+  const handlePolish = async () => {
+    const trimmed = clampToMax(prompt.trim(), ARENA_PROMPT_MAX_CHARS);
+    if (!trimmed || isPolishing || isLoading || submitBlocked) return;
+    setIsPolishing(true);
+    setPolishMessage(null);
+    try {
+      const result = await improvePrompt(trimmed);
+      if (result.refined && result.improved_prompt) {
+        const polished = clampToMax(result.improved_prompt, ARENA_PROMPT_MAX_CHARS);
+        setPrompt(polished);
+        requestAnimationFrame(() => {
+          const el = textareaRef.current;
+          if (el) autoResize(el);
+        });
+        setPolishMessage(result.note || 'Prompt polished — review before sending.');
+        onPolished?.(polished, result.note);
+      } else {
+        setPolishMessage(result.note || 'Could not improve this prompt — it was left unchanged.');
+        onPolished?.(trimmed, result.note);
+      }
+    } catch {
+      setPolishMessage('Prompt polish is unavailable right now — your prompt was left unchanged.');
+      onPolished?.(trimmed, 'Prompt polish is unavailable right now.');
+    } finally {
+      setIsPolishing(false);
+    }
+  };
+
   const hasContent = Boolean(prompt.trim());
   const canSubmit = hasContent && !isLoading && !submitBlocked;
+  const canPolish = hasContent && !isLoading && !isPolishing && !submitBlocked;
   const reducedMotion = prefersReducedMotion();
   const showBudget =
     prompt.length >= 80 || prompt.length >= Math.floor(ARENA_PROMPT_MAX_CHARS * 0.85);
@@ -309,6 +347,41 @@ export function PromptInput({
               </span>
             ) : null}
 
+            {polishEnabled ? (
+              <button
+                type="button"
+                className={[
+                  'prompt-input-polish',
+                  canPolish ? 'prompt-input-polish--armed' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={handlePolish}
+                disabled={!canPolish}
+                aria-label="Polish prompt with AI"
+                title={canPolish ? 'Polish prompt with AI' : 'Type a prompt to polish'}
+              >
+                {isPolishing ? (
+                  <Loader2
+                    className="prompt-input-polish__icon"
+                    width={14}
+                    height={14}
+                    aria-hidden
+                    style={{
+                      animation: promptSendSpinnerAnimation(true, reducedMotion),
+                    }}
+                  />
+                ) : (
+                  <Sparkles
+                    className="prompt-input-polish__icon"
+                    width={14}
+                    height={14}
+                    aria-hidden
+                  />
+                )}
+              </button>
+            ) : null}
+
             <button
               type="submit"
               className={[
@@ -354,6 +427,11 @@ export function PromptInput({
           </div>
         </div>
       </div>
+      {polishMessage ? (
+        <p className="prompt-input-polish-status" role="status">
+          {polishMessage}
+        </p>
+      ) : null}
     </form>
   );
 }

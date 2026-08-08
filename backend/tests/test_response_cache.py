@@ -2,7 +2,20 @@
 
 import pytest
 
-from arena.core.response_cache import ResponseCache, make_cache_key
+from arena.core.response_cache import ResponseCache, all_responses_healthy, make_cache_key
+
+
+def _agent(verdict="Real answer", one_liner="Short answer", confidence=70):
+    from arena.models.schemas import AgentResponse
+
+    return AgentResponse(
+        agent_id="agent_1",
+        agent_number=1,
+        verdict=verdict,
+        one_liner=one_liner,
+        confidence=confidence,
+        key_assumption="assumption",
+    )
 
 
 class TestMakeCacheKey:
@@ -113,3 +126,32 @@ class TestGetCacheSingleton:
         a = get_cache()
         b = get_cache()
         assert a is b
+
+
+class TestAllResponsesHealthy:
+    def test_healthy_round(self):
+        assert all_responses_healthy([_agent() for _ in range(4)]) is True
+
+    def test_empty_round_is_not_healthy(self):
+        assert all_responses_healthy([]) is False
+
+    def test_single_error_slot_blocks_caching(self):
+        responses = [_agent() for _ in range(3)] + [
+            _agent(
+                verdict="[Error: provider down]",
+                one_liner="Response unavailable",
+                confidence=0,
+            )
+        ]
+        assert all_responses_healthy(responses) is False
+
+    def test_all_error_round_is_not_healthy(self):
+        responses = [
+            _agent(
+                verdict="[Error: request timed out]",
+                one_liner="Response unavailable",
+                confidence=0,
+            )
+            for _ in range(4)
+        ]
+        assert all_responses_healthy(responses) is False

@@ -107,6 +107,7 @@ export function DebateMode({
   const [debateHistory, setDebateHistory] = useState<DebateMessage[]>([]);
   const [currentRound, setCurrentRound] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [errorCopied, setErrorCopied] = useState(false);
   const [expandedRounds, setExpandedRounds] = useState<Record<number, boolean>>({});
 
   const [streamingTexts, setStreamingTexts] = useState<Record<string, string>>({});
@@ -115,6 +116,8 @@ export function DebateMode({
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const roundInFlightRef = useRef(false);
+  const requestIdRef = useRef<string | null>(null);
+  const lastInterjectionRef = useRef<string | null>(null);
 
   const [interjection, setInterjection] = useState('');
   /** After round 3, user may unlock one bonus follow-up round (max 4). */
@@ -335,6 +338,7 @@ export function DebateMode({
     const nextRound = currentRound + 1;
     if (nextRound > MAX_ROUNDS) return;
     if (roundInFlightRef.current) return;
+    lastInterjectionRef.current = userMessage || null;
 
     abortRef.current?.abort();
     const abortController = new AbortController();
@@ -343,6 +347,7 @@ export function DebateMode({
 
     setPhase('streaming');
     setError(null);
+    requestIdRef.current = null;
     setStreamingTexts({});
     setDoneAgents(new Set());
     tokenBuffers.current = {};
@@ -363,6 +368,9 @@ export function DebateMode({
           persona_ids: panel.map((persona) => persona.id),
         },
         {
+          onRequestId: (data) => {
+            requestIdRef.current = data.request_id;
+          },
           onReactionToken: (data) => {
             if (abortController.signal.aborted) return;
             tokenBuffers.current[data.agent_id] =
@@ -396,7 +404,9 @@ export function DebateMode({
           onError: (data) => {
             if (abortController.signal.aborted) return;
             if (flushTimer.current) clearInterval(flushTimer.current);
-            setError(data.detail);
+            const base = data.message || data.detail || 'Something went wrong';
+            const rid = requestIdRef.current;
+            setError(rid ? `${base} (Request ID: ${rid})` : base);
             setPhase('done');
           },
         },
@@ -407,7 +417,9 @@ export function DebateMode({
       if (abortController.signal.aborted) return;
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (err instanceof Error && err.name === 'AbortError') return;
-      setError(err instanceof Error ? err.message : 'Debate round failed');
+      const base = err instanceof Error ? err.message : 'Debate round failed';
+      const rid = requestIdRef.current;
+      setError(rid ? `${base} (Request ID: ${rid})` : base);
       setPhase('done');
     } finally {
       if (abortRef.current === abortController) {
@@ -515,7 +527,7 @@ export function DebateMode({
             <span style={{ fontSize: '13px', fontWeight: 500, color: '#1A1714' }}>
               {agent.name}
             </span>
-            <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#A0A39A', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+            <span style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--vp-muted)', letterSpacing: '.05em', textTransform: 'uppercase', fontWeight: 500 }}>
               Reaction {index + 1}
             </span>
           </div>
@@ -669,7 +681,7 @@ export function DebateMode({
               challenged
             </span>
           </div>
-          <span style={{ fontSize: '10px', letterSpacing: '.2em', textTransform: 'uppercase', color: '#A0A39A' }}>
+          <span style={{ fontSize: '12px', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--vp-muted)', fontWeight: 500 }}>
             In the arena
           </span>
         </div>
@@ -687,7 +699,7 @@ export function DebateMode({
             borderLeft: `2px solid ${challengedConfig.color}`,
           }}
         >
-          <div style={{ fontSize: '10px', letterSpacing: '.12em', textTransform: 'uppercase', color: '#A0A39A', marginBottom: '4px' }}>
+          <div style={{ fontSize: '12px', letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--vp-muted)', marginBottom: '4px', fontWeight: 500 }}>
             Key assumption
           </div>
           <p style={{ fontSize: '13px', color: '#A0A39A', lineHeight: 1.6, fontStyle: 'italic' }}>
@@ -963,6 +975,42 @@ export function DebateMode({
               <p style={{ fontSize: '13px', color: '#A0A39A', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
               <button
                 type="button"
+                aria-label="Try again"
+                onClick={() => {
+                  void runRound(lastInterjectionRef.current || undefined);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  color: '#6B6460',
+                  flexShrink: 0,
+                }}
+              >
+                Try again
+              </button>
+              <button
+                type="button"
+                aria-label="Copy error"
+                onClick={() => {
+                  void copyToClipboard(error);
+                  setErrorCopied(true);
+                  window.setTimeout(() => setErrorCopied(false), 1500);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  color: '#6B6460',
+                  flexShrink: 0,
+                }}
+              >
+                {errorCopied ? 'Copied' : 'Copy'}
+              </button>
+              <button
+                type="button"
                 aria-label="Dismiss error"
                 onClick={() => setError(null)}
                 style={{
@@ -1090,6 +1138,42 @@ export function DebateMode({
                 }}
               >
                 <p style={{ fontSize: '13px', color: '#A0A39A', margin: 0, flex: 1, lineHeight: 1.45 }}>{error}</p>
+                <button
+                  type="button"
+                  aria-label="Try again"
+                  onClick={() => {
+                    void runRound(lastInterjectionRef.current || undefined);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    color: '#6B6460',
+                    flexShrink: 0,
+                  }}
+                >
+                  Try again
+                </button>
+                <button
+                  type="button"
+                  aria-label="Copy error"
+                  onClick={() => {
+                    void copyToClipboard(error);
+                    setErrorCopied(true);
+                    window.setTimeout(() => setErrorCopied(false), 1500);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    color: '#6B6460',
+                    flexShrink: 0,
+                  }}
+                >
+                  {errorCopied ? 'Copied' : 'Copy'}
+                </button>
                 <button
                   type="button"
                   aria-label="Dismiss error"

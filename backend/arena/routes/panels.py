@@ -2,7 +2,7 @@
 
 
 from pydantic import BaseModel, Field, field_validator
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 
 from arena.core.dependencies import get_current_user_required
@@ -209,7 +209,7 @@ async def list_panel_presets(
 
 @router.post("/panel/preset/{name}")
 async def apply_panel_preset(
-    name: str,
+    name: str = Path(..., max_length=50, description="Preset identifier (must match a key in PANEL_PRESETS)."),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> dict:

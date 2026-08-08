@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
+import { Reveal } from '../components/Reveal';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
 import { setRedirectIntent } from '../utils/redirectIntent';
@@ -131,7 +132,7 @@ export function CapabilitiesPage() {
           </div>
         </section>
 
-        <section className="cap-section" aria-labelledby="cap-topo-heading">
+        <Reveal as="section" className="cap-section" aria-labelledby="cap-topo-heading">
           <div className="cap-section__head">
             <span className="mkt-eyebrow">Execution topologies</span>
             <h2 id="cap-topo-heading" className="cap-section__title">
@@ -158,9 +159,9 @@ export function CapabilitiesPage() {
               </article>
             ))}
           </div>
-        </section>
+        </Reveal>
 
-        <section className="cap-section cap-section--tint" aria-labelledby="cap-pipe-heading">
+        <Reveal as="section" className="cap-section cap-section--tint" aria-labelledby="cap-pipe-heading">
           <div className="cap-section__head">
             <span className="mkt-eyebrow">Agent Mode internals</span>
             <h2 id="cap-pipe-heading" className="cap-section__title">
@@ -180,9 +181,9 @@ export function CapabilitiesPage() {
               </article>
             ))}
           </div>
-        </section>
+        </Reveal>
 
-        <section className="cap-section" aria-labelledby="cap-surface-heading">
+        <Reveal as="section" className="cap-section" aria-labelledby="cap-surface-heading">
           <div className="cap-section__head">
             <span className="mkt-eyebrow">Product surface</span>
             <h2 id="cap-surface-heading" className="cap-section__title">
@@ -197,9 +198,9 @@ export function CapabilitiesPage() {
               </article>
             ))}
           </div>
-        </section>
+        </Reveal>
 
-        <section className="mkt-cta-block" aria-labelledby="cap-cta-heading">
+        <Reveal as="section" className="mkt-cta-block" aria-labelledby="cap-cta-heading">
           <p id="cap-cta-heading" className="mkt-cta-block__pitch">
             Ready to put four minds on a real question?
           </p>
@@ -210,20 +211,20 @@ export function CapabilitiesPage() {
             </MotionButton>
             <button
               type="button"
-              className="arena-btn arena-btn--secondary arena-btn--md"
+              className="arena-btn arena-btn--secondary arena-btn--md interactive-surface interactive-surface--soft"
               onClick={() => navigate('/product')}
             >
               Product overview
             </button>
             <button
               type="button"
-              className="arena-btn arena-btn--ghost arena-btn--md"
+              className="arena-btn arena-btn--ghost arena-btn--md interactive-surface interactive-surface--soft"
               onClick={() => navigate('/pricing')}
             >
               Pricing
             </button>
           </div>
-        </section>
+        </Reveal>
       </main>
 
       <Footer />

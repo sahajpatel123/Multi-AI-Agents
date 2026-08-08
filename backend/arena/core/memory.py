@@ -6,6 +6,7 @@ import ast
 import json
 import logging
 import re
+import threading
 import uuid
 from collections import Counter
 from datetime import UTC, datetime
@@ -172,6 +173,7 @@ class ShortTermMemory:
 
     def __init__(self) -> None:
         self._store: dict[str, dict[str, Any]] = {}
+        self._lock: threading.Lock = threading.Lock()
 
     def _get_or_create_state(self, session_id: str, user_id: str = "anonymous") -> dict[str, Any]:
         state = self._store.get(session_id)
@@ -235,70 +237,66 @@ class ShortTermMemory:
     ) -> SessionTurn:
         from arena.core.agents import get_persona_id_for_agent
 
-        state = self._get_or_create_state(session_id, user_id=user_id)
-        turn_number = len(state["exchanges"]) + 1
-        timestamp = _now_utc()
+        with self._lock:
+            state = self._get_or_create_state(session_id, user_id=user_id)
+            turn_number = len(state["exchanges"]) + 1
+            timestamp = _now_utc()
 
-        agent_responses = {
-            scored.response.agent_id: scored.response
-            for scored in scored_responses
-        }
-
-        turn = SessionTurn(
-            turn_id=str(uuid.uuid4()),
-            prompt=prompt,
-            agent_responses=agent_responses,
-            winner_id=winner_id,
-            timestamp=timestamp,
-        )
-
-        winner_response = agent_responses[winner_id]
-        exchange = {
-            "turn": turn_number,
-            "prompt": prompt,
-            "prompt_category": prompt_category,
-            "winner_agent_id": winner_id,
-            "winner_persona_id": winner_persona_id,
-            "winner_one_liner": winner_response.one_liner,
-            "all_responses": [
-                {
-                    "agent_id": scored.response.agent_id,
-                    "persona_id": get_persona_id_for_agent(scored.response.agent_id, persona_ids),
-                    "one_liner": scored.response.one_liner,
-                    "score": scored.score,
-                    "confidence": scored.response.confidence,
-                }
+            agent_responses = {
+                scored.response.agent_id: scored.response
                 for scored in scored_responses
-            ],
-            "timestamp": timestamp,
-        }
+            }
 
-        state["exchanges"].append(exchange)
-        if len(state["exchanges"]) > SHORT_TERM_EXCHANGE_LIMIT:
-            state["exchanges"] = state["exchanges"][-SHORT_TERM_EXCHANGE_LIMIT:]
+            turn = SessionTurn(
+                turn_id=str(uuid.uuid4()),
+                prompt=prompt,
+                agent_responses=agent_responses,
+                winner_id=winner_id,
+                timestamp=timestamp,
+            )
 
-        session_data: SessionData = state["session_data"]
-        session_data.turns.append(turn)
-        if len(session_data.turns) > SHORT_TERM_EXCHANGE_LIMIT:
-            session_data.turns = session_data.turns[-SHORT_TERM_EXCHANGE_LIMIT:]
-        session_data.last_active = timestamp
+            winner_response = agent_responses[winner_id]
+            exchange = {
+                "turn": turn_number,
+                "prompt": prompt,
+                "prompt_category": prompt_category,
+                "winner_agent_id": winner_id,
+                "winner_persona_id": winner_persona_id,
+                "winner_one_liner": winner_response.one_liner,
+                "all_responses": [
+                    {
+                        "agent_id": scored.response.agent_id,
+                        "persona_id": get_persona_id_for_agent(scored.response.agent_id, persona_ids),
+                        "one_liner": scored.response.one_liner,
+                        "score": scored.score,
+                        "confidence": scored.response.confidence,
+                    }
+                    for scored in scored_responses
+                ],
+                "timestamp": timestamp,
+            }
 
-        current_topics = _extract_topics_from_exchanges(state["exchanges"], limit=4)
-        session_data.topics = current_topics
+            state["exchanges"].append(exchange)
+            if len(state["exchanges"]) > SHORT_TERM_EXCHANGE_LIMIT:
+                state["exchanges"] = state["exchanges"][-SHORT_TERM_EXCHANGE_LIMIT:]
 
-        # Bind ownership carefully:
-        # - anonymous → authenticated claim is allowed (upgrade)
-        # - never overwrite a real owner's id with another user's id
-        #   (that was the hijack: attacker add_turn claimed the session)
-        if _is_anonymous_owner(state.get("user_id")) and not _is_anonymous_owner(user_id):
-            state["user_id"] = user_id
-            session_data.user_id = user_id
-        elif not _is_anonymous_owner(state.get("user_id")):
-            # Keep the original owner; assert already ran above.
-            session_data.user_id = state["user_id"]
-        else:
-            state["user_id"] = user_id
-            session_data.user_id = user_id
+            session_data: SessionData = state["session_data"]
+            session_data.turns.append(turn)
+            if len(session_data.turns) > SHORT_TERM_EXCHANGE_LIMIT:
+                session_data.turns = session_data.turns[-SHORT_TERM_EXCHANGE_LIMIT:]
+            session_data.last_active = timestamp
+
+            current_topics = _extract_topics_from_exchanges(state["exchanges"], limit=4)
+            session_data.topics = current_topics
+
+            if _is_anonymous_owner(state.get("user_id")) and not _is_anonymous_owner(user_id):
+                state["user_id"] = user_id
+                session_data.user_id = user_id
+            elif not _is_anonymous_owner(state.get("user_id")):
+                session_data.user_id = state["user_id"]
+            else:
+                state["user_id"] = user_id
+                session_data.user_id = user_id
 
         return turn
 
@@ -315,24 +313,26 @@ class ShortTermMemory:
         is owned by someone else — prevents discuss/debate from injecting
         another user's prior takes into the model context.
         """
-        state = self._store.get(session_id)
-        if not state:
-            return []
-        if user_id is not None:
-            try:
-                assert_session_owner(state.get("user_id"), user_id)
-            except SessionOwnershipError:
+        with self._lock:
+            state = self._store.get(session_id)
+            if not state:
                 return []
+            if user_id is not None:
+                try:
+                    assert_session_owner(state.get("user_id"), user_id)
+                except SessionOwnershipError:
+                    return []
 
-        session_data: SessionData = state["session_data"]
-        responses: list[str] = []
-        for turn in session_data.turns:
-            if agent_id in turn.agent_responses:
-                responses.append(turn.agent_responses[agent_id].verdict)
+            session_data: SessionData = state["session_data"]
+            responses: list[str] = []
+            for turn in session_data.turns:
+                if agent_id in turn.agent_responses:
+                    responses.append(turn.agent_responses[agent_id].verdict)
         return responses
 
     def clear_session(self, session_id: str) -> None:
-        self._store.pop(session_id, None)
+        with self._lock:
+            self._store.pop(session_id, None)
 
 
 class SessionCompressor:

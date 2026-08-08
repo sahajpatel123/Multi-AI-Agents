@@ -1,8 +1,9 @@
 /// <reference types="vite/client" />
 
-import { apiFetch as bearerApiFetch, type ApiFetchOptions } from './lib/apiFetch';
+import { apiFetch as bearerApiFetch, fetchWithTimeout, type ApiFetchOptions } from './lib/apiFetch';
 import { clearTokens, getRefreshToken, setTokens } from './lib/tokenStorage';
 import {
+  PromptContextItem,
   PromptResponse,
   DebateRoundResponse,
   DebateMessage,
@@ -12,6 +13,7 @@ import {
   User,
   SavedResponseItem,
   TierStatus,
+  ScoringAuditResponse,
 } from './types';
 
 export const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(
@@ -71,7 +73,17 @@ function asLocalExecutionDetail(data: unknown): LocalExecutionRequiredError['det
 }
 
 async function parseJsonSafely<T>(response: Response): Promise<T | null> {
-  const text = await response.text();
+  // Wrap both the body read AND the parse in try/catch — a hung
+  // stream that aborts mid-read (network blip, devtools interrupt,
+  // backend SIGPIPE) would otherwise throw a TypeError straight up
+  // to the caller's catch. Returning null keeps the failure mode
+  // uniform: caller treats it as "empty / unparseable response".
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    return null;
+  }
   if (!text) return null;
 
   try {
@@ -95,6 +107,11 @@ function getErrorMessage(
   return fallback;
 }
 
+export function withRequestId(message: string, response: Response): string {
+  const rid = response.headers.get('x-request-id');
+  return rid ? `${message} (Request ID: ${rid})` : message;
+}
+
 // ──────────────────────────────────────────────────────────────
 // Auth
 // ──────────────────────────────────────────────────────────────
@@ -107,33 +124,45 @@ type TokenAuthResponse = {
 };
 
 export async function register(name: string, email: string, password: string): Promise<User> {
-  const res = await fetch(`${API_ORIGIN}/api/auth/register`, {
+  const res = await fetchWithTimeout(`${API_ORIGIN}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password }),
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
-    throw new ApiError(getErrorMessage(err, 'Registration failed'), res.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Registration failed'), res),
+      res.status,
+      err,
+    );
   }
   const data = await parseJsonSafely<TokenAuthResponse>(res);
-  if (!data?.user || !data.access_token || !data.refresh_token) throw new Error('Empty response');
+  if (!data?.user || !data.access_token || !data.refresh_token) {
+    throw new Error(withRequestId('Empty response', res));
+  }
   setTokens(data.access_token, data.refresh_token);
   return data.user;
 }
 
 export async function login(email: string, password: string): Promise<User> {
-  const res = await fetch(`${API_ORIGIN}/api/auth/login`, {
+  const res = await fetchWithTimeout(`${API_ORIGIN}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(res);
-    throw new ApiError(getErrorMessage(err, 'Login failed'), res.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Login failed'), res),
+      res.status,
+      err,
+    );
   }
   const data = await parseJsonSafely<TokenAuthResponse>(res);
-  if (!data?.user || !data.access_token || !data.refresh_token) throw new Error('Empty response');
+  if (!data?.user || !data.access_token || !data.refresh_token) {
+    throw new Error(withRequestId('Empty response', res));
+  }
   setTokens(data.access_token, data.refresh_token);
   return data.user;
 }
@@ -151,7 +180,11 @@ export async function getMe(): Promise<User | null> {
   if (res.status === 401) return null;
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
-    throw new ApiError(err?.detail || 'Failed to fetch user', res.status, err);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to fetch user', res),
+      res.status,
+      err,
+    );
   }
   return parseJsonSafely<User>(res);
 }
@@ -171,10 +204,14 @@ export async function getUserUsage(): Promise<UserUsageResponse> {
   const res = await apiFetch(`/api/user/usage`);
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
-    throw new ApiError(err?.detail || 'Failed to load usage', res.status, err);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to load usage', res),
+      res.status,
+      err,
+    );
   }
   const data = await parseJsonSafely<UserUsageResponse>(res);
-  if (!data) throw new Error('Empty usage response');
+  if (!data) throw new Error(withRequestId('Empty usage response', res));
   return data;
 }
 
@@ -190,10 +227,14 @@ export async function patchUserProfile(body: {
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
-    throw new ApiError(err?.detail || 'Failed to save profile', res.status, err);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to save profile', res),
+      res.status,
+      err,
+    );
   }
   const data = await parseJsonSafely<User>(res);
-  if (!data) throw new Error('Empty response');
+  if (!data) throw new Error(withRequestId('Empty response', res));
   return data;
 }
 
@@ -207,10 +248,30 @@ export async function getUserTier(): Promise<TierStatus | null> {
   return parseJsonSafely<TierStatus>(res);
 }
 
+export async function fetchScoringAudit(
+  sessionId: string,
+  limit = 50,
+): Promise<ScoringAuditResponse> {
+  const response = await apiFetch(
+    `/api/analytics/scoring-audit/${encodeURIComponent(sessionId)}?limit=${encodeURIComponent(String(limit))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load scoring audit'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<ScoringAuditResponse>(response);
+  if (!data) throw new Error(withRequestId('Empty scoring audit response', response));
+  return data;
+}
+
 export async function refreshToken(): Promise<User | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
-  const res = await fetch(`${API_ORIGIN}/api/auth/refresh`, {
+  const res = await fetchWithTimeout(`${API_ORIGIN}/api/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refresh }),
@@ -233,7 +294,7 @@ export async function saveMemory(sessionId: string, trigger: 'session_end' | 'ne
   });
 
   if (!res.ok) {
-    throw new Error('Failed to save memory');
+    throw new Error(withRequestId('Failed to save memory', res));
   }
 }
 
@@ -260,7 +321,7 @@ export interface SavedPanel {
 export async function getPersonas(): Promise<ApiPersona[]> {
   const res = await apiFetch(`/api/personas`);
   if (!res.ok) {
-    throw new Error('Failed to load personas');
+    throw new Error(withRequestId('Failed to load personas', res));
   }
   return (await parseJsonSafely<ApiPersona[]>(res)) || [];
 }
@@ -269,7 +330,7 @@ export async function getPanel(): Promise<SavedPanel> {
   const res = await apiFetch(`/api/panel`);
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to load panel'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to load panel'), res));
   }
   return (await parseJsonSafely<SavedPanel>(res)) || { slot_1: '', slot_2: '', slot_3: '', slot_4: '' };
 }
@@ -282,20 +343,33 @@ export async function savePanel(panel: SavedPanel): Promise<SavedPanel> {
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to save panel'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to save panel'), res));
   }
   const data = (await parseJsonSafely<{ panel?: SavedPanel }>(res)) || {};
   return data.panel || { slot_1: '', slot_2: '', slot_3: '', slot_4: '' };
 }
 
 export async function getSavedResponses(): Promise<SavedResponseItem[]> {
-  const res = await apiFetch(`/api/saved`);
+  // The backend caps per_page at SAVED_MAX_PER_USER (200). Pulling the full
+  // library keeps the sidebar's local search/filter/sort honest instead of
+  // silently hiding older takes behind the default 50-row page.
+  const res = await apiFetch(`/api/saved?per_page=200`);
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to load saved responses'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to load saved responses'), res));
   }
-  const data = ((await parseJsonSafely<Array<Record<string, unknown>>>(res)) || []);
-  return data.map((item) => ({
+  const data = await parseJsonSafely<
+    | Array<Record<string, unknown>>
+    | { items?: Array<Record<string, unknown>> }
+  >(res);
+  // Backend now returns an envelope ({items,...}); keep the bare-array shape
+  // accepted for resilience against old cached responses / proxies.
+  const rawItems = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.items)
+      ? data.items
+      : [];
+  return rawItems.map((item) => ({
     id: Number(item.id),
     session_id: String(item.session_id || ''),
     turn_id: `${item.session_id || ''}:${item.agent_id || ''}`,
@@ -308,6 +382,8 @@ export async function getSavedResponses(): Promise<SavedResponseItem[]> {
     confidence: typeof item.confidence === 'number' ? item.confidence : null,
     one_liner: String(item.one_liner || ''),
     verdict: String(item.verdict || ''),
+    pinned: item.pinned === true || Boolean(item.pinned_at),
+    pinned_at: item.pinned_at ? String(item.pinned_at) : null,
     timestamp: String(item.saved_at || ''),
   }));
 }
@@ -331,7 +407,7 @@ export async function saveResponse(payload: {
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to save response'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to save response'), res));
   }
   const data = (await parseJsonSafely<{ id?: number }>(res)) || {};
   return Number(data.id);
@@ -343,14 +419,75 @@ export async function deleteSavedResponse(id: number): Promise<void> {
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
-    throw new Error(getErrorMessage(err, 'Failed to delete saved response'));
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to delete saved response'), res));
   }
+}
+
+export type SavedPinResult = {
+  id: number;
+  pinned: boolean;
+  pinned_at: string | null;
+};
+
+export async function setSavedResponsePinned(
+  id: number,
+  pinned: boolean,
+): Promise<SavedPinResult> {
+  const res = await apiFetch(`/api/saved/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pinned }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to update saved take'), res));
+  }
+  const body = await parseJsonSafely<Partial<SavedPinResult>>(res);
+  return {
+    id: typeof body?.id === 'number' ? body.id : id,
+    pinned: typeof body?.pinned === 'boolean' ? body.pinned : pinned,
+    pinned_at: body?.pinned_at ?? null,
+  };
+}
+
+export type SavedBulkPinResult = {
+  status: 'ok';
+  requested: number;
+  applied: number;
+  ids: number[];
+  pinned: boolean;
+  pin_limit_reached: boolean;
+};
+
+export async function setSavedResponsesPinned(
+  ids: number[],
+  pinned: boolean,
+): Promise<SavedBulkPinResult> {
+  const res = await apiFetch(`/api/saved/bulk-pin`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, pinned }),
+  });
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: { message?: string } | string }>(res);
+    throw new Error(withRequestId(getErrorMessage(err, 'Failed to update saved takes'), res));
+  }
+  const body = await parseJsonSafely<Partial<SavedBulkPinResult>>(res);
+  return {
+    status: 'ok',
+    requested: typeof body?.requested === 'number' ? body.requested : ids.length,
+    applied: typeof body?.applied === 'number' ? body.applied : 0,
+    ids: Array.isArray(body?.ids) ? body.ids : [],
+    pinned: typeof body?.pinned === 'boolean' ? body.pinned : pinned,
+    pin_limit_reached: body?.pin_limit_reached === true,
+  };
 }
 
 export async function submitPrompt(
   prompt: string,
   sessionId?: string,
   personaIds?: string[],
+  context?: PromptContextItem[],
 ): Promise<PromptResponse> {
   const response = await apiFetch(`/api/prompt`, {
     method: 'POST',
@@ -361,26 +498,28 @@ export async function submitPrompt(
       prompt,
       session_id: sessionId,
       persona_ids: personaIds,
+      context,
     }),
   });
 
   if (!response.ok) {
     const error = await parseJsonSafely<{ detail?: string }>(response);
-    throw new Error(getErrorMessage(error, 'Failed to submit prompt'));
+    throw new Error(withRequestId(getErrorMessage(error, 'Failed to submit prompt'), response));
   }
 
   const data = await parseJsonSafely<PromptResponse>(response);
-  if (!data) throw new Error('Empty response');
+  if (!data) throw new Error(withRequestId('Empty response', response));
   return data;
 }
 
 export interface StreamCallbacks {
+  onRequestId?: (data: { request_id: string }) => void;
   onPipeline?: (data: { passed: boolean; category: string; rejection_reason: string | null }) => void;
   onToken?: (data: { agent_id: string; token: string }) => void;
   onAgentDone?: (data: { agent_id: string }) => void;
   onAgentError?: (data: { agent_id: string; error: string }) => void;
   onResult?: (data: PromptResponse) => void;
-  onError?: (data: { detail: string }) => void;
+  onError?: (data: { detail?: string; message?: string; error?: string }) => void;
 }
 
 export function parseStreamedAgentPreview(rawText: string): string | null {
@@ -445,11 +584,17 @@ export async function streamPrompt(
   sessionId?: string,
   personaIds?: string[],
   signal?: AbortSignal,
+  context?: PromptContextItem[],
 ): Promise<void> {
   const response = await apiFetch(`/api/prompt/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, session_id: sessionId, persona_ids: personaIds }),
+    body: JSON.stringify({
+      prompt,
+      session_id: sessionId,
+      persona_ids: personaIds,
+      context,
+    }),
     signal,
   });
 
@@ -457,22 +602,28 @@ export async function streamPrompt(
     const error = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
     if (response.status === 429) {
       throw new Error(
-        getErrorMessage(
-          error,
-          'Daily message limit reached. Resets at midnight UTC — or upgrade for more headroom.',
+        withRequestId(
+          getErrorMessage(
+            error,
+            'Daily message limit reached. Resets at midnight UTC — or upgrade for more headroom.',
+          ),
+          response,
         ),
       );
     }
     if (response.status === 401 || response.status === 403) {
-      throw new Error(getErrorMessage(error, 'Sign in to run this prompt in Arena.'));
+      throw new Error(withRequestId(getErrorMessage(error, 'Sign in to run this prompt in Arena.'), response));
     }
-    throw new Error(getErrorMessage(error, 'Failed to start stream'));
+    throw new Error(withRequestId(getErrorMessage(error, 'Failed to start stream'), response));
   }
 
   if (!response.body) throw new Error('No response body');
 
   await consumeSseStream(response.body, signal, (event, data) => {
     switch (event) {
+      case 'request_id':
+        callbacks.onRequestId?.(data);
+        break;
       case 'pipeline':
         callbacks.onPipeline?.(data);
         break;
@@ -500,10 +651,11 @@ export async function streamPrompt(
 // ──────────────────────────────────────────────────────────────
 
 export interface DebateStreamCallbacks {
+  onRequestId?: (data: { request_id: string }) => void;
   onReactionToken?: (data: { agent_id: string; token: string }) => void;
   onReactionDone?: (data: { agent_id: string }) => void;
   onResult?: (data: DebateRoundResponse) => void;
-  onError?: (data: { detail: string }) => void;
+  onError?: (data: { detail?: string; message?: string; error?: string }) => void;
 }
 
 export async function streamDebateRound(
@@ -529,13 +681,16 @@ export async function streamDebateRound(
 
   if (!response.ok) {
     const error = await parseJsonSafely<{ detail?: string }>(response);
-    throw new Error(getErrorMessage(error, 'Failed to start debate stream'));
+    throw new Error(withRequestId(getErrorMessage(error, 'Failed to start debate stream'), response));
   }
 
   if (!response.body) throw new Error('No response body');
 
   await consumeSseStream(response.body, signal, (event, data) => {
     switch (event) {
+      case 'request_id':
+        callbacks.onRequestId?.(data);
+        break;
       case 'reaction_token':
         callbacks.onReactionToken?.(data);
         break;
@@ -557,9 +712,10 @@ export async function streamDebateRound(
 // ──────────────────────────────────────────────────────────────
 
 export interface DiscussStreamCallbacks {
+  onRequestId?: (data: { request_id: string }) => void;
   onToken?: (data: { agent_id: string; token: string }) => void;
   onResult?: (data: DiscussResponse) => void;
-  onError?: (data: { detail: string }) => void;
+  onError?: (data: { detail?: string; message?: string; error?: string }) => void;
 }
 
 export async function streamDiscuss(
@@ -584,13 +740,16 @@ export async function streamDiscuss(
 
   if (!response.ok) {
     const error = await parseJsonSafely<{ detail?: string }>(response);
-    throw new Error(getErrorMessage(error, 'Failed to start discuss stream'));
+    throw new Error(withRequestId(getErrorMessage(error, 'Failed to start discuss stream'), response));
   }
 
   if (!response.body) throw new Error('No response body');
 
   await consumeSseStream(response.body, signal, (event, data) => {
     switch (event) {
+      case 'request_id':
+        callbacks.onRequestId?.(data);
+        break;
       case 'token':
         callbacks.onToken?.(data);
         break;
@@ -717,9 +876,13 @@ export async function getAgentTemplates(): Promise<AgentTemplatesResponse> {
   const response = await apiFetch(`/api/agent/templates`);
   const data = await parseJsonSafely<AgentTemplatesResponse & { detail?: string }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Failed to load templates'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to load templates'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data?.categories) throw new Error('Invalid templates response');
+  if (!data?.categories) throw new Error(withRequestId('Invalid templates response', response));
   return data;
 }
 
@@ -758,7 +921,11 @@ export async function postAgentTaskAnswerFeedback(
     { success?: boolean; feedback_stats?: AnswerFeedbackStats; detail?: string } | null
   >(response);
   if (!data || !response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Failed to submit feedback'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to submit feedback'), response),
+      response.status,
+      data,
+    );
   }
   return { success: !!data.success, feedback_stats: data.feedback_stats! };
 }
@@ -767,7 +934,11 @@ export async function getUserAnswerFeedbackStats(): Promise<AnswerFeedbackStats>
   const response = await apiFetch(`/api/user/answer-feedback-stats`);
   const data = await parseJsonSafely<AnswerFeedbackStats & { detail?: string }>(response);
   if (!response.ok || !data) {
-    throw new ApiError(getErrorMessage(data, 'Failed to load feedback stats'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to load feedback stats'), response),
+      response.status,
+      data,
+    );
   }
   return data;
 }
@@ -789,7 +960,7 @@ export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedback
   const data = raw as { items?: RecentFeedbackItem[] } | null;
   if (!response.ok) {
     throw new ApiError(
-      getErrorMessage(raw as object, 'Failed to load recent feedback'),
+      withRequestId(getErrorMessage(raw as object, 'Failed to load recent feedback'), response),
       response.status,
       raw,
     );
@@ -798,12 +969,14 @@ export async function getRecentAgentFeedback(limit = 10): Promise<RecentFeedback
 }
 
 export type AgentStartResponse = {
+  request_id?: string | null;
   task_id: string;
   status: string;
   message?: string;
 };
 
 export type AgentStatusPayload = {
+  request_id?: string | null;
   task_id: string;
   status: string;
   current_stage?: string;
@@ -833,13 +1006,17 @@ export async function runAgentTask(
   const data = await parseJsonSafely<
     AgentStartResponse & { detail?: string | { message?: string; error?: string } }
   >(response);
-  if (!data) throw new Error('Empty response');
+  if (!data) throw new Error(withRequestId('Empty response', response));
   if (!response.ok) {
     if (response.status === 409) {
       const local = asLocalExecutionDetail(data);
       if (local) throw new LocalExecutionRequiredError(local);
     }
-    throw new ApiError(getErrorMessage(data, 'Agent task failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Agent task failed'), response),
+      response.status,
+      data,
+    );
   }
   return data;
 }
@@ -941,9 +1118,12 @@ export async function uploadAgentFile(file: File): Promise<{
   }>(response);
   if (!response.ok || !data?.file_id) {
     throw new ApiError(
-      getErrorMessage(
-        data as { detail?: string | { message?: string } },
-        response.status === 413 ? 'File too large (max 10MB)' : 'Upload failed',
+      withRequestId(
+        getErrorMessage(
+          data as { detail?: string | { message?: string } },
+          response.status === 413 ? 'File too large (max 10MB)' : 'Upload failed',
+        ),
+        response,
       ),
       response.status,
       data,
@@ -994,9 +1174,13 @@ export async function getAgentStatus(taskId: string): Promise<AgentStatusPayload
     response,
   );
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Status request failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Status request failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty status response');
+  if (!data) throw new Error(withRequestId('Empty status response', response));
   return data;
 }
 
@@ -1004,9 +1188,13 @@ export async function getAgentResult(taskId: string): Promise<unknown> {
   const response = await apiFetch(`/api/agent/result/${taskId}`);
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Result request failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Result request failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty result response');
+  if (!data) throw new Error(withRequestId('Empty result response', response));
   return data;
 }
 
@@ -1041,10 +1229,14 @@ export async function getAgentTaskDetail(taskId: string): Promise<AgentTaskDetai
     AgentTaskDetailPayload & { detail?: string | { message?: string } }
   >(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Task detail request failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Task detail request failed'), response),
+      response.status,
+      data,
+    );
   }
   if (!data || !data.task || !data.task.task_id) {
-    throw new Error('Empty or invalid task detail response');
+    throw new Error(withRequestId('Empty or invalid task detail response', response));
   }
   return {
     task: data.task,
@@ -1057,7 +1249,11 @@ export async function exportAgentTaskPdf(taskId: string): Promise<Blob> {
   const response = await apiFetch(`/api/agent/tasks/${encodeURIComponent(taskId)}/export/pdf`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Export failed'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Export failed'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }
@@ -1066,29 +1262,72 @@ export async function postAgentOrchestrate(body: {
   questions: string[];
   expertise_level?: string;
   expertise_domain?: string;
-}): Promise<{ orchestration_id: string; task_ids: string[] }> {
+}): Promise<{ request_id?: string | null; orchestration_id: string; task_ids: string[] }> {
   const response = await apiFetch(`/api/agent/orchestrate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   const data = await parseJsonSafely<{
+    request_id?: string | null;
     orchestration_id?: string;
     task_ids?: string[];
     detail?: string | { message?: string };
   }>(response);
   if (!data || !response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Orchestration failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Orchestration failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data.orchestration_id || !data.task_ids) throw new Error('Invalid orchestration response');
-  return { orchestration_id: data.orchestration_id, task_ids: data.task_ids };
+  if (!data.orchestration_id || !data.task_ids) {
+    throw new Error(withRequestId('Invalid orchestration response', response));
+  }
+  return {
+    request_id: data.request_id || null,
+    orchestration_id: data.orchestration_id,
+    task_ids: data.task_ids,
+  };
 }
 
 export async function getAgentOrchestration(orchId: string): Promise<any> {
   const response = await apiFetch(`/api/agent/orchestrate/${encodeURIComponent(orchId)}`);
   const data = await parseJsonSafely<any>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Failed to load orchestration'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Failed to load orchestration'), response),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
+
+export type CancelAgentOrchestrationResponse = {
+  orchestration_id: string;
+  status: 'cancelled' | 'complete' | 'failed';
+  task_ids: string[];
+  cancelled_task_ids?: string[];
+  message?: string;
+};
+
+export async function cancelAgentOrchestration(
+  orchId: string,
+): Promise<CancelAgentOrchestrationResponse> {
+  const response = await apiFetch(
+    `/api/agent/orchestrate/${encodeURIComponent(orchId)}/cancel`,
+    { method: 'POST' },
+  );
+  const data = await parseJsonSafely<
+    CancelAgentOrchestrationResponse & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok || !data?.orchestration_id) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Cancel failed'), response),
+      response.status,
+      data,
+    );
   }
   return data;
 }
@@ -1099,7 +1338,11 @@ export async function exportOrchestrationPdf(orchId: string): Promise<Blob> {
   );
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Export failed'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Export failed'), response),
+      response.status,
+      err,
+    );
   }
   return response.blob();
 }
@@ -1211,9 +1454,13 @@ export async function getAgentWatchlist(): Promise<{
     detail?: string | { message?: string };
   }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Watchlist request failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Watchlist request failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty watchlist response');
+  if (!data) throw new Error(withRequestId('Empty watchlist response', response));
   return {
     items: data.items || [],
     active_count: data.active_count ?? 0,
@@ -1234,7 +1481,11 @@ export async function postAgentWatchlist(body: {
   });
   const data = await parseJsonSafely<AgentWatchlistItem & { detail?: string | { message?: string } }>(response);
   if (!data || !response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Could not add to watchlist'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not add to watchlist'), response),
+      response.status,
+      data,
+    );
   }
   return data as AgentWatchlistItem;
 }
@@ -1250,7 +1501,11 @@ export async function patchAgentWatchlist(
   });
   const data = await parseJsonSafely<AgentWatchlistItem & { detail?: string | { message?: string } }>(response);
   if (!data || !response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Watchlist update failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Watchlist update failed'), response),
+      response.status,
+      data,
+    );
   }
   return data as AgentWatchlistItem;
 }
@@ -1261,7 +1516,11 @@ export async function deleteAgentWatchlist(itemId: string): Promise<void> {
   });
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Could not remove watchlist item'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not remove watchlist item'), response),
+      response.status,
+      data,
+    );
   }
 }
 
@@ -1303,9 +1562,13 @@ export async function getAgentWatchlistHistory(
     }
   >(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Could not load watch history'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not load watch history'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty watch history response');
+  if (!data) throw new Error(withRequestId('Empty watch history response', response));
   return {
     items: Array.isArray(data.items) ? data.items : [],
     stats: data.stats || {
@@ -1318,6 +1581,106 @@ export async function getAgentWatchlistHistory(
   };
 }
 
+export async function exportAgentWatchlistHistoryCsv(itemId: string, limit = 100): Promise<Blob> {
+  const cap = Math.max(1, Math.min(500, Math.floor(limit)));
+  const response = await apiFetch(
+    `/api/agent/watchlist/${encodeURIComponent(itemId)}/history/export.csv?limit=${encodeURIComponent(String(cap))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export watch history CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return response.blob();
+}
+
+export interface PromptImproveResult {
+  original_prompt: string;
+  improved_prompt: string;
+  refined: boolean;
+  note?: string;
+}
+
+/** Ask the backend to polish a prompt before it is sent to Arena. */
+export async function improvePrompt(prompt: string): Promise<PromptImproveResult> {
+  const response = await apiFetch('/api/prompt/improve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
+  const data = await parseJsonSafely<PromptImproveResult & { detail?: string | { message?: string } }>(
+    response,
+  );
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Prompt polish failed'), response),
+      response.status,
+      data,
+    );
+  }
+  if (!data) throw new Error(withRequestId('Empty prompt polish response', response));
+  return data;
+}
+
+export interface FollowUpSuggestionsResult {
+  prompt: string;
+  suggestions: string[];
+  source: 'llm' | 'fallback';
+}
+
+// Client-side mirror of the backend caps in core/followup_suggestions.py so
+// the UI never sends a payload the API would reject.
+const FOLLOWUP_SUGGESTION_MAX_VERDICTS = 8;
+const FOLLOWUP_SUGGESTION_VERDICT_MAX_CHARS = 1800;
+const FOLLOWUP_SUGGESTION_TOTAL_MAX_CHARS = 12000;
+
+/**
+ * Ask the panel for short follow-up questions after a completed round.
+ * Best-effort by contract: the backend always returns suggestions (LLM or
+ * deterministic fallback), so callers only need to handle network failures.
+ */
+export async function suggestFollowUps(
+  prompt: string,
+  verdicts: string[],
+  signal?: AbortSignal,
+): Promise<FollowUpSuggestionsResult> {
+  const trimmed = verdicts
+    .map((v) => (v || '').trim().slice(0, FOLLOWUP_SUGGESTION_VERDICT_MAX_CHARS))
+    .filter(Boolean)
+    .slice(0, FOLLOWUP_SUGGESTION_MAX_VERDICTS);
+  // Keep the earliest verdicts when the combined budget is exhausted.
+  let total = 0;
+  const kept: string[] = [];
+  for (const verdict of trimmed) {
+    if (total + verdict.length > FOLLOWUP_SUGGESTION_TOTAL_MAX_CHARS) break;
+    kept.push(verdict);
+    total += verdict.length;
+  }
+
+  const response = await apiFetch('/api/prompt/followups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, verdicts: kept }),
+    signal,
+  });
+  const data = await parseJsonSafely<
+    FollowUpSuggestionsResult & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not suggest follow-ups'), response),
+      response.status,
+      data,
+    );
+  }
+  if (!data) throw new Error(withRequestId('Empty follow-up suggestions response', response));
+  return data;
+}
+
+
 export async function postCalibrationRate(
   taskId: string,
   rating: number,
@@ -1329,9 +1692,13 @@ export async function postCalibrationRate(
   });
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Calibration rating failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Calibration rating failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty calibration response');
+  if (!data) throw new Error(withRequestId('Empty calibration response', response));
   return data;
 }
 
@@ -1339,9 +1706,13 @@ export async function getCalibrationStats(): Promise<unknown> {
   const response = await apiFetch(`/api/calibration/stats`);
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Calibration stats failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Calibration stats failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty calibration stats');
+  if (!data) throw new Error(withRequestId('Empty calibration stats', response));
   return data;
 }
 
@@ -1351,9 +1722,13 @@ export async function getCalibrationRatingForTask(taskId: string): Promise<unkno
   );
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Calibration lookup failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Calibration lookup failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty calibration lookup');
+  if (!data) throw new Error(withRequestId('Empty calibration lookup', response));
   return data;
 }
 
@@ -1371,9 +1746,13 @@ export async function toggleAgentTaskLive(
   );
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Live toggle failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Live toggle failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty live toggle response');
+  if (!data) throw new Error(withRequestId('Empty live toggle response', response));
   return data;
 }
 
@@ -1391,9 +1770,13 @@ export async function markAgentLiveUpdatesRead(
   );
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Mark read failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Mark read failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty mark-read response');
+  if (!data) throw new Error(withRequestId('Empty mark-read response', response));
   return data;
 }
 
@@ -1413,10 +1796,14 @@ export async function renameAgentTask(
     { success?: boolean; title?: string; detail?: string | { message?: string } }
   >(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Rename failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Rename failed'), response),
+      response.status,
+      data,
+    );
   }
   if (!data || data.success !== true || typeof data.title !== 'string') {
-    throw new Error('Invalid rename response');
+    throw new Error(withRequestId('Invalid rename response', response));
   }
   return { success: true, title: data.title };
 }
@@ -1430,12 +1817,42 @@ export async function deleteAgentTask(taskId: string): Promise<{ success: boolea
     response,
   );
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Delete failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Delete failed'), response),
+      response.status,
+      data,
+    );
   }
   if (!data || data.success !== true) {
-    throw new Error('Invalid delete response');
+    throw new Error(withRequestId('Invalid delete response', response));
   }
   return { success: true };
+}
+
+export type CancelAgentTaskResponse = {
+  task_id: string;
+  status: 'cancelling' | 'cancelled' | 'complete' | 'failed';
+  message?: string;
+};
+
+export async function cancelAgentTask(
+  taskId: string,
+): Promise<CancelAgentTaskResponse> {
+  const response = await apiFetch(
+    `/api/agent/tasks/${encodeURIComponent(taskId)}/cancel`,
+    { method: 'POST' },
+  );
+  const data = await parseJsonSafely<
+    CancelAgentTaskResponse & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok || !data?.task_id) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Cancel failed'), response),
+      response.status,
+      data,
+    );
+  }
+  return data;
 }
 
 export async function getMemoryContext(task: string = ''): Promise<unknown> {
@@ -1443,9 +1860,13 @@ export async function getMemoryContext(task: string = ''): Promise<unknown> {
   const response = await apiFetch(`/api/agent/memory/context?task=${q}`);
   const data = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, 'Memory context failed'), response.status, data);
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Memory context failed'), response),
+      response.status,
+      data,
+    );
   }
-  if (!data) throw new Error('Empty memory context');
+  if (!data) throw new Error(withRequestId('Empty memory context', response));
   return data;
 }
 
@@ -1896,4 +2317,80 @@ export async function deleteRoom(slug: string): Promise<void> {
     const data = await parseJsonSafely<{ detail?: string }>(response);
     throw new ApiError(getErrorMessage(data || {}, 'Could not delete room'), response.status, data);
   }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Analytics CSV Exports
+// ──────────────────────────────────────────────────────────────
+
+export async function exportAnalyticsSummaryCsv(windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/summary/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export analytics summary CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function exportAnalyticsPersonaWinRateCsv(windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/persona-win-rate/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export persona win rate CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function exportAnalyticsCategoryStatsCsv(windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/category-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export category stats CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function exportAnalyticsPersonaStatsOverviewCsv(windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/persona-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export persona stats overview CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function exportAnalyticsPersonaStatsTimelineCsv(personaId: string, windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(personaId)}/timeline/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export persona timeline CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function exportAnalyticsPersonaStatsByCategoryCsv(personaId: string, windowDays: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/persona-stats/${encodeURIComponent(personaId)}/by-category/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export persona category stats CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
+export async function exportScoringAuditCsv(
+  sessionId: string,
+  limit = 50,
+): Promise<Blob> {
+  const response = await apiFetch(
+    `/api/analytics/scoring-audit/${encodeURIComponent(sessionId)}/export.csv?limit=${encodeURIComponent(String(limit))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export scoring audit CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return response.blob();
 }

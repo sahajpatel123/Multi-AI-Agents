@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from arena.db_models import AgentTask, AnswerFeedback
@@ -13,16 +14,37 @@ try:  # Python 3.9+: keep imports minimal in module-level
 except ImportError:  # pragma: no cover - Python 3.11+
     from datetime import timezone  # type: ignore[no-redef]
 
+CALIBRATION_WINDOW = 20
+"""Number of most-recent verdicts that feed the display-calibration knob.
+
+The calibration contract has always described the signal as the caller's
+*last* verdicts (see the endpoint docstring for GET /api/agent/feedback/
+calibration). The previous implementation aggregated the user's entire
+history, which made the knob sticky: mistakes from months ago never
+decayed, and per-request cost grew with the feedback table. Bounding the
+window keeps the knob responsive to recent behavior and the query cost
+constant.
+"""
+
+
+def _feedback_counts_by_verdict(user_id: int, db: Session) -> dict[str, int]:
+    return dict(
+        db.query(AnswerFeedback.verdict, func.count(AnswerFeedback.id))
+        .filter(AnswerFeedback.user_id == user_id)
+        .group_by(AnswerFeedback.verdict)
+        .all()
+    )
+
 
 def get_answer_feedback_distribution(user_id: int, db: Session) -> dict[str, int]:
     """Percent breakdown of verdicts for Profile / POST response."""
-    rows = db.query(AnswerFeedback).filter(AnswerFeedback.user_id == user_id).all()
-    n = len(rows)
+    counts = _feedback_counts_by_verdict(user_id, db)
+    n = sum(counts.values())
     if n == 0:
         return {"total": 0, "correct_pct": 0, "partial_pct": 0, "wrong_pct": 0}
-    c = sum(1 for r in rows if r.verdict == "correct")
-    p = sum(1 for r in rows if r.verdict == "partial")
-    w = sum(1 for r in rows if r.verdict == "wrong")
+    c = counts.get("correct", 0)
+    p = counts.get("partial", 0)
+    w = counts.get("wrong", 0)
     return {
         "total": n,
         "correct_pct": round(100 * c / n),
@@ -32,27 +54,40 @@ def get_answer_feedback_distribution(user_id: int, db: Session) -> dict[str, int
 
 
 def get_feedback_calibration(user_id: int, db: Session) -> Dict[str, Any]:
+    """User-level stats used to adjust displayed confidence (not stored scores).
+
+    Aggregates only the most recent ``CALIBRATION_WINDOW`` verdicts so the
+    knob tracks current behavior instead of lifetime averages. Returns
+    ``partial_rate`` alongside ``wrong_rate`` because both feed the
+    adjustment formula (weights 7 and 15 respectively) — a consumer that
+    wants to explain the displayed number needs both.
     """
-    User-level stats used to adjust displayed confidence (not stored scores).
-    """
-    records = db.query(AnswerFeedback).filter(AnswerFeedback.user_id == user_id).all()
-    n = len(records)
+    rows = (
+        db.query(AnswerFeedback)
+        .filter(AnswerFeedback.user_id == user_id)
+        .order_by(AnswerFeedback.created_at.desc(), AnswerFeedback.id.desc())
+        .limit(CALIBRATION_WINDOW)
+        .all()
+    )
+    n = len(rows)
     if n < 5:
         return {
             "adjustment": 0,
             "reliable": False,
             "total_feedback": n,
             "wrong_rate": 0,
+            "partial_rate": 0,
         }
 
-    wrong_rate = len([r for r in records if r.verdict == "wrong"]) / n
-    partial_rate = len([r for r in records if r.verdict == "partial"]) / n
+    wrong_rate = sum(1 for r in rows if r.verdict == "wrong") / n
+    partial_rate = sum(1 for r in rows if r.verdict == "partial") / n
     adjustment = int(round(-(wrong_rate * 15) - (partial_rate * 7)))
 
     return {
         "adjustment": adjustment,
         "total_feedback": n,
         "wrong_rate": round(wrong_rate * 100),
+        "partial_rate": round(partial_rate * 100),
         "reliable": n >= 10,
     }
 

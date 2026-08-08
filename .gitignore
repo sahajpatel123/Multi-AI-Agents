@@ -106,3 +106,18 @@ design/
 * (*).*
 
 
+
+# Loop telemetry — internal to the autonomous DevSecOps loop. Each cycle
+# rewrites `.agent_loop_telemetry.json` with start/end timestamps + a
+# summary. It is loop state, not project state, and must never enter
+# version control (would either be rewritten on the next cycle or, worse,
+# committed accidentally by a sweeping `git add .`).
+.agent_loop_telemetry.json
+
+# Autonomous loop runner — local runtime state only (task.md is tracked)
+agent-loop/state.json
+agent-loop/loop.lock
+agent-loop/last_output.md
+agent-loop/stop
+agent-loop/history.jsonl
+agent-loop/logs/

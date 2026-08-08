@@ -106,6 +106,16 @@ async def test_list_rejects_overlong_provider(app_client, db_session):
     payload can't pin the DB on an ilike scan."""
     res = await app_client.get(f"/api/personas?provider={'x' * 200}")
     assert res.status_code == 422
+    # Behavior-level envelope pin (cycle-95 lesson): the 422 from
+    # Pydantic ValidationError returns detail as a LIST of error objects,
+    # not our {error, message} dict (that dict envelope only fires when
+    # the route handler itself raises HTTPException).
+    detail = res.json().get("detail")
+    assert isinstance(detail, list)
+    assert len(detail) >= 1
+    first = detail[0]
+    assert first["loc"][0] == "query"
+    assert first["loc"][1] == "provider"
 
 
 # ─── Tier-aware availability ────────────────────────────────────────────────

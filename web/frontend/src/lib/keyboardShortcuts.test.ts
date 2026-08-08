@@ -41,12 +41,34 @@ describe('keyboardShortcuts', () => {
     expect(shortcutsForSurface('personas').some((s) => s.action.includes('library'))).toBe(true);
   });
 
+  it('exposes persona-playground shortcuts', () => {
+    const list = shortcutsForSurface('persona-playground');
+    expect(list.some((s) => s.keys === '/' && s.action.includes('hub search'))).toBe(true);
+    expect(list.some((s) => s.keys.includes('K') && s.action.toLowerCase().includes('command palette'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + l'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + m'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + c'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + s'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + t'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + r'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + e'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + f'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + a'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + g'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + w'))).toBe(true);
+    expect(list.some((s) => s.keys.toLowerCase().includes('shift + p'))).toBe(true);
+    expect(list.some((s) => s.keys === '←  →')).toBe(true);
+    expect(list.some((s) => s.keys === 'Esc')).toBe(true);
+    expect(list.some((s) => s.keys === '?')).toBe(true);
+  });
+
   it('titles panels by surface', () => {
     expect(shortcutsPanelTitle('arena')).toContain('Arena');
     expect(shortcutsPanelTitle('agent')).toContain('Agent');
     expect(shortcutsPanelTitle('room')).toContain('Room');
     expect(shortcutsPanelTitle('watchlist')).toContain('Watchlist');
     expect(shortcutsPanelTitle('personas')).toContain('Personas');
+    expect(shortcutsPanelTitle('persona-playground')).toContain('Persona Playground');
   });
 
   it('detects bare question-mark help key', () => {

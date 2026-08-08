@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SIDEBAR_TURN_TITLE_MAX,
   clearSidebarTurnTitles,
@@ -34,5 +34,39 @@ describe('sidebarTurnTitles', () => {
     const next = saveSidebarTurnTitle('turn_1', '   ');
     expect(next.turn_1).toBeUndefined();
     expect(loadSidebarTurnTitles().turn_1).toBeUndefined();
+  });
+});
+
+describe('sidebarTurnTitles same-tab storage notification', () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('dispatches a synthetic storage event on saveSidebarTurnTitle', () => {
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      saveSidebarTurnTitle('turn_1', 'Pricing rethink');
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe('arena_sidebar_turn_titles_v1');
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
+  });
+
+  it('dispatches a synthetic storage event on clearSidebarTurnTitles', () => {
+    saveSidebarTurnTitle('turn_1', 'Keep me');
+    const onStorage = vi.fn();
+    window.addEventListener('storage', onStorage);
+    try {
+      clearSidebarTurnTitles();
+      expect(onStorage).toHaveBeenCalled();
+      const event = onStorage.mock.calls[0][0] as StorageEvent;
+      expect(event.key).toBe('arena_sidebar_turn_titles_v1');
+      expect(event.newValue).toBeNull();
+    } finally {
+      window.removeEventListener('storage', onStorage);
+    }
   });
 });

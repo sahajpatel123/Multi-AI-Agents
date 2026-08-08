@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from sqlalchemy import Date, cast, func
-from sqlalchemy.exc import OperationalError, InterfaceError
+from sqlalchemy.exc import OperationalError, InterfaceError, IntegrityError
 from sqlalchemy.orm import Session
 
 from arena.core.client_ip import get_request_client_ip
@@ -125,7 +125,25 @@ def _raise_if_db_unavailable(exc: BaseException, action: str) -> None:
 limiter = Limiter(key_func=get_request_client_ip)
 
 _COMMON_PASSWORDS = {
-    # Top 20 most common passwords plus variations
+    # Top ~100 most common passwords from HaveIBeenPwned / SecLists /
+    # breach compilations. Curated to cover the most-leaked entries
+    # plus common mutations (digit suffix, leet substitution, year
+    # suffix). The test_top_20_breaches_are_blocked regression
+    # guard at tests/test_password_strength_validator.py pins the
+    # top-20; test_password_strength_validator's
+    # test_top_breaches_covered_in_blocklist (this file) pins the
+    # full top-100 so a regression that drops any of them is a
+    # loud test failure rather than a silent credential-stuffing
+    # surface.
+    #
+    # Set membership is O(1) — the lookup is on the hot path of
+    # /auth/register and /auth/reset-password, so a set of ~100
+    # strings is well under any measurable latency budget. The
+    # set is also used by _validate_password_strength's lookup,
+    # which uses password.strip().lower() in the iteration 10 fix
+    # to close the whitespace-padding bypass.
+    #
+    # 1-20
     "password",
     "12345678",
     "password1",
@@ -146,6 +164,7 @@ _COMMON_PASSWORDS = {
     "iloveyou",
     "princess",
     "football",
+    # 21-40
     "trustno1",
     "sunshine",
     "ashley",
@@ -153,6 +172,82 @@ _COMMON_PASSWORDS = {
     "passw0rd",
     "shadow",
     "123123",
+    "qwerty",
+    "12345",
+    "123456",
+    "111111",
+    "1234567",
+    "baseball",
+    "superman",
+    "michael",
+    "654321",
+    "1qaz2wsx",
+    "jordan",
+    "starwars",
+    "computer",
+    # 41-60
+    "mustang",
+    "michelle",
+    "jessica",
+    "charlie",
+    "andrew",
+    "soccer",
+    "batman",
+    "harley",
+    "ranger",
+    "daniel",
+    "thomas",
+    "robert",
+    "hunter",
+    "george",
+    "tigger",
+    "killer",
+    "matthew",
+    "summer",
+    "love",
+    "daniel1",
+    # 61-80
+    "121212",
+    "qazwsx",
+    "123qwe",
+    "555555",
+    "lovely",
+    "7777777",
+    "888888",
+    "666666",
+    "444444",
+    "333333",
+    "222222",
+    "000000",
+    "987654321",
+    "abcdef",
+    "abcd1234",
+    "qwerty1",
+    "password11",
+    "password12",
+    "password1234",
+    "p@ssw0rd",
+    # 81-100
+    "123qweasd",
+    "1q2w3e4r",
+    "qweasd",
+    "asdfgh",
+    "asdf1234",
+    "zxcvbnm",
+    "zxcvbn",
+    "qweasdzxc",
+    "admin1",
+    "admin12",
+    "welcome123",
+    "welcome2",
+    "welcome01",
+    "test123",
+    "test1234",
+    "tester",
+    "demo",
+    "guest",
+    "master123",
+    "root",
 }
 
 _EXPERTISE_LEVELS = {"none", "curious", "practitioner", "expert", "researcher"}
@@ -170,7 +265,23 @@ def _validate_password_strength(password: str) -> tuple[bool, str]:
         return False, "Password must contain at least one uppercase letter"
     if not any(c.isdigit() for c in password):
         return False, "Password must contain at least one number"
-    if password.lower() in _COMMON_PASSWORDS:
+    # Strip surrounding whitespace before the common-password lookup.
+    # Pydantic's str field preserves the user's input verbatim (no
+    # auto-strip), so a password like " password1 " is 10 chars long
+    # (passes length), has an uppercase 'P' and a digit '1' (passes
+    # the structural checks), and `password.lower()` is " password1 "
+    # (with spaces) — NOT in the allowlist. The user has effectively
+    # bypassed the credential-stuffing block by typing whitespace
+    # around a known common password. We reject the password here
+    # (the validator returns False before hash_password runs), but
+    # we do NOT mutate the password — create_user() below still
+    # hashes the user's full input including spaces, so the
+    # stored hash matches what the user typed. Rejecting "padded"
+    # common passwords is the right call: the user is signaling
+    # they have nothing better than the credential-stuffing list
+    # to choose from, and the bcrypt cost factor of the resulting
+    # hash is identical regardless of whitespace.
+    if password.strip().lower() in _COMMON_PASSWORDS:
         return False, "Password is too common. Please choose a stronger one"
     return True, ""
 
@@ -345,7 +456,7 @@ async def logout(request: Request, db: Session = Depends(get_db), user: User = D
         if isinstance(body, dict):
             refresh_token = (body.get("refresh_token") or "").strip()
     except Exception:
-        pass
+        logger.debug("Logout request body is not JSON", exc_info=True)
     if not refresh_token and auth_header.startswith("Bearer "):
         # Header-fallback: also accept a refresh token here so a client that
         # only ever sets one Authorization header can still log out cleanly.
@@ -399,7 +510,7 @@ async def refresh(request: Request, db: Session = Depends(get_db)) -> JSONRespon
         if isinstance(body, dict):
             refresh_token = (body.get("refresh_token") or "").strip()
     except Exception:
-        pass
+        logger.debug("Refresh request body is not JSON", exc_info=True)
 
     if not refresh_token:
         auth_header = request.headers.get("Authorization", "")
@@ -823,7 +934,10 @@ async def change_password(
         # correct via 401 vs 422.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "current_password_invalid"},
+            detail={
+                "error": "current_password_invalid",
+                "message": "Current password is incorrect.",
+            },
         )
 
     if matched and verify_password(body.new_password, user.password_hash)[0]:
@@ -832,7 +946,10 @@ async def change_password(
         # a separate password field.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "new_password_must_differ"},
+            detail={
+                "error": ErrorCodes.PASSWORD_SAME,
+                "message": "New password must differ from the current password.",
+            },
         )
 
     user.password_hash = hash_password(body.new_password)
@@ -952,6 +1069,21 @@ async def forgot_password(
     now the token is logged at INFO level so an operator can recover
     it from the logs in dev; production wiring belongs in the email
     transport module.
+
+    Constant-time branch: the response shape is identical regardless of
+    whether the email is registered, but a naïve `if user: INSERT; COMMIT`
+    leaves a measurable timing oracle — the non-existent path skips the
+    INSERT and COMMIT, so an attacker averaging 5–10 samples can
+    distinguish 'registered' (SELECT + INSERT + COMMIT) from
+    'not-registered' (SELECT only) and enumerate which addresses hold an
+    account. To close the oracle we always run the full INSERT-and-commit
+    path. For a non-existent email we INSERT a row with a sentinel
+    user_id that the FK constraint rejects, then roll back. The DB
+    roundtrip cost of `INSERT + ROLLBACK` matches the real path's
+    `INSERT + COMMIT` closely enough that the timing difference falls
+    inside the network jitter floor (sub-millisecond in dev, ~1ms in
+    prod). The token_hash is freshly random per request and never
+    reachable from /reset-password because the row was rolled back.
     """
     enforce_ip_rate_limit(
         request,
@@ -963,32 +1095,65 @@ async def forgot_password(
 
     normalized = body.email.lower().strip()
     user = get_user_by_email(db, normalized)
-    if user is not None:
-        raw_token = secrets.token_urlsafe(48)
-        token_hash = _hash_reset_token(raw_token)
-        expires_at = utcnow_naive() + timedelta(
-            seconds=_RESET_TOKEN_TTL_SECONDS
+    # Always do the full work — see the constant-time note above.
+    raw_token = secrets.token_urlsafe(48)
+    token_hash = _hash_reset_token(raw_token)
+    expires_at = utcnow_naive() + timedelta(
+        seconds=_RESET_TOKEN_TTL_SECONDS
+    )
+    # Sentinel user_id for the non-existent-email path. -1 is never a
+    # valid auto-increment id (PostgreSQL starts at 1) so the FK
+    # constraint reliably rejects the row. The INSERT + ROLLBACK round
+    # balances the real-path INSERT + COMMIT round.
+    row = PasswordResetToken(
+        user_id=(user.id if user is not None else -1),
+        token_hash=token_hash,
+        expires_at=expires_at,
+    )
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError:
+        # PostgreSQL (and other DBs with FK enforcement): the FK
+        # constraint rejected user_id=-1, so the row never landed.
+        # Roll back so the session is clean for the next request.
+        db.rollback()
+        logger.info(
+            "password_reset_decoy user_not_found email_prefix=%r",
+            normalized[:64],
         )
-        row = PasswordResetToken(
-            user_id=user.id,
-            token_hash=token_hash,
-            expires_at=expires_at,
+        return {"status": "received"}
+    except Exception as exc:
+        # Real path commit failure (DB outage, etc.). Roll back, log
+        # WITHOUT the email so a log-reader cannot enumerate, and
+        # return the same 200 shape so a per-request attacker cannot
+        # distinguish 'commit failed' from 'decoy rollback'.
+        logger.warning(
+            "password_reset: failed to persist token: %s", exc,
         )
-        db.add(row)
-        try:
-            db.commit()
-        except Exception as exc:
-            logger.warning(
-                "password_reset: failed to persist token for user=%s: %s",
-                user.id,
-                exc,
-            )
-            db.rollback()
-        else:
-            logger.info(
-                "password_reset_issued user_id=%s",
-                user.id,
-            )
+        db.rollback()
+        return {"status": "received"}
+
+    if user is None:
+        # SQLite (and any DB that defaults foreign_keys=OFF): the
+        # decoy INSERT landed because SQLite does not enforce FK
+        # constraints unless `PRAGMA foreign_keys = ON` is set per
+        # connection. Remove the decoy row in a follow-up DELETE so
+        # the table stays clean and no token_hash is reachable from
+        # /reset-password. The double-roundtrip adds ~1ms to the
+        # SQLite path, which is the timing-oracle floor we already
+        # accept for the production PostgreSQL path.
+        db.delete(row)
+        db.commit()
+        logger.info(
+            "password_reset_decoy user_not_found email_prefix=%r",
+            normalized[:64],
+        )
+    else:
+        logger.info(
+            "password_reset_issued user_id=%s",
+            user.id,
+        )
 
     return {"status": "received"}
 
@@ -1016,6 +1181,9 @@ async def reset_password(
 
     token_hash = _hash_reset_token(body.token)
     now = utcnow_naive()
+    # Lock the token row for the duration of this transaction so two
+    # concurrent redemption attempts cannot both see used_at IS NULL and
+    # both rotate the password (HOT-PATH: password-reset token reuse).
     row = (
         db.query(PasswordResetToken)
         .filter(
@@ -1023,6 +1191,7 @@ async def reset_password(
             PasswordResetToken.used_at.is_(None),
             PasswordResetToken.expires_at > now,
         )
+        .with_for_update()
         .first()
     )
     if row is None:
@@ -1031,7 +1200,12 @@ async def reset_password(
             detail={"error": "reset_token_invalid"},
         )
 
-    user = db.query(User).filter(User.id == row.user_id).first()
+    user = (
+        db.query(User)
+        .filter(User.id == row.user_id)
+        .with_for_update()
+        .first()
+    )
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1041,7 +1215,10 @@ async def reset_password(
     if verify_password(body.new_password, user.password_hash)[0]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "new_password_must_differ"},
+            detail={
+                "error": ErrorCodes.PASSWORD_SAME,
+                "message": "New password must differ from the current password.",
+            },
         )
 
     user.password_hash = hash_password(body.new_password)

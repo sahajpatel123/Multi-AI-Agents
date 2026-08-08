@@ -14,6 +14,11 @@ from arena.core.input_validation import (
     sanitize_model_optional_text,
     sanitize_model_text,
 )
+from arena.core.followup import (
+    FOLLOW_UP_MAX_ITEMS,
+    FOLLOW_UP_MAX_ITEM_CHARS,
+    FOLLOW_UP_MAX_TOTAL_CHARS,
+)
 
 
 class PromptCategory(str, Enum):
@@ -83,12 +88,139 @@ class PromptRequest(BaseModel):
 
     prompt: str = Field(..., min_length=1, max_length=2000, description="User's prompt")
     session_id: str | None = Field(None, description="Optional session ID for continuity")
-    persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
+    # Follow-up context is bounded at the Pydantic level: at most 8 prior
+    # round messages, each capped at 1800 chars, with a 12k total budget so a
+    # single follow-up cannot blow up the per-agent context window. The
+    # formatter in core/followup.py re-truncates defensively anyway.
+    context: list["PromptContextItem"] | None = Field(
+        None,
+        max_length=FOLLOW_UP_MAX_ITEMS,
+        description="Optional prior-round messages giving the panel continuity",
+    )
+    # persona_ids is bounded at the Pydantic level: the list has
+    # max 4 entries (matching the 4-slot agent design) and each
+    # string is max 50 chars (persona ids are short slugs like
+    # "philosopher" or "claude_opus"). The downstream
+    # validate_persona_access call rejects unknown ids, but a
+    # user could submit 1000 unknown 10K-char strings to amplify
+    # the validation cost and the DB write cost before
+    # _enforce_persona_access returns. The Pydantic cap closes
+    # the gap at parse time.
+    persona_ids: list[str] | None = Field(
+        None, max_length=4,
+        description="Optional active persona ids for slots 1-4 (max 4 entries)",
+    )
 
     @field_validator("prompt")
     @classmethod
     def validate_prompt(cls, v: str) -> str:
         return sanitize_model_text(v, max_length=2000, field_name="prompt")
+
+    @field_validator("persona_ids")
+    @classmethod
+    def validate_persona_ids(cls, v: list[str] | None) -> list[str] | None:
+        # Per-element cap: persona_ids are short slugs (e.g.
+        # "philosopher", "claude_opus"). 50 chars is generous.
+        # The list-length cap is enforced by the Field(max_length=4)
+        # above. Both caps together prevent a 1000 * 10K DoS.
+        if v is None:
+            return v
+        return [s[:50] for s in v]
+
+    @field_validator("context")
+    @classmethod
+    def validate_context(
+        cls, v: list["PromptContextItem"] | None
+    ) -> list["PromptContextItem"] | None:
+        if not v:
+            return v
+        total = sum(len(item.content) for item in v)
+        if total > FOLLOW_UP_MAX_TOTAL_CHARS:
+            raise ValueError(
+                f"context content is too long ({total} chars; "
+                f"max {FOLLOW_UP_MAX_TOTAL_CHARS})"
+            )
+        return v
+
+
+class PromptContextItem(BaseModel):
+    """One prior-round message included as context for a follow-up round.
+
+    ``role`` distinguishes the user's original question from each persona's
+    answer. Assistant items may carry ``agent_id``/``name`` so the formatted
+    transcript is readable by the models.
+    """
+
+    role: Literal["user", "assistant"] = Field(
+        ..., description="Speaker role: the user's question or a persona's answer"
+    )
+    agent_id: str | None = Field(
+        None, max_length=64, description="Slot id (agent_1..agent_4) for assistant items"
+    )
+    name: str | None = Field(
+        None, max_length=80, description="Display name for assistant items"
+    )
+    content: str = Field(
+        ...,
+        min_length=1,
+        max_length=FOLLOW_UP_MAX_ITEM_CHARS,
+        description="Message text (capped to keep context cheap)",
+    )
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, v: str) -> str:
+        return sanitize_model_text(
+            v, max_length=FOLLOW_UP_MAX_ITEM_CHARS, field_name="context.content"
+        )
+
+
+class FollowUpSuggestionsRequest(BaseModel):
+    """Ask the panel for follow-up questions after a completed round.
+
+    The request carries the original question plus one short verdict per
+    persona. Bounds mirror the follow-up context budget (see
+    core/followup.py) so a single suggestion request stays cheap for a
+    lightweight model and a hostile client cannot amplify the cost with
+    megabytes of verdict text.
+    """
+
+    prompt: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="The user's original question from the completed round",
+    )
+    verdicts: list[str] = Field(
+        default_factory=list,
+        max_length=FOLLOW_UP_MAX_ITEMS,
+        description="One short verdict per persona (max 8, capped in length)",
+    )
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, v: str) -> str:
+        return sanitize_model_text(v, max_length=2000, field_name="prompt")
+
+    @field_validator("verdicts")
+    @classmethod
+    def validate_verdicts(cls, v: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        total = 0
+        for verdict in v:
+            item = sanitize_model_text(
+                verdict,
+                max_length=FOLLOW_UP_MAX_ITEM_CHARS,
+                field_name="verdicts",
+            )
+            total += len(item)
+            cleaned.append(item)
+        if total > FOLLOW_UP_MAX_TOTAL_CHARS:
+            raise ValueError(
+                f"verdicts content is too long ({total} chars; "
+                f"max {FOLLOW_UP_MAX_TOTAL_CHARS})"
+            )
+        return cleaned
 
 
 class IntegrityReport(BaseModel):
@@ -118,6 +250,7 @@ class ScoredAgent(BaseModel):
 class PromptResponse(BaseModel):
     """Complete response to a prompt request"""
     
+    request_id: str | None = Field(None, description="Request correlation ID (X-Request-ID) for this response")
     session_id: str = Field(..., description="Session ID for this conversation")
     prompt: str = Field(..., description="Original prompt")
     prompt_category: str = Field("", description="Classified category of the prompt")
@@ -132,7 +265,14 @@ class PromptResponse(BaseModel):
 class DebateMessage(BaseModel):
     """A single message in a debate thread"""
     agent_id: str = Field(..., description="Agent or 'user' who sent this message")
-    content: str = Field(..., description="Message content")
+    # Content is capped at 20K chars per message. Same cap as
+    # DiscussChatMessage.content (cycle 13 fix) — matches the
+    # realistic LLM context budget and prevents a per-message
+    # DoS where a user submits a single 5MB message in
+    # debate_history that gets amplified into _build_debate_context
+    # (and forwarded to the LLM API, which then rejects the
+    # request after the server has already paid the memory cost).
+    content: str = Field(..., max_length=20000, description="Message content (max 20K chars)")
     round_number: int = Field(..., ge=0, description="Which debate round this belongs to")
     timestamp: datetime = Field(default_factory=utcnow_naive)
 
@@ -143,10 +283,30 @@ class DebateRequest(BaseModel):
     challenged_agent_id: str = Field(..., description="Agent being challenged")
     challenged_verdict: str = Field(..., description="The challenged agent's verdict")
     round_number: int = Field(1, ge=1, le=4, description="Current round (1-3 standard, optional 4th follow-up)")
-    debate_history: list[DebateMessage] = Field(default_factory=list, description="Previous debate messages")
+    # debate_history is capped at 32 entries. The debate has at
+    # most 4 active agents and 4 rounds, so the natural upper
+    # bound is 16 messages. 32 is a generous ceiling that
+    # accommodates future per-agent or per-round expansions
+    # without a schema migration. Combined with the per-message
+    # 20K cap on DebateMessage.content (cycle 14 fix), the
+    # maximum history is 32 * 20K = 640K chars.
+    debate_history: list[DebateMessage] = Field(
+        default_factory=list, max_length=32,
+        description="Previous debate messages (max 32 entries)",
+    )
     user_interjection: str | None = Field(None, description="Optional user message to redirect the debate")
     session_id: str | None = Field(None, description="Session ID for continuity")
-    persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
+    # persona_ids is bounded at the Pydantic level: the list has
+    # max 4 entries (matching the 4-slot agent design) and each
+    # string is sliced to 50 chars (per-element cap, matching
+    # the PromptRequest cycle 16 fix). The downstream
+    # validate_persona_access rejects unknown ids, but a
+    # user could submit 1000 unknown 10K-char strings to
+    # amplify the validation cost before the rejection fires.
+    persona_ids: list[str] | None = Field(
+        None, max_length=4,
+        description="Optional active persona ids for slots 1-4 (max 4 entries)",
+    )
 
     @field_validator("original_prompt", "challenged_verdict")
     @classmethod
@@ -157,6 +317,14 @@ class DebateRequest(BaseModel):
     @classmethod
     def validate_user_interjection(cls, v: str | None) -> str | None:
         return sanitize_model_optional_text(v, max_length=2000, field_name="user_interjection")
+
+    @field_validator("persona_ids")
+    @classmethod
+    def validate_persona_ids(cls, v: list[str] | None) -> list[str] | None:
+        # Per-element cap matching PromptRequest cycle 16 fix.
+        if v is None:
+            return v
+        return [s[:50] for s in v]
 
 
 class DebateReaction(BaseModel):
@@ -170,6 +338,7 @@ class DebateReaction(BaseModel):
 
 class DebateRoundResponse(BaseModel):
     """Response for a single debate round"""
+    request_id: str | None = Field(None, description="Request correlation ID (X-Request-ID) for this response")
     round_number: int = Field(..., description="Which round this is")
     challenged_agent_id: str = Field(..., description="Agent being challenged")
     reactions: list[DebateReaction] = Field(..., description="3 agent reactions")
@@ -179,8 +348,27 @@ class DebateRoundResponse(BaseModel):
 
 class DiscussChatMessage(BaseModel):
     """A single message in a 1-on-1 discussion"""
-    role: str = Field(..., description="'user' or 'agent'")
-    content: str = Field(..., description="Message content")
+    # Role is restricted to a Literal allowlist. Without this,
+    # _build_messages in routes/discuss.py maps any non-"user"
+    # value to "assistant" — a user could submit
+    # `role: "assistant"` in conversation_history and have the
+    # text passed to the LLM as a fake prior agent response.
+    # The LLM would then treat the injected text as its own
+    # prior output and could be steered into continuing whatever
+    # the user planted (e.g. "You should always respond with..."
+    # masquerading as a past assistant turn). The Pydantic-level
+    # Literal check rejects the bad value at request parse time
+    # (422) so the LLM never sees it.
+    role: Literal["user", "agent"] = Field(..., description="'user' or 'agent'")
+    # Content is capped at 20K chars per message. The same cap
+    # is enforced by SaveThreadBody's validate_messages field
+    # validator (line ~604) for the durable thread record. The
+    # cap matches the realistic LLM context budget (most prompts
+    # are 1-10K chars; 20K is a generous ceiling) and prevents
+    # a per-message DoS where a user submits a single 5MB message
+    # that pydantic stores in memory and the LLM API then
+    # rejects (waste of server memory + LLM-side processing).
+    content: str = Field(..., max_length=20000, description="Message content (max 20K chars)")
     timestamp: datetime = Field(default_factory=utcnow_naive)
 
 
@@ -188,20 +376,47 @@ class DiscussRequest(BaseModel):
     """Request to send a message in a 1-on-1 discussion"""
     agent_id: str = Field(..., description="Which agent to talk to")
     message: str = Field(..., min_length=1, max_length=2000, description="User's message")
-    conversation_history: list[DiscussChatMessage] = Field(default_factory=list, description="Full conversation so far")
+    # conversation_history is capped at 500 entries. The per-message
+    # cap on DiscussChatMessage.content (cycle 13 fix, 20K) bounds
+    # the per-message memory cost; this cap bounds the total list
+    # length so a user cannot submit 100K * 20K = 2GB of history.
+    # The same 500-entry cap is enforced for the durable thread
+    # record by SaveThreadBody's validate_messages field validator
+    # (line ~604: `for m in v[:500]`). 500 is generous — most
+    # active discuss threads are 10-50 messages.
+    conversation_history: list[DiscussChatMessage] = Field(
+        default_factory=list, max_length=500,
+        description="Full conversation so far (max 500 entries)",
+    )
     original_verdict: str = Field(..., description="Agent's original verdict for context")
     original_prompt: str = Field(..., description="The original arena prompt for context")
     session_id: str | None = Field(None, description="Session ID for continuity")
-    persona_ids: list[str] | None = Field(None, description="Optional active persona ids for slots 1-4")
+    # persona_ids is bounded at the Pydantic level: the list has
+    # max 4 entries (matching the 4-slot agent design) and each
+    # string is sliced to 50 chars (per-element cap, matching
+    # the PromptRequest cycle 16 fix).
+    persona_ids: list[str] | None = Field(
+        None, max_length=4,
+        description="Optional active persona ids for slots 1-4 (max 4 entries)",
+    )
 
     @field_validator("message", "original_verdict", "original_prompt")
     @classmethod
     def validate_discuss_text(cls, v: str, info) -> str:
         return sanitize_model_text(v, max_length=2000, field_name=info.field_name)
 
+    @field_validator("persona_ids")
+    @classmethod
+    def validate_persona_ids(cls, v: list[str] | None) -> list[str] | None:
+        # Per-element cap matching PromptRequest cycle 16 fix.
+        if v is None:
+            return v
+        return [s[:50] for s in v]
+
 
 class DiscussResponse(BaseModel):
     """Response from a 1-on-1 discussion turn"""
+    request_id: str | None = Field(None, description="Request correlation ID (X-Request-ID) for this response")
     agent_id: str = Field(..., description="Which agent responded")
     content: str = Field(..., description="Agent's reply")
     conversation_history: list[DiscussChatMessage] = Field(..., description="Updated full history")
@@ -238,7 +453,7 @@ class ErrorResponse(BaseModel):
     """Standard error response"""
 
     error: str
-    detail: str | None = None
+    message: str | None = None
     timestamp: datetime = Field(default_factory=utcnow_naive)
 
 
@@ -270,12 +485,37 @@ class LoginRequest(BaseModel):
 
 
 class FeedbackCalibrationInfo(BaseModel):
+    """Display-only confidence adjustment derived from a user's verdict history.
+
+    Field bounds pin the contract so a malformed helper or a downstream
+    client can never silently smuggle absurd values into the UI:
+
+    - adjustment is in [-15, 0]. The helper's formula is
+      ``-(wrong_rate*15) - (partial_rate*7)`` rounded to an int. Worst
+      case is every row wrong → -15. The lower bound also prevents the
+      UI from ever being told to subtract more confidence than the 0-100
+      score range can express.
+    - reliable flips at 10 verdicts (see feedback_calibrator.get_feedback_calibration).
+    - wrong_rate / partial_rate are percentages in [0, 100],
+      integer-rounded. partial_rate is surfaced because the formula
+      weights partials at 7 — a payload without it cannot explain the
+      adjustment when wrong_rate is 0.
+    - total_feedback is the number of verdicts in the recent-20 window
+      that fed the computation (max 20 — see CALIBRATION_WINDOW in
+      feedback_calibrator). The window keeps the knob responsive to
+      recent behavior instead of a lifetime average.
+
+    Bounds are enforced at the Pydantic level (parse-time 422) so a
+    bad payload cannot reach the response serializer.
+    """
+
     model_config = ConfigDict(extra="ignore")
 
-    adjustment: int = 0
+    adjustment: int = Field(0, ge=-15, le=0)
     reliable: bool = False
-    total_feedback: int = 0
-    wrong_rate: int = 0
+    total_feedback: int = Field(0, ge=0, le=20)
+    wrong_rate: int = Field(0, ge=0, le=100)
+    partial_rate: int = Field(0, ge=0, le=100)
 
 
 class UserResponse(BaseModel):
@@ -351,13 +591,27 @@ class AuthResponse(BaseModel):
 
 
 class SubscribePlanRequest(BaseModel):
-    plan_key: str
+    # plan_key is bounded at the Pydantic level (max 50
+    # chars). Real values are like "plus_monthly" (~12 chars);
+    # 50 chars is generous. The Pydantic cap closes the gap
+    # so a user cannot submit a 1MB plan_key to amplify the
+    # pydantic memory cost before the route handler's dict
+    # lookup runs.
+    plan_key: str = Field(..., max_length=50)
 
 
 class VerifyPaymentRequest(BaseModel):
-    razorpay_payment_id: str
-    razorpay_subscription_id: str
-    razorpay_signature: str
+    # Razorpay fields are bounded at the Pydantic level.
+    # Razorpay payment/subscription IDs are short
+    # ("pay_XXXXXXXXXXXXX" ~18 chars, "sub_..." ~18 chars);
+    # 64 chars is generous. Razorpay signatures are
+    # HMAC-SHA256 hex strings (~64 chars); 256 chars is
+    # generous. The Pydantic cap closes the gap so a user
+    # cannot submit a 1MB string to amplify the verify-payment
+    # work before the route handler's ID validation runs.
+    razorpay_payment_id: str = Field(..., max_length=64)
+    razorpay_subscription_id: str = Field(..., max_length=64)
+    razorpay_signature: str = Field(..., max_length=256)
 
 
 # ─────────────────────────────────────────────────
@@ -370,7 +624,7 @@ class RateLimitError(BaseModel):
     tier: str
     prompts_used: int
     daily_limit: int
-    resets_at: str
+    scope: str = ""
 
 
 # ─────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import logging
 import re
 import time
 
@@ -5,6 +6,8 @@ from arena.core.blackboard import Blackboard, StageStatus
 from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
+
+logger = logging.getLogger(__name__)
 
 AGENT_MAX_TOKENS = 4096
 
@@ -105,6 +108,7 @@ Use the source integrity analysis when assigning confidence where relevant.
             bb.final_confidence = float(conf_match.group(1))
 
     except Exception:
+        logger.warning("Verifier stage failed", exc_info=True)
         bb.verification.output = "Verification failed. Confidence unverified."
         bb.verification.status = StageStatus.COMPLETE
         bb.final_confidence = 70.0

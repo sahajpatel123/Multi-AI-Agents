@@ -10,12 +10,15 @@ Why this exists:
 Key design choices:
 - Pure-Python LRU with O(1) get/set, no Redis dependency.
 - TTL = 1 hour by default; oldest entry evicted first.
-- Key = sha256(normalized_prompt + sorted persona_ids + expertise_level).
+- Key = sha256(key_version + normalized_prompt + persona_ids + expertise_level).
   Persona ORDER matters for routing (each slot maps to a specific model), so
-  we preserve order when hashing.
+  order is preserved when hashing. Bump `_CACHE_KEY_VERSION` if the key
+  contract ever changes (new fields, different normalization, etc.) so old
+  entries are invalidated instead of silently matched.
 - Disabled when session_id is present (continuation/conversation prompts
   shouldn't hit cache because the conversation context matters).
-- Bypassed in test environments via env var ARENA_CACHE_DISABLED=1.
+- Bypass entirely by setting ARENA_CACHE_DISABLED=1 (used by test
+  environments to keep tests independent of process-global state).
 
 The cache is process-local. A multi-worker deployment will have N independent
 caches; that's fine because each prompt still costs the same on a miss.
@@ -34,6 +37,7 @@ from typing import Any, Optional
 
 _DEFAULT_TTL_SECONDS = 3600  # 1 hour
 _DEFAULT_MAX_ENTRIES = 256
+_CACHE_KEY_VERSION = "v1"
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
@@ -48,10 +52,33 @@ def make_cache_key(
 ) -> str:
     """Stable cache key for a (prompt, panel) tuple."""
     norm = _normalize_prompt(prompt)
-    # Sort for persona identity but keep order to preserve routing.
+    # Preserve persona order: each slot maps to a specific model, so a
+    # reordered panel routes differently and must not share a key.
     persona_tuple = tuple(persona_ids or [])
-    raw = f"{norm}\x00{','.join(persona_tuple)}\x00{expertise_level}"
+    raw = (
+        f"{_CACHE_KEY_VERSION}\x00{norm}\x00"
+        f"{','.join(persona_tuple)}\x00{expertise_level}"
+    )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def all_responses_healthy(responses: list[Any]) -> bool:
+    """Return True only when a round produced real answers in every slot.
+
+    The orchestrator never raises on agent failure; it synthesizes an error
+    placeholder (verdict starting with "[Error:", one_liner
+    "Response unavailable", confidence 0) instead. Caching such a round
+    would poison the store with a broken answer for the whole TTL, so
+    callers gate ``set`` on this helper.
+    """
+    if not responses:
+        return False
+    return not any(
+        getattr(r, "confidence", None) == 0
+        and getattr(r, "one_liner", None) == "Response unavailable"
+        and str(getattr(r, "verdict", "")).startswith("[Error:")
+        for r in responses
+    )
 
 
 class _CacheEntry:
@@ -117,6 +144,18 @@ class ResponseCache:
     def clear(self) -> None:
         with self._lock:
             self._store.clear()
+
+    def reset(self) -> None:
+        """Clear the store and zero all counters.
+
+        Intended for test isolation and operator resets. The TTL and size
+        configuration stay untouched.
+        """
+        with self._lock:
+            self._store.clear()
+            self._hits = 0
+            self._misses = 0
+            self._evictions = 0
 
     def stats(self) -> dict:
         with self._lock:

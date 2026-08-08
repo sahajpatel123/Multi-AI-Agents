@@ -54,7 +54,35 @@ describe('sortSidebarSaved', () => {
     expect(sortSidebarSaved(sample, 'mind').map((s) => s.id)).toEqual([2, 3, 1]);
   });
 
+  it('sorts pinned takes first, most recently pinned first within each group', () => {
+    const withPins = [
+      ...sample,
+      // Saved earlier but pinned later — pinned_at must win over timestamp.
+      { id: 4, mindName: 'Mystic', score: 60, timestamp: '2026-02-10T00:00:00Z', pinned: true, pinned_at: '2026-03-10T00:00:00Z' },
+      { id: 5, mindName: 'Oracle', score: 70, timestamp: '2026-05-01T00:00:00Z', pinned: true, pinned_at: '2026-02-10T00:00:00Z' },
+    ];
+    expect(sortSidebarSaved(withPins, 'pinned').map((s) => s.id)).toEqual([4, 5, 2, 3, 1]);
+  });
+
+  it('falls back to saved timestamp when pinned_at is missing', () => {
+    const withPins = [
+      ...sample,
+      { id: 4, mindName: 'Mystic', score: 60, timestamp: '2026-04-01T00:00:00Z', pinned: true, pinned_at: null },
+      { id: 5, mindName: 'Oracle', score: 70, timestamp: '2026-05-01T00:00:00Z', pinned: true, pinned_at: null },
+    ];
+    expect(sortSidebarSaved(withPins, 'pinned').map((s) => s.id)).toEqual([5, 4, 2, 3, 1]);
+  });
+
+  it('keeps unpinned items below pinned items when sorting by score', () => {
+    const withPins = [
+      ...sample,
+      { id: 4, mindName: 'Mystic', score: 10, timestamp: '2026-04-01T00:00:00Z', pinned: true, pinned_at: '2026-02-10T00:00:00Z' },
+    ];
+    expect(sortSidebarSaved(withPins, 'score_desc').map((s) => s.id)).toEqual([4, 2, 1, 3]);
+  });
+
   it('labels sorts', () => {
     expect(sidebarSavedSortLabel('score_asc')).toBe('Score · low');
+    expect(sidebarSavedSortLabel('pinned')).toBe('Pinned first');
   });
 });

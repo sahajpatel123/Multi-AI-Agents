@@ -54,12 +54,24 @@ class ToolRouter:
         tool_results = {}
         for tool, result in zip(tools_to_run, results):
             if isinstance(result, Exception):
-                # Tool raised an exception - wrap it in a failed ToolResult
+                # Tool raised an exception - wrap it in a failed ToolResult.
+                # Log the full exception internally so operators can
+                # diagnose, but return a generic code to the caller —
+                # `str(result)` can leak provider-internal details
+                # (library version strings, endpoint URLs, exception
+                # subclass names, etc.) that have no business reaching
+                # the agent's context string or, downstream, the user.
+                # Mirrors the cycle-161 web_search.py and cycle-162
+                # datetime_tool.py fixes.
+                logger.exception(
+                    "[TOOL_ROUTER] Tool %s execution failed",
+                    tool.name,
+                )
                 tool_results[tool.name] = ToolResult(
                     tool_name=tool.name,
                     success=False,
                     data=None,
-                    error=f"Tool execution failed: {str(result)}"
+                    error="tool_execution_failed",
                 )
             else:
                 tool_results[tool.name] = result

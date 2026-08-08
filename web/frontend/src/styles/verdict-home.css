@@ -103,3 +103,23 @@
 @media (max-width: 520px) {
   .vp-home .vp-pipeline article:last-child { grid-column: auto; }
 }
+
+/* Premium micro-interactions — hero CTAs settle instead of snap */
+.vp-home .vp-hero-copy button,
+.vp-home .vp-enter,
+.vp-home .vp-close form button{
+  transition:background var(--motion-hover-ms,240ms) var(--ease-btn,var(--ease)),border-color var(--motion-hover-ms,240ms) var(--ease-btn,var(--ease)),transform var(--motion-lift-ms,280ms) var(--ease-spring-soft,var(--ease)),box-shadow var(--motion-lift-ms,280ms) var(--ease-out-premium,var(--ease));
+}
+@media (hover:hover) and (pointer:fine){
+  .vp-home .vp-hero-copy button:hover,
+  .vp-home .vp-close form button:hover{transform:translateY(-1.5px);box-shadow:0 10px 24px rgba(0,0,0,.22)}
+}
+.vp-home .vp-mast>nav a{transition:color var(--motion-hover-ms,240ms) var(--ease-btn,var(--ease)),background var(--motion-hover-ms,240ms) var(--ease-btn,var(--ease))}
+@media (prefers-reduced-motion:reduce){
+  .vp-home .vp-hero-copy button,
+  .vp-home .vp-enter,
+  .vp-home .vp-close form button,
+  .vp-home .vp-mast>nav a{transition:none}
+  .vp-home .vp-hero-copy button:hover,
+  .vp-home .vp-close form button:hover{transform:none;box-shadow:none}
+}

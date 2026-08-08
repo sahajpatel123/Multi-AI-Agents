@@ -81,6 +81,7 @@ def _integration_public(row: MCPIntegration) -> dict:
 
             meta = json.loads(meta)
         except Exception:
+            logger.warning("Failed to parse integration_metadata JSON in mcp list", exc_info=True)
             meta = None
     return {
         "id": row.id,
@@ -348,7 +349,10 @@ async def connect_manual(
     _ensure_encryption()
     svc = body.service.strip().lower()
     if svc not in VALID_SERVICES:
-        raise HTTPException(status_code=400, detail=f"Unsupported service: {svc}")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "unsupported_service", "message": f"Unsupported service: {svc}"},
+        )
 
     enc = encrypt_token(body.access_token.strip())
 

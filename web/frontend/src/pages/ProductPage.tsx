@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
+import { Pressable } from '../components/Pressable';
+import { Reveal } from '../components/Reveal';
 import { setRedirectIntent } from '../utils/redirectIntent';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
@@ -143,10 +145,10 @@ export function ProductPage() {
           </div>
         </section>
 
-        <section className="product-modes" aria-label="Product modes">
+        <Reveal as="section" className="product-modes" aria-label="Product modes">
           <button
             type="button"
-            className="product-mode-card product-mode-card--arena"
+            className="product-mode-card product-mode-card--arena interactive-surface"
             onClick={() => go('/app')}
           >
             <span className="product-mode-card__badge">
@@ -169,7 +171,7 @@ export function ProductPage() {
 
           <button
             type="button"
-            className="product-mode-card product-mode-card--agent"
+            className="product-mode-card product-mode-card--agent interactive-surface"
             onClick={() => go('/agent')}
           >
             <span className="product-mode-card__badge product-mode-card__badge--agent">
@@ -191,9 +193,9 @@ export function ProductPage() {
             </ul>
             <span className="product-mode-card__cta product-mode-card__cta--agent">Enter Agent</span>
           </button>
-        </section>
+        </Reveal>
 
-        <section id="product-showcase" className="product-showcase" aria-labelledby="product-showcase-title">
+        <Reveal as="section" id="product-showcase" className="product-showcase" aria-labelledby="product-showcase-title">
           <header className="product-section-head">
             <div>
               <h2 id="product-showcase-title">See the difference in the output.</h2>
@@ -230,13 +232,12 @@ export function ProductPage() {
             <div className="product-engine-grid">
               <article className="product-engine product-engine--arena">
                 <header>
-                  <div><small>ENGINE 01</small><h3>ARENA / DECISION ROOM</h3></div>
+                  <div><small>PRIMARY ENGINE</small><h3>ARENA / DECISION ROOM</h3></div>
                   <span>4 RESPONSES · 1 JUDGE</span>
                 </header>
                 <div className="product-arena-answers">
-                  {showcase.answers.map((answer, index) => (
+                  {showcase.answers.map((answer) => (
                     <div key={answer.mind} style={{ '--tone': answer.tone } as CSSProperties}>
-                      <small>0{index + 1}</small>
                       <strong>{answer.mind}</strong>
                       <p>{answer.copy}</p>
                       <b>{answer.score}</b>
@@ -244,7 +245,7 @@ export function ProductPage() {
                   ))}
                 </div>
                 <div className="product-verdict">
-                  <div><small>JUDGE 05 / WINNER</small><strong>{showcase.winner}</strong></div>
+                  <div><small>WINNING VERDICT</small><strong>{showcase.winner}</strong></div>
                   <b>{Math.max(...showcase.answers.map((answer) => answer.score))}</b>
                   <p>{showcase.verdict}</p>
                 </div>
@@ -256,47 +257,47 @@ export function ProductPage() {
 
               <article className="product-engine product-engine--agent">
                 <header>
-                  <div><small>ENGINE 02</small><h3>AGENT / RESEARCH SYSTEM</h3></div>
+                  <div><small>RESEARCH ENGINE</small><h3>AGENT / RESEARCH SYSTEM</h3></div>
                   <span>7 VISIBLE STAGES · ILLUSTRATIVE</span>
                 </header>
                 <div className="product-agent-stages" aria-label="Agent pipeline stages">
-                  {AGENT_STAGES.map((stage, index) => <span key={stage}><small>0{index + 1}</small>{stage}</span>)}
+                  {AGENT_STAGES.map((stage) => <span key={stage}>{stage}</span>)}
                 </div>
                 <div className="product-agent-artifact">
                   <div><small>ILLUSTRATIVE DELIVERABLE</small><h4>{showcase.artifact}</h4></div>
                   <strong>{showcase.confidence}<small>ILLUSTRATIVE CONFIDENCE</small></strong>
                 </div>
                 <ul className="product-agent-evidence">
-                  {showcase.evidence.map((item, index) => <li key={item}><span>0{index + 1}</span>{item}<b>EXAMPLE</b></li>)}
+                  {showcase.evidence.map((item) => <li key={item}>{item}<b>EXAMPLE</b></li>)}
                 </ul>
                 <blockquote>“{showcase.verdict}”</blockquote>
                 <footer>
                   <span>SOURCES · ASSUMPTIONS · CONFIDENCE</span>
-                  <button type="button" onClick={() => go('/agent')}>RUN AGENT <ArrowRight aria-hidden="true" /></button>
+                  <Pressable type="button" onClick={() => go('/agent')}>RUN AGENT <ArrowRight aria-hidden="true" /></Pressable>
                 </footer>
               </article>
             </div>
           </div>
-        </section>
+        </Reveal>
 
-        <section className="product-routing" aria-labelledby="product-routing-title">
+        <Reveal as="section" className="product-routing" aria-labelledby="product-routing-title">
           <header className="product-section-head">
             <div><h2 id="product-routing-title">Choose by the work—not the hype.</h2></div>
           </header>
           <div className="product-routing-table">
             <div className="product-routing-table__head"><span>SIGNAL</span><span>ROUTE</span><span>WHAT COMES BACK</span><span>ACTION</span></div>
-            {ROUTING_ROWS.map((row, index) => (
+            {ROUTING_ROWS.map((row) => (
               <div key={row.signal} className="product-routing-row" style={{ '--tone': row.tone } as CSSProperties}>
-                <p><small>0{index + 1}</small>{row.signal}</p>
+                <p>{row.signal}</p>
                 <strong>{row.mode}</strong>
                 <span>{row.output}</span>
-                <button type="button" onClick={() => go(row.path)}>RUN <ArrowRight aria-hidden="true" /></button>
+                <Pressable type="button" onClick={() => go(row.path)}>RUN <ArrowRight aria-hidden="true" /></Pressable>
               </div>
             ))}
           </div>
-        </section>
+        </Reveal>
 
-        <section className="product-surface" aria-labelledby="product-surface-title">
+        <Reveal as="section" className="product-surface" aria-labelledby="product-surface-title">
           <header className="product-section-head">
             <div><h2 id="product-surface-title">The verdict is only the beginning.</h2></div>
           </header>
@@ -310,11 +311,11 @@ export function ProductPage() {
           </div>
           <div className="product-surface__actions">
             <p><strong>16</strong> minds · <strong>04</strong> in every room · <strong>01</strong> visible verdict</p>
-            <button type="button" onClick={() => navigate('/capabilities')}>EXPLORE EVERY CAPABILITY <ArrowRight aria-hidden="true" /></button>
+            <Pressable type="button" onClick={() => navigate('/capabilities')}>EXPLORE EVERY CAPABILITY <ArrowRight aria-hidden="true" /></Pressable>
           </div>
-        </section>
+        </Reveal>
 
-        <section className="product-compare" aria-labelledby="product-compare-heading">
+        <Reveal as="section" className="product-compare" aria-labelledby="product-compare-heading">
           <h2 id="product-compare-heading" className="product-compare__heading">Choose the engine. Keep the account.</h2>
           <div className="product-compare__pills">
             <span className="product-compare__pill">Arena → opinions, decisions, debate</span>
@@ -324,11 +325,11 @@ export function ProductPage() {
             <MotionButton type="button" variant="secondary" size="md" onClick={() => navigate('/capabilities')}>
               See all capabilities
             </MotionButton>
-            <button type="button" className="arena-btn arena-btn--ghost arena-btn--md" onClick={() => navigate('/pricing')}>
+            <button type="button" className="arena-btn arena-btn--ghost arena-btn--md interactive-surface interactive-surface--soft" onClick={() => navigate('/pricing')}>
               Pricing
             </button>
           </div>
-        </section>
+        </Reveal>
       </main>
 
       <Footer />

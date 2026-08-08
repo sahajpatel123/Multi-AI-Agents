@@ -49,7 +49,7 @@ python-dateutil>=2.8.0
 pdfplumber==0.11.10
 Pillow==12.3.0
 python-docx==1.1.2
-cryptography==48.0.1
+cryptography==50.0.0
 python-magic==0.4.27
 
 # Payments
@@ -60,6 +60,9 @@ ddgs==9.0.0
 
 # PDF reports (optional — export falls back to HTML if import fails)
 weasyprint==69.0
+
+# Excel export support
+openpyxl==3.1.5
 
 # Dev
 pytest==9.0.3

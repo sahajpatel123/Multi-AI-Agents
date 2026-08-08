@@ -92,6 +92,9 @@ async def test_agent_run_allows_web_research_when_honesty_on(
     body = res.json()
     assert body.get("status") == "running"
     assert body.get("task_id")
+    assert body.get("request_id") == res.headers.get("x-request-id"), (
+        "agent run response must carry the request's X-Request-ID"
+    )
 
 
 @pytest.mark.asyncio

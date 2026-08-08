@@ -45,6 +45,10 @@ title = "Multi-AI-Agents gitleaks config"
   regexes = [
     '''sk-ant-test-fake-key[^"\\]*''',
     '''sk-test-fake-key[^"\\]*''',
+    '''sk-ant-test-key[^"\\]*''',  # test_allowed_origins_list.py / test_production_config.py
+    '''sk-ant-test-key-not-real[^"\\]*''',  # test_config_no_startup_prints.py / test_production_config.py
+    '''sk-ant-test(?!-)[^"\\]*''',  # bare sk-ant-test (conftest/test_condura)
+    '''sk-test(?!-)[^"\\]*''',  # bare sk-test (test_condura, test_temporal, test_dissent)
     '''sk-ol-[*]+[a-f0-9]{4}''',  # OpenAI key shape from earlier captured payload
   ]
 

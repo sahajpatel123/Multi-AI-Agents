@@ -29,6 +29,7 @@ export interface IntegrityReport {
 }
 
 export interface PromptResponse {
+  request_id?: string | null;
   session_id: string;
   prompt: string;
   prompt_category: string;
@@ -38,6 +39,13 @@ export interface PromptResponse {
   integrity: IntegrityReport | null;
   tools_used: string[];
   timestamp: string;
+}
+
+export interface PromptContextItem {
+  role: 'user' | 'assistant';
+  agent_id?: string;
+  name?: string;
+  content: string;
 }
 
 export interface AgentConfig {
@@ -64,6 +72,7 @@ export interface DebateReaction {
 }
 
 export interface DebateRoundResponse {
+  request_id?: string | null;
   round_number: number;
   challenged_agent_id: string;
   reactions: DebateReaction[];
@@ -78,6 +87,7 @@ export interface DiscussChatMessage {
 }
 
 export interface DiscussResponse {
+  request_id?: string | null;
   agent_id: string;
   content: string;
   conversation_history: DiscussChatMessage[];
@@ -107,6 +117,8 @@ export interface SavedResponseItem {
   persona_color?: string;
   score?: number | null;
   confidence?: number | null;
+  pinned?: boolean;
+  pinned_at?: string | null;
   one_liner: string;
   verdict: string;
   timestamp: string;
@@ -169,6 +181,34 @@ export interface TierStatus {
   allowed_personas: string[];
   features: TierFeatures;
   upgrade_to: string | null;
+}
+
+export interface ScoringAuditConfidence {
+  agent_id: string;
+  confidence: number;
+}
+
+export interface ScoringAuditRound {
+  id: number;
+  prompt_snippet: string;
+  prompt_category: string | null;
+  winner_agent_id: string | null;
+  winner_persona_id: string | null;
+  winner_score: number | null;
+  scores: Record<string, number> | null;
+  criteria_breakdown: Record<string, Record<string, number>> | null;
+  confidence_values: ScoringAuditConfidence[] | null;
+  persona_ids_used: string[];
+  scoring_duration_ms: number | null;
+  fallback_used: boolean;
+  created_at: string | null;
+}
+
+export interface ScoringAuditResponse {
+  session_id: string;
+  audits: ScoringAuditRound[];
+  audit_count: number;
+  total_count: number;
 }
 
 export const AGENTS: Record<string, AgentConfig> = {

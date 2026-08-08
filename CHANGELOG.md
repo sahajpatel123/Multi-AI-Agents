@@ -1,0 +1,84 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- CI status badges to README.md
+- SECURITY.md with vulnerability reporting guidelines
+- CODEOWNERS for automatic code review assignment
+- CONTRIBUTING.md with development guidelines
+- Release workflow for version-tagged builds
+- `workflow_dispatch` triggers for manual CI runs
+- PR diff size check for large PR warnings
+- Summary steps at end of CI jobs
+- `X-Request-ID` tracing middleware (request IDs on every response)
+- Request ID surfaced in prompt, debate, and discuss SSE streams
+- Request ID included in non-stream prompt responses and admin health detail
+- Request ID included in Agent Mode run responses and frontend error messages
+- Request ID included in Agent status/result frontend error messages
+- Request ID included in Agent status poll responses
+- Request ID included in Agent orchestration start responses
+- Request ID included in Agent orchestration status responses
+- Request ID included in Agent orchestration list responses
+- Request ID included in Agent watchlist list responses
+- Request ID included in Agent orchestration frontend errors
+- Request ID included in Agent export frontend errors
+- Request ID included in feedback submit frontend errors
+- Request ID included in Agent upload frontend errors
+- Request ID included in saved-response delete frontend errors
+- Request ID included in saved-response save/pin frontend errors
+- Request ID included in saved-response list frontend errors
+- Request ID included in persona/panel frontend errors
+- Request ID included in memory frontend errors
+- Request ID included in watchlist frontend errors
+- Request ID included in feedback history frontend errors
+- Request ID included in scoring audit frontend errors
+- Request ID included in agent task detail frontend errors
+- Request ID included in agent task action frontend errors
+- Request ID included in prompt improve frontend errors
+- Request ID included in templates frontend errors
+- Request ID included in follow-up suggestion frontend errors
+- Request ID included in calibration frontend errors
+- Request ID included in auth frontend errors
+- Request ID included in profile/usage frontend errors
+- Request ID shown in Arena, Discuss, and Debate stream error messages
+- “Try again” button in the Arena error banner for quick retries
+- “Try again” button in focused-chat error banners for history-safe retries
+- Copy error buttons in Debate Mode error banners
+- Copy error button in Agent Mode banner
+- “Try again” button in Agent Mode banner
+- “Try again” buttons in Debate Mode error banners
+
+### Changed
+- Repaired CodeQL action tag after an invalid v5 bump (now pinned to v4)
+- Upgraded actions/checkout from v4 to v7
+- Optimized Dependabot schedule to daily security checks
+- Updated postcss pin floor to 8.5.23 (security fix)
+- Bumped cryptography to 50.0.0 and postcss to 8.5.26 (security fixes)
+- Exposed `X-Request-ID` through CORS for browser clients
+- Release workflow now enforces the npm audit HIGH/CRITICAL gate and no longer
+  ships `backend/arena.db` in release artifacts
+
+### Security
+- Added gitleaks allowlists for test fixture API keys
+- Fixed npm audit vulnerabilities (brace-expansion, js-yaml, postcss)
+- Added comprehensive security floor guards for Python and Node.js
+- Hardened release artifacts against accidental database/PII leakage
+
+## [0.1.0] - 2026-08-07
+
+### Added
+- Initial release with multi-AI agent chatroom functionality
+- 16 AI personas with distinct reasoning styles
+- Backend: FastAPI with SQLAlchemy, Alembic migrations
+- Frontend: React 18, TypeScript, Tailwind CSS, Vite
+- Agent Mode with 8-stage research pipeline
+- Debate and Discuss modes
+- Watchlist, Saved responses, Rooms features
+- Razorpay subscription support
+- Model Context Protocol (MCP) integration

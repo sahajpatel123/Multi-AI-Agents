@@ -1,8 +1,12 @@
 """Persona Integrity Engine — drift guard + overlap filter"""
 
+import logging
 from difflib import SequenceMatcher
 from collections import defaultdict
+from threading import Lock
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from arena.core.agents import get_persona_id_for_agent
 from arena.core.observability import log_drift_result
@@ -18,6 +22,7 @@ from arena.models.schemas import AgentResponse, IntegrityReport
 
 # In-memory session history (will move to Redis in Week 4+)
 _session_history: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+_session_history_lock = Lock()
 
 MAX_HISTORY_PER_AGENT = 10
 DRIFT_THRESHOLD = 0.6  # similarity above this = drifting/repeating
@@ -37,7 +42,8 @@ def compute_drift_score(
     Compute how much an agent is repeating itself within a session.
     Returns 0.0 (no drift) to 1.0 (high drift / near-duplicate).
     """
-    history = _session_history[session_id][agent_id]
+    with _session_history_lock:
+        history = _session_history[session_id][agent_id]
 
     if not history:
         return 0.0
@@ -53,16 +59,17 @@ def compute_drift_score(
 
 def record_response(agent_id: str, verdict: str, session_id: str) -> None:
     """Record a response in session history for future drift checks."""
-    history = _session_history[session_id][agent_id]
-    history.append(verdict)
-    # Cap history length
-    if len(history) > MAX_HISTORY_PER_AGENT:
-        _session_history[session_id][agent_id] = history[-MAX_HISTORY_PER_AGENT:]
+    with _session_history_lock:
+        history = _session_history[session_id][agent_id]
+        history.append(verdict)
+        if len(history) > MAX_HISTORY_PER_AGENT:
+            _session_history[session_id][agent_id] = history[-MAX_HISTORY_PER_AGENT:]
 
 
 def clear_session_history(session_id: str) -> None:
     """Clear all history for a session."""
-    _session_history.pop(session_id, None)
+    with _session_history_lock:
+        _session_history.pop(session_id, None)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -159,7 +166,7 @@ async def check_integrity(
                     db=db,
                 )
             except Exception:
-                pass
+                logger.warning("Failed to persist drift log", exc_info=True)
 
     # Record responses for future drift detection
     for resp in responses:

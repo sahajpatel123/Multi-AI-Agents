@@ -44,6 +44,13 @@ async def test_save_rejects_duplicates(app_client, make_user):
         headers=_pro_headers(user),
     )
     assert res.status_code == 422
+    # Behavior-level envelope pin (cycle-89 pattern): if the route ever
+    # regresses to detail='string', this fails before the AST detector
+    # even has to.
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "validation_error"
+    assert "duplicate" in detail["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -60,6 +67,10 @@ async def test_save_rejects_invalid_persona(app_client, make_user):
         headers=_pro_headers(user),
     )
     assert res.status_code == 422
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "validation_error"
+    assert "invalid persona" in detail["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -76,6 +87,10 @@ async def test_save_rejects_paywalled_for_free_tier(app_client, make_user):
         headers=_pro_headers(user),
     )
     assert res.status_code == 403
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "persona_not_allowed"
+    assert "blocked_personas" in detail
 
 
 @pytest.mark.asyncio
@@ -92,8 +107,17 @@ async def test_save_strips_overlong_slot(app_client, make_user):
         },
         headers=_pro_headers(user),
     )
-    # Pydantic ValidationError surfaces as 422.
+    # Pydantic ValidationError surfaces as 422. The detail in this case
+    # is a LIST of error objects (FastAPI default ValidationError envelope),
+    # NOT our {error, message} dict — that dict envelope only fires when
+    # the route handler itself raises HTTPException. Pin the list shape.
     assert res.status_code == 422
+    detail = res.json().get("detail")
+    assert isinstance(detail, list)
+    assert len(detail) >= 1
+    first = detail[0]
+    assert first["loc"] == ["body", "slot_1"]
+    assert "slot" in first["msg"].lower() or "exceeds" in first["msg"].lower()
 
 
 # ─── Presets ────────────────────────────────────────────────────────────────
@@ -164,6 +188,20 @@ async def test_apply_preset_404_for_unknown_name(app_client, make_user):
     )
     assert res.status_code == 404
     assert res.json()["detail"]["preset"] == "banana"
+
+
+@pytest.mark.asyncio
+async def test_apply_preset_rejects_oversized_path_name(app_client, make_user):
+    """The ``name`` path parameter must be bounded at 50 chars (the
+    longest preset identifier in ``PANEL_PRESETS``). A 100-char name
+    must return 422 BEFORE the 404 lookup — that way a client
+    typo doesn't run an unbounded string match against the preset dict."""
+    user = make_user(email="preset-bound@test.com", tier=UserTier.PRO)
+    long_name = "x" * 100
+    res = await app_client.post(
+        f"/api/panel/preset/{long_name}", headers=_pro_headers(user)
+    )
+    assert res.status_code == 422
 
 
 @pytest.mark.asyncio

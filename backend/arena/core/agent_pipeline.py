@@ -104,6 +104,24 @@ def _plain_answer_text(answer: str) -> str:
     return answer
 
 
+def _mark_cancelled_if_requested(bb: Blackboard) -> bool:
+    """Cooperatively stop a pipeline at the next stage boundary.
+
+    The cancel endpoint only flips ``cancel_requested`` — it never yanks the
+    asyncio task out from under an LLM call. Stage boundaries are the only
+    safe place to stop: the current stage's response has already been paid
+    for, and skipping the remaining stages avoids spending more tokens on
+    work the user explicitly abandoned.
+    """
+    if not bb.cancel_requested:
+        return False
+    bb.status = AgentStatus.CANCELLED
+    bb.error = "Task cancelled by user"
+    if bb.completed_at is None:
+        bb.completed_at = utcnow_naive()
+    return True
+
+
 def record_agent_task_usage(bb: Blackboard) -> None:
     """Persist one UsageRecord for a completed agent run (real token totals on blackboard)."""
     if not bb.user_id or bb.status != AgentStatus.COMPLETE:
@@ -173,6 +191,10 @@ async def run_agent_pipeline_on_blackboard(
         bb.expertise_domain = str(expertise_domain).strip()
     bb.expertise_modifier = get_expertise_modifier(bb.expertise_level, bb.expertise_domain)
 
+    if _mark_cancelled_if_requested(bb):
+        logger.info("[AGENT] Task cancelled before start task_id=%s", bb.task_id)
+        return bb
+
     logger.info(
         "[AGENT] Starting pipeline task_id=%s user_id=%s",
         bb.task_id,
@@ -181,7 +203,11 @@ async def run_agent_pipeline_on_blackboard(
 
     try:
         bb = await run_planner(bb, memory_context=memory_context)
+        if _mark_cancelled_if_requested(bb):
+            return bb
         bb = await run_researcher(bb)
+        if _mark_cancelled_if_requested(bb):
+            return bb
 
         if bb.research.status == StageStatus.COMPLETE and bb.research.output:
             try:
@@ -205,18 +231,38 @@ async def run_agent_pipeline_on_blackboard(
             except Exception as e:
                 logger.warning("[AGENT] Source integrity skipped: %s", e)
 
+        if _mark_cancelled_if_requested(bb):
+            return bb
         await _run_steelman_step(bb)
+        if _mark_cancelled_if_requested(bb):
+            return bb
 
         bb = await run_solver(bb)
+        if _mark_cancelled_if_requested(bb):
+            return bb
         bb = await run_critic(bb)
+        if _mark_cancelled_if_requested(bb):
+            return bb
         bb = await run_verifier(bb)
+        if _mark_cancelled_if_requested(bb):
+            return bb
         bb = await run_synthesizer(bb)
+        if _mark_cancelled_if_requested(bb):
+            return bb
         bb = await run_judge(bb)
+        if _mark_cancelled_if_requested(bb):
+            return bb
 
         while bb.status == AgentStatus.NEEDS_REVISION:
             bb = await run_solver(bb)
+            if _mark_cancelled_if_requested(bb):
+                return bb
             bb = await run_synthesizer(bb)
+            if _mark_cancelled_if_requested(bb):
+                return bb
             bb = await run_judge(bb)
+            if _mark_cancelled_if_requested(bb):
+                return bb
 
         if bb.status != AgentStatus.FAILED and bb.final_answer:
             async def safe_score(bb):
@@ -229,6 +275,7 @@ async def run_agent_pipeline_on_blackboard(
                         bb=bb,
                     )
                 except Exception:
+                    logger.warning("intelligence_score post-pipeline failed, returning empty", exc_info=True)
                     return {}
 
             async def safe_assume(bb):
@@ -239,6 +286,7 @@ async def run_agent_pipeline_on_blackboard(
                         bb=bb,
                     )
                 except Exception:
+                    logger.warning("assumption surfacing post-pipeline failed, returning empty", exc_info=True)
                     return {}
 
             async def safe_dissent(bb):
@@ -250,6 +298,7 @@ async def run_agent_pipeline_on_blackboard(
                             critique_output=getattr(bb.critique, 'output', '') or ''
                         ), timeout=25)
                 except Exception:
+                    logger.warning("dissent report post-pipeline failed, returning empty", exc_info=True)
                     return {"positions": [], "minority_view_summary": ""}
 
             async def safe_temporal(bb):
@@ -260,6 +309,7 @@ async def run_agent_pipeline_on_blackboard(
                             final_answer=bb.final_answer
                         ), timeout=25)
                 except Exception:
+                    logger.warning("temporal classification post-pipeline failed, returning default", exc_info=True)
                     return {"decay_class": "durable", "half_life": "2–5 years", "recheck_by": None, "decay_reason": "", "time_sensitive_claims": []}
 
             try:
@@ -420,6 +470,9 @@ Address specifically: {intent.get("instruction")}
     existing_bb.refinement_count += 1
     existing_bb.status = AgentStatus.RUNNING
     existing_bb.current_stage = "refining"
+    if _mark_cancelled_if_requested(existing_bb):
+        logger.info("[REFINEMENT] Task cancelled before start task=%s", existing_bb.task_id)
+        return existing_bb
     existing_bb.plan.reasoning = refinement_context
     existing_bb.expertise_modifier = get_expertise_modifier(
         getattr(existing_bb, "expertise_level", "curious") or "curious",
@@ -443,30 +496,44 @@ Address specifically: {intent.get("instruction")}
         if "planner" in stages_set:
             existing_bb.plan.reasoning = refinement_context
             existing_bb = await run_planner(existing_bb)
+            if _mark_cancelled_if_requested(existing_bb):
+                return existing_bb
 
         if "researcher" in stages_set:
             existing_bb.task = f"{base_task}\n\nFOCUS: {intent.get('focus')}"
             existing_bb = await run_researcher(existing_bb)
             existing_bb.task = saved_task
             await _run_steelman_step(existing_bb)
+            if _mark_cancelled_if_requested(existing_bb):
+                return existing_bb
 
         if "critic" in stages_set:
             existing_bb.solution.output = current_answer
             existing_bb = await run_critic(existing_bb)
+            if _mark_cancelled_if_requested(existing_bb):
+                return existing_bb
 
         if "solver" in stages_set:
             existing_bb.plan.reasoning = refinement_context
             existing_bb = await run_solver(existing_bb)
+            if _mark_cancelled_if_requested(existing_bb):
+                return existing_bb
 
         if "verifier" in stages_set:
             existing_bb = await run_verifier(existing_bb)
+            if _mark_cancelled_if_requested(existing_bb):
+                return existing_bb
 
         _mark_stage_pending(existing_bb, "synthesizer")
         existing_bb.plan.reasoning = refinement_context
         existing_bb = await run_synthesizer(existing_bb)
+        if _mark_cancelled_if_requested(existing_bb):
+            return existing_bb
 
         _mark_stage_pending(existing_bb, "judge")
         existing_bb = await run_judge(existing_bb)
+        if _mark_cancelled_if_requested(existing_bb):
+            return existing_bb
         if existing_bb.status == AgentStatus.NEEDS_REVISION:
             existing_bb.status = AgentStatus.COMPLETE
             existing_bb.completed_at = utcnow_naive()

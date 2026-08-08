@@ -146,12 +146,19 @@ async def test_metrics_requires_admin(app_client, make_user, monkeypatch):
         headers={"Authorization": f"Bearer {create_access_token(user.id, user.email)}"},
     )
     assert res.status_code == 403
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "admin_required"
 
 
 @pytest.mark.asyncio
 async def test_metrics_requires_auth(app_client):
     res = await app_client.get("/api/metrics")
     assert res.status_code == 401
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert "error" in detail
+    assert "message" in detail
 
 
 # ─── Tier breakdown ─────────────────────────────────────────────────────────

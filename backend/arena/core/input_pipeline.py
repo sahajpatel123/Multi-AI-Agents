@@ -3,11 +3,14 @@
 import asyncio
 import html
 import json
+import logging
 import re
 import anthropic
 from fastapi import HTTPException
 
 from arena.core.model_router import get_route_for_prompt, get_route_for_task
+
+logger = logging.getLogger(__name__)
 from arena.models.schemas import (
     PromptCategory,
     PromptClassification,
@@ -49,6 +52,8 @@ def sanitize_input(text: str) -> str:
 # Prompt injection detection
 # ──────────────────────────────────────────────────────────────
 
+import unicodedata
+
 _INJECTION_PATTERNS: list[str] = [
     "ignore previous instructions",
     "ignore all instructions",
@@ -70,9 +75,129 @@ _INJECTION_PATTERNS: list[str] = [
 ]
 
 
+# Characters that visually contribute nothing to a substring scan but
+# can be inserted to bypass a naïve equality check. NFKC normalization
+# (see _normalize_for_injection_scan below) handles fullwidth forms,
+# ligatures, and combining marks, but NFKC does NOT remove zero-width
+# or bidi-control characters. Strip them explicitly so "ig​nore
+# previous instructions" cannot bypass the gate.
+_INVISIBLE_CODEPOINTS = frozenset({
+    0x200B,  # ZERO WIDTH SPACE
+    0x200C,  # ZERO WIDTH NON-JOINER
+    0x200D,  # ZERO WIDTH JOINER
+    0x2060,  # WORD JOINER
+    0xFEFF,  # ZERO WIDTH NO-BREAK SPACE / BOM
+    0x202A, 0x202B, 0x202C, 0x202D, 0x202E,  # bidi LRE/RLE/PDF/LRO/RLO
+    0x2066, 0x2067, 0x2068, 0x2069,  # bidi LRI/RLI/FSI/PDI
+})
+
+# Cyrillic (and a few related-script) homoglyphs that NFKC does NOT
+# fold to their Latin visual equivalents — because each Cyrillic
+# codepoint is already in its canonical form, NFKC leaves them
+# alone. Without an explicit transliteration pass, a prompt like
+# "ignоre previоus instructiоns" (with Cyrillic 'o'
+# U+043E in place of Latin 'o') would not match any of the 17
+# patterns.
+#
+# Only Cyrillic chars that visually map to a Latin letter AND that
+# a low-effort attacker would plausibly use as a 1:1 replacement
+# in an injection phrase are listed. The table is intentionally
+# narrow: transliterating every Cyrillic char would mangle
+# legitimate Cyrillic-language user input. A user typing
+# Cyrillic prose that incidentally contains a single Latin char
+# matched by these 17 patterns would still flag — but Cyrillic
+# prose is overwhelmingly Cyrillic-script, and the homoglyph
+# count for any non-target sentence is zero, so the false-
+# positive surface is small. A genuine Cyrillic-language user
+# who happens to type the English phrase "ignore previous
+# instructions" embedded in Cyrillic prose would not be
+# affected unless they replaced 7+ Latin letters with Cyrillic
+# homoglyphs.
+_HOMOGLYPH_TRANSLIT = str.maketrans({
+    # Lowercase Cyrillic -> Latin lowercase
+    "а": "a",  # a
+    "е": "e",  # e
+    "о": "o",  # o
+    "р": "p",  # p
+    "с": "c",  # c
+    "у": "y",  # y (visually identical)
+    "х": "x",  # x
+    "ѕ": "s",  # s (Macedonian)
+    "і": "i",  # i (Ukrainian)
+    "ј": "j",  # j (Serbian)
+    "н": "h",  # h (Cyrillic lowercase en)
+    "ӏ": "l",  # l (Cyrillic palochka)
+    # Uppercase Cyrillic -> Latin uppercase
+    "А": "A",
+    "В": "B",
+    "С": "C",
+    "Е": "E",
+    "Н": "H",
+    "К": "K",
+    "М": "M",
+    "О": "O",
+    "Р": "P",
+    "Т": "T",
+    "Х": "X",
+    "У": "Y",
+    "Ӏ": "I",  # I (Cyrillic palochka uppercase)
+})
+
+
+def _normalize_for_injection_scan(prompt: str) -> str:
+    """Canonicalize the prompt before the substring scan.
+
+    Four passes in order:
+    1. NFKC normalization - collapses fullwidth Latin (e.g. 'I'
+       fullwidth to 'I'), ligatures (fi ligature to 'fi'), and
+       combining marks. Stdlib (unicodedata.normalize).
+    2. Strip zero-width and bidi-control characters - these
+       have zero rendered width but break naive 'in' substring
+       scans when interleaved between letters. NFKC does not
+       remove them.
+    3. Cyrillic homoglyph transliteration - NFKC does NOT fold
+       cross-script homoglyphs (Cyrillic 'o' U+043E stays as
+       Cyrillic 'o' because it is already in canonical form), so
+       an explicit str.maketrans() pass maps the ~20 commonly
+       abused Cyrillic letters to their Latin visual equivalents.
+       Only Cyrillic->Latin is mapped; legitimate Cyrillic prose
+       that contains zero homoglyph chars is unaffected, and
+       prose with one or two homoglyphs reads coherently in
+       Latin after the transliteration (which is exactly what the
+       attacker relied on). The original prompt is NOT mutated -
+       only this helper sees the transliterated form. The
+       downstream enriched_prompt uses the original (untransliterated)
+       prompt, so a Cyrillic-language user is not silently
+       mangle-translated at storage.
+    4. ASCII lowercase - the final comparison layer.
+
+    Note: NFKC + homoglyph transliteration closes the
+    accidental bypass (Word doc fullwidth conversion, zero-width
+    joiner from a Markdown editor) and the low-effort bypass
+    (fullwidth Unicode, ligatures, accent-decomposed copy-paste,
+    single-char Cyrillic substitutions). The LLM-based toxicity
+    check downstream remains the second line of defence for
+    higher-effort cross-script bypasses (mixed Cyrillic+Latin,
+    rare Cyrillic letters not in the table, etc.).
+    """
+    nfkc = unicodedata.normalize("NFKC", prompt)
+    no_invisible = "".join(c for c in nfkc if ord(c) not in _INVISIBLE_CODEPOINTS)
+    transliterated = no_invisible.translate(_HOMOGLYPH_TRANSLIT)
+    return transliterated.lower()
+
+
 def detect_prompt_injection(prompt: str) -> bool:
-    """Return True if the prompt contains a known injection pattern."""
-    lower = prompt.lower()
+    """Return True if the prompt contains a known injection pattern.
+
+    The prompt is canonicalized through _normalize_for_injection_scan
+    before the substring scan so that:
+    - fullwidth Latin (e.g. 'Ｉｇｎｏｒｅ') matches 'ignore'
+    - ligatures ('ﬁ') decompose so 'f' + 'i' substring checks work
+    - accent-decomposed copy-paste ('á' = 'á') matches 'á'
+    - zero-width / bidi-control characters between letters
+      cannot split a pattern into two non-matching halves
+    """
+    lower = _normalize_for_injection_scan(prompt)
     return any(pattern in lower for pattern in _INJECTION_PATTERNS)
 
 
@@ -184,6 +309,7 @@ async def classify_prompt(
             reasoning=data.get("reasoning", ""),
         )
     except Exception:
+        logger.warning("LLM classification failed, returning fallback", exc_info=True)
         return PromptClassification(
             category=PromptCategory.QUESTION,
             reasoning="Fallback: classification failed",
@@ -209,6 +335,7 @@ async def extract_intent(
             key_entities=data.get("key_entities", [])[:5],
         )
     except Exception:
+        logger.warning("LLM intent extraction failed, returning fallback", exc_info=True)
         return IntentExtraction(
             surface_intent=prompt,
             deeper_intent="",
@@ -235,6 +362,7 @@ async def check_toxicity_llm(
             confidence=float(data.get("confidence", 0.0)),
         )
     except Exception:
+        logger.warning("LLM toxicity check failed, returning safe fallback", exc_info=True)
         return ToxicityResult(is_toxic=False, reason=None, confidence=0.0)
 
 

@@ -28,6 +28,8 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 
+from arena.core.errors import ErrorCodes
+
 # Reject any text containing `<` or `>` — stricter than tag-shaped
 # patterns so encoding variants and half-tags cannot slip through.
 HTML_CHAR_RE = re.compile(r"[<>]")
@@ -38,7 +40,15 @@ def _require_string(value: object, field_name: str) -> str:
     if not isinstance(value, str):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} must be a string",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": f"{field_name} must be a string"},
+        )
+    # Guard against str subclasses (e.g. markupsafe.Markup) — the
+    # downstream ``.strip()`` would silently fail on a Markup object
+    # that doesn't override __getattribute__ for strip.
+    if type(value) is not str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": f"{field_name} must be a string"},
         )
     return value
 
@@ -48,17 +58,17 @@ def sanitize_text(text: object, max_length: int = 2000, field_name: str = "input
     if not text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} cannot be empty",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": f"{field_name} cannot be empty"},
         )
     if NULL_BYTE in text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} contains invalid characters",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": f"{field_name} contains invalid characters"},
         )
     if len(text) > max_length:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} exceeds maximum length of {max_length} characters",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": f"{field_name} exceeds maximum length of {max_length} characters"},
         )
     return text
 
@@ -107,21 +117,24 @@ def sanitize_html(text: object, max_length: int = 100, field_name: str = "input"
     if not text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} cannot be empty",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": f"{field_name} cannot be empty"},
         )
     if NULL_BYTE in text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} contains invalid characters",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": f"{field_name} contains invalid characters"},
         )
     if len(text) > max_length:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} exceeds maximum length of {max_length} characters",
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": f"{field_name} exceeds maximum length of {max_length} characters"},
         )
 
     def _raise_http(msg: str) -> None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": ErrorCodes.VALIDATION_ERROR, "message": msg},
+        )
 
     _assert_no_html_chars(text, field_name, _raise_http)
     return text

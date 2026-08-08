@@ -321,7 +321,7 @@ export function AgentCard({
           </div>
           {score != null && !isIdle && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="agent-score" style={{ fontSize: '11px', color: '#1A1714', background: isWinner ? '#F0B84E' : '#F0EBE3', padding: '3px 10px', borderRadius: '999px', fontWeight: isWinner ? 500 : 400 }}>
+              <span className="agent-score" style={{ fontSize: '12px', color: '#1A1714', background: isWinner ? '#F0B84E' : '#F0EBE3', padding: '4px 12px', borderRadius: '999px', fontWeight: 500, letterSpacing: '0.01em' }}>
                 {isWinner ? `Winner · ${score}` : score}
               </span>
             </div>
@@ -449,11 +449,11 @@ export function AgentCard({
                       {scoredAgent.contradiction.previous_statement && scoredAgent.contradiction.current_statement ? (
                         <>
                           <div style={{ marginBottom: '8px' }}>
-                            <strong style={{ color: '#1A1714', fontSize: '11px' }}>Previous:</strong>
+                            <strong style={{ color: '#1A1714', fontSize: '12px' }}>Previous:</strong>
                             <div style={{ marginTop: '4px' }}>{scoredAgent.contradiction.previous_statement}</div>
                           </div>
                           <div>
-                            <strong style={{ color: '#1A1714', fontSize: '11px' }}>Current:</strong>
+                            <strong style={{ color: '#1A1714', fontSize: '12px' }}>Current:</strong>
                             <div style={{ marginTop: '4px' }}>{scoredAgent.contradiction.current_statement}</div>
                           </div>
                         </>

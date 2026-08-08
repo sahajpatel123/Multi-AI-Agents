@@ -1,3 +1,5 @@
+import { safeSessionStorage } from '../lib/safeStorage';
+
 const INTENT_KEY = 'arena_post_auth_redirect';
 
 /** Canonical post-auth home when no deep-link was requested. */
@@ -22,6 +24,50 @@ export function isSafeRedirectPath(path: string): boolean {
   // Block encoded tricks that still resolve off-site in some browsers
   const lower = p.toLowerCase();
   if (lower.includes('javascript:') || lower.includes('data:')) return false;
+  // Decode percent-escapes (both at the top level and inside the
+  // query string) before re-running the checks. A raw `//` or `://`
+  // hidden behind `%2F%2F` or `%3A%2F%2F` would slip past literal
+  // checks but is decoded to a protocol-relative prefix at the
+  // browser navigation step.
+  let decoded = p;
+  try {
+    decoded = decodeURIComponent(p);
+  } catch {
+    // Malformed percent-escape — refuse outright rather than try
+    // to interpret it. A malformed escape shouldn't reach navigate().
+    return false;
+  }
+  // Split path and query AFTER decode so an encoded `%3F` (a `?` that
+  // the browser would otherwise keep glued to the path) cannot smuggle
+  // a query string past the query-string checks below.
+  let decodedPath = decoded;
+  let decodedQs = '';
+  const qIndex = decoded.indexOf('?');
+  if (qIndex >= 0) {
+    decodedPath = decoded.slice(0, qIndex);
+    decodedQs = decoded.slice(qIndex + 1);
+  }
+  if (decodedPath.startsWith('//')) return false;
+  if (decodedPath.includes('\\')) return false;
+  if (decodedPath.includes('://')) return false;
+  const decodedLower = decodedPath.toLowerCase();
+  if (decodedLower.includes('javascript:') || decodedLower.includes('data:')) return false;
+  // Defense-in-depth: reject any query-string value that contains a
+  // protocol-relative prefix, absolute scheme, backslash trick, or
+  // js:/data: payload. A downstream component reading `?next=//evil.com`
+  // and passing it to window.location is an open redirect even if the
+  // outer path is safe — refuse at the source.
+  if (decodedQs) {
+    if (
+      decodedQs.includes('//') ||
+      decodedQs.includes('://') ||
+      decodedQs.includes('\\') ||
+      decodedQs.toLowerCase().includes('javascript:') ||
+      decodedQs.toLowerCase().includes('data:')
+    ) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -41,29 +87,17 @@ export function normalizeRedirectPath(path: string): string {
 
 export function setRedirectIntent(path: string): void {
   if (!isSafeRedirectPath(path)) return;
-  try {
-    sessionStorage.setItem(INTENT_KEY, normalizeRedirectPath(path.trim()));
-  } catch {
-    /* private mode / quota */
-  }
+  safeSessionStorage.setItem(INTENT_KEY, normalizeRedirectPath(path.trim()));
 }
 
 export function getRedirectIntent(): string {
-  try {
-    const raw = sessionStorage.getItem(INTENT_KEY);
-    if (raw && isSafeRedirectPath(raw)) return normalizeRedirectPath(raw.trim());
-  } catch {
-    /* ignore */
-  }
+  const raw = safeSessionStorage.getItem(INTENT_KEY);
+  if (raw && isSafeRedirectPath(raw)) return normalizeRedirectPath(raw.trim());
   return DEFAULT_REDIRECT_INTENT;
 }
 
 export function clearRedirectIntent(): void {
-  try {
-    sessionStorage.removeItem(INTENT_KEY);
-  } catch {
-    /* ignore */
-  }
+  safeSessionStorage.removeItem(INTENT_KEY);
 }
 
 /** Human label for where post-auth navigation will land. */

@@ -37,6 +37,44 @@ def _seed_usage(
     return rec
 
 
+def _seed_usage_on_day(
+    db,
+    *,
+    user_id: int,
+    day_offset: int,
+    mode: str = "arena",
+) -> UsageRecord:
+    """Seed a usage record on a specific calendar day relative to today.
+
+    Used by streak tests that anchor events to calendar dates rather
+    than hours — the streak algorithm walks back by date (not by
+    24-hour windows), so seeding by hours near midnight UTC produces
+    inconsistent calendar dates and breaks the assertion.
+    `day_offset=0` lands on today (1h ago to stay inside the day),
+    `day_offset=1` on yesterday (12:00), `day_offset=2` two days ago.
+    """
+    now = utcnow_naive()
+    today = now.date()
+    target_date = today - timedelta(days=day_offset)
+    # Pick a fixed noon UTC on the target date so the `.date()` cast
+    # matches the calendar date in any timezone the production server
+    # might be configured with.
+    ts = datetime(target_date.year, target_date.month, target_date.day, 12, 0, 0)
+    rec = UsageRecord(
+        user_id=user_id,
+        request_id=str(uuid.uuid4()),
+        mode=mode,
+        input_tokens=1,
+        output_tokens=1,
+        estimated_cost_usd=0.0,
+        total_processing_ms=100,
+        timestamp=ts,
+    )
+    db.add(rec)
+    db.flush()
+    return rec
+
+
 def _seed_event(
     db,
     *,
@@ -212,8 +250,8 @@ async def test_engagement_rate_capped_at_one(app_client, make_user, db_session):
 async def test_streak_walks_back_from_today(app_client, make_user, db_session):
     """Three consecutive days back from today → streak of 3."""
     user = make_user(email="ana-streak@test.com", tier=UserTier.PRO)
-    for hours_ago in [1, 25, 49]:  # ~0d, ~1d, ~2d
-        _seed_usage(db_session, user_id=user.id, hours_ago=hours_ago)
+    for day_offset in [0, 1, 2]:  # today, yesterday, 2-days ago
+        _seed_usage_on_day(db_session, user_id=user.id, day_offset=day_offset)
     db_session.commit()
     res = await app_client.get("/api/analytics/summary", headers=_pro_headers(user))
     body = res.json()
@@ -224,8 +262,8 @@ async def test_streak_walks_back_from_today(app_client, make_user, db_session):
 async def test_streak_survives_quiet_today(app_client, make_user, db_session):
     """Today empty but yesterday/2-days-ago populated → streak of 2."""
     user = make_user(email="ana-streak-quiet@test.com", tier=UserTier.PRO)
-    _seed_usage(db_session, user_id=user.id, hours_ago=25)
-    _seed_usage(db_session, user_id=user.id, hours_ago=49)
+    _seed_usage_on_day(db_session, user_id=user.id, day_offset=1)
+    _seed_usage_on_day(db_session, user_id=user.id, day_offset=2)
     db_session.commit()
     res = await app_client.get("/api/analytics/summary", headers=_pro_headers(user))
     body = res.json()
@@ -235,8 +273,8 @@ async def test_streak_survives_quiet_today(app_client, make_user, db_session):
 @pytest.mark.asyncio
 async def test_longest_streak_finds_max_run(app_client, make_user, db_session):
     user = make_user(email="ana-longest@test.com", tier=UserTier.PRO)
-    for hours_ago in [1, 25, 49, 73, 97]:  # 5 consecutive days
-        _seed_usage(db_session, user_id=user.id, hours_ago=hours_ago)
+    for day_offset in [0, 1, 2, 3, 4]:  # 5 consecutive days
+        _seed_usage_on_day(db_session, user_id=user.id, day_offset=day_offset)
     db_session.commit()
     res = await app_client.get("/api/analytics/summary", headers=_pro_headers(user))
     body = res.json()

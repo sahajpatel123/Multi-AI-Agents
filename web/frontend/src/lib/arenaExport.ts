@@ -88,7 +88,7 @@ export function formatArenaExport(
   const lines: string[] = [];
   lines.push('# Arena — four minds');
   lines.push('');
-  lines.push(`**Question:** ${response.prompt.trim() || '(no prompt)'}`);
+  lines.push(`**Question:** ${(response.prompt || '').trim() || '(no prompt)'}`);
   lines.push('');
 
   const sorted = [...response.all_responses].sort((a, b) => {
@@ -104,6 +104,103 @@ export function formatArenaExport(
   lines.push('---');
   lines.push('_Shared from Arena_');
   return lines.join('\n').trim() + '\n';
+}
+
+/**
+ * Structured JSON for a full Arena round (all takes, winner, scores).
+ */
+export function formatArenaJsonExport(
+  response: PromptResponse,
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: { exportedAt?: string },
+): string {
+  const winner = pickArenaWinner(response);
+  const sorted = [...response.all_responses].sort((a, b) => {
+    if (a.is_winner !== b.is_winner) return a.is_winner ? -1 : 1;
+    return b.score - a.score;
+  });
+  const data = {
+    exported_from: 'arena',
+    exported_at: opts?.exportedAt || new Date().toISOString(),
+    session_id: response.session_id,
+    prompt: (response.prompt || '').trim() || '(no prompt)',
+    prompt_category: response.prompt_category,
+    winner_agent_id: winner?.response.agent_id ?? response.winner_agent_id ?? null,
+    tools_used: Array.isArray(response.tools_used) ? response.tools_used : [],
+    timestamp: response.timestamp || '',
+    integrity: response.integrity || null,
+    takes: sorted.map((scored) => {
+      const persona = resolvePersona(scored.response.agent_id);
+      return {
+        agent_id: scored.response.agent_id,
+        agent_name: persona.name || scored.response.agent_id,
+        is_winner: scored.is_winner,
+        score:
+          typeof scored.score === 'number' && Number.isFinite(scored.score)
+            ? scored.score
+            : null,
+        confidence:
+          typeof scored.response.confidence === 'number' &&
+          Number.isFinite(scored.response.confidence)
+            ? scored.response.confidence
+            : null,
+        one_liner: (scored.response.one_liner || '').trim() || null,
+        verdict: (scored.response.verdict || '').trim() || null,
+        key_assumption: (scored.response.key_assumption || '').trim() || null,
+        contradiction: scored.contradiction || null,
+      };
+    }),
+  };
+  return JSON.stringify(data, null, 2) + '\n';
+}
+
+function toCsvCell(value: string | number | boolean | null | undefined): string {
+  const raw = value == null ? '' : String(value);
+  return `"${raw.replace(/"/g, '""')}"`;
+}
+
+/**
+ * CSV export for a full Arena round (one row per take).
+ */
+export function formatArenaCsvExport(
+  response: PromptResponse,
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+): string {
+  const sorted = [...response.all_responses].sort((a, b) => {
+    if (a.is_winner !== b.is_winner) return a.is_winner ? -1 : 1;
+    return b.score - a.score;
+  });
+  const headers = [
+    'agentName',
+    'prompt',
+    'oneLiner',
+    'verdict',
+    'score',
+    'confidence',
+    'winner',
+    'keyAssumption',
+  ];
+  const lines: string[] = [headers.map(toCsvCell).join(',')];
+  for (const scored of sorted) {
+    const persona = resolvePersona(scored.response.agent_id);
+    lines.push(
+      [
+        persona.name || scored.response.agent_id,
+        (response.prompt || '').trim() || '(no prompt)',
+        (scored.response.one_liner || '').trim(),
+        (scored.response.verdict || '').trim(),
+        typeof scored.score === 'number' && Number.isFinite(scored.score) ? scored.score : '',
+        typeof scored.response.confidence === 'number' && Number.isFinite(scored.response.confidence)
+          ? scored.response.confidence
+          : '',
+        scored.is_winner ? 'yes' : 'no',
+        (scored.response.key_assumption || '').trim(),
+      ]
+        .map(toCsvCell)
+        .join(','),
+    );
+  }
+  return lines.join('\n') + '\n';
 }
 
 function formatAgentBlock(scored: ScoredAgent, persona: ArenaExportPersona): string {

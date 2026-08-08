@@ -133,12 +133,22 @@ class WebSearchTool(Tool):
                 error="duckduckgo-search library not installed"
             )
         except Exception as e:
-            logger.warning("[WEB_SEARCH] Error: %s", type(e).__name__)
+            # Log the full exception internally so operators can diagnose,
+            # but return a generic message to the tool caller — `str(e)`
+            # can leak provider-internal details (library version strings,
+            # endpoint URLs, query fragments) that have no business reaching
+            # the agent's context string or, downstream, the user.
+            logger.warning(
+                "[WEB_SEARCH] Error: %s — %s",
+                type(e).__name__,
+                e,
+                exc_info=True,
+            )
             return WebSearchToolResult(
                 tool_name=self.name,
                 success=False,
                 data=None,
-                error=f"Search error: {str(e)}"
+                error="web_search_unavailable",
             )
     
     def _enhance_query(self, query: str, original_prompt: str) -> str:

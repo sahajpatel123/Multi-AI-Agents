@@ -78,7 +78,7 @@ def extract_answer_snippet(raw: str | None, *, limit: int = 400) -> str:
                 elif parsed.get("text"):
                     text = str(parsed["text"])
         except Exception:
-            pass
+            logger.warning("Failed to parse response JSON in temporal_evolution", exc_info=True)
     cleaned = re.sub(r"\s+", " ", text).strip()
     return cleaned[:limit]
 

@@ -9,6 +9,8 @@ export type SavedTakeListItem = {
   verdict?: string | null;
   score?: number | null;
   timestamp?: string | null;
+  pinned?: boolean;
+  personaId?: string | null;
 };
 
 export function formatSavedTakeExport(opts: {
@@ -124,4 +126,94 @@ export function formatSavedTakesListExport(opts: {
   lines.push('---');
   lines.push('_Shared from Arena (saved takes)_');
   return lines.join('\n').trim() + '\n';
+}
+
+
+/**
+ * JSON export of bookmarked takes (full list or current sidebar filter).
+ */
+export function formatSavedTakesJsonExport(opts: {
+  items: SavedTakeListItem[];
+  totalCount?: number | null;
+  filterNote?: string | null;
+  exportedAt?: string;
+}): string {
+  const items = (opts.items || []).map((item) => ({
+    agentName: (item.agentName || 'Arena mind').trim() || 'Arena mind',
+    prompt: (item.prompt || '').trim() || '(no prompt)',
+    oneLiner: (item.oneLiner || '').trim() || null,
+    verdict: (item.verdict || '').trim() || null,
+    score: typeof item.score === 'number' && Number.isFinite(item.score) ? item.score : null,
+    timestamp: item.timestamp || null,
+    pinned: item.pinned === true,
+    personaId: item.personaId || null,
+  }));
+  return JSON.stringify(
+    {
+      exported_from: 'arena',
+      exported_at: opts.exportedAt || new Date().toISOString(),
+      total_saved:
+        typeof opts.totalCount === 'number' && Number.isFinite(opts.totalCount)
+          ? opts.totalCount
+          : null,
+      filter_note: (opts.filterNote || '').trim() || null,
+      count: items.length,
+      items,
+    },
+    null,
+    2,
+  ) + '\n';
+}
+
+
+function toCsvCell(value: string | number | boolean | null | undefined): string {
+  const raw = value == null ? '' : String(value);
+  return `"${raw.replace(/"/g, '""')}"`;
+}
+
+/**
+ * CSV export of bookmarked takes (full list or current sidebar filter).
+ * The first row is headers; every cell is quoted so commas/newlines in
+ * verdict text cannot break the column layout. Filter context is deliberately
+ * kept out of the CSV so every row matches the header schema exactly.
+ */
+export function formatSavedTakesCsvExport(opts: { items: SavedTakeListItem[] }): string {
+  const items = (opts.items || []).map((item) => ({
+    agentName: (item.agentName || 'Arena mind').trim() || 'Arena mind',
+    prompt: (item.prompt || '').trim() || '(no prompt)',
+    oneLiner: (item.oneLiner || '').trim() || '',
+    verdict: (item.verdict || '').trim() || '',
+    score: typeof item.score === 'number' && Number.isFinite(item.score) ? item.score : '',
+    pinned: item.pinned === true,
+    personaId: item.personaId || '',
+    timestamp: item.timestamp || '',
+  }));
+  const headers = [
+    'agentName',
+    'prompt',
+    'oneLiner',
+    'verdict',
+    'score',
+    'pinned',
+    'personaId',
+    'timestamp',
+  ];
+  const lines: string[] = [headers.map(toCsvCell).join(',')];
+  items.forEach((item) => {
+    lines.push(
+      [
+        item.agentName,
+        item.prompt,
+        item.oneLiner,
+        item.verdict,
+        item.score,
+        item.pinned,
+        item.personaId,
+        item.timestamp,
+      ]
+        .map(toCsvCell)
+        .join(','),
+    );
+  });
+  return lines.join('\n') + '\n';
 }

@@ -7,7 +7,7 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -16,8 +16,10 @@ from arena.core.dependencies import get_current_user_required
 from arena.core.errors import ErrorCodes
 from arena.core.rate_limits import enforce_user_rate_limit
 from arena.database import get_db
-from arena.db_models import AgentTask, ConfidenceRating
+from arena.db_models import AgentTask, ConfidenceRating, User
 from arena.models.schemas import UserResponse
+from arena.core.datetime_utils import utcnow_naive
+from arena.core.http_headers import content_disposition_attachment
 
 logger = logging.getLogger(__name__)
 
@@ -40,19 +42,27 @@ def _verdict_for_delta(delta: int) -> str:
 
 def _system_score_from_task(row: AgentTask) -> int:
     raw = row.intelligence_score
+    # total_score and final_score are bounded to [0, 100] in
+    # the Arena score range. A maliciously-injected value
+    # (e.g. via a corrupted row in the DB) outside this range
+    # is clamped. The clamping closes a path where a
+    # `intelligence_score: {total_score: 999999999999}` value
+    # would amplify the delta returned to the user (delta =
+    # system_score - user_rating*20, which could be a huge
+    # value) and skew the calibration score math downstream.
     if isinstance(raw, dict):
         try:
-            return int(raw.get("total_score") or 0)
+            return max(0, min(100, int(raw.get("total_score") or 0)))
         except (TypeError, ValueError):
             pass
     if isinstance(raw, str) and raw.strip():
         try:
             d = json.loads(raw)
-            return int(d.get("total_score") or 0)
+            return max(0, min(100, int(d.get("total_score") or 0)))
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
     try:
-        return int(row.final_score or 0)
+        return max(0, min(100, int(row.final_score or 0)))
     except (TypeError, ValueError):
         return 0
 
@@ -151,14 +161,31 @@ async def post_calibration_rate(
     )
     if existing:
         stats = build_calibration_stats(db, user.id)
+        # Clamp system_score and delta to sane ranges at the
+        # read side. The column types in the DB are unbounded
+        # int (per the cycle 49 revert at the user's request),
+        # so a row written before any future write-side clamp
+        # could contain a huge value. The clamp here is the
+        # read-side defense: even if the write side is
+        # unbounded, the response is bounded.
+        try:
+            sys_raw = int(existing.system_score or 0)
+        except (TypeError, ValueError):
+            sys_raw = 0
+        system_score = max(0, min(100, sys_raw))
+        try:
+            delta_raw = int(existing.delta or 0)
+        except (TypeError, ValueError):
+            delta_raw = 0
+        delta = max(-100, min(100, delta_raw))
         return JSONResponse(
             status_code=200,
             content={
                 "already_rated": True,
-                "delta": existing.delta,
-                "verdict": _verdict_for_delta(existing.delta),
+                "delta": delta,
+                "verdict": _verdict_for_delta(delta),
                 "user_rating": existing.user_rating,
-                "system_score": existing.system_score,
+                "system_score": system_score,
                 "calibration_stats": stats,
             },
         )
@@ -206,13 +233,20 @@ async def post_calibration_rate(
 
     db.refresh(row)
     stats = build_calibration_stats(db, user.id)
+    # Clamp system_score and delta to sane ranges at the
+    # read side. The _system_score_from_task helper reads
+    # unbounded data (per the cycle 49 revert at the user's
+    # request), so we clamp the response here to bound the
+    # JSON output.
+    sys_raw = max(0, min(100, int(system_score or 0)))
+    delta_bounded = max(-100, min(100, int(delta or 0)))
     return JSONResponse(
         content={
             "already_rated": False,
-            "delta": delta,
-            "verdict": _verdict_for_delta(delta),
+            "delta": delta_bounded,
+            "verdict": _verdict_for_delta(delta_bounded),
             "user_rating": int(body.rating),
-            "system_score": system_score,
+            "system_score": sys_raw,
             "calibration_stats": stats,
         }
     )
@@ -263,9 +297,11 @@ async def get_calibration_rating_for_task(
             "rated": True,
             "data": {
                 "user_rating": row.user_rating,
-                "system_score": row.system_score,
-                "delta": row.delta,
-                "verdict": _verdict_for_delta(row.delta),
+                "system_score": max(0, min(100, int(row.system_score or 0))),
+                "delta": max(-100, min(100, int(row.delta or 0))),
+                "verdict": _verdict_for_delta(
+                    max(-100, min(100, int(row.delta or 0)))
+                ),
                 "created_at": row.created_at.isoformat() if row.created_at else "",
             },
         }
@@ -276,13 +312,33 @@ async def get_calibration_rating_for_task(
 
 
 def _serialize_rating(row: ConfidenceRating) -> dict:
+    # system_score and delta are clamped to sane ranges at
+    # the read side. The column types in the DB are unbounded
+    # int (per the cycle 49 revert at the user's request), so
+    # a row written before any future write-side clamp could
+    # contain a huge value. The clamp here is the read-side
+    # defense: even if the write side is unbounded, the
+    # response is bounded.
+    #   system_score: clamped to [0, 100] (the Arena score range)
+    #   delta: clamped to [-100, 100] (system_score - user_scaled,
+    #     where user_scaled is in [20, 100])
+    try:
+        sys_raw = int(row.system_score or 0)
+    except (TypeError, ValueError):
+        sys_raw = 0
+    system_score = max(0, min(100, sys_raw))
+    try:
+        delta_raw = int(row.delta or 0)
+    except (TypeError, ValueError):
+        delta_raw = 0
+    delta = max(-100, min(100, delta_raw))
     return {
         "id": row.id,
         "task_id": row.task_id,
         "user_rating": row.user_rating,
-        "system_score": row.system_score,
-        "delta": row.delta,
-        "verdict": _verdict_for_delta(row.delta),
+        "system_score": system_score,
+        "delta": delta,
+        "verdict": _verdict_for_delta(delta),
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
 
@@ -413,13 +469,20 @@ async def retract_and_rerate(
     db.refresh(existing)
 
     stats = build_calibration_stats(db, user.id)
+    # Clamp system_score and delta to sane ranges at the
+    # read side. The _system_score_from_task helper reads
+    # unbounded data (per the cycle 49 revert at the user's
+    # request), so we clamp the response here to bound the
+    # JSON output.
+    sys_raw = max(0, min(100, int(system_score or 0)))
+    delta_bounded = max(-100, min(100, int(delta or 0)))
     return {
         "status": "replaced",
         "id": existing.id,
-        "delta": delta,
-        "verdict": _verdict_for_delta(delta),
+        "delta": delta_bounded,
+        "verdict": _verdict_for_delta(delta_bounded),
         "user_rating": existing.user_rating,
-        "system_score": system_score,
+        "system_score": sys_raw,
         "calibration_stats": stats,
     }
 
@@ -457,3 +520,172 @@ async def delete_calibration_rating(
     db.delete(row)
     db.commit()
     return {"status": "deleted", "task_id": clean_id}
+
+
+@router.get("/history/export.csv")
+async def export_calibration_history_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """CSV export of calibration rating history.
+
+    Streams all calibration ratings with formula-injection defense.
+    Useful for analyzing user's rating patterns over time.
+    """
+    from arena.db_models import User
+    from arena.core.datetime_utils import utcnow_naive
+    from arena.core.http_headers import content_disposition_attachment
+    from fastapi.responses import Response
+    import csv
+    import io
+    
+    orm_user = db.query(User).filter(User.id == user.id).first()
+    if not orm_user:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
+        )
+    
+    enforce_user_rate_limit(
+        user.id,
+        scope="calibration_csv_export",
+        limit=30,
+        window_seconds=60,
+        message="Too many CSV exports. Please wait.",
+    )
+    
+    def _csv_safe(value) -> str:
+        """Escape value for CSV to prevent formula injection."""
+        if value is None:
+            return ""
+        s = str(value)
+        if s.startswith(("=", "+", "-", "@")):
+            return "'" + s
+        return s
+    
+    # Get all calibration ratings for the user
+    ratings = (
+        db.query(ConfidenceRating)
+        .filter(ConfidenceRating.user_id == user.id)
+        .order_by(ConfidenceRating.created_at.desc())
+        .all()
+    )
+    
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    
+    # Write header
+    writer.writerow([
+        "task_id",
+        "user_rating",
+        "system_score",
+        "delta",
+        "verdict",
+        "created_at",
+    ])
+    
+    # Write rows
+    for row in ratings:
+        try:
+            sys_score = max(0, min(100, int(row.system_score or 0)))
+        except (TypeError, ValueError):
+            sys_score = 0
+        
+        try:
+            delta = max(-100, min(100, int(row.delta or 0)))
+        except (TypeError, ValueError):
+            delta = 0
+        
+        verdict = _verdict_for_delta(delta)
+        
+        writer.writerow([
+            _csv_safe(row.task_id),
+            _csv_safe(row.user_rating),
+            _csv_safe(sys_score),
+            _csv_safe(delta),
+            _csv_safe(verdict),
+            _csv_safe(row.created_at.isoformat() if row.created_at else ""),
+        ])
+    
+    filename = f"arena-calibration-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
+@router.get("/history/export.json")
+async def export_calibration_history_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """JSON export of calibration rating history.
+
+    Returns all calibration ratings as a JSON array.
+    Useful for programmatic access to calibration data.
+    """
+    orm_user = db.query(User).filter(User.id == user.id).first()
+    if not orm_user:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "User not found"},
+        )
+    
+    enforce_user_rate_limit(
+        user.id,
+        scope="calibration_json_export",
+        limit=30,
+        window_seconds=60,
+        message="Too many JSON exports. Please wait.",
+    )
+    
+    # Get all calibration ratings for the user
+    ratings = (
+        db.query(ConfidenceRating)
+        .filter(ConfidenceRating.user_id == user.id)
+        .order_by(ConfidenceRating.created_at.desc())
+        .all()
+    )
+    
+    # Format as JSON-serializable list
+    items = []
+    for row in ratings:
+        try:
+            sys_score = max(0, min(100, int(row.system_score or 0)))
+        except (TypeError, ValueError):
+            sys_score = 0
+        
+        try:
+            delta = max(-100, min(100, int(row.delta or 0)))
+        except (TypeError, ValueError):
+            delta = 0
+        
+        verdict = _verdict_for_delta(delta)
+        
+        items.append({
+            "task_id": row.task_id,
+            "user_rating": row.user_rating,
+            "system_score": sys_score,
+            "delta": delta,
+            "verdict": verdict,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        })
+    
+    filename = f"arena-calibration-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.json"
+    headers = {
+        "Content-Disposition": content_disposition_attachment(filename),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    }
+    import json
+    return Response(
+        content=json.dumps(items, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers=headers,
+    )

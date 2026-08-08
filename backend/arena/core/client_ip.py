@@ -51,8 +51,7 @@ def _trust_proxy_headers() -> bool:
 
         return bool(get_settings().is_production)
     except Exception:
-        # Fail closed: if settings are unavailable, never trust client
-        # headers for rate-limit identity.
+        logger.warning("Failed to read settings for proxy trust, defaulting to False", exc_info=True)
         return False
 
 

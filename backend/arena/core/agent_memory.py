@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from arena.core.blackboard import Blackboard
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
-from arena.db_models import AgentContradiction, AgentTask
+from arena.db_models import AgentContradiction, AgentTask, WatchlistItem
 from arena.core.datetime_utils import utcnow_naive
 
 logger = logging.getLogger("arena.agent_memory")
@@ -249,6 +249,11 @@ async def save_task_to_memory(
     insight_report: Optional[dict[str, Any]] = None,
     pipeline_contradictions: Optional[list[Any]] = None,
     intelligence_score: Optional[dict[str, Any]] = None,
+    source_integrity: Optional[dict[str, Any]] = None,
+    assumptions: Optional[dict[str, Any]] = None,
+    dissent_report: Optional[dict[str, Any]] = None,
+    temporal_profile: Optional[dict[str, Any]] = None,
+    steelman: Optional[dict[str, Any]] = None,
     orchestration_id: Optional[str] = None,
     watchlist_item_id: Optional[str] = None,
     bb: Optional[Blackboard] = None,
@@ -290,6 +295,11 @@ async def save_task_to_memory(
         insight_report=insight_report,
         contradictions=pipeline_contradictions,
         intelligence_score=intelligence_score,
+        source_integrity=source_integrity,
+        assumptions=assumptions,
+        dissent_report=dissent_report,
+        temporal_profile=temporal_profile,
+        steelman=steelman,
     )
     db.add(task_record)
     db.commit()
@@ -638,6 +648,9 @@ def get_watchlist_history(
         {
             "task_id": t.task_id,
             "title": t.title,
+            "status": "complete" if isinstance(t.final_score, (int, float)) else "",
+            "intelligence_score": t.intelligence_score,
+            "final_answer": t.final_answer,
             "final_score": t.final_score,
             "final_confidence": t.final_confidence,
             "user_feedback": t.user_feedback,
@@ -656,6 +669,87 @@ def get_watchlist_history(
     }
 
     return {"items": items, "stats": stats}
+
+
+def get_watchlist_statistics(
+    db: Session,
+    user_id: int,
+) -> dict[str, Any]:
+    """Aggregate statistics across all watchlist items for a user.
+
+    Returns a dict with:
+      - total_items: count of watchlist items (active + inactive)
+      - active_items: count of active watchlist items
+      - total_runs: total number of agent task runs for watchlist items
+      - scored_runs: number of runs with scores
+      - avg_score: average final score across all scored runs
+      - min_score: minimum score
+      - max_score: maximum score
+      - success_rate: percentage of runs that have scores (scored runs are considered successful)
+      - per_item_stats: dict mapping item_id to {item_question, run_count, avg_score, last_run_at}
+    """
+    # Get all watchlist items for the user
+    items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id).all()
+    
+    total_items = len(items)
+    active_items = sum(1 for item in items if item.is_active)
+    
+    # Get all agent tasks for watchlist items
+    tasks = (
+        db.query(AgentTask)
+        .filter(
+            AgentTask.user_id == user_id,
+            AgentTask.watchlist_item_id.isnot(None),
+        )
+        .all()
+    )
+    
+    total_runs = len(tasks)
+    
+    # Calculate score statistics
+    scored_tasks = [t for t in tasks if isinstance(t.final_score, (int, float))]
+    scored_runs = len(scored_tasks)
+    
+    scores = [t.final_score for t in scored_tasks]
+    avg_score = round(sum(scores) / len(scores), 1) if scores else None
+    min_score = min(scores) if scores else None
+    max_score = max(scores) if scores else None
+    
+    # Calculate success rate: scored runs are considered successful
+    success_rate = round((scored_runs / total_runs * 100), 1) if total_runs > 0 else 0.0
+    
+    # Per-item statistics
+    item_stats = {}
+    for item in items:
+        item_tasks = [t for t in tasks if t.watchlist_item_id == item.id]
+        item_scored = [t for t in item_tasks if isinstance(t.final_score, (int, float))]
+        item_scores = [t.final_score for t in item_scored]
+        
+        last_run_at = None
+        if item_tasks:
+            last_run_at = max(t.created_at for t in item_tasks if t.created_at)
+        
+        item_stats[item.id] = {
+            "question": item.question,
+            "run_count": len(item_tasks),
+            "scored_run_count": len(item_scored),
+            "avg_score": round(sum(item_scores) / len(item_scores), 1) if item_scores else None,
+            "last_run_at": last_run_at.isoformat() if last_run_at else None,
+            "is_active": item.is_active,
+            "interval_hours": item.interval_hours,
+        }
+    
+    return {
+        "total_items": total_items,
+        "active_items": active_items,
+        "total_runs": total_runs,
+        "scored_runs": scored_runs,
+        "avg_score": avg_score,
+        "min_score": min_score,
+        "max_score": max_score,
+        "success_rate": success_rate,
+        "per_item_stats": item_stats,
+    }
 
 
 def iter_user_task_export(

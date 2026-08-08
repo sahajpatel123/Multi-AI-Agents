@@ -27,9 +27,9 @@ export function ScrollToTop() {
       return () => window.cancelAnimationFrame(id);
     }
 
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    // Soft settle on route change; collapses to instant under reduced motion.
+    window.scrollTo({ top: 0, left: 0, behavior });
   }, [pathname, hash]);
-
   return null;
 }
 

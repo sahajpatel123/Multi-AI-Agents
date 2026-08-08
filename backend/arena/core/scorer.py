@@ -2,8 +2,11 @@
 
 import asyncio
 import json
+import logging
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import anthropic
 from sqlalchemy.orm import Session
@@ -132,6 +135,7 @@ class Scorer:
             
         except Exception as e:
             # Fallback: return responses with default scores
+            logger.warning("Scorer LLM call failed, using fallback scores: %s", e, exc_info=True)
             fallback_used = True
             result_scored = [
                 ScoredAgent(response=resp, score=50, is_winner=(i == 0))
@@ -163,7 +167,7 @@ class Scorer:
                         db=db,
                     )
                 except Exception:
-                    pass
+                    logger.warning("Failed to log scoring audit", exc_info=True)
 
         return result_scored
     

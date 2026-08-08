@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from sqlalchemy.orm import Session
+from starlette.requests import Request
 
 from arena.db_models import PersonaDriftLog, ScoringAudit, UXEvent
 
@@ -90,6 +91,16 @@ def new_request_id() -> str:
     return str(uuid.uuid4())
 
 
+def correlation_request_id(request: Request) -> str:
+    """Return the middleware-set request ID, falling back to a fresh UUID.
+
+    The RequestIDMiddleware tags every request with ``request.state.request_id``
+    and echoes it as ``X-Request-ID``. Using that same ID for usage records,
+    logs, and stream events means a client can trace one request end-to-end.
+    """
+    return getattr(request.state, "request_id", None) or new_request_id()
+
+
 def log_request(
     request_id: str,
     user_id: str,
@@ -103,6 +114,7 @@ def log_request(
     estimated_cost_usd: float,
     errors: Optional[list[str]] = None,
     warnings: Optional[list[str]] = None,
+    cache_status: Optional[str] = None,
 ) -> None:
     """Log a completed request. Never logs prompt content."""
     global _requests_today
@@ -124,6 +136,7 @@ def log_request(
             "estimated_cost_usd": round(estimated_cost_usd, 6),
             "errors": errors or [],
             "warnings": warnings or [],
+            "cache_status": cache_status,
         },
     )
 
@@ -313,7 +326,7 @@ def _read_rss_bytes() -> Optional[int]:
 
         return int(psutil.Process(os.getpid()).memory_info().rss)
     except Exception:
-        pass
+        logger.warning("Failed to read RSS bytes via psutil", exc_info=True)
 
     status_path = Path("/proc/self/status")
     if not status_path.exists():
@@ -326,6 +339,7 @@ def _read_rss_bytes() -> Optional[int]:
                     # VmRSS is reported in kilobytes.
                     return int(parts[1]) * 1024
     except Exception:
+        logger.warning("Failed to read VmRSS from /proc/self/status", exc_info=True)
         return None
     return None
 
@@ -342,6 +356,7 @@ def _read_open_fd_count() -> Optional[int]:
     try:
         return sum(1 for entry in fd_dir.iterdir())
     except Exception:
+        logger.warning("Failed to count open file descriptors", exc_info=True)
         return None
 
 
@@ -350,6 +365,7 @@ def _read_cpu_count() -> Optional[int]:
     try:
         return os.cpu_count()
     except Exception:
+        logger.warning("Failed to read CPU count", exc_info=True)
         return None
 
 
@@ -372,7 +388,7 @@ def get_health_data(db_connected: bool) -> dict:
     }
 
 
-def get_health_data_detailed(db_connected: bool) -> dict:
+def get_health_data_detailed(db_connected: bool, request_id: str | None = None) -> dict:
     """Authenticated, operator-facing health payload.
 
     Returns the public fields plus app version, process uptime, and the
@@ -393,6 +409,7 @@ def get_health_data_detailed(db_connected: bool) -> dict:
     uptime = int(time.time() - _app_start_time)
     return {
         **get_health_data(db_connected),
+        "request_id": request_id,
         "version": settings.app_version,
         "uptime_seconds": uptime,
         "worker_pid": os.getpid(),

@@ -132,6 +132,184 @@ def build_report_context_from_row(
     }
 
 
+# Tags + URL schemes that we strip from rendered markdown output. The
+# markdown library's default mode allows raw HTML, so a final_answer
+# produced by an LLM under prompt-injection (or a benign model
+# misfire) could include <script>, <iframe>, javascript: links, or
+# on* event handlers. WeasyPrint (the PDF path) ignores scripts, but
+# write_pdf_or_html falls back to raw text/html when WeasyPrint
+# fails — the file is downloaded as report.html with
+# Content-Disposition: attachment, and a user who opens it in a
+# browser would execute any embedded payload (self-XSS on the
+# user's own report, low severity, but a free fix).
+_DANGEROUS_TAG_NAMES = frozenset({
+    "script", "iframe", "object", "embed", "applet", "frame", "frameset",
+    "base", "form", "input", "button", "textarea", "select",
+    "style", "link", "meta",
+})
+# Void elements per the HTML5 spec — the parser does not emit an
+# end tag for these, so we must drop them on the starttag callback
+# without entering a skip-depth region.
+_VOID_DANGEROUS_TAGS = frozenset({"embed", "input", "link", "meta", "base"})
+_DANGEROUS_ATTR_PREFIXES = ("on",)
+_DANGEROUS_URL_SCHEMES = frozenset({
+    "javascript:", "vbscript:", "data:text/html", "data:application/xhtml",
+})
+
+
+def _strip_dangerous_html(html_str: str) -> str:
+    """Post-process rendered markdown to remove active content.
+
+    Uses the stdlib html.parser so we don't pull in bleach/nh3. The
+    pass is intentionally conservative: it never re-emits a tag we
+    don't recognize as safe, and it never re-emits an attribute whose
+    value starts with a dangerous URL scheme. The two known false
+    positives — inline math using <script type="math/tex"> and CSS in
+    <style> — are not in the answer-md surface (this sanitizer only
+    touches the agent's free-form answer text, not the document
+    shell), so stripping them is the right call.
+    """
+    import re
+    from html.parser import HTMLParser
+
+    # Fast path: if none of the dangerous tokens are present at all
+    # (the common case for a well-behaved LLM answer), skip the parse
+    # entirely and return the original string.
+    if not any(tok in html_str for tok in (
+        "<script", "<iframe", "<object", "<embed", "<style",
+        "<form", "<base", "<link", "<meta", "javascript:", "vbscript:",
+        " onerror=", " onload=", " onclick=", " onmouseover=",
+    )):
+        return html_str
+
+    dangerous_tags = _DANGEROUS_TAG_NAMES
+    void_dangerous_tags = _VOID_DANGEROUS_TAGS
+    dangerous_attr_prefixes = _DANGEROUS_ATTR_PREFIXES
+    dangerous_url_schemes = _DANGEROUS_URL_SCHEMES
+
+    # Compile the dangerous-attribute regex once. Matches any attribute
+    # whose name starts with one of the prefixes (currently just "on")
+    # or whose value starts with a dangerous URL scheme.
+    attr_re = re.compile(
+        r'\s+(on[a-z]+|'
+        + "|".join(re.escape(s) for s in sorted(dangerous_url_schemes))
+        + r')="[^"]*"',
+        re.IGNORECASE,
+    )
+    # Match href/src that start with a dangerous scheme (with or
+    # without quotes, =).
+    href_re = re.compile(
+        r'\s+(href|src)\s*=\s*["\']?\s*('
+        + "|".join(re.escape(s) for s in sorted(dangerous_url_schemes))
+        + r")[^\"'\s>]*",
+        re.IGNORECASE,
+    )
+
+    class _Scrubber(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self._skip_depth = 0
+            self._out: list[str] = []
+
+        def _attrs(self, attrs: list[tuple[str, Optional[str]]]) -> list[tuple[str, Optional[str]]]:
+            cleaned: list[tuple[str, Optional[str]]] = []
+            for name, value in attrs:
+                if name is None:
+                    continue
+                lname = name.lower()
+                if lname.startswith(dangerous_attr_prefixes):
+                    continue
+                if value is None:
+                    cleaned.append((name, value))
+                    continue
+                lval = value.lstrip().lower()
+                if any(lval.startswith(scheme) for scheme in dangerous_url_schemes):
+                    continue
+                cleaned.append((name, value))
+            return cleaned
+
+        def _format_attr(self, name: str, value: Optional[str]) -> str:
+            if value is None:
+                return f" {name}"
+            return f' {name}="{html.escape(value, quote=True)}"'
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, Optional[str]]]) -> None:
+            ltag = tag.lower()
+            # Void dangerous elements (embed, input, link, meta, base):
+            # the parser will not send a matching end tag, so dropping
+            # them on the starttag callback is the only correct path.
+            if ltag in void_dangerous_tags:
+                return
+            # Non-void dangerous elements: enter skip mode so the
+            # parser's end tag (and any inner content) is also dropped.
+            if self._skip_depth > 0 or ltag in dangerous_tags:
+                self._skip_depth += 1
+                return
+            cleaned = self._attrs(attrs)
+            self._out.append(
+                f"<{ltag}{''.join(self._format_attr(n, v) for n, v in cleaned)}>"
+            )
+
+        def handle_endtag(self, tag: str) -> None:
+            ltag = tag.lower()
+            if ltag in dangerous_tags and ltag not in void_dangerous_tags:
+                # Match the starttag's skip-depth increment for
+                # non-void dangerous elements.
+                if self._skip_depth > 0:
+                    self._skip_depth -= 1
+                return
+            if self._skip_depth > 0:
+                return
+            self._out.append(f"</{ltag}>")
+
+        def handle_startendtag(self, tag: str, attrs: list[tuple[str, Optional[str]]]) -> None:
+            ltag = tag.lower()
+            if self._skip_depth > 0 or ltag in dangerous_tags:
+                return
+            cleaned = self._attrs(attrs)
+            self._out.append(
+                f"<{ltag}{''.join(self._format_attr(n, v) for n, v in cleaned)}/>"
+            )
+
+        def handle_data(self, data: str) -> None:
+            if self._skip_depth > 0:
+                return
+            self._out.append(html.escape(data, quote=False))
+
+        def get_data(self) -> str:
+            return "".join(self._out)
+
+    scrubber = _Scrubber()
+    try:
+        scrubber.feed(html_str)
+        scrubber.close()
+        result = scrubber.get_data()
+    except Exception:
+        # If the parser itself fails (malformed HTML), fall back to a
+        # regex-only scrub. This is the worst-case path: strip known
+        # dangerous tags + on* handlers + dangerous URL schemes.
+        logger.warning("HTML parser failed during markdown scrub, falling back to regex", exc_info=True)
+        result = html_str
+        # Remove dangerous open + close tags and their content.
+        for tag in ("script", "iframe", "object", "embed", "style", "form", "base"):
+            result = re.sub(
+                rf"<{tag}\b[^>]*>.*?</{tag}>",
+                "",
+                result,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            result = re.sub(
+                rf"<{tag}\b[^>]*/?>",
+                "",
+                result,
+                flags=re.IGNORECASE,
+            )
+        result = attr_re.sub("", result)
+        result = href_re.sub("", result)
+
+    return result
+
+
 def _markdown_answer_html(plain: str) -> str:
     raw = (plain or "").strip()
     if not raw:
@@ -139,8 +317,10 @@ def _markdown_answer_html(plain: str) -> str:
     try:
         body = markdown_lib.markdown(raw, extensions=["tables", "fenced_code"])
     except Exception:
+        logger.warning("Failed to render markdown, returning escaped plain text", exc_info=True)
         return f"<p>{html.escape(raw)}</p>"
-    return f'<div class="answer-md">{body}</div>'
+    safe_body = _strip_dangerous_html(body)
+    return f'<div class="answer-md">{safe_body}</div>'
 
 
 def _answer_html(ctx: dict[str, Any]) -> str:

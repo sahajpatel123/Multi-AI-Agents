@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from arena.core.datetime_utils import utcnow_naive
 from arena.db_models import SavedResponse, UserTier
 
 
@@ -165,6 +166,54 @@ async def test_min_score_rejects_out_of_range(app_client, make_user):
         "/api/saved?min_score=200", headers=_pro_headers(user)
     )
     assert res.status_code == 422
+
+
+# ─── Max Score ─────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_max_score_filter(app_client, make_user, db_session):
+    user = make_user(email="filter-max-score@test.com", tier=UserTier.PLUS)
+    db_session.add(_seed(db_session, user_id=user.id, prompt="a", score=50))
+    db_session.add(_seed(db_session, user_id=user.id, prompt="b", score=85))
+    db_session.add(_seed(db_session, user_id=user.id, prompt="c", score=95))
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved?max_score=80", headers=_pro_headers(user)
+    )
+    body = res.json()
+    prompts = {item["prompt"] for item in body["items"]}
+    assert prompts == {"a"}
+
+
+@pytest.mark.asyncio
+async def test_max_score_rejects_out_of_range(app_client, make_user):
+    user = make_user(email="filter-bad-max-score@test.com", tier=UserTier.PLUS)
+    res = await app_client.get(
+        "/api/saved?max_score=200", headers=_pro_headers(user)
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_score_range_filter(app_client, make_user, db_session):
+    """Test filtering with both min_score and max_score."""
+    user = make_user(email="filter-score-range@test.com", tier=UserTier.PLUS)
+    db_session.add(_seed(db_session, user_id=user.id, prompt="a", score=50))
+    db_session.add(_seed(db_session, user_id=user.id, prompt="b", score=75))
+    db_session.add(_seed(db_session, user_id=user.id, prompt="c", score=85))
+    db_session.add(_seed(db_session, user_id=user.id, prompt="d", score=95))
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved?min_score=60&max_score=90", headers=_pro_headers(user)
+    )
+    body = res.json()
+    prompts = {item["prompt"] for item in body["items"]}
+    assert prompts == {"b", "c"}
+    assert body["filters"]["min_score"] == 60
+    assert body["filters"]["max_score"] == 90
 
 
 # ─── Sort ───────────────────────────────────────────────────────────────────
@@ -414,3 +463,75 @@ async def test_bulk_delete_requires_auth(app_client):
         json={"ids": [1]},
     )
     assert res.status_code == 401
+
+
+# ─── Pinned filter ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_pinned_filter_returns_only_pinned(app_client, make_user, db_session):
+    user = make_user(email="pin-filter@test.com", tier=UserTier.PLUS)
+    pinned = _seed(db_session, user_id=user.id, prompt="pinned-a")
+    pinned.pinned_at = utcnow_naive()
+    unpinned = _seed(db_session, user_id=user.id, prompt="unpinned-b")
+    db_session.add_all([pinned, unpinned])
+    db_session.commit()
+
+    res = await app_client.get("/api/saved?pinned=true", headers=_pro_headers(user))
+    assert res.status_code == 200
+    body = res.json()
+    prompts = {item["prompt"] for item in body["items"]}
+    assert prompts == {"pinned-a"}
+    assert body["filters"]["pinned"] is True
+
+
+@pytest.mark.asyncio
+async def test_unpinned_filter_returns_only_unpinned(app_client, make_user, db_session):
+    user = make_user(email="unpin-filter@test.com", tier=UserTier.PLUS)
+    pinned = _seed(db_session, user_id=user.id, prompt="pinned-a")
+    pinned.pinned_at = utcnow_naive()
+    unpinned = _seed(db_session, user_id=user.id, prompt="unpinned-b")
+    db_session.add_all([pinned, unpinned])
+    db_session.commit()
+
+    res = await app_client.get("/api/saved?pinned=false", headers=_pro_headers(user))
+    assert res.status_code == 200
+    prompts = {item["prompt"] for item in res.json()["items"]}
+    assert prompts == {"unpinned-b"}
+
+
+@pytest.mark.asyncio
+async def test_pinned_filter_composes_with_search_and_persona(
+    app_client, make_user, db_session
+):
+    user = make_user(email="pin-compose@test.com", tier=UserTier.PLUS)
+    pinned = _seed(
+        db_session,
+        user_id=user.id,
+        prompt="quantum pinned",
+        persona_id="analyst",
+    )
+    pinned.pinned_at = utcnow_naive()
+    unpinned = _seed(
+        db_session,
+        user_id=user.id,
+        prompt="quantum unpinned",
+        persona_id="analyst",
+    )
+    other_pinned = _seed(
+        db_session,
+        user_id=user.id,
+        prompt="bitcoin pinned",
+        persona_id="philosopher",
+    )
+    other_pinned.pinned_at = utcnow_naive()
+    db_session.add_all([pinned, unpinned, other_pinned])
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/saved?pinned=true&search=quantum&persona_id=analyst",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    prompts = {item["prompt"] for item in res.json()["items"]}
+    assert prompts == {"quantum pinned"}

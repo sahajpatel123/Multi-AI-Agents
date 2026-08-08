@@ -51,7 +51,7 @@ async def test_change_password_rejects_same_as_current(app_client, make_user):
         headers=_pro_headers(user),
     )
     assert res.status_code == 400
-    assert res.json()["detail"]["error"] == "new_password_must_differ"
+    assert res.json()["detail"]["error"] == "password_same"
 
 
 @pytest.mark.asyncio

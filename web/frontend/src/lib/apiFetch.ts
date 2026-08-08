@@ -2,21 +2,66 @@ import { getAccessToken, getRefreshToken, setTokens, clearTokens } from './token
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
 
+/** Per-request timeout (ms). Hung backends used to hang forever. */
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
 
-export type ApiFetchOptions = RequestInit & { skipAuthRefresh?: boolean };
+export type ApiFetchOptions = RequestInit & {
+  skipAuthRefresh?: boolean;
+  /** Per-request timeout in ms. Defaults to 30s. Pass 0 to disable. */
+  timeoutMs?: number;
+};
+
+/**
+ * Race a fetch against an AbortController-driven timeout. Without this,
+ * a hung backend (TCP open, no response) leaves the user staring at a
+ * spinner until the browser's default ~5min timeout fires.
+ *
+ * Exported so callers that need a timed fetch WITHOUT going through the
+ * apiFetch auth-refresh dance (e.g. the auth endpoints themselves,
+ * which deliberately skip refresh on 401) can still get the timeout
+ * protection.
+ */
+export async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+): Promise<Response> {
+  // Three exit paths: negative → disable (callers can opt out), 0 →
+  // disable, NaN/Infinity → disable (setTimeout would treat as 0 or
+  // max-int, neither is what the caller intended).
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return fetch(input, init);
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  // If the caller passed their own signal, abort ours when theirs fires.
+  const externalSignal = init.signal;
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
 
 async function doRefresh(): Promise<boolean> {
   const refresh = getRefreshToken();
   if (!refresh) return false;
 
   try {
-    const r = await fetch(`${API}/api/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refresh }),
-    });
+    const r = await fetchWithTimeout(
+      `${API}/api/auth/refresh`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refresh }),
+      },
+      DEFAULT_TIMEOUT_MS,
+    );
     if (!r.ok) {
       clearTokens();
       return false;
@@ -80,20 +125,32 @@ const AUTH_PATHS_NO_REFRESH = [
   '/api/auth/logout',
 ];
 
+/**
+ * Exact-match check that ignores trailing slashes and query strings.
+ * Substring matching (the previous behaviour) would treat a future
+ * endpoint like /api/auth/login-history as a no-refresh path and
+ * leave the user locked out.
+ */
+function isAuthPathNoRefresh(path: string): boolean {
+  const cleanPath = path.split('?')[0].replace(/\/+$/, '');
+  return AUTH_PATHS_NO_REFRESH.some((skipPath) => cleanPath === skipPath);
+}
+
 export async function apiFetch(path: string, options: ApiFetchOptions = {}): Promise<Response> {
-  const { skipAuthRefresh, ...fetchOpts } = options;
+  const { skipAuthRefresh, timeoutMs = DEFAULT_TIMEOUT_MS, ...fetchOpts } = options;
   const token = getAccessToken();
   const headers = mergeHeaders(token, fetchOpts);
 
-  const res = await fetch(`${API}${path}`, {
-    ...fetchOpts,
-    headers,
-  });
+  const res = await fetchWithTimeout(
+    `${API}${path}`,
+    { ...fetchOpts, headers },
+    timeoutMs,
+  );
 
   if (
     res.status === 401 &&
     !skipAuthRefresh &&
-    !AUTH_PATHS_NO_REFRESH.some(skipPath => path.includes(skipPath))
+    !isAuthPathNoRefresh(path)
   ) {
     if (!isRefreshing) {
       isRefreshing = true;
@@ -107,10 +164,11 @@ export async function apiFetch(path: string, options: ApiFetchOptions = {}): Pro
     if (refreshed) {
       const newToken = getAccessToken();
       const retryHeaders = mergeHeaders(newToken, fetchOpts);
-      return fetch(`${API}${path}`, {
-        ...fetchOpts,
-        headers: retryHeaders,
-      });
+      return fetchWithTimeout(
+        `${API}${path}`,
+        { ...fetchOpts, headers: retryHeaders },
+        timeoutMs,
+      );
     }
 
     window.dispatchEvent(new Event('auth:session-expired'));

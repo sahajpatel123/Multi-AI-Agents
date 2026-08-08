@@ -14,11 +14,28 @@ from arena.core.feedback_calibrator import (
 class _Q:
     def __init__(self, rows):
         self._rows = rows
+        self._group_by: list = []
 
     def filter(self, *a, **k):
         return self
 
+    def order_by(self, *a, **k):
+        return self
+
+    def limit(self, *a, **k):
+        return self
+
+    def group_by(self, *a, **k):
+        self._group_by.extend(a)
+        return self
+
     def all(self):
+        if self._group_by:
+            from collections import Counter
+            counts: Counter[str] = Counter()
+            for r in self._rows:
+                counts[r.verdict] += 1
+            return list(counts.items())
         return list(self._rows)
 
 
@@ -73,3 +90,4 @@ def test_calibration_adjustment_and_reliable_flag():
     # wrong_rate=0.4 → -6; partial_rate=0.2 → -1.4 → round(-7.4) = -7
     assert out["adjustment"] == -7
     assert out["wrong_rate"] == 40
+    assert out["partial_rate"] == 20

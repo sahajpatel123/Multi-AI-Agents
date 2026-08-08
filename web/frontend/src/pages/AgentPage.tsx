@@ -15,6 +15,8 @@ import {
   LocalExecutionRequiredError,
   addRoomTask,
   agentDetailMessage,
+  cancelAgentOrchestration,
+  cancelAgentTask,
   challengeAgentAnswer,
   createRoom,
   crossPollinateAgentAnswer,
@@ -746,8 +748,11 @@ export function AgentPage() {
   const [crossPollinateBusy, setCrossPollinateBusy] = useState(false);
   /** Bumped to cancel in-flight poll loops (run / refine / bridge). */
   const runGenerationRef = useRef(0);
+  /** Task id currently being polled, so Stop can cancel it on the backend. */
+  const activeTaskIdRef = useRef<string | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCopied, setErrorCopied] = useState(false);
   const [conduraCtaOpen, setConduraCtaOpen] = useState(false);
   const [conduraCtaMessage, setConduraCtaMessage] = useState(
     'Arena cannot control your computer from the browser. Install Condura (free, local-first) for on-device actions.',
@@ -1375,15 +1380,23 @@ export function AgentPage() {
 
   const pollAgentTaskUntilDone = useCallback(async (taskId: string) => {
     const generation = runGenerationRef.current;
+    activeTaskIdRef.current = taskId;
+    const clearActiveTask = () => {
+      if (activeTaskIdRef.current === taskId) activeTaskIdRef.current = null;
+    };
     const maxAttempts = 60;
     for (let attempts = 0; attempts < maxAttempts; attempts++) {
       if (runGenerationRef.current !== generation) {
         // User stopped (or a newer run superseded this poll).
+        clearActiveTask();
         return;
       }
       try {
         const statusData = await getAgentStatus(taskId);
-        if (runGenerationRef.current !== generation) return;
+        if (runGenerationRef.current !== generation) {
+          clearActiveTask();
+          return;
+        }
         const stages = statusData.stages || {};
 
         const next: Partial<Record<StageId, string>> = {};
@@ -1405,11 +1418,25 @@ export function AgentPage() {
         setCompletedStages(STAGE_ORDER.filter((s) => stages[s]?.status === 'complete'));
 
         const st = String(statusData.status || '').toLowerCase();
+        if (st === 'cancelled') {
+          clearActiveTask();
+          setIsRunning(false);
+          setIsRefining(false);
+          setCurrentStage('done');
+          setToastMessage('Task cancelled.');
+          return;
+        }
         if (st === 'complete' || st === 'failed') {
-          if (runGenerationRef.current !== generation) return;
+          if (runGenerationRef.current !== generation) {
+            clearActiveTask();
+            return;
+          }
           try {
             const resultData = (await getAgentResult(taskId)) as AgentResult;
-            if (runGenerationRef.current !== generation) return;
+            if (runGenerationRef.current !== generation) {
+              clearActiveTask();
+              return;
+            }
             if (resultData) {
               setResult(resultData);
               setCompletedStages([...STAGE_ORDER]);
@@ -1424,19 +1451,27 @@ export function AgentPage() {
               }
             }
           } catch (resultErr) {
-            if (runGenerationRef.current !== generation) return;
+            if (runGenerationRef.current !== generation) {
+              clearActiveTask();
+              return;
+            }
             setError(resultErr instanceof Error ? resultErr.message : 'Could not load agent result');
           }
           setIsRunning(false);
           setIsRefining(false);
+          clearActiveTask();
           return;
         }
       } catch (pollErr) {
-        if (runGenerationRef.current !== generation) return;
+        if (runGenerationRef.current !== generation) {
+          clearActiveTask();
+          return;
+        }
         if (pollErr instanceof ApiError && (pollErr.status === 401 || pollErr.status === 403)) {
           setError(pollErr.message || 'Authentication required');
           setIsRunning(false);
           setIsRefining(false);
+          clearActiveTask();
           return;
         }
         await wait(5000);
@@ -1444,19 +1479,57 @@ export function AgentPage() {
       }
       await wait(3000);
     }
-    if (runGenerationRef.current !== generation) return;
+    if (runGenerationRef.current !== generation) {
+      clearActiveTask();
+      return;
+    }
     setError('Task timed out. Please try again.');
     setIsRunning(false);
     setIsRefining(false);
+    clearActiveTask();
   }, []);
 
   const handleStopAgentWork = useCallback(() => {
     runGenerationRef.current += 1;
+    const taskId = activeTaskIdRef.current;
+    activeTaskIdRef.current = null;
+    const orchId = orchActiveId;
+    setOrchActiveId(null);
+    setOrchPoll(null);
     setIsRunning(false);
     setIsRefining(false);
     setIsChallengingAnswer(false);
     setToastMessage('Stopped.');
-  }, []);
+    if (orchId) {
+      // Multi-task runs are polled as an orchestration rather than per
+      // task, so Stop must ask the backend to cancel every child pipeline
+      // at once — otherwise the whole run keeps spending token budget.
+      void cancelAgentOrchestration(orchId)
+        .then((res) => {
+          if (res.status === 'cancelled') {
+            setToastMessage('Tasks cancelled.');
+          }
+        })
+        .catch(() => {
+          // Best-effort, same contract as task cancel: Stop must never
+          // fail on a network hiccup; the client poll is already gone.
+        });
+    } else if (taskId) {
+      // Stop used to only abandon the client poll while the backend kept
+      // running every remaining stage and spending token budget. Ask the
+      // backend to stop at the next stage boundary too.
+      void cancelAgentTask(taskId)
+        .then((res) => {
+          if (res.status === 'cancelling' || res.status === 'cancelled') {
+            setToastMessage('Task cancelled.');
+          }
+        })
+        .catch(() => {
+          // The task may have just finished server-side; the poll is
+          // already stopped either way. Never fail Stop on a network hiccup.
+        });
+    }
+  }, [orchActiveId]);
 
   useEffect(() => {
     if (!bridgeMeta?.taskId || !hasAgentAccess || authLoading) return;
@@ -1506,6 +1579,7 @@ export function AgentPage() {
     );
     if (t.length < 10 || isRunning) return;
     if (selectedTemplate && !allTemplateSlotsFilled) return;
+    activeTaskIdRef.current = null;
     runGenerationRef.current += 1;
     setError(null);
     setBridgeMeta(null);
@@ -1598,6 +1672,7 @@ export function AgentPage() {
     if (!hasAgentAccess) return;
     const qs = multiTasks.slice(0, activeTaskCount).map((t) => t.trim());
     if (qs.length !== activeTaskCount || qs.some((q) => q.length < 10) || isRunning) return;
+    activeTaskIdRef.current = null;
     runGenerationRef.current += 1;
     try {
       sessionStorage.removeItem('pending_room_slug');
@@ -1646,6 +1721,13 @@ export function AgentPage() {
             setOrchActiveId(null);
             setOrchPoll(null);
             void loadTaskHistory();
+          }
+        } else if (data.status === 'cancelled') {
+          if (!cancelled) {
+            setToastMessage('Multi-task run cancelled.');
+            setIsRunning(false);
+            setOrchActiveId(null);
+            setOrchPoll(null);
           }
         } else if (data.status === 'failed') {
           if (!cancelled) {
@@ -1800,6 +1882,7 @@ export function AgentPage() {
       );
       return;
     }
+    activeTaskIdRef.current = null;
     runGenerationRef.current += 1;
     // Clear only after we know we'll send; restore on failure so the draft isn't lost.
     setFollowUp('');
@@ -2592,6 +2675,7 @@ export function AgentPage() {
 
   const handleChallengeAnswer = useCallback(async () => {
     if (!result || isChallengingAnswer) return;
+    activeTaskIdRef.current = null;
     const generation = ++runGenerationRef.current;
     setChallengesVisible(true);
     setIsChallengingAnswer(true);
@@ -6489,6 +6573,27 @@ export function AgentPage() {
                     }}
                   >
                     Edit compose
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      setError(null);
+                      void handleRunTask();
+                    }}
+                  >
+                    Try again
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      void copyToClipboard(error);
+                      setErrorCopied(true);
+                      window.setTimeout(() => setErrorCopied(false), 1500);
+                    }}
+                  >
+                    {errorCopied ? 'Copied' : 'Copy error'}
                   </button>
                 </div>
               </div>

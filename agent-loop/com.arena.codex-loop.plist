@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.arena.codex-loop</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/sahajpatel/Code/Multi-Agents/agent-loop/run_loop.py</string>
+        <string>--daemon</string>
+        <string>--workdir</string>
+        <string>/Users/sahajpatel/Code/Multi-Agents</string>
+        <string>--branch</string>
+        <string>main</string>
+        <string>--interval</string>
+        <string>300</string>
+        <string>--max-attempts</string>
+        <string>2</string>
+        <string>--timeout</string>
+        <string>2700</string>
+        <string>--sandbox</string>
+        <string>danger-full-access</string>
+        <string>--codex</string>
+        <string>/Users/sahajpatel/.local/bin/codex</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/sahajpatel/Code/Multi-Agents</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>/Users/sahajpatel/Code/Multi-Agents/agent-loop/logs/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/sahajpatel/Code/Multi-Agents/agent-loop/logs/launchd.err.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>/Users/sahajpatel</string>
+        <key>PATH</key>
+        <string>/Users/sahajpatel/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>

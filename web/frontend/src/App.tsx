@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PromptInput } from './components/PromptInput';
+import { FollowUpBar } from './components/FollowUpBar';
+import { FollowUpSuggestions } from './components/FollowUpSuggestions';
+import { ReRunRoundButton } from './components/ReRunRoundButton';
 import { AgentCard } from './components/AgentCard';
 import { DebateMode } from './components/DebateMode';
 import { DiscussMode } from './components/DiscussMode';
@@ -23,12 +26,22 @@ import {
   getSavedResponses,
   saveResponse,
   deleteSavedResponse,
+  setSavedResponsePinned,
+  setSavedResponsesPinned,
   verifyArenaAnswerInAgent,
   extractStreamingPreview,
+  suggestFollowUps,
 } from './api';
 import { copyToClipboard } from './lib/clipboard';
-import { downloadMarkdownFile } from './lib/downloadTextFile';
-import { formatArenaExport, formatArenaWinnerExport } from './lib/arenaExport';
+import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from './lib/downloadTextFile';
+import { safeLocalStorage } from './lib/safeStorage';
+import {
+  formatArenaExport,
+  formatArenaCsvExport,
+  formatArenaJsonExport,
+  formatArenaWinnerExport,
+} from './lib/arenaExport';
+import { buildFollowUpContext } from './lib/followUpContext';
 import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
 import { isScrollNearBottom, shouldAutoScrollChat } from './lib/chatScroll';
 import { scrollBehavior } from './lib/motion';
@@ -59,6 +72,7 @@ import {
   ScoredAgent,
   SessionData,
   SessionTurn,
+  PromptContextItem,
 } from './types';
 
 const AGENT_IDS = ['agent_1', 'agent_2', 'agent_3', 'agent_4'] as const;
@@ -90,7 +104,14 @@ function App() {
   const { openModal: openProfileModal } = useProfileModal();
   const [exportCopied, setExportCopied] = useState(false);
   const [exportDownloaded, setExportDownloaded] = useState(false);
+  const [arenaJsonDownloaded, setArenaJsonDownloaded] = useState(false);
+  const [arenaJsonCopied, setArenaJsonCopied] = useState(false);
+  const [arenaCsvDownloaded, setArenaCsvDownloaded] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
+  const [winnerDownloaded, setWinnerDownloaded] = useState(false);
+  const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
+  const [followUpSuggestionsSource, setFollowUpSuggestionsSource] = useState<'llm' | 'fallback'>('llm');
   const [recentPrompts, setRecentPrompts] = useState<RecentPrompt[]>(() => loadRecentPrompts());
   const quotaExhausted = messagesRemaining <= 0;
   const personaIds = panel.map((persona) => persona.id);
@@ -214,6 +235,13 @@ function App() {
   const agentCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const promptAbortRef = useRef<AbortController | null>(null);
   const discussAbortRef = useRef<AbortController | null>(null);
+  const lastRequestIdRef = useRef<string | null>(null);
+  const focusedRequestIdRef = useRef<string | null>(null);
+  const focusedRetryRef = useRef<{ message: string; historyBefore: DiscussChatMessage[] } | null>(null);
+  /** Context of the most recently started Arena round, so re-run replays it faithfully. */
+  const lastRoundContextRef = useRef<PromptContextItem[] | undefined>(undefined);
+  /** Prevents a double-click from starting two re-run rounds in the same tick. */
+  const rerunInFlightRef = useRef(false);
 
   const flushStreamPreviews = useCallback(() => {
     const next: Record<string, string> = {};
@@ -236,7 +264,7 @@ function App() {
 
   // Session restore on mount
   useEffect(() => {
-    const storedSessionId = localStorage.getItem('arena_session_id');
+    const storedSessionId = safeLocalStorage.getItem('arena_session_id');
     if (!storedSessionId) return;
     void getSession(storedSessionId)
       .then((data) => {
@@ -245,11 +273,11 @@ function App() {
           const lastTurn = data.turns[data.turns.length - 1];
           loadTurn(lastTurn);
         } else {
-          localStorage.removeItem('arena_session_id');
+          safeLocalStorage.removeItem('arena_session_id');
         }
       })
       .catch(() => {
-        localStorage.removeItem('arena_session_id');
+        safeLocalStorage.removeItem('arena_session_id');
       });
   }, []);
 
@@ -327,7 +355,7 @@ function App() {
     }));
 
     const promptResponse: PromptResponse = {
-      session_id: sessionData?.session_id || localStorage.getItem('arena_session_id') || '',
+      session_id: sessionData?.session_id || safeLocalStorage.getItem('arena_session_id') || '',
       prompt: turn.prompt,
       prompt_category: turn.prompt_category || '',
       winner: turn.agent_responses[turn.winner_id],
@@ -345,6 +373,9 @@ function App() {
     setCurrentPrompt(turn.prompt);
     setActiveTurnId(turn.turn_id);
     setPhase('done');
+    // A loaded turn has no live follow-up context; re-running it must replay
+    // the prompt alone rather than stale context from a previous round.
+    lastRoundContextRef.current = undefined;
   };
 
   const getResponseKey = useCallback((turnId: string, agentId: string) => `${turnId}:${agentId}`, []);
@@ -475,6 +506,23 @@ function App() {
     }
   }, [buildArenaWinnerMarkdown]);
 
+  const handleDownloadWinner = useCallback(() => {
+    const md = buildArenaWinnerMarkdown();
+    if (!md) return;
+    const winnerName = response?.winner_agent_id
+      ? resolveArenaPersona(response.winner_agent_id).name
+      : 'winner';
+    const stem = `arena-winner-${winnerName}-${(response?.prompt || 'take').slice(0, 40)}`;
+    const ok = downloadMarkdownFile(md, stem);
+    if (ok) {
+      setWinnerDownloaded(true);
+      window.setTimeout(() => setWinnerDownloaded(false), 1800);
+      void track('arena_download_winner');
+    } else {
+      setError('Could not download the winner. Try Copy winner instead.');
+    }
+  }, [buildArenaWinnerMarkdown, resolveArenaPersona, response?.prompt, response?.winner_agent_id]);
+
   const handleDownloadAllTakes = useCallback(() => {
     const md = buildArenaComparisonMarkdown();
     if (!md) return;
@@ -488,6 +536,70 @@ function App() {
       setError('Could not download the comparison. Try Copy all takes instead.');
     }
   }, [buildArenaComparisonMarkdown, response?.prompt]);
+
+  const handleDownloadArenaJson = useCallback(() => {
+    if (!response) return;
+    const json = formatArenaJsonExport(response, resolveArenaPersona);
+    const stem = `arena-${(response.prompt || 'round').slice(0, 48)}`;
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate(stem)}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    if (ok) {
+      setArenaJsonDownloaded(true);
+      window.setTimeout(() => setArenaJsonDownloaded(false), 1800);
+      void track('arena_download_json');
+    } else {
+      setError('Could not download the JSON. Try Copy all takes instead.');
+    }
+  }, [resolveArenaPersona, response]);
+
+  const handleDownloadArenaCsv = useCallback(() => {
+    if (!response) return;
+    const csv = formatArenaCsvExport(response, resolveArenaPersona);
+    const stem = `arena-${(response.prompt || 'round').slice(0, 48)}`;
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate(stem)}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    if (ok) {
+      setArenaCsvDownloaded(true);
+      window.setTimeout(() => setArenaCsvDownloaded(false), 1800);
+      void track('arena_download_csv');
+    } else {
+      setError('Could not download the CSV. Try Copy all takes instead.');
+    }
+  }, [resolveArenaPersona, response]);
+
+  const handleCopyArenaJson = useCallback(async () => {
+    if (!response) return;
+    const json = formatArenaJsonExport(response, resolveArenaPersona);
+    const ok = await copyToClipboard(json);
+    if (ok) {
+      setArenaJsonCopied(true);
+      window.setTimeout(() => setArenaJsonCopied(false), 1800);
+      void track('arena_copy_json');
+    } else {
+      setError('Could not copy the JSON. Try Copy all takes instead.');
+    }
+  }, [resolveArenaPersona, response]);
+
+  const handleCopyPrompt = useCallback(async () => {
+    if (!response) return;
+    const prompt = (response.prompt || '').trim();
+    if (!prompt) {
+      setError('This round has no question to copy.');
+      return;
+    }
+    const ok = await copyToClipboard(prompt);
+    if (ok) {
+      setPromptCopied(true);
+      window.setTimeout(() => setPromptCopied(false), 1800);
+      void track('arena_copy_prompt');
+    } else {
+      setError('Could not copy the question. Try selecting it manually.');
+    }
+  }, [response]);
 
   const handleLikeResponse = useCallback((scoredAgent: ScoredAgent) => {
     if (!activeTurnId) return;
@@ -646,9 +758,80 @@ function App() {
     }
   }, [activeTurnId, sessionData]);
 
+  const handleToggleSavedPin = useCallback(
+    async (item: SavedResponseItem, pinned: boolean) => {
+      try {
+        const result = await setSavedResponsePinned(Number(item.id), pinned);
+        setSavedItems((current) =>
+          current.map((saved) =>
+            saved.id === item.id
+              ? {
+                  ...saved,
+                  pinned: result.pinned,
+                  pinned_at: result.pinned_at ?? (pinned ? new Date().toISOString() : null),
+                }
+              : saved,
+          ),
+        );
+        void track(pinned ? 'saved_take_pinned' : 'saved_take_unpinned', undefined, item.agent_id);
+      } catch (err) {
+        const detail =
+          err instanceof Error && err.message
+            ? err.message
+            : pinned
+              ? "Couldn't pin take — try again."
+              : "Couldn't unpin take — try again.";
+        setSaveSyncMessage(detail);
+      }
+    },
+    [],
+  );
+
+  const handleBulkPinSaved = useCallback(
+    async (ids: number[], pinned: boolean) => {
+      const appliedIds = new Set<number>();
+      let pinLimitReached = false;
+      try {
+        const result = await setSavedResponsesPinned(ids, pinned);
+        result.ids.forEach((id) => appliedIds.add(Number(id)));
+        pinLimitReached = result.pin_limit_reached;
+        setSavedItems((current) =>
+          current.map((saved) =>
+            appliedIds.has(Number(saved.id))
+              ? {
+                  ...saved,
+                  pinned,
+                  pinned_at: pinned ? saved.pinned_at ?? new Date().toISOString() : null,
+                }
+              : saved,
+          ),
+        );
+        if (pinLimitReached) {
+          setSaveSyncMessage(
+            pinned
+              ? 'Pin limit reached — some shown takes were not pinned.'
+              : null,
+          );
+        }
+        void track(pinned ? 'saved_takes_bulk_pinned' : 'saved_takes_bulk_unpinned', undefined);
+        return { applied: result.applied, pin_limit_reached: pinLimitReached };
+      } catch (err) {
+        const detail =
+          err instanceof Error && err.message
+            ? err.message
+            : pinned
+              ? "Couldn't pin shown takes — try again."
+              : "Couldn't unpin shown takes — try again.";
+        setSaveSyncMessage(detail);
+        throw err;
+      }
+    },
+    [],
+  );
+
   const handleNewChat = useCallback(async () => {
     void track('new_chat_clicked');
-    const currentSessionId = sessionData?.session_id || localStorage.getItem('arena_session_id');
+    const currentSessionId = sessionData?.session_id || safeLocalStorage.getItem('arena_session_id');
     if (user && currentSessionId) {
       try {
         await saveMemory(currentSessionId, 'new_chat');
@@ -688,12 +871,18 @@ function App() {
     setHighlightedAgentId(null);
     setPendingScrollTarget(null);
     setActiveTurnId(null);
+    setFollowUpSuggestions([]);
+    lastRoundContextRef.current = undefined;
     tokenBuffers.current = {};
     focusedTokenBuffer.current = '';
     setIsSidebarOpen(false);
   }, [sessionData, user]);
 
-  const handleSubmit = async (prompt: string) => {
+  const handleSubmit = async (
+    prompt: string,
+    followUpContext?: PromptContextItem[],
+    onStart?: () => void,
+  ) => {
     if (quotaExhausted) {
       showPlusUpgrade(
         isFree
@@ -703,6 +892,9 @@ function App() {
       return;
     }
 
+    onStart?.();
+    lastRoundContextRef.current = followUpContext ?? undefined;
+    lastRequestIdRef.current = null;
     setStressFromAgentBanner(false);
     setCrossPollinateSourceTaskId(null);
     setCrossPollinateIntelScore(null);
@@ -723,6 +915,7 @@ function App() {
     setCurrentResponses(null);
     setAnimateCurrentResponseBars(false);
     setExpandedAgent(null);
+    setFollowUpSuggestions([]);
     setCurrentPrompt(prompt);
     setDoneAgents(new Set());
     setStreamPreviews({});
@@ -740,7 +933,7 @@ function App() {
     tokenBuffers.current = {};
 
     // Pass existing session_id if available
-    const existingSessionId = sessionData?.session_id || localStorage.getItem('arena_session_id') || undefined;
+    const existingSessionId = sessionData?.session_id || safeLocalStorage.getItem('arena_session_id') || undefined;
 
     // Flush buffered tokens to React state ~20fps so cards feel alive without
     // re-rendering on every SSE token.
@@ -748,6 +941,9 @@ function App() {
 
     try {
       await streamPrompt(prompt, {
+        onRequestId: (data) => {
+          lastRequestIdRef.current = data.request_id;
+        },
         onPipeline: (data) => {
           if (abortController.signal.aborted) return;
           if (!data.passed) {
@@ -805,7 +1001,29 @@ function App() {
           setCrossPollinateIntelScore(null);
 
           // Save session ID to localStorage
-          localStorage.setItem('arena_session_id', data.session_id);
+          safeLocalStorage.setItem('arena_session_id', data.session_id);
+
+          // Best-effort: ask the panel for one-click follow-up suggestions.
+          // Never blocks the round — failures just hide the chips.
+          const verdicts = (data.all_responses || [])
+            .map((scored) =>
+              (scored.response?.one_liner || scored.response?.verdict || '').trim(),
+            )
+            .filter(Boolean);
+          void suggestFollowUps(data.prompt, verdicts, abortController.signal)
+            .then((result) => {
+              // A new round, reset, or unmount may have aborted this round —
+              // never let a stale response repopulate the chips.
+              if (abortController.signal.aborted) return;
+              setFollowUpSuggestions(result.suggestions || []);
+              setFollowUpSuggestionsSource(
+                result.source === 'fallback' ? 'fallback' : 'llm',
+              );
+            })
+            .catch(() => {
+              if (abortController.signal.aborted) return;
+              setFollowUpSuggestions([]);
+            });
 
           // Update session data with new turn using functional update
           const currentTimestamp = new Date().toISOString();
@@ -849,10 +1067,13 @@ function App() {
           if (abortController.signal.aborted) return;
           if (flushTimer.current) clearInterval(flushTimer.current);
           setStreamPreviews({});
-          setError(data.detail);
+          setFollowUpSuggestions([]);
+          const base = data.message || data.detail || 'Something went wrong';
+          const rid = lastRequestIdRef.current;
+          setError(rid ? `${base} (Request ID: ${rid})` : base);
           setPhase('idle');
         },
-      }, existingSessionId, personaIds, abortController.signal);
+      }, existingSessionId, personaIds, abortController.signal, followUpContext);
     } catch (err) {
       if (flushTimer.current) clearInterval(flushTimer.current);
       setStreamPreviews({});
@@ -862,6 +1083,7 @@ function App() {
         return;
       }
       const msg = err instanceof Error ? err.message : 'Something went wrong';
+      const rid = lastRequestIdRef.current;
       if (err instanceof DOMException && err.name === 'AbortError') {
         setPhase((prev) => (prev === 'pipeline' || prev === 'streaming' || prev === 'scoring' ? 'idle' : prev));
         return;
@@ -870,7 +1092,7 @@ function App() {
         setPhase((prev) => (prev === 'pipeline' || prev === 'streaming' || prev === 'scoring' ? 'idle' : prev));
         return;
       }
-      setError(msg);
+      setError(rid ? `${msg} (Request ID: ${rid})` : msg);
       setPhase('idle');
     }
   };
@@ -1100,11 +1322,13 @@ function App() {
     discussAbortRef.current = abortController;
 
     setFocusedChatError(null);
+    focusedRequestIdRef.current = null;
     setIsFocusedChatStreaming(true);
     setFocusedStreamingText('');
     focusedTokenBuffer.current = '';
 
     const currentHistory = focusedHistories[focusedAgentId] || [];
+    focusedRetryRef.current = { message: trimmed, historyBefore: currentHistory };
     setFocusedHistories((prev) => ({
       ...prev,
       [focusedAgentId]: [
@@ -1125,10 +1349,13 @@ function App() {
           conversation_history: currentHistory,
           original_verdict: focusedScored?.response.verdict || focusedAgentConfig?.oneLiner || '',
           original_prompt: response?.prompt || currentPrompt || 'General discussion',
-          session_id: response?.session_id || sessionData?.session_id || localStorage.getItem('arena_session_id') || undefined,
+          session_id: response?.session_id || sessionData?.session_id || safeLocalStorage.getItem('arena_session_id') || undefined,
           persona_ids: personaIds,
         },
         {
+          onRequestId: (data) => {
+            focusedRequestIdRef.current = data.request_id;
+          },
           onToken: (data) => {
             if (abortController.signal.aborted) return;
             focusedTokenBuffer.current += data.token;
@@ -1148,7 +1375,9 @@ function App() {
           onError: (data) => {
             if (abortController.signal.aborted) return;
             if (focusedFlushTimer.current) clearInterval(focusedFlushTimer.current);
-            setFocusedChatError(data.detail);
+            const base = data.message || data.detail || 'Something went wrong';
+            const rid = focusedRequestIdRef.current;
+            setFocusedChatError(rid ? `${base} (Request ID: ${rid})` : base);
             setIsFocusedChatStreaming(false);
           },
         },
@@ -1159,7 +1388,9 @@ function App() {
       if (abortController.signal.aborted) return;
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (err instanceof Error && err.name === 'AbortError') return;
-      setFocusedChatError(err instanceof Error ? err.message : 'Failed to message agent');
+      const base = err instanceof Error ? err.message : 'Failed to message agent';
+      const rid = focusedRequestIdRef.current;
+      setFocusedChatError(rid ? `${base} (Request ID: ${rid})` : base);
       setIsFocusedChatStreaming(false);
     }
   };
@@ -1170,6 +1401,48 @@ function App() {
       return;
     }
     void handleSubmit(prompt);
+  };
+
+  /** Re-use a saved take's prompt without clobbering a draft with empty text. */
+  const handleReuseSavedPrompt = (item: SavedResponseItem) => {
+    const prompt = (item.prompt || '').trim();
+    if (!prompt) return;
+    setPresetPrompt(prompt);
+    setPresetPromptNonce((prev) => prev + 1);
+    void track('saved_take_reused', undefined, item.agent_id);
+  };
+
+  /** Ask the whole panel a follow-up with the previous round as context. */
+  const handleFollowUpSubmit = (prompt: string) => {
+    if (!response) return;
+    const context = buildFollowUpContext(response, (agentId) => {
+      const persona = getPersonaForAgentId(agentId);
+      return persona?.name || AGENTS[agentId]?.name;
+    });
+    setFollowUpSuggestions([]);
+    if (context.length === 0) {
+      void handleSubmit(prompt);
+      return;
+    }
+    void handleSubmit(prompt, context);
+  };
+
+  /** Send a suggested follow-up through the same pipeline as the bar. */
+  const handleFollowUpSuggestionPick = (suggestion: string) => {
+    void track('arena_followup_suggestion_used');
+    setFollowUpSuggestions([]);
+    handleFollowUpSubmit(suggestion);
+  };
+
+  /** Replay the last completed round exactly: same prompt, same follow-up context. */
+  const handleReRunRound = () => {
+    if (rerunInFlightRef.current) return;
+    rerunInFlightRef.current = true;
+    void handleSubmit(currentPrompt, lastRoundContextRef.current, () => {
+      void track('arena_rerun_round');
+    }).finally(() => {
+      rerunInFlightRef.current = false;
+    });
   };
 
   const handleExamplePromptClick = (prompt: string) => {
@@ -1316,6 +1589,11 @@ function App() {
           onLeaderboardClick={openLeaderboard}
           savedItems={savedItems}
           onSavedItemClick={handleSavedItemClick}
+          onToggleSavedPin={(item, pinned) => {
+            void handleToggleSavedPin(item, pinned);
+          }}
+          onReuseSavedPrompt={handleReuseSavedPrompt}
+          onBulkPinSaved={handleBulkPinSaved}
         />
       )}
 
@@ -1393,7 +1671,7 @@ function App() {
               {isLoading || isStreaming || isFocusedChatStreaming ? (
                 <button
                   type="button"
-                  className="arena-btn arena-btn--ghost arena-btn--sm"
+                  className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                   onClick={handleStopGeneration}
                   title="Stop generating"
                   aria-label="Stop generating"
@@ -1410,7 +1688,16 @@ function App() {
                 <>
                   <button
                     type="button"
-                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => void handleCopyPrompt()}
+                    title="Copy the question as text"
+                    style={{ fontSize: 12 }}
+                  >
+                    {promptCopied ? 'Question copied' : 'Copy question'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => {
                       void handleExportWinner();
                     }}
@@ -1421,7 +1708,16 @@ function App() {
                   </button>
                   <button
                     type="button"
-                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => handleDownloadWinner()}
+                    title="Download the winning take as markdown"
+                    style={{ fontSize: 12 }}
+                  >
+                    {winnerDownloaded ? 'Winner saved' : 'Download winner'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => {
                       void handleExportAllTakes();
                     }}
@@ -1432,19 +1728,53 @@ function App() {
                   </button>
                   <button
                     type="button"
-                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => void handleCopyArenaJson()}
+                    title="Copy the full round as JSON"
+                    style={{ fontSize: 12 }}
+                  >
+                    {arenaJsonCopied ? 'JSON copied' : 'Copy JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => handleDownloadAllTakes()}
                     title="Download all four takes as a markdown file"
                     style={{ fontSize: 12 }}
                   >
                     {exportDownloaded ? 'Downloaded' : 'Download .md'}
                   </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => handleDownloadArenaJson()}
+                    title="Download the full round as a JSON file"
+                    style={{ fontSize: 12 }}
+                  >
+                    {arenaJsonDownloaded ? 'Saved JSON' : 'Download .json'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => handleDownloadArenaCsv()}
+                    title="Download the full round as a CSV file"
+                    style={{ fontSize: 12 }}
+                  >
+                    {arenaCsvDownloaded ? 'Saved CSV' : 'Download .csv'}
+                  </button>
+                  {currentPrompt ? (
+                    <ReRunRoundButton
+                      prompt={currentPrompt}
+                      compact={isMobile}
+                      onReRun={handleReRunRound}
+                    />
+                  ) : null}
                 </>
               ) : null}
               {isDone && response && response.all_responses.length >= 2 ? (
                 <button
                   type="button"
-                  className="arena-btn arena-btn--ghost arena-btn--sm"
+                  className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                   onClick={() => setShowPerspectiveComparison(true)}
                   title="Compare perspectives across answers"
                   style={{ fontSize: 12 }}
@@ -1543,6 +1873,26 @@ function App() {
                     }}
                   >
                     Edit prompt
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      setError(null);
+                      handleReRunRound();
+                    }}
+                  >
+                    Try again
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm"
+                    onClick={() => {
+                      void copyToClipboard(error);
+                      queueFeedbackReset('copy', 'error-banner');
+                    }}
+                  >
+                    {copyFeedback['error-banner'] ? 'Copied' : 'Copy error'}
                   </button>
                 </div>
               )}
@@ -1874,6 +2224,41 @@ function App() {
                     {focusedChatError && (
                       <div style={{ borderRadius: '10px', border: '0.5px solid rgba(196,149,106,0.3)', background: '#FFFFFF', padding: '0.75rem' }}>
                         <p style={{ fontSize: '11px', color: '#A0A39A' }}>{focusedChatError}</p>
+                        <button
+                          type="button"
+                          className="arena-btn arena-btn--ghost arena-btn--sm"
+                          style={{ marginTop: 6 }}
+                          onClick={() => {
+                            const retry = focusedRetryRef.current;
+                            if (!retry) return;
+                            setFocusedChatError(null);
+                            setFocusedHistories((prev) => ({
+                              ...prev,
+                              [focusedAgentId]: retry.historyBefore,
+                            }));
+                            void handleFocusedAgentSubmit(retry.message);
+                          }}
+                        >
+                          Try again
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void copyToClipboard(focusedChatError);
+                            queueFeedbackReset('copy', 'focused-error');
+                          }}
+                          style={{
+                            marginTop: 6,
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: 11,
+                            color: '#6B6460',
+                            padding: 0,
+                          }}
+                        >
+                          {copyFeedback['focused-error'] ? 'Copied' : 'Copy error'}
+                        </button>
                       </div>
                     )}
 
@@ -2103,6 +2488,23 @@ function App() {
               </button>
             )}
 
+            {isDone && response && !focusedAgentId && (
+              <>
+                <FollowUpSuggestions
+                  suggestions={followUpSuggestions}
+                  source={followUpSuggestionsSource}
+                  onPick={handleFollowUpSuggestionPick}
+                  disabled={quotaExhausted}
+                  disabledTitle="Daily Arena message limit reached"
+                />
+                <FollowUpBar
+                  onSubmit={handleFollowUpSubmit}
+                  disabled={quotaExhausted}
+                  disabledTitle="Daily Arena message limit reached"
+                />
+              </>
+            )}
+
             <PromptInput
               onSubmit={handlePromptSubmit}
               isLoading={focusedAgentId ? isFocusedChatStreaming : (isLoading || isStreaming)}
@@ -2134,6 +2536,7 @@ function App() {
               }}
               draftKey={focusedAgentId ? undefined : 'arena_prompt_draft:v1'}
               clearDraftSignal={arenaPromptClearSignal}
+              polishEnabled
             />
           </div>
         </>
@@ -2170,6 +2573,8 @@ function App() {
           <LeaderboardView
             turns={sessionData?.turns || []}
             onBack={exitToArena}
+            sessionId={sessionData?.session_id}
+            scoringAuditEnabled={canUseFeature('scoring_audit')}
           />
         </div>
       )}

@@ -69,7 +69,7 @@ async def surface_assumptions(
                 s["text"] for s in parsed["sentences"] if isinstance(s, dict)
             )
     except Exception:
-        pass
+        logger.warning("Failed to parse final_answer JSON in assumption_surfacer", exc_info=True)
 
     try:
         model = MODEL_REGISTRY.get("gpt_4o", MODEL_REGISTRY["claude_sonnet"])

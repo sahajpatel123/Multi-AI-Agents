@@ -24,6 +24,7 @@ from .schemas import (
     SessionData,
     MemoryContext,
     ErrorResponse,
+    FeedbackCalibrationInfo,
 )
 
 __all__ = [
@@ -50,4 +51,5 @@ __all__ = [
     "SessionData",
     "MemoryContext",
     "ErrorResponse",
+    "FeedbackCalibrationInfo",
 ]

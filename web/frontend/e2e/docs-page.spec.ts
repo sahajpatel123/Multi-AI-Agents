@@ -1,7 +1,69 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Documentation field manual', () => {
-  test('is searchable, inspectable, and keyboard-safe at the 834px tablet edge', async ({ page }) => {
+  test('renders the hero + 7 chapters + documentation navigation at desktop', async ({
+    page,
+  }) => {
+    // Companion to the cycle 140 tablet-edge test: at default desktop
+    // viewport, pin the high-level shape the user sees on first visit.
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto('/docs');
+
+    // Hero heading + 7 chapters + the documentation navigation landmark.
+    await expect(
+      page.getByRole('heading', { name: /understand the system/i }),
+    ).toBeVisible();
+    await expect(page.locator('.docs-field-chapter')).toHaveCount(7);
+
+    // The "Documentation chapters" nav landmark is the per-chapter
+    // anchor list — pin its 7 links so a future chapter rename /
+    // reorder surfaces in CI.
+    const chaptersNav = page.getByLabel('Documentation chapters');
+    await expect(chaptersNav).toBeVisible();
+    await expect(chaptersNav.getByRole('link')).toHaveCount(7);
+
+    // No leftover interactive console from an old design (defensive).
+    await expect(page.locator('.docs-query-console')).toHaveCount(0);
+  });
+
+  test('chapter nav links update the URL hash on click', async ({ page }) => {
+    await page.goto('/docs');
+
+    // Clicking a chapter nav link should update the URL hash so the
+    // browser's deep-link + history works. The 3rd chapter link is
+    // a stable target — the URL hash it produces is the contract.
+    const chaptersNav = page.getByLabel('Documentation chapters');
+    const thirdChapter = chaptersNav.getByRole('link').nth(2);
+    const href = await thirdChapter.getAttribute('href');
+    expect(href).toMatch(/^#/);
+
+    await thirdChapter.click();
+    // The URL hash now reflects the clicked chapter.
+    expect(new URL(page.url()).hash).toBe(href);
+  });
+
+  test('renders the 7 documented chapter anchors', async ({ page }) => {
+    await page.goto('/docs');
+
+    // Pin all 7 chapter anchor ids — these are the stable URL targets
+    // users + search engines deep-link to. A rename of any of these
+    // breaks every shared chapter link.
+    const chapterIds = [
+      'start',
+      'concepts',
+      'agent',
+      'api',
+      'architecture',
+      'tiers',
+      'security',
+    ];
+    for (const id of chapterIds) {
+      await expect(page.locator(`#${id}`)).toBeVisible();
+    }
+    expect(await page.locator('.docs-field-chapter').count()).toBe(7);
+  });
+
+  test('is inspectable and keyboard-safe at the 834px tablet edge', async ({ page }) => {
     await page.setViewportSize({ width: 834, height: 1000 });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -10,6 +72,9 @@ test.describe('Documentation field manual', () => {
     await expect(page.getByRole('heading', { name: /understand the system/i })).toBeVisible();
     await expect(page.locator('.docs-field-chapter')).toHaveCount(7);
     await expect(page.getByRole('region', { name: /from clone to first verdict/i })).toBeVisible();
+    await expect(page.locator('.docs-query-console')).toHaveCount(0);
+    await expect(page.getByLabel('Documentation chapters')).toBeVisible();
+    await expect(page.getByLabel('Documentation chapters').getByRole('link')).toHaveCount(7);
 
     const geometry = await page.evaluate(() => {
       const title = document.querySelector('.docs-field-hero h1')?.getBoundingClientRect();
@@ -39,19 +104,6 @@ test.describe('Documentation field manual', () => {
     await skip.focus();
     await skip.press('Enter');
     await expect(page.locator('main#main-content')).toBeFocused();
-
-    await page.locator('body').click({ position: { x: 4, y: 4 } });
-    await page.keyboard.press('/');
-    const search = page.getByRole('searchbox', { name: /search documentation/i });
-    await expect(search).toBeFocused();
-    await search.fill('security');
-    await expect(page.getByLabel('Documentation search console').getByRole('status')).toContainText('1 chapter match');
-    await expect(page.locator('.docs-field-chapter')).toHaveCount(1);
-    await expect(page.getByRole('region', { name: /defence belongs inside the runtime/i })).toBeVisible();
-    await search.press('Escape');
-    await expect(search).toHaveValue('');
-    await expect(page.locator('.docs-field-chapter')).toHaveCount(7);
-    await expect(page.getByLabel('Documentation search console').getByRole('status')).toContainText('7 chapters available');
 
     const pipeline = page.getByRole('group', { name: /inspect agent stage/i });
     await expect(pipeline.getByRole('button')).toHaveCount(7);
@@ -92,6 +144,7 @@ test.describe('Documentation field manual', () => {
 
     await page.goto('/docs');
     await expect(page.getByRole('heading', { name: /understand the system/i })).toBeVisible();
+    await expect(page.locator('.docs-query-console')).toHaveCount(0);
 
     const geometry = await page.evaluate(() => {
       const title = document.querySelector('.docs-field-hero h1')?.getBoundingClientRect();
@@ -149,11 +202,6 @@ test.describe('Documentation field manual', () => {
     await judge.click();
     await expect(judge).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByLabel('Selected Agent stage')).toContainText('Ready / revise');
-
-    const search = page.getByRole('searchbox', { name: /search documentation/i });
-    await search.fill('no-such-field-entry');
-    await expect(page.getByRole('heading', { name: /nothing in the field manual matches/i })).toBeVisible();
-    await page.getByRole('button', { name: /clear search/i }).click();
     await expect(page.locator('.docs-field-chapter')).toHaveCount(7);
 
     expect(errors).toEqual([]);

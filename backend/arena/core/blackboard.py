@@ -1,6 +1,8 @@
+import time
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
+from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from dataclasses import dataclass, field
@@ -12,6 +14,7 @@ class AgentStatus(str, Enum):
     COMPLETE = "complete"
     FAILED = "failed"
     NEEDS_REVISION = "needs_revision"
+    CANCELLED = "cancelled"
 
 
 class StageStatus(str, Enum):
@@ -26,6 +29,122 @@ def _json_enum(v: Any) -> Any:
     if isinstance(v, Enum):
         return v.value
     return v
+
+
+# Allowlist of intelligence_score keys. calculate_intelligence_score
+# produces 7 known keys; any other key in the JSON column is
+# either legacy data, a future schema change, or — in the worst
+# case — a maliciously-injected key that would be returned in
+# every to_dict() call. The cap bounds the response size and
+# closes the injection surface.
+_INTELLIGENCE_SCORE_KEYS: frozenset = frozenset({
+    "research_depth",
+    "logical_soundness",
+    "consensus_level",
+    "answer_durability",
+    "total_score",
+    "score_label",
+    "one_line_verdict",
+})
+
+# Allowlist of assumptions keys. The assumption_surfacer
+# produces 3 known keys; any other key would be a legacy
+# field or a maliciously-injected one.
+_ASSUMPTIONS_KEYS: frozenset = frozenset({
+    "summary",
+    "assumptions",  # list of assumption dicts
+    "assumption_count",  # int
+})
+
+
+def _filter_intelligence_score_keys(value: Any) -> dict:
+    """Return only the known intelligence_score keys.
+
+    The intelligence_score JSON column is populated by
+    calculate_intelligence_score. A user-injected value (e.g.
+    via a corrupted pipeline or a maliciously-modified row in
+    the DB) could include arbitrary keys. The to_dict() call
+    returns this dict verbatim, so the injection would be
+    emitted in every GET /tasks/{id}/detail response. The
+    allowlist cap closes that surface.
+    """
+    if not isinstance(value, dict):
+        return {}
+    return {k: value[k] for k in value if k in _INTELLIGENCE_SCORE_KEYS}
+
+
+def _filter_assumptions_keys(value: Any) -> dict:
+    """Return only the known assumptions keys.
+
+    Same rationale as _filter_intelligence_score_keys. The
+    assumption_surfacer produces 3 known keys; any other key
+    is dropped.
+    """
+    if not isinstance(value, dict):
+        return {}
+    return {k: value[k] for k in value if k in _ASSUMPTIONS_KEYS}
+
+
+# Generic cap for the remaining dict fields in to_dict() that
+# don't have a clear key allowlist. The cap bounds the per-field
+# response size to (MAX_KEYS * MAX_VALUE_CHARS) and applies a
+# truncation to the str representation of each value.
+_GENERIC_DICT_MAX_KEYS = 10
+_GENERIC_DICT_MAX_VALUE_CHARS = 100
+
+# Cap on the list length of to_dict() fields that grow via
+# the agent pipeline. A buggy LLM (or a malicious user
+# submitting a crafted agent task) could cause unbounded
+# growth on any of these lists. The cap bounds the per-list
+# response size to a fixed maximum.
+_LIST_MAX_ITEMS = 100
+
+
+def _cap_list(value: Any, *, max_items: int = _LIST_MAX_ITEMS) -> list:
+    """Cap a list to the first max_items entries.
+
+    The list fields in to_dict() (sources, flags, caveats)
+    grow via the agent pipeline. A buggy LLM response or a
+    malicious user task could append thousands of items to
+    any of these lists. The to_dict() cap bounds the per-list
+    response size to a fixed maximum (the first max_items
+    entries are returned; excess are silently dropped).
+    """
+    if not isinstance(value, list):
+        return []
+    if len(value) <= max_items:
+        return value
+    return value[:max_items]
+
+
+def _filter_generic_dict_keys(value: Any) -> dict:
+    """Apply a generic cap to a dict field that doesn't have a
+    known allowlist.
+
+    Used for source_integrity, dissent_report, temporal_profile,
+    contradictions — these don't have a clear allowlist in the
+    code (they're produced by various scoring engines with
+    dynamic keys), but a maliciously-injected value (e.g. via
+    a corrupted row in the DB) could include arbitrary keys.
+    The cap bounds the per-field response size.
+
+    The cap is a soft bound:
+    - At most _GENERIC_DICT_MAX_KEYS keys (10) are returned
+    - Each str value is sliced to at most
+      _GENERIC_DICT_MAX_VALUE_CHARS chars (100)
+    - Non-str values (int, list, dict, bool) are kept as-is
+    - Excess keys and over-length values are silently dropped
+    """
+    if not isinstance(value, dict):
+        return {}
+    out: dict = {}
+    for i, (k, v) in enumerate(value.items()):
+        if i >= _GENERIC_DICT_MAX_KEYS:
+            break
+        if isinstance(v, str) and len(v) > _GENERIC_DICT_MAX_VALUE_CHARS:
+            v = v[:_GENERIC_DICT_MAX_VALUE_CHARS]
+        out[k] = v
+    return out
 
 
 @dataclass
@@ -47,6 +166,11 @@ class Blackboard:
     user_id: int = 0
     task: str = ""
     status: AgentStatus = AgentStatus.PENDING
+    # Cooperative cancellation flag. The cancel endpoint sets this on the
+    # in-memory blackboard; the pipeline checks it between stages so an
+    # in-flight task stops at the next safe boundary instead of burning
+    # further LLM calls (and token budget) after the user hits Stop.
+    cancel_requested: bool = False
     current_stage: str = "planner"
     iterations: int = 0
     max_iterations: int = 2
@@ -191,15 +315,15 @@ class Blackboard:
             "final_answer": self.final_answer,
             "final_confidence": self.final_confidence,
             "final_score": self.final_score,
-            "sources": self.sources,
-            "flags": self.flags,
-            "caveats": self.caveats,
-            "source_integrity": self.source_integrity,
-            "contradictions": self.contradictions,
-            "intelligence_score": self.intelligence_score,
-            "assumptions": self.assumptions,
-            "dissent_report": self.dissent_report,
-            "temporal_profile": self.temporal_profile,
+            "sources": _cap_list(self.sources),
+            "flags": _cap_list(self.flags),
+            "caveats": _cap_list(self.caveats),
+            "source_integrity": _filter_generic_dict_keys(self.source_integrity),
+            "contradictions": _filter_generic_dict_keys(self.contradictions),
+            "intelligence_score": _filter_intelligence_score_keys(self.intelligence_score),
+            "assumptions": _filter_assumptions_keys(self.assumptions),
+            "dissent_report": _filter_generic_dict_keys(self.dissent_report),
+            "temporal_profile": _filter_generic_dict_keys(self.temporal_profile),
             "memory_saved": self.memory_saved,
             "expertise_level": self.expertise_level,
             "expertise_domain": self.expertise_domain,
@@ -234,6 +358,7 @@ class Blackboard:
 
 
 active_tasks: dict[str, Blackboard] = {}
+_active_tasks_lock = Lock()
 
 
 def create_blackboard(user_id: int, task: str) -> Blackboard:
@@ -243,13 +368,67 @@ def create_blackboard(user_id: int, task: str) -> Blackboard:
         original_task=task,
         started_at=datetime.now(timezone.utc),
     )
-    active_tasks[bb.task_id] = bb
+    with _active_tasks_lock:
+        active_tasks[bb.task_id] = bb
     return bb
 
 
 def get_blackboard(task_id: str) -> Optional[Blackboard]:
-    return active_tasks.get(task_id)
+    with _active_tasks_lock:
+        return active_tasks.get(task_id)
+
+
+def request_cancel(task_id: str) -> Optional[Blackboard]:
+    """Request cooperative cancellation of an in-memory agent task.
+
+    Sets the ``cancel_requested`` flag on the blackboard (if present) and
+    returns it. The pipeline observes the flag between stages and stops as
+    soon as the current stage yields. Returns None when no active task
+    matches — the caller decides whether that is a 404 or an already-finished
+    task.
+    """
+    with _active_tasks_lock:
+        bb = active_tasks.get(task_id)
+        if bb is not None:
+            bb.cancel_requested = True
+        return bb
 
 
 def remove_blackboard(task_id: str) -> None:
-    active_tasks.pop(task_id, None)
+    with _active_tasks_lock:
+        active_tasks.pop(task_id, None)
+
+
+# Terminal-cancel registry. Once a pipeline drops its blackboard there is
+# no in-memory record of the outcome; the orchestration watcher needs to
+# know a child stopped as CANCELLED so it can stop the rest of the run
+# instead of polling until its 10-minute deadline. Entries expire after
+# a fixed TTL so this dict stays bounded.
+_CANCELLED_TASK_TTL_S = 15 * 60
+_cancelled_tasks: dict[str, float] = {}
+
+
+def note_task_cancelled(task_id: str) -> None:
+    """Record that a task ended as CANCELLED (survives blackboard removal)."""
+    with _active_tasks_lock:
+        now = time.monotonic()
+        expired = [
+            tid
+            for tid, ts in _cancelled_tasks.items()
+            if now - ts > _CANCELLED_TASK_TTL_S
+        ]
+        for tid in expired:
+            _cancelled_tasks.pop(tid, None)
+        _cancelled_tasks[task_id] = now
+
+
+def is_task_cancelled(task_id: str) -> bool:
+    """True if a task was recorded as CANCELLED within the TTL window."""
+    with _active_tasks_lock:
+        ts = _cancelled_tasks.get(task_id)
+        if ts is None:
+            return False
+        if time.monotonic() - ts > _CANCELLED_TASK_TTL_S:
+            _cancelled_tasks.pop(task_id, None)
+            return False
+        return True

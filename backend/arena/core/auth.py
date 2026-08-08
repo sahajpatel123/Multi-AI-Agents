@@ -60,8 +60,8 @@ def verify_password(plain: str, hashed: str) -> tuple[bool, bool]:
     try:
         if _bcrypt.checkpw(_prehash(plain), hashed_bytes):
             return True, False
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error("bcrypt prehash check failed: %s", e, exc_info=True)
 
     try:
         legacy = plain.encode("utf-8")[:72].decode("utf-8", errors="ignore").encode("utf-8")
@@ -76,8 +76,8 @@ def verify_password(plain: str, hashed: str) -> tuple[bool, bool]:
                 "caller should rehash to modern format",
             )
             return True, True
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error("bcrypt legacy check failed: %s", e, exc_info=True)
 
     return False, False
 

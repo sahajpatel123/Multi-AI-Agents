@@ -76,6 +76,7 @@ class User(Base):
     saved_responses = relationship("SavedResponse", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     persona_drift_logs = relationship("PersonaDriftLog", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     scoring_audits = relationship("ScoringAudit", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    export_presets = relationship("ExportPreset", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     ux_events = relationship("UXEvent", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     agent_tasks = relationship("AgentTask", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     discuss_threads = relationship("DiscussThread", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
@@ -178,7 +179,7 @@ class DBSession(Base):
     session_id = Column(String(36), unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     guest_ip = Column(String(45), nullable=True)
-    topics = Column(Text, default="[]")
+    topics = Column(JSON, default=list, nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
     last_active = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 
@@ -202,6 +203,10 @@ class DBTurn(Base):
 
 class UsageRecord(Base):
     __tablename__ = "usage_records"
+    __table_args__ = (
+        # Hot-path: get_today_token_usage filters user_id + timestamp >= midnight.
+        Index("idx_usage_records_user_timestamp", "user_id", "timestamp"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -358,6 +363,7 @@ class SavedResponse(Base):
     verdict = Column(Text, nullable=False)
     score = Column(Integer, nullable=True)
     confidence = Column(Integer, nullable=True)
+    pinned_at = Column(DateTime, nullable=True)
     saved_at = Column(DateTime, default=_now, nullable=False)
     user = relationship("User", back_populates="saved_responses", lazy="joined")
 
@@ -365,6 +371,35 @@ class SavedResponse(Base):
     __table_args__ = (
         Index("idx_saved_responses_user_session", "user_id", "session_id"),
         Index("idx_saved_responses_user_saved_at", "user_id", "saved_at"),
+    )
+
+
+class ExportPreset(Base):
+    __tablename__ = "export_presets"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(100), nullable=False)
+    description = Column(String(500), nullable=True)  # Optional description of the preset
+    preset_type = Column(String(20), nullable=False, default="saved")  # saved, sessions, etc.
+    format = Column(String(10), nullable=False, default="csv")  # csv, json, xlsx
+    search = Column(String(100), nullable=True)
+    persona_id = Column(String(50), nullable=True)
+    min_score = Column(Integer, nullable=True)
+    max_score = Column(Integer, nullable=True)
+    sort = Column(String(20), nullable=False, default="newest")
+    position = Column(Integer, nullable=False, default=0)  # For custom ordering
+    is_default = Column(Boolean, nullable=False, default=False)  # Mark as default preset
+    last_used_at = Column(DateTime, nullable=True)  # Track when preset was last used
+    created_at = Column(DateTime, default=_now, nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
+
+    user = relationship("User", back_populates="export_presets", lazy="joined")
+
+    __table_args__ = (
+        Index("idx_export_presets_user", "user_id"),
+        Index("idx_export_presets_user_created", "user_id", "created_at"),
+        Index("idx_export_presets_user_position", "user_id", "position"),
     )
 
 
@@ -433,7 +468,7 @@ class UXEvent(Base):
     event_type = Column(String(50), nullable=False, comment="See event types below")
     persona_id = Column(String(50), nullable=True, comment="Which persona was involved")
     agent_id = Column(String(20), nullable=True)
-    event_metadata = Column("metadata", JSON, nullable=True, comment="Extra event data")
+    event_metadata = Column("event_metadata", JSON, nullable=True, comment="Extra event data")
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="ux_events", lazy="joined")
@@ -463,6 +498,16 @@ class AgentTask(Base):
     insight_report = Column(JSON, nullable=True)
     contradictions = Column(JSON, nullable=True)
     intelligence_score = Column(JSON, nullable=True)
+    # Post-pipeline research reports. These are computed while the
+    # blackboard is warm (source integrity, assumptions, dissent,
+    # temporal profile, steelman) and are persisted here so a reloaded
+    # /result or saved-task payload returns the same reports instead of
+    # empty shells once the in-memory blackboard is dropped.
+    source_integrity = Column(JSON, nullable=True)
+    assumptions = Column(JSON, nullable=True)
+    dissent_report = Column(JSON, nullable=True)
+    temporal_profile = Column(JSON, nullable=True)
+    steelman = Column(JSON, nullable=True)
     is_live = Column(Boolean, default=False, nullable=False)
     live_last_checked = Column(DateTime, nullable=True)
     live_next_check = Column(DateTime, nullable=True)
@@ -682,7 +727,7 @@ class MCPIntegration(Base):
     token_expires_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     connected_at = Column(DateTime, default=_now, nullable=False)
-    integration_metadata = Column("metadata", JSON, nullable=True)
+    integration_metadata = Column("integration_metadata", JSON, nullable=True)
 
     user = relationship("User", back_populates="mcp_integrations", lazy="joined")
 
@@ -709,6 +754,24 @@ class RevokedToken(Base):
     expires_at = Column(DateTime, nullable=False, index=True)
     revoked_at = Column(DateTime, default=_now, nullable=False)
     reason = Column(String(64), nullable=True)  # 'logout' / 'admin' / etc.
+
+
+class ProcessedWebhookEvent(Base):
+    """Idempotency ledger for Razorpay (and future) signed webhooks.
+
+    Claiming an ``event_key`` before side effects prevents replay of the
+    same valid payload from double-applying subscription state. Keys are
+    TTL'd so the table stays bounded; failed handlers delete the claim
+    so Razorpay retries can re-process.
+    """
+
+    __tablename__ = "processed_webhook_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_key = Column(String(128), nullable=False, unique=True, index=True)
+    event_name = Column(String(64), nullable=True)
+    processed_at = Column(DateTime, default=_now, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
 
 
 class RoomTask(Base):
@@ -822,4 +885,3 @@ class DiscussThread(Base):
     created_at = Column(DateTime, default=_now, nullable=False)
 
     user = relationship("User", back_populates="discuss_threads", lazy="joined")
-

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatSavedTakeExport, formatSavedTakesListExport } from './savedTakeExport';
+import {
+  formatSavedTakesCsvExport,
+  formatSavedTakeExport,
+  formatSavedTakesJsonExport,
+  formatSavedTakesListExport,
+} from './savedTakeExport';
 
 describe('formatSavedTakeExport', () => {
   it('formats question, one-liner, and verdict', () => {
@@ -70,5 +75,122 @@ describe('formatSavedTakesListExport', () => {
     expect(md).toContain('_Filtered view: search “quantum”_');
     expect(md).toMatch(/No saved takes match this filter/i);
     expect(md).toContain('**0** of **5** saved takes');
+  });
+});
+
+describe('formatSavedTakesJsonExport', () => {
+  it('serializes a filtered saved list as pretty JSON', () => {
+    const json = formatSavedTakesJsonExport({
+      totalCount: 2,
+      filterNote: 'pinned only',
+      exportedAt: '2026-08-07T00:00:00.000Z',
+      items: [
+        {
+          agentName: 'The Analyst',
+          prompt: 'Ship today?',
+          oneLiner: 'Ship small.',
+          verdict: 'Risk is bounded if scope is tight.',
+          score: 90,
+          timestamp: '2026-07-01T12:00:00Z',
+          pinned: true,
+          personaId: 'analyst',
+        },
+      ],
+    });
+    const parsed = JSON.parse(json);
+    expect(parsed.exported_from).toBe('arena');
+    expect(parsed.exported_at).toBe('2026-08-07T00:00:00.000Z');
+    expect(parsed.total_saved).toBe(2);
+    expect(parsed.filter_note).toBe('pinned only');
+    expect(parsed.count).toBe(1);
+    expect(parsed.items[0]).toMatchObject({
+      agentName: 'The Analyst',
+      prompt: 'Ship today?',
+      oneLiner: 'Ship small.',
+      verdict: 'Risk is bounded if scope is tight.',
+      score: 90,
+      timestamp: '2026-07-01T12:00:00Z',
+      pinned: true,
+      personaId: 'analyst',
+    });
+    expect(json).toContain('\n');
+  });
+
+  it('normalizes missing fields for JSON output', () => {
+    const json = formatSavedTakesJsonExport({
+      exportedAt: '2026-08-07T00:00:00.000Z',
+      items: [
+        {
+          agentName: '',
+          prompt: '',
+          oneLiner: '',
+          verdict: '',
+          score: null,
+          timestamp: null,
+        },
+      ],
+    });
+    const parsed = JSON.parse(json);
+    expect(parsed.items[0]).toMatchObject({
+      agentName: 'Arena mind',
+      prompt: '(no prompt)',
+      oneLiner: null,
+      verdict: null,
+      score: null,
+      timestamp: null,
+      pinned: false,
+      personaId: null,
+    });
+    expect(parsed.filter_note).toBeNull();
+  });
+});
+
+describe('formatSavedTakesCsvExport', () => {
+  it('writes headers and quoted CSV rows', () => {
+    const csv = formatSavedTakesCsvExport({
+      items: [
+        {
+          agentName: 'The Analyst',
+          prompt: 'Ship today?',
+          oneLiner: 'Ship small.',
+          verdict: 'Risk, if bounded, is fine.',
+          score: 90,
+          pinned: true,
+          personaId: 'analyst',
+          timestamp: '2026-07-01T12:00:00Z',
+        },
+      ],
+    });
+    expect(csv).toContain('"agentName","prompt","oneLiner","verdict","score","pinned","personaId","timestamp"');
+    expect(csv).toContain('"Risk, if bounded, is fine."');
+    expect(csv).toContain('"analyst"');
+    expect(csv.endsWith('\n')).toBe(true);
+    const rows = csv.trim().split('\n');
+    // Header row plus exactly one data row; the CSV never injects extra
+    // metadata rows that would break the column schema.
+    expect(rows).toHaveLength(2);
+    expect(rows[1].startsWith('"The Analyst"')).toBe(true);
+    expect(rows[1].endsWith('"2026-07-01T12:00:00Z"')).toBe(true);
+  });
+
+  it('escapes embedded quotes and normalizes missing fields', () => {
+    const csv = formatSavedTakesCsvExport({
+      items: [
+        {
+          agentName: '',
+          prompt: '',
+          oneLiner: 'Say "hello"',
+          verdict: '',
+          score: null,
+          pinned: false,
+          personaId: null,
+          timestamp: null,
+        },
+      ],
+    });
+    expect(csv).toContain('"Say ""hello"""');
+    expect(csv).toContain('"Arena mind"');
+    expect(csv).toContain('"(no prompt)"');
+    expect(csv).toContain('"false"');
   });
 });

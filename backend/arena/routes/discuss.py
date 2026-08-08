@@ -1,6 +1,7 @@
 """Discuss route — 1-on-1 private conversation with a single agent"""
 
 import json
+import logging
 import uuid
 from typing import Optional
 
@@ -30,8 +31,11 @@ from arena.models.schemas import (
     UserResponse,
 )
 from arena.core.agents import get_agent_config, get_persona_id_for_agent, get_raw_persona_prompt, call_persona, get_model_for_persona
+
+logger = logging.getLogger(__name__)
 from arena.core.memory import get_memory_manager
 from arena.core.model_router import get_route_for_persona
+from arena.core.observability import correlation_request_id
 
 
 router = APIRouter(prefix="/api", tags=["discuss"])
@@ -87,11 +91,27 @@ def _get_persona_excerpt(agent_id: str, persona_ids: list[str] | None = None) ->
 def _build_messages(
     request: DiscussRequest,
 ) -> list[dict]:
-    """Build the Anthropic messages array from conversation history + new message."""
+    """Build the Anthropic messages array from conversation history + new message.
+
+    The role value is already validated against the Literal
+    {"user", "agent"} allowlist at the Pydantic level (see
+    DiscussChatMessage.role in models/schemas.py). This means
+    the LLM never sees a user-supplied "system", "tool", or
+    other role — only "user" and "agent" (the "agent" token
+    here is the API-side mirror of "assistant", the role
+    Anthropic's Messages API expects for prior agent turns).
+    A user can no longer plant a fake prior agent response in
+    conversation_history that the LLM would treat as its own
+    past output.
+    """
     messages: list[dict] = []
 
     for msg in request.conversation_history:
-        role = "user" if msg.role == "user" else "assistant"
+        # Map our API-side "agent" role to Anthropic's
+        # "assistant" role. The mapping is unconditional
+        # because the Literal allowlist ensures msg.role is
+        # exactly "user" or "agent" — no else-branch needed.
+        role = "assistant" if msg.role == "agent" else "user"
         messages.append({"role": role, "content": msg.content})
 
     # Add the new user message
@@ -127,7 +147,7 @@ async def discuss_with_agent(
 
     # Check rate limit BEFORE any LLM calls
     try:
-        check_and_increment_user(db, user.id, user_tier)
+        check_and_increment_user(db, user.id)
     except RateLimitExceeded as e:
         raise HTTPException(
             status_code=429,
@@ -154,6 +174,7 @@ async def discuss_with_agent(
         )
 
     session_id = request.session_id or str(uuid.uuid4())
+    request_id = correlation_request_id(http_request)
 
     # Get agent's previous responses from memory (ownership-scoped)
     memory = get_memory_manager()
@@ -203,6 +224,7 @@ async def discuss_with_agent(
         new_history.append(DiscussChatMessage(role="agent", content=reply))
 
         return DiscussResponse(
+            request_id=request_id,
             agent_id=request.agent_id,
             content=reply,
             conversation_history=new_history,
@@ -210,6 +232,7 @@ async def discuss_with_agent(
         )
 
     except Exception:
+        logger.exception("Discuss request failed")
         raise HTTPException(
             status_code=500,
             detail={"error": ErrorCodes.REQUEST_FAILED, "message": "Discuss request failed"},
@@ -239,7 +262,7 @@ async def stream_discuss(
 
     # Check rate limit BEFORE any LLM calls
     try:
-        check_and_increment_user(db, user.id, user_tier)
+        check_and_increment_user(db, user.id)
     except RateLimitExceeded as e:
         raise HTTPException(
             status_code=429,
@@ -266,6 +289,7 @@ async def stream_discuss(
         )
 
     session_id = request.session_id or str(uuid.uuid4())
+    request_id = correlation_request_id(http_request)
 
     # Get agent's previous responses from memory (ownership-scoped)
     memory = get_memory_manager()
@@ -292,6 +316,9 @@ async def stream_discuss(
     messages = _build_messages(request)
 
     async def event_generator():
+        # First event tells the client which request ID this stream maps to,
+        # matching the X-Request-ID response header for support correlation.
+        yield _sse_event("request_id", {"request_id": request_id})
         full_text = ""
         try:
             # Get persona_id and check if it uses Grok
@@ -341,6 +368,7 @@ async def stream_discuss(
             new_history.append(DiscussChatMessage(role="agent", content=reply))
 
             final = DiscussResponse(
+                request_id=request_id,
                 agent_id=request.agent_id,
                 content=reply,
                 conversation_history=new_history,
@@ -354,7 +382,8 @@ async def stream_discuss(
             # handles stream cleanup via __aexit__ on generator close.
             # Swallow silently — no error event needed for a disconnected client.
             return
-        except Exception as e:
+        except Exception:
+            logger.warning("Discuss SSE generator failed", exc_info=True)
             yield _sse_event("error", {"detail": "Discuss request failed"})
 
     return StreamingResponse(
@@ -570,14 +599,28 @@ class SaveThreadBody(BaseModel):
     @field_validator("messages")
     @classmethod
     def validate_messages(cls, v: list[dict]) -> list[dict]:
-        # Cap each message's content so a 100KB blob can't slip in via
-        # a single field. Bounded list length prevents an unbounded
-        # JSON column.
+        # Cap each message's content so a 100KB blob can't slip
+        # in via a single field. Bounded list length prevents an
+        # unbounded JSON column. Role is normalized to the
+        # {"user", "agent"} allowlist — anything else is dropped
+        # (defense-in-depth: a malicious client cannot persist
+        # role="system" or role="admin" that the read path
+        # would later emit in the GET /discuss/threads/{id}
+        # response, which would then be rendered to other
+        # clients in the room view).
         out: list[dict] = []
         for m in v[:500]:
             if not isinstance(m, dict):
                 continue
-            role = str(m.get("role", ""))[:20]
+            raw_role = str(m.get("role", ""))[:20]
+            if raw_role == "agent":
+                role = "agent"
+            else:
+                # Default to "user" for any value other than
+                # "agent" (the two valid values). This includes
+                # "user", empty, "system", "admin", etc. — only
+                # "agent" is preserved verbatim.
+                role = "user"
             content = str(m.get("content", ""))[:20000]
             out.append({"role": role, "content": content, "timestamp": m.get("timestamp")})
         return out

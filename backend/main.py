@@ -25,6 +25,7 @@ from arena.core.observability import get_health_data, get_health_data_detailed, 
 from arena.core.rate_limits import client_ip, enforce_ip_rate_limit, enforce_user_rate_limit, rate_limiter
 from arena.database import SessionLocal, dispose_engine, get_db, init_db, is_db_connectivity_error
 from arena.models.schemas import UserResponse
+from arena.core.request_id import RequestIDMiddleware
 from arena.routes.auth import router as auth_router, user_router
 from arena.routes.analytics import router as analytics_router
 from arena.routes.personas import router as personas_router
@@ -34,6 +35,7 @@ from arena.routes.debate import router as debate_router
 from arena.routes.discuss import router as discuss_router
 from arena.routes.memory import memory_router
 from arena.routes.saved import router as saved_router
+from arena.routes.export_presets import router as export_presets_router
 from arena.routes.session import router as session_router
 from arena.routes.payments import router as payments_router
 from arena.routes.agent import router as agent_router
@@ -46,6 +48,7 @@ from arena.core.live_scheduler import schedule_live_checks
 from arena.core.loyalty_scheduler import schedule_loyalty_checks
 from arena.core.watchlist_runner import schedule_watchlist_checks
 from arena.core.condura_scheduler import schedule_condura_reconciler
+from arena.core.subscription_expiry_scheduler import schedule_subscription_expiry_checks
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +90,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "frame-ancestors 'none'; "
             "object-src 'none'; "
             "base-uri 'self'; "
-            "form-action 'self'"
+            "form-action 'self'; "
+            "upgrade-insecure-requests"
         )
         # Defense-in-depth for any HTML ever served from the API origin.
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
@@ -188,6 +192,7 @@ def create_app() -> FastAPI:
             request.method,
             request.url.path,
             exc,
+            extra={"request_id": getattr(request.state, "request_id", None)},
         )
         return JSONResponse(
             status_code=503,
@@ -212,6 +217,7 @@ def create_app() -> FastAPI:
                 request.method,
                 request.url.path,
                 exc,
+                extra={"request_id": getattr(request.state, "request_id", None)},
             )
             return JSONResponse(
                 status_code=503,
@@ -228,6 +234,7 @@ def create_app() -> FastAPI:
             request.method,
             request.url.path,
             error_detail,
+            extra={"request_id": getattr(request.state, "request_id", None)},
         )
         if settings.is_production:
             return JSONResponse(
@@ -273,11 +280,16 @@ def create_app() -> FastAPI:
             "Accept-Language",
             "X-Requested-With",
         ],
+        # Browser JS can only read response headers listed here. We want
+        # clients on allowed origins to correlate the X-Request-ID header
+        # that RequestIDMiddleware emits on every response.
+        expose_headers=["X-Request-ID"],
         max_age=3600,
     )
     app.add_middleware(GlobalRateLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
     app.add_middleware(RequestSizeLimitMiddleware, max_size=DEFAULT_MAX_BODY_BYTES)
+    app.add_middleware(RequestIDMiddleware)
 
     # ── Routers ───────────────────────────────────────────────
     app.include_router(auth_router)
@@ -290,6 +302,7 @@ def create_app() -> FastAPI:
     app.include_router(personas_router, prefix="/api")
     app.include_router(panels_router, prefix="/api")
     app.include_router(saved_router, prefix="/api")
+    app.include_router(export_presets_router, prefix="/api")
     app.include_router(analytics_router, prefix="/api")
     app.include_router(payments_router, prefix="/api/payments")
     app.include_router(agent_router, prefix="/api/agent")
@@ -351,6 +364,7 @@ def create_app() -> FastAPI:
         asyncio.create_task(schedule_watchlist_checks())
         asyncio.create_task(schedule_loyalty_checks())
         asyncio.create_task(schedule_condura_reconciler())
+        asyncio.create_task(schedule_subscription_expiry_checks())
 
     # ── Startup self-test: verify global exception handler is wired ──────
     # Earlier versions of this block raised a local RuntimeError, caught
@@ -430,7 +444,10 @@ def create_app() -> FastAPI:
             db_ok = True
         except Exception:
             pass
-        return get_health_data_detailed(db_connected=db_ok)
+        return get_health_data_detailed(
+            db_connected=db_ok,
+            request_id=getattr(request.state, "request_id", None),
+        )
 
     return app
 

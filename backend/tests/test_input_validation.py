@@ -40,19 +40,22 @@ class TestSanitizeText:
         with pytest.raises(HTTPException) as ei:
             input_validation.sanitize_text("   ", max_length=200)
         assert ei.value.status_code == 400
-        assert "cannot be empty" in ei.value.detail
+        assert ei.value.detail["error"] == "validation_error"
+        assert "cannot be empty" in ei.value.detail["message"]
 
     def test_null_byte_rejected(self):
         with pytest.raises(HTTPException) as ei:
             input_validation.sanitize_text("ok\x00evil", max_length=200)
         assert ei.value.status_code == 400
-        assert "invalid characters" in ei.value.detail
+        assert ei.value.detail["error"] == "validation_error"
+        assert "invalid characters" in ei.value.detail["message"]
 
     def test_too_long_rejected(self):
         with pytest.raises(HTTPException) as ei:
             input_validation.sanitize_text("a" * 1001, max_length=1000)
         assert ei.value.status_code == 400
-        assert "exceeds maximum length" in ei.value.detail
+        assert ei.value.detail["error"] == "validation_error"
+        assert "exceeds maximum length" in ei.value.detail["message"]
 
     def test_non_string_raises(self):
         with pytest.raises(HTTPException):
@@ -66,19 +69,22 @@ class TestSanitizeHtmlRejectsInsteadOfStrips:
         with pytest.raises(HTTPException) as ei:
             input_validation.sanitize_html("<script>alert(1)</script>", max_length=200)
         assert ei.value.status_code == 400
-        assert "HTML markup" in ei.value.detail
+        assert ei.value.detail["error"] == "validation_error"
+        assert "HTML markup" in ei.value.detail["message"]
 
     def test_lone_open_angle_rejected(self):
         with pytest.raises(HTTPException) as ei:
             input_validation.sanitize_html("hello <world", max_length=200)
         assert ei.value.status_code == 400
-        assert "HTML markup" in ei.value.detail
+        assert ei.value.detail["error"] == "validation_error"
+        assert "HTML markup" in ei.value.detail["message"]
 
     def test_lone_close_angle_rejected(self):
         with pytest.raises(HTTPException) as ei:
             input_validation.sanitize_html("hello world>", max_length=200)
         assert ei.value.status_code == 400
-        assert "HTML markup" in ei.value.detail
+        assert ei.value.detail["error"] == "validation_error"
+        assert "HTML markup" in ei.value.detail["message"]
 
     def test_angle_in_code_snippet_rejected(self):
         # The original silent-strip mishap: a user referencing <stdio.h>
@@ -112,7 +118,8 @@ class TestSanitizeHtmlRejectsInsteadOfStrips:
                 "<x>" + ("a" * 1000), max_length=100
             )
         assert ei.value.status_code == 400
-        assert "exceeds maximum length" in ei.value.detail
+        assert ei.value.detail["error"] == "validation_error"
+        assert "exceeds maximum length" in ei.value.detail["message"]
 
 
 class TestSanitizeModelHtmlRejects:
@@ -185,7 +192,8 @@ class TestOptionalHelpers:
                 strip_tags=True,
             )
         assert ei.value.status_code == 400
-        assert "HTML markup" in str(ei.value.detail)
+        assert ei.value.detail["error"] == "validation_error"
+        assert "HTML markup" in ei.value.detail["message"]
 
     def test_optional_text_strip_tags_true_allows_plain(self):
         out = input_validation.sanitize_optional_text(

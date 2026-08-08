@@ -16,12 +16,14 @@ import {
   HelpCircle,
   CheckSquare,
   MessageSquare,
+  Send,
   Swords,
   Bookmark,
   Pencil,
   Trash2,
   Copy,
   Check,
+  Pin,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AGENTS, type PromptCategory, type SavedResponseItem } from '../types';
@@ -34,14 +36,19 @@ import { useProfileModal } from '../context/ProfileModalContext';
 import track from '../utils/track';
 import { filterBySearchQuery, filterTurnsBySearchQuery } from '../lib/sidebarSearch';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from '../lib/downloadTextFile';
 import { formatRelativePast } from '../lib/relativeTime';
 import {
   formatArenaRecentItemCopy,
   formatArenaRecentPromptCopy,
   formatArenaRecentsExport,
 } from '../lib/arenaRecentsExport';
-import { formatSavedTakeExport, formatSavedTakesListExport } from '../lib/savedTakeExport';
+import {
+  formatSavedTakesCsvExport,
+  formatSavedTakeExport,
+  formatSavedTakesJsonExport,
+  formatSavedTakesListExport,
+} from '../lib/savedTakeExport';
 import { motionDuration } from '../lib/motion';
 import {
   SIDEBAR_RECENTS_SORT_OPTIONS,
@@ -60,6 +67,12 @@ import {
   sidebarSavedMindFilterLabel,
   type SidebarSavedMindFilter,
 } from '../lib/sidebarSavedMindFilter';
+import {
+  SIDEBAR_SAVED_PIN_ALL,
+  SIDEBAR_SAVED_PIN_ONLY,
+  filterSavedByPin,
+  type SavedPinFilterValue,
+} from '../lib/sidebarSavedPinFilter';
 import {
   SIDEBAR_RECENTS_WINNER_ALL,
   collectRecentsWinnerFilterOptions,
@@ -107,6 +120,12 @@ interface SidebarProps {
   onLeaderboardClick: () => void;
   savedItems: SavedResponseItem[];
   onSavedItemClick: (item: SavedResponseItem) => void;
+  onToggleSavedPin?: (item: SavedResponseItem, pinned: boolean) => void;
+  onReuseSavedPrompt?: (item: SavedResponseItem) => void;
+  onBulkPinSaved?: (
+    ids: number[],
+    pinned: boolean,
+  ) => Promise<{ applied: number; pin_limit_reached: boolean }> | void;
 }
 
 type FilterValue = 'all' | PromptCategory;
@@ -129,6 +148,9 @@ export function Sidebar({
   onLeaderboardClick,
   savedItems,
   onSavedItemClick,
+  onToggleSavedPin,
+  onReuseSavedPrompt,
+  onBulkPinSaved,
 }: SidebarProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -144,6 +166,8 @@ export function Sidebar({
   const [savedSort, setSavedSort] = useState<SidebarSavedSort>('newest');
   const [savedMindFilter, setSavedMindFilter] =
     useState<SidebarSavedMindFilter>(SIDEBAR_SAVED_MIND_ALL);
+  const [savedPinFilter, setSavedPinFilter] =
+    useState<SavedPinFilterValue>(SIDEBAR_SAVED_PIN_ALL);
   const [savedScoreFilter, setSavedScoreFilter] =
     useState<AgentHistoryScoreFilter>('all');
   const [savedRecencyFilter, setSavedRecencyFilter] =
@@ -156,6 +180,9 @@ export function Sidebar({
   const [copySavedFailed, setCopySavedFailed] = useState(false);
   const [copyAllSavedStatus, setCopyAllSavedStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadAllSavedStatus, setDownloadAllSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadJsonSavedStatus, setDownloadJsonSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [downloadCsvSavedStatus, setDownloadCsvSavedStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [bulkPinStatus, setBulkPinStatus] = useState<'idle' | 'busy' | 'done' | 'failed' | 'partial'>('idle');
   const [copyRecentsStatus, setCopyRecentsStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadRecentsStatus, setDownloadRecentsStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   /** Per-recent row copy feedback: turn_id + kind. */
@@ -249,7 +276,8 @@ export function Sidebar({
   );
   const filteredSaved = useMemo(() => {
     const byMind = filterSavedByMind(reversedSaved, savedMindFilter);
-    const byScore = filterAgentHistoryByScore(byMind, savedScoreFilter);
+    const byPin = filterSavedByPin(byMind, savedPinFilter);
+    const byScore = filterAgentHistoryByScore(byPin, savedScoreFilter);
     const byRecency = filterAgentHistoryByRecency(
       byScore.map((item) => ({
         ...item,
@@ -276,12 +304,21 @@ export function Sidebar({
     savedSearchQuery,
     savedSort,
     savedMindFilter,
+    savedPinFilter,
     savedScoreFilter,
     savedRecencyFilter,
   ]);
 
   const savedScoreFilterUseful = useMemo(
     () => agentHistoryScoreFilterUseful(reversedSaved),
+    [reversedSaved],
+  );
+
+  const shownSavedPinnedCount = filteredSaved.filter((item) => item.pinned === true).length;
+  const totalPinnedSavedCount = savedItems.filter((item) => item.pinned === true).length;
+
+  const savedPinFilterUseful = useMemo(
+    () => reversedSaved.some((item) => item.pinned === true),
     [reversedSaved],
   );
 
@@ -305,6 +342,14 @@ export function Sidebar({
       setSavedMindFilter(SIDEBAR_SAVED_MIND_ALL);
     }
   }, [savedMindFilter, savedMindOptions]);
+
+  // Drop the pinned-only filter when the last pinned take is unpinned so the
+  // sidebar never leaves the user stranded on an empty pinned-only view.
+  useEffect(() => {
+    if (savedPinFilter === SIDEBAR_SAVED_PIN_ONLY && !savedPinFilterUseful) {
+      setSavedPinFilter(SIDEBAR_SAVED_PIN_ALL);
+    }
+  }, [savedPinFilter, savedPinFilterUseful]);
 
   // Drop winner filter when that winner no longer appears in recents.
   useEffect(() => {
@@ -337,6 +382,27 @@ export function Sidebar({
     const t = window.setTimeout(() => setDownloadAllSavedStatus('idle'), hold > 0 ? hold : 0);
     return () => window.clearTimeout(t);
   }, [downloadAllSavedStatus]);
+
+  useEffect(() => {
+    if (downloadJsonSavedStatus === 'idle') return;
+    const hold = motionDuration(downloadJsonSavedStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadJsonSavedStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadJsonSavedStatus]);
+
+  useEffect(() => {
+    if (downloadCsvSavedStatus === 'idle') return;
+    const hold = motionDuration(downloadCsvSavedStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setDownloadCsvSavedStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [downloadCsvSavedStatus]);
+
+  useEffect(() => {
+    if (bulkPinStatus === 'idle' || bulkPinStatus === 'busy') return;
+    const hold = motionDuration(bulkPinStatus === 'failed' ? 2800 : 2000);
+    const t = window.setTimeout(() => setBulkPinStatus('idle'), hold > 0 ? hold : 0);
+    return () => window.clearTimeout(t);
+  }, [bulkPinStatus]);
 
   useEffect(() => {
     if (copyRecentsStatus === 'idle') return;
@@ -382,13 +448,16 @@ export function Sidebar({
     }
   };
 
-  const buildSavedTakesMarkdown = () => {
+  const buildSavedTakesFilterNote = () => {
     const q = savedSearchQuery.trim();
     const filterBits: string[] = [];
     if (savedMindFilter !== SIDEBAR_SAVED_MIND_ALL) {
       filterBits.push(
         `mind: ${sidebarSavedMindFilterLabel(savedMindFilter, savedMindOptions)}`,
       );
+    }
+    if (savedPinFilter === SIDEBAR_SAVED_PIN_ONLY) {
+      filterBits.push('pinned only');
     }
     if (savedScoreFilter !== 'all') {
       filterBits.push(`score: ${agentHistoryScoreLabel(savedScoreFilter)}`);
@@ -398,20 +467,29 @@ export function Sidebar({
     }
     if (q) filterBits.push(`search “${q}”`);
     if (savedSort !== 'newest') filterBits.push(`sort: ${sidebarSavedSortLabel(savedSort)}`);
+    return filterBits.length ? filterBits.join(' · ') : undefined;
+  };
+
+  const buildSavedTakesItems = () =>
+    filteredSaved.map((item) => {
+      const agent = AGENTS[item.agent_id];
+      return {
+        agentName: item.persona_name || agent?.name || item.agent_id || 'Mind',
+        prompt: item.prompt,
+        oneLiner: item.one_liner,
+        verdict: item.verdict,
+        score: item.score,
+        timestamp: item.timestamp,
+        pinned: item.pinned === true,
+        personaId: item.persona_id || null,
+      };
+    });
+
+  const buildSavedTakesMarkdown = () => {
     return formatSavedTakesListExport({
       totalCount: savedItems.length,
-      filterNote: filterBits.length ? filterBits.join(' · ') : undefined,
-      items: filteredSaved.map((item) => {
-        const agent = AGENTS[item.agent_id];
-        return {
-          agentName: item.persona_name || agent?.name || item.agent_id || 'Mind',
-          prompt: item.prompt,
-          oneLiner: item.one_liner,
-          verdict: item.verdict,
-          score: item.score,
-          timestamp: item.timestamp,
-        };
-      }),
+      filterNote: buildSavedTakesFilterNote(),
+      items: buildSavedTakesItems(),
     });
   };
 
@@ -433,6 +511,49 @@ export function Sidebar({
     const ok = downloadMarkdownFile(md, 'arena-saved-takes');
     setDownloadAllSavedStatus(ok ? 'done' : 'failed');
     if (ok) void track('saved_takes_list_downloaded');
+  };
+
+  const handleDownloadJsonSaved = () => {
+    const json = formatSavedTakesJsonExport({
+      totalCount: savedItems.length,
+      filterNote: buildSavedTakesFilterNote(),
+      items: buildSavedTakesItems(),
+    });
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate('arena-saved-takes')}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    setDownloadJsonSavedStatus(ok ? 'done' : 'failed');
+    if (ok) void track('saved_takes_json_downloaded');
+  };
+
+  const handleDownloadCsvSaved = () => {
+    const csv = formatSavedTakesCsvExport({
+      items: buildSavedTakesItems(),
+    });
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate('arena-saved-takes')}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    setDownloadCsvSavedStatus(ok ? 'done' : 'failed');
+    if (ok) void track('saved_takes_csv_downloaded');
+  };
+
+  const handleBulkPinSaved = async () => {
+    if (!onBulkPinSaved) return;
+    const ids = filteredSaved
+      .map((item) => Number(item.id))
+      .filter((id) => Number.isFinite(id));
+    if (ids.length === 0) return;
+    const shouldPin = savedPinFilter !== SIDEBAR_SAVED_PIN_ONLY;
+    setBulkPinStatus('busy');
+    try {
+      const result = await onBulkPinSaved(ids, shouldPin);
+      setBulkPinStatus(result?.pin_limit_reached ? 'partial' : 'done');
+      void track(shouldPin ? 'saved_takes_bulk_pinned' : 'saved_takes_bulk_unpinned');
+    } catch {
+      setBulkPinStatus('failed');
+    }
   };
 
   const buildRecentsMarkdown = () => {
@@ -1333,13 +1454,77 @@ export function Sidebar({
                       {filteredSaved.length}
                       {savedSearchQuery.trim() ||
                       savedMindFilter !== SIDEBAR_SAVED_MIND_ALL ||
+                      savedPinFilter === SIDEBAR_SAVED_PIN_ONLY ||
                       savedScoreFilter !== 'all' ||
                       savedRecencyFilter !== 'all'
                         ? ` / ${savedItems.length}`
                         : ''}
+                      {savedPinFilter !== SIDEBAR_SAVED_PIN_ONLY && totalPinnedSavedCount > 0
+                        ? ` · pinned ${totalPinnedSavedCount}`
+                        : ''}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      disabled={
+                        bulkPinStatus === 'busy' ||
+                        filteredSaved.length === 0 ||
+                        (savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                          ? shownSavedPinnedCount === 0
+                          : shownSavedPinnedCount === filteredSaved.length)
+                      }
+                      title={
+                        savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                          ? 'Unpin all shown saved takes'
+                          : 'Pin all shown saved takes'
+                      }
+                      aria-label={
+                        bulkPinStatus === 'busy'
+                          ? savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                            ? 'Unpinning shown saved takes'
+                            : 'Pinning shown saved takes'
+                          : savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                            ? 'Unpin all shown saved takes'
+                            : 'Pin all shown saved takes'
+                      }
+                      onClick={() => void handleBulkPinSaved()}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        cursor: bulkPinStatus === 'busy' ? 'default' : 'pointer',
+                        color:
+                          bulkPinStatus === 'failed'
+                            ? '#D85A30'
+                            : bulkPinStatus === 'partial'
+                              ? '#C9A227'
+                              : bulkPinStatus === 'done'
+                                ? '#5A8C6A'
+                                : '#F0B84E',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {bulkPinStatus === 'busy'
+                        ? savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                          ? 'Unpinning…'
+                          : 'Pinning…'
+                        : bulkPinStatus === 'done'
+                          ? savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                            ? 'Unpinned'
+                            : 'Pinned'
+                          : bulkPinStatus === 'partial'
+                            ? 'Pin limit'
+                            : bulkPinStatus === 'failed'
+                              ? 'Failed'
+                              : savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                                ? 'Unpin all'
+                                : 'Pin all'}
+                    </button>
                     <button
                       type="button"
                       title="Copy all saved takes as markdown"
@@ -1410,9 +1595,83 @@ export function Sidebar({
                           ? 'Failed'
                           : 'Download'}
                     </button>
+                    <button
+                      type="button"
+                      title="Download all saved takes as JSON"
+                      aria-label={
+                        downloadJsonSavedStatus === 'done'
+                          ? 'Saved takes JSON downloaded'
+                          : downloadJsonSavedStatus === 'failed'
+                            ? 'JSON download failed'
+                            : 'Download all saved takes as JSON'
+                      }
+                      onClick={() => handleDownloadJsonSaved()}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color:
+                          downloadJsonSavedStatus === 'failed'
+                            ? '#D85A30'
+                            : downloadJsonSavedStatus === 'done'
+                              ? '#5A8C6A'
+                              : '#F0B84E',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {downloadJsonSavedStatus === 'done'
+                        ? 'Saved JSON'
+                        : downloadJsonSavedStatus === 'failed'
+                          ? 'Failed'
+                          : 'JSON'}
+                    </button>
+                    <button
+                      type="button"
+                      title="Download all saved takes as CSV"
+                      aria-label={
+                        downloadCsvSavedStatus === 'done'
+                          ? 'Saved takes CSV downloaded'
+                          : downloadCsvSavedStatus === 'failed'
+                            ? 'CSV download failed'
+                            : 'Download all saved takes as CSV'
+                      }
+                      onClick={() => handleDownloadCsvSaved()}
+                      style={{
+                        background: 'none',
+                        border: '0.5px solid #E0D8D0',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color:
+                          downloadCsvSavedStatus === 'failed'
+                            ? '#D85A30'
+                            : downloadCsvSavedStatus === 'done'
+                              ? '#5A8C6A'
+                              : '#F0B84E',
+                        padding: '3px 8px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                    >
+                      {downloadCsvSavedStatus === 'done'
+                        ? 'Saved CSV'
+                        : downloadCsvSavedStatus === 'failed'
+                          ? 'Failed'
+                          : 'CSV'}
+                    </button>
                   </div>
                 </div>
-                {copyAllSavedStatus !== 'idle' || downloadAllSavedStatus !== 'idle' ? (
+                {copyAllSavedStatus !== 'idle' ||
+                downloadAllSavedStatus !== 'idle' ||
+                downloadJsonSavedStatus !== 'idle' ||
+                downloadCsvSavedStatus !== 'idle' ||
+                (bulkPinStatus !== 'idle' && bulkPinStatus !== 'busy') ? (
                   <div
                     role="status"
                     aria-live="polite"
@@ -1434,9 +1693,25 @@ export function Sidebar({
                         ? 'Could not copy saved takes'
                         : downloadAllSavedStatus === 'done'
                           ? 'Saved takes downloaded'
-                          : downloadAllSavedStatus === 'failed'
-                            ? 'Could not download saved takes'
-                            : ''}
+                        : downloadAllSavedStatus === 'failed'
+                          ? 'Could not download saved takes'
+                          : downloadJsonSavedStatus === 'done'
+                            ? 'Saved takes JSON downloaded'
+                            : downloadJsonSavedStatus === 'failed'
+                              ? 'Could not download saved takes JSON'
+                              : downloadCsvSavedStatus === 'done'
+                                ? 'Saved takes CSV downloaded'
+                                : downloadCsvSavedStatus === 'failed'
+                                  ? 'Could not download saved takes CSV'
+                                  : bulkPinStatus === 'done'
+                            ? savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                              ? 'Shown saved takes unpinned'
+                              : 'Shown saved takes pinned'
+                            : bulkPinStatus === 'partial'
+                              ? 'Pin limit reached — some shown takes were not pinned'
+                              : bulkPinStatus === 'failed'
+                                ? 'Could not update saved takes'
+                                : ''}
                   </div>
                 ) : null}
                 <div style={{ marginBottom: 8 }}>
@@ -1475,6 +1750,60 @@ export function Sidebar({
                               lineHeight: 1.35,
                             }}
                           >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {savedPinFilterUseful ? (
+                    <div
+                      role="group"
+                      aria-label="Filter saved takes by pin state"
+                      style={{
+                        display: 'flex',
+                        gap: 6,
+                        marginBottom: 8,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {([
+                        { value: SIDEBAR_SAVED_PIN_ALL, label: 'All saved' },
+                        { value: SIDEBAR_SAVED_PIN_ONLY, label: 'Pinned' },
+                      ] as Array<{ value: SavedPinFilterValue; label: string }>).map((opt) => {
+                        const selected = savedPinFilter === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setSavedPinFilter(opt.value)}
+                            aria-pressed={selected}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              background: selected ? '#F0E6DA' : 'transparent',
+                              border: selected
+                                ? '0.5px solid #F0B84E'
+                                : '0.5px solid #E0D8D0',
+                              borderRadius: 999,
+                              padding: '3px 9px',
+                              fontSize: 10,
+                              letterSpacing: '0.03em',
+                              color: selected ? '#4A3728' : '#A0A39A',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--vp-font-sans)',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            <Pin
+                              style={{
+                                width: 11,
+                                height: 11,
+                                fill: selected ? 'currentColor' : 'none',
+                              }}
+                            />
                             {opt.label}
                           </button>
                         );
@@ -1653,8 +1982,14 @@ export function Sidebar({
                               savedRecencyFilter !== 'all'
                                 ? ` · ${agentHistoryRecencyLabel(savedRecencyFilter)}`
                                 : ''
+                            }${
+                              savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                                ? ' · pinned only'
+                                : ''
                             }`
-                          : savedRecencyFilter !== 'all' &&
+                          : savedPinFilter === SIDEBAR_SAVED_PIN_ONLY
+                            ? 'No pinned saved takes in this view'
+                            : savedRecencyFilter !== 'all' &&
                               savedMindFilter === SIDEBAR_SAVED_MIND_ALL &&
                               savedScoreFilter === 'all'
                             ? `No saved takes from ${agentHistoryRecencyLabel(savedRecencyFilter).toLowerCase()}`
@@ -1670,6 +2005,7 @@ export function Sidebar({
                         onClick={() => {
                           setSavedSearchQuery('');
                           setSavedMindFilter(SIDEBAR_SAVED_MIND_ALL);
+                          setSavedPinFilter(SIDEBAR_SAVED_PIN_ALL);
                           setSavedScoreFilter('all');
                           setSavedRecencyFilter('all');
                           savedSearchInputRef.current?.focus();
@@ -1685,6 +2021,7 @@ export function Sidebar({
                         }}
                       >
                         {(savedMindFilter !== SIDEBAR_SAVED_MIND_ALL ||
+                          savedPinFilter === SIDEBAR_SAVED_PIN_ONLY ||
                           savedScoreFilter !== 'all' ||
                           savedRecencyFilter !== 'all') &&
                         !savedSearchQuery.trim()
@@ -1775,6 +2112,31 @@ export function Sidebar({
                           </button>
                           <button
                             type="button"
+                            aria-label={`Re-ask ${displayName} take`}
+                            title="Re-ask this take"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onReuseSavedPrompt?.(item);
+                            }}
+                            style={{
+                              flexShrink: 0,
+                              width: 28,
+                              height: 28,
+                              borderRadius: 6,
+                              border: 'none',
+                              background: 'transparent',
+                              color: '#A0A39A',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 0,
+                            }}
+                          >
+                            <Send style={{ width: 13, height: 13 }} />
+                          </button>
+                          <button
+                            type="button"
                             aria-label={justCopied ? 'Copied' : `Copy ${displayName} take as markdown`}
                             title={justCopied ? 'Copied' : 'Copy as markdown'}
                             onClick={(e) => {
@@ -1801,6 +2163,45 @@ export function Sidebar({
                             ) : (
                               <Copy style={{ width: 13, height: 13 }} />
                             )}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={
+                              item.pinned
+                                ? `Unpin ${displayName} take`
+                                : `Pin ${displayName} take`
+                            }
+                            title={item.pinned ? 'Unpin take' : 'Pin take'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const nextPinned = !item.pinned;
+                              if (nextPinned) setSavedSort('pinned');
+                              onToggleSavedPin?.(item, nextPinned);
+                            }}
+                            style={{
+                              flexShrink: 0,
+                              width: 28,
+                              height: 28,
+                              borderRadius: 6,
+                              border: 'none',
+                              background: item.pinned
+                                ? 'rgba(196,149,106,0.15)'
+                                : 'transparent',
+                              color: item.pinned ? '#F0B84E' : '#A0A39A',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 0,
+                            }}
+                          >
+                            <Pin
+                              style={{
+                                width: 13,
+                                height: 13,
+                                fill: item.pinned ? 'currentColor' : 'none',
+                              }}
+                            />
                           </button>
                         </div>
                       );

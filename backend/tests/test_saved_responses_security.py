@@ -39,6 +39,10 @@ async def test_save_requires_plus_or_pro(app_client, make_user):
         json=_payload(),
     )
     assert res.status_code == 403, res.text
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "feature_not_allowed"
+    assert detail.get("upgrade_required") == "plus"
 
 
 @pytest.mark.asyncio
@@ -89,6 +93,9 @@ async def test_delete_foreign_returns_404_not_403(app_client, make_user, db_sess
     # Owner row still present.
     db_session.refresh(row)
     assert row.id is not None
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "not_found"
 
 
 @pytest.mark.asyncio
@@ -96,6 +103,9 @@ async def test_delete_missing_returns_404(app_client, make_user):
     user = make_user(email="saved-miss@test.com", tier=UserTier.PLUS)
     res = await app_client.delete("/api/saved/999999", headers=_headers(user))
     assert res.status_code == 404
+    detail = res.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "not_found"
 
 
 @pytest.mark.asyncio

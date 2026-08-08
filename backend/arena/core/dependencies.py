@@ -3,7 +3,7 @@
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, raiseload
 
 from arena.core.auth import decode_token, orm_user_to_response
 from arena.core.errors import ErrorCodes
@@ -72,7 +72,7 @@ async def get_current_user(
             detail={"error": ErrorCodes.INVALID_TOKEN, "message": "Invalid token"},
         )
 
-    user = db.query(User).filter(User.id == uid).first()
+    user = db.query(User).options(raiseload('*')).filter(User.id == uid).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

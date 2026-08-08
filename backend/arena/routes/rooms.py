@@ -13,6 +13,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import desc, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from arena.config import get_settings
@@ -28,6 +29,22 @@ from arena.core.datetime_utils import utcnow_naive
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["rooms"])
+
+
+def _touch_room_member(member_id: int) -> None:
+    """Background write of last_seen_at so GET /rooms/{slug} stays idempotent."""
+    db = SessionLocal()
+    try:
+        rm = db.query(RoomMember).filter(RoomMember.id == member_id).first()
+        if rm:
+            rm.last_seen_at = utcnow_naive()
+            db.commit()
+    except Exception:
+        logger.warning("Failed to touch room member last_seen_at", exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
+
 
 MAX_ROOM_MEMBERS = 20
 
@@ -122,7 +139,7 @@ async def run_room_synthesis(slug: str) -> None:
         try:
             db.rollback()
         except Exception:
-            pass
+            logger.warning("Failed to rollback after room synthesis failure", exc_info=True)
     finally:
         db.close()
 
@@ -133,7 +150,12 @@ def _schedule_synthesis(background_tasks: BackgroundTasks, slug: str) -> None:
 
 class CreateRoomBody(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    task_id: Optional[str] = None
+    # task_id is bounded at the Pydantic level (max 100 chars).
+    # Real values are UUIDs (~36 chars); 100 chars is generous.
+    # The Pydantic cap closes the gap so a user cannot submit
+    # a 1MB task_id to amplify the pydantic memory cost before
+    # the route handler's ownership check runs.
+    task_id: Optional[str] = Field(default=None, max_length=100)
 
     @field_validator("name")
     @classmethod
@@ -142,7 +164,9 @@ class CreateRoomBody(BaseModel):
 
 
 class AddTaskBody(BaseModel):
-    task_id: str = Field(..., min_length=1)
+    # task_id is bounded at the Pydantic level (max 100 chars).
+    # Same rationale as CreateRoomBody.task_id above.
+    task_id: str = Field(..., min_length=1, max_length=100)
 
 
 def _ensure_unique_slug(db: Session, base_slug: str) -> str:
@@ -267,15 +291,33 @@ async def my_rooms(
         .limit(per_page)
         .all()
     )
+    room_ids = [r.id for r in rows]
+    if room_ids:
+        member_counts = dict(
+            db.query(RoomMember.room_id, func.count(RoomMember.id))
+            .filter(RoomMember.room_id.in_(room_ids))
+            .group_by(RoomMember.room_id)
+            .all()
+        )
+        task_counts = dict(
+            db.query(RoomTask.room_id, func.count(RoomTask.id))
+            .filter(RoomTask.room_id.in_(room_ids))
+            .group_by(RoomTask.room_id)
+            .all()
+        )
+        last_seen_map = dict(
+            db.query(RoomMember.room_id, RoomMember.last_seen_at)
+            .filter(RoomMember.room_id.in_(room_ids), RoomMember.user_id == user.id)
+            .all()
+        )
+    else:
+        member_counts = {}
+        task_counts = {}
+        last_seen_map = {}
     result = []
     for r in rows:
-        d = _room_to_dict(r, db)
-        rm = (
-            db.query(RoomMember)
-            .filter(RoomMember.room_id == r.id, RoomMember.user_id == user.id)
-            .first()
-        )
-        d["last_seen_at"] = rm.last_seen_at.isoformat() if rm and rm.last_seen_at else None
+        d = _room_to_dict(r, db, member_count=member_counts.get(r.id, 0), task_count=task_counts.get(r.id, 0))
+        d["last_seen_at"] = last_seen_map.get(r.id).isoformat() if last_seen_map.get(r.id) else None
         result.append(d)
     return {
         "rooms": result,
@@ -342,8 +384,25 @@ async def discover_rooms(
         .limit(per_page)
         .all()
     )
+    room_ids = [r.id for r in rows]
+    if room_ids:
+        member_counts = dict(
+            db.query(RoomMember.room_id, func.count(RoomMember.id))
+            .filter(RoomMember.room_id.in_(room_ids))
+            .group_by(RoomMember.room_id)
+            .all()
+        )
+        task_counts = dict(
+            db.query(RoomTask.room_id, func.count(RoomTask.id))
+            .filter(RoomTask.room_id.in_(room_ids))
+            .group_by(RoomTask.room_id)
+            .all()
+        )
+    else:
+        member_counts = {}
+        task_counts = {}
     return {
-        "rooms": [_room_to_dict(r, db) for r in rows],
+        "rooms": [_room_to_dict(r, db, member_count=member_counts.get(r.id, 0), task_count=task_counts.get(r.id, 0)) for r in rows],
         "total": total,
         "page": page,
         "per_page": per_page,
@@ -491,6 +550,7 @@ async def get_synthesis(
 async def get_room(
     request: Request,
     slug: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current: Optional[User] = Depends(get_current_user_optional_orm),
 ) -> dict[str, Any]:
@@ -525,10 +585,11 @@ async def get_room(
             .first()
         )
         if rm:
-            # Presence heartbeat for existing members only.
-            rm.last_seen_at = utcnow_naive()
-            db.add(rm)
-            db.commit()
+            # Presence heartbeat for existing members only — defer write
+            # to background task so GET stays side-effect-free for the
+            # request transaction (tests still observe the update after
+            # the ASGI response completes and Starlette drains tasks).
+            background_tasks.add_task(_touch_room_member, rm.id)
 
     return _build_room_payload(db, room)
 
@@ -587,7 +648,21 @@ async def join_room(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_required_orm),
 ) -> dict[str, Any]:
-    room = db.query(Room).filter(Room.slug == slug, Room.is_active.is_(True)).first()
+    room = (
+        db.query(Room)
+        .filter(Room.slug == slug, Room.is_active.is_(True))
+        # Lock the room row for the duration of the join transaction so two
+        # concurrent joins to the same room serialize on the cap check below.
+        # Without this, a count-then-insert TOCTOU race lets N+1 concurrent
+        # joins all see n=MAX_ROOM_MEMBERS-1 and all INSERT, pushing the
+        # real member count to MAX_ROOM_MEMBERS+N and over the documented
+        # cap. with_for_update() on the room row (not the count query) is
+        # the cheapest fix — concurrent joins to *different* rooms still
+        # run in parallel, and concurrent joins to the *same* room just
+        # queue briefly on the row lock.
+        .with_for_update()
+        .first()
+    )
     if not room:
         raise HTTPException(
             status_code=404,
@@ -708,7 +783,22 @@ async def add_task_to_room(
             user_id=user.id,
         )
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Race: two concurrent add-task requests for the same
+        # (room_id, task_id) pair both passed the dup check above,
+        # and the RoomTask unique constraint (`uq_room_task_room_task`)
+        # rejected the second INSERT. The first one is already in the
+        # table; treat the second as "already in room" so the
+        # client gets the same response shape as the pre-check path
+        # above (no 500, no duplicate synthesis run). The previously
+        # bound error budget (15/hr) on the synthesis scope is also
+        # NOT consumed by the losing race — losing requests must not
+        # burn quota the way successful inserts do.
+        db.rollback()
+        db.refresh(room)
+        return _build_room_payload(db, room)
 
     _schedule_synthesis(background_tasks, room.slug)
 
@@ -821,7 +911,7 @@ def _extract_answer_snippet(raw: str | None, *, limit: int = 500) -> str:
                 elif parsed.get("text"):
                     text = str(parsed["text"])
         except Exception:
-            pass
+            logger.warning("Failed to parse response JSON in _extract_answer_snippet", exc_info=True)
     cleaned = re.sub(r"\s+", " ", text).strip()
     return cleaned[:limit]
 
@@ -1028,6 +1118,7 @@ async def get_perspective_drift(
                 else:
                     topics = str(parsed_topics)[:200]
             except Exception:
+                logger.warning("Failed to parse room task topics JSON", exc_info=True)
                 topics = str(at.topics)[:200]
 
         answer = _extract_answer_snippet(at.final_answer)
@@ -1044,6 +1135,7 @@ async def get_perspective_drift(
                 else:
                     answer = str(kc)[:500]
             except Exception:
+                logger.warning("Failed to parse room task key_conclusions JSON", exc_info=True)
                 answer = str(at.key_conclusions)[:500]
 
         display_name = (u.name or "").strip() or (u.email.split("@")[0] if u.email else "member")

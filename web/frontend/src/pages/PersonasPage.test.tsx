@@ -152,6 +152,9 @@ describe('PersonasPage', () => {
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content');
     expect(screen.getByRole('heading', { name: /build useful disagreement/i })).toBeInTheDocument();
     expect(container.querySelectorAll('.personas-studio-section')).toHaveLength(3);
+
+    expect(container.querySelectorAll('.personas-studio-section')).toHaveLength(2);
+         main
     expect(screen.getByTestId('navbar')).toBeInTheDocument();
     expect(screen.getByTestId('footer')).toBeInTheDocument();
   });
@@ -188,20 +191,10 @@ describe('PersonasPage', () => {
     expect(panelState.swapAgent).not.toHaveBeenCalled();
   });
 
-  it('switches the illustrative lens preview with pressed-button semantics', () => {
-    renderPage();
-    const group = screen.getByRole('group', { name: /lens preview scenario/i });
-    const decision = within(group).getByRole('button', { name: /decision/i });
-    const product = within(group).getByRole('button', { name: /product/i });
-    expect(decision).toHaveAttribute('aria-pressed', 'true');
-    expect(product).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(product);
-    expect(decision).toHaveAttribute('aria-pressed', 'false');
-    expect(product).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/solving a problem—or decorating one/i)).toBeInTheDocument();
-    expect(screen.getByText(/not a live run/i)).toBeInTheDocument();
-  });
 
+
+
+     main
   it('shows a concise initial index and discloses the complete catalog on demand', () => {
     const { container } = renderPage();
     expect(container.querySelectorAll('.personas-lib-card')).toHaveLength(8);
@@ -264,6 +257,8 @@ describe('PersonasPage', () => {
     expect(panelState.resetPanel).toHaveBeenCalledTimes(1);
   });
 
+
+         main
   it('keeps the selected profile consistent when availability filters remove a mind', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /the pragmatist.*what actually works/i }));

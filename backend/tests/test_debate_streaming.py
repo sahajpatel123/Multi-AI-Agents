@@ -39,9 +39,17 @@ class TestDebateStreamingEndpoint:
         # Should return SSE stream
         assert res.status_code == 200
         assert "text/event-stream" in res.headers.get("content-type", "")
+        assert res.headers.get("x-accel-buffering") == "no", (
+            "SSE responses must disable proxy/nginx buffering"
+        )
 
         events = self._parse_sse_events(res.text)
         event_types = [e["event"] for e in events]
+
+        request_id_events = [e for e in events if e["event"] == "request_id"]
+        assert len(request_id_events) == 1
+        assert request_id_events[0]["data"]["request_id"]
+        assert event_types[0] == "request_id"
 
         # Should have reaction_token events (streaming)
         token_events = [e for e in events if e["event"] == "reaction_token"]
@@ -56,6 +64,9 @@ class TestDebateStreamingEndpoint:
         assert len(result_events) == 1
 
         result = result_events[0]["data"]
+        assert result.get("request_id") == request_id_events[0]["data"]["request_id"], (
+            "debate result must carry the same request_id advertised at stream start"
+        )
         assert "round_number" in result
         assert "challenged_agent_id" in result
         assert "reactions" in result

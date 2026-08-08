@@ -25,11 +25,13 @@ export type SidebarRecentsSortable = {
 export type SidebarSavedSort =
   | 'newest'
   | 'oldest'
+  | 'pinned'
   | 'score_desc'
   | 'score_asc'
   | 'mind';
 
 export const SIDEBAR_SAVED_SORT_OPTIONS: Array<{ value: SidebarSavedSort; label: string }> = [
+  { value: 'pinned', label: 'Pinned first' },
   { value: 'newest', label: 'Newest' },
   { value: 'oldest', label: 'Oldest' },
   { value: 'score_desc', label: 'Score · high' },
@@ -47,6 +49,8 @@ export type SidebarSavedSortable = {
   mindName?: string | null;
   score?: number | null;
   timestamp?: string | null;
+  pinned?: boolean;
+  pinned_at?: string | null;
 };
 
 function createdMs(iso: string | null | undefined): number {
@@ -108,7 +112,23 @@ export function sortSidebarSaved<T extends SidebarSavedSortable>(
   const tie = (a: T, b: T) => cmpStr(String(a.id), String(b.id));
 
   list.sort((a, b) => {
+    // Pinned takes always float above the rest; within a group the chosen
+    // sort applies. This keeps the sidebar's curated set stable no matter
+    // which secondary ordering the user selects.
+    const pinDelta = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
+    if (pinDelta !== 0) return pinDelta;
+
     switch (sort) {
+      case 'pinned': {
+        // Match the backend's pinned sort: most recently pinned first,
+        // then most recently saved as a secondary key.
+        const pa = createdMs(a.pinned_at ?? a.timestamp);
+        const pb = createdMs(b.pinned_at ?? b.timestamp);
+        const d = pb - pa;
+        if (d !== 0) return d;
+        const t = createdMs(b.timestamp) - createdMs(a.timestamp);
+        return t !== 0 ? t : tie(a, b);
+      }
       case 'oldest': {
         const d = createdMs(a.timestamp) - createdMs(b.timestamp);
         return d !== 0 ? d : tie(a, b);

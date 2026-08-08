@@ -8,6 +8,21 @@ import '../styles/verdict-public-nav.css';
 const PRIMARY_LINKS = [
   { label: 'PRODUCT', path: '/product' },
   { label: 'PERSONAS', path: '/personas' },
+  { label: 'PLAYGROUND', path: '/persona-playground' },
+  { label: 'MATCH', path: '/persona-match' },
+  { label: 'BATTLE', path: '/persona-battle' },
+  { label: 'WHEEL', path: '/persona-wheel' },
+  { label: 'TRIVIA', path: '/persona-trivia' },
+  { label: 'SPEED', path: '/persona-speed' },
+  { label: 'ROAST', path: '/persona-roast' },
+  { label: 'CHALLENGE', path: '/persona-challenge' },
+  { label: 'DUEL', path: '/persona-duel' },
+  { label: 'ECHO', path: '/persona-echo' },
+  { label: 'COUNCIL', path: '/persona-council' },
+  { label: 'DILEMMA', path: '/persona-dilemma' },
+  { label: 'FORECAST', path: '/persona-forecast' },
+  { label: 'MOSAIC', path: '/persona-mosaic' },
+  { label: 'LIBRARY', path: '/persona-library' },
   { label: 'PRICING', path: '/pricing' },
   { label: 'DOCS', path: '/docs' },
 ] as const;
@@ -16,10 +31,25 @@ const MENU_LINKS = [
   { number: '01', label: 'Product', path: '/product' },
   { number: '02', label: 'Capabilities', path: '/capabilities' },
   { number: '03', label: 'Personas', path: '/personas' },
-  { number: '04', label: 'Pricing', path: '/pricing' },
-  { number: '05', label: 'Documentation', path: '/docs' },
-  { number: '06', label: 'About', path: '/about' },
-  { number: '07', label: 'Changelog', path: '/changelog' },
+  { number: '04', label: 'Persona Playground', path: '/persona-playground' },
+  { number: '05', label: 'Persona Match', path: '/persona-match' },
+  { number: '06', label: 'Persona Battle', path: '/persona-battle' },
+  { number: '07', label: 'Persona Wheel', path: '/persona-wheel' },
+  { number: '08', label: 'Persona Trivia', path: '/persona-trivia' },
+  { number: '09', label: 'Persona Speed', path: '/persona-speed' },
+  { number: '10', label: 'Persona Roast', path: '/persona-roast' },
+  { number: '11', label: 'Persona Challenge', path: '/persona-challenge' },
+  { number: '12', label: 'Persona Duel', path: '/persona-duel' },
+  { number: '13', label: 'Persona Echo', path: '/persona-echo' },
+  { number: '14', label: 'Persona Council', path: '/persona-council' },
+  { number: '15', label: 'Persona Dilemma', path: '/persona-dilemma' },
+  { number: '16', label: 'Persona Forecast', path: '/persona-forecast' },
+  { number: '17', label: 'Persona Mosaic', path: '/persona-mosaic' },
+  { number: '18', label: 'Persona Library', path: '/persona-library' },
+  { number: '19', label: 'Pricing', path: '/pricing' },
+  { number: '20', label: 'Documentation', path: '/docs' },
+  { number: '21', label: 'About', path: '/about' },
+  { number: '22', label: 'Changelog', path: '/changelog' },
 ] as const;
 
 export function Navbar() {
@@ -28,6 +58,8 @@ export function Navbar() {
   const { isAuthenticated } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuDialogRef = useRef<HTMLDivElement>(null);
+  const closeMenuButtonRef = useRef<HTMLButtonElement>(null);
   const firstMenuLinkRef = useRef<HTMLAnchorElement>(null);
   const wasOpenRef = useRef(false);
 
@@ -39,13 +71,52 @@ export function Navbar() {
     if (!menuOpen) return;
 
     const previousOverflow = document.body.style.overflow;
+    const inertTargets = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-public-prism-nav], #route-content main, #route-content .site-footer',
+      ),
+    ).map((element) => ({
+      element,
+      alreadyInert: element.hasAttribute('inert'),
+    }));
+
     document.body.style.overflow = 'hidden';
-    const focusTimer = window.setTimeout(() => firstMenuLinkRef.current?.focus(), 0);
+    inertTargets.forEach(({ element }) => element.setAttribute('inert', ''));
+    const focusTimer = window.setTimeout(
+      () => closeMenuButtonRef.current?.focus(),
+      0,
+    );
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
         setMenuOpen(false);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const dialog = menuDialogRef.current;
+      if (!dialog) return;
+
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]):not([tabindex="-1"]), a[href]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
@@ -54,6 +125,9 @@ export function Navbar() {
       window.clearTimeout(focusTimer);
       window.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = previousOverflow;
+      inertTargets.forEach(({ element, alreadyInert }) => {
+        if (!alreadyInert) element.removeAttribute('inert');
+      });
     };
   }, [menuOpen]);
 
@@ -115,6 +189,7 @@ export function Navbar() {
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={menuOpen}
           aria-controls="public-prism-menu"
+          tabIndex={menuOpen ? -1 : 0}
         >
           {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
         </button>
@@ -123,6 +198,7 @@ export function Navbar() {
       <div className="vp-nav-spacer" aria-hidden="true" />
 
       <div
+        ref={menuDialogRef}
         id="public-prism-menu"
         className={`vp-menu vp-public-menu${menuOpen ? ' open' : ''}`}
         role="dialog"
@@ -130,6 +206,16 @@ export function Navbar() {
         aria-label="Site navigation"
         aria-hidden={!menuOpen}
       >
+        <button
+          ref={closeMenuButtonRef}
+          type="button"
+          className="vp-menu-close"
+          aria-label="Close menu"
+          tabIndex={menuOpen ? 0 : -1}
+          onClick={() => setMenuOpen(false)}
+        >
+          <X aria-hidden="true" />
+        </button>
         <nav aria-label="Expanded navigation">
           {MENU_LINKS.map((item, index) => (
             <Link

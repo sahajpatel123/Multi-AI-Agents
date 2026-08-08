@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -8,6 +9,8 @@ from arena.core.blackboard import AgentStatus, Blackboard, StageStatus
 from arena.core.expertise_calibrator import append_expertise_to_system
 from arena.core.llm_caller import call_llm
 from arena.core.model_router import MODEL_REGISTRY
+
+logger = logging.getLogger(__name__)
 
 AGENT_MAX_TOKENS = 2048
 
@@ -184,7 +187,7 @@ Score this answer objectively. Include caveats array as specified.
             try:
                 judgment_data = json.loads(json_match.group())
             except Exception:
-                pass
+                logger.warning("Failed to parse judgment JSON from LLM response", exc_info=True)
 
         bb.judgment.output = response
         bb.judgment.model_used = model["model_id"]
@@ -209,6 +212,7 @@ Score this answer objectively. Include caveats array as specified.
             bb.completed_at = datetime.now(timezone.utc)
 
     except Exception:
+        logger.warning("Judge stage failed", exc_info=True)
         bb.judgment.status = StageStatus.COMPLETE
         bb.judgment.output = "Judgment failed."
         bb.final_score = 75

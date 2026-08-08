@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { Reveal } from '../components/Reveal';
 import '../styles/changelog.css';
 
 const CHANGELOG_ENTRIES = [
@@ -25,6 +26,9 @@ const CHANGELOG_ENTRIES = [
       '[IMPROVED] Agent rooms list: live activity time, “New synthesis” meta, copy invite link',
       '[NEW] Agent templates: Recently used strip + sort (local memory of last picks)',
       '[NEW] Arena leaderboard: click a mind to filter session prompts; copy any prompt',
+      '[NEW] Arena: Re-run round — replay the same prompt from the header for fresh takes',
+      '[NEW] Pro scoring audit: open the session leaderboard and inspect how the judge scored every mind per round (scores, criteria, confidence, fallback flags)',
+      '[IMPROVED] Scoring audit modal: empty sessions show a clear empty state instead of a load error, with a focus trap, background scroll lock, and focus restore',
       '[NEW] Room board: Copy question / Copy answer on each task card',
       '[NEW] Room board confidence filter chips + per-card confidence badge',
       '[IMPROVED] Room board live relative timestamps; member online dots tick every 60s',
@@ -341,10 +345,6 @@ export function ChangelogPage() {
 
       <main id="main-content" className="changelog-page__main" tabIndex={-1}>
         <header className="changelog-page__hero">
-          <p className="changelog-page__kicker">
-            <span className="changelog-page__kicker-dot" aria-hidden="true" />
-            What&apos;s new
-          </p>
           <h1 className="changelog-page__title">Changelog</h1>
           <p className="changelog-page__lede">
             Every update, improvement, and fix — documented.
@@ -364,7 +364,8 @@ export function ChangelogPage() {
             const isExpanded = !isLatest || latestExpanded;
             const visibleItems = isExpanded ? entry.items : entry.items.slice(0, 12);
             return (
-              <article
+              <Reveal
+                as="article"
                 id={`release-${entry.version.replace('.', '-')}`}
                 key={`${entry.version}-${entry.date}`}
                 className={`changelog-entry${isLatest ? ' changelog-entry--latest' : ''}`}
@@ -418,7 +419,7 @@ export function ChangelogPage() {
                     </button>
                   ) : null}
                 </div>
-              </article>
+              </Reveal>
             );
           })}
         </div>

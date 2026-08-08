@@ -21,6 +21,14 @@ from arena.db_models import AgentTask
 
 logger = logging.getLogger("arena.live_thread_checker")
 
+# Cap on the number of live_updates entries persisted per task.
+# Without a cap, a long-running task (e.g. 5 years with daily
+# checks) accumulates ~1800 entries * ~400 chars = ~720KB in
+# the JSON column and the GET /tasks/{id}/live-updates
+# response. 100 is generous (the user sees the 100 most recent
+# updates; older entries are dropped on a FIFO basis).
+LIVE_UPDATES_MAX = 100
+
 
 
 
@@ -167,6 +175,17 @@ async def check_live_task(task: AgentTask, db: Session) -> bool:
                 "status": "unread",
             }
         )
+        # Cap the list to the most-recent LIVE_UPDATES_MAX entries.
+        # Without a cap, a long-running task (e.g. 5 years with
+        # daily checks) accumulates ~1800 entries * ~400 chars
+        # = ~720KB in the JSON column and the GET
+        # /tasks/{id}/live-updates response. Drop the oldest
+        # entries (FIFO) — the user already saw them, so the
+        # memory cost of dropping is bounded to "the user loses
+        # very-old unread state" which is acceptable for a
+        # 100-entry cap.
+        if len(updates) > LIVE_UPDATES_MAX:
+            updates = updates[-LIVE_UPDATES_MAX:]
         task.live_updates = updates
 
     task.live_last_checked = now

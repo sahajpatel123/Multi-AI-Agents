@@ -1,0 +1,817 @@
+/* Arena Pricing — minimal paywall in Verdict Prism.
+   Signature: Plus as the only lit column. Everything else stays quiet. */
+
+body .pricing-studio-page {
+  --pw-bg: #0b0c0a;
+  --pw-panel: #121410;
+  --pw-ink: #f3f0e7;
+  --pw-copy: #a8aca2;
+  --pw-muted: #9aa094;
+  --pw-rule: rgba(243, 240, 231, 0.14);
+  --pw-acid: #d7f64a;
+  color: var(--pw-ink);
+  background: var(--pw-bg) !important;
+}
+
+body .pricing-studio-page .pricing-page__main {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 0 24px 88px;
+}
+
+body .pricing-studio-page button,
+body .pricing-studio-page a {
+  border-radius: 0 !important;
+}
+
+body .pricing-studio-page button:focus-visible,
+body .pricing-studio-page a:focus-visible {
+  outline: 2px solid var(--vp-amber) !important;
+  outline-offset: 3px;
+}
+
+body .pricing-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Notices */
+body .pricing-studio-page .pricing-studio-notice {
+  min-height: 48px;
+  margin: 16px 0 0;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--pw-bg) !important;
+  border: 1px solid var(--pw-bg);
+  font: 700 12px/1.4 var(--vp-font-sans);
+}
+
+body .pricing-studio-notice--success { background: var(--pw-acid); }
+body .pricing-studio-notice--error { background: var(--vp-coral); }
+body .pricing-studio-notice > svg { width: 16px; }
+body .pricing-studio-notice > button {
+  margin-left: auto;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid var(--pw-bg);
+  color: var(--pw-bg) !important;
+}
+body .pricing-studio-notice > button svg { width: 15px; }
+
+/* Hero */
+body .pricing-studio-page .pricing-paywall-hero {
+  padding: 88px 0 56px;
+  max-width: 720px;
+  border-bottom: 1px solid var(--pw-rule);
+}
+
+body .pricing-studio-page .pricing-paywall-hero__kicker {
+  margin: 0 0 22px;
+  color: var(--pw-acid) !important;
+  font: 700 11px/1 var(--vp-font-mono);
+  text-transform: uppercase;
+}
+
+body .pricing-studio-page .pricing-paywall-hero h1 {
+  margin: 0;
+  color: var(--pw-ink) !important;
+  font-size: clamp(48px, 7vw, 76px);
+  font-weight: 800;
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+}
+
+body .pricing-studio-page .pricing-paywall-hero h1 span {
+  display: block;
+  color: var(--pw-copy) !important;
+  font-weight: 500;
+}
+
+body .pricing-studio-page .pricing-paywall-hero__lede {
+  max-width: 520px;
+  margin: 24px 0 0;
+  color: var(--pw-copy) !important;
+  font-size: 16px;
+  line-height: 1.55;
+  font-weight: 400;
+}
+
+body .pricing-studio-page .pricing-paywall-hero__trust {
+  margin: 28px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  list-style: none;
+}
+
+body .pricing-studio-page .pricing-paywall-hero__trust li {
+  color: var(--pw-muted);
+  font: 600 11px/1 var(--vp-font-mono);
+  text-transform: uppercase;
+}
+
+body .pricing-studio-page .pricing-paywall-hero__trust li::before {
+  content: '·';
+  margin-right: 10px;
+  color: var(--pw-acid);
+}
+
+body .pricing-studio-page .pricing-paywall-hero__trust li:first-child::before {
+  content: none;
+  margin: 0;
+}
+
+/* Active / addon strips */
+body .pricing-studio-page .pricing-active-strip,
+body .pricing-studio-page .pricing-addon-note {
+  min-height: 52px;
+  margin-top: 20px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--pw-bg) !important;
+  background: var(--vp-cyan);
+}
+
+body .pricing-studio-page .pricing-active-strip {
+  background-image: linear-gradient(90deg, color-mix(in srgb, #fff 16%, transparent), transparent 50%);
+  background-color: var(--vp-cyan);
+}
+
+body .pricing-studio-page .pricing-addon-note {
+  background: var(--vp-amber);
+}
+
+body .pricing-active-strip > svg { width: 16px; }
+body .pricing-active-strip > span,
+body .pricing-addon-note > span { font-size: 13px; }
+
+body .pricing-active-strip button,
+body .pricing-addon-note button {
+  margin-left: auto;
+  min-height: 36px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--pw-bg) !important;
+  background: transparent;
+  border: 1px solid var(--pw-bg);
+  font: 700 10px/1 var(--vp-font-mono);
+  text-transform: uppercase;
+}
+
+body .pricing-active-strip button svg,
+body .pricing-addon-note button svg { width: 13px; }
+
+/* Plans bar */
+body .pricing-studio-page .pricing-paywall-plans {
+  padding: 56px 0 0;
+  scroll-margin-top: 80px;
+}
+
+body .pricing-studio-page .pricing-paywall-plans__bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+body .pricing-studio-page .pricing-paywall-plans__bar h2 {
+  margin: 0;
+  color: var(--pw-ink) !important;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+body .pricing-studio-page .pricing-billing-control {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--pw-rule);
+}
+
+body .pricing-studio-page .pricing-billing-control button {
+  min-height: 42px;
+  min-width: 108px;
+  padding: 0 14px;
+  color: var(--pw-muted) !important;
+  background: transparent !important;
+  border: 0;
+  font: 700 11px/1 var(--vp-font-mono);
+  text-transform: uppercase;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease));
+}
+
+body .pricing-studio-page .pricing-billing-control button span {
+  display: block;
+  margin-top: 4px;
+  color: var(--vp-amber) !important;
+  font-size: 10px;
+}
+
+body .pricing-studio-page .pricing-billing-control button.is-active {
+  color: var(--pw-bg) !important;
+  background: var(--pw-ink) !important;
+}
+
+body .pricing-studio-page .pricing-billing-control button.is-active span {
+  color: var(--pw-bg) !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body .pricing-studio-page .pricing-billing-control button:not(.is-active):hover {
+    color: var(--pw-ink) !important;
+    background: #1a1c17 !important;
+  }
+}
+
+/* Deck */
+body .pricing-studio-page .pricing-deck {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--pw-rule);
+  border: 1px solid var(--pw-rule);
+}
+
+body .pricing-studio-page .pricing-tier-card {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  padding: 28px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  color: #f3f0e7 !important;
+  background: #121410 !important;
+  border: 0 !important;
+  box-shadow: none;
+  overflow: visible;
+  scroll-margin-top: 88px;
+  transition:
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, var(--vp-ease)),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, var(--vp-ease));
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended {
+  box-shadow: 0 24px 60px -36px rgba(215, 246, 74, 0.45);
+  z-index: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body .pricing-studio-page .pricing-tier-card:hover {
+    box-shadow: 0 18px 48px -40px rgba(243, 240, 231, 0.28);
+    transform: translateY(-3px);
+  }
+
+  body .pricing-studio-page .pricing-tier-card.is-recommended:hover {
+    box-shadow: 0 28px 70px -34px rgba(215, 246, 74, 0.55);
+    transform: translateY(-4px);
+  }
+}
+
+body .pricing-studio-page .pricing-tier-card--explorer,
+body .pricing-studio-page .pricing-tier-card--pro {
+  background: #121410 !important;
+  color: #f3f0e7 !important;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended,
+body .pricing-studio-page .pricing-tier-card--plus {
+  color: #0b0c0a !important;
+  background: #d7f64a !important;
+  z-index: 1;
+}
+
+/* Title row only — no side copy */
+body .pricing-studio-page .pricing-tier-card__top {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+body .pricing-studio-page .pricing-tier-card__top h3 {
+  margin: 0;
+  color: #f3f0e7 !important;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__top h3 {
+  color: #0b0c0a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card__recommendation {
+  padding: 5px 8px;
+  color: #d7f64a !important;
+  background: #0b0c0a !important;
+  font: 700 10px/1 var(--vp-font-mono);
+  text-transform: uppercase;
+}
+
+body .pricing-studio-page .pricing-tier-card__price {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+body .pricing-studio-page .pricing-tier-card__price > b {
+  color: #f3f0e7 !important;
+  font-size: clamp(44px, 4.6vw, 58px);
+  font-weight: 750;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__price > b {
+  color: #0b0c0a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card__price > em {
+  color: #9aa094 !important;
+  font: 600 11px/1.3 var(--vp-font-mono);
+  font-style: normal;
+  text-transform: uppercase;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__price > em {
+  color: rgba(11, 12, 10, 0.62) !important;
+}
+
+body .pricing-studio-page .pricing-tier-card__billing-note {
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+  color: #9aa094 !important;
+  font: 600 11px/1.4 var(--vp-font-mono);
+  text-transform: uppercase;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__billing-note {
+  color: rgba(11, 12, 10, 0.58) !important;
+}
+
+body .pricing-studio-page .pricing-tier-card__limits {
+  margin: 22px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid rgba(243, 240, 231, 0.16);
+  color: #f3f0e7 !important;
+  font: 600 12px/1.45 var(--vp-font-mono);
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__limits {
+  border-color: rgba(11, 12, 10, 0.22);
+  color: #0b0c0a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card__features {
+  margin: 16px 0 28px;
+  padding: 0;
+  list-style: none;
+}
+
+body .pricing-studio-page .pricing-tier-card__features li {
+  padding: 8px 0;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  align-items: start;
+  border: 0 !important;
+}
+
+body .pricing-studio-page .pricing-tier-card__features svg {
+  width: 15px !important;
+  height: 15px !important;
+  margin-top: 1px;
+  color: #d7f64a !important;
+  stroke: #d7f64a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__features svg {
+  color: #0b0c0a !important;
+  stroke: #0b0c0a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card__features span {
+  color: #e8e6dc !important;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__features span {
+  color: #0b0c0a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card > footer {
+  margin-top: auto;
+}
+
+/* High-contrast CTAs on every plan */
+body .pricing-studio-page .pricing-tier-card__cta,
+body .pricing-studio-page .pricing-tier-card__state {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #0b0c0a !important;
+  background: #f3f0e7 !important;
+  border: 1px solid #f3f0e7 !important;
+  font: 700 11px/1 var(--vp-font-mono);
+  text-transform: uppercase;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    filter var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, var(--vp-ease));
+}
+
+body .pricing-studio-page .pricing-tier-card__cta svg,
+body .pricing-studio-page .pricing-tier-card__state svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 240ms var(--vp-ease);
+}
+
+body .pricing-studio-page .pricing-tier-card__cta *,
+body .pricing-studio-page .pricing-tier-card__state * {
+  color: #0b0c0a !important;
+  stroke: #0b0c0a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__cta,
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__state {
+  color: #d7f64a !important;
+  background: #0b0c0a !important;
+  border-color: #0b0c0a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__cta *,
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__state * {
+  color: #d7f64a !important;
+  stroke: #d7f64a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card__cta:hover {
+  background: #d7f64a !important;
+  border-color: #d7f64a !important;
+  color: #0b0c0a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card__cta:hover * {
+  color: #0b0c0a !important;
+  stroke: #0b0c0a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__cta:hover {
+  background: #11120e !important;
+  border-color: #11120e !important;
+  color: #d7f64a !important;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended .pricing-tier-card__cta:hover * {
+  color: #d7f64a !important;
+  stroke: #d7f64a !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body .pricing-studio-page .pricing-tier-card__cta:hover svg {
+    transform: translateX(3px);
+  }
+}
+
+body .pricing-studio-page .pricing-tier-card__state { justify-content: center; }
+
+body .pricing-studio-page .pricing-tier-card > footer > p {
+  margin: 12px 0 0;
+  color: #9aa094 !important;
+  font: 600 11px/1.4 var(--vp-font-mono);
+  text-align: left;
+  text-transform: uppercase;
+}
+
+body .pricing-studio-page .pricing-tier-card.is-recommended > footer > p {
+  color: rgba(11, 12, 10, 0.55) !important;
+}
+
+/* Compare + FAQ */
+body .pricing-studio-page .pricing-studio-section {
+  padding: 72px 0 0;
+  border: 0;
+  scroll-margin-top: 80px;
+}
+
+body .pricing-studio-page .pricing-studio-section__head {
+  margin-bottom: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 0.55fr);
+  gap: 24px;
+  align-items: end;
+}
+
+body .pricing-studio-page .pricing-studio-section__head > div > span {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--pw-muted) !important;
+  font: 700 11px/1 var(--vp-font-mono);
+  text-transform: uppercase;
+}
+
+body .pricing-studio-page .pricing-studio-section__head h2 {
+  margin: 0;
+  max-width: 520px;
+  color: var(--pw-ink) !important;
+  font-size: clamp(28px, 3.6vw, 40px);
+  font-weight: 750;
+  line-height: 1.05;
+}
+
+body .pricing-studio-page .pricing-studio-section__head > p {
+  margin: 0;
+  color: var(--pw-copy) !important;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+body .pricing-studio-page .pricing-matrix-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--pw-rule);
+}
+
+body .pricing-studio-page .pricing-matrix {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+body .pricing-studio-page .pricing-matrix th,
+body .pricing-studio-page .pricing-matrix td {
+  height: 48px;
+  padding: 10px 14px;
+  border-right: 1px solid var(--pw-rule);
+  border-bottom: 1px solid var(--pw-rule);
+  font-size: 13px;
+  text-align: left;
+  color: var(--pw-copy) !important;
+  background: transparent;
+}
+
+body .pricing-studio-page .pricing-matrix th:last-child,
+body .pricing-studio-page .pricing-matrix td:last-child { border-right: 0; }
+body .pricing-studio-page .pricing-matrix tbody tr:last-child > * { border-bottom: 0; }
+
+body .pricing-studio-page .pricing-matrix thead th {
+  height: 52px;
+  color: var(--pw-ink) !important;
+  background: var(--pw-panel);
+  font: 700 11px/1 var(--vp-font-mono);
+  text-transform: uppercase;
+}
+
+body .pricing-studio-page .pricing-matrix thead th:first-child,
+body .pricing-studio-page .pricing-matrix tbody th { width: 40%; }
+
+body .pricing-studio-page .pricing-matrix tbody th {
+  color: var(--pw-ink) !important;
+  font-weight: 600;
+  background: transparent;
+}
+
+body .pricing-studio-page .pricing-matrix__mark {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+}
+
+body .pricing-studio-page .pricing-matrix__mark svg { width: 12px; }
+
+body .pricing-studio-page .pricing-matrix__mark--yes {
+  color: var(--pw-bg) !important;
+  background: var(--pw-acid);
+  border-color: var(--pw-acid);
+}
+
+body .pricing-studio-page .pricing-matrix__mark--no {
+  color: var(--pw-muted) !important;
+  background: transparent;
+  border-color: var(--pw-rule);
+}
+
+body .pricing-studio-page .pricing-faq-studio__list {
+  max-width: 760px;
+  border-top: 1px solid var(--pw-rule);
+}
+
+body .pricing-studio-page .pricing-faq-studio__list article {
+  border-bottom: 1px solid var(--pw-rule);
+  border-right: 0;
+}
+
+body .pricing-studio-page .pricing-faq-studio__list article > button {
+  width: 100%;
+  min-height: 64px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 28px;
+  align-items: center;
+  gap: 16px;
+  text-align: left;
+  color: var(--pw-ink) !important;
+  background: transparent !important;
+  border: 0;
+  transition:
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease));
+}
+
+body .pricing-studio-page .pricing-faq-studio__list article > button small { display: none; }
+
+body .pricing-studio-page .pricing-faq-studio__list article > button span {
+  color: inherit !important;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+body .pricing-studio-page .pricing-faq-studio__list article > button b {
+  color: var(--pw-muted) !important;
+  font: 400 22px/1 var(--vp-font-sans);
+  text-align: right;
+}
+
+body .pricing-studio-page .pricing-faq-studio__list article.is-open > button {
+  color: var(--pw-ink) !important;
+  background: transparent !important;
+}
+
+body .pricing-studio-page .pricing-faq-studio__list article > div {
+  padding: 0 36px 20px 0;
+  background: transparent !important;
+  color: var(--pw-copy) !important;
+}
+
+body .pricing-studio-page .pricing-faq-studio__list article > div p {
+  max-width: 640px;
+  margin: 0;
+  color: var(--pw-copy) !important;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Close */
+body .pricing-studio-page .pricing-studio-close {
+  margin-top: 72px;
+  min-height: 0;
+  padding: 48px 0 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  color: var(--pw-ink) !important;
+  background: transparent !important;
+  border-top: 1px solid var(--pw-rule);
+}
+
+body .pricing-studio-page .pricing-studio-close * {
+  color: inherit !important;
+}
+
+body .pricing-studio-page .pricing-studio-close > p {
+  margin: 0;
+  color: var(--pw-muted) !important;
+  font: 700 11px/1 var(--vp-font-mono);
+  text-transform: uppercase;
+}
+
+body .pricing-studio-page .pricing-studio-close h2 {
+  max-width: 640px;
+  margin: 18px 0 0;
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: 750;
+  line-height: 1.05;
+}
+
+body .pricing-studio-page .pricing-studio-close > div {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body .pricing-studio-page .pricing-studio-close > div > button {
+  min-height: 48px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--pw-acid) !important;
+  color: var(--pw-bg) !important;
+  border: 1px solid var(--pw-acid);
+  font: 700 11px/1 var(--vp-font-mono);
+  text-transform: uppercase;
+  transition:
+    background var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    border-color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    color var(--motion-hover-ms, 240ms) var(--ease-btn, var(--vp-ease)),
+    transform var(--motion-lift-ms, 280ms) var(--ease-spring-soft, var(--vp-ease)),
+    box-shadow var(--motion-lift-ms, 280ms) var(--ease-out-premium, var(--vp-ease));
+}
+
+body .pricing-studio-page .pricing-studio-close > div > button:last-child:not(:only-child) {
+  background: transparent !important;
+  color: var(--pw-ink) !important;
+  border-color: var(--pw-rule);
+}
+
+body .pricing-studio-page .pricing-studio-close > div > button svg {
+  width: 14px;
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+
+body .pricing-studio-page .pricing-studio-close > div > button:first-child,
+body .pricing-studio-page .pricing-studio-close > div > button:first-child * {
+  color: var(--pw-bg) !important;
+  stroke: var(--pw-bg) !important;
+}
+
+@media (max-width: 960px) {
+  body .pricing-studio-page .pricing-deck {
+    grid-template-columns: 1fr;
+  }
+
+  body .pricing-studio-page .pricing-tier-card.is-recommended {
+    order: -1;
+  }
+
+  body .pricing-studio-page .pricing-studio-section__head {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  body .pricing-studio-page .pricing-page__main {
+    padding: 0 18px 64px;
+  }
+
+  body .pricing-studio-page .pricing-paywall-hero {
+    padding: 68px 0 40px;
+  }
+
+  body .pricing-studio-page .pricing-paywall-plans__bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  body .pricing-studio-page .pricing-billing-control {
+    width: 100%;
+  }
+
+  body .pricing-studio-page .pricing-billing-control button {
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body .pricing-studio-page *,
+  body .pricing-studio-page *::before,
+  body .pricing-studio-page *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  body .pricing-studio-page .pricing-tier-card:hover,
+  body .pricing-studio-page .pricing-tier-card.is-recommended:hover {
+    transform: none !important;
+  }
+}

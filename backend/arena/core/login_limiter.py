@@ -24,7 +24,6 @@ API above.
 from __future__ import annotations
 
 import time
-from collections import defaultdict
 from threading import Lock
 
 from fastapi import HTTPException, Request
@@ -46,9 +45,24 @@ class LoginRateLimiter:
         self.max_attempts = max_attempts
         self.window_seconds = window_seconds
         self.lockout_seconds = lockout_seconds
-        self._attempts: dict[str, list[float]] = defaultdict(list)
+        # _attempts and _lockouts are plain dicts (not default-dict)
+        # so a key with no remaining entries is fully removed. The
+        # previous default-dict + `= []` pattern left an empty list
+        # for every IP ever seen — a memory leak in the face of a
+        # large IP pool (botnet, NAT churn, scanner traffic).
+        self._attempts: dict[str, list[float]] = {}
         self._lockouts: dict[str, float] = {}
         self._lock = Lock()
+        # Counter for the lazy sweep — every Nth call to a hot
+        # path method, we sweep expired lockouts. Lockouts for IPs
+        # that never return would otherwise accumulate forever
+        # (the per-IP cleanup in assert_not_locked only runs when
+        # the SAME IP returns). 1000 is a balance: the sweep runs
+        # ~once per 1000 hits (cheap; ~O(dict-size) per call)
+        # and the dict size stays bounded at ~1000 entries
+        # under sustained traffic.
+        self._hit_count: int = 0
+        self._sweep_every: int = 1000
 
     @staticmethod
     def get_client_ip(request: Request) -> str:
@@ -80,11 +94,31 @@ class LoginRateLimiter:
         ip = self.get_client_ip(request)
         now = time.time()
         with self._lock:
+            self._maybe_sweep_lockouts(now)
             lockout_until = self._lockouts.get(ip)
             if lockout_until is None:
                 return
             if now < lockout_until:
                 self._raise_locked(int(lockout_until - now))
+            del self._lockouts[ip]
+
+    def _maybe_sweep_lockouts(self, now: float) -> None:
+        """Lazy sweep of expired lockout entries. Called on the
+        hot path (assert_not_locked, record_failure) every
+        _sweep_every calls. Sweep is O(n) over the dict; the
+        amortized cost is O(1) per hot-path call.
+
+        The lock is already held by the caller.
+        """
+        self._hit_count += 1
+        if self._hit_count % self._sweep_every != 0:
+            return
+        expired = [
+            ip
+            for ip, until in self._lockouts.items()
+            if now >= until
+        ]
+        for ip in expired:
             del self._lockouts[ip]
 
     def remaining_attempts(self, request: Request) -> int:
@@ -119,15 +153,24 @@ class LoginRateLimiter:
             if lockout_until is not None and now >= lockout_until:
                 del self._lockouts[ip]
 
+            # Use .get(ip, []) — plain dict (no default-dict) raises
+            # KeyError on a missing key. An IP with no recorded
+            # failures has an empty bucket, which is the same
+            # starting state as the previous default-dict behaviour.
+            self._maybe_sweep_lockouts(now)
             bucket = [
-                t for t in self._attempts[ip] if now - t < self.window_seconds
+                t for t in self._attempts.get(ip, []) if now - t < self.window_seconds
             ]
             bucket.append(now)
             self._attempts[ip] = bucket
 
             if len(bucket) >= self.max_attempts:
                 self._lockouts[ip] = now + self.lockout_seconds
-                self._attempts[ip] = []
+                # Clear the attempts bucket entirely so a successful
+                # login after the lockout window doesn't carry forward
+                # the failed attempts. del the key (rather than = [])
+                # so the IP entry is fully removed from the dict.
+                del self._attempts[ip]
                 raise HTTPException(
                     status_code=429,
                     detail={
@@ -145,7 +188,12 @@ class LoginRateLimiter:
         """Clear failure history for this IP after a confirmed success."""
         ip = self.get_client_ip(request)
         with self._lock:
-            self._attempts[ip] = []
+            # del the key (rather than `= []`) so the IP entry is
+            # fully removed from the dict. The previous `= []` pattern
+            # left an empty list for every IP ever seen, which is a
+            # memory leak in the face of a large IP pool (botnet,
+            # NAT churn, scanner traffic).
+            self._attempts.pop(ip, None)
             # Do not lift an active lockout on success from a different
             # path — lockout is time-based. Successful auth only clears
             # the sliding failure window so the user is not one bad try

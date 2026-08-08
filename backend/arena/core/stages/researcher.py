@@ -72,7 +72,7 @@ async def run_researcher(bb: Blackboard) -> Blackboard:
             try:
                 plan_data = json.loads(bb.plan.output)
             except Exception:
-                pass
+                logger.warning("Failed to parse plan_data JSON in researcher", exc_info=True)
 
         search_queries = plan_data.get("search_queries", [bb.task])
         if not isinstance(search_queries, list):

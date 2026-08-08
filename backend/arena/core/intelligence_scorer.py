@@ -103,7 +103,7 @@ async def calculate_intelligence_score(
                 s["text"] for s in parsed["sentences"] if isinstance(s, dict)
             )
     except Exception:
-        pass
+        logger.warning("Failed to parse final_answer JSON in intelligence_scorer", exc_info=True)
 
     try:
         model = MODEL_REGISTRY.get("deepseek_v4_flash", MODEL_REGISTRY["claude_sonnet"])

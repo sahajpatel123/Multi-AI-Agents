@@ -91,6 +91,7 @@ async def check_loyalty_resumes(db: Session) -> None:
                 db.add(user)
                 db.commit()
             except Exception:
+                logger.warning("Loyalty resume: failed to deactivate user after missing rzp_id", exc_info=True)
                 db.rollback()
             continue
         try:
@@ -111,6 +112,7 @@ async def check_loyalty_resumes(db: Session) -> None:
                 db.add(user)
                 db.commit()
             except Exception:
+                logger.warning("Loyalty resume: failed to update retry state for user", exc_info=True)
                 db.rollback()
             continue
 

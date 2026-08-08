@@ -30,6 +30,28 @@ def _coerce_iso(value: Optional[datetime]) -> Optional[str]:
     return value.isoformat()
 
 
+def get_active_subscription(db: Session, user: User) -> Optional[Subscription]:
+    """Look up the user's active Subscription row.
+
+    First tries ``user.subscription_id`` (direct FK), then falls back to
+    the most recent ``Subscription`` for this user ordered by id desc.
+    Returns ``None`` when no subscription exists.
+    """
+    subscription: Optional[Subscription] = None
+    if user.subscription_id:
+        subscription = db.query(Subscription).filter(
+            Subscription.id == user.subscription_id,
+        ).first()
+    if subscription is None:
+        subscription = (
+            db.query(Subscription)
+            .filter(Subscription.user_id == user.id)
+            .order_by(Subscription.id.desc())
+            .first()
+        )
+    return subscription
+
+
 def compute_user_entitlements(
     db: Session,
     user: User,
@@ -59,18 +81,7 @@ def compute_user_entitlements(
 
     now = now or utcnow_naive()
 
-    subscription: Optional[Subscription] = None
-    if user.subscription_id:
-        subscription = db.query(Subscription).filter(
-            Subscription.id == user.subscription_id
-        ).first()
-    if subscription is None:
-        subscription = (
-            db.query(Subscription)
-            .filter(Subscription.user_id == user.id)
-            .order_by(Subscription.id.desc())
-            .first()
-        )
+    subscription = get_active_subscription(db, user)
 
     sub_payload: Optional[dict[str, Any]] = None
     if subscription is not None:

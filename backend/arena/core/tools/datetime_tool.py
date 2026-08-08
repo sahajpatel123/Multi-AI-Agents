@@ -1,26 +1,29 @@
 """DateTime tool for current date and time information"""
 
+import logging
 from datetime import datetime, timezone
 from typing import Dict, Any
 
 from arena.core.tools.base import Tool, ToolResult
 
+logger = logging.getLogger(__name__)
+
 
 class DateTimeTool(Tool):
     """Provides current date, time, and timezone information"""
-    
+
     @property
     def name(self) -> str:
         return "datetime"
-    
+
     @property
     def description(self) -> str:
         return "Returns current date, time, timezone, and day of week"
-    
+
     def should_trigger(self, prompt: str, **kwargs) -> bool:
         """Trigger when prompt mentions time-related queries"""
         prompt_lower = prompt.lower()
-        
+
         # Time-related keywords
         time_keywords = [
             'today', 'now', 'current time', 'current date', 'what time',
@@ -28,15 +31,15 @@ class DateTimeTool(Tool):
             'day of week', 'day of the week', 'what date',
             'time is it', 'date is it', 'timezone'
         ]
-        
+
         return any(kw in prompt_lower for kw in time_keywords)
-    
+
     async def execute(self, prompt: str, **kwargs) -> ToolResult:
         """Get current datetime information"""
         try:
             # Get current UTC time
             now_utc = datetime.now(timezone.utc)
-            
+
             # Format various representations
             data = {
                 "utc_datetime": now_utc.isoformat(),
@@ -49,17 +52,27 @@ class DateTimeTool(Tool):
                 "timestamp": int(now_utc.timestamp()),
                 "formatted": now_utc.strftime("%A, %B %d, %Y at %H:%M:%S UTC")
             }
-            
+
             return ToolResult(
                 tool_name=self.name,
                 success=True,
                 data=data
             )
-            
+
         except Exception as e:
+            # Log the full exception internally so operators can diagnose,
+            # but return a generic code to the tool caller — `str(e)` can
+            # leak platform-internal details (locale strings, tzdata paths,
+            # format() internals) that have no business reaching the
+            # agent's context string or, downstream, the user.
+            # Mirrors the cycle-161 web_search.py fix.
+            logger.exception(
+                "[DATETIME] Error: %s",
+                type(e).__name__,
+            )
             return ToolResult(
                 tool_name=self.name,
                 success=False,
                 data=None,
-                error=f"DateTime error: {str(e)}"
+                error="datetime_unavailable",
             )

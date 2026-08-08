@@ -7,6 +7,22 @@ from arena.database import engine
 logger = logging.getLogger(__name__)
 
 
+# Module-level so the migrations list can be inspected by tests without
+# calling run_safe_migrations() (which would touch the real engine).
+migrations: list[str] = [
+    """
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS expertise_level
+        VARCHAR DEFAULT 'curious'
+    """,
+    """
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS expertise_domain
+        VARCHAR DEFAULT ''
+    """,
+]
+
+
 def run_safe_migrations():
     """
     Runs ADD COLUMN IF NOT EXISTS for every known column
@@ -14,19 +30,6 @@ def run_safe_migrations():
     every startup — IF NOT EXISTS means it does nothing
     if the column already exists.
     """
-    migrations = [
-        """
-        ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS expertise_level
-            VARCHAR DEFAULT 'curious'
-        """,
-        """
-        ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS expertise_domain
-            VARCHAR DEFAULT ''
-        """,
-    ]
-
     with engine.connect() as conn:
         for sql in migrations:
             try:

@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { MotionButton } from '../components/MotionButton';
+import { Reveal } from '../components/Reveal';
 import { useAuth } from '../hooks/useAuth';
 import { prefersReducedMotion } from '../lib/motion';
 import { setRedirectIntent } from '../utils/redirectIntent';
@@ -56,11 +57,6 @@ export function AboutPage() {
         aria-labelledby="about-title"
       >
         <section className="about-hero">
-          <p className="about-hero__kicker">
-            <span className="about-hero__kicker-dot" aria-hidden="true" />
-            The story behind Arena
-          </p>
-
           <h1 id="about-title" className="about-hero__title">
             <span className="about-hero__title-line">Reasoning,</span>
             <span className="about-hero__title-line about-hero__title-line--accent">
@@ -88,15 +84,6 @@ export function AboutPage() {
             </p>
           </div>
 
-          <div className="about-hero__minds" aria-hidden="true">
-            <span className="about-hero__minds-label">Four default minds</span>
-            <div className="about-hero__minds-dots">
-              <span className="about-hero__minds-dot" />
-              <span className="about-hero__minds-dot" />
-              <span className="about-hero__minds-dot" />
-              <span className="about-hero__minds-dot" />
-            </div>
-          </div>
           <div className="about-hero__actions">
             <MotionButton type="button" variant="primary" size="md" onClick={goArena}>
               Start with four minds →
@@ -111,14 +98,10 @@ export function AboutPage() {
           </div>
         </section>
 
-        <section className="about-story" aria-labelledby="about-story-heading">
+        <Reveal as="section" className="about-story" aria-labelledby="about-story-heading">
           <h2 id="about-story-heading" className="about-story__heading">
             What Arena actually is
           </h2>
-          <p className="about-story__sub">
-            Three beats — the problem, the approach, and what you can use today.
-          </p>
-
           <div className="about-story__grid">
             {STORY_CARDS.map((card) => (
               <article
@@ -133,14 +116,11 @@ export function AboutPage() {
               </article>
             ))}
           </div>
-        </section>
+        </Reveal>
 
-        <section className="about-cta" aria-labelledby="about-cta-heading">
+        <Reveal as="section" className="about-cta" aria-labelledby="about-cta-heading">
           <p id="about-cta-heading" className="about-cta__pitch">
             Arena is live and free to try.
-          </p>
-          <p className="about-cta__sub">
-            No card required. Start with four minds — go deeper when you want.
           </p>
           <div className="about-cta__actions">
             <MotionButton type="button" variant="primary" size="md" onClick={goArena}>
@@ -148,20 +128,20 @@ export function AboutPage() {
             </MotionButton>
             <button
               type="button"
-              className="arena-btn arena-btn--secondary arena-btn--md"
+              className="arena-btn arena-btn--secondary arena-btn--md interactive-surface interactive-surface--soft"
               onClick={() => navigate('/product')}
             >
               How it works
             </button>
             <button
               type="button"
-              className="arena-btn arena-btn--ghost arena-btn--md"
+              className="arena-btn arena-btn--ghost arena-btn--md interactive-surface interactive-surface--soft"
               onClick={() => navigate('/pricing')}
             >
               Pricing
             </button>
           </div>
-        </section>
+        </Reveal>
       </main>
 
       <Footer />

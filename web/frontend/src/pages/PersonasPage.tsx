@@ -8,9 +8,11 @@ import {
 } from 'react';
 import { ArrowRight, Lock, Sparkles, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { Pressable } from '../components/Pressable';
+import { Reveal } from '../components/Reveal';
 import { AgentDot } from '../components/AgentDot';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
@@ -64,23 +66,6 @@ interface ToastState {
   kind?: PanelSaveToastKind;
 }
 
-const SHOWCASE_PROMPTS = [
-  {
-    label: 'DECISION',
-    prompt: 'Should we launch before the evidence is complete?',
-    note: 'A useful panel does not agree faster. It exposes a decision from different failure modes.',
-  },
-  {
-    label: 'PRODUCT',
-    prompt: 'Is this feature solving a problem—or decorating one?',
-    note: 'Each lens changes what gets inspected before the team commits engineering time.',
-  },
-  {
-    label: 'STRATEGY',
-    prompt: 'Where should a small team place its next asymmetric bet?',
-    note: 'The panel turns one broad prompt into four different tests of leverage, evidence, and consequence.',
-  },
-] as const;
 
 const PERSONA_LENSES: Record<string, string> = {
   analyst: 'Which assumption breaks the case first?',
@@ -101,6 +86,8 @@ const PERSONA_LENSES: Record<string, string> = {
   devilsadvocate: 'What is the strongest case against this direction?',
 };
 
+
+        main
 export function PersonasPage() {
   const navigate = useNavigate();
   const { panel, personas, swapAgent, resetPanel, savePanel, isDefaultPanel } = usePanel();
@@ -134,6 +121,8 @@ export function PersonasPage() {
   const [swapAvailability, setSwapAvailability] =
     useState<PersonasLibraryAvailability>('all');
   const [showcaseIndex, setShowcaseIndex] = useState(0);
+
+         main
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [showAllLibrary, setShowAllLibrary] = useState(false);
   const [inspectedSlot, setInspectedSlot] = useState<SlotIndex>(0);
@@ -144,6 +133,7 @@ export function PersonasPage() {
   const slotLabels = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'] as const;
   const activePersona = activeSlot !== null ? panel[activeSlot] : null;
   const showcase = SHOWCASE_PROMPTS[showcaseIndex];
+        main
   const panelTemperature = panel.length
     ? panel.reduce((total, persona) => total + persona.temperature, 0) / panel.length
     : 0;
@@ -431,6 +421,7 @@ export function PersonasPage() {
       : displayedLibrary[0]) ??
     null;
 
+        main
   const buildFilteredLibraryMarkdown = () => {
     const q = libraryQuery.trim();
     const filterBits: string[] = [];
@@ -564,6 +555,9 @@ export function PersonasPage() {
     closeModal();
   };
 
+
+
+        main
   const handleSavePanel = async () => {
     if (!isAuthenticated) {
       setRedirectIntent('/personas');
@@ -617,7 +611,8 @@ export function PersonasPage() {
             </p>
             <div className="personas-studio-hero__actions">
               <a href="#panel-studio">Tune your panel <ArrowRight aria-hidden="true" /></a>
-              <button type="button" onClick={() => navigate('/app')}>Enter Arena</button>
+              <Link to="/persona-playground">Explore the playground <ArrowRight aria-hidden="true" /></Link>
+              <Pressable type="button" onClick={() => navigate('/app')}>Enter Arena</Pressable>
             </div>
             <dl className="personas-studio-proof">
               <div><dt>16</dt><dd>reasoning styles</dd></div>
@@ -642,9 +637,11 @@ export function PersonasPage() {
           </div>
         </section>
 
-        <section id="panel-studio" className="personas-studio-section personas-panel-studio" aria-labelledby="panel-studio-title">
+        <Reveal as="section" id="panel-studio" className="personas-studio-section personas-panel-studio" aria-labelledby="panel-studio-title">
           <header className="personas-studio-section__head">
             <div>
+              <span className="personas-studio-eyebrow">Your panel</span>
+         main
               <h2 id="panel-studio-title">Shape the room before asking the question.</h2>
             </div>
             <p>
@@ -713,7 +710,7 @@ export function PersonasPage() {
                     >
                       <div className="personas-panel-card__rail" aria-hidden="true" />
                       <header className="personas-panel-card__meta">
-                        <span><b>0{index + 1}</b> / SLOT</span>
+                        <span>SLOT {index + 1}</span>
                         <span>
                           <AgentDot agentId={`agent_${index + 1}`} size={7} color={persona.color} />
                           DIVERGENCE {persona.temperature.toFixed(1)}
@@ -739,7 +736,6 @@ export function PersonasPage() {
                           onClick={() => setInspectedSlot(slot)}
                         >
                           <span>{isInspected ? 'Lens in focus' : 'Inspect lens'}</span>
-                          <b aria-hidden="true">0{index + 1}</b>
                         </button>
                         <button
                           type="button"
@@ -826,7 +822,7 @@ export function PersonasPage() {
               ) : <span className="personas-panel-actions__status">DEFAULT PANEL / UNSAVED CHANGES: NONE</span>}
             </div>
           </div>
-        </section>
+        </Reveal>
 
         <section className="personas-studio-section personas-lens-lab" aria-labelledby="lens-lab-title">
           <header className="personas-studio-section__head">
@@ -871,6 +867,12 @@ export function PersonasPage() {
         <section className="personas-studio-section personas-page__library" aria-labelledby="library-title">
           <header className="personas-studio-section__head personas-library-title-row">
             <div>
+
+        <Reveal as="section" className="personas-studio-section personas-page__library" aria-labelledby="library-title">
+          <header className="personas-studio-section__head personas-library-title-row">
+            <div>
+              <span className="personas-studio-eyebrow">Mind index</span>
+         main
               <h2 id="library-title">Inspect every reasoning style.</h2>
             </div>
             <p>
@@ -995,13 +997,16 @@ export function PersonasPage() {
               ) : null}
             </div>
           )}
-        </section>
+        </Reveal>
 
         <section className="personas-studio-close" aria-labelledby="personas-close-title">
+        <Reveal as="section" className="personas-studio-close" aria-labelledby="personas-close-title">
+          <small>THE ROOM IS THE INSTRUMENT</small>
+        main
           <h2 id="personas-close-title">Choose minds that fail differently.</h2>
           <p>Then give all four the question you cannot afford to examine from one angle.</p>
-          <button type="button" onClick={() => navigate('/app')}>Enter Arena <ArrowRight aria-hidden="true" /></button>
-        </section>
+          <Pressable type="button" onClick={() => navigate('/app')}>Enter Arena <ArrowRight aria-hidden="true" /></Pressable>
+        </Reveal>
       </main>
 
       <Footer />

@@ -7,6 +7,10 @@ import {
   cancelAgentAddon,
   cancelSubscription,
   deleteMcpIntegration,
+  exportAnalyticsCategoryStatsCsv,
+  exportAnalyticsPersonaStatsOverviewCsv,
+  exportAnalyticsPersonaWinRateCsv,
+  exportAnalyticsSummaryCsv,
   getCalibrationStats,
   getMcpIntegrations,
   getRecentAgentFeedback,
@@ -21,8 +25,10 @@ import {
   type SubscriptionStatusResponse,
   type UserUsageResponse,
 } from '../api';
+import { downloadBlobFile } from '../lib/downloadTextFile';
 import { useTier } from '../context/TierContext';
 import { useProfileModal } from '../context/ProfileModalContext';
+import { safeLocalStorage } from '../lib/safeStorage';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from './Button';
 import { getBrandIcon, PlugIcon } from './BrandIcons';
@@ -244,6 +250,7 @@ export function ProfileModal() {
     calibration_score?: number;
     recent_ratings?: Array<{ delta?: number; created_at?: string }>;
   } | null>(null);
+  const [activeExport, setActiveExport] = useState<string | null>(null);
   const [calLoading, setCalLoading] = useState(false);
   const [calErr, setCalErr] = useState<string | null>(null);
   const [fbAcc, setFbAcc] = useState<AnswerFeedbackStats | null>(null);
@@ -465,8 +472,12 @@ export function ProfileModal() {
         expertise_level: level,
         expertise_domain: domain,
       });
-      localStorage.setItem('arena_expertise_level', level);
-      localStorage.setItem('arena_expertise_domain', domain);
+      // Cache the level/domain locally so the next session render
+      // skips a network round-trip. safeLocalStorage swallows throws
+      // (private mode / quota / enterprise storage-disable) — the
+      // server already has the truth; cache is purely a perf hint.
+      safeLocalStorage.setItem('arena_expertise_level', level);
+      safeLocalStorage.setItem('arena_expertise_domain', domain);
       await refreshUser();
       setSaveOk(true);
       if (saveOkTimerRef.current != null) window.clearTimeout(saveOkTimerRef.current);
@@ -1158,6 +1169,136 @@ export function ProfileModal() {
                   <span style={{ color: '#C4A882' }}>14 days ago</span>
                   <span style={{ color: '#C4A882' }}>Today</span>
                 </div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    color: '#A0A39A',
+                    letterSpacing: '0.10em',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  Analytics exports (CSV)
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'summary' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'summary' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('summary');
+                      try {
+                        const blob = await exportAnalyticsSummaryCsv(30);
+                        downloadBlobFile(blob, 'arena-analytics-summary-30d.csv');
+                      } catch {
+                        // ignore error
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'summary' ? '⏳ Downloading…' : '📊 Summary Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate');
+                      try {
+                        const blob = await exportAnalyticsPersonaWinRateCsv(30);
+                        downloadBlobFile(blob, 'arena-persona-win-rates-30d.csv');
+                      } catch {
+                        // ignore error
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate' ? '⏳ Downloading…' : '🏆 Win Rates Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'category' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'category' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('category');
+                      try {
+                        const blob = await exportAnalyticsCategoryStatsCsv(30);
+                        downloadBlobFile(blob, 'arena-category-stats-30d.csv');
+                      } catch {
+                        // ignore error
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'category' ? '⏳ Downloading…' : '📂 Categories Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'overview' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'overview' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('overview');
+                      try {
+                        const blob = await exportAnalyticsPersonaStatsOverviewCsv(30);
+                        downloadBlobFile(blob, 'arena-persona-overview-30d.csv');
+                      } catch {
+                        // ignore error
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'overview' ? '⏳ Downloading…' : '🤖 Persona Stats Export'}
+                  </button>
+                </div>
+
                 <div
                   style={{
                     fontSize: 10,

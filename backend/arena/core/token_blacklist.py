@@ -28,6 +28,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from arena.db_models import RevokedToken
@@ -69,6 +70,14 @@ def _purge_loop(stop_event: threading.Event, interval_seconds: int) -> None:
                     logger.info(
                         "Periodic revoked_tokens purge cleared %s row(s)",
                         n,
+                    )
+                from arena.core.webhook_idempotency import purge_expired_webhook_events
+
+                wn = purge_expired_webhook_events(s)
+                if wn:
+                    logger.info(
+                        "Periodic processed_webhook_events purge cleared %s row(s)",
+                        wn,
                     )
             finally:
                 s.close()
@@ -164,8 +173,15 @@ def add(token: str, expires_at: datetime, db: Session, reason: Optional[str] = N
             existing.expires_at = expires_at
             db.commit()
         return
-    db.add(RevokedToken(token_hash=h, expires_at=expires_at, reason=reason))
-    db.commit()
+    try:
+        db.add(RevokedToken(token_hash=h, expires_at=expires_at, reason=reason))
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        logger.debug(
+            "concurrent blacklist insert detected for token %s...; rolled back",
+            h[:16],
+        )
 
 
 def is_blacklisted(token: str, db: Session) -> bool:
