@@ -180,7 +180,11 @@ export async function getMe(): Promise<User | null> {
   if (res.status === 401) return null;
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
-    throw new ApiError(err?.detail || 'Failed to fetch user', res.status, err);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to fetch user', res),
+      res.status,
+      err,
+    );
   }
   return parseJsonSafely<User>(res);
 }
@@ -200,10 +204,14 @@ export async function getUserUsage(): Promise<UserUsageResponse> {
   const res = await apiFetch(`/api/user/usage`);
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
-    throw new ApiError(err?.detail || 'Failed to load usage', res.status, err);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to load usage', res),
+      res.status,
+      err,
+    );
   }
   const data = await parseJsonSafely<UserUsageResponse>(res);
-  if (!data) throw new Error('Empty usage response');
+  if (!data) throw new Error(withRequestId('Empty usage response', res));
   return data;
 }
 
@@ -219,10 +227,14 @@ export async function patchUserProfile(body: {
   });
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
-    throw new ApiError(err?.detail || 'Failed to save profile', res.status, err);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to save profile', res),
+      res.status,
+      err,
+    );
   }
   const data = await parseJsonSafely<User>(res);
-  if (!data) throw new Error('Empty response');
+  if (!data) throw new Error(withRequestId('Empty response', res));
   return data;
 }
 
