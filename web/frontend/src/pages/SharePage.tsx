@@ -103,7 +103,7 @@ export function SharePage() {
   const pageUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
     return window.location.href;
-  }, [agentId, prompt, response]);
+  }, []);
 
   useEffect(() => {
     setNativeShareAvailable(canUseNativeShare());

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from arena.config import get_settings
 from arena.models.schemas import AgentConfig, AgentResponse
 from arena.core.agents import AGENTS, get_all_agents, get_persona_id_for_agent, call_persona
+from arena.core.cost_tracker import RequestCostAccumulator
 from arena.core.memory import MemoryRelevanceRanker, format_memory_for_injection
 from arena.core.model_router import get_route_for_persona
 from arena.core.observability import LatencyTracker
@@ -153,7 +154,10 @@ class Orchestrator:
         tool_context: str = "",
         persona_ids: list[str] | None = None,
         memory_context: str = "",
+        cost: RequestCostAccumulator | None = None,
+
         request_context: str = "",
+         main
     ) -> AgentResponse:
         """Call a single agent and parse its response"""
         try:
@@ -168,7 +172,7 @@ class Orchestrator:
             persona_id = get_persona_id_for_agent(agent.agent_id, persona_ids)
             
             # Route to appropriate API (Claude or Grok)
-            content, _, _ = await asyncio.wait_for(
+            content, in_tok, out_tok = await asyncio.wait_for(
                 call_persona(
                     persona_id=persona_id,
                     system_prompt=system_prompt,
@@ -178,6 +182,10 @@ class Orchestrator:
                 timeout=self.timeout,
             )
             
+            if cost is not None:
+                route = get_route_for_persona(persona_id)
+                cost.add(in_tok, out_tok, model_key=route.get("model_key", "claude_sonnet"))
+
             # Parse JSON response
             parsed = self._parse_agent_response(content, agent)
             return parsed
@@ -190,6 +198,10 @@ class Orchestrator:
         # return_exceptions=True) can isolate one cancelled agent without
         # converting cancellation into a silent success path.
         except Exception as e:
+            logger.warning("Agent call failed for %s: %s", agent.agent_id, e)
+            return self._create_error_response(agent, f"Error: {str(e)}")
+    
+
             logger.warning("Agent call failed for %s: %s", agent.name, e, exc_info=True)
             return self._create_error_response(agent, "Agent call failed")
 
@@ -217,6 +229,7 @@ class Orchestrator:
                 responses.append(self._create_error_response(agent, "Unexpected agent result"))
         return responses
 
+    main
     def _parse_agent_response(self, content: str, agent: AgentConfig) -> AgentResponse:
         """Parse JSON response from agent"""
         # Try to extract JSON from the response
@@ -261,8 +274,11 @@ class Orchestrator:
         db: Session | None = None,
         session_id: str | None = None,
         tracker: LatencyTracker | None = None,
+        cost: RequestCostAccumulator | None = None,
+
         request_context: str | None = None,
         tool_results: dict[str, Any] | None = None,
+        main
     ) -> tuple[list[AgentResponse], list[str]]:
         """
         Run all agents in parallel and collect responses.
@@ -307,7 +323,10 @@ class Orchestrator:
                 tool_context,
                 persona_ids,
                 memory_contexts.get(agent.agent_id, ""),
+                cost=cost,
+
                 request_context or "",
+        main
             )
             for agent in active_agents
         ]
@@ -383,7 +402,10 @@ class Orchestrator:
         tool_context: str = "",
         persona_ids: list[str] | None = None,
         memory_context: str = "",
+        cost: RequestCostAccumulator | None = None,
+
         request_context: str = "",
+        main
     ) -> AgentResponse:
         """Stream a single agent's response, pushing tokens to a shared queue."""
         full_text = ""
@@ -423,6 +445,11 @@ class Orchestrator:
                     "agent_id": agent.agent_id,
                     "token": text,
                 })
+
+            if cost is not None:
+                in_tokens = max(1, (len(system_prompt) + len(prompt)) // 4)
+                out_tokens = max(1, len(full_text) // 4 if token_count == 0 else token_count)
+                cost.add(in_tokens, out_tokens, model_key=route.get("model_key", "claude_sonnet"))
 
             # Signal that this agent is done streaming
             await output_queue.put({
@@ -485,7 +512,10 @@ class Orchestrator:
         db: Session | None = None,
         session_id: str | None = None,
         tracker: LatencyTracker | None = None,
+        cost: RequestCostAccumulator | None = None,
+
         request_context: str | None = None,
+        main
     ) -> tuple[asyncio.Queue, list[asyncio.Task], list[str]]:
         """
         Start streaming all agents in parallel.
@@ -531,7 +561,10 @@ class Orchestrator:
                             tool_context,
                             persona_ids,
                             memory_contexts.get(agent.agent_id, ""),
+                            cost=cost,
+
                             request_context or "",
+        main
                         )
                     )
                     for agent in active_agents

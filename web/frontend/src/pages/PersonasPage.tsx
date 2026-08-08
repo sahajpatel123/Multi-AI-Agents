@@ -87,6 +87,7 @@ const PERSONA_LENSES: Record<string, string> = {
 };
 
 
+        main
 export function PersonasPage() {
   const navigate = useNavigate();
   const { panel, personas, swapAgent, resetPanel, savePanel, isDefaultPanel } = usePanel();
@@ -119,6 +120,9 @@ export function PersonasPage() {
   const [swapSort, setSwapSort] = useState<PersonasLibrarySort>('default');
   const [swapAvailability, setSwapAvailability] =
     useState<PersonasLibraryAvailability>('all');
+  const [showcaseIndex, setShowcaseIndex] = useState(0);
+
+         main
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [showAllLibrary, setShowAllLibrary] = useState(false);
   const [inspectedSlot, setInspectedSlot] = useState<SlotIndex>(0);
@@ -128,6 +132,8 @@ export function PersonasPage() {
   const lastSwapTriggerRef = useRef<HTMLElement | null>(null);
   const slotLabels = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'] as const;
   const activePersona = activeSlot !== null ? panel[activeSlot] : null;
+  const showcase = SHOWCASE_PROMPTS[showcaseIndex];
+        main
   const panelTemperature = panel.length
     ? panel.reduce((total, persona) => total + persona.temperature, 0) / panel.length
     : 0;
@@ -415,7 +421,7 @@ export function PersonasPage() {
       : displayedLibrary[0]) ??
     null;
 
-
+        main
   const buildFilteredLibraryMarkdown = () => {
     const q = libraryQuery.trim();
     const filterBits: string[] = [];
@@ -550,6 +556,8 @@ export function PersonasPage() {
   };
 
 
+
+        main
   const handleSavePanel = async () => {
     if (!isAuthenticated) {
       setRedirectIntent('/personas');
@@ -594,10 +602,6 @@ export function PersonasPage() {
           aria-labelledby="personas-title"
         >
           <div className="personas-studio-hero__copy">
-            <p className="personas-studio-kicker">
-              <span aria-hidden="true" />
-              The persona system
-            </p>
             <h1 id="personas-title">
               Build useful <em>disagreement.</em>
             </h1>
@@ -637,6 +641,7 @@ export function PersonasPage() {
           <header className="personas-studio-section__head">
             <div>
               <span className="personas-studio-eyebrow">Your panel</span>
+         main
               <h2 id="panel-studio-title">Shape the room before asking the question.</h2>
             </div>
             <p>
@@ -819,10 +824,55 @@ export function PersonasPage() {
           </div>
         </Reveal>
 
+        <section className="personas-studio-section personas-lens-lab" aria-labelledby="lens-lab-title">
+          <header className="personas-studio-section__head">
+            <div>
+              <h2 id="lens-lab-title">One question. Four different inspections.</h2>
+            </div>
+            <p>
+              Persona choice changes what gets examined—not merely the tone of the response.
+              Preview the question each current mind is designed to ask first.
+            </p>
+          </header>
+
+          <div className="personas-lens-scenarios" role="group" aria-label="Lens preview scenario">
+            {SHOWCASE_PROMPTS.map((scenario, index) => (
+              <button
+                key={scenario.label}
+                type="button"
+                aria-pressed={showcaseIndex === index}
+                className={showcaseIndex === index ? 'is-active' : ''}
+                onClick={() => setShowcaseIndex(index)}
+              >
+                <small>0{index + 1}</small><strong>{scenario.label}</strong><span aria-hidden="true">{showcaseIndex === index ? '●' : '○'}</span>
+              </button>
+            ))}
+          </div>
+          <div className="personas-lens-question">
+            <small>ILLUSTRATIVE LENS PREVIEW · NOT A LIVE RUN</small>
+            <h3>{showcase.prompt}</h3>
+            <p>{showcase.note}</p>
+          </div>
+          <div className="personas-lens-grid">
+            {panel.map((persona, index) => (
+              <article key={`${persona.id}-lens`} style={{ '--tone': persona.color } as CSSProperties}>
+                <header><small>0{index + 1}</small><span>{persona.name}</span></header>
+                <blockquote>“{PERSONA_LENSES[persona.id] ?? persona.quote}”</blockquote>
+                <footer>DESIGNED LENS / {persona.temperature.toFixed(1)}</footer>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="personas-studio-section personas-page__library" aria-labelledby="library-title">
+          <header className="personas-studio-section__head personas-library-title-row">
+            <div>
+
         <Reveal as="section" className="personas-studio-section personas-page__library" aria-labelledby="library-title">
           <header className="personas-studio-section__head personas-library-title-row">
             <div>
               <span className="personas-studio-eyebrow">Mind index</span>
+         main
               <h2 id="library-title">Inspect every reasoning style.</h2>
             </div>
             <p>
@@ -949,8 +999,10 @@ export function PersonasPage() {
           )}
         </Reveal>
 
+        <section className="personas-studio-close" aria-labelledby="personas-close-title">
         <Reveal as="section" className="personas-studio-close" aria-labelledby="personas-close-title">
           <small>THE ROOM IS THE INSTRUMENT</small>
+        main
           <h2 id="personas-close-title">Choose minds that fail differently.</h2>
           <p>Then give all four the question you cannot afford to examine from one angle.</p>
           <Pressable type="button" onClick={() => navigate('/app')}>Enter Arena <ArrowRight aria-hidden="true" /></Pressable>

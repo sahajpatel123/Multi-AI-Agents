@@ -151,7 +151,10 @@ describe('PersonasPage', () => {
     const { container } = renderPage();
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content');
     expect(screen.getByRole('heading', { name: /build useful disagreement/i })).toBeInTheDocument();
+    expect(container.querySelectorAll('.personas-studio-section')).toHaveLength(3);
+
     expect(container.querySelectorAll('.personas-studio-section')).toHaveLength(2);
+         main
     expect(screen.getByTestId('navbar')).toBeInTheDocument();
     expect(screen.getByTestId('footer')).toBeInTheDocument();
   });
@@ -190,6 +193,8 @@ describe('PersonasPage', () => {
 
 
 
+
+     main
   it('shows a concise initial index and discloses the complete catalog on demand', () => {
     const { container } = renderPage();
     expect(container.querySelectorAll('.personas-lib-card')).toHaveLength(8);
@@ -253,6 +258,7 @@ describe('PersonasPage', () => {
   });
 
 
+         main
   it('keeps the selected profile consistent when availability filters remove a mind', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /the pragmatist.*what actually works/i }));

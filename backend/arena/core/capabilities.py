@@ -5,12 +5,15 @@ See docs/adr/0001-condura-integration.md and docs/condura/CAPABILITY-REGISTRY.md
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from enum import Enum
 from typing import Any, Optional, Type
 
 from pydantic import BaseModel, Field, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionEnvironment(str, Enum):
@@ -223,6 +226,17 @@ def resolve(capability_id: str) -> Capability:
 
 def honest_rejection_enabled() -> bool:
     """Feature flag for Condura 409 path. Default off for staged rollout."""
+    try:
+        from arena.config import get_settings
+
+        if get_settings().condura_honest_rejection_enabled:
+            return True
+    except Exception as exc:
+        logger.debug(
+            "Could not read Condura feature flag from settings; using environment fallback",
+            exc_info=True,
+            extra={"error_type": type(exc).__name__},
+        )
     return (os.getenv("CONDURA_HONEST_REJECTION_ENABLED") or "").strip().lower() in {
         "1",
         "true",

@@ -29,6 +29,10 @@ services:
       # (same region). External/public IPs (e.g. 35.x.x.x) often fail with
       # "SSL connection has been closed unexpectedly" mid-handshake.
       # Paste Internal URL from the Postgres dashboard → Connections.
+      - key: DATABASE_INTERNAL_URL
+        sync: false
+      # Keep the external/public URL available for tooling and migration
+      # inspection. The runtime engine prefers DATABASE_INTERNAL_URL above.
       - key: DATABASE_URL
         sync: false
       # Public HTTPS origin of the SPA, e.g. https://your-app.vercel.app

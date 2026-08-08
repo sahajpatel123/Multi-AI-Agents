@@ -274,6 +274,19 @@ async def submit_prompt(
             )
 
         agent_timings: dict[str, int] = {}
+        t_agents = time.monotonic()
+        responses, tools_used = await orchestrator.run_all_agents(
+            pipeline_result.enriched_prompt,
+            agents=active_agents,
+            persona_ids=body.persona_ids,
+            user_id=user.id if memory_enabled else None,
+            db=db if memory_enabled else None,
+            session_id=session_id,
+            tracker=tracker,
+            cost=cost,
+        )
+        agent_timings["all_agents"] = int((time.monotonic() - t_agents) * 1000)
+
         cache_status: str | None = None
         cache_key: str | None = None
         cache_hit = False
@@ -340,6 +353,7 @@ async def submit_prompt(
             cache_status = "miss"
         else:
             cache_status = "hit"
+       main
 
         integrity_report = await check_integrity(
             responses,
@@ -470,6 +484,7 @@ async def submit_prompt(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Prompt request failed for user %s: %s", user_label, e)
         log_unhandled_exception(request_id, user_label, e)
         logger.exception("prompt route handler failed", extra={"request_id": request_id})
         raise HTTPException(
@@ -651,7 +666,10 @@ async def stream_prompt(
                 db=db if memory_enabled else None,
                 session_id=session_id,
                 tracker=tracker,
+                cost=cost,
+
                 request_context=format_follow_up_context(body.context),
+       main
             )
 
             while True:
@@ -786,6 +804,7 @@ async def stream_prompt(
             )
 
         except Exception as e:
+            logger.exception("Stream event generator failed for user %s: %s", user_label, e)
             log_unhandled_exception(request_id, user_label, e)
             logger.exception("prompt SSE handler failed", extra={"request_id": request_id})
             yield _sse_event("error", {
@@ -884,7 +903,10 @@ async def prompt_readiness(
         db.execute(text("SELECT 1"))
         checks["db"] = "ok"
     except Exception as exc:  # noqa: BLE001 — surface any failure mode
+        logger.warning("Readiness DB probe failed: %s", exc)
+
         logger.warning("health check: db round-trip failed", exc_info=True)
+        main
         checks["db"] = f"fail: {type(exc).__name__}"
         ok = False
 
@@ -899,7 +921,10 @@ async def prompt_readiness(
         if mm is None:
             ok = False
     except Exception as exc:  # noqa: BLE001
+        logger.warning("Readiness memory probe failed: %s", exc)
+
         logger.warning("health check: memory manager probe failed", exc_info=True)
+        main
         checks["memory"] = f"fail: {type(exc).__name__}"
         ok = False
 
