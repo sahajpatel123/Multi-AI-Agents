@@ -58,11 +58,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated postcss pin floor to 8.5.23 (security fix)
 - Bumped cryptography to 50.0.0 and postcss to 8.5.26 (security fixes)
 - Exposed `X-Request-ID` through CORS for browser clients
+- Release workflow now enforces the npm audit HIGH/CRITICAL gate and no longer
+  ships `backend/arena.db` in release artifacts
 
 ### Security
 - Added gitleaks allowlists for test fixture API keys
 - Fixed npm audit vulnerabilities (brace-expansion, js-yaml, postcss)
 - Added comprehensive security floor guards for Python and Node.js
+- Hardened release artifacts against accidental database/PII leakage
 
 ## [0.1.0] - 2026-08-07
 

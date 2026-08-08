@@ -51,7 +51,39 @@ jobs:
       - name: Security audit
         working-directory: web/frontend
         run: |
-          npm audit --audit-level=high || true
+          # Audit ALL deps (no --omit=dev) at HIGH+ severity. This mirrors the
+          # frontend CI gate in ci.yml so release assets never ship behind a
+          # known HIGH/CRITICAL vulnerability.
+          #
+          # Exception: advisories with no published patch on npm yet
+          # (fixAvailable: null) are surfaced as a warning but do not fail the
+          # build. The pin floor guard in CI defends against silent downgrades
+          # of fixed versions.
+          set +e
+          audit_output=$(npm audit --audit-level=high --json)
+          audit_exit=$?
+          set -e
+          if [ $audit_exit -eq 0 ]; then
+            echo "No high+ vulnerabilities."
+            exit 0
+          fi
+          unfixable=$(echo "$audit_output" | jq -r '
+            (.vulnerabilities // {})
+            | to_entries[]
+            | .value.via[]
+            | select(type == "object")
+            | select(.fixAvailable == null)
+            | .url // ""
+          ')
+          if [ -n "$unfixable" ]; then
+            echo "::warning::Unfixable advisories detected (no published patch on npm). Release gate waived:"
+            echo "$unfixable" | sed 's/^/  - /'
+            npm audit --audit-level=high || true
+            exit 0
+          fi
+          # Re-run audit (non-JSON) to surface the regular failure output.
+          npm audit --audit-level=high
+          exit 1
 
       - name: Test backend
         working-directory: backend
@@ -66,10 +98,14 @@ jobs:
         run: npm run build
 
       - name: Upload artifacts
+        # NOTE: intentionally NOT shipping backend/arena.db. A live SQLite
+        # database can contain user PII, hashed passwords, and tokens; it is
+        # also gitignored so it would only appear on a local release runner.
+        # Ship migration files instead if schema snapshots are ever needed.
         uses: actions/upload-artifact@v4
         with:
           name: release-assets
           path: |
             web/frontend/dist/
-            backend/arena.db  # Optional: include DB schema
+            backend/alembic/versions/
           retention-days: 30
