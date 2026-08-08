@@ -2767,6 +2767,7 @@ async def create_watchlist_item(
 
 @router.get("/watchlist")
 async def list_watchlist_items(
+    http_request: Request,
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: UserResponse = Depends(get_current_user_required),
@@ -2800,6 +2801,7 @@ async def list_watchlist_items(
     latest_summaries = _batch_watchlist_latest_summaries(db, user.id, latest_task_ids) if latest_task_ids else {}
     return JSONResponse(
         content={
+            "request_id": correlation_request_id(http_request),
             "items": [_watchlist_item_api_dict(db, i, latest_summary=latest_summaries.get(i.latest_task_id)) for i in items],
             "total": total,
             "limit": limit,
