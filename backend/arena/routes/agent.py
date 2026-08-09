@@ -3859,6 +3859,7 @@ async def toggle_agent_task_live(
 
 @router.get("/tasks/{task_id}/updates")
 async def get_agent_task_live_updates(
+    http_request: Request,
     task_id: str,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -3881,7 +3882,12 @@ async def get_agent_task_live_updates(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
         )
-    return JSONResponse(content={"live_updates": _live_updates_from_row(row)})
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            "live_updates": _live_updates_from_row(row),
+        }
+    )
 
 
 @router.post("/tasks/{task_id}/live-updates/mark-read")
