@@ -421,6 +421,39 @@ jobs:
           fi
           echo "Source integrity OK"
 
+  style:
+    name: Style (whitespace / conflict check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Whitespace / conflict check
+        # Enforces `git diff --check` on the actual PR/push range so trailing
+        # whitespace and whitespace-only conflicts are caught before merge.
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          else
+            echo "Skipping diff range for ${{ github.event_name }}"
+            exit 0
+          fi
+          if [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            echo "Skipping diff check for the initial commit."
+            exit 0
+          fi
+          git diff --check "$base" "$head"
+          echo "Whitespace/conflict check OK"
+
   e2e:
     name: E2E (Playwright smoke)
     runs-on: ubuntu-latest

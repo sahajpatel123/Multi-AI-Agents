@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request ID included in Agent live-toggle responses
 - Request ID included in Agent mark-read responses
 - Request ID included in Agent live-updates responses
+- Request ID included in Agent capabilities/capability-docs responses
 - Request ID included in Agent orchestration frontend errors
 - Request ID included in Agent export frontend errors
 - Request ID included in feedback submit frontend errors
@@ -86,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expanded the PR template security checklist with dependency review, CodeQL,
   source-integrity, and workflow YAML validation checks
 - Documented the expanded CI security gates in CONTRIBUTING.md
+- Added a CI style job that enforces `git diff --check` on PR/push diffs
 
 ## [0.1.0] - 2026-08-07
 

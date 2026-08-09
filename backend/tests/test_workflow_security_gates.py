@@ -113,3 +113,24 @@ def test_codeql_uses_focused_config() -> None:
     ignores = config.get("paths-ignore", [])
     assert "**/tests/**" in ignores, "CodeQL should ignore test files"
     assert "web/frontend/dist/**" in ignores, "CodeQL should ignore build output"
+
+
+def test_ci_has_whitespace_diff_check() -> None:
+    ci = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    style = ci["jobs"].get("style")
+    assert style is not None, "CI is missing the 'style' job"
+    steps = style["steps"]
+    check_steps = [
+        step for step in steps
+        if isinstance(step, dict) and step.get("name") == "Whitespace / conflict check"
+    ]
+    assert check_steps, "CI style job is missing the whitespace check step"
+    run_script = check_steps[0]["run"]
+    assert "git diff --check" in run_script, (
+        "CI style job no longer runs git diff --check"
+    )
+    assert 'pull_request' in run_script, (
+        "CI style job should handle pull_request diff ranges"
+    )
