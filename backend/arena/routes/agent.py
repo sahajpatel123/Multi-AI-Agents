@@ -3936,6 +3936,7 @@ async def mark_agent_live_updates_read(
 
 @router.get("/memory/context")
 async def get_memory_context(
+    http_request: Request,
     task: str = "",
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -3958,7 +3959,12 @@ async def get_memory_context(
     context = get_user_memory_context(
         db=db, user_id=user.id, current_task=task, limit=5
     )
-    return JSONResponse(content=context)
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            **context,
+        }
+    )
 
 
 @router.get("/saved/{task_id}")
