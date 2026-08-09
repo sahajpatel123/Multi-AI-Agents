@@ -1872,6 +1872,7 @@ async def get_orchestration_status(
 
 @router.post("/orchestrate/{orch_id}/cancel")
 async def cancel_orchestration(
+    http_request: Request,
     orch_id: str,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -1914,6 +1915,7 @@ async def cancel_orchestration(
     if orch.status in ("complete", "failed"):
         return JSONResponse(
             content={
+                "request_id": correlation_request_id(http_request),
                 "orchestration_id": orch.id,
                 "status": orch.status,
                 "task_ids": task_ids,
@@ -1943,6 +1945,7 @@ async def cancel_orchestration(
     )
     return JSONResponse(
         content={
+            "request_id": correlation_request_id(http_request),
             "orchestration_id": orch.id,
             "status": "cancelled",
             "task_ids": task_ids,
