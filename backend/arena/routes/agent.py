@@ -1238,6 +1238,7 @@ async def run_bridge_pipeline_background(task_id: str, user_id: int) -> None:
 
 @router.post("/upload")
 async def upload_agent_attachment(
+    http_request: Request,
     file: UploadFile = File(...),
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -1295,6 +1296,7 @@ async def upload_agent_attachment(
     else:
         content_preview = ((record.get("content") or "")[:100]) or ""
     return {
+        "request_id": correlation_request_id(http_request),
         "file_id": file_id,
         "filename": orig,
         "type": rtype,
