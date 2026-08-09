@@ -79,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened release artifacts against accidental database/PII leakage
 - Added a CI source-integrity guard that fails on stray bare `main` tokens,
   catching paste corruption before it breaks backend imports or frontend builds
+- Added a regression test that locks the CI source-integrity guard in place
 
 ## [0.1.0] - 2026-08-07
 
