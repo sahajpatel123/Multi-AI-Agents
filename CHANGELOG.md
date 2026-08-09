@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request ID included in Agent task cancel responses
 - Request ID included in Agent orchestration cancel responses
 - Request ID included in Agent task rename/delete responses
+- Request ID included in Agent live-toggle responses
 - Request ID included in Agent orchestration frontend errors
 - Request ID included in Agent export frontend errors
 - Request ID included in feedback submit frontend errors
