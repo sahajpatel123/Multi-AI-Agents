@@ -88,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source-integrity, and workflow YAML validation checks
 - Documented the expanded CI security gates in CONTRIBUTING.md
 - Added a CI style job that enforces `git diff --check` on PR/push diffs
+- Tightened the style-job regression test to verify the full-history checkout
 
 ## [0.1.0] - 2026-08-07
 

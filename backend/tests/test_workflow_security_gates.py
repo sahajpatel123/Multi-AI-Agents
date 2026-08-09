@@ -122,6 +122,15 @@ def test_ci_has_whitespace_diff_check() -> None:
     style = ci["jobs"].get("style")
     assert style is not None, "CI is missing the 'style' job"
     steps = style["steps"]
+    checkout_steps = [
+        step for step in steps
+        if isinstance(step, dict)
+        and step.get("uses", "").startswith("actions/checkout@")
+    ]
+    assert checkout_steps, "CI style job is missing a checkout step"
+    assert checkout_steps[0].get("with", {}).get("fetch-depth") == 0, (
+        "CI style job must fetch full history so the diff-range check works"
+    )
     check_steps = [
         step for step in steps
         if isinstance(step, dict) and step.get("name") == "Whitespace / conflict check"
@@ -133,4 +142,7 @@ def test_ci_has_whitespace_diff_check() -> None:
     )
     assert 'pull_request' in run_script, (
         "CI style job should handle pull_request diff ranges"
+    )
+    assert '= "push"' in run_script, (
+        "CI style job should handle push diff ranges"
     )
