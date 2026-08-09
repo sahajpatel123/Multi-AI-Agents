@@ -1648,6 +1648,7 @@ async def get_agent_task_detail(
 
 @router.post("/tasks/{task_id}/feedback")
 async def post_task_answer_feedback(
+    http_request: Request,
     task_id: str,
     body: AnswerAccuracyFeedbackBody,
     user: UserResponse = Depends(get_current_user_required),
@@ -1698,7 +1699,11 @@ async def post_task_answer_feedback(
         )
     db.commit()
     stats = get_answer_feedback_distribution(user.id, db)
-    return {"success": True, "feedback_stats": stats}
+    return {
+        "request_id": correlation_request_id(http_request),
+        "success": True,
+        "feedback_stats": stats,
+    }
 
 
 @router.post("/orchestrate")
