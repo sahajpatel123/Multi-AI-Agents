@@ -1,0 +1,14 @@
+name: "CodeQL config"
+
+# Focus CodeQL on production code. Test fixtures, generated build output,
+# gitignored design/scratch dirs, and vendored dependencies create noise and
+# false positives without adding signal to the security analysis.
+paths-ignore:
+  - "**/tests/**"
+  - "**/node_modules/**"
+  - "**/__pycache__/**"
+  - "**/.venv/**"
+  - "web/frontend/dist/**"
+  - "design/**"
+  - "arena-video/**"
+  - "app/**"
