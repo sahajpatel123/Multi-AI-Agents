@@ -1536,7 +1536,10 @@ async def list_capability_examples_endpoint(request: Request) -> dict:
         window_seconds=60,
         message="Too many capability-example lookups. Please slow down.",
     )
-    return {"examples": list_capability_examples()}
+    return {
+        "request_id": correlation_request_id(request),
+        "examples": list_capability_examples(),
+    }
 
 
 @router.get("/capabilities/stats")
@@ -1573,7 +1576,11 @@ async def list_capability_stats(request: Request) -> dict:
         items.append(item)
     # Stable alphabetical order.
     items.sort(key=lambda x: x["id"])
-    return {"stats": items, "total": len(items)}
+    return {
+        "request_id": correlation_request_id(request),
+        "stats": items,
+        "total": len(items),
+    }
 
 
 @router.get("/tasks/{task_id}/feedback")
