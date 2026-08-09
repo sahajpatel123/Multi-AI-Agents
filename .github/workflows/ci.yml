@@ -397,6 +397,30 @@ jobs:
           # sees the offending package without leaving Actions.
           comment-summary-in-pr: on-failure
 
+  integrity:
+    name: Source integrity (no stray tokens)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fail on stray bare 'main' tokens
+        # A past bad paste inserted bare `main` lines across Python/TS/TSX
+        # source files, breaking imports and JSX parsing in CI while the
+        # files still looked close to normal. rg matches a line that is
+        # exactly `main` (with optional whitespace) — legitimate code uses
+        # `def main`, `main()`, `export function main`, etc., so this scan
+        # only fires on paste corruption.
+        run: |
+          set -euo pipefail
+          if rg -n '^\s*main\s*$' backend/arena backend/tests web/frontend/src --glob '*.py' --glob '*.ts' --glob '*.tsx'; then
+            echo "::error::Stray bare 'main' tokens found in source (likely paste corruption)."
+            exit 1
+          fi
+          echo "Source integrity OK"
+
   e2e:
     name: E2E (Playwright smoke)
     runs-on: ubuntu-latest

@@ -77,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed npm audit vulnerabilities (brace-expansion, js-yaml, postcss)
 - Added comprehensive security floor guards for Python and Node.js
 - Hardened release artifacts against accidental database/PII leakage
+- Added a CI source-integrity guard that fails on stray bare `main` tokens,
+  catching paste corruption before it breaks backend imports or frontend builds
 
 ## [0.1.0] - 2026-08-07
 
