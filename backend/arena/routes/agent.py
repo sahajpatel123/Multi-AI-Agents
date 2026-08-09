@@ -1488,7 +1488,11 @@ async def list_capability_docs(request: Request) -> dict:
         })
     # Stable alphabetical order so the UI doesn't shuffle.
     items.sort(key=lambda x: x["id"])
-    return {"docs": items, "total": len(items)}
+    return {
+        "request_id": correlation_request_id(request),
+        "docs": items,
+        "total": len(items),
+    }
 
 
 @router.get("/capabilities/docs/{capability_id}")
