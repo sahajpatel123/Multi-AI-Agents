@@ -76,6 +76,12 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio httpx
 
+      - name: Dependency consistency check (pip check)
+        # `pip check` verifies the installed dependency tree is internally
+        # consistent (no missing or conflicting requirements). Catches
+        # resolution mistakes before tests run, complementing pip-audit.
+        run: python -m pip check
+
       - name: Generate runtime encryption key
         # Produce a fresh Fernet key per CI run so the workflow file never
         # contains a long-lived credential. The key is exposed to later

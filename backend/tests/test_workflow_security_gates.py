@@ -146,3 +146,20 @@ def test_ci_has_whitespace_diff_check() -> None:
     assert '= "push"' in run_script, (
         "CI style job should handle push diff ranges"
     )
+
+
+def test_ci_runs_pip_check() -> None:
+    ci = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    backend = ci["jobs"]["backend"]
+    steps = backend["steps"]
+    pip_check_steps = [
+        step for step in steps
+        if isinstance(step, dict)
+        and step.get("name") == "Dependency consistency check (pip check)"
+    ]
+    assert pip_check_steps, "Backend CI job is missing the pip check step"
+    assert "pip check" in pip_check_steps[0]["run"], (
+        "pip check step should invoke python -m pip check"
+    )

@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request ID included in Agent mark-read responses
 - Request ID included in Agent live-updates responses
 - Request ID included in Agent capabilities/capability-docs responses
+- Request ID included in Agent capability examples/stats responses
 - Request ID included in Agent orchestration frontend errors
 - Request ID included in Agent export frontend errors
 - Request ID included in feedback submit frontend errors
@@ -89,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented the expanded CI security gates in CONTRIBUTING.md
 - Added a CI style job that enforces `git diff --check` on PR/push diffs
 - Tightened the style-job regression test to verify the full-history checkout
+- Added `pip check` to the backend CI job to catch dependency inconsistencies
 
 ## [0.1.0] - 2026-08-07
 
