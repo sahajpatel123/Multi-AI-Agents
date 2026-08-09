@@ -1332,7 +1332,10 @@ async def list_agent_capabilities(request: Request) -> dict:
         window_seconds=60,
         message="Too many capability lookups. Please slow down.",
     )
-    return {"capabilities": list_capabilities()}
+    return {
+        "request_id": correlation_request_id(request),
+        "capabilities": list_capabilities(),
+    }
 
 
 @router.get("/capability-usage")
