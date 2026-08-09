@@ -82,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a regression test that locks the CI source-integrity guard in place
 - Added a focused CodeQL config that ignores tests/build/generated paths so
   the security analysis stays on production code with less noise
+- Extended workflow YAML validation to cover the CodeQL config file
 
 ## [0.1.0] - 2026-08-07
 

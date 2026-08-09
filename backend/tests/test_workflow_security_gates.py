@@ -82,6 +82,7 @@ def test_release_npm_audit_is_a_real_security_gate() -> None:
         ".github/workflows/ci.yml",
         ".github/workflows/codeql.yml",
         ".github/workflows/release.yml",
+        ".github/codeql-config.yml",
     ],
 )
 def test_workflow_yamls_are_valid(path: str) -> None:
