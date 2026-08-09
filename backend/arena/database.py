@@ -168,7 +168,6 @@ def _make_retrying_pg_creator(url: str, max_attempts: int = 3) -> Callable[[], A
 
                 return psycopg.connect(**kwargs)
             except Exception as exc:  # noqa: BLE001 — psycopg and network errors share this path
-      main
                 last_error = exc
                 retryable = _is_retryable_connect_error(exc)
                 if attempt >= max_attempts or not retryable:

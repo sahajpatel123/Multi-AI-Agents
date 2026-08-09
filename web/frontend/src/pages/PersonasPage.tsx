@@ -66,6 +66,23 @@ interface ToastState {
   kind?: PanelSaveToastKind;
 }
 
+const SHOWCASE_PROMPTS = [
+  {
+    label: 'DECISION',
+    prompt: 'Should we launch before the evidence is complete?',
+    note: 'A useful panel does not agree faster. It exposes a decision from different failure modes.',
+  },
+  {
+    label: 'PRODUCT',
+    prompt: 'Is this feature solving a problem—or decorating one?',
+    note: 'Each lens changes what gets inspected before the team commits engineering time.',
+  },
+  {
+    label: 'STRATEGY',
+    prompt: 'Where should a small team place its next asymmetric bet?',
+    note: 'The panel turns one broad prompt into four different tests of leverage, evidence, and consequence.',
+  },
+] as const;
 
 const PERSONA_LENSES: Record<string, string> = {
   analyst: 'Which assumption breaks the case first?',
@@ -87,7 +104,6 @@ const PERSONA_LENSES: Record<string, string> = {
 };
 
 
-        main
 export function PersonasPage() {
   const navigate = useNavigate();
   const { panel, personas, swapAgent, resetPanel, savePanel, isDefaultPanel } = usePanel();
@@ -122,7 +138,6 @@ export function PersonasPage() {
     useState<PersonasLibraryAvailability>('all');
   const [showcaseIndex, setShowcaseIndex] = useState(0);
 
-         main
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [showAllLibrary, setShowAllLibrary] = useState(false);
   const [inspectedSlot, setInspectedSlot] = useState<SlotIndex>(0);
@@ -133,7 +148,6 @@ export function PersonasPage() {
   const slotLabels = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'] as const;
   const activePersona = activeSlot !== null ? panel[activeSlot] : null;
   const showcase = SHOWCASE_PROMPTS[showcaseIndex];
-        main
   const panelTemperature = panel.length
     ? panel.reduce((total, persona) => total + persona.temperature, 0) / panel.length
     : 0;
@@ -421,7 +435,6 @@ export function PersonasPage() {
       : displayedLibrary[0]) ??
     null;
 
-        main
   const buildFilteredLibraryMarkdown = () => {
     const q = libraryQuery.trim();
     const filterBits: string[] = [];
@@ -557,7 +570,6 @@ export function PersonasPage() {
 
 
 
-        main
   const handleSavePanel = async () => {
     if (!isAuthenticated) {
       setRedirectIntent('/personas');
@@ -641,7 +653,6 @@ export function PersonasPage() {
           <header className="personas-studio-section__head">
             <div>
               <span className="personas-studio-eyebrow">Your panel</span>
-         main
               <h2 id="panel-studio-title">Shape the room before asking the question.</h2>
             </div>
             <p>
@@ -864,15 +875,10 @@ export function PersonasPage() {
           </div>
         </section>
 
-        <section className="personas-studio-section personas-page__library" aria-labelledby="library-title">
-          <header className="personas-studio-section__head personas-library-title-row">
-            <div>
-
         <Reveal as="section" className="personas-studio-section personas-page__library" aria-labelledby="library-title">
           <header className="personas-studio-section__head personas-library-title-row">
             <div>
               <span className="personas-studio-eyebrow">Mind index</span>
-         main
               <h2 id="library-title">Inspect every reasoning style.</h2>
             </div>
             <p>
@@ -999,10 +1005,8 @@ export function PersonasPage() {
           )}
         </Reveal>
 
-        <section className="personas-studio-close" aria-labelledby="personas-close-title">
         <Reveal as="section" className="personas-studio-close" aria-labelledby="personas-close-title">
           <small>THE ROOM IS THE INSTRUMENT</small>
-        main
           <h2 id="personas-close-title">Choose minds that fail differently.</h2>
           <p>Then give all four the question you cannot afford to examine from one angle.</p>
           <Pressable type="button" onClick={() => navigate('/app')}>Enter Arena <ArrowRight aria-hidden="true" /></Pressable>

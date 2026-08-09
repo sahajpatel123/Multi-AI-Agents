@@ -155,9 +155,7 @@ class Orchestrator:
         persona_ids: list[str] | None = None,
         memory_context: str = "",
         cost: RequestCostAccumulator | None = None,
-
         request_context: str = "",
-         main
     ) -> AgentResponse:
         """Call a single agent and parse its response"""
         try:
@@ -229,7 +227,6 @@ class Orchestrator:
                 responses.append(self._create_error_response(agent, "Unexpected agent result"))
         return responses
 
-    main
     def _parse_agent_response(self, content: str, agent: AgentConfig) -> AgentResponse:
         """Parse JSON response from agent"""
         # Try to extract JSON from the response
@@ -278,7 +275,6 @@ class Orchestrator:
 
         request_context: str | None = None,
         tool_results: dict[str, Any] | None = None,
-        main
     ) -> tuple[list[AgentResponse], list[str]]:
         """
         Run all agents in parallel and collect responses.
@@ -324,9 +320,7 @@ class Orchestrator:
                 persona_ids,
                 memory_contexts.get(agent.agent_id, ""),
                 cost=cost,
-
-                request_context or "",
-        main
+                request_context=request_context or "",
             )
             for agent in active_agents
         ]
@@ -405,7 +399,6 @@ class Orchestrator:
         cost: RequestCostAccumulator | None = None,
 
         request_context: str = "",
-        main
     ) -> AgentResponse:
         """Stream a single agent's response, pushing tokens to a shared queue."""
         full_text = ""
@@ -515,7 +508,6 @@ class Orchestrator:
         cost: RequestCostAccumulator | None = None,
 
         request_context: str | None = None,
-        main
     ) -> tuple[asyncio.Queue, list[asyncio.Task], list[str]]:
         """
         Start streaming all agents in parallel.
@@ -562,9 +554,7 @@ class Orchestrator:
                             persona_ids,
                             memory_contexts.get(agent.agent_id, ""),
                             cost=cost,
-
-                            request_context or "",
-        main
+                            request_context=request_context or "",
                         )
                     )
                     for agent in active_agents

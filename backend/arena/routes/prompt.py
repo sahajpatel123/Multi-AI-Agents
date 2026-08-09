@@ -353,7 +353,6 @@ async def submit_prompt(
             cache_status = "miss"
         else:
             cache_status = "hit"
-       main
 
         integrity_report = await check_integrity(
             responses,
@@ -669,7 +668,6 @@ async def stream_prompt(
                 cost=cost,
 
                 request_context=format_follow_up_context(body.context),
-       main
             )
 
             while True:
@@ -906,7 +904,6 @@ async def prompt_readiness(
         logger.warning("Readiness DB probe failed: %s", exc)
 
         logger.warning("health check: db round-trip failed", exc_info=True)
-        main
         checks["db"] = f"fail: {type(exc).__name__}"
         ok = False
 
@@ -924,7 +921,6 @@ async def prompt_readiness(
         logger.warning("Readiness memory probe failed: %s", exc)
 
         logger.warning("health check: memory manager probe failed", exc_info=True)
-        main
         checks["memory"] = f"fail: {type(exc).__name__}"
         ok = False
 
