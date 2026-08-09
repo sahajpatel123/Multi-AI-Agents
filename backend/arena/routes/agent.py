@@ -2466,6 +2466,7 @@ async def get_agent_status(
 
 @router.post("/tasks/{task_id}/cancel")
 async def cancel_agent_task(
+    http_request: Request,
     task_id: str,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -2506,6 +2507,7 @@ async def cancel_agent_task(
         if row:
             return JSONResponse(
                 content={
+                    "request_id": correlation_request_id(http_request),
                     "task_id": row.task_id,
                     "status": "complete",
                     "message": "Task already finished",
@@ -2520,6 +2522,7 @@ async def cancel_agent_task(
     if bb.status in (AgentStatus.COMPLETE, AgentStatus.FAILED, AgentStatus.CANCELLED):
         return JSONResponse(
             content={
+                "request_id": correlation_request_id(http_request),
                 "task_id": bb.task_id,
                 "status": _stage_status_value(bb.status),
                 "message": "Task already finished",
@@ -2534,6 +2537,7 @@ async def cancel_agent_task(
     )
     return JSONResponse(
         content={
+            "request_id": correlation_request_id(http_request),
             "task_id": bb.task_id,
             "status": "cancelling",
             "message": "Cancellation requested",
