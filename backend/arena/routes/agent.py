@@ -3886,6 +3886,7 @@ async def get_agent_task_live_updates(
 
 @router.post("/tasks/{task_id}/live-updates/mark-read")
 async def mark_agent_live_updates_read(
+    http_request: Request,
     task_id: str,
     body: MarkLiveReadBody = MarkLiveReadBody(),
     user: UserResponse = Depends(get_current_user_required),
@@ -3924,7 +3925,13 @@ async def mark_agent_live_updates_read(
     if changed:
         row.live_updates = updates
         db.commit()
-    return JSONResponse(content={"success": True, "live_updates": updates})
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            "success": True,
+            "live_updates": updates,
+        }
+    )
 
 
 @router.get("/memory/context")
