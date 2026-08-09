@@ -3710,6 +3710,7 @@ async def export_agent_history_json(
 
 @router.patch("/tasks/{task_id}/rename")
 async def rename_agent_task(
+    http_request: Request,
     task_id: str,
     body: AgentTaskRenameRequest,
     user: UserResponse = Depends(get_current_user_required),
@@ -3736,11 +3737,18 @@ async def rename_agent_task(
     row.title = sanitize_html(body.title, max_length=100, field_name="title")
     db.commit()
     db.refresh(row)
-    return JSONResponse(content={"success": True, "title": row.title})
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            "success": True,
+            "title": row.title,
+        }
+    )
 
 
 @router.delete("/tasks/{task_id}")
 async def delete_agent_task(
+    http_request: Request,
     task_id: str,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -3766,7 +3774,7 @@ async def delete_agent_task(
         )
     db.delete(row)
     db.commit()
-    return JSONResponse(content={"success": True})
+    return JSONResponse(content={"request_id": correlation_request_id(http_request), "success": True})
 
 
 @router.post("/tasks/{task_id}/live")
