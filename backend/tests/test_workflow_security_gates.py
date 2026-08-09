@@ -90,3 +90,25 @@ def test_workflow_yamls_are_valid(path: str) -> None:
         data = yaml.safe_load(fh)
     assert isinstance(data, dict)
     assert "name" in data
+
+
+def test_codeql_uses_focused_config() -> None:
+    codeql = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "codeql.yml").read_text(encoding="utf-8")
+    )
+    init_steps = [
+        step for step in codeql["jobs"]["analyze"]["steps"]
+        if isinstance(step, dict) and step.get("name") == "Initialize CodeQL"
+    ]
+    assert init_steps, "CodeQL workflow is missing the Initialize CodeQL step"
+    init = init_steps[0]
+    assert init["with"]["config-file"] == ".github/codeql-config.yml", (
+        "CodeQL workflow should use the focused config file"
+    )
+
+    config_path = REPO_ROOT / ".github" / "codeql-config.yml"
+    assert config_path.exists(), "CodeQL config file is missing"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    ignores = config.get("paths-ignore", [])
+    assert "**/tests/**" in ignores, "CodeQL should ignore test files"
+    assert "web/frontend/dist/**" in ignores, "CodeQL should ignore build output"

@@ -80,6 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a CI source-integrity guard that fails on stray bare `main` tokens,
   catching paste corruption before it breaks backend imports or frontend builds
 - Added a regression test that locks the CI source-integrity guard in place
+- Added a focused CodeQL config that ignores tests/build/generated paths so
+  the security analysis stays on production code with less noise
 
 ## [0.1.0] - 2026-08-07
 
