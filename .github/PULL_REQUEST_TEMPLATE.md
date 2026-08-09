@@ -23,6 +23,9 @@ If applicable, please ensure:
 - [ ] `pip-audit` passes with no HIGH/CRITICAL findings
 - [ ] gitleaks scan passes (no committed secrets)
 - [ ] Pin floor guards are satisfied (no version regressions)
+- [ ] Dependency review passes (no new HIGH/CRITICAL dependencies)
+- [ ] CodeQL analysis reports no new HIGH/CRITICAL findings
+- [ ] Source integrity check passes (no stray tokens / paste corruption)
 
 ## CI Checks Verified
 
@@ -30,6 +33,7 @@ If applicable, please ensure:
 - [ ] Frontend tests pass (`npm test`)
 - [ ] TypeScript compilation passes (`npx tsc --noEmit`)
 - [ ] Frontend build passes (`npm run build`)
+- [ ] Workflow YAML validation passes (CI, CodeQL, release configs)
 
 ## Checklist
 
