@@ -3779,6 +3779,7 @@ async def delete_agent_task(
 
 @router.post("/tasks/{task_id}/live")
 async def toggle_agent_task_live(
+    http_request: Request,
     task_id: str,
     body: LiveToggleBody = LiveToggleBody(),
     user: UserResponse = Depends(get_current_user_required),
@@ -3848,7 +3849,12 @@ async def toggle_agent_task_live(
         row.live_next_check = None
     db.commit()
     db.refresh(row)
-    return JSONResponse(content={"task": row.to_dict()})
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            "task": row.to_dict(),
+        }
+    )
 
 
 @router.get("/tasks/{task_id}/updates")
