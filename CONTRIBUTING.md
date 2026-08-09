@@ -89,7 +89,9 @@ npm run build  # Production build
 
 1. **Before submitting a PR**:
    - Run all tests locally
-   - Ensure CI passes (we check pip-audit, npm audit, gitleaks)
+   - Ensure CI passes (pip-audit, npm audit, gitleaks, dependency review,
+     CodeQL, source-integrity, and workflow YAML validation)
+   - Run `git diff --check` to catch whitespace errors
    - Follow the existing code style
    - Add tests for new functionality
 
@@ -110,7 +112,10 @@ npm run build  # Production build
   - pip-audit (Python dependencies)
   - npm audit (Node.js dependencies)
   - gitleaks (secret scanning)
+  - Dependency review (new HIGH/CRITICAL dependency changes)
   - GitHub CodeQL (static analysis)
+  - Source-integrity scan (stray-token/paste corruption)
+  - Workflow YAML validation (CI, CodeQL, release configs)
 - Pin-floor guards prevent regression to insecure package versions
 - See [SECURITY.md](SECURITY.md) for vulnerability reporting
 

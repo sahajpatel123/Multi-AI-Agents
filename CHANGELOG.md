@@ -85,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extended workflow YAML validation to cover the CodeQL config file
 - Expanded the PR template security checklist with dependency review, CodeQL,
   source-integrity, and workflow YAML validation checks
+- Documented the expanded CI security gates in CONTRIBUTING.md
 
 ## [0.1.0] - 2026-08-07
 
