@@ -2573,6 +2573,7 @@ async def cancel_agent_task(
 
 @router.get("/result/{task_id}")
 async def get_agent_result(
+    http_request: Request,
     task_id: str,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -2598,7 +2599,7 @@ async def get_agent_result(
         )
         if row:
             _merge_db_task_into_result_payload(out, row)
-        return JSONResponse(content=out)
+        return JSONResponse(content={"request_id": correlation_request_id(http_request), **out})
 
     row = (
         db.query(AgentTaskRow)
@@ -2612,7 +2613,12 @@ async def get_agent_result(
         )
 
     contra = _load_task_contradictions(db, task_id, user.id)
-    return JSONResponse(content=_persisted_agent_task_result_dict(row, contra))
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            **_persisted_agent_task_result_dict(row, contra),
+        }
+    )
 
 
 @router.post("/challenge")
