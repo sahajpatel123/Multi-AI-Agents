@@ -21,6 +21,7 @@ If applicable, please ensure:
 - [ ] All new code is covered by tests
 - [ ] `npm audit` passes (or vulnerabilities are documented as waived)
 - [ ] `pip-audit` passes with no HIGH/CRITICAL findings
+- [ ] `pip check` passes (no dependency resolution inconsistencies)
 - [ ] gitleaks scan passes (no committed secrets)
 - [ ] Pin floor guards are satisfied (no version regressions)
 - [ ] Dependency review passes (no new HIGH/CRITICAL dependencies)

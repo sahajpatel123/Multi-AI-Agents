@@ -91,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a CI style job that enforces `git diff --check` on PR/push diffs
 - Tightened the style-job regression test to verify the full-history checkout
 - Added `pip check` to the backend CI job to catch dependency inconsistencies
+- Documented the `pip check` gate in the PR template and CONTRIBUTING
 
 ## [0.1.0] - 2026-08-07
 
