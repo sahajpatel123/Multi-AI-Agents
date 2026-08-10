@@ -170,6 +170,7 @@ def test_codeowners_cover_ci_security_files() -> None:
     codeowners = (REPO_ROOT / ".github" / "CODEOWNERS").read_text(encoding="utf-8")
     required_entries = (
         "/.github/codeql-config.yml",
+        "/.github/dependabot.yml",
         "/.github/PULL_REQUEST_TEMPLATE.md",
         "/CONTRIBUTING.md",
         "/backend/tests/test_workflow_security_gates.py",
