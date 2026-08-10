@@ -124,6 +124,9 @@ def test_codeql_skips_docs_only_changes() -> None:
         paths_ignore = codeql[on_key][event].get("paths-ignore", [])
         assert "*.md" in paths_ignore, f"CodeQL should skip markdown-only {event}s"
         assert "design/**" in paths_ignore, f"CodeQL should skip design-only {event}s"
+        assert "arena-video/**" in paths_ignore, f"CodeQL should skip arena-video {event}s"
+        assert "app/**" in paths_ignore, f"CodeQL should skip app-only {event}s"
+    assert "schedule" in codeql[on_key], "CodeQL should keep its weekly scheduled scan"
 
 
 def test_ci_has_whitespace_diff_check() -> None:
