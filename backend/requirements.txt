@@ -13,7 +13,7 @@ anthropic==0.34.2
 openai==1.54.3
 
 # Async
-httpx==0.27.2
+httpx==0.28.1
 anyio==4.6.0
 
 # Reliability — exponential-backoff retry for transient LLM API errors
