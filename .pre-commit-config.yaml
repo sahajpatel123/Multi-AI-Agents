@@ -33,10 +33,10 @@ repos:
         files: \.[jt]sx?$
         types: [file]
         additional_dependencies:
-          - eslint@9
-          - @eslint/js@9
-          - globals@15
-          - eslint-plugin-react-hooks@5
+          - "eslint@9"
+          - "@eslint/js@9"
+          - "globals@15"
+          - "eslint-plugin-react-hooks@5"
 
   # Gitleaks for secret scanning
   - repo: https://github.com/gitleaks/gitleaks
@@ -59,7 +59,9 @@ repos:
     hooks:
       - id: check-debug-statements
         name: check for debug statements
-        entry: grep -rn "console.log\|pdb.set_trace\|breakpoint()" --include="*.py" --include="*.ts" --include="*.tsx" .
+        # Use rg with glob excludes so vendored/generated dirs (.venv,
+        # node_modules, dist, __pycache__) never trigger false positives.
+        entry: rg -n "console\.log|pdb\.set_trace|breakpoint\(\)" --glob '*.py' --glob '*.ts' --glob '*.tsx' --glob '!**/.venv*/**' --glob '!**/node_modules/**' --glob '!**/dist/**' --glob '!**/__pycache__/**' .
         language: system
         always_run: true
         pass_filenames: false

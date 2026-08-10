@@ -228,3 +228,26 @@ def test_release_runs_pip_check() -> None:
     assert pip_check_steps[0].get("working-directory") == "backend", (
         "Release pip check step must run from the backend directory"
     )
+
+
+def test_pre_commit_config_and_ci_job() -> None:
+    pre_commit = yaml.safe_load(
+        (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    local_hooks = [
+        hook
+        for repo in pre_commit.get("repos", [])
+        for hook in repo.get("hooks", [])
+    ]
+    debug_hooks = [h for h in local_hooks if h.get("id") == "check-debug-statements"]
+    assert debug_hooks, "pre-commit config is missing the debug-statement hook"
+    entry = debug_hooks[0]["entry"]
+    assert "rg" in entry, "debug-statement hook should use rg"
+    assert "!**/.venv*/**" in entry, (
+        "debug-statement hook should exclude vendored .venv directories"
+    )
+
+    ci = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    assert "pre-commit" in ci["jobs"], "CI is missing the pre-commit job"

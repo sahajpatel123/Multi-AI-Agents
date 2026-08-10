@@ -108,6 +108,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `pip check` to the release workflow dependency consistency gate
 - Tightened the release pip-check regression test to verify the backend
   working-directory
+- Added a CI job that runs pre-commit hooks and fixed the pre-commit YAML
+  (`@`-prefixed dependency pins and venv-scanning debug hook)
 
 ## [0.1.0] - 2026-08-07
 
