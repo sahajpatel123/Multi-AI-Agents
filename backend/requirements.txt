@@ -7,7 +7,7 @@ pydantic-settings==2.5.2
 email-validator==2.2.0
 
 # Anthropic
-anthropic==0.34.2
+anthropic==0.120.2
 
 # OpenAI (for Grok API)
 openai==1.54.3
