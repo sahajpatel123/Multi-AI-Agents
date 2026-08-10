@@ -115,6 +115,17 @@ def test_codeql_uses_focused_config() -> None:
     assert "web/frontend/dist/**" in ignores, "CodeQL should ignore build output"
 
 
+def test_codeql_skips_docs_only_changes() -> None:
+    codeql = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "codeql.yml").read_text(encoding="utf-8")
+    )
+    on_key = "on" if "on" in codeql else True  # PyYAML maps `on:` to True
+    for event in ("push", "pull_request"):
+        paths_ignore = codeql[on_key][event].get("paths-ignore", [])
+        assert "*.md" in paths_ignore, f"CodeQL should skip markdown-only {event}s"
+        assert "design/**" in paths_ignore, f"CodeQL should skip design-only {event}s"
+
+
 def test_ci_has_whitespace_diff_check() -> None:
     ci = yaml.safe_load(
         (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")

@@ -6,8 +6,18 @@ permissions:
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'design/**'
+      - 'arena-video/**'
+      - 'app/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'design/**'
+      - 'arena-video/**'
+      - 'app/**'
   schedule:
     - cron: '30 2 * * 1'
   workflow_dispatch:
