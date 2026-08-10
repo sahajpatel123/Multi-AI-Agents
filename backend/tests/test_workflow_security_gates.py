@@ -209,3 +209,19 @@ def test_dependabot_config_is_valid() -> None:
     assert all(u.get("open-pull-requests-limit") for u in dependabot.get("updates", [])), (
         "Each Dependabot update should set an open-pull-requests limit"
     )
+
+
+def test_release_runs_pip_check() -> None:
+    release = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    )
+    steps = release["jobs"]["build"]["steps"]
+    pip_check_steps = [
+        step for step in steps
+        if isinstance(step, dict)
+        and step.get("name") == "Dependency consistency check (pip check)"
+    ]
+    assert pip_check_steps, "Release workflow is missing the pip check step"
+    assert "pip check" in pip_check_steps[0]["run"], (
+        "Release pip check step should invoke pip check"
+    )
