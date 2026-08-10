@@ -117,6 +117,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the weekly scheduled scan
 - Added a manual `workflow_dispatch` trigger to the release workflow
 - Strengthened the release trigger regression test to keep v* tag pushes intact
+- Skipped CI on markdown/design-only pushes and PRs to save runner time while
+  keeping all code and CI checks active
 
 ## [0.1.0] - 2026-08-07
 

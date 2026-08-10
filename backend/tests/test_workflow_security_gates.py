@@ -179,6 +179,18 @@ def test_ci_runs_pip_check() -> None:
     )
 
 
+def test_ci_skips_docs_only_changes() -> None:
+    ci = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    on_key = "on" if "on" in ci else True
+    for event in ("push", "pull_request"):
+        paths_ignore = ci[on_key][event].get("paths-ignore", [])
+        assert "*.md" in paths_ignore, f"CI should skip markdown-only {event}s"
+        assert "design/**" in paths_ignore, f"CI should skip design-only {event}s"
+        assert "app/**" in paths_ignore, f"CI should skip app-only {event}s"
+
+
 def test_codeowners_cover_ci_security_files() -> None:
     """Changes to CI/security config and guards need owner review."""
     codeowners = (REPO_ROOT / ".github" / "CODEOWNERS").read_text(encoding="utf-8")

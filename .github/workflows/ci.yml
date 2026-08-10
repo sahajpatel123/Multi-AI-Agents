@@ -6,8 +6,18 @@ permissions:
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'design/**'
+      - 'arena-video/**'
+      - 'app/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'design/**'
+      - 'arena-video/**'
+      - 'app/**'
   workflow_dispatch:
 
 # Keep in-flight runs running when a new commit lands. Cancelling on every
