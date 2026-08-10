@@ -1340,6 +1340,7 @@ async def list_agent_capabilities(request: Request) -> dict:
 
 @router.get("/capability-usage")
 async def get_capability_usage(
+    http_request: Request,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
     days: int = Query(30, ge=1, le=365, description="Window length in days, ending today (UTC)."),
@@ -1441,6 +1442,7 @@ async def get_capability_usage(
         )
 
     return {
+        "request_id": correlation_request_id(http_request),
         "window_days": days,
         "window_start": window_start.date().isoformat(),
         "window_end": now_utc.date().isoformat(),
