@@ -244,6 +244,16 @@ def test_release_runs_pip_check() -> None:
     )
 
 
+def test_release_has_manual_dispatch() -> None:
+    release = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    )
+    on_key = "on" if "on" in release else True
+    assert "workflow_dispatch" in release[on_key], (
+        "Release workflow should support manual workflow_dispatch runs"
+    )
+
+
 def test_pre_commit_config_and_ci_job() -> None:
     pre_commit = yaml.safe_load(
         (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
