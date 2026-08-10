@@ -1585,6 +1585,7 @@ async def list_capability_stats(request: Request) -> dict:
 
 @router.get("/tasks/{task_id}/feedback")
 async def get_task_answer_feedback(
+    http_request: Request,
     task_id: str,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -1619,6 +1620,7 @@ async def get_task_answer_feedback(
     if not fb:
         return None
     return {
+        "request_id": correlation_request_id(http_request),
         "verdict": fb.verdict,
         "note": fb.note,
         "created_at": fb.created_at.isoformat() if fb.created_at else None,
