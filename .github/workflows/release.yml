@@ -102,7 +102,7 @@ jobs:
         # database can contain user PII, hashed passwords, and tokens; it is
         # also gitignored so it would only appear on a local release runner.
         # Ship migration files instead if schema snapshots are ever needed.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets
           path: |
