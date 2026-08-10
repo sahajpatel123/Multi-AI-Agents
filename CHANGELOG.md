@@ -95,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tightened the style-job regression test to verify the full-history checkout
 - Added `pip check` to the backend CI job to catch dependency inconsistencies
 - Documented the `pip check` gate in the PR template and CONTRIBUTING
+- Added CODEOWNERS review coverage for CI/security config and tests
 
 ## [0.1.0] - 2026-08-07
 
