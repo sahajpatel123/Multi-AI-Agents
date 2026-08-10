@@ -1518,7 +1518,10 @@ async def get_capability_doc_endpoint(
             status_code=404,
             detail={"error": "capability_not_found", "id": capability_id},
         )
-    return doc
+    return {
+        "request_id": correlation_request_id(request),
+        **doc,
+    }
 
 
 @router.get("/capabilities/examples")
