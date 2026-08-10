@@ -100,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a regression test that locks the CODEOWNERS security coverage in place
 - Documented pip check, source-integrity, git diff --check, and CODEOWNERS
   coverage in SECURITY.md
+- Added a regression test that keeps SECURITY.md aligned with the CI gates
 
 ## [0.1.0] - 2026-08-07
 

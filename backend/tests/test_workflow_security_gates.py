@@ -177,3 +177,16 @@ def test_codeowners_cover_ci_security_files() -> None:
     )
     for entry in required_entries:
         assert entry in codeowners, f"CODEOWNERS is missing an owner entry for {entry}"
+
+
+def test_security_doc_lists_new_gates() -> None:
+    """The security policy should keep describing the actual CI gates."""
+    security_md = (REPO_ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    required_terms = (
+        "pip check",
+        "Source integrity",
+        "git diff --check",
+        "CODEOWNERS",
+    )
+    for term in required_terms:
+        assert term in security_md, f"SECURITY.md is missing mention of {term!r}"
