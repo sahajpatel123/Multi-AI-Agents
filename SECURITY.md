@@ -66,6 +66,8 @@ This project implements the following security practices:
 - **CI hardening**: every CI/CodeQL/release job has an explicit timeout and
   least-privilege GitHub token permissions where possible; in-flight runs are
   not cancelled by newer pushes so each commit gets a trustworthy result
+- **Pre-commit enforcement**: CI runs the repo's pre-commit hooks (lint,
+  formatting, secret scanning, and debug-statement checks)
 - **Source integrity**: CI scans for stray-token/paste corruption and runs
   `git diff --check` on PR/push diffs
 - **Review coverage**: CODEOWNERS requires owner review for CI/security config
