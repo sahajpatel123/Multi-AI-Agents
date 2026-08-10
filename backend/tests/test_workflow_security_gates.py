@@ -252,6 +252,9 @@ def test_release_has_manual_dispatch() -> None:
     assert "workflow_dispatch" in release[on_key], (
         "Release workflow should support manual workflow_dispatch runs"
     )
+    assert "push" in release[on_key], "Release workflow should still run on tag pushes"
+    tags = release[on_key]["push"]["tags"]
+    assert "v*" in tags, "Release workflow should still run on v* tag pushes"
 
 
 def test_pre_commit_config_and_ci_job() -> None:
