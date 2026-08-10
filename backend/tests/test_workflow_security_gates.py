@@ -163,3 +163,17 @@ def test_ci_runs_pip_check() -> None:
     assert "pip check" in pip_check_steps[0]["run"], (
         "pip check step should invoke python -m pip check"
     )
+
+
+def test_codeowners_cover_ci_security_files() -> None:
+    """Changes to CI/security config and guards need owner review."""
+    codeowners = (REPO_ROOT / ".github" / "CODEOWNERS").read_text(encoding="utf-8")
+    required_entries = (
+        "/.github/codeql-config.yml",
+        "/.github/PULL_REQUEST_TEMPLATE.md",
+        "/CONTRIBUTING.md",
+        "/backend/tests/test_workflow_security_gates.py",
+        "/backend/tests/test_no_stray_main_tokens.py",
+    )
+    for entry in required_entries:
+        assert entry in codeowners, f"CODEOWNERS is missing an owner entry for {entry}"
