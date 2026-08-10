@@ -2927,6 +2927,7 @@ async def delete_watchlist_item(
 
 @router.get("/watchlist/{item_id}/history")
 async def get_watchlist_item_history(
+    http_request: Request,
     item_id: str,
     limit: int = Query(50, ge=1, le=200, description="Max number of history rows to return."),
     user: UserResponse = Depends(get_current_user_required),
@@ -2958,7 +2959,13 @@ async def get_watchlist_item_history(
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
         )
     payload = get_watchlist_history(db, user.id, item.id, limit=limit)
-    return JSONResponse(content={"success": True, **payload})
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            "success": True,
+            **payload,
+        }
+    )
 
 
 @router.get("/watchlist/{item_id}/history/export.csv")
