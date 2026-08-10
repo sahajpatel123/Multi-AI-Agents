@@ -225,3 +225,6 @@ def test_release_runs_pip_check() -> None:
     assert "pip check" in pip_check_steps[0]["run"], (
         "Release pip check step should invoke pip check"
     )
+    assert pip_check_steps[0].get("working-directory") == "backend", (
+        "Release pip check step must run from the backend directory"
+    )

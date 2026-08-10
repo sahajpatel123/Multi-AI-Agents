@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request ID included in Agent capabilities/capability-docs responses
 - Request ID included in Agent capability examples/stats responses
 - Request ID included in Agent capability-usage responses
+- Request ID included in Agent single capability-doc responses
 - Request ID included in Agent calibration responses
 - Request ID included in Agent task feedback responses
 - Request ID included in Agent watchlist history responses
@@ -105,6 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   added a regression test that keeps it valid
 - Extended the CODEOWNERS coverage test to include the Dependabot config
 - Added `pip check` to the release workflow dependency consistency gate
+- Tightened the release pip-check regression test to verify the backend
+  working-directory
 
 ## [0.1.0] - 2026-08-07
 
