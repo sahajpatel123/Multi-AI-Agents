@@ -190,3 +190,21 @@ def test_security_doc_lists_new_gates() -> None:
     )
     for term in required_terms:
         assert term in security_md, f"SECURITY.md is missing mention of {term!r}"
+
+
+def test_dependabot_config_is_valid() -> None:
+    """Dependabot config must be a real version-2 config, not a workflow file."""
+    dependabot = yaml.safe_load(
+        (REPO_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    )
+    assert dependabot.get("version") == 2, "Dependabot config must declare version: 2"
+    assert "on" not in dependabot, "Dependabot config must not contain a workflow 'on' key"
+    assert "name" not in dependabot, "Dependabot config must not contain a workflow 'name' key"
+
+    ecosystems = {u.get("package-ecosystem") for u in dependabot.get("updates", [])}
+    assert {"pip", "npm", "github-actions"} <= ecosystems, (
+        "Dependabot should cover pip, npm, and GitHub Actions"
+    )
+    assert all(u.get("open-pull-requests-limit") for u in dependabot.get("updates", [])), (
+        "Each Dependabot update should set an open-pull-requests limit"
+    )

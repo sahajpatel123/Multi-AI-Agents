@@ -101,6 +101,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented pip check, source-integrity, git diff --check, and CODEOWNERS
   coverage in SECURITY.md
 - Added a regression test that keeps SECURITY.md aligned with the CI gates
+- Fixed the malformed Dependabot config (now a valid `version: 2` file) and
+  added a regression test that keeps it valid
 
 ## [0.1.0] - 2026-08-07
 

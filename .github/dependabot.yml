@@ -1,14 +1,9 @@
-name: Dependabot
-
-on:
-  schedule:
-    interval: daily
-  open-pull-requests-limit: 10
-
+version: 2
 updates:
   # Weekly for non-critical dependency updates
   - package-ecosystem: pip
     directory: /backend
+    open-pull-requests-limit: 10
     schedule:
       interval: weekly
       day: monday
@@ -27,6 +22,7 @@ updates:
   # Weekly for non-critical dependency updates
   - package-ecosystem: npm
     directory: /web/frontend
+    open-pull-requests-limit: 10
     schedule:
       interval: weekly
       day: monday
@@ -46,6 +42,7 @@ updates:
   # and stale tags have caused CI failures in this repo (CodeQL v5).
   - package-ecosystem: github-actions
     directory: /
+    open-pull-requests-limit: 10
     schedule:
       interval: weekly
       day: monday
