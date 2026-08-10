@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request ID included in Agent capability examples/stats responses
 - Request ID included in Agent calibration responses
 - Request ID included in Agent task feedback responses
+- Request ID included in Agent watchlist history responses
 - Request ID included in Agent orchestration frontend errors
 - Request ID included in Agent export frontend errors
 - Request ID included in feedback submit frontend errors
