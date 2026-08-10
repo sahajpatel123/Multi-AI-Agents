@@ -3265,6 +3265,7 @@ async def list_recent_feedback(
 
 @router.get("/feedback/calibration")
 async def get_feedback_calibration(
+    http_request: Request,
     user: UserResponse = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -3303,7 +3304,12 @@ async def get_feedback_calibration(
         message="Too many feedback-calibration lookups. Please slow down.",
     )
     payload = _compute_feedback_calibration(user.id, db)
-    return JSONResponse(content=payload)
+    return JSONResponse(
+        content={
+            "request_id": correlation_request_id(http_request),
+            **payload,
+        }
+    )
 
 
 @router.get("/feedback/export.csv")
