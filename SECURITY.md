@@ -53,6 +53,8 @@ This project implements the following security practices:
   introduce HIGH/CRITICAL dependency vulnerabilities
 - **Pin floors**: CI guards the minimum security-required versions for
   critical Python and Node packages
+- **Dependency consistency**: `pip check` runs in backend CI to catch
+  dependency resolution inconsistencies
 - **Dependency automation**: Dependabot covers pip, npm, and GitHub Actions
   on a weekly schedule with security labels
 - **Secret scanning**: gitleaks with CI integration
@@ -64,6 +66,10 @@ This project implements the following security practices:
 - **CI hardening**: every CI/CodeQL/release job has an explicit timeout and
   least-privilege GitHub token permissions where possible; in-flight runs are
   not cancelled by newer pushes so each commit gets a trustworthy result
+- **Source integrity**: CI scans for stray-token/paste corruption and runs
+  `git diff --check` on PR/push diffs
+- **Review coverage**: CODEOWNERS requires owner review for CI/security config
+  and security test files
 - **Request tracing**: every response carries `X-Request-ID`; the same ID is
   surfaced in SSE streams and error messages for end-to-end correlation
 - **CORS**: locked to an environment allowlist; only `X-Request-ID` is

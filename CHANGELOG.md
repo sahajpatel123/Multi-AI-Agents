@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request ID included in Agent live-updates responses
 - Request ID included in Agent capabilities/capability-docs responses
 - Request ID included in Agent capability examples/stats responses
+- Request ID included in Agent capability-usage responses
 - Request ID included in Agent calibration responses
 - Request ID included in Agent task feedback responses
 - Request ID included in Agent watchlist history responses
@@ -97,6 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented the `pip check` gate in the PR template and CONTRIBUTING
 - Added CODEOWNERS review coverage for CI/security config and tests
 - Added a regression test that locks the CODEOWNERS security coverage in place
+- Documented pip check, source-integrity, git diff --check, and CODEOWNERS
+  coverage in SECURITY.md
 
 ## [0.1.0] - 2026-08-07
 
