@@ -40,7 +40,7 @@ bcrypt==4.2.0
 python-multipart==0.0.32
 
 # Rate limiting
-slowapi==0.1.9
+slowapi==0.1.10
 
 # Utils - updated for security
 python-dotenv==1.2.2
