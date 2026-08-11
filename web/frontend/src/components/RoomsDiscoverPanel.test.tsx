@@ -7,12 +7,15 @@ function renderPanel(overrides: Partial<Parameters<typeof RoomsDiscoverPanel>[0]
     rooms: [],
     total: 0,
     loading: false,
+    loadingMore: false,
+    loadMoreFailed: false,
     failed: false,
     searchQuery: '',
     onSearchChange: vi.fn(),
     onSubmitSearch: vi.fn(),
     onClearSearch: vi.fn(),
     onRetry: vi.fn(),
+    onLoadMore: vi.fn(),
     onOpen: vi.fn(),
     ...overrides,
   };
@@ -73,6 +76,70 @@ describe('RoomsDiscoverPanel', () => {
     expect(container.textContent).toContain('2 members · 4 tasks · New synthesis');
     expect(container.textContent).toContain('1 member · 0 tasks · No synthesis yet');
     expect(container.textContent).toContain('Showing 2 of 12 discoverable rooms');
+  });
+
+  it('offers load more when additional rooms remain', () => {
+    const { getByRole, props } = renderPanel({
+      rooms: [
+        {
+          id: 1,
+          name: 'Quantum investing',
+          slug: 'quantum-investing',
+          member_count: 2,
+          task_count: 4,
+        },
+      ],
+      total: 5,
+    });
+    fireEvent.click(getByRole('button', { name: 'Load more discoverable rooms' }));
+    expect(props.onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides load more once every room is shown', () => {
+    const { queryByRole } = renderPanel({
+      rooms: [
+        {
+          id: 1,
+          name: 'Quantum investing',
+          slug: 'quantum-investing',
+        },
+      ],
+      total: 1,
+    });
+    expect(queryByRole('button', { name: 'Load more discoverable rooms' })).toBeNull();
+  });
+
+  it('disables load more while appending', () => {
+    const { getByRole } = renderPanel({
+      rooms: [
+        {
+          id: 1,
+          name: 'Quantum investing',
+          slug: 'quantum-investing',
+        },
+      ],
+      total: 5,
+      loadingMore: true,
+    });
+    const button = getByRole('button', { name: 'Load more discoverable rooms' }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toContain('Loading more…');
+  });
+
+  it('retries a failed append through the load-more control', () => {
+    const { getByRole, props } = renderPanel({
+      rooms: [
+        {
+          id: 1,
+          name: 'Quantum investing',
+          slug: 'quantum-investing',
+        },
+      ],
+      total: 5,
+      loadMoreFailed: true,
+    });
+    fireEvent.click(getByRole('button', { name: 'Retry' }));
+    expect(props.onLoadMore).toHaveBeenCalledTimes(1);
   });
 
   it('opens a room by slug', () => {

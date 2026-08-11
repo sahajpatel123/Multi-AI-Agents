@@ -894,6 +894,8 @@ export function AgentPage() {
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [createdRoom, setCreatedRoom] = useState<any>(null);
   const roomNameInputRef = useRef<HTMLInputElement | null>(null);
+  /** Monotonic request id so a slow discover response can't overwrite a newer search. */
+  const discoverRequestIdRef = useRef(0);
   const [myRooms, setMyRooms] = useState<any[]>([]);
   const [myRoomsLoading, setMyRoomsLoading] = useState(false);
   const [myRoomsLoadFailed, setMyRoomsLoadFailed] = useState(false);
@@ -902,6 +904,9 @@ export function AgentPage() {
   const [discoverTotal, setDiscoverTotal] = useState(0);
   const [discoverLoading, setDiscoverLoading] = useState(false);
   const [discoverLoadFailed, setDiscoverLoadFailed] = useState(false);
+  const [discoverLoadingMore, setDiscoverLoadingMore] = useState(false);
+  const [discoverLoadMoreFailed, setDiscoverLoadMoreFailed] = useState(false);
+  const [discoverPage, setDiscoverPage] = useState(1);
   const [discoverSearchQuery, setDiscoverSearchQuery] = useState('');
   const [roomsSearchQuery, setRoomsSearchQuery] = useState('');
   const [roomsSort, setRoomsSort] = useState<AgentRoomsSort>('recent');
@@ -1134,26 +1139,45 @@ export function AgentPage() {
   }, [user]);
 
   const loadDiscoverRooms = useCallback(
-    async (query: string = discoverSearchQuery) => {
+    async (query: string = discoverSearchQuery, page = 1) => {
+      const requestId = ++discoverRequestIdRef.current;
       if (!user) {
         setDiscoverRooms([]);
         setDiscoverTotal(0);
         setDiscoverLoadFailed(false);
         setDiscoverLoading(false);
+        setDiscoverLoadingMore(false);
+        setDiscoverLoadMoreFailed(false);
         return;
       }
-      setDiscoverLoading(true);
+      setDiscoverLoading(page === 1);
+      setDiscoverLoadingMore(page > 1);
+      setDiscoverLoadMoreFailed(false);
       try {
-        const r = await getDiscoverRooms(query, 1, 20);
-        setDiscoverRooms(r.rooms || []);
+        const r = await getDiscoverRooms(query, page, 20);
+        if (requestId !== discoverRequestIdRef.current) return;
+        setDiscoverRooms((prev) => {
+          if (page === 1) return r.rooms || [];
+          const seen = new Set(prev.map((room) => room?.id));
+          return [...prev, ...(r.rooms || []).filter((room) => !seen.has(room.id))];
+        });
         setDiscoverTotal(r.total || 0);
+        setDiscoverPage(page);
         setDiscoverLoadFailed(false);
       } catch {
-        setDiscoverRooms([]);
-        setDiscoverTotal(0);
-        setDiscoverLoadFailed(true);
+        if (requestId !== discoverRequestIdRef.current) return;
+        if (page === 1) {
+          setDiscoverRooms([]);
+          setDiscoverTotal(0);
+          setDiscoverLoadFailed(true);
+        } else {
+          setDiscoverLoadMoreFailed(true);
+        }
       } finally {
-        setDiscoverLoading(false);
+        if (requestId === discoverRequestIdRef.current) {
+          setDiscoverLoading(false);
+          setDiscoverLoadingMore(false);
+        }
       }
     },
     [discoverSearchQuery, user],
@@ -4108,6 +4132,8 @@ export function AgentPage() {
                   rooms={discoverRooms}
                   total={discoverTotal}
                   loading={discoverLoading}
+                  loadingMore={discoverLoadingMore}
+                  loadMoreFailed={discoverLoadMoreFailed}
                   failed={discoverLoadFailed}
                   searchQuery={discoverSearchQuery}
                   onSearchChange={setDiscoverSearchQuery}
@@ -4117,6 +4143,9 @@ export function AgentPage() {
                     void loadDiscoverRooms('');
                   }}
                   onRetry={() => void loadDiscoverRooms()}
+                  onLoadMore={() =>
+                    void loadDiscoverRooms(discoverSearchQuery, discoverPage + 1)
+                  }
                   onOpen={(slug) => {
                     navigate(`/room/${encodeURIComponent(slug)}`);
                     if (isMobile) setSidebarOpen(false);

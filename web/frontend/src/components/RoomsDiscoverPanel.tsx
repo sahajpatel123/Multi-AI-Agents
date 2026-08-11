@@ -14,12 +14,15 @@ type RoomsDiscoverPanelProps = {
   rooms: DiscoverRoomLike[];
   total: number;
   loading: boolean;
+  loadingMore: boolean;
+  loadMoreFailed: boolean;
   failed: boolean;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onSubmitSearch: () => void;
   onClearSearch: () => void;
   onRetry: () => void;
+  onLoadMore: () => void;
   onOpen: (slug: string) => void;
 };
 
@@ -32,12 +35,15 @@ export function RoomsDiscoverPanel({
   rooms,
   total,
   loading,
+  loadingMore,
+  loadMoreFailed,
   failed,
   searchQuery,
   onSearchChange,
   onSubmitSearch,
   onClearSearch,
   onRetry,
+  onLoadMore,
   onOpen,
 }: RoomsDiscoverPanelProps) {
   const [submittedQuery, setSubmittedQuery] = useState(searchQuery);
@@ -223,11 +229,51 @@ export function RoomsDiscoverPanel({
               );
             })}
           </div>
-          {total > rooms.length ? (
-            <p style={{ fontSize: 10, color: '#A0A39A', margin: '8px 2px 0' }}>
-              Showing {rooms.length} of {total} discoverable rooms
-            </p>
-          ) : null}
+          <div
+            style={{
+              margin: '8px 2px 0',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: 6,
+            }}
+          >
+            {total > rooms.length ? (
+              <p style={{ fontSize: 10, color: '#A0A39A', margin: 0 }}>
+                Showing {rooms.length} of {total} discoverable rooms
+              </p>
+            ) : null}
+            {loadMoreFailed ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 10,
+                  color: '#C96A5A',
+                }}
+              >
+                <span>Could not load more rooms.</span>
+                <button
+                  type="button"
+                  className="arena-btn arena-btn--ghost arena-btn--sm"
+                  onClick={onLoadMore}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : total > rooms.length ? (
+              <button
+                type="button"
+                className="arena-btn arena-btn--ghost arena-btn--sm"
+                onClick={onLoadMore}
+                disabled={loadingMore}
+                aria-label="Load more discoverable rooms"
+              >
+                {loadingMore ? 'Loading more…' : 'Load more'}
+              </button>
+            ) : null}
+          </div>
         </>
       )}
     </div>
