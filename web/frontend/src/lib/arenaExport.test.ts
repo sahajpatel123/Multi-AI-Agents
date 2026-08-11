@@ -220,6 +220,29 @@ describe('formatArenaCsvExport', () => {
     expect(csv).toContain('"quality bar is fixed"');
     expect(csv.endsWith('\n')).toBe(true);
   });
+
+  it('neutralizes spreadsheet formula injection in every cell', () => {
+    const dangerous: PromptResponse = {
+      ...sample,
+      prompt: '=HYPERLINK("https://example.invalid","click")',
+      all_responses: sample.all_responses.map((scored, index) => ({
+        ...scored,
+        is_winner: index === 0,
+        response: {
+          ...scored.response,
+          one_liner: index === 0 ? '+SUM(A1:A9)' : 'safe one-liner',
+          verdict: index === 0 ? '@cmd|/c calc' : 'safe verdict',
+          key_assumption: index === 0 ? '-2+3' : 'safe assumption',
+        },
+      })),
+    };
+    const csv = formatArenaCsvExport(dangerous, () => ({ name: 'The Analyst' }));
+    expect(csv).toContain('"\'=HYPERLINK(""https://example.invalid"",""click"")"');
+    expect(csv).toContain('"\'+SUM(A1:A9)"');
+    expect(csv).toContain('"\'@cmd|/c calc"');
+    expect(csv).toContain('"\'-2+3"');
+    expect(csv).not.toContain('"=HYPERLINK');
+  });
 });
 
 describe('formatArenaTranscriptCsvExport', () => {
@@ -372,6 +395,39 @@ describe('formatArenaTranscriptCsvExport', () => {
     const csv = formatArenaTranscriptCsvExport(turns, () => ({ name: '' }));
     const rows = csv.trim().split('\n');
     expect(rows[1]).toContain('"agent_1","agent_1"');
+  });
+
+  it('neutralizes formula injection in prompts and takes', () => {
+    const csv = formatArenaTranscriptCsvExport(
+      [
+        {
+          turn_id: '=1+1',
+          prompt: '-HYPERLINK("https://example.invalid","open")',
+          prompt_category: '',
+          winner_id: 'agent_1',
+          timestamp: '',
+          agent_responses: {
+            agent_1: {
+              agent_id: 'agent_1',
+              agent_number: 1,
+              one_liner: '@SUM(A1:A9)',
+              verdict: '+1+1',
+              confidence: 0.8,
+              key_assumption: '\t=cmd|/c calc',
+              timestamp: '',
+            },
+          },
+        },
+      ],
+      () => ({ name: '=The Analyst' }),
+    );
+    expect(csv).toContain('"\'=1+1"');
+    expect(csv).toContain('"\'-HYPERLINK(""https://example.invalid"",""open"")"');
+    expect(csv).toContain('"\'@SUM(A1:A9)"');
+    expect(csv).toContain('"\'+1+1"');
+    expect(csv).toContain('"\'=cmd|/c calc"');
+    expect(csv).toContain('"\'=The Analyst"');
+    expect(csv).not.toContain('"-HYPERLINK');
   });
 });
 

@@ -330,9 +330,23 @@ export function formatArenaJsonExport(
   return JSON.stringify(data, null, 2) + '\n';
 }
 
+/**
+ * Characters that, when they appear as the first character of a CSV cell,
+ * cause Excel / Google Sheets / LibreOffice to evaluate the cell as a
+ * formula. OWASP CSV Injection guidance: prefix any cell that begins with
+ * one of these with a single quote to neutralize the formula (CWE-1236).
+ *
+ * Arena prompts and verdicts are user- and model-controlled text, so they
+ * must never be able to turn a downloaded transcript into an executable
+ * spreadsheet payload for the next analyst who opens it.
+ */
+const CSV_FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
+
 function toCsvCell(value: string | number | boolean | null | undefined): string {
   const raw = value == null ? '' : String(value);
-  return `"${raw.replace(/"/g, '""')}"`;
+  const safe =
+    raw && CSV_FORMULA_PREFIXES.includes(raw[0]) ? `'${raw}` : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 /**
