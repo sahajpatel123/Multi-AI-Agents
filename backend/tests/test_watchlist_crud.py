@@ -3,7 +3,7 @@
 from __future__ import annotations
 from arena.core.datetime_utils import utcnow_naive
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -183,6 +183,132 @@ async def test_patch_rejects_invalid_interval(app_client, make_user, db_session)
         json={"interval_hours": 12},
     )
     assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_patch_updates_question_and_expertise_preserving_history(
+    app_client, make_user, db_session
+):
+    """Refining a watch's question/expertise must keep run history intact."""
+    user = make_user(email="wl-patch-edit@test.com", tier=UserTier.PRO)
+    now = utcnow_naive()
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Old question?",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=now + timedelta(hours=5),
+        run_count=7,
+        latest_task_id="task-old",
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+    next_run_before = item.next_run_at
+
+    res = await app_client.patch(
+        f"/api/agent/watchlist/{item.id}",
+        headers=_pro_headers(user),
+        json={
+            "question": "  Refined question?  ",
+            "expertise_level": "expert",
+            "expertise_domain": "finance",
+        },
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["question"] == "Refined question?"
+    assert body["expertise_level"] == "expert"
+    assert body["expertise_domain"] == "finance"
+    # History + scheduler state survive an edit.
+    assert body["run_count"] == 7
+    assert body["latest_task_id"] == "task-old"
+    assert body["next_run_at"] == next_run_before.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_patch_rejects_empty_question(app_client, make_user, db_session):
+    user = make_user(email="wl-patch-empty-q@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Keep me",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.patch(
+        f"/api/agent/watchlist/{item.id}",
+        headers=_pro_headers(user),
+        json={"question": "   "},
+    )
+    assert res.status_code == 422
+    db_session.refresh(item)
+    assert item.question == "Keep me"
+
+
+@pytest.mark.asyncio
+async def test_patch_rejects_invalid_expertise_level(app_client, make_user, db_session):
+    user = make_user(email="wl-patch-bad-level@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Keep me",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.patch(
+        f"/api/agent/watchlist/{item.id}",
+        headers=_pro_headers(user),
+        json={"expertise_level": "bogus"},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_question_honors_capability_gate(
+    app_client, make_user, db_session, monkeypatch
+):
+    """Editing a watch into a local-intent question must be rejected."""
+    monkeypatch.setenv("CONDURA_HONEST_REJECTION_ENABLED", "true")
+    user = make_user(email="wl-patch-gate@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Research quarterly AI regulation changes",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.patch(
+        f"/api/agent/watchlist/{item.id}",
+        headers=_pro_headers(user),
+        json={"question": "Open Linear and create a ticket from this research"},
+    )
+    assert res.status_code == 409
+    db_session.refresh(item)
+    assert item.question == "Research quarterly AI regulation changes"
 
 
 @pytest.mark.asyncio

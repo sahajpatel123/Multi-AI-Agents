@@ -597,3 +597,114 @@
   color: #a89070;
   margin-top: 2px;
 }
+
+/* Edit-watch dialog: refine question/expertise without losing history. */
+.watchlist-edit-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(26, 23, 20, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.watchlist-edit-dialog {
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: #f5f0e8;
+  border: 0.5px solid #e0d5c5;
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(26, 23, 20, 0.24);
+  padding: 20px;
+}
+
+.watchlist-edit-dialog__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: #1a1714;
+}
+
+.watchlist-edit-dialog__hint {
+  margin: 6px 0 14px;
+  font-size: 12px;
+  color: #8c7355;
+}
+
+.watchlist-edit-dialog__label {
+  display: block;
+  font-size: 12px;
+  color: #2c1810;
+  margin-bottom: 6px;
+}
+
+.watchlist-edit-dialog__question {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 84px;
+  border: 0.5px solid #d9ccba;
+  border-radius: 8px;
+  background: #fbf8f2;
+  color: #1a1714;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+  font-size: 13px;
+  padding: 10px 12px;
+}
+
+.watchlist-edit-dialog__question:focus {
+  outline: 2px solid #b4906a;
+  outline-offset: 1px;
+}
+
+.watchlist-edit-dialog__question:disabled {
+  opacity: 0.65;
+}
+
+.watchlist-edit-dialog__expertise {
+  margin-top: 14px;
+}
+
+.watchlist-edit-dialog__error {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #993c1d;
+}
+
+.watchlist-edit-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.watchlist-edit-dialog__cancel,
+.watchlist-edit-dialog__save {
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+}
+
+.watchlist-edit-dialog__cancel {
+  background: transparent;
+  border: 0.5px solid #d9ccba;
+  color: #8c7355;
+}
+
+.watchlist-edit-dialog__save {
+  background: #2c1810;
+  border: none;
+  color: #f5f0e8;
+}
+
+.watchlist-edit-dialog__cancel:disabled,
+.watchlist-edit-dialog__save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

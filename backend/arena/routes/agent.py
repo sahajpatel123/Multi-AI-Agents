@@ -577,6 +577,27 @@ class WatchlistPatchBody(BaseModel):
     # PATCH path too.
     interval_hours: Optional[int] = Field(default=None, ge=1, le=168)
     is_active: Optional[bool] = None
+    # Editing the question/expertise lets users refine a watch
+    # without deleting it (which would discard run history).
+    question: Optional[str] = None
+    expertise_level: Optional[
+        Literal["none", "curious", "practitioner", "expert", "researcher"]
+    ] = None
+    expertise_domain: Optional[str] = None
+
+    @field_validator("question")
+    @classmethod
+    def validate_patch_question(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return sanitize_model_text(v, max_length=2000, field_name="question")
+
+    @field_validator("expertise_domain")
+    @classmethod
+    def validate_patch_domain(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return sanitize_model_optional_text(v, max_length=100, field_name="expertise_domain") or ""
 
 
 class WatchlistBulkBody(BaseModel):
@@ -2990,6 +3011,25 @@ async def patch_watchlist_item(
             item.next_run_at = now + timedelta(hours=int(item.interval_hours))
         else:
             item.is_active = False
+
+    if body.question is not None:
+        q = sanitize_text(body.question, max_length=2000, field_name="question")
+        if not q:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": ErrorCodes.VALIDATION_ERROR, "message": "question cannot be empty"},
+            )
+        # Same capability gate as create: a watch that gains a
+        # local-intent question must be rejected before the scheduler
+        # sees it.
+        _enforce_capability_gate(capability_id="watchlist.create", task_text=q)
+        item.question = q
+
+    if body.expertise_level is not None:
+        item.expertise_level = body.expertise_level.strip().lower()
+
+    if body.expertise_domain is not None:
+        item.expertise_domain = body.expertise_domain.strip()[:100]
 
     db.commit()
     db.refresh(item)

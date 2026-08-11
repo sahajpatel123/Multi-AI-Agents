@@ -1575,7 +1575,13 @@ export async function postAgentWatchlist(body: {
 
 export async function patchAgentWatchlist(
   itemId: string,
-  body: { interval_hours?: number; is_active?: boolean },
+  body: {
+    interval_hours?: number;
+    is_active?: boolean;
+    question?: string;
+    expertise_level?: string;
+    expertise_domain?: string;
+  },
 ): Promise<AgentWatchlistItem> {
   const response = await apiFetch(`/api/agent/watchlist/${encodeURIComponent(itemId)}`, {
     method: 'PATCH',

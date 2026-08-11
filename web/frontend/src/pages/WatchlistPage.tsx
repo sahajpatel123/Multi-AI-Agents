@@ -6,6 +6,7 @@ import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
 import { EmptyState } from '../components/EmptyState';
 import { MotionButton } from '../components/MotionButton';
+import { ExpertiseSelector } from '../components/ExpertiseSelector';
 import {
   ApiError,
   deleteAgentWatchlist,
@@ -120,6 +121,12 @@ export function WatchlistPage() {
   const [cadenceBusyId, setCadenceBusyId] = useState<string | null>(null);
   const [runNowBusyId, setRunNowBusyId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<AgentWatchlistItem | null>(null);
+  const [editQuestion, setEditQuestion] = useState('');
+  const [editLevel, setEditLevel] = useState('curious');
+  const [editDomain, setEditDomain] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<WatchlistStatusFilter>('all');
   const [scoreFilter, setScoreFilter] = useState<AgentHistoryScoreFilter>('all');
@@ -158,6 +165,7 @@ export function WatchlistPage() {
   historyCacheRef.current = historyCache;
   const errorRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const editQuestionRef = useRef<HTMLTextAreaElement | null>(null);
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
   const csvDownloadStatusTimerRef = useRef<number | null>(null);
@@ -265,6 +273,17 @@ export function WatchlistPage() {
     return () => document.removeEventListener('keydown', onKey);
   }, [pendingDeleteId]);
 
+  useEffect(() => {
+    if (!editingItem) return;
+    editQuestionRef.current?.focus();
+    editQuestionRef.current?.select();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !editBusy) setEditingItem(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [editingItem, editBusy]);
+
   // `/` focuses watchlist search when not typing in another field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -336,6 +355,40 @@ export function WatchlistPage() {
       void refreshStats();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Delete failed');
+    }
+  };
+
+  const openEdit = (item: AgentWatchlistItem) => {
+    setError(null);
+    setEditError(null);
+    setEditingItem(item);
+    setEditQuestion(item.question);
+    setEditLevel((item.expertise_level || 'curious').trim().toLowerCase() || 'curious');
+    setEditDomain(item.expertise_domain || '');
+  };
+
+  const closeEdit = () => {
+    if (editBusy) return;
+    setEditingItem(null);
+    setEditError(null);
+  };
+
+  const onEditSave = async () => {
+    if (!editingItem || editBusy) return;
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      const updated = await patchAgentWatchlist(editingItem.id, {
+        question: editQuestion,
+        expertise_level: editLevel,
+        expertise_domain: editDomain,
+      });
+      setItems((prev) => prev.map((x) => (x.id === editingItem.id ? updated : x)));
+      setEditingItem(null);
+    } catch (e) {
+      setEditError(e instanceof ApiError ? e.message : 'Could not save changes');
+    } finally {
+      setEditBusy(false);
     }
   };
 
@@ -1411,6 +1464,15 @@ export function WatchlistPage() {
                     <div className="watchlist-item__actions">
                       <button
                         type="button"
+                        onClick={() => openEdit(item)}
+                        title="Edit the watched question and expertise settings"
+                        aria-label={`Edit watch: ${item.question.slice(0, 80) || 'watched question'}`}
+                        className="watchlist-link"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => void onRunNow(item)}
                         disabled={runNowBusyId === item.id}
                         title="Start an immediate re-check now"
@@ -1705,6 +1767,84 @@ export function WatchlistPage() {
           </div>
         )}
       </main>
+
+      {editingItem ? (
+        <div
+          className="watchlist-edit-overlay"
+          onClick={editBusy ? undefined : closeEdit}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="watchlist-edit-title"
+            className="watchlist-edit-dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="watchlist-edit-title" className="watchlist-edit-dialog__title">
+              Edit watch
+            </h2>
+            <p className="watchlist-edit-dialog__hint">
+              Refining the question or expertise keeps run history intact.
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void onEditSave();
+              }}
+            >
+              <label
+                htmlFor="watchlist-edit-question"
+                className="watchlist-edit-dialog__label"
+              >
+                Watched question
+              </label>
+              <textarea
+                id="watchlist-edit-question"
+                ref={editQuestionRef}
+                className="watchlist-edit-dialog__question"
+                value={editQuestion}
+                onChange={(e) => setEditQuestion(e.target.value)}
+                maxLength={2000}
+                rows={3}
+                disabled={editBusy}
+              />
+              <div className="watchlist-edit-dialog__expertise">
+                <ExpertiseSelector
+                  level={editLevel}
+                  domain={editDomain}
+                  onChange={(level, domain) => {
+                    setEditLevel(level);
+                    setEditDomain(domain);
+                  }}
+                  disabled={editBusy}
+                />
+              </div>
+              {editError ? (
+                <p role="alert" className="watchlist-edit-dialog__error">
+                  {editError}
+                </p>
+              ) : null}
+              <div className="watchlist-edit-dialog__actions">
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  disabled={editBusy}
+                  className="watchlist-edit-dialog__cancel"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editBusy || !editQuestion.trim()}
+                  className="watchlist-edit-dialog__save"
+                >
+                  {editBusy ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       <KeyboardShortcutsHelp surface="watchlist" />
     </div>

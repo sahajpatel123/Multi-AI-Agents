@@ -44,6 +44,7 @@ const tierState: {
 const navigateMock = vi.fn();
 const getAgentWatchlistMock = vi.fn();
 const patchAgentWatchlistBulkMock = vi.fn();
+const patchAgentWatchlistMock = vi.fn();
 const postAgentWatchlistRunMock = vi.fn();
 const getAgentWatchlistStatisticsMock = vi.fn();
 const exportAgentWatchlistStatisticsCsvMock = vi.fn();
@@ -81,9 +82,7 @@ vi.mock('../api', async () => {
         last_run_at: null,
       },
     }),
-    patchAgentWatchlist: vi.fn().mockImplementation(async (id: string) => {
-      return { ...baseItem, id };
-    }),
+    patchAgentWatchlist: (...args: unknown[]) => patchAgentWatchlistMock(...args),
     postAgentWatchlistRun: (...args: unknown[]) => postAgentWatchlistRunMock(...args),
     patchAgentWatchlistBulk: (...args: unknown[]) => patchAgentWatchlistBulkMock(...args),
     deleteAgentWatchlist: vi.fn().mockResolvedValue(undefined),
@@ -179,6 +178,10 @@ describe('WatchlistPage', () => {
       paused_count: 2,
       active_cap: 10,
     });
+    patchAgentWatchlistMock.mockReset();
+    patchAgentWatchlistMock.mockImplementation(
+      async (id: string, body?: Record<string, unknown>) => ({ ...baseItem, id, ...body }),
+    );
     postAgentWatchlistRunMock.mockReset();
     postAgentWatchlistRunMock.mockResolvedValue({
       success: true,
@@ -340,6 +343,80 @@ describe('WatchlistPage', () => {
       await screen.findByText('Re-check started — the latest result will update shortly.'),
     ).toBeInTheDocument();
     expect(screen.getByText(/Run 4 times/)).toBeInTheDocument();
+  });
+
+  it('opens the edit dialog prefilled with the watch question and expertise', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Edit watch: How is the Indian IPO market evolving?',
+      }),
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Edit watch' });
+    expect(dialog).toBeInTheDocument();
+    const question = dialog.querySelector('#watchlist-edit-question') as HTMLTextAreaElement;
+    expect(question.value).toBe('How is the Indian IPO market evolving?');
+    const expertChip = dialog.querySelector(
+      '.expertise-selector__chip[aria-checked="true"]',
+    );
+    expect(expertChip?.textContent).toBe('Expert');
+    const domain = dialog.querySelector('.expertise-selector__domain-input') as HTMLInputElement;
+    expect(domain.value).toBe('finance');
+  });
+
+  it('saves refined question and expertise through the patch endpoint', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Edit watch: How is the Indian IPO market evolving?',
+      }),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Edit watch' });
+    const question = dialog.querySelector('#watchlist-edit-question') as HTMLTextAreaElement;
+    fireEvent.change(question, {
+      target: { value: 'How are Indian IPOs evolving this quarter?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(patchAgentWatchlistMock).toHaveBeenCalledWith('item-1', {
+        question: 'How are Indian IPOs evolving this quarter?',
+        expertise_level: 'expert',
+        expertise_domain: 'finance',
+      });
+    });
+    expect(
+      await screen.findByText('How are Indian IPOs evolving this quarter?'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Edit watch' })).not.toBeInTheDocument();
+  });
+
+  it('surfaces a save error in the edit dialog', async () => {
+    patchAgentWatchlistMock.mockRejectedValue(new Error('Save failed'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Edit watch: How is the Indian IPO market evolving?',
+      }),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Edit watch' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByText('Could not save changes')).toBeInTheDocument();
+    expect(dialog).toBeInTheDocument();
   });
 
   it('downloads the current filtered view as CSV', async () => {
