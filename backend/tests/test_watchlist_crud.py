@@ -209,6 +209,68 @@ async def test_duplicate_404_for_other_users_watch(app_client, make_user, db_ses
 
 
 @pytest.mark.asyncio
+async def test_duplicate_rejects_unusable_question(app_client, make_user, db_session):
+    """A broken/empty watch must not spawn another broken paused copy."""
+    user = make_user(email="wl-dup-bad@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="   ",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.post(
+        f"/api/agent/watchlist/{item.id}/duplicate",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 400
+    assert res.json()["detail"]["error"] == "validation_error"
+    assert (
+        db_session.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id)
+        .count()
+        == 1
+    )
+
+
+@pytest.mark.asyncio
+async def test_duplicate_normalizes_question_whitespace(
+    app_client, make_user, db_session
+):
+    """Copies inherit a cleaned question, not legacy padding from the source."""
+    user = make_user(email="wl-dup-clean@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="  Branch this watch into a weekly variant.  ",
+        interval_hours=168,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.post(
+        f"/api/agent/watchlist/{item.id}/duplicate",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200, res.text
+    assert res.json()["question"] == "Branch this watch into a weekly variant."
+
+
+@pytest.mark.asyncio
 async def test_patch_updates_interval(app_client, make_user, db_session):
     user = make_user(email="wl-patch-int@test.com", tier=UserTier.PRO)
     item = WatchlistItem(

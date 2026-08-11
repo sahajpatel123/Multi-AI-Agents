@@ -3185,11 +3185,21 @@ async def duplicate_watchlist_item(
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
         )
 
+    q = (item.question or "").strip()
+    if not q or len(q) > 2000:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": ErrorCodes.VALIDATION_ERROR,
+                "message": "This watch has no usable question to duplicate.",
+            },
+        )
+
     now = utcnow_naive()
     copy = WatchlistItem(
         id=str(uuid.uuid4()),
         user_id=user.id,
-        question=item.question,
+        question=q,
         interval_hours=int(item.interval_hours),
         expertise_level=(item.expertise_level or "curious").strip().lower() or "curious",
         expertise_domain=(item.expertise_domain or "").strip()[:100],

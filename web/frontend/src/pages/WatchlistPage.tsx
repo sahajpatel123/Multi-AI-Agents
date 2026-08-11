@@ -402,12 +402,13 @@ export function WatchlistPage() {
     setError(null);
     setBulkNotice(null);
     try {
-      await postAgentWatchlistDuplicate(item.id);
-      const data = await getAgentWatchlist();
-      setItems(data.items);
-      setActiveCount(data.active_count);
-      setActiveCap(data.active_cap);
-      setTotalCount(data.total);
+      const copy = await postAgentWatchlistDuplicate(item.id);
+      setItems((prev) => [copy, ...prev.filter((x) => x.id !== copy.id)]);
+      setTotalCount((prev) => prev + 1);
+      setActiveCount((prev) => prev + (copy.is_active ? 1 : 0));
+      // The copy is deliberately paused; if the user was looking only at
+      // active watches, show the full list so the new copy is not invisible.
+      setStatusFilter((current) => (current === 'active' ? 'all' : current));
       setBulkNotice('Duplicated watch — the paused copy is ready to edit or resume.');
       void refreshStats();
     } catch (e) {

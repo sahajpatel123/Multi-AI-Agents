@@ -377,7 +377,61 @@ describe('WatchlistPage', () => {
         'Duplicated watch — the paused copy is ready to edit or resume.',
       ),
     ).toBeInTheDocument();
-    expect(getAgentWatchlistMock).toHaveBeenCalledTimes(2);
+    expect(getAgentWatchlistMock).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText('How is the Indian IPO market evolving?')).toHaveLength(2);
+  });
+
+  it('reveals the paused copy when duplicating from the active-only filter', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Active' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Will the monsoon affect Indian agriculture exports?'),
+      ).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Duplicate watch: How is the Indian IPO market evolving?',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(postAgentWatchlistDuplicateMock).toHaveBeenCalledWith('item-1');
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    expect(screen.getAllByText('How is the Indian IPO market evolving?')).toHaveLength(2);
+  });
+
+  it('surfaces a duplicate failure without losing the current list', async () => {
+    postAgentWatchlistDuplicateMock.mockRejectedValue(new Error('Duplicate failed'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Duplicate watch: How is the Indian IPO market evolving?',
+      }),
+    );
+
+    expect(await screen.findByText('Could not duplicate this watch')).toBeInTheDocument();
+    expect(screen.getAllByText('How is the Indian IPO market evolving?')).toHaveLength(1);
+    expect(
+      screen.getByRole('button', {
+        name: 'Duplicate watch: How is the Indian IPO market evolving?',
+      }),
+    ).not.toBeDisabled();
   });
 
   it('opens the edit dialog prefilled with the watch question and expertise', async () => {
