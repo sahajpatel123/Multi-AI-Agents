@@ -45,6 +45,10 @@ MUTABLE_REF_MARKERS = (
     "@latest",
     "@head",
     "@develop",
+    "@dev",
+    "@vnext",
+    "@nightly",
+    "@canary",
     "@refs/heads/",
 )
 
@@ -109,8 +113,14 @@ def _check_action_pinning(path: Path, job_name: str, uses: str) -> str | None:
             "(missing a version tag or SHA)"
         )
     ref = uses.split("@", 1)[1]
+    if not ref:
+        return (
+            f"{path}: job '{job_name}' step uses action '{uses}' with an "
+            "empty ref; pin to a stable tag or SHA"
+        )
+    ref_marker = f"@{ref}".lower()
     for marker in MUTABLE_REF_MARKERS:
-        if marker in f"@{ref}":
+        if marker in ref_marker:
             return (
                 f"{path}: job '{job_name}' uses mutable ref '@{ref}' for "
                 f"'{uses.split('@', 1)[0]}'; pin to a stable tag or SHA"

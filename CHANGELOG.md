@@ -81,6 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - “Try again” buttons in Debate Mode error banners
 
 ### Changed
+- Workflow security gate now also rejects empty action refs and mutable
+  non-branch tags like `canary`, `nightly`, and `dev`
 - Workflow security gate now also rejects wildcard `write-all`/`read-all`
   permissions, mutable third-party action refs, and comes with negative unit
   tests for every invariant it enforces

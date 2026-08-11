@@ -108,6 +108,21 @@ def test_unpinned_action_ref_is_reported(tmp_path: Path) -> None:
     assert any("unpinned action" in v for v in _violations(tmp_path, text))
 
 
+def test_empty_action_ref_is_reported(tmp_path: Path) -> None:
+    text = _minimal_valid().replace("actions/setup-python@v6", "actions/setup-python@")
+    assert any("empty ref" in v for v in _violations(tmp_path, text))
+
+
+def test_mutable_non_branch_ref_is_reported(tmp_path: Path) -> None:
+    text = _minimal_valid().replace("actions/setup-python@v6", "actions/setup-python@canary")
+    assert any("mutable ref" in v for v in _violations(tmp_path, text))
+
+
+def test_unlisted_action_with_stable_tag_passes(tmp_path: Path) -> None:
+    text = _minimal_valid().replace("actions/setup-python@v6", "some/action@v1")
+    assert _violations(tmp_path, text) == []
+
+
 def test_local_action_is_allowed(tmp_path: Path) -> None:
     text = _minimal_valid().replace("actions/setup-python@v6", "./.github/actions/setup")
     assert _violations(tmp_path, text) == []
