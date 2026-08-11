@@ -3293,7 +3293,7 @@ async def get_watchlist_statistics_csv(
 ):
     """CSV export of watchlist statistics.
 
-    Streams a CSV with formula-injection defense (_csv_safe).
+    Streams a UTF-8-BOM CSV with CRLF rows and formula-injection defense.
     Includes summary statistics and per-item breakdown.
     """
     _ensure_agent_watchlist_access(user)
@@ -3306,14 +3306,25 @@ async def get_watchlist_statistics_csv(
     )
     
     from arena.core.agent_memory import get_watchlist_statistics
-    from arena.routes.analytics import _csv_safe
     import csv
     import io
-    
-    stats = get_watchlist_statistics(db, user.id)
-    
+
+    # Defense-in-depth against CWE-1236: a question like " =1+1" is still a
+    # formula risk because spreadsheets commonly ignore leading whitespace
+    # before deciding whether a cell is a formula. Neutralize the first
+    # significant character, not just the raw first byte.
+    def _stats_csv_safe(value) -> str:
+        s = "" if value is None else str(value)
+        if s and s.lstrip()[0] in ("=", "+", "-", "@", "\t", "\r"):
+            return "'" + s
+        return s
+
     buf = io.StringIO()
+    # UTF-8 BOM so Excel and friends detect the Unicode question text.
+    buf.write("\ufeff")
     writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+
+    stats = get_watchlist_statistics(db, user.id)
     
     # Write summary row
     writer.writerow(["Watchlist Statistics Summary"])
@@ -3343,14 +3354,14 @@ async def get_watchlist_statistics_csv(
     
     for item_id, item_stats in stats["per_item_stats"].items():
         writer.writerow([
-            _csv_safe(item_id),
-            _csv_safe(item_stats["question"]),
-            _csv_safe("Yes" if item_stats["is_active"] else "No"),
-            _csv_safe(item_stats["interval_hours"]),
-            _csv_safe(item_stats["run_count"]),
-            _csv_safe(item_stats["scored_run_count"]),
-            _csv_safe(item_stats["avg_score"] if item_stats["avg_score"] is not None else ""),
-            _csv_safe(item_stats["last_run_at"] if item_stats["last_run_at"] else ""),
+            _stats_csv_safe(item_id),
+            _stats_csv_safe(item_stats["question"]),
+            _stats_csv_safe("Yes" if item_stats["is_active"] else "No"),
+            _stats_csv_safe(item_stats["interval_hours"]),
+            _stats_csv_safe(item_stats["run_count"]),
+            _stats_csv_safe(item_stats["scored_run_count"]),
+            _stats_csv_safe(item_stats["avg_score"] if item_stats["avg_score"] is not None else ""),
+            _stats_csv_safe(item_stats["last_run_at"] if item_stats["last_run_at"] else ""),
         ])
     
     filename = f"arena-watchlist-stats-{user.id}-{utcnow_naive().strftime('%Y%m%d')}.csv"
