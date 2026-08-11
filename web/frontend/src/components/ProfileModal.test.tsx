@@ -112,6 +112,24 @@ const hoistedMocks = vi.hoisted(() => ({
   getMcpIntegrations: vi.fn().mockResolvedValue({ integrations: [] }),
 }));
 
+function emptyWinRatePayload(overrides: Record<string, unknown> = {}) {
+  return {
+    window_days: 30,
+    window_start: '2026-07-13',
+    window_end: '2026-08-11',
+    min_appearances: 1,
+    include_fallback: false,
+    low_confidence_threshold: 5,
+    scored_exchanges: 0,
+    unattributed_exchanges: 0,
+    fallback_exchanges: 0,
+    personas: [],
+    best_persona_id: null,
+    best_win_rate: null,
+    ...overrides,
+  };
+}
+
 vi.mock('../hooks/useAuth', () => ({
   useAuth: () => authState,
 }));
@@ -394,6 +412,36 @@ describe('ProfileModal', () => {
 
     expect(await screen.findByText('75%')).toBeInTheDocument();
     expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenCalledTimes(2);
+  });
+
+  it('explains fallback-only windows in the persona win-rate empty state', async () => {
+    hoistedMocks.getAnalyticsPersonaWinRate.mockResolvedValueOnce(
+      emptyWinRatePayload({ fallback_exchanges: 4 }),
+    );
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    expect(
+      await screen.findByText(
+        'No judged panels in the last 30 days yet — fallback scorings are excluded.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the plain empty-state copy when there is no activity at all', async () => {
+    hoistedMocks.getAnalyticsPersonaWinRate.mockResolvedValueOnce(emptyWinRatePayload());
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    expect(
+      await screen.findByText('No scored panels in the last 30 days yet.'),
+    ).toBeInTheDocument();
   });
 
   it('downloads usage JSON with the server-provided filename', async () => {

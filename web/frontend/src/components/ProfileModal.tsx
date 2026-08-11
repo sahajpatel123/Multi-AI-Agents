@@ -1338,9 +1338,9 @@ export function ProfileModal() {
                       style={{
                         padding: '5px 10px',
                         borderRadius: 6,
-                        border: '0.5px solid #E0D5C5',
-                        background: '#F0E8DC',
-                        color: '#F3F0E7',
+                        border: '0.5px solid var(--vp-rule-dark, #E0D5C5)',
+                        background: 'var(--vp-carbon-3, #F0E8DC)',
+                        color: 'var(--vp-ivory, #F3F0E7)',
                         fontSize: 11,
                         cursor: 'pointer',
                         fontFamily: 'var(--vp-font-sans)',
@@ -1353,7 +1353,11 @@ export function ProfileModal() {
                 ) : winRate ? (
                   winRate.personas.length === 0 ? (
                     <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
-                      No scored panels in the last 30 days yet.
+                      {winRate.scored_exchanges === 0 && winRate.fallback_exchanges > 0
+                        ? 'No judged panels in the last 30 days yet — fallback scorings are excluded.'
+                        : winRate.scored_exchanges === 0 && winRate.unattributed_exchanges > 0
+                          ? 'No panels with recorded appearances in the last 30 days yet.'
+                          : 'No scored panels in the last 30 days yet.'}
                     </p>
                   ) : (
                     <div role="group" aria-label="Persona win rates">
@@ -1403,7 +1407,12 @@ export function ProfileModal() {
                                 ) : null}
                                 {row.name}
                                 {row.low_confidence ? (
-                                  <span style={{ color: '#A0A39A', fontSize: 10, marginLeft: 6 }}>low sample</span>
+                                  <span
+                                    title={`Fewer than ${winRate.low_confidence_threshold} scored appearances — treat as provisional`}
+                                    style={{ color: '#A0A39A', fontSize: 10, marginLeft: 6 }}
+                                  >
+                                    low sample
+                                  </span>
                                 ) : null}
                               </td>
                               <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>

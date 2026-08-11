@@ -2402,16 +2402,26 @@ function isAnalyticsPersonaWinRateRow(value: unknown): value is AnalyticsPersona
   const row = value as Record<string, unknown>;
   return (
     typeof row.persona_id === 'string' &&
+    row.persona_id.length > 0 &&
     typeof row.name === 'string' &&
     typeof row.color === 'string' &&
-    typeof row.appearances === 'number' &&
-    Number.isFinite(row.appearances) &&
-    typeof row.wins === 'number' &&
-    Number.isFinite(row.wins) &&
+    isNonNegativeInteger(row.appearances) &&
+    isNonNegativeInteger(row.wins) &&
+    row.wins <= row.appearances &&
     typeof row.win_rate === 'number' &&
     Number.isFinite(row.win_rate) &&
+    row.win_rate >= 0 &&
+    row.win_rate <= 1 &&
     typeof row.low_confidence === 'boolean'
   );
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
 function isAnalyticsPersonaWinRateResponse(
@@ -2420,29 +2430,40 @@ function isAnalyticsPersonaWinRateResponse(
   if (!value || typeof value !== 'object') return false;
   const data = value as Record<string, unknown>;
   if (
-    typeof data.window_days !== 'number' ||
-    !Number.isFinite(data.window_days) ||
+    !isPositiveInteger(data.window_days) ||
     typeof data.window_start !== 'string' ||
     typeof data.window_end !== 'string' ||
-    typeof data.min_appearances !== 'number' ||
-    !Number.isFinite(data.min_appearances) ||
+    !isPositiveInteger(data.min_appearances) ||
     typeof data.include_fallback !== 'boolean' ||
-    typeof data.low_confidence_threshold !== 'number' ||
-    !Number.isFinite(data.low_confidence_threshold) ||
-    typeof data.scored_exchanges !== 'number' ||
-    !Number.isFinite(data.scored_exchanges) ||
-    typeof data.unattributed_exchanges !== 'number' ||
-    !Number.isFinite(data.unattributed_exchanges) ||
-    typeof data.fallback_exchanges !== 'number' ||
-    !Number.isFinite(data.fallback_exchanges) ||
+    !isPositiveInteger(data.low_confidence_threshold) ||
+    !isNonNegativeInteger(data.scored_exchanges) ||
+    !isNonNegativeInteger(data.unattributed_exchanges) ||
+    !isNonNegativeInteger(data.fallback_exchanges) ||
     !Array.isArray(data.personas) ||
     !data.personas.every(isAnalyticsPersonaWinRateRow) ||
-    (data.best_persona_id !== null && typeof data.best_persona_id !== 'string') ||
+    (data.best_persona_id !== null &&
+      (typeof data.best_persona_id !== 'string' || data.best_persona_id.length === 0)) ||
     (data.best_win_rate !== null &&
       (typeof data.best_win_rate !== 'number' || !Number.isFinite(data.best_win_rate)))
   ) {
     return false;
   }
+
+  const personaIds = new Set<string>();
+  for (const row of data.personas) {
+    if (personaIds.has(row.persona_id)) return false;
+    personaIds.add(row.persona_id);
+  }
+
+  if (data.best_persona_id !== null) {
+    const best = data.personas.find((row) => row.persona_id === data.best_persona_id);
+    if (!best || data.best_win_rate === null || best.win_rate !== data.best_win_rate) {
+      return false;
+    }
+  } else if (data.best_win_rate !== null) {
+    return false;
+  }
+
   return true;
 }
 
@@ -2450,6 +2471,12 @@ export async function getAnalyticsPersonaWinRate(
   windowDays: number = 30,
   minAppearances: number = 1,
 ): Promise<AnalyticsPersonaWinRateResponse> {
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+    throw new RangeError('windowDays must be an integer between 1 and 365');
+  }
+  if (!Number.isInteger(minAppearances) || minAppearances < 1 || minAppearances > 200) {
+    throw new RangeError('minAppearances must be an integer between 1 and 200');
+  }
   const response = await apiFetch(
     `/api/analytics/persona-win-rate?window_days=${encodeURIComponent(String(windowDays))}&min_appearances=${encodeURIComponent(String(minAppearances))}`,
   );

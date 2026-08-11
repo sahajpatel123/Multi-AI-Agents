@@ -17,19 +17,22 @@ function winRatePayload(overrides: Record<string, unknown> = {}) {
     scored_exchanges: 10,
     unattributed_exchanges: 0,
     fallback_exchanges: 0,
-    personas: [
-      {
-        persona_id: 'analyst',
-        name: 'The Analyst',
-        color: '#F0B84E',
-        appearances: 8,
-        wins: 6,
-        win_rate: 0.75,
-        low_confidence: false,
-      },
-    ],
+    personas: [winRateRow()],
     best_persona_id: 'analyst',
     best_win_rate: 0.75,
+    ...overrides,
+  };
+}
+
+function winRateRow(overrides: Record<string, unknown> = {}) {
+  return {
+    persona_id: 'analyst',
+    name: 'The Analyst',
+    color: '#F0B84E',
+    appearances: 8,
+    wins: 6,
+    win_rate: 0.75,
+    low_confidence: false,
     ...overrides,
   };
 }
@@ -99,5 +102,105 @@ describe('Analytics persona win-rate frontend API helper', () => {
       message: 'Malformed persona win rate response (Request ID: req-malformed)',
     });
     await expect(request).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('rejects impossible per-persona win rates', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(winRatePayload({ personas: [winRateRow({ win_rate: 1.5 })] })),
+        { status: 200, headers: { 'x-request-id': 'req-rate' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-rate)',
+    });
+  });
+
+  it('rejects rows where wins outnumber appearances', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          winRatePayload({
+            personas: [winRateRow({ appearances: 3, wins: 4, win_rate: 0.75 })],
+          }),
+        ),
+        { status: 200, headers: { 'x-request-id': 'req-wins' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-wins)',
+    });
+  });
+
+  it('rejects duplicate persona rows', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          winRatePayload({
+            personas: [winRateRow(), winRateRow()],
+          }),
+        ),
+        { status: 200, headers: { 'x-request-id': 'req-dupe' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-dupe)',
+    });
+  });
+
+  it('rejects best summaries that do not match a persona row', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(winRatePayload({ best_persona_id: 'ghost' })),
+        { status: 200, headers: { 'x-request-id': 'req-best' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-best)',
+    });
+  });
+
+  it('rejects a best rate without a best persona and vice versa', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(winRatePayload({ best_persona_id: null, best_win_rate: 0.75 })),
+        { status: 200, headers: { 'x-request-id': 'req-pair' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-pair)',
+    });
+
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(winRatePayload({ best_persona_id: 'analyst', best_win_rate: null })),
+        { status: 200, headers: { 'x-request-id': 'req-pair-2' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-pair-2)',
+    });
+  });
+
+  it('rejects out-of-range window arguments before fetching', async () => {
+    await expect(getAnalyticsPersonaWinRate(0)).rejects.toThrow(
+      'windowDays must be an integer between 1 and 365',
+    );
+    await expect(getAnalyticsPersonaWinRate(30, 201)).rejects.toThrow(
+      'minAppearances must be an integer between 1 and 200',
+    );
+    expect(apiFetchModule.apiFetch).not.toHaveBeenCalled();
   });
 });
