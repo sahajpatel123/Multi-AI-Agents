@@ -1,4 +1,5 @@
 import type { PromptResponse, ScoredAgent, SessionTurn } from '../types';
+import { copyToClipboard } from './clipboard';
 
 export type ArenaExportPersona = {
   name: string;
@@ -169,6 +170,19 @@ export function formatArenaTranscriptExport(
 
   lines.push('---', '_Shared from Arena_');
   return lines.join('\n').trim() + '\n';
+}
+
+/**
+ * Copy the full-session Markdown transcript to the clipboard. Reuses the
+ * download formatter so copy and download stay byte-for-byte in sync, and
+ * returns the clipboard helper's success flag for UI feedback.
+ */
+export async function copyArenaTranscriptToClipboard(
+  turns: SessionTurn[],
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: ArenaTranscriptOptions,
+): Promise<boolean> {
+  return copyToClipboard(formatArenaTranscriptExport(turns, resolvePersona, opts));
 }
 
 /**

@@ -39,6 +39,7 @@ import {
   formatArenaExport,
   formatArenaCsvExport,
   formatArenaJsonExport,
+  copyArenaTranscriptToClipboard,
   formatArenaTranscriptExport,
   formatArenaTranscriptCsvExport,
   formatArenaTranscriptJsonExport,
@@ -111,6 +112,7 @@ function App() {
   const [arenaJsonCopied, setArenaJsonCopied] = useState(false);
   const [arenaCsvDownloaded, setArenaCsvDownloaded] = useState(false);
   const [transcriptDownloaded, setTranscriptDownloaded] = useState(false);
+  const [transcriptCopied, setTranscriptCopied] = useState(false);
   const [transcriptCsvDownloaded, setTranscriptCsvDownloaded] = useState(false);
   const [transcriptJsonDownloaded, setTranscriptJsonDownloaded] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
@@ -557,6 +559,21 @@ function App() {
       void track('arena_download_transcript');
     } else {
       setError('Could not download the transcript. Try again or copy the latest take instead.');
+    }
+  }, [resolveArenaPersona, sessionData]);
+
+  const handleCopyTranscript = useCallback(async () => {
+    const turns = sessionData?.turns;
+    if (!turns || !turns.length) return;
+    const ok = await copyArenaTranscriptToClipboard(turns, resolveArenaPersona, {
+      sessionId: sessionData?.session_id,
+    });
+    if (ok) {
+      setTranscriptCopied(true);
+      window.setTimeout(() => setTranscriptCopied(false), 1800);
+      void track('arena_copy_transcript');
+    } else {
+      setError('Could not copy the transcript. Try again or download it instead.');
     }
   }, [resolveArenaPersona, sessionData]);
 
@@ -1834,6 +1851,15 @@ function App() {
               ) : null}
               {(sessionData?.turns.length ?? 0) > 0 && !isStreaming && !isLoading ? (
                 <>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => void handleCopyTranscript()}
+                    title="Copy the full session as a markdown transcript"
+                    style={{ fontSize: 12 }}
+                  >
+                    {transcriptCopied ? 'Transcript copied' : 'Copy transcript'}
+                  </button>
                   <button
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"

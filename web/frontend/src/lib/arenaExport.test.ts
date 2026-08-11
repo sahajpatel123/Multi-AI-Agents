@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  copyArenaTranscriptToClipboard,
   formatArenaExport,
   formatArenaCsvExport,
   formatArenaJsonExport,
@@ -585,6 +586,59 @@ describe('formatArenaTranscriptExport', () => {
     });
     expect(md).toContain('**Exchanges:** 0');
     expect(md).toContain('_No exchanges in this session yet._');
+  });
+});
+
+describe('copyArenaTranscriptToClipboard', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('copies the formatted session transcript through the clipboard helper', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const turns: SessionTurn[] = [
+      {
+        turn_id: 't1',
+        prompt: 'Should we ship this week?',
+        prompt_category: 'question',
+        winner_id: 'agent_1',
+        timestamp: '2026-08-07T10:00:00Z',
+        agent_responses: {
+          agent_1: {
+            agent_id: 'agent_1',
+            agent_number: 1,
+            one_liner: 'Ship the smallest honest slice.',
+            verdict: 'Ship a thin vertical.',
+            confidence: 0.9,
+            key_assumption: 'quality bar is fixed',
+            timestamp: '2026-08-07T10:00:00Z',
+          },
+        },
+      },
+    ];
+    const ok = await copyArenaTranscriptToClipboard(turns, () => ({ name: 'The Analyst' }), {
+      exportedAt: '2026-08-07T12:00:00.000Z',
+      sessionId: 'session-abc123',
+    });
+    expect(ok).toBe(true);
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining('# Arena — session transcript'),
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining('**Session:** session-abc123'),
+    );
+  });
+
+  it('returns false when the clipboard helper reports failure', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: vi.fn().mockReturnValue(false),
+    });
+    const ok = await copyArenaTranscriptToClipboard([], () => ({ name: 'The Analyst' }));
+    expect(ok).toBe(false);
   });
 });
 
