@@ -104,6 +104,8 @@ describe('formatWatchlistQuestionCopy', () => {
 describe('formatWatchlistCsvExport', () => {
   const WATCHLIST_CSV_HEADER =
     '"question","status","cadenceHours","runs","lastRunAt","nextRunAt","latestTitle","latestScore","expertiseLevel","expertiseDomain"';
+  const csvLines = (csv: string) =>
+    csv.replace(/^\uFEFF/, '').trim().split(/\r?\n/);
 
   it('renders one row per watch with a stable header schema', () => {
     const csv = formatWatchlistCsvExport([
@@ -127,7 +129,7 @@ describe('formatWatchlistCsvExport', () => {
       },
     ]);
 
-    const lines = csv.trim().split('\n');
+    const lines = csvLines(csv);
     expect(lines[0]).toBe(WATCHLIST_CSV_HEADER);
     expect(lines[1]).toBe(
       '"How is the Indian IPO market evolving?","active","24","3","2026-07-18T10:00:00Z","2026-07-19T10:00:00Z","IPO market mid-year recap","82","expert","finance"',
@@ -170,6 +172,8 @@ describe('formatWatchlistCsvExport', () => {
         intervalHours: 24,
         isActive: true,
         latestTitle: '+SUM(1,1)',
+        lastRunAt: ' =NOW()',
+        nextRunAt: '\t+EVAL("x")',
         latestScore: -5,
         expertiseLevel: '@cmd',
         expertiseDomain: '-hidden',
@@ -177,13 +181,29 @@ describe('formatWatchlistCsvExport', () => {
     ]);
     expect(csv).toContain(`"'=HYPERLINK(""https://evil.example"")"`);
     expect(csv).toContain(`"'+SUM(1,1)"`);
+    expect(csv).toContain(`"' =NOW()"`);
+    expect(csv).toContain(`"'\t+EVAL(""x"")"`);
     expect(csv).toContain(`"'@cmd"`);
     expect(csv).toContain(`"'-hidden"`);
   });
 
+  it('starts with a UTF-8 BOM and uses CRLF record separators', () => {
+    const csv = formatWatchlistCsvExport([
+      {
+        question: 'How is the monsoon shaping up?',
+        intervalHours: 24,
+        isActive: true,
+      },
+    ]);
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv.slice(1)).toMatch(/\r\n/);
+    expect(csv.slice(1).endsWith('\r\n')).toBe(true);
+    expect(csvLines(csv)).toHaveLength(2);
+  });
+
   it('returns just the header row for an empty view', () => {
     const csv = formatWatchlistCsvExport([]);
-    expect(csv.trim().split('\n')).toEqual([WATCHLIST_CSV_HEADER]);
+    expect(csvLines(csv)).toEqual([WATCHLIST_CSV_HEADER]);
   });
 
   it('falls back to a placeholder question and blank numeric cells', () => {

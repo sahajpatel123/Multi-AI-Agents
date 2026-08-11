@@ -155,8 +155,11 @@ const CSV_FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
 
 function toCsvCell(value: string | number | boolean | null | undefined): string {
   const raw = value == null ? '' : String(value);
-  const safe =
-    raw && CSV_FORMULA_PREFIXES.includes(raw[0]) ? `'${raw}` : raw;
+  // Check the first significant character so a formula trigger hidden behind
+  // leading whitespace still gets neutralized (spreadsheets often ignore
+  // leading whitespace before deciding whether a cell is a formula).
+  const firstSignificant = (raw.trimStart())[0] || '';
+  const safe = CSV_FORMULA_PREFIXES.includes(firstSignificant) ? `'${raw}` : raw;
   return `"${safe.replace(/"/g, '""')}"`;
 }
 
@@ -166,6 +169,8 @@ function toCsvCell(value: string | number | boolean | null | undefined): string 
  * question or latest-task text cannot break the column layout. Filter
  * context is deliberately kept out of the CSV so every row matches the
  * header schema exactly (the Markdown export carries the filter note).
+ * The file starts with a UTF-8 BOM so Excel detects Unicode, and rows use
+ * CRLF line endings per RFC 4180.
  */
 export function formatWatchlistCsvExport(items: WatchlistExportItem[]): string {
   const headers = [
@@ -205,5 +210,5 @@ export function formatWatchlistCsvExport(items: WatchlistExportItem[]): string {
         .join(','),
     );
   }
-  return lines.join('\n') + '\n';
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
 }

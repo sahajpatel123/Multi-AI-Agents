@@ -301,9 +301,14 @@ describe('WatchlistPage', () => {
     const { downloadTextFile } = await import('../lib/downloadTextFile');
     expect(downloadTextFile).toHaveBeenCalledTimes(1);
     const [csv, opts] = vi.mocked(downloadTextFile).mock.calls[0];
+    expect(csv.startsWith('\uFEFF')).toBe(true);
     expect(csv).toContain('"question","status","cadenceHours"');
-    expect(csv).toContain('"How is the Indian IPO market evolving?","active","24","3"');
-    expect(csv).toContain('"Will the monsoon affect Indian agriculture exports?","paused","24","3"');
+    expect(csv).toContain(
+      '\r\n"How is the Indian IPO market evolving?","active","24","3"',
+    );
+    expect(csv).toContain(
+      '\r\n"Will the monsoon affect Indian agriculture exports?","paused","24","3"',
+    );
     expect(opts.filename).toMatch(/^agent-watchlist-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(opts.mimeType).toBe('text/csv;charset=utf-8');
   });
