@@ -57,6 +57,39 @@ async def test_activity_json_rejects_zero_days(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_activity_json_rejects_excessive_window(app_client, make_user):
+    user = make_user(email="actjson-overflow@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/activity/export.json?days=400",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_activity_json_rejects_non_integer_days(app_client, make_user):
+    user = make_user(email="actjson-nan@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/activity/export.json?days=abc",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_activity_json_defaults_to_30_days(app_client, make_user):
+    user = make_user(email="actjson-default@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/activity/export.json",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["window_days"] == 30
+    assert len(body["activity"]) == 30
+
+
+@pytest.mark.asyncio
 async def test_activity_json_is_zero_for_new_user(app_client, make_user):
     user = make_user(email="actjson-empty@test.com", tier=UserTier.PRO)
     res = await app_client.get(
@@ -135,6 +168,39 @@ async def test_activity_json_row_order_is_chronological(
     assert dates[-1] == utcnow_naive().date().isoformat()
 
 
+@pytest.mark.asyncio
+async def test_activity_json_is_scoped_to_caller(
+    app_client, make_user, db_session
+):
+    """One user's export must never include another user's activity."""
+    owner = make_user(email="actjson-owner@test.com", tier=UserTier.PRO)
+    other = make_user(email="actjson-other@test.com", tier=UserTier.PRO)
+    _seed_records(db_session, owner.id, [(0, "arena"), (1, "debate")])
+
+    other_res = await app_client.get(
+        "/api/analytics/activity/export.json?days=7",
+        headers=_pro_headers(other),
+    )
+    owner_res = await app_client.get(
+        "/api/analytics/activity/export.json?days=7",
+        headers=_pro_headers(owner),
+    )
+    assert other_res.status_code == 200
+    assert owner_res.status_code == 200
+    assert other_res.json()["totals"] == {
+        "prompts": 0,
+        "debates": 0,
+        "discusses": 0,
+        "agent_runs": 0,
+    }
+    assert owner_res.json()["totals"] == {
+        "prompts": 1,
+        "debates": 1,
+        "discusses": 0,
+        "agent_runs": 0,
+    }
+
+
 # ─── Filename + headers ────────────────────────────────────────────────────
 
 
@@ -149,7 +215,9 @@ async def test_activity_json_filename_includes_window(app_client, make_user):
     assert cd.startswith("attachment; filename=")
     assert "arena-activity-" in cd
     assert ".json" in cd
-    assert utcnow_naive().date().isoformat() in cd
+    today = utcnow_naive().date()
+    assert (today - timedelta(days=6)).isoformat() in cd
+    assert today.isoformat() in cd
 
 
 @pytest.mark.asyncio
@@ -200,3 +268,38 @@ async def test_activity_json_uses_separate_rate_limit_scope(
     assert f"user:analytics_activity_csv:{user.id}" in keys
     assert f"user:analytics_activity:{user.id}" in keys
     assert keys.count(f"user:analytics_activity_json:{user.id}") == 1
+
+
+@pytest.mark.asyncio
+async def test_activity_json_rate_limited(app_client, make_user, monkeypatch):
+    """The JSON export rejects callers who exhaust its hourly budget."""
+    from arena.core import rate_limits
+
+    hits = {"n": 0}
+    real_hit = rate_limits.rate_limiter.hit
+
+    def limited_hit(key, *, limit, window_seconds, message):
+        if key.startswith("user:analytics_activity_json:"):
+            hits["n"] += 1
+            if hits["n"] > 0:
+                from fastapi import HTTPException, status
+
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "error": "rate_limit_exceeded",
+                        "message": message,
+                        "retry_after": 1,
+                    },
+                )
+            return
+        return real_hit(key, limit=limit, window_seconds=window_seconds, message=message)
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", limited_hit)
+
+    user = make_user(email="actjson-rl@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/activity/export.json?days=7",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 429, res.text

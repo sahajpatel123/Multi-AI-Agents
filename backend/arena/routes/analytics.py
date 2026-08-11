@@ -937,7 +937,7 @@ async def analytics_activity_json(
         30,
         ge=1,
         le=366,
-        description="Window length in days, ending today (UTC). Must match the JSON endpoint.",
+        description="Window length in days, ending today (UTC).",
     ),
 ) -> Response:
     """JSON export of the GitHub-style activity timeline.

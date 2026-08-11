@@ -2417,7 +2417,11 @@ export async function exportAnalyticsActivityJson(days: number = 30): Promise<An
   const response = await apiFetch(`/api/analytics/activity/export.json?days=${encodeURIComponent(String(days))}`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(response);
-    throw new ApiError(getErrorMessage(err, 'Failed to export activity JSON'), response.status, err);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export activity JSON'), response),
+      response.status,
+      err,
+    );
   }
   return {
     blob: await response.blob(),

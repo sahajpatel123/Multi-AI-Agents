@@ -135,6 +135,7 @@ GET  /api/analytics/summary/export.csv  CSV export of the summary (mirrors the J
 GET  /api/analytics/category-stats   All-categories aggregate (which categories do I engage with most, per-category best persona)
 GET  /api/analytics/category-stats/export.csv   CSV export of the same (mirrors the JSON shape, footer rollup included)
 GET  /api/analytics/activity   GitHub-style activity timeline with daily buckets, totals, and streak metrics
+GET  /api/analytics/activity/export.csv   CSV export of the same activity timeline (footer rollup included)
 GET  /api/analytics/activity/export.json   Machine-readable JSON download of the same activity timeline
 GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
 GET  /api/analytics/persona-stats/:persona_id   Deep-dive on one persona (avg winning score, last activity, best category)

@@ -48,4 +48,23 @@ describe('Analytics activity JSON export frontend API helper', () => {
     expectBlob(res.blob);
     expect(res.filename).toBe('arena-activity-30d.json');
   });
+
+  it('surfaces request IDs on failure', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          detail: { message: 'Too many activity JSON exports' },
+        }),
+        {
+          status: 429,
+          headers: { 'x-request-id': 'req-456' },
+        },
+      ),
+    );
+
+    await expect(exportAnalyticsActivityJson()).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many activity JSON exports (Request ID: req-456)',
+    });
+  });
 });
