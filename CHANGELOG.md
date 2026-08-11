@@ -73,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - “Try again” buttons in Debate Mode error banners
 
 ### Changed
+- Usage JSON export preserves the server's date-ranged filename and uses the
+  shared Content-Disposition helper
+- Profile export section label now covers JSON and CSV data exports
 - Usage history CSV export now runs a single aggregation pass (no duplicate
   day-history query) and computes day boundaries in naive UTC, matching the
   codebase's timestamp convention on SQLite and Postgres

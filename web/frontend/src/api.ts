@@ -228,7 +228,27 @@ export async function exportUserUsageCsv(): Promise<Blob> {
   return res.blob();
 }
 
-export async function exportUserUsageJson(): Promise<Blob> {
+export type UserUsageJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+function contentDispositionFilename(res: Response): string | null {
+  const header = res.headers.get('content-disposition') ?? '';
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (encoded?.[1]) {
+    try {
+      const decoded = decodeURIComponent(encoded[1]);
+      if (decoded) return decoded;
+    } catch {
+      // Fall through to the plain filename form.
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(header);
+  return plain?.[1]?.trim() || null;
+}
+
+export async function exportUserUsageJson(): Promise<UserUsageJsonExport> {
   const res = await apiFetch(`/api/user/usage/export.json`);
   if (!res.ok) {
     const err = await parseJsonSafely<{ detail?: string }>(res);
@@ -238,7 +258,10 @@ export async function exportUserUsageJson(): Promise<Blob> {
       err,
     );
   }
-  return res.blob();
+  return {
+    blob: await res.blob(),
+    filename: contentDispositionFilename(res) ?? 'arena-usage-14d.json',
+  };
 }
 
 export async function patchUserProfile(body: {

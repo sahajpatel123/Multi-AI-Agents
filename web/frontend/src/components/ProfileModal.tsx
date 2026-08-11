@@ -1181,7 +1181,7 @@ export function ProfileModal() {
                     margin: '22px 0 10px',
                   }}
                 >
-                  Analytics exports (CSV)
+                  Data exports
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
                   <button
@@ -1347,8 +1347,8 @@ export function ProfileModal() {
                     onClick={async () => {
                       setActiveExport('usage-json');
                       try {
-                        const blob = await exportUserUsageJson();
-                        downloadBlobFile(blob, 'arena-usage-14d.json');
+                        const { blob, filename } = await exportUserUsageJson();
+                        downloadBlobFile(blob, filename);
                       } catch {
                         // ignore error
                       } finally {

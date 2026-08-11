@@ -11,20 +11,58 @@ describe('exportUserUsageJson', () => {
     vi.clearAllMocks();
   });
 
-  it('fetches the user usage JSON endpoint and returns a blob', async () => {
+  it('fetches the endpoint and returns the blob with the server filename', async () => {
     const mockBlob = new Blob(
       [JSON.stringify({ history: [{ date: '2026-08-11', tokens: 100 }] })],
       { type: 'application/json' },
     );
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
-      new Response(mockBlob, { status: 200 })
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-usage-2026-07-29-to-2026-08-11.json"',
+        },
+      })
     );
 
     const res = await exportUserUsageJson();
-    expect(Object.prototype.toString.call(res)).toBe('[object Blob]');
+    expect(res.blob).toBeInstanceOf(Blob);
+    expect(res.filename).toBe(
+      'arena-usage-2026-07-29-to-2026-08-11.json',
+    );
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/user/usage/export.json',
       {}
+    );
+  });
+
+  it('falls back to a fixed filename when Content-Disposition is missing', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['{"history":[]}'], { type: 'application/json' }), {
+        status: 200,
+      })
+    );
+
+    const res = await exportUserUsageJson();
+    expect(res.blob).toBeInstanceOf(Blob);
+    expect(res.filename).toBe('arena-usage-14d.json');
+  });
+
+  it('decodes RFC 5987 encoded filenames', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['{"history":[]}'], { type: 'application/json' }), {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            "attachment; filename*=UTF-8''arena-usage-2026-07-29-to-2026-08-11.json",
+        },
+      })
+    );
+
+    const res = await exportUserUsageJson();
+    expect(res.filename).toBe(
+      'arena-usage-2026-07-29-to-2026-08-11.json',
     );
   });
 

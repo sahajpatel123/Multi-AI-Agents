@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from arena.core.client_ip import get_request_client_ip
 from arena.core.rate_limits import enforce_ip_rate_limit, enforce_user_rate_limit
 from arena.core.datetime_utils import utcnow_naive
+from arena.core.http_headers import content_disposition_attachment
 
 from arena.core.errors import ErrorCodes
 from arena.core.auth import (
@@ -993,7 +994,7 @@ async def export_user_usage_json(
     return JSONResponse(
         content=body,
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": content_disposition_attachment(filename),
             "Cache-Control": "no-store",
             "X-Content-Type-Options": "nosniff",
         },

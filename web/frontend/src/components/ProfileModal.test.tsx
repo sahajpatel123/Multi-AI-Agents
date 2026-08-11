@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ProfileModal } from './ProfileModal';
 import { ProfileModalProvider, useProfileModal } from '../context/ProfileModalContext';
+import { downloadBlobFile } from '../lib/downloadTextFile';
 
 const navigateMock = vi.fn();
 const refreshUserMock = vi.fn().mockResolvedValue(undefined);
@@ -93,7 +94,10 @@ vi.mock('../api', () => ({
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
   exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(new Blob(['date,prompts'], { type: 'text/csv' })),
   exportUserUsageCsv: vi.fn().mockResolvedValue(new Blob(['date,tokens'], { type: 'text/csv' })),
-  exportUserUsageJson: vi.fn().mockResolvedValue(new Blob(['{"history":[]}'], { type: 'application/json' })),
+  exportUserUsageJson: vi.fn().mockResolvedValue({
+    blob: new Blob(['{"history":[]}'], { type: 'application/json' }),
+    filename: 'arena-usage-2026-07-29-to-2026-08-11.json',
+  }),
   patchUserProfile: vi.fn().mockResolvedValue({ ok: true }),
   cancelSubscription: vi.fn().mockResolvedValue({ ok: true }),
   reactivateSubscription: vi.fn().mockResolvedValue({ ok: true }),
@@ -108,6 +112,10 @@ vi.mock('../api', () => ({
       this.status = status;
     }
   },
+}));
+
+vi.mock('../lib/downloadTextFile', () => ({
+  downloadBlobFile: vi.fn(() => true),
 }));
 
 /** Test helper that mounts the modal already open via the context. */
@@ -139,6 +147,7 @@ describe('ProfileModal', () => {
     navigateMock.mockReset();
     refreshUserMock.mockClear();
     refreshTierMock.mockClear();
+    vi.mocked(downloadBlobFile).mockClear();
     (window as { __profileModalOpened?: boolean }).__profileModalOpened = false;
   });
 
@@ -200,6 +209,23 @@ describe('ProfileModal', () => {
     expect(
       await screen.findByRole('button', { name: /usage json export/i }),
     ).toBeInTheDocument();
+  });
+
+  it('downloads usage JSON with the server-provided filename', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const button = await screen.findByRole('button', { name: /usage json export/i });
+    button.click();
+
+    await waitFor(() => {
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-usage-2026-07-29-to-2026-08-11.json',
+      );
+    });
   });
 
   it('applies the .profile-modal__input BEM class with --readonly variant on the disabled email', async () => {

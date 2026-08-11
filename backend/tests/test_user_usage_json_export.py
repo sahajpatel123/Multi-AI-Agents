@@ -83,9 +83,19 @@ async def test_usage_json_matches_dashboard_and_csv(
     body = json_res.json()
     dashboard = dashboard_res.json()
     assert [item["tokens"] for item in body["history"]] == dashboard["usage_history"]
-    assert body["summary"]["credits_used_today"] == dashboard["credits_used_today"]
-    assert body["summary"]["credits_used_week"] == dashboard["credits_used_week"]
-    assert body["summary"]["total_tasks_month"] == dashboard["total_tasks_month"]
+
+    summary_keys = (
+        "credits_used_today",
+        "credits_remaining_today",
+        "daily_limit",
+        "credits_used_week",
+        "credits_remaining_week",
+        "weekly_limit",
+        "total_tasks_month",
+    )
+    assert set(body["summary"]) == set(summary_keys)
+    for key in summary_keys:
+        assert body["summary"][key] == dashboard[key]
 
     assert "date,tokens" in csv_res.text
 
