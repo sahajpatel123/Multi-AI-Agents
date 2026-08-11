@@ -208,6 +208,31 @@ def test_workflows_set_top_level_permissions() -> None:
         )
 
 
+def test_dependency_security_workflow_exists() -> None:
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "dependency-security.yml"
+    assert workflow_path.exists(), "Dependency security workflow is missing"
+    data = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    events = _events(data)
+    assert "schedule" in events, (
+        "Dependency security workflow should run on a weekly schedule"
+    )
+    assert "workflow_dispatch" in events, (
+        "Dependency security workflow should support manual dispatch"
+    )
+    steps = data["jobs"]["scan"]["steps"]
+    run_text = "\n".join(
+        step.get("run", "")
+        for step in steps
+        if isinstance(step, dict) and isinstance(step.get("run"), str)
+    )
+    assert "pip-audit" in run_text, (
+        "Dependency security workflow should scan Python dependencies with pip-audit"
+    )
+    assert "npm audit" in run_text, (
+        "Dependency security workflow should scan frontend dependencies with npm audit"
+    )
+
+
 def test_workflows_avoid_dangerous_triggers_and_secret_inheritance() -> None:
     workflow_dir = REPO_ROOT / ".github" / "workflows"
     for path in workflow_dir.glob("*.yml"):

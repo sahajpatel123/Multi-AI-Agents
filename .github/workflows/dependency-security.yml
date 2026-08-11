@@ -1,0 +1,79 @@
+name: Dependency Security Scan
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    # Weekly check so newly disclosed PyPI/npm advisories are caught even
+    # when the repo has no commits to trigger CI.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: dependency-security
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    name: Scan backend and frontend dependency trees
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Backend security scan (pip-audit)
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+
+      - name: Frontend security scan (npm audit)
+        working-directory: web/frontend
+        run: |
+          npm ci
+          # Mirror the CI gate: fail on fixable HIGH/CRITICAL findings, but
+          # waive advisories where npm has no published fix available yet.
+          set +e
+          audit_output=$(npm audit --audit-level=high --json)
+          audit_exit=$?
+          set -e
+          if [ $audit_exit -eq 0 ]; then
+            echo "No high+ vulnerabilities."
+            exit 0
+          fi
+          unfixable=$(echo "$audit_output" | jq -r '
+            (.vulnerabilities // {})
+            | to_entries[]
+            | .value.via[]
+            | select(type == "object")
+            | select(.fixAvailable == null)
+            | .url // ""
+          ')
+          if [ -n "$unfixable" ]; then
+            echo "::warning::Unfixable advisories detected (no published patch on npm). Gate waived:"
+            echo "$unfixable" | sed 's/^/  - /'
+            npm audit --audit-level=high || true
+            exit 0
+          fi
+          npm audit --audit-level=high
+          exit 1

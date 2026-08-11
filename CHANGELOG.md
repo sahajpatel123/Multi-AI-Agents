@@ -114,6 +114,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ships `backend/arena.db` in release artifacts
 
 ### Security
+- Added a scheduled dependency security workflow that runs `pip-audit` and
+  `npm audit` weekly (plus on-demand via `workflow_dispatch`) so newly
+  disclosed vulnerabilities are caught even without a code change
 - Workflow security gate now enforces minimum version floors for
   security-critical GitHub Actions, so a downgrade below a known-good major
   version cannot silently regress CI or CodeQL
