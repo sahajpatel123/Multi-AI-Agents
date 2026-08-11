@@ -10,12 +10,13 @@ from __future__ import annotations
 import csv
 import io
 import uuid
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 import pytest
 
 from arena.core.datetime_utils import utcnow_naive
 from arena.db_models import UsageRecord, UserTier
+from arena.routes.auth import _CSV_FORMULA_PREFIXES, _csv_safe
 
 
 def _seed_records(db, user_id: int, events: list[tuple[int, int]]) -> None:
@@ -143,3 +144,51 @@ async def test_usage_csv_uses_separate_rate_limit_scope(
     # The JSON endpoint remains callable immediately after CSV exports.
     json_res = await app_client.get("/api/user/usage", headers=_pro_headers(user))
     assert json_res.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_usage_csv_covers_exact_window_oldest_first_zero_filled(
+    app_client, make_user, db_session
+):
+    """The 14 rows are consecutive UTC dates, oldest first, and out-of-window
+    records never leak into the export."""
+    user = make_user(email="usagecsv-window@test.com", tier=UserTier.FREE)
+    _seed_records(db_session, user.id, [(0, 100), (2, 50), (20, 999)])
+
+    res = await app_client.get(
+        "/api/user/usage/export.csv", headers=_pro_headers(user)
+    )
+    assert res.status_code == 200
+
+    rows = _parse_csv(res.text)
+    day_rows = rows[1:-1]
+    today = utcnow_naive().date()
+    assert len(day_rows) == 14
+    assert day_rows[0][0] == (today - timedelta(days=13)).isoformat()
+    assert day_rows[-1][0] == today.isoformat()
+
+    dates = [row[0] for row in day_rows]
+    assert dates == sorted(dates)
+    assert all(
+        (date.fromisoformat(b) - date.fromisoformat(a)).days == 1
+        for a, b in zip(dates, dates[1:])
+    )
+
+    tokens = [int(row[1]) for row in day_rows]
+    assert 999 not in tokens
+    assert tokens[0] == 0  # 13 days ago
+    assert tokens[11] == 50  # 2 days ago
+    assert tokens[-1] == 100  # today
+
+
+@pytest.mark.parametrize("prefix", _CSV_FORMULA_PREFIXES)
+def test_csv_safe_neutralizes_formula_prefix(prefix: str) -> None:
+    """CSV cells starting with spreadsheet formula triggers are neutralized."""
+    assert _csv_safe(f"{prefix}SUM(A1:A2)") == f"'{prefix}SUM(A1:A2)"
+
+
+def test_csv_safe_passes_through_safe_values() -> None:
+    assert _csv_safe("2026-08-11") == "2026-08-11"
+    assert _csv_safe(150) == "150"
+    assert _csv_safe("") == ""
+    assert _csv_safe(None) == ""

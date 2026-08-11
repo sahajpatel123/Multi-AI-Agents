@@ -72,6 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - “Try again” buttons in Debate Mode error banners
 
 ### Changed
+- Usage history CSV export now runs a single aggregation pass (no duplicate
+  day-history query) and computes day boundaries in naive UTC, matching the
+  codebase's timestamp convention on SQLite and Postgres
 - Activity timeline CSV export shares the JSON endpoint's aggregation helper,
   so exporting no longer consumes the JSON endpoint's rate-limit budget
 - Repaired CodeQL action tag after an invalid v5 bump (now pinned to v4)

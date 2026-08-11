@@ -770,11 +770,11 @@ def _usage_history_rows(user: User, db: Session) -> list[tuple[date, int]]:
     """Return 14 daily token totals as (UTC date, tokens) pairs, oldest first.
 
     Shared by the JSON usage endpoint and its CSV export so the dashboard
-    chart and the downloaded file cannot drift.
+    chart and the downloaded file cannot drift. Day boundaries use the
+    codebase's canonical naive-UTC form so SQLite and Postgres compare
+    ``usage_records.timestamp`` identically.
     """
-    today_start = datetime.now(timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    today_start = utcnow_naive().replace(hour=0, minute=0, second=0, microsecond=0)
     chart_start = today_start - timedelta(days=13)
     token_sum = UsageRecord.input_tokens + UsageRecord.output_tokens
     day_col = func.date(UsageRecord.timestamp).label("day")
@@ -804,15 +804,22 @@ def _usage_history_rows(user: User, db: Session) -> list[tuple[date, int]]:
     return history
 
 
-def _user_usage_payload(user: User, db: Session) -> dict:
-    """Compute the /api/user/usage response for one user."""
+def _user_usage_payload(
+    user: User,
+    db: Session,
+    history: Optional[list[tuple[date, int]]] = None,
+) -> dict:
+    """Compute the /api/user/usage response for one user.
+
+    ``history`` is optional so the CSV export can compute the 14-day rows
+    once and share them with the summary (instead of running the same
+    aggregation twice and risking a midnight-boundary mismatch).
+    """
     normalized = normalize_tier(get_tier_str(user))
     daily_limit = get_credit_budget(normalized)
     weekly_limit = daily_limit * 7
 
-    today_start = datetime.now(timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    today_start = utcnow_naive().replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=7)
     month_start = today_start - timedelta(days=30)
 
@@ -842,7 +849,9 @@ def _user_usage_payload(user: User, db: Session) -> dict:
     )
     total_tasks_month = int(total_tasks_month)
 
-    usage_history = [tokens for _, tokens in _usage_history_rows(user, db)]
+    if history is None:
+        history = _usage_history_rows(user, db)
+    usage_history = [tokens for _, tokens in history]
 
     return {
         "credits_used_today": credits_used_today,
@@ -894,8 +903,8 @@ async def export_user_usage_csv(
         message="Too many usage CSV exports. Please slow down.",
     )
 
-    payload = _user_usage_payload(user, db)
     history = _usage_history_rows(user, db)
+    payload = _user_usage_payload(user, db, history=history)
 
     import csv
     import io
