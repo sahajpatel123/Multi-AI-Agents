@@ -1388,6 +1388,7 @@ async def analytics_persona_win_rate_csv(
     payload = await analytics_persona_win_rate(
         window_days=window_days,
         min_appearances=min_appearances,
+        include_fallback=False,
         user=user,
         db=db,
     )
@@ -1434,6 +1435,147 @@ async def analytics_persona_win_rate_csv(
             # text/csv *can* be navigated to and rendered as a
             # poorly-quoted table by some browsers; X-Content-Type-Options
             # blocks that.
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/analytics/persona-win-rate/export.md")
+async def analytics_persona_win_rate_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description="Drop personas that appeared on fewer than N panels.",
+    ),
+) -> Response:
+    """Markdown export of the persona win-rate report.
+
+    Renders the same computation as ``/analytics/persona-win-rate`` as a
+    human-readable report: window facts, scored-exchange honesty counters,
+    the best (confident) persona, and a per-persona table with trend
+    sparkline data spelled out as weekly win rates. Shares the JSON route's
+    aggregation so the export and the dashboard can never drift, and keeps
+    its own user-scoped rate limit so Markdown exports do not consume the
+    dashboard or CSV export budgets.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate export requests. Limit is 60 per hour.",
+    )
+
+    payload = await analytics_persona_win_rate(
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=False,
+        user=user,
+        db=db,
+    )
+
+    best_row = None
+    if payload.get("best_persona_id"):
+        best_row = next(
+            (
+                row
+                for row in payload["personas"]
+                if row["persona_id"] == payload["best_persona_id"]
+            ),
+            None,
+        )
+
+    lines = [
+        "# Arena — persona win rates",
+        "",
+        f"**Window:** {payload['window_start']} → {payload['window_end']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Scored exchanges:** {payload['scored_exchanges']}",
+        f"- **Unattributed exchanges:** {payload['unattributed_exchanges']}",
+        f"- **Fallback exchanges:** {payload['fallback_exchanges']}",
+        f"- **Minimum appearances:** {payload['min_appearances']}",
+    ]
+    if best_row:
+        lines.extend(
+            [
+                "",
+                f"**Best (confident):** {_markdown_cell(best_row['name'])} — "
+                f"{round(best_row['win_rate'] * 100)}% across "
+                f"{best_row['appearances']} panels",
+            ]
+        )
+
+    lines.append("")
+    if payload["personas"]:
+        lines.extend(
+            [
+                "## Personas",
+                "",
+                "| Persona | Appearances | Wins | Win rate | Sample | Weekly trend |",
+                "| --- | ---: | ---: | ---: | --- | --- |",
+            ]
+        )
+        for row in payload["personas"]:
+            trend = ", ".join(
+                (
+                    "no data"
+                    if bucket["win_rate"] is None
+                    else f"{round(bucket['win_rate'] * 100)}%"
+                )
+                for bucket in row["trend"]
+            )
+            omitted = ""
+            if row.get("trend_omitted_appearances"):
+                omitted = (
+                    f" ({row['trend_omitted_appearances']} older "
+                    "appearance"
+                    + ("s" if row["trend_omitted_appearances"] != 1 else "")
+                    + " not plotted)"
+                )
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        _markdown_cell(row["name"]),
+                        _markdown_cell(row["appearances"]),
+                        _markdown_cell(row["wins"]),
+                        _markdown_cell(f"{round(row['win_rate'] * 100)}%"),
+                        "low sample" if row["low_confidence"] else "",
+                        _markdown_cell(trend + omitted),
+                    ]
+                )
+                + " |"
+            )
+    else:
+        lines.append(
+            "_No scored panels meet the minimum appearance threshold in this "
+            "window._"
+        )
+
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+
+    filename = (
+        f"arena-persona-win-rate-"
+        f"{payload['window_start']}-to-{payload['window_end']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
             "X-Content-Type-Options": "nosniff",
         },
     )

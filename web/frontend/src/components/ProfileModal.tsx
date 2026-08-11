@@ -13,6 +13,7 @@ import {
   exportAnalyticsCategoryStatsCsv,
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaWinRateCsv,
+  exportAnalyticsPersonaWinRateMarkdown,
   exportAnalyticsSummaryCsv,
   exportUserUsageCsv,
   exportUserUsageJson,
@@ -1616,6 +1617,35 @@ export function ProfileModal() {
                     }}
                   >
                     {activeExport === 'win-rate' ? '⏳ Downloading…' : '🏆 Win Rates Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'win-rate-md' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'win-rate-md' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('win-rate-md');
+                      try {
+                        const { blob, filename } = await exportAnalyticsPersonaWinRateMarkdown(30);
+                        downloadBlobFile(blob, filename);
+                      } catch {
+                        // ignore error
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'win-rate-md' ? '⏳ Downloading…' : '🏆 Win Rates Markdown Export'}
                   </button>
                   <button
                     type="button"

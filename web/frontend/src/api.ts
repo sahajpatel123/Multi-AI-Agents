@@ -2777,6 +2777,31 @@ export async function exportAnalyticsPersonaWinRateCsv(windowDays: number = 30):
   return response.blob();
 }
 
+export type AnalyticsPersonaWinRateMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsPersonaWinRateMarkdown(
+  windowDays: number = 30,
+): Promise<AnalyticsPersonaWinRateMarkdownExport> {
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate/export.md?window_days=${encodeURIComponent(String(windowDays))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export persona win rate Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-persona-win-rates-${windowDays}d.md`,
+  };
+}
+
 export async function exportAnalyticsCategoryStatsCsv(windowDays: number = 30): Promise<Blob> {
   const response = await apiFetch(`/api/analytics/category-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {

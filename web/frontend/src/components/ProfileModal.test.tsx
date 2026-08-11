@@ -182,6 +182,13 @@ vi.mock('../api', () => ({
     blob: new Blob(['# Arena — activity timeline'], { type: 'text/markdown' }),
     filename: 'arena-activity-2026-08-05-to-2026-08-11.md',
   }),
+  exportAnalyticsPersonaWinRateCsv: vi.fn().mockResolvedValue(
+    new Blob(['persona_id,name'], { type: 'text/csv' }),
+  ),
+  exportAnalyticsPersonaWinRateMarkdown: vi.fn().mockResolvedValue({
+    blob: new Blob(['# Arena — persona win rates'], { type: 'text/markdown' }),
+    filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
+  }),
   exportUserUsageCsv: vi.fn().mockResolvedValue(new Blob(['date,tokens'], { type: 'text/csv' })),
   exportUserUsageJson: vi.fn().mockResolvedValue({
     blob: new Blob(['{"history":[]}'], { type: 'application/json' }),
@@ -307,6 +314,25 @@ describe('ProfileModal', () => {
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-activity-2026-08-05-to-2026-08-11.md',
+      );
+    });
+  });
+
+  it('renders and downloads the persona win-rate Markdown export', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const button = await screen.findByRole('button', {
+      name: /win rates markdown export/i,
+    });
+    button.click();
+
+    await waitFor(() => {
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
       );
     });
   });
