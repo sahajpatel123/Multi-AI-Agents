@@ -44,6 +44,7 @@ const tierState: {
 const navigateMock = vi.fn();
 const getAgentWatchlistMock = vi.fn();
 const patchAgentWatchlistBulkMock = vi.fn();
+const postAgentWatchlistRunMock = vi.fn();
 
 vi.mock('../context/TierContext', () => ({
   useTier: () => tierState,
@@ -77,6 +78,7 @@ vi.mock('../api', async () => {
     patchAgentWatchlist: vi.fn().mockImplementation(async (id: string) => {
       return { ...baseItem, id };
     }),
+    postAgentWatchlistRun: (...args: unknown[]) => postAgentWatchlistRunMock(...args),
     patchAgentWatchlistBulk: (...args: unknown[]) => patchAgentWatchlistBulkMock(...args),
     deleteAgentWatchlist: vi.fn().mockResolvedValue(undefined),
     ApiError: actual.ApiError,
@@ -169,6 +171,13 @@ describe('WatchlistPage', () => {
       active_count: 0,
       paused_count: 2,
       active_cap: 10,
+    });
+    postAgentWatchlistRunMock.mockReset();
+    postAgentWatchlistRunMock.mockResolvedValue({
+      success: true,
+      task_id: 'task-new',
+      message: 'Watch re-check started',
+      item: { ...baseItem, run_count: 4, latest_task_id: 'task-new' },
     });
   });
 
@@ -286,6 +295,27 @@ describe('WatchlistPage', () => {
       expect(patchAgentWatchlistBulkMock).toHaveBeenCalledWith('pause_all');
     });
     expect(await screen.findByText('Paused 1 active watch.')).toBeInTheDocument();
+  });
+
+  it('starts an immediate re-check through the run-now endpoint', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Run now: How is the Indian IPO market evolving?',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(postAgentWatchlistRunMock).toHaveBeenCalledWith('item-1');
+    });
+    expect(
+      await screen.findByText('Re-check started — the latest result will update shortly.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Run 4 times/)).toBeInTheDocument();
   });
 
   it('downloads the current filtered view as CSV', async () => {

@@ -1593,6 +1593,40 @@ export async function patchAgentWatchlist(
   return data as AgentWatchlistItem;
 }
 
+export async function postAgentWatchlistRun(itemId: string): Promise<{
+  success: boolean;
+  task_id: string;
+  message: string;
+  item: AgentWatchlistItem;
+}> {
+  const response = await apiFetch(
+    `/api/agent/watchlist/${encodeURIComponent(itemId)}/run`,
+    { method: 'POST' },
+  );
+  const data = await parseJsonSafely<
+    {
+      success?: boolean;
+      task_id?: string;
+      message?: string;
+      item?: AgentWatchlistItem;
+      detail?: string | { message?: string };
+    }
+  >(response);
+  if (!response.ok || !data || !data.task_id || !data.item) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not run this watch now'), response),
+      response.status,
+      data,
+    );
+  }
+  return {
+    success: data.success ?? true,
+    task_id: data.task_id,
+    message: data.message || 'Watch re-check started',
+    item: data.item,
+  };
+}
+
 export async function deleteAgentWatchlist(itemId: string): Promise<void> {
   const response = await apiFetch(`/api/agent/watchlist/${encodeURIComponent(itemId)}`, {
     method: 'DELETE',

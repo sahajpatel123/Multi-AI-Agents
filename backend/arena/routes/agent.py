@@ -2996,6 +2996,100 @@ async def patch_watchlist_item(
     return JSONResponse(content=_watchlist_item_api_dict(db, item))
 
 
+@router.post("/watchlist/{item_id}/run")
+async def run_watchlist_item_now(
+    item_id: str,
+    background_tasks: BackgroundTasks,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Start an immediate re-check for one watchlist item.
+
+    Manual re-runs are the same cost as an Agent Mode run, so they share the
+    daily token budget and get their own per-user rate limit (a burst of
+    one-click runs would otherwise bypass the scheduler's natural cadence).
+    The item keeps its active/paused state; only the schedule counters and
+    next-run time advance.
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="watchlist_run",
+        limit=12,
+        window_seconds=3600,
+        message="Too many manual watchlist runs. Limit is 12 per hour.",
+    )
+
+    tier = normalize_tier(get_tier_str(user))
+    today_usage = get_today_token_usage(db, user.id)
+    daily_limit = get_credit_budget(tier)
+    if today_usage >= daily_limit:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "daily_limit_reached",
+                "message": "Daily usage limit reached.",
+                "used": today_usage,
+                "limit": daily_limit,
+                "resets_at": "midnight UTC",
+            },
+        )
+
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
+
+    q = (item.question or "").strip()
+    if not q or len(q) > 2000:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": ErrorCodes.VALIDATION_ERROR,
+                "message": "This watch has no usable question to run.",
+            },
+        )
+    _enforce_capability_gate(capability_id="watchlist.create", task_text=q)
+
+    now = utcnow_naive()
+    bb = create_blackboard(user_id=user.id, task=q)
+    bb.status = AgentStatus.RUNNING
+    bb.expertise_level = (item.expertise_level or "curious").strip().lower() or "curious"
+    bb.expertise_domain = (item.expertise_domain or "").strip()[:512]
+
+    item.latest_task_id = bb.task_id
+    item.last_run_at = now
+    item.next_run_at = now + timedelta(hours=int(item.interval_hours))
+    item.run_count = int(item.run_count or 0) + 1
+    db.commit()
+
+    background_tasks.add_task(
+        run_agent_pipeline_background,
+        bb.task_id,
+        user.id,
+        q,
+        bb.expertise_level,
+        bb.expertise_domain,
+        None,
+        item.id,
+    )
+
+    return JSONResponse(
+        content={
+            "success": True,
+            "task_id": bb.task_id,
+            "message": "Watch re-check started",
+            "item": _watchlist_item_api_dict(db, item),
+        }
+    )
+
+
 @router.delete("/watchlist/{item_id}")
 async def delete_watchlist_item(
     item_id: str,

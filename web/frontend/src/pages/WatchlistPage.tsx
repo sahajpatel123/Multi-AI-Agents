@@ -13,6 +13,7 @@ import {
   getAgentWatchlistHistory,
   patchAgentWatchlistBulk,
   patchAgentWatchlist,
+  postAgentWatchlistRun,
   type AgentWatchlistHistoryResponse,
   type AgentWatchlistItem,
 } from '../api';
@@ -108,6 +109,7 @@ export function WatchlistPage() {
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState<'pause_all' | 'resume_all' | null>(null);
   const [cadenceBusyId, setCadenceBusyId] = useState<string | null>(null);
+  const [runNowBusyId, setRunNowBusyId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<WatchlistStatusFilter>('all');
@@ -277,6 +279,22 @@ export function WatchlistPage() {
       setError(e instanceof ApiError ? e.message : 'Could not update schedule');
     } finally {
       setCadenceBusyId(null);
+    }
+  };
+
+  const onRunNow = async (item: AgentWatchlistItem) => {
+    if (runNowBusyId === item.id) return;
+    setRunNowBusyId(item.id);
+    setError(null);
+    setBulkNotice(null);
+    try {
+      const result = await postAgentWatchlistRun(item.id);
+      setItems((prev) => prev.map((x) => (x.id === item.id ? result.item : x)));
+      setBulkNotice('Re-check started — the latest result will update shortly.');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not start this re-check');
+    } finally {
+      setRunNowBusyId(null);
     }
   };
 
@@ -1321,6 +1339,16 @@ export function WatchlistPage() {
                       })}
                     </div>
                     <div className="watchlist-item__actions">
+                      <button
+                        type="button"
+                        onClick={() => void onRunNow(item)}
+                        disabled={runNowBusyId === item.id}
+                        title="Start an immediate re-check now"
+                        aria-label={`Run now: ${item.question.slice(0, 80) || 'watched question'}`}
+                        className="watchlist-link watchlist-link--accent"
+                      >
+                        {runNowBusyId === item.id ? 'Starting…' : 'Run now'}
+                      </button>
                       {item.latest_task_id && item.latest_task ? (
                         <button
                           type="button"
