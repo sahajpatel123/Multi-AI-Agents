@@ -75,6 +75,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - “Try again” buttons in Debate Mode error banners
 
 ### Changed
+- JSON session transcript export now pins a format version, drops stale
+  winner ids that match no stored take, and falls back to agent ids when a
+  persona cannot be resolved
 - Markdown session transcript export now includes the session id, per-exchange
   timestamps, and an empty-exchange fallback, and normalizes multi-line prompts
   and one-liners for portable archives

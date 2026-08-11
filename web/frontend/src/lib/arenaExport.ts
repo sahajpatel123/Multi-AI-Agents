@@ -190,7 +190,10 @@ function pickExchangeTimestamp(turn: SessionTurn): string {
  * exchange with the prompt, category, timestamp, winner, and every stored
  * take. Mirrors ``formatArenaTranscriptExport`` but stays machine-readable
  * (multiline prompts and verdicts are preserved verbatim), so the archive
- * can be re-imported, analyzed, or diffed later.
+ * can be re-imported, analyzed, or diffed later. The envelope carries a
+ * ``format_version`` so consumers can detect incompatible archive shapes,
+ * and a stale ``winner_id`` that matches no stored take is dropped rather
+ * than exported as an inconsistent winner with no matching ``is_winner``.
  *
  * Deterministic except for the optional exported-at timestamp: pass
  * ``opts.exportedAt`` to pin it (tests do this); otherwise the caller gets
@@ -205,12 +208,17 @@ export function formatArenaTranscriptJsonExport(
   const data = {
     exported_from: 'arena',
     export_type: 'session_transcript',
+    format_version: 1,
     exported_at: opts?.exportedAt || new Date().toISOString(),
     session_id: opts?.sessionId || null,
     exchange_count: exchanges.length,
     exchanges: exchanges.map((turn) => {
-      const winnerId = turn.winner_id || '';
-      const entries = Object.values(turn.agent_responses || {}).sort((a, b) => {
+      const entries = Object.values(turn.agent_responses || {});
+      const winnerId =
+        turn.winner_id && entries.some((entry) => entry.agent_id === turn.winner_id)
+          ? turn.winner_id
+          : '';
+      const sorted = [...entries].sort((a, b) => {
         const aWinner = a.agent_id === winnerId ? 1 : 0;
         const bWinner = b.agent_id === winnerId ? 1 : 0;
         if (aWinner !== bWinner) return bWinner - aWinner;
@@ -222,8 +230,8 @@ export function formatArenaTranscriptJsonExport(
         prompt_category: (turn.prompt_category || '').trim() || null,
         timestamp: pickExchangeTimestamp(turn) || null,
         winner_agent_id: winnerId || null,
-        takes: entries.map((agentResponse) => {
-          const persona = resolvePersona(agentResponse.agent_id);
+        takes: sorted.map((agentResponse) => {
+          const persona = resolvePersona(agentResponse.agent_id) || {};
           return {
             agent_id: agentResponse.agent_id,
             agent_name: persona.name || agentResponse.agent_id,

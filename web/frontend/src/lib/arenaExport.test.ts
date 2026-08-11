@@ -529,4 +529,124 @@ describe('formatArenaTranscriptJsonExport', () => {
     expect(sparse.exchanges[0].takes).toEqual([]);
     expect(sparse.exchanges[0].winner_agent_id).toBeNull();
   });
+
+  it('pins a format version so consumers can detect incompatible archives', () => {
+    const parsed = JSON.parse(
+      formatArenaTranscriptJsonExport(turns, () => ({ name: 'The Analyst' }), {
+        exportedAt: '2026-08-07T12:00:00.000Z',
+      }),
+    );
+    expect(parsed.format_version).toBe(1);
+  });
+
+  it('drops a stale winner id that matches no stored take', () => {
+    const parsed = JSON.parse(
+      formatArenaTranscriptJsonExport(
+        [
+          {
+            turn_id: 't5',
+            prompt: 'Who should decide?',
+            winner_id: 'agent_missing',
+            timestamp: '2026-08-07T10:20:00Z',
+            agent_responses: {
+              agent_1: {
+                agent_id: 'agent_1',
+                agent_number: 1,
+                one_liner: 'One owner.',
+                verdict: 'Pick someone.',
+                confidence: 0.8,
+                key_assumption: 'someone is available',
+                timestamp: '2026-08-07T10:20:00Z',
+              },
+            },
+          },
+        ],
+        () => ({ name: 'The Analyst' }),
+        { exportedAt: '2026-08-07T12:00:00.000Z' },
+      ),
+    );
+    expect(parsed.exchanges[0].winner_agent_id).toBeNull();
+    expect(parsed.exchanges[0].takes[0].is_winner).toBe(false);
+  });
+
+  it('normalizes blank fields and rejects invalid confidence values', () => {
+    const parsed = JSON.parse(
+      formatArenaTranscriptJsonExport(
+        [
+          {
+            turn_id: 't6',
+            prompt: '   ',
+            prompt_category: '  ',
+            winner_id: '',
+            timestamp: '',
+            agent_responses: {
+              agent_1: {
+                agent_id: 'agent_1',
+                agent_number: 1,
+                one_liner: '  ',
+                verdict: '',
+                confidence: Number.NaN,
+                key_assumption: '',
+                timestamp: '',
+              },
+            },
+          },
+        ],
+        () => ({ name: 'The Analyst' }),
+        { exportedAt: '2026-08-07T12:00:00.000Z' },
+      ),
+    );
+    expect(parsed.exchanges[0]).toMatchObject({
+      prompt: '(no prompt)',
+      prompt_category: null,
+      winner_agent_id: null,
+      timestamp: null,
+    });
+    expect(parsed.exchanges[0].takes[0]).toMatchObject({
+      one_liner: null,
+      verdict: null,
+      key_assumption: null,
+      confidence: null,
+      timestamp: null,
+    });
+  });
+
+  it('falls back to the agent id when the persona resolver returns nothing', () => {
+    const parsed = JSON.parse(
+      formatArenaTranscriptJsonExport(
+        [
+          {
+            turn_id: 't7',
+            prompt: 'Hello?',
+            winner_id: 'agent_1',
+            timestamp: '2026-08-07T10:25:00Z',
+            agent_responses: {
+              agent_1: {
+                agent_id: 'agent_1',
+                agent_number: 1,
+                one_liner: 'Hi.',
+                verdict: 'Hello.',
+                confidence: 0.5,
+                key_assumption: '',
+                timestamp: '2026-08-07T10:25:00Z',
+              },
+            },
+          },
+        ],
+        () => undefined as unknown as { name: string },
+        { exportedAt: '2026-08-07T12:00:00.000Z' },
+      ),
+    );
+    expect(parsed.exchanges[0].takes[0].agent_name).toBe('agent_1');
+  });
+
+  it('handles a null turns payload without crashing', () => {
+    const parsed = JSON.parse(
+      formatArenaTranscriptJsonExport(null as unknown as SessionTurn[], () => ({
+        name: 'The Analyst',
+      }), { exportedAt: '2026-08-07T12:00:00.000Z' }),
+    );
+    expect(parsed.exchange_count).toBe(0);
+    expect(parsed.exchanges).toEqual([]);
+  });
 });
