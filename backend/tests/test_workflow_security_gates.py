@@ -346,6 +346,23 @@ def test_release_has_manual_dispatch() -> None:
     assert "v*" in tags, "Release workflow should still run on v* tag pushes"
 
 
+def test_release_runs_workflow_security_gate() -> None:
+    release = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    )
+    steps = release["jobs"]["build"]["steps"]
+    gate_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict) and step.get("name") == "Run workflow security gate"
+    ]
+    assert gate_steps, "Release workflow is missing the workflow security gate step"
+    run_script = gate_steps[0]["run"]
+    assert "scripts/check_workflow_security.py" in run_script, (
+        "Release workflow security gate should invoke scripts/check_workflow_security.py"
+    )
+
+
 def test_pre_commit_config_and_ci_job() -> None:
     pre_commit = yaml.safe_load(
         (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")

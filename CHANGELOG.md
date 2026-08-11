@@ -112,6 +112,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ships `backend/arena.db` in release artifacts
 
 ### Security
+- Release workflow now runs the same workflow-security gate as CI so a
+  release cannot ship from a workflow that violates the hardened GitHub
+  Actions invariants
 - Hardened client-side Arena CSV exports (single-round and full-session
   transcript) against spreadsheet formula injection (CWE-1236)
 - Added gitleaks allowlists for test fixture API keys
