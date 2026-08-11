@@ -7,7 +7,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from arena.core.blackboard import AgentStatus, create_blackboard
+from arena.core.blackboard import AgentStatus, create_blackboard, get_blackboard
 from arena.core.capabilities import evaluate_capability_gate
 from arena.core.telemetry import record_guard_decision
 from arena.core.tier_config import get_tier_str, has_feature, normalize_tier
@@ -51,6 +51,21 @@ async def run_due_watchlist() -> None:
                     continue
                 tier = normalize_tier(get_tier_str(user))
                 if not has_feature(tier, "agent_watchlist"):
+                    continue
+
+                # A manual run-now (or an earlier sweep) may already have this
+                # watch's pipeline warm in memory. Skip it instead of stacking a
+                # second concurrent pipeline for the same question.
+                active_run = get_blackboard(item.latest_task_id) if item.latest_task_id else None
+                if active_run is not None and active_run.status in (
+                    AgentStatus.PENDING,
+                    AgentStatus.RUNNING,
+                    AgentStatus.NEEDS_REVISION,
+                ):
+                    logger.info(
+                        "[WATCHLIST] skip item id=%s: run already in progress",
+                        item.id,
+                    )
                     continue
 
                 q = (item.question or "").strip()

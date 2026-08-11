@@ -3046,6 +3046,23 @@ async def run_watchlist_item_now(
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
         )
 
+    if item.latest_task_id:
+        active_run = get_blackboard(item.latest_task_id)
+        if (
+            active_run is not None
+            and active_run.user_id == user.id
+            and active_run.status
+            in (AgentStatus.PENDING, AgentStatus.RUNNING, AgentStatus.NEEDS_REVISION)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "watchlist_run_in_progress",
+                    "message": "This watch is already re-checking; wait for the current run to finish.",
+                    "task_id": item.latest_task_id,
+                },
+            )
+
     q = (item.question or "").strip()
     if not q or len(q) > 2000:
         raise HTTPException(

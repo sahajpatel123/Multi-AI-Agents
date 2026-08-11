@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from arena.core.blackboard import AgentStatus, create_blackboard, remove_blackboard
 from arena.core.datetime_utils import utcnow_naive
 from arena.db_models import UserTier, WatchlistItem
 
@@ -94,6 +95,44 @@ async def test_run_now_works_for_paused_watch_without_resuming(
     db_session.refresh(item)
     assert item.is_active is False
     assert item.run_count == 3
+
+
+@pytest.mark.asyncio
+async def test_run_now_rejects_while_latest_task_is_still_running(
+    app_client, make_user, db_session
+):
+    user = make_user(email="wl-run-busy@test.com", tier=UserTier.PRO)
+    item = _add_watch(db_session, user.id, "Already being re-checked")
+    bb = create_blackboard(user_id=user.id, task=item.question)
+    bb.status = AgentStatus.RUNNING
+    item.latest_task_id = bb.task_id
+    db_session.commit()
+    db_session.refresh(item)
+    old_next = item.next_run_at
+    old_run_count = item.run_count
+
+    try:
+        with patch(
+            "arena.routes.agent.run_agent_pipeline_background",
+            new_callable=AsyncMock,
+        ) as run_pipeline:
+            res = await app_client.post(
+                f"/api/agent/watchlist/{item.id}/run",
+                headers=_pro_headers(user),
+            )
+
+        assert res.status_code == 409, res.text
+        detail = res.json().get("detail", res.json())
+        assert detail["error"] == "watchlist_run_in_progress"
+        assert detail["task_id"] == bb.task_id
+        run_pipeline.assert_not_awaited()
+
+        db_session.refresh(item)
+        assert item.run_count == old_run_count
+        assert item.latest_task_id == bb.task_id
+        assert item.next_run_at == old_next
+    finally:
+        remove_blackboard(bb.task_id)
 
 
 @pytest.mark.asyncio
