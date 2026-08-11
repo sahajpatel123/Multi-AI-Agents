@@ -1138,7 +1138,14 @@ async def analytics_persona_win_rate(
       ``trend`` array of weekly buckets covering the window (capped at 26
       weeks) so a dashboard can show whether a persona is improving or
       fading. Empty weeks report ``win_rate: null`` — absence is not a 0%
-      week. Bucket totals sum exactly to the row totals.
+      week. Bucket totals plus the omitted counters sum exactly to the row
+      totals.
+
+    - **Rows older than the plotted window are counted, not folded in.** For
+      windows beyond 26 weeks the sparkline plots the most recent 26 weeks
+      and reports the remainder in ``trend_omitted_appearances`` /
+      ``trend_omitted_wins``. Folding those older exchanges into the final
+      bucket would make the newest point look like a spike it is not.
 
     Scoped to the caller — this is "which minds win for *me*", not a global
     leaderboard. Bounded like the sibling analytics endpoints: capped window,
@@ -1177,15 +1184,20 @@ async def analytics_persona_win_rate(
         .all()
     )
 
-    # Weekly buckets partition the whole window so every persona's trend
-    # shares one time axis and sums exactly to the row-level totals. Capped at
-    # 26 buckets (~6 months): beyond that a sparkline is noise and the payload
-    # is wasted on a profile tab. Empty buckets carry ``win_rate: null`` — an
-    # absent week is "no data", not a 0% week.
+    # Weekly buckets share one time axis and sum exactly to the row-level
+    # totals. Windows up to 26 weeks are fully plotted; longer windows keep
+    # the most recent 26 weeks and carry the older exchanges as omitted
+    # counters so the last bucket never silently absorbs months of history.
+    # Empty buckets carry ``win_rate: null`` — an absent week is "no data",
+    # not a 0% week.
     MAX_TREND_BUCKETS = 26
     bucket_count = min(MAX_TREND_BUCKETS, (window_days + 6) // 7)
+    trend_start_day = max(
+        window_start_day,
+        now_utc.date() - timedelta(days=7 * bucket_count - 1),
+    )
     bucket_starts = [
-        window_start_day + timedelta(days=7 * i) for i in range(bucket_count)
+        trend_start_day + timedelta(days=7 * i) for i in range(bucket_count)
     ]
     bucket_ends = [
         min(start + timedelta(days=6), now_utc.date()) for start in bucket_starts
@@ -1195,6 +1207,8 @@ async def analytics_persona_win_rate(
     wins: Counter = Counter()
     bucket_appearances: list[Counter] = [Counter() for _ in range(bucket_count)]
     bucket_wins: list[Counter] = [Counter() for _ in range(bucket_count)]
+    omitted_appearances: Counter = Counter()
+    omitted_wins: Counter = Counter()
     scored_exchanges = 0
     unattributed_exchanges = 0
     fallback_exchanges = 0
@@ -1214,16 +1228,27 @@ async def analytics_persona_win_rate(
             continue
 
         scored_exchanges += 1
-        days_since_start = max((created_at.date() - window_start_day).days, 0)
-        bucket_index = min(days_since_start // 7, bucket_count - 1)
         # De-duplicate within a panel: a persona seated twice in one exchange
         # still only had one chance to win it.
-        for persona_id in set(panel):
-            appearances[persona_id] += 1
-            bucket_appearances[bucket_index][persona_id] += 1
-        if winner_persona_id and winner_persona_id in panel:
-            wins[winner_persona_id] += 1
-            bucket_wins[bucket_index][winner_persona_id] += 1
+        panel_ids = set(panel)
+        if created_at.date() < trend_start_day:
+            for persona_id in panel_ids:
+                appearances[persona_id] += 1
+                omitted_appearances[persona_id] += 1
+            if winner_persona_id and winner_persona_id in panel_ids:
+                wins[winner_persona_id] += 1
+                omitted_wins[winner_persona_id] += 1
+        else:
+            days_since_trend_start = max(
+                (created_at.date() - trend_start_day).days, 0
+            )
+            bucket_index = min(days_since_trend_start // 7, bucket_count - 1)
+            for persona_id in panel_ids:
+                appearances[persona_id] += 1
+                bucket_appearances[bucket_index][persona_id] += 1
+            if winner_persona_id and winner_persona_id in panel_ids:
+                wins[winner_persona_id] += 1
+                bucket_wins[bucket_index][winner_persona_id] += 1
 
     personas = []
     for persona_id, appearance_count in appearances.items():
@@ -1258,6 +1283,8 @@ async def analytics_persona_win_rate(
                 "win_rate": round(win_count / appearance_count, 3),
                 "low_confidence": appearance_count < LOW_CONFIDENCE_APPEARANCES,
                 "trend": trend,
+                "trend_omitted_appearances": omitted_appearances[persona_id],
+                "trend_omitted_wins": omitted_wins[persona_id],
             }
         )
 

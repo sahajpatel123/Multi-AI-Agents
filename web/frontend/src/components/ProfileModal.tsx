@@ -220,14 +220,29 @@ function WinRateTrendSparkline({
   trend,
   personaName,
   color,
+  omittedAppearances = 0,
 }: {
   trend: AnalyticsPersonaWinRateTrendPoint[];
   personaName: string;
   color: string;
+  omittedAppearances?: number;
 }) {
   const width = 72;
   const height = 20;
   const padding = 2;
+  const omittedLabel =
+    omittedAppearances > 0
+      ? `, ${omittedAppearances} older appearance${omittedAppearances === 1 ? '' : 's'} not plotted`
+      : '';
+  const omittedBadge =
+    omittedAppearances > 0 ? (
+      <span
+        style={{ color: '#A0A39A', fontSize: 10, whiteSpace: 'nowrap' }}
+        title={`${omittedAppearances} older appearance${omittedAppearances === 1 ? '' : 's'} not plotted`}
+      >
+        +{omittedAppearances} older
+      </span>
+    ) : null;
 
   const points = trend.map((point, index) => ({
     index,
@@ -243,8 +258,11 @@ function WinRateTrendSparkline({
 
   if (!points.some((p) => p.y !== null)) {
     return (
-      <span style={{ color: '#A0A39A', fontSize: 10, fontFamily: 'var(--vp-font-sans)' }}>
-        no data
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ color: '#A0A39A', fontSize: 10, fontFamily: 'var(--vp-font-sans)' }}>
+          no data
+        </span>
+        {omittedBadge}
       </span>
     );
   }
@@ -275,29 +293,32 @@ function WinRateTrendSparkline({
     .join(', ');
 
   return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label={`${personaName} win rate trend over the last ${trend.length} weeks: ${label}`}
-    >
-      <title>{`${personaName} — weekly win rate: ${label}`}</title>
-      {runs.map((run, i) => (
-        <polyline
-          key={i}
-          points={run.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}
-          fill="none"
-          stroke={stroke}
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ))}
-      {plotted.map((p) => (
-        <circle key={p.index} cx={p.x} cy={p.y} r={1.5} fill={stroke} />
-      ))}
-    </svg>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={`${personaName} win rate trend over the last ${trend.length} weeks: ${label}${omittedLabel}`}
+      >
+        <title>{`${personaName} — weekly win rate: ${label}${omittedLabel}`}</title>
+        {runs.map((run, i) => (
+          <polyline
+            key={i}
+            points={run.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ))}
+        {plotted.map((p) => (
+          <circle key={p.index} cx={p.x} cy={p.y} r={1.5} fill={stroke} />
+        ))}
+      </svg>
+      {omittedBadge}
+    </span>
   );
 }
 
@@ -1507,6 +1528,7 @@ export function ProfileModal() {
                                   trend={row.trend}
                                   personaName={row.name}
                                   color={row.color}
+                                  omittedAppearances={row.trend_omitted_appearances}
                                 />
                               </td>
                               <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>

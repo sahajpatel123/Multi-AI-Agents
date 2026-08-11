@@ -82,6 +82,8 @@ const hoistedMocks = vi.hoisted(() => ({
         wins: 6,
         win_rate: 0.75,
         low_confidence: false,
+        trend_omitted_appearances: 0,
+        trend_omitted_wins: 0,
         trend: [
           { bucket_start: '2026-07-13', bucket_end: '2026-07-19', appearances: 2, wins: 1, win_rate: 0.5 },
           { bucket_start: '2026-07-20', bucket_end: '2026-07-26', appearances: 1, wins: 1, win_rate: 1 },
@@ -98,6 +100,8 @@ const hoistedMocks = vi.hoisted(() => ({
         wins: 2,
         win_rate: 0.667,
         low_confidence: true,
+        trend_omitted_appearances: 0,
+        trend_omitted_wins: 0,
         trend: [
           { bucket_start: '2026-07-13', bucket_end: '2026-07-19', appearances: 2, wins: 1, win_rate: 0.5 },
           { bucket_start: '2026-07-20', bucket_end: '2026-07-26', appearances: 0, wins: 0, win_rate: null },
@@ -428,6 +432,58 @@ describe('ProfileModal', () => {
     expect(
       within(group).getByRole('img', {
         name: 'The Philosopher win rate trend over the last 3 weeks: 50%, no data, 100%',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('marks sparklines whose older exchanges are not plotted', async () => {
+    hoistedMocks.getAnalyticsPersonaWinRate.mockResolvedValueOnce({
+      window_days: 30,
+      window_start: '2026-07-13',
+      window_end: '2026-08-11',
+      min_appearances: 1,
+      include_fallback: false,
+      low_confidence_threshold: 5,
+      scored_exchanges: 3,
+      unattributed_exchanges: 0,
+      fallback_exchanges: 0,
+      personas: [
+        {
+          persona_id: 'analyst',
+          name: 'The Analyst',
+          color: '#F0B84E',
+          appearances: 3,
+          wins: 2,
+          win_rate: 0.667,
+          low_confidence: false,
+          trend_omitted_appearances: 2,
+          trend_omitted_wins: 1,
+          trend: [
+            {
+              bucket_start: '2026-08-03',
+              bucket_end: '2026-08-09',
+              appearances: 1,
+              wins: 1,
+              win_rate: 1,
+            },
+          ],
+        },
+      ],
+      best_persona_id: 'analyst',
+      best_win_rate: 0.667,
+    });
+
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const group = await screen.findByRole('group', { name: /persona win rates/i });
+    expect(within(group).getByText('+2 older')).toBeInTheDocument();
+    expect(
+      within(group).getByRole('img', {
+        name: 'The Analyst win rate trend over the last 1 weeks: 100%, 2 older appearances not plotted',
       }),
     ).toBeInTheDocument();
   });

@@ -33,6 +33,8 @@ function winRateRow(overrides: Record<string, unknown> = {}) {
     wins: 6,
     win_rate: 0.75,
     low_confidence: false,
+    trend_omitted_appearances: 0,
+    trend_omitted_wins: 0,
     trend: [
       { bucket_start: '2026-07-13', bucket_end: '2026-07-19', appearances: 2, wins: 1, win_rate: 0.5 },
       { bucket_start: '2026-07-20', bucket_end: '2026-07-26', appearances: 1, wins: 1, win_rate: 1 },
@@ -276,6 +278,83 @@ describe('Analytics persona win-rate frontend API helper', () => {
 
     await expect(getAnalyticsPersonaWinRate()).resolves.toMatchObject({
       personas: [{ persona_id: 'analyst' }],
+    });
+  });
+
+  it('accepts older appearances omitted from the trend when totals reconcile', async () => {
+    const trend = [
+      { bucket_start: '2026-02-09', bucket_end: '2026-02-15', appearances: 1, wins: 1, win_rate: 1 },
+    ];
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          winRatePayload({
+            best_win_rate: 0.667,
+            personas: [
+              winRateRow({
+                appearances: 3,
+                wins: 2,
+                win_rate: 0.667,
+                trend,
+                trend_omitted_appearances: 2,
+                trend_omitted_wins: 1,
+              }),
+            ],
+          }),
+        ),
+        { status: 200, headers: { 'x-request-id': 'req-trend-omitted' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).resolves.toMatchObject({
+      personas: [{ persona_id: 'analyst' }],
+    });
+  });
+
+  it('rejects omitted wins that exceed omitted appearances', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          winRatePayload({
+            personas: [
+              winRateRow({
+                trend_omitted_appearances: 1,
+                trend_omitted_wins: 2,
+              }),
+            ],
+          }),
+        ),
+        { status: 200, headers: { 'x-request-id': 'req-trend-omit-win' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-trend-omit-win)',
+    });
+  });
+
+  it('rejects an empty trend array even when totals are zero', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          winRatePayload({
+            personas: [
+              winRateRow({
+                trend: [],
+                trend_omitted_appearances: 8,
+                trend_omitted_wins: 6,
+              }),
+            ],
+          }),
+        ),
+        { status: 200, headers: { 'x-request-id': 'req-trend-empty-array' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-trend-empty-array)',
     });
   });
 

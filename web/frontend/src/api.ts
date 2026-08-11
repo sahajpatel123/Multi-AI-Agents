@@ -2381,6 +2381,8 @@ export type AnalyticsPersonaWinRateRow = {
   win_rate: number;
   low_confidence: boolean;
   trend: AnalyticsPersonaWinRateTrendPoint[];
+  trend_omitted_appearances: number;
+  trend_omitted_wins: number;
 };
 
 export type AnalyticsPersonaWinRateTrendPoint = {
@@ -2409,7 +2411,9 @@ export type AnalyticsPersonaWinRateResponse = {
 function isAnalyticsPersonaWinRateRow(value: unknown): value is AnalyticsPersonaWinRateRow {
   if (!value || typeof value !== 'object') return false;
   const row = value as Record<string, unknown>;
-  if (!Array.isArray(row.trend) || row.trend.length > 26) return false;
+  if (!Array.isArray(row.trend) || row.trend.length < 1 || row.trend.length > 26) {
+    return false;
+  }
   return (
     typeof row.persona_id === 'string' &&
     row.persona_id.length > 0 &&
@@ -2425,8 +2429,14 @@ function isAnalyticsPersonaWinRateRow(value: unknown): value is AnalyticsPersona
     typeof row.low_confidence === 'boolean' &&
     row.trend.every(isAnalyticsPersonaWinRateTrendPoint) &&
     isSortedAscendingTrend(row.trend) &&
-    row.trend.reduce((sum, point) => sum + point.appearances, 0) === row.appearances &&
-    row.trend.reduce((sum, point) => sum + point.wins, 0) === row.wins
+    isNonNegativeInteger(row.trend_omitted_appearances) &&
+    isNonNegativeInteger(row.trend_omitted_wins) &&
+    row.trend_omitted_wins <= row.trend_omitted_appearances &&
+    row.trend.reduce((sum, point) => sum + point.appearances, 0) +
+      row.trend_omitted_appearances ===
+      row.appearances &&
+    row.trend.reduce((sum, point) => sum + point.wins, 0) + row.trend_omitted_wins ===
+      row.wins
   );
 }
 

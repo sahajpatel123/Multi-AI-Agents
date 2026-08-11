@@ -609,3 +609,59 @@ async def test_trend_buckets_are_iso_and_monotonic(app_client, make_user, db_ses
         assert _iso_date(point["bucket_end"])
         assert point["bucket_start"] <= point["bucket_end"]
         assert point["bucket_start"] > prev["bucket_end"]
+
+
+@pytest.mark.asyncio
+async def test_trend_omits_older_rows_instead_of_folding_into_last_bucket(
+    app_client, make_user, db_session
+):
+    """A 365-day window plots the last 26 weeks and counts the rest, exactly."""
+    user = make_user(email="pwr-trend-omit@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # ~300 days ago: older than the 26-week plotted span (182 days).
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        hours_ago=24 * 300,
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="philosopher",
+        panel=panel,
+        hours_ago=24 * 2,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-win-rate?window_days=365",
+        headers=_pro_headers(user),
+    )
+    body = res.json()
+
+    analyst = _row(body, "analyst")
+    assert analyst["appearances"] == 2
+    assert analyst["wins"] == 1
+    assert len(analyst["trend"]) == 26
+    assert analyst["trend_omitted_appearances"] == 1
+    assert analyst["trend_omitted_wins"] == 1
+    assert (
+        sum(p["appearances"] for p in analyst["trend"])
+        + analyst["trend_omitted_appearances"]
+        == analyst["appearances"]
+    )
+    assert (
+        sum(p["wins"] for p in analyst["trend"]) + analyst["trend_omitted_wins"]
+        == analyst["wins"]
+    )
+    # The old win must not be folded into the newest bucket.
+    assert analyst["trend"][-1]["appearances"] == 1
+    assert analyst["trend"][-1]["wins"] == 0
+
+    philosopher = _row(body, "philosopher")
+    assert philosopher["trend_omitted_appearances"] == 1
+    assert philosopher["trend_omitted_wins"] == 0
+    assert philosopher["trend"][-1]["appearances"] == 1
+    assert philosopher["trend"][-1]["wins"] == 1
