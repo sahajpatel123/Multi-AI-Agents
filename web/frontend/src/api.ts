@@ -2369,8 +2369,109 @@ export async function deleteRoom(slug: string): Promise<void> {
 }
 
 // ──────────────────────────────────────────────────────────────
-// Analytics CSV Exports
+// Analytics data + CSV exports
 // ──────────────────────────────────────────────────────────────
+
+export type AnalyticsPersonaWinRateRow = {
+  persona_id: string;
+  name: string;
+  color: string;
+  appearances: number;
+  wins: number;
+  win_rate: number;
+  low_confidence: boolean;
+};
+
+export type AnalyticsPersonaWinRateResponse = {
+  window_days: number;
+  window_start: string;
+  window_end: string;
+  min_appearances: number;
+  include_fallback: boolean;
+  low_confidence_threshold: number;
+  scored_exchanges: number;
+  unattributed_exchanges: number;
+  fallback_exchanges: number;
+  personas: AnalyticsPersonaWinRateRow[];
+  best_persona_id: string | null;
+  best_win_rate: number | null;
+};
+
+function isAnalyticsPersonaWinRateRow(value: unknown): value is AnalyticsPersonaWinRateRow {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.persona_id === 'string' &&
+    typeof row.name === 'string' &&
+    typeof row.color === 'string' &&
+    typeof row.appearances === 'number' &&
+    Number.isFinite(row.appearances) &&
+    typeof row.wins === 'number' &&
+    Number.isFinite(row.wins) &&
+    typeof row.win_rate === 'number' &&
+    Number.isFinite(row.win_rate) &&
+    typeof row.low_confidence === 'boolean'
+  );
+}
+
+function isAnalyticsPersonaWinRateResponse(
+  value: unknown,
+): value is AnalyticsPersonaWinRateResponse {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Record<string, unknown>;
+  if (
+    typeof data.window_days !== 'number' ||
+    !Number.isFinite(data.window_days) ||
+    typeof data.window_start !== 'string' ||
+    typeof data.window_end !== 'string' ||
+    typeof data.min_appearances !== 'number' ||
+    !Number.isFinite(data.min_appearances) ||
+    typeof data.include_fallback !== 'boolean' ||
+    typeof data.low_confidence_threshold !== 'number' ||
+    !Number.isFinite(data.low_confidence_threshold) ||
+    typeof data.scored_exchanges !== 'number' ||
+    !Number.isFinite(data.scored_exchanges) ||
+    typeof data.unattributed_exchanges !== 'number' ||
+    !Number.isFinite(data.unattributed_exchanges) ||
+    typeof data.fallback_exchanges !== 'number' ||
+    !Number.isFinite(data.fallback_exchanges) ||
+    !Array.isArray(data.personas) ||
+    !data.personas.every(isAnalyticsPersonaWinRateRow) ||
+    (data.best_persona_id !== null && typeof data.best_persona_id !== 'string') ||
+    (data.best_win_rate !== null &&
+      (typeof data.best_win_rate !== 'number' || !Number.isFinite(data.best_win_rate)))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export async function getAnalyticsPersonaWinRate(
+  windowDays: number = 30,
+  minAppearances: number = 1,
+): Promise<AnalyticsPersonaWinRateResponse> {
+  const response = await apiFetch(
+    `/api/analytics/persona-win-rate?window_days=${encodeURIComponent(String(windowDays))}&min_appearances=${encodeURIComponent(String(minAppearances))}`,
+  );
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load persona win rates'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<AnalyticsPersonaWinRateResponse>(response);
+  if (!data) throw new Error(withRequestId('Empty persona win rate response', response));
+  if (!isAnalyticsPersonaWinRateResponse(data)) {
+    throw new ApiError(
+      withRequestId('Malformed persona win rate response', response),
+      response.status,
+      data,
+    );
+  }
+  return data;
+}
 
 export async function exportAnalyticsSummaryCsv(windowDays: number = 30): Promise<Blob> {
   const response = await apiFetch(`/api/analytics/summary/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);

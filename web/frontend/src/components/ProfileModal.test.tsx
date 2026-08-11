@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ProfileModal } from './ProfileModal';
 import { ProfileModalProvider, useProfileModal } from '../context/ProfileModalContext';
@@ -63,6 +63,39 @@ const hoistedMocks = vi.hoisted(() => ({
     busiest_day: '2026-08-10',
     busiest_day_count: 8,
   }),
+  getAnalyticsPersonaWinRate: vi.fn().mockResolvedValue({
+    window_days: 30,
+    window_start: '2026-07-13',
+    window_end: '2026-08-11',
+    min_appearances: 1,
+    include_fallback: false,
+    low_confidence_threshold: 5,
+    scored_exchanges: 10,
+    unattributed_exchanges: 0,
+    fallback_exchanges: 0,
+    personas: [
+      {
+        persona_id: 'analyst',
+        name: 'The Analyst',
+        color: '#F0B84E',
+        appearances: 8,
+        wins: 6,
+        win_rate: 0.75,
+        low_confidence: false,
+      },
+      {
+        persona_id: 'philosopher',
+        name: 'The Philosopher',
+        color: '#8C7355',
+        appearances: 3,
+        wins: 2,
+        win_rate: 0.667,
+        low_confidence: true,
+      },
+    ],
+    best_persona_id: 'analyst',
+    best_win_rate: 0.75,
+  }),
   getCalibrationStats: vi.fn().mockResolvedValue({
     score: null,
     coverage: 0,
@@ -101,6 +134,7 @@ vi.mock('../api', () => ({
   getSubscriptionStatus: hoistedMocks.getSubscriptionStatus,
   getUserUsage: hoistedMocks.getUserUsage,
   getAnalyticsActivity: hoistedMocks.getAnalyticsActivity,
+  getAnalyticsPersonaWinRate: hoistedMocks.getAnalyticsPersonaWinRate,
   getCalibrationStats: hoistedMocks.getCalibrationStats,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
@@ -168,6 +202,7 @@ describe('ProfileModal', () => {
     refreshUserMock.mockClear();
     refreshTierMock.mockClear();
     vi.mocked(hoistedMocks.getAnalyticsActivity).mockClear();
+    vi.mocked(hoistedMocks.getAnalyticsPersonaWinRate).mockClear();
     vi.mocked(downloadBlobFile).mockClear();
     (window as { __profileModalOpened?: boolean }).__profileModalOpened = false;
   });
@@ -313,6 +348,52 @@ describe('ProfileModal', () => {
 
     expect(await screen.findByText('2 days')).toBeInTheDocument();
     expect(hoistedMocks.getAnalyticsActivity).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders persona win rates from the live endpoint', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const group = await screen.findByRole('group', { name: /persona win rates/i });
+    expect(within(group).getAllByText('The Analyst').length).toBeGreaterThan(0);
+    expect(within(group).getByText('The Philosopher')).toBeInTheDocument();
+    expect(within(group).getByText('75%')).toBeInTheDocument();
+    expect(within(group).getByText(/best:/i)).toHaveTextContent('The Analyst');
+    expect(within(group).getByText('low sample')).toBeInTheDocument();
+    expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenCalledWith(30);
+  });
+
+  it('shows a fallback message when persona win rates fail to load', async () => {
+    hoistedMocks.getAnalyticsPersonaWinRate.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    expect(
+      await screen.findByText('Could not load persona win rates'),
+    ).toBeInTheDocument();
+  });
+
+  it('retries persona win rates after a failed load', async () => {
+    hoistedMocks.getAnalyticsPersonaWinRate.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const retry = await screen.findByRole('button', {
+      name: /retry loading persona win rates/i,
+    });
+    retry.click();
+
+    expect(await screen.findByText('75%')).toBeInTheDocument();
+    expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenCalledTimes(2);
   });
 
   it('downloads usage JSON with the server-provided filename', async () => {

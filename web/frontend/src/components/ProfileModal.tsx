@@ -17,6 +17,7 @@ import {
   exportUserUsageCsv,
   exportUserUsageJson,
   getAnalyticsActivity,
+  getAnalyticsPersonaWinRate,
   getCalibrationStats,
   getMcpIntegrations,
   getRecentAgentFeedback,
@@ -27,6 +28,7 @@ import {
   postMcpManualConnect,
   reactivateAgentAddon,
   type AnalyticsActivityResponse,
+  type AnalyticsPersonaWinRateResponse,
   type AnswerFeedbackStats,
   type RecentFeedbackItem,
   type SubscriptionStatusResponse,
@@ -254,6 +256,10 @@ export function ProfileModal() {
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityErr, setActivityErr] = useState<string | null>(null);
   const [activityReload, setActivityReload] = useState(0);
+  const [winRate, setWinRate] = useState<AnalyticsPersonaWinRateResponse | null>(null);
+  const [winRateLoading, setWinRateLoading] = useState(false);
+  const [winRateErr, setWinRateErr] = useState<string | null>(null);
+  const [winRateReload, setWinRateReload] = useState(0);
   const [calStats, setCalStats] = useState<{
     total_ratings?: number;
     avg_delta?: number;
@@ -353,6 +359,29 @@ export function ProfileModal() {
       cancelled = true;
     };
   }, [isOpen, activeTab, activityReload]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
+    setWinRateLoading(true);
+    setWinRateErr(null);
+    void getAnalyticsPersonaWinRate(30)
+      .then((w) => {
+        if (!cancelled) setWinRate(w);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWinRateErr('Could not load persona win rates');
+          setWinRate(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setWinRateLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, winRateReload]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
@@ -1282,6 +1311,116 @@ export function ProfileModal() {
                       </p>
                     ) : null}
                   </div>
+                ) : null}
+                <div
+                  style={{
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    color: '#A0A39A',
+                    letterSpacing: '0.10em',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  Persona win rates · 30 days
+                </div>
+                {winRateLoading ? (
+                  <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }} role="status">
+                    <MicroLoader label="Loading persona win rates" />
+                  </div>
+                ) : winRateErr ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <p style={{ fontSize: 13, color: '#8C7355', margin: 0 }} aria-live="polite">
+                      {winRateErr}
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Retry loading persona win rates"
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                      onClick={() => setWinRateReload((n) => n + 1)}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : winRate ? (
+                  winRate.personas.length === 0 ? (
+                    <p style={{ fontSize: 12, color: '#8C7355', margin: 0 }}>
+                      No scored panels in the last 30 days yet.
+                    </p>
+                  ) : (
+                    <div role="group" aria-label="Persona win rates">
+                      {(() => {
+                        const bestRow = winRate.best_persona_id
+                          ? winRate.personas.find((row) => row.persona_id === winRate.best_persona_id)
+                          : undefined;
+                        return bestRow ? (
+                          <p style={{ fontSize: 12, color: '#8C7355', margin: '0 0 10px' }}>
+                            Best:{' '}
+                            <strong style={{ color: '#F0B84E' }}>{bestRow.name}</strong>{' '}
+                            ({Math.round(bestRow.win_rate * 100)}% across {bestRow.appearances} panels)
+                          </p>
+                        ) : null;
+                      })()}
+                      <table
+                        style={{
+                          width: '100%',
+                          borderCollapse: 'collapse',
+                          fontFamily: 'var(--vp-font-sans)',
+                          fontSize: 12,
+                        }}
+                      >
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: 'left', color: '#A0A39A', fontWeight: 500, padding: '4px 8px 8px 0' }}>Persona</th>
+                            <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>Appearances</th>
+                            <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>Wins</th>
+                            <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>Rate</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {winRate.personas.map((row) => (
+                            <tr key={row.persona_id} style={{ opacity: row.low_confidence ? 0.65 : 1 }}>
+                              <td style={{ padding: '5px 8px 5px 0', borderTop: '0.5px solid #E0D5C5', color: '#F3F0E7' }}>
+                                {row.color ? (
+                                  <span
+                                    style={{
+                                      display: 'inline-block',
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: '50%',
+                                      background: row.color,
+                                      marginRight: 6,
+                                    }}
+                                  />
+                                ) : null}
+                                {row.name}
+                                {row.low_confidence ? (
+                                  <span style={{ color: '#A0A39A', fontSize: 10, marginLeft: 6 }}>low sample</span>
+                                ) : null}
+                              </td>
+                              <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                {row.appearances}
+                              </td>
+                              <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
+                                {row.wins}
+                              </td>
+                              <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#F0B84E' }}>
+                                {Math.round(row.win_rate * 100)}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
                 ) : null}
                 <div
                   style={{
