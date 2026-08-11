@@ -228,6 +228,19 @@ export async function exportUserUsageCsv(): Promise<Blob> {
   return res.blob();
 }
 
+export async function exportUserUsageJson(): Promise<Blob> {
+  const res = await apiFetch(`/api/user/usage/export.json`);
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to export usage JSON', res),
+      res.status,
+      err,
+    );
+  }
+  return res.blob();
+}
+
 export async function patchUserProfile(body: {
   name?: string;
   expertise_level?: string;

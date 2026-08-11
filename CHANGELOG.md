@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Usage history JSON export (14-day dated token rows plus period summary)
 - Usage history CSV export (14-day daily token totals with a period summary footer)
 - Activity timeline CSV export with per-mode daily counts and a rollup footer
 - CI status badges to README.md

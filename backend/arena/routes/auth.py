@@ -941,6 +941,65 @@ async def export_user_usage_csv(
     )
 
 
+@user_router.get("/usage/export.json")
+async def export_user_usage_json(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+) -> Response:
+    """JSON export of the user's 14-day usage history and period summary.
+
+    Complements the CSV export for automation and machine-readable backups:
+    each daily row carries its date alongside the token total, and the
+    summary block mirrors /api/user/usage so the dashboard, CSV, and JSON
+    surfaces cannot drift. Uses its own rate-limit scope so exporting JSON
+    does not consume the dashboard or CSV export budgets.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_usage_json",
+        limit=60,
+        window_seconds=60,
+        message="Too many usage JSON exports. Please slow down.",
+    )
+
+    history = _usage_history_rows(user, db)
+    payload = _user_usage_payload(user, db, history=history)
+    start_date, end_date = history[0][0], history[-1][0]
+    filename = (
+        f"arena-usage-{start_date.isoformat()}-to-{end_date.isoformat()}.json"
+    )
+
+    body = {
+        "exported_at": utcnow_naive().isoformat() + "Z",
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "summary": {
+            key: payload[key]
+            for key in (
+                "credits_used_today",
+                "credits_remaining_today",
+                "daily_limit",
+                "credits_used_week",
+                "credits_remaining_week",
+                "weekly_limit",
+                "total_tasks_month",
+            )
+        },
+        "history": [
+            {"date": day.isoformat(), "tokens": tokens}
+            for day, tokens in history
+        ],
+    }
+    return JSONResponse(
+        content=body,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @user_router.get("/tier")
 async def get_user_tier_summary(
     user: User = Depends(get_current_user_required_orm),

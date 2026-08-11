@@ -93,6 +93,7 @@ vi.mock('../api', () => ({
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
   exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(new Blob(['date,prompts'], { type: 'text/csv' })),
   exportUserUsageCsv: vi.fn().mockResolvedValue(new Blob(['date,tokens'], { type: 'text/csv' })),
+  exportUserUsageJson: vi.fn().mockResolvedValue(new Blob(['{"history":[]}'], { type: 'application/json' })),
   patchUserProfile: vi.fn().mockResolvedValue({ ok: true }),
   cancelSubscription: vi.fn().mockResolvedValue({ ok: true }),
   reactivateSubscription: vi.fn().mockResolvedValue({ ok: true }),
@@ -186,6 +187,18 @@ describe('ProfileModal', () => {
     usageTab.click();
     expect(
       await screen.findByRole('button', { name: /usage history export/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the usage JSON export button', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    const usageTab = screen.getByRole('button', { name: /usage/i });
+    usageTab.click();
+    expect(
+      await screen.findByRole('button', { name: /usage json export/i }),
     ).toBeInTheDocument();
   });
 
