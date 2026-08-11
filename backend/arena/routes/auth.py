@@ -5,11 +5,11 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
-from sqlalchemy import Date, cast, func
+from sqlalchemy import func
 from sqlalchemy.exc import OperationalError, InterfaceError, IntegrityError
 from sqlalchemy.orm import Session
 
@@ -748,19 +748,64 @@ async def user_answer_feedback_stats(
     return get_answer_feedback_distribution(user.id, db)
 
 
-@user_router.get("/usage")
-async def get_user_usage(
-    user: User = Depends(get_current_user_required_orm),
-    db: Session = Depends(get_db),
-) -> dict:
-    # 60/min/user — multi-aggregate usage dashboard; cap polling.
-    enforce_user_rate_limit(
-        user.id,
-        scope="user_usage",
-        limit=60,
-        window_seconds=60,
-        message="Too many usage stats reads. Please slow down.",
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value) -> str:
+    """Return ``value`` as a CSV cell safe against formula injection.
+
+    Defense-in-depth for the user usage CSV export (CWE-1236): the current
+    cells are server-computed dates and integers, but every CSV surface in
+    this codebase routes values through the same OWASP-recommended prefix
+    escape so a future column can't regress the file into a spreadsheet
+    formula-execution vector.
+    """
+    s = str(value) if value is not None else ""
+    if s and s[0] in _CSV_FORMULA_PREFIXES:
+        return "'" + s
+    return s
+
+
+def _usage_history_rows(user: User, db: Session) -> list[tuple[date, int]]:
+    """Return 14 daily token totals as (UTC date, tokens) pairs, oldest first.
+
+    Shared by the JSON usage endpoint and its CSV export so the dashboard
+    chart and the downloaded file cannot drift.
+    """
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
     )
+    chart_start = today_start - timedelta(days=13)
+    token_sum = UsageRecord.input_tokens + UsageRecord.output_tokens
+    day_col = func.date(UsageRecord.timestamp).label("day")
+    rows = (
+        db.query(day_col, func.coalesce(func.sum(token_sum), 0).label("total"))
+        .filter(UsageRecord.user_id == user.id, UsageRecord.timestamp >= chart_start)
+        .group_by(day_col)
+        .all()
+    )
+    by_day: dict[date, int] = {}
+    for r in rows:
+        d = r.day
+        if isinstance(d, datetime):
+            dk = d.date()
+        elif isinstance(d, date):
+            dk = d
+        elif isinstance(d, str):
+            dk = date.fromisoformat(d[:10])
+        else:
+            dk = d
+        by_day[dk] = int(r.total or 0)
+
+    history: list[tuple[date, int]] = []
+    for i in range(13, -1, -1):
+        day = (today_start - timedelta(days=i)).date()
+        history.append((day, by_day.get(day, 0)))
+    return history
+
+
+def _user_usage_payload(user: User, db: Session) -> dict:
+    """Compute the /api/user/usage response for one user."""
     normalized = normalize_tier(get_tier_str(user))
     daily_limit = get_credit_budget(normalized)
     weekly_limit = daily_limit * 7
@@ -797,31 +842,7 @@ async def get_user_usage(
     )
     total_tasks_month = int(total_tasks_month)
 
-    chart_start = today_start - timedelta(days=13)
-    day_col = cast(UsageRecord.timestamp, Date)
-    rows = (
-        db.query(day_col.label("day"), func.coalesce(func.sum(token_sum), 0).label("total"))
-        .filter(UsageRecord.user_id == user.id, UsageRecord.timestamp >= chart_start)
-        .group_by(day_col)
-        .all()
-    )
-    by_day: dict[date, int] = {}
-    for r in rows:
-        d = r.day
-        if isinstance(d, datetime):
-            dk = d.date()
-        elif isinstance(d, date):
-            dk = d
-        elif isinstance(d, str):
-            dk = date.fromisoformat(d[:10])
-        else:
-            dk = d
-        by_day[dk] = int(r.total or 0)
-
-    usage_history: list[int] = []
-    for i in range(13, -1, -1):
-        day = (today_start - timedelta(days=i)).date()
-        usage_history.append(by_day.get(day, 0))
+    usage_history = [tokens for _, tokens in _usage_history_rows(user, db)]
 
     return {
         "credits_used_today": credits_used_today,
@@ -833,6 +854,82 @@ async def get_user_usage(
         "total_tasks_month": total_tasks_month,
         "usage_history": usage_history,
     }
+
+
+@user_router.get("/usage")
+async def get_user_usage(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+) -> dict:
+    # 60/min/user — multi-aggregate usage dashboard; cap polling.
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_usage",
+        limit=60,
+        window_seconds=60,
+        message="Too many usage stats reads. Please slow down.",
+    )
+    return _user_usage_payload(user, db)
+
+
+@user_router.get("/usage/export.csv")
+async def export_user_usage_csv(
+    user: User = Depends(get_current_user_required_orm),
+    db: Session = Depends(get_db),
+) -> Response:
+    """CSV export of the user's 14-day usage history.
+
+    Shares the JSON endpoint's aggregation helper so the downloaded file
+    and the Profile modal chart cannot drift. Uses its own rate-limit scope
+    so exporting doesn't consume the JSON endpoint's per-minute budget.
+
+    Follows the same defenses as the other CSV exports in this codebase:
+    RFC 4180 quoting, formula-injection escape, no-store, and nosniff.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="user_usage_csv",
+        limit=60,
+        window_seconds=60,
+        message="Too many usage CSV exports. Please slow down.",
+    )
+
+    payload = _user_usage_payload(user, db)
+    history = _usage_history_rows(user, db)
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(["date", "tokens"])
+    for day, tokens in history:
+        writer.writerow([_csv_safe(day.isoformat()), tokens])
+    writer.writerow(
+        [
+            f"# credits_used_today={payload['credits_used_today']}",
+            f"credits_remaining_today={payload['credits_remaining_today']}",
+            f"daily_limit={payload['daily_limit']}",
+            f"credits_used_week={payload['credits_used_week']}",
+            f"credits_remaining_week={payload['credits_remaining_week']}",
+            f"weekly_limit={payload['weekly_limit']}",
+            f"total_tasks_month={payload['total_tasks_month']}",
+        ]
+    )
+
+    filename = (
+        f"arena-usage-"
+        f"{history[0][0].isoformat()}-to-{history[-1][0].isoformat()}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @user_router.get("/tier")

@@ -215,6 +215,19 @@ export async function getUserUsage(): Promise<UserUsageResponse> {
   return data;
 }
 
+export async function exportUserUsageCsv(): Promise<Blob> {
+  const res = await apiFetch(`/api/user/usage/export.csv`);
+  if (!res.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(res);
+    throw new ApiError(
+      withRequestId(err?.detail || 'Failed to export usage CSV', res),
+      res.status,
+      err,
+    );
+  }
+  return res.blob();
+}
+
 export async function patchUserProfile(body: {
   name?: string;
   expertise_level?: string;
