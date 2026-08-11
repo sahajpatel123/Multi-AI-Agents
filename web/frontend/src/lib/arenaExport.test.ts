@@ -3,10 +3,11 @@ import {
   formatArenaExport,
   formatArenaCsvExport,
   formatArenaJsonExport,
+  formatArenaTranscriptExport,
   formatArenaWinnerExport,
   pickArenaWinner,
 } from './arenaExport';
-import type { PromptResponse } from '../types';
+import type { PromptResponse, SessionTurn } from '../types';
 
 const sample: PromptResponse = {
   session_id: 's1',
@@ -216,5 +217,103 @@ describe('formatArenaCsvExport', () => {
     expect(csv).toContain('"yes"');
     expect(csv).toContain('"quality bar is fixed"');
     expect(csv.endsWith('\n')).toBe(true);
+  });
+});
+
+describe('formatArenaTranscriptExport', () => {
+  const turns: SessionTurn[] = [
+    {
+      turn_id: 't1',
+      prompt: 'Should we ship this week?',
+      prompt_category: 'question',
+      winner_id: 'agent_1',
+      timestamp: '2026-08-07T10:00:00Z',
+      agent_responses: {
+        agent_2: {
+          agent_id: 'agent_2',
+          agent_number: 2,
+          one_liner: 'Question the deadline first.',
+          verdict: 'The week is arbitrary.',
+          confidence: 0.7,
+          key_assumption: 'time pressure is real',
+          timestamp: '2026-08-07T10:00:00Z',
+        },
+        agent_1: {
+          agent_id: 'agent_1',
+          agent_number: 1,
+          one_liner: 'Ship the smallest honest slice.',
+          verdict: 'Ship a thin vertical that de-risks the week without rewriting the roadmap.',
+          confidence: 0.9,
+          key_assumption: 'quality bar is fixed',
+          timestamp: '2026-08-07T10:00:00Z',
+        },
+      },
+    },
+    {
+      turn_id: 't2',
+      prompt: 'Who owns the launch checklist?',
+      prompt_category: 'task',
+      winner_id: 'agent_2',
+      timestamp: '2026-08-07T10:05:00Z',
+      agent_responses: {
+        agent_2: {
+          agent_id: 'agent_2',
+          agent_number: 2,
+          one_liner: 'Name a single owner.',
+          verdict: 'Assign one accountable owner and give them the checklist.',
+          confidence: 0.85,
+          key_assumption: 'ownership beats committee',
+          timestamp: '2026-08-07T10:05:00Z',
+        },
+        agent_1: {
+          agent_id: 'agent_1',
+          agent_number: 1,
+          one_liner: 'Spread the checklist.',
+          verdict: 'Distribute items by expertise.',
+          confidence: 0.6,
+          key_assumption: 'team is large enough',
+          timestamp: '2026-08-07T10:05:00Z',
+        },
+      },
+    },
+  ];
+
+  it('renders every exchange with the winner first in each section', () => {
+    const md = formatArenaTranscriptExport(turns, (id) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    }), { exportedAt: '2026-08-07T12:00:00.000Z' });
+
+    expect(md).toContain('# Arena — session transcript');
+    expect(md).toContain('**Exported:** 2026-08-07T12:00:00.000Z');
+    expect(md).toContain('**Exchanges:** 2');
+    expect(md).toContain('## Exchange 1 · question');
+    expect(md).toContain('## Exchange 2 · task');
+    expect(md).toContain('**Question:** Should we ship this week?');
+    expect(md).toContain('**Question:** Who owns the launch checklist?');
+
+    const firstExchange = md.slice(0, md.indexOf('## Exchange 2'));
+    expect(firstExchange.indexOf('### The Analyst · winner · confidence 0.9'))
+      .toBeLessThan(firstExchange.indexOf('### The Philosopher'));
+    expect(firstExchange).toContain('quality bar is fixed');
+    expect(firstExchange).toContain('time pressure is real');
+
+    expect(md).toContain('### The Philosopher · winner · confidence 0.85');
+    expect(md.endsWith('\n')).toBe(true);
+  });
+
+  it('falls back to agent ids when no persona name resolves', () => {
+    const md = formatArenaTranscriptExport(turns, () => ({ name: '' }), {
+      exportedAt: '2026-08-07T12:00:00.000Z',
+    });
+    expect(md).toContain('### agent_1 · winner');
+    expect(md).toContain('### agent_2');
+  });
+
+  it('renders a friendly placeholder for an empty session', () => {
+    const md = formatArenaTranscriptExport([], () => ({ name: 'The Analyst' }), {
+      exportedAt: '2026-08-07T12:00:00.000Z',
+    });
+    expect(md).toContain('**Exchanges:** 0');
+    expect(md).toContain('_No exchanges in this session yet._');
   });
 });

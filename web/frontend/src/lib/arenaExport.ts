@@ -1,4 +1,4 @@
-import type { PromptResponse, ScoredAgent } from '../types';
+import type { PromptResponse, ScoredAgent, SessionTurn } from '../types';
 
 export type ArenaExportPersona = {
   name: string;
@@ -74,6 +74,80 @@ export function formatArenaWinnerExport(
     lines.push(`_Key assumption:_ ${assumption}`, '');
   }
   lines.push('---', '_Shared from Arena (winner only)_');
+  return lines.join('\n').trim() + '\n';
+}
+
+/**
+ * Portable markdown transcript of an entire Arena session, one section per
+ * exchange. Covers every stored turn (prompt, all four takes, winner badge,
+ * confidence, key assumption) so a user can archive or share a whole
+ * conversation, not just the latest round.
+ *
+ * Deterministic except for the optional exported-at timestamp: pass
+ * ``opts.exportedAt`` to pin it (tests do this); otherwise the caller gets
+ * the current UTC ISO timestamp.
+ */
+export function formatArenaTranscriptExport(
+  turns: SessionTurn[],
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: { exportedAt?: string },
+): string {
+  const lines: string[] = [
+    '# Arena — session transcript',
+    '',
+    `**Exported:** ${opts?.exportedAt || new Date().toISOString()}`,
+    `**Exchanges:** ${turns.length}`,
+    '',
+  ];
+
+  if (!turns.length) {
+    lines.push('_No exchanges in this session yet._', '', '---', '_Shared from Arena_');
+    return lines.join('\n').trim() + '\n';
+  }
+
+  turns.forEach((turn, index) => {
+    const category = (turn.prompt_category || '').trim();
+    lines.push(`## Exchange ${index + 1}${category ? ` · ${category}` : ''}`, '');
+    lines.push(`**Question:** ${(turn.prompt || '').trim() || '(no prompt)'}`, '');
+
+    const entries = Object.values(turn.agent_responses || {});
+    const winnerId = turn.winner_id;
+    const sorted = [...entries].sort((a, b) => {
+      const aWinner = a.agent_id === winnerId ? 1 : 0;
+      const bWinner = b.agent_id === winnerId ? 1 : 0;
+      if (aWinner !== bWinner) return bWinner - aWinner;
+      return a.agent_id.localeCompare(b.agent_id);
+    });
+
+    for (const agentResponse of sorted) {
+      const persona = resolvePersona(agentResponse.agent_id);
+      const name = persona.name || agentResponse.agent_id;
+      const badge = agentResponse.agent_id === winnerId ? ' · winner' : '';
+      const confidence =
+        typeof agentResponse.confidence === 'number' &&
+        Number.isFinite(agentResponse.confidence)
+          ? ` · confidence ${agentResponse.confidence}`
+          : '';
+      const oneLiner = (agentResponse.one_liner || '').trim() || '_(no one-liner)_';
+      const verdict = (agentResponse.verdict || '').trim();
+      const assumption = (agentResponse.key_assumption || '').trim();
+
+      lines.push(`### ${name}${badge}${confidence}`, '', oneLiner);
+      if (verdict && verdict !== oneLiner) {
+        lines.push('', `**Verdict:** ${verdict}`);
+      }
+      if (assumption) {
+        lines.push('', `_Key assumption:_ ${assumption}`);
+      }
+      lines.push('');
+    }
+
+    if (index < turns.length - 1) {
+      lines.push('---', '');
+    }
+  });
+
+  lines.push('---', '_Shared from Arena_');
   return lines.join('\n').trim() + '\n';
 }
 
