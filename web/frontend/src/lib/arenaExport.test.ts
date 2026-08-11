@@ -4,6 +4,7 @@ import {
   formatArenaCsvExport,
   formatArenaJsonExport,
   formatArenaTranscriptExport,
+  formatArenaTranscriptJsonExport,
   formatArenaWinnerExport,
   pickArenaWinner,
 } from './arenaExport';
@@ -374,5 +375,158 @@ describe('formatArenaTranscriptExport', () => {
     });
     expect(md).toContain('**Exchanges:** 0');
     expect(md).toContain('_No exchanges in this session yet._');
+  });
+});
+
+describe('formatArenaTranscriptJsonExport', () => {
+  const turns: SessionTurn[] = [
+    {
+      turn_id: 't1',
+      prompt: 'Should we ship this week?',
+      prompt_category: 'question',
+      winner_id: 'agent_1',
+      timestamp: '2026-08-07T10:00:00Z',
+      agent_responses: {
+        agent_2: {
+          agent_id: 'agent_2',
+          agent_number: 2,
+          one_liner: 'Question the deadline first.',
+          verdict: 'The week is arbitrary.',
+          confidence: 0.7,
+          key_assumption: 'time pressure is real',
+          timestamp: '2026-08-07T10:00:00Z',
+        },
+        agent_1: {
+          agent_id: 'agent_1',
+          agent_number: 1,
+          one_liner: 'Ship the smallest honest slice.',
+          verdict: 'Ship a thin vertical that de-risks the week without rewriting the roadmap.',
+          confidence: 0.9,
+          key_assumption: 'quality bar is fixed',
+          timestamp: '2026-08-07T10:00:00Z',
+        },
+      },
+    },
+    {
+      turn_id: 't2',
+      prompt: 'Who owns the launch checklist?',
+      prompt_category: 'task',
+      winner_id: 'agent_2',
+      timestamp: '2026-08-07T10:05:00Z',
+      agent_responses: {
+        agent_2: {
+          agent_id: 'agent_2',
+          agent_number: 2,
+          one_liner: 'Name a single owner.',
+          verdict: 'Assign one accountable owner and give them the checklist.',
+          confidence: 0.85,
+          key_assumption: 'ownership beats committee',
+          timestamp: '2026-08-07T10:05:00Z',
+        },
+        agent_1: {
+          agent_id: 'agent_1',
+          agent_number: 1,
+          one_liner: 'Spread the checklist.',
+          verdict: 'Distribute items by expertise.',
+          confidence: 0.6,
+          key_assumption: 'team is large enough',
+          timestamp: '2026-08-07T10:05:00Z',
+        },
+      },
+    },
+  ];
+
+  it('serializes every exchange with winner first and session provenance', () => {
+    const json = formatArenaTranscriptJsonExport(turns, (id) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    }), { exportedAt: '2026-08-07T12:00:00.000Z', sessionId: 'session-abc123' });
+    const parsed = JSON.parse(json);
+    expect(parsed.exported_from).toBe('arena');
+    expect(parsed.export_type).toBe('session_transcript');
+    expect(parsed.exported_at).toBe('2026-08-07T12:00:00.000Z');
+    expect(parsed.session_id).toBe('session-abc123');
+    expect(parsed.exchange_count).toBe(2);
+    expect(parsed.exchanges).toHaveLength(2);
+    expect(parsed.exchanges[0]).toMatchObject({
+      turn_id: 't1',
+      prompt: 'Should we ship this week?',
+      prompt_category: 'question',
+      timestamp: '2026-08-07T10:00:00Z',
+      winner_agent_id: 'agent_1',
+    });
+    expect(parsed.exchanges[0].takes[0]).toMatchObject({
+      agent_id: 'agent_1',
+      agent_name: 'The Analyst',
+      is_winner: true,
+      confidence: 0.9,
+      one_liner: 'Ship the smallest honest slice.',
+      key_assumption: 'quality bar is fixed',
+    });
+    expect(parsed.exchanges[0].takes[1].agent_id).toBe('agent_2');
+    expect(parsed.exchanges[1].winner_agent_id).toBe('agent_2');
+    expect(parsed.exchanges[1].takes[0].is_winner).toBe(true);
+    expect(parsed.exchanges[1].takes[1].is_winner).toBe(false);
+    expect(json.endsWith('\n')).toBe(true);
+  });
+
+  it('falls back to agent ids and preserves multiline fields verbatim', () => {
+    const json = formatArenaTranscriptJsonExport(
+      [
+        {
+          turn_id: 't3',
+          prompt: 'First line\nSecond line',
+          winner_id: '',
+          timestamp: '',
+          agent_responses: {
+            agent_1: {
+              agent_id: 'agent_1',
+              agent_number: 1,
+              one_liner: 'A single line.',
+              verdict: 'Details\nacross lines.',
+              confidence: 0.8,
+              key_assumption: 'assumption',
+              timestamp: '2026-08-07T10:10:00Z',
+            },
+          },
+        },
+      ],
+      () => ({ name: '' }),
+      { exportedAt: '2026-08-07T12:00:00.000Z' },
+    );
+    const parsed = JSON.parse(json);
+    expect(parsed.exchanges[0].prompt).toBe('First line\nSecond line');
+    expect(parsed.exchanges[0].timestamp).toBe('2026-08-07T10:10:00Z');
+    expect(parsed.exchanges[0].takes[0]).toMatchObject({
+      agent_name: 'agent_1',
+      verdict: 'Details\nacross lines.',
+    });
+  });
+
+  it('handles empty sessions and exchanges without takes', () => {
+    const empty = JSON.parse(
+      formatArenaTranscriptJsonExport([], () => ({ name: 'The Analyst' }), {
+        exportedAt: '2026-08-07T12:00:00.000Z',
+      }),
+    );
+    expect(empty.exchange_count).toBe(0);
+    expect(empty.exchanges).toEqual([]);
+
+    const sparse = JSON.parse(
+      formatArenaTranscriptJsonExport(
+        [
+          {
+            turn_id: 't4',
+            prompt: 'Where did everyone go?',
+            winner_id: '',
+            timestamp: '2026-08-07T10:15:00Z',
+            agent_responses: {},
+          },
+        ],
+        () => ({ name: 'The Analyst' }),
+        { exportedAt: '2026-08-07T12:00:00.000Z' },
+      ),
+    );
+    expect(sparse.exchanges[0].takes).toEqual([]);
+    expect(sparse.exchanges[0].winner_agent_id).toBeNull();
   });
 });

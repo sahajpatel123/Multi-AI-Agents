@@ -186,6 +186,66 @@ function pickExchangeTimestamp(turn: SessionTurn): string {
 }
 
 /**
+ * Structured JSON transcript of an entire Arena session — one object per
+ * exchange with the prompt, category, timestamp, winner, and every stored
+ * take. Mirrors ``formatArenaTranscriptExport`` but stays machine-readable
+ * (multiline prompts and verdicts are preserved verbatim), so the archive
+ * can be re-imported, analyzed, or diffed later.
+ *
+ * Deterministic except for the optional exported-at timestamp: pass
+ * ``opts.exportedAt`` to pin it (tests do this); otherwise the caller gets
+ * the current UTC ISO timestamp.
+ */
+export function formatArenaTranscriptJsonExport(
+  turns: SessionTurn[],
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: ArenaTranscriptOptions,
+): string {
+  const exchanges = turns ?? [];
+  const data = {
+    exported_from: 'arena',
+    export_type: 'session_transcript',
+    exported_at: opts?.exportedAt || new Date().toISOString(),
+    session_id: opts?.sessionId || null,
+    exchange_count: exchanges.length,
+    exchanges: exchanges.map((turn) => {
+      const winnerId = turn.winner_id || '';
+      const entries = Object.values(turn.agent_responses || {}).sort((a, b) => {
+        const aWinner = a.agent_id === winnerId ? 1 : 0;
+        const bWinner = b.agent_id === winnerId ? 1 : 0;
+        if (aWinner !== bWinner) return bWinner - aWinner;
+        return a.agent_id.localeCompare(b.agent_id);
+      });
+      return {
+        turn_id: turn.turn_id || '',
+        prompt: (turn.prompt || '').trim() || '(no prompt)',
+        prompt_category: (turn.prompt_category || '').trim() || null,
+        timestamp: pickExchangeTimestamp(turn) || null,
+        winner_agent_id: winnerId || null,
+        takes: entries.map((agentResponse) => {
+          const persona = resolvePersona(agentResponse.agent_id);
+          return {
+            agent_id: agentResponse.agent_id,
+            agent_name: persona.name || agentResponse.agent_id,
+            is_winner: agentResponse.agent_id === winnerId,
+            confidence:
+              typeof agentResponse.confidence === 'number' &&
+              Number.isFinite(agentResponse.confidence)
+                ? agentResponse.confidence
+                : null,
+            one_liner: (agentResponse.one_liner || '').trim() || null,
+            verdict: (agentResponse.verdict || '').trim() || null,
+            key_assumption: (agentResponse.key_assumption || '').trim() || null,
+            timestamp: (agentResponse.timestamp || '').trim() || null,
+          };
+        }),
+      };
+    }),
+  };
+  return JSON.stringify(data, null, 2) + '\n';
+}
+
+/**
  * Build a portable markdown comparison of all four Arena takes.
  * Used by "Copy all takes" so users can paste into notes, docs, or share channels.
  */

@@ -40,6 +40,7 @@ import {
   formatArenaCsvExport,
   formatArenaJsonExport,
   formatArenaTranscriptExport,
+  formatArenaTranscriptJsonExport,
   formatArenaWinnerExport,
 } from './lib/arenaExport';
 import { buildFollowUpContext } from './lib/followUpContext';
@@ -109,6 +110,7 @@ function App() {
   const [arenaJsonCopied, setArenaJsonCopied] = useState(false);
   const [arenaCsvDownloaded, setArenaCsvDownloaded] = useState(false);
   const [transcriptDownloaded, setTranscriptDownloaded] = useState(false);
+  const [transcriptJsonDownloaded, setTranscriptJsonDownloaded] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
   const [winnerDownloaded, setWinnerDownloaded] = useState(false);
@@ -553,6 +555,26 @@ function App() {
       void track('arena_download_transcript');
     } else {
       setError('Could not download the transcript. Try again or copy the latest take instead.');
+    }
+  }, [resolveArenaPersona, sessionData]);
+
+  const handleDownloadTranscriptJson = useCallback(() => {
+    const turns = sessionData?.turns;
+    if (!turns || !turns.length) return;
+    const json = formatArenaTranscriptJsonExport(turns, resolveArenaPersona, {
+      sessionId: sessionData?.session_id,
+    });
+    const stem = `arena-transcript-${(sessionData?.session_id || 'session').slice(0, 12)}`;
+    const ok = downloadTextFile(json, {
+      filename: `${withDownloadDate(stem)}.json`,
+      mimeType: 'application/json;charset=utf-8',
+    });
+    if (ok) {
+      setTranscriptJsonDownloaded(true);
+      window.setTimeout(() => setTranscriptJsonDownloaded(false), 1800);
+      void track('arena_download_transcript_json');
+    } else {
+      setError('Could not download the transcript JSON. Try again or copy the latest take instead.');
     }
   }, [resolveArenaPersona, sessionData]);
 
@@ -1791,15 +1813,26 @@ function App() {
                 </>
               ) : null}
               {(sessionData?.turns.length ?? 0) > 0 && !isStreaming && !isLoading ? (
-                <button
-                  type="button"
-                  className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
-                  onClick={() => handleDownloadTranscript()}
-                  title="Download the full session as a markdown transcript"
-                  style={{ fontSize: 12 }}
-                >
-                  {transcriptDownloaded ? 'Transcript saved' : 'Download transcript'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => handleDownloadTranscript()}
+                    title="Download the full session as a markdown transcript"
+                    style={{ fontSize: 12 }}
+                  >
+                    {transcriptDownloaded ? 'Transcript saved' : 'Download transcript'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => handleDownloadTranscriptJson()}
+                    title="Download the full session as structured JSON"
+                    style={{ fontSize: 12 }}
+                  >
+                    {transcriptJsonDownloaded ? 'JSON saved' : 'Transcript .json'}
+                  </button>
+                </>
               ) : null}
               {isDone && response && response.all_responses.length >= 2 ? (
                 <button
