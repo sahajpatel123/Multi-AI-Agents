@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Workflow security gate that enforces least-privilege permissions, job
+  timeouts, no dangerous triggers or `secrets: inherit`, and
+  `persist-credentials: false` on every checkout
 - Full-session transcript copy (Markdown) so the whole conversation can be pasted without a file download
 - Full-session transcript CSV export (one spreadsheet row per take, winner first)
 - Full-session JSON transcript export (structured archive of every exchange and take)

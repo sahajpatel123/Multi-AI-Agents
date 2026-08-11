@@ -191,6 +191,79 @@ def test_ci_skips_docs_only_changes() -> None:
         assert "app/**" in paths_ignore, f"CI should skip app-only {event}s"
 
 
+def _events(data: dict) -> dict:
+    """Return the workflow `on` mapping, tolerating PyYAML's bool key."""
+    if "on" in data:
+        return data["on"]
+    return data.get(True, {})
+
+
+def test_workflows_set_top_level_permissions() -> None:
+    workflow_dir = REPO_ROOT / ".github" / "workflows"
+    for path in workflow_dir.glob("*.yml"):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        assert isinstance(data, dict), f"{path} is not a workflow mapping"
+        assert isinstance(data.get("permissions"), dict), (
+            f"{path} must declare an explicit top-level permissions mapping"
+        )
+
+
+def test_workflows_avoid_dangerous_triggers_and_secret_inheritance() -> None:
+    workflow_dir = REPO_ROOT / ".github" / "workflows"
+    for path in workflow_dir.glob("*.yml"):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        events = _events(data)
+        for trigger in ("pull_request_target", "workflow_run"):
+            assert trigger not in events, f"{path} uses dangerous trigger {trigger}"
+        for job_name, job in data.get("jobs", {}).items():
+            assert isinstance(job, dict), f"{path}: job {job_name} is malformed"
+            assert job.get("secrets") != "inherit", (
+                f"{path}: job {job_name} must not use secrets: inherit"
+            )
+
+
+def test_every_workflow_job_has_a_timeout() -> None:
+    workflow_dir = REPO_ROOT / ".github" / "workflows"
+    for path in workflow_dir.glob("*.yml"):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_name, job in data.get("jobs", {}).items():
+            assert "timeout-minutes" in job, (
+                f"{path}: job {job_name} is missing timeout-minutes"
+            )
+
+
+def test_all_checkouts_do_not_persist_credentials() -> None:
+    workflow_dir = REPO_ROOT / ".github" / "workflows"
+    for path in workflow_dir.glob("*.yml"):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_name, job in data.get("jobs", {}).items():
+            for step in job.get("steps", []):
+                if not isinstance(step, dict):
+                    continue
+                uses = step.get("uses")
+                if isinstance(uses, str) and uses.startswith("actions/checkout@"):
+                    assert step.get("with", {}).get("persist-credentials") is False, (
+                        f"{path}: checkout in job {job_name} must set "
+                        "persist-credentials: false"
+                    )
+
+
+def test_ci_has_workflow_security_job() -> None:
+    ci = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
+    job = ci["jobs"].get("workflow-security")
+    assert job is not None, "CI is missing the workflow-security job"
+    run_steps = [
+        step for step in job["steps"]
+        if isinstance(step, dict) and step.get("name") == "Run workflow security gate"
+    ]
+    assert run_steps, "workflow-security job is missing the gate step"
+    assert "scripts/check_workflow_security.py" in run_steps[0]["run"], (
+        "workflow-security job should run scripts/check_workflow_security.py"
+    )
+
+
 def test_codeowners_cover_ci_security_files() -> None:
     """Changes to CI/security config and guards need owner review."""
     codeowners = (REPO_ROOT / ".github" / "CODEOWNERS").read_text(encoding="utf-8")
@@ -199,6 +272,7 @@ def test_codeowners_cover_ci_security_files() -> None:
         "/.github/dependabot.yml",
         "/.github/PULL_REQUEST_TEMPLATE.md",
         "/CONTRIBUTING.md",
+        "/scripts/check_workflow_security.py",
         "/backend/tests/test_workflow_security_gates.py",
         "/backend/tests/test_no_stray_main_tokens.py",
     )

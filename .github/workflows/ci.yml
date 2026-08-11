@@ -57,6 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           # Gitleaks below scans `git log <prev_sha>^..HEAD`; the
           # default fetch-depth: 1 leaves <prev_sha>^ unresolved so
           # the diff is empty AND the action exits non-zero. fetch-depth: 2
@@ -283,6 +284,8 @@ jobs:
         working-directory: web/frontend
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v7
@@ -400,6 +403,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Dependency Review
         uses: actions/dependency-review-action@v5
@@ -421,6 +426,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Fail on stray bare 'main' tokens
         # A past bad paste inserted bare `main` lines across Python/TS/TSX
@@ -437,6 +444,32 @@ jobs:
           fi
           echo "Source integrity OK"
 
+  workflow-security:
+    name: Workflow security invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install PyYAML
+        run: python -m pip install pyyaml
+
+      - name: Run workflow security gate
+        # Enforces least-privilege permissions, no dangerous triggers, job
+        # timeouts, no secrets: inherit, and persist-credentials: false on
+        # every checkout. See scripts/check_workflow_security.py for the
+        # full invariant list.
+        run: python scripts/check_workflow_security.py
+
   style:
     name: Style (whitespace / conflict check)
     runs-on: ubuntu-latest
@@ -446,6 +479,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Whitespace / conflict check
@@ -478,6 +512,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -515,6 +551,8 @@ jobs:
       RAZORPAY_WEBHOOK_SECRET: dummy_webhook
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
