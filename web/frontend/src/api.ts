@@ -2516,6 +2516,50 @@ export async function getMyRooms(): Promise<{ rooms: any[] }> {
   return { rooms: data?.rooms ?? [] };
 }
 
+export async function getDiscoverRooms(
+  search = '',
+  page = 1,
+  perPage = 20,
+): Promise<{
+  rooms: Array<Record<string, unknown>>;
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  filters: { search: string | null };
+}> {
+  const qs = new URLSearchParams();
+  const trimmed = search.trim();
+  if (trimmed) qs.set('search', trimmed);
+  qs.set('page', String(page));
+  qs.set('per_page', String(perPage));
+  const response = await apiFetch(`/api/rooms/discover?${qs.toString()}`);
+  const data = await parseJsonSafely<{
+    detail?: string;
+    rooms?: Array<Record<string, unknown>>;
+    total?: number;
+    page?: number;
+    per_page?: number;
+    total_pages?: number;
+    filters?: { search?: string | null };
+  }>(response);
+  if (!response.ok) {
+    throw new ApiError(
+      getErrorMessage(data || {}, 'Could not load discoverable rooms'),
+      response.status,
+      data,
+    );
+  }
+  return {
+    rooms: data?.rooms ?? [],
+    total: data?.total ?? 0,
+    page: data?.page ?? page,
+    per_page: data?.per_page ?? perPage,
+    total_pages: data?.total_pages ?? 0,
+    filters: { search: data?.filters?.search ?? null },
+  };
+}
+
 export async function deleteRoom(slug: string): Promise<void> {
   const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}`, { method: 'DELETE' });
   if (!response.ok) {

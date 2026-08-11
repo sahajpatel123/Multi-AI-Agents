@@ -23,6 +23,7 @@ import {
   deleteAgentTask,
   exportAgentTaskPdf,
   exportOrchestrationPdf,
+  getDiscoverRooms,
   getAgentHistory,
   getMyRooms,
   getAgentWatchlist,
@@ -55,6 +56,7 @@ import {
 import { ConduraInstallCTA } from '../components/ConduraInstallCTA';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { EmptyState } from '../components/EmptyState';
+import { RoomsDiscoverPanel } from '../components/RoomsDiscoverPanel';
 import { TemporalEvolutionPanel } from '../components/TemporalEvolutionPanel';
 import { buildHandoffPayload } from '../lib/conduraHandoff';
 import { dispatchHandoff, pairDevice, ConduraClientError } from '../lib/conduraClient';
@@ -895,6 +897,12 @@ export function AgentPage() {
   const [myRooms, setMyRooms] = useState<any[]>([]);
   const [myRoomsLoading, setMyRoomsLoading] = useState(false);
   const [myRoomsLoadFailed, setMyRoomsLoadFailed] = useState(false);
+  const [roomsTab, setRoomsTab] = useState<'mine' | 'discover'>('mine');
+  const [discoverRooms, setDiscoverRooms] = useState<any[]>([]);
+  const [discoverTotal, setDiscoverTotal] = useState(0);
+  const [discoverLoading, setDiscoverLoading] = useState(false);
+  const [discoverLoadFailed, setDiscoverLoadFailed] = useState(false);
+  const [discoverSearchQuery, setDiscoverSearchQuery] = useState('');
   const [roomsSearchQuery, setRoomsSearchQuery] = useState('');
   const [roomsSort, setRoomsSort] = useState<AgentRoomsSort>('recent');
   const [roomsActivityFilter, setRoomsActivityFilter] =
@@ -1124,6 +1132,39 @@ export function AgentPage() {
       setMyRoomsLoading(false);
     }
   }, [user]);
+
+  const loadDiscoverRooms = useCallback(
+    async (query: string = discoverSearchQuery) => {
+      if (!user) {
+        setDiscoverRooms([]);
+        setDiscoverTotal(0);
+        setDiscoverLoadFailed(false);
+        setDiscoverLoading(false);
+        return;
+      }
+      setDiscoverLoading(true);
+      try {
+        const r = await getDiscoverRooms(query, 1, 20);
+        setDiscoverRooms(r.rooms || []);
+        setDiscoverTotal(r.total || 0);
+        setDiscoverLoadFailed(false);
+      } catch {
+        setDiscoverRooms([]);
+        setDiscoverTotal(0);
+        setDiscoverLoadFailed(true);
+      } finally {
+        setDiscoverLoading(false);
+      }
+    },
+    [discoverSearchQuery, user],
+  );
+
+  const handleRoomsTabChange = (tab: 'mine' | 'discover') => {
+    setRoomsTab(tab);
+    if (tab === 'discover' && discoverRooms.length === 0 && !discoverLoading) {
+      void loadDiscoverRooms();
+    }
+  };
 
   useEffect(() => {
     void loadMyRooms();
@@ -3535,7 +3576,37 @@ export function AgentPage() {
                 <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B0A9A2' }}>
                   Rooms
                 </div>
-                {roomsBodyMode === 'list' ? (
+                <div
+                  role="tablist"
+                  aria-label="Rooms views"
+                  style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+                >
+                  {['mine' as const, 'discover' as const].map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      role="tab"
+                      aria-selected={roomsTab === tab}
+                      onClick={() => handleRoomsTabChange(tab)}
+                      style={{
+                        background: roomsTab === tab ? '#2C3B33' : 'transparent',
+                        border: '0.5px solid #E0D5C5',
+                        borderRadius: 6,
+                        padding: '2px 7px',
+                        fontSize: 10,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        color: roomsTab === tab ? '#F3F0E7' : '#A0A39A',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--vp-font-sans)',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {tab === 'mine' ? 'Mine' : 'Discover'}
+                    </button>
+                  ))}
+                </div>
+                {roomsTab === 'mine' && roomsBodyMode === 'list' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 10, color: '#A0A39A' }}>
                       {filteredMyRooms.length}
@@ -3621,6 +3692,8 @@ export function AgentPage() {
                   </div>
                 ) : null}
               </div>
+              {roomsTab === 'mine' ? (
+                <>
               {roomsBodyMode === 'loading' ? (
                 <div style={{ fontSize: 11, color: '#C4B8AE', padding: '4px 0' }}>Loading…</div>
               ) : roomsBodyMode === 'load_error' ? (
@@ -4028,6 +4101,27 @@ export function AgentPage() {
                     </div>
                   )}
                 </>
+              )}
+                </>
+              ) : (
+                <RoomsDiscoverPanel
+                  rooms={discoverRooms}
+                  total={discoverTotal}
+                  loading={discoverLoading}
+                  failed={discoverLoadFailed}
+                  searchQuery={discoverSearchQuery}
+                  onSearchChange={setDiscoverSearchQuery}
+                  onSubmitSearch={() => void loadDiscoverRooms()}
+                  onClearSearch={() => {
+                    setDiscoverSearchQuery('');
+                    void loadDiscoverRooms('');
+                  }}
+                  onRetry={() => void loadDiscoverRooms()}
+                  onOpen={(slug) => {
+                    navigate(`/room/${encodeURIComponent(slug)}`);
+                    if (isMobile) setSidebarOpen(false);
+                  }}
+                />
               )}
               <button
                 type="button"
