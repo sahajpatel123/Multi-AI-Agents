@@ -137,6 +137,7 @@ GET  /api/analytics/category-stats/export.csv   CSV export of the same (mirrors 
 GET  /api/analytics/activity   GitHub-style activity timeline with daily buckets, totals, and streak metrics
 GET  /api/analytics/activity/export.csv   CSV export of the same activity timeline (footer rollup included)
 GET  /api/analytics/activity/export.json   Machine-readable JSON download of the same activity timeline
+GET  /api/analytics/activity/export.md   Human-readable Markdown report of the same activity timeline (summary + daily table)
 GET  /api/analytics/persona-win-rate   Per-persona wins ÷ panel appearances
 GET  /api/analytics/persona-stats/:persona_id   Deep-dive on one persona (avg winning score, last activity, best category)
 GET  /api/analytics/persona-stats   All-personas summary (full 16-persona grid in one call, sorted strongest-first)

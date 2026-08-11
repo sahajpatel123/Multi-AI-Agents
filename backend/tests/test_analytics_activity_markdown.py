@@ -67,7 +67,40 @@ async def test_activity_markdown_rejects_zero_days(app_client, make_user):
     assert res.status_code == 422
 
 
+@pytest.mark.asyncio
+async def test_activity_markdown_rejects_excessive_window(app_client, make_user):
+    user = make_user(email="actmd-overflow@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/activity/export.md?days=400",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_activity_markdown_rejects_non_integer_days(app_client, make_user):
+    user = make_user(email="actmd-nan@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/activity/export.md?days=abc",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 422
+
+
 # ─── Core shape ────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_activity_markdown_defaults_to_30_days(app_client, make_user):
+    user = make_user(email="actmd-default@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/activity/export.md",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 200
+    assert "**Window:**" in res.text
+    assert "(30 days, UTC)" in res.text
+    assert len(_table_rows(res.text)[1:]) == 30
 
 
 @pytest.mark.asyncio
@@ -165,6 +198,69 @@ async def test_activity_markdown_summary_matches_json_rollup(
     assert f"- **Longest streak:** {json_body['longest_streak']}" in text
     assert f"{json_body['busiest_day'] or 'none'}" in text
     assert f"{json_body['busiest_day_count']} actions" in text
+
+
+@pytest.mark.asyncio
+async def test_activity_markdown_row_order_is_chronological(
+    app_client, make_user, db_session
+):
+    """Buckets stay oldest-first, matching the JSON activity contract."""
+    user = make_user(email="actmd-order@test.com", tier=UserTier.PRO)
+    _seed_records(db_session, user.id, [(0, "arena"), (2, "debate")])
+
+    res = await app_client.get(
+        "/api/analytics/activity/export.md?days=7",
+        headers=_pro_headers(user),
+    )
+    dates = [row[0] for row in _table_rows(res.text)[1:]]
+    assert dates == sorted(dates)
+    assert dates[-1] == utcnow_naive().date().isoformat()
+
+
+@pytest.mark.asyncio
+async def test_activity_markdown_is_scoped_to_caller(
+    app_client, make_user, db_session
+):
+    """One user's report must never include another user's activity."""
+    owner = make_user(email="actmd-owner@test.com", tier=UserTier.PRO)
+    other = make_user(email="actmd-other@test.com", tier=UserTier.PRO)
+    _seed_records(db_session, owner.id, [(0, "arena"), (1, "debate")])
+
+    other_res = await app_client.get(
+        "/api/analytics/activity/export.md?days=7",
+        headers=_pro_headers(other),
+    )
+    owner_res = await app_client.get(
+        "/api/analytics/activity/export.md?days=7",
+        headers=_pro_headers(owner),
+    )
+    assert other_res.status_code == 200
+    assert owner_res.status_code == 200
+
+    other_rows = _table_rows(other_res.text)[1:]
+    assert all(int(row[1]) == 0 for row in other_rows)
+    assert all(int(row[2]) == 0 for row in other_rows)
+
+    owner_rows = _table_rows(owner_res.text)[1:]
+    assert sum(int(row[1]) for row in owner_rows) == 1
+    assert sum(int(row[2]) for row in owner_rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_activity_markdown_report_structure_is_stable(
+    app_client, make_user
+):
+    """The report keeps a consistent header, table, and export footer."""
+    user = make_user(email="actmd-structure@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/activity/export.md?days=7",
+        headers=_pro_headers(user),
+    )
+    text = res.text
+    assert text.startswith("# Arena — activity timeline\n\n**Window:**")
+    assert "| Date | Prompts | Debates | Discusses | Agent runs |" in text
+    assert "| --- | ---: | ---: | ---: | ---: |" in text
+    assert text.rstrip().endswith("_Exported from Arena_")
 
 
 # ─── Filename + headers ────────────────────────────────────────────────────
@@ -269,3 +365,17 @@ async def test_activity_markdown_rate_limited(app_client, make_user, monkeypatch
         headers=_pro_headers(user),
     )
     assert res.status_code == 429, res.text
+
+
+# ─── Markdown cell escaping ────────────────────────────────────────────────
+
+
+def test_markdown_cell_escapes_table_breaking_characters():
+    """Markdown table cells stay intact even for non-server-controlled data."""
+    from arena.routes.analytics import _markdown_cell
+
+    assert _markdown_cell("2026-08-11") == "2026-08-11"
+    assert _markdown_cell(7) == "7"
+    assert _markdown_cell("a|b") == "a\\|b"
+    assert _markdown_cell("line1\nline2") == "line1 line2"
+    assert _markdown_cell("line1\rline2") == "line1 line2"

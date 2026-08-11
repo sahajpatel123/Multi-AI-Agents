@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Usage history JSON export (14-day dated token rows plus period summary)
 - Usage history CSV export (14-day daily token totals with a period summary footer)
 - Activity timeline CSV export with per-mode daily counts and a rollup footer
+- Activity timeline Markdown export (summary, streaks, and a per-day table for notes or docs)
 - CI status badges to README.md
 - SECURITY.md with vulnerability reporting guidelines
 - CODEOWNERS for automatic code review assignment
@@ -76,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - “Try again” buttons in Debate Mode error banners
 
 ### Changed
+- Activity Markdown export now escapes table cells and is covered by window-boundary,
+  caller-isolation, row-order, and report-structure regression tests
 - JSON session transcript export now pins a format version, drops stale
   winner ids that match no stored take, and falls back to agent ids when a
   persona cannot be resolved

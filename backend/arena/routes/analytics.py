@@ -975,6 +975,18 @@ async def analytics_activity_json(
     )
 
 
+def _markdown_cell(value) -> str:
+    """Return ``value`` as a string safe to embed in a Markdown table cell.
+
+    Defense-in-depth for the human-readable activity report. The current
+    cells are server-generated ISO dates and integers, but a future user-
+    or model-controlled field must not be able to break the table layout or
+    smuggle Markdown into a downloaded report.
+    """
+    s = str(value)
+    return s.replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
+
 @router.get("/analytics/activity/export.md")
 async def analytics_activity_markdown(
     user: UserResponse = Depends(get_current_user_required),
@@ -1033,8 +1045,17 @@ async def analytics_activity_markdown(
     ]
     for row in payload["activity"]:
         lines.append(
-            f"| {row['date']} | {row['prompts']} | {row['debates']} | "
-            f"{row['discusses']} | {row['agent_runs']} |"
+            "| "
+            + " | ".join(
+                [
+                    _markdown_cell(row["date"]),
+                    _markdown_cell(row["prompts"]),
+                    _markdown_cell(row["debates"]),
+                    _markdown_cell(row["discusses"]),
+                    _markdown_cell(row["agent_runs"]),
+                ]
+            )
+            + " |"
         )
     lines.extend(["", "---", "_Exported from Arena_", ""])
 
