@@ -2425,6 +2425,59 @@ export type AnalyticsActivityResponse = {
   busiest_day_count: number;
 };
 
+function isAnalyticsActivityDay(value: unknown): value is AnalyticsActivityDay {
+  if (!value || typeof value !== 'object') return false;
+  const day = value as Record<string, unknown>;
+  return (
+    typeof day.date === 'string' &&
+    typeof day.prompts === 'number' &&
+    Number.isFinite(day.prompts) &&
+    typeof day.debates === 'number' &&
+    Number.isFinite(day.debates) &&
+    typeof day.discusses === 'number' &&
+    Number.isFinite(day.discusses) &&
+    typeof day.agent_runs === 'number' &&
+    Number.isFinite(day.agent_runs)
+  );
+}
+
+function isAnalyticsActivityResponse(value: unknown): value is AnalyticsActivityResponse {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Record<string, unknown>;
+  if (
+    typeof data.window_days !== 'number' ||
+    !Number.isFinite(data.window_days) ||
+    typeof data.start_date !== 'string' ||
+    typeof data.end_date !== 'string' ||
+    !Array.isArray(data.activity) ||
+    !data.activity.every(isAnalyticsActivityDay) ||
+    !data.totals ||
+    typeof data.totals !== 'object' ||
+    typeof data.active_days !== 'number' ||
+    !Number.isFinite(data.active_days) ||
+    typeof data.current_streak !== 'number' ||
+    !Number.isFinite(data.current_streak) ||
+    typeof data.longest_streak !== 'number' ||
+    !Number.isFinite(data.longest_streak) ||
+    (data.busiest_day !== null && typeof data.busiest_day !== 'string') ||
+    typeof data.busiest_day_count !== 'number' ||
+    !Number.isFinite(data.busiest_day_count)
+  ) {
+    return false;
+  }
+  const totals = data.totals as Record<string, unknown>;
+  return (
+    typeof totals.prompts === 'number' &&
+    Number.isFinite(totals.prompts) &&
+    typeof totals.debates === 'number' &&
+    Number.isFinite(totals.debates) &&
+    typeof totals.discusses === 'number' &&
+    Number.isFinite(totals.discusses) &&
+    typeof totals.agent_runs === 'number' &&
+    Number.isFinite(totals.agent_runs)
+  );
+}
+
 export async function getAnalyticsActivity(days: number = 30): Promise<AnalyticsActivityResponse> {
   const response = await apiFetch(`/api/analytics/activity?days=${encodeURIComponent(String(days))}`);
   if (!response.ok) {
@@ -2437,6 +2490,13 @@ export async function getAnalyticsActivity(days: number = 30): Promise<Analytics
   }
   const data = await parseJsonSafely<AnalyticsActivityResponse>(response);
   if (!data) throw new Error(withRequestId('Empty activity response', response));
+  if (!isAnalyticsActivityResponse(data)) {
+    throw new ApiError(
+      withRequestId('Malformed activity timeline response', response),
+      response.status,
+      data,
+    );
+  }
   return data;
 }
 

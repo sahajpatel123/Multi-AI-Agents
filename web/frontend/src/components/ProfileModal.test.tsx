@@ -145,7 +145,6 @@ function ModalHarness() {
   // Open on mount so the portal renders synchronously by the time the test asserts.
   // Using a layout effect would also work; React's commit phase fires before
   // testing-library queries, so a render-phase call is fine here.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   if (typeof window !== 'undefined' && !(window as { __profileModalOpened?: boolean }).__profileModalOpened) {
     (window as { __profileModalOpened?: boolean }).__profileModalOpened = true;
     queueMicrotask(() => openModal('top-right'));
@@ -168,6 +167,7 @@ describe('ProfileModal', () => {
     navigateMock.mockReset();
     refreshUserMock.mockClear();
     refreshTierMock.mockClear();
+    vi.mocked(hoistedMocks.getAnalyticsActivity).mockClear();
     vi.mocked(downloadBlobFile).mockClear();
     (window as { __profileModalOpened?: boolean }).__profileModalOpened = false;
   });
@@ -279,6 +279,9 @@ describe('ProfileModal', () => {
     expect(screen.getByText('42')).toBeInTheDocument();
     expect(screen.getByText('7')).toBeInTheDocument();
     expect(screen.getByText(/busiest day/i)).toHaveTextContent('2026-08-10');
+    expect(
+      screen.getByRole('group', { name: /activity highlights/i }),
+    ).toBeInTheDocument();
     expect(hoistedMocks.getAnalyticsActivity).toHaveBeenCalledWith(30);
   });
 
@@ -293,6 +296,23 @@ describe('ProfileModal', () => {
     expect(
       await screen.findByText('Could not load activity highlights'),
     ).toBeInTheDocument();
+  });
+
+  it('retries activity highlights after a failed load', async () => {
+    hoistedMocks.getAnalyticsActivity.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const retry = await screen.findByRole('button', {
+      name: /retry loading activity highlights/i,
+    });
+    retry.click();
+
+    expect(await screen.findByText('2 days')).toBeInTheDocument();
+    expect(hoistedMocks.getAnalyticsActivity).toHaveBeenCalledTimes(2);
   });
 
   it('downloads usage JSON with the server-provided filename', async () => {

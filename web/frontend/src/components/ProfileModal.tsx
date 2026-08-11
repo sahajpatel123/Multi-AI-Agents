@@ -253,6 +253,7 @@ export function ProfileModal() {
   const [activity, setActivity] = useState<AnalyticsActivityResponse | null>(null);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityErr, setActivityErr] = useState<string | null>(null);
+  const [activityReload, setActivityReload] = useState(0);
   const [calStats, setCalStats] = useState<{
     total_ratings?: number;
     avg_delta?: number;
@@ -351,7 +352,7 @@ export function ProfileModal() {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, activeTab]);
+  }, [isOpen, activeTab, activityReload]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'usage') return;
@@ -1214,13 +1215,34 @@ export function ProfileModal() {
                   Activity highlights · 30 days
                 </div>
                 {activityLoading ? (
-                  <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }}>
-                    <MicroLoader />
+                  <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }} role="status">
+                    <MicroLoader label="Loading activity highlights" />
                   </div>
                 ) : activityErr ? (
-                  <p style={{ fontSize: 13, color: '#8C7355' }}>{activityErr}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <p style={{ fontSize: 13, color: '#8C7355', margin: 0 }} aria-live="polite">
+                      {activityErr}
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Retry loading activity highlights"
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        border: '0.5px solid #E0D5C5',
+                        background: '#F0E8DC',
+                        color: '#F3F0E7',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        fontFamily: 'var(--vp-font-sans)',
+                      }}
+                      onClick={() => setActivityReload((n) => n + 1)}
+                    >
+                      Retry
+                    </button>
+                  </div>
                 ) : activity ? (
-                  <>
+                  <div role="group" aria-label="Activity highlights">
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 10 }}>
                       {[
                         {
@@ -1259,7 +1281,7 @@ export function ProfileModal() {
                         {activity.busiest_day_count} actions)
                       </p>
                     ) : null}
-                  </>
+                  </div>
                 ) : null}
                 <div
                   style={{

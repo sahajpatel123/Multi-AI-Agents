@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getAnalyticsActivity } from './api';
+import { ApiError, getAnalyticsActivity } from './api';
 import * as apiFetchModule from './lib/apiFetch';
 
 vi.mock('./lib/apiFetch', () => ({
@@ -80,5 +80,52 @@ describe('Analytics activity timeline frontend API helper', () => {
       status: 429,
       message: 'Too many analytics activity requests (Request ID: req-789)',
     });
+  });
+
+  it('rejects malformed activity payloads instead of returning unusable data', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          window_days: 30,
+          start_date: '2026-07-13',
+          end_date: '2026-08-11',
+          activity: [],
+          totals: { prompts: 1 },
+          active_days: 1,
+          current_streak: 1,
+          longest_streak: 1,
+          busiest_day: null,
+          busiest_day_count: 0,
+        }),
+        { status: 200, headers: { 'x-request-id': 'req-malformed' } },
+      ),
+    );
+
+    await expect(getAnalyticsActivity()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed activity timeline response (Request ID: req-malformed)',
+    });
+  });
+
+  it('rejects activity payloads whose timeline is not an array', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          window_days: 30,
+          start_date: '2026-07-13',
+          end_date: '2026-08-11',
+          activity: null,
+          totals: { prompts: 1, debates: 0, discusses: 0, agent_runs: 0 },
+          active_days: 1,
+          current_streak: 1,
+          longest_streak: 1,
+          busiest_day: null,
+          busiest_day_count: 0,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(getAnalyticsActivity()).rejects.toBeInstanceOf(ApiError);
   });
 });
