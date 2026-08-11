@@ -14,20 +14,33 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     /* fall through */
   }
 
+  const activeElement = document.activeElement as HTMLElement | null;
+  let textarea: HTMLTextAreaElement | null = null;
   try {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed';
-    ta.style.left = '-9999px';
-    ta.style.top = '0';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    const ok = document.execCommand('copy');
-    document.body.removeChild(ta);
-    return ok;
+    textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    return document.execCommand('copy');
   } catch {
     return false;
+  } finally {
+    // Never leave the temporary textarea behind, even when execCommand or a
+    // DOM call throws. Restoring focus is best-effort: the user clicked a
+    // copy control, and the control (or the field they were editing) should
+    // keep keyboard focus after the fallback runs.
+    textarea?.remove();
+    if (activeElement) {
+      try {
+        activeElement.focus();
+      } catch {
+        /* focus restoration is best-effort */
+      }
+    }
   }
 }

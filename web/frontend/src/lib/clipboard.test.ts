@@ -32,4 +32,40 @@ describe('copyToClipboard', () => {
     expect(await copyToClipboard('fallback text')).toBe(true);
     expect(document.execCommand).toHaveBeenCalledWith('copy');
   });
+
+  it('removes the fallback textarea even when execCommand throws', async () => {
+    vi.stubGlobal('navigator', {
+      clipboard: {
+        writeText: vi.fn().mockRejectedValue(new Error('denied')),
+      },
+    });
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: vi.fn(() => {
+        throw new Error('copy blocked');
+      }),
+    });
+
+    await expect(copyToClipboard('still needs a copy')).resolves.toBe(false);
+    expect(document.querySelectorAll('textarea')).toHaveLength(0);
+  });
+
+  it('restores focus after the fallback copy succeeds', async () => {
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    vi.stubGlobal('navigator', {
+      clipboard: {
+        writeText: vi.fn().mockRejectedValue(new Error('denied')),
+      },
+    });
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: vi.fn().mockReturnValue(true),
+    });
+
+    await expect(copyToClipboard('focus me')).resolves.toBe(true);
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
 });

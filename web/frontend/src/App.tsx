@@ -113,6 +113,7 @@ function App() {
   const [arenaCsvDownloaded, setArenaCsvDownloaded] = useState(false);
   const [transcriptDownloaded, setTranscriptDownloaded] = useState(false);
   const [transcriptCopied, setTranscriptCopied] = useState(false);
+  const [transcriptCopying, setTranscriptCopying] = useState(false);
   const [transcriptCsvDownloaded, setTranscriptCsvDownloaded] = useState(false);
   const [transcriptJsonDownloaded, setTranscriptJsonDownloaded] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
@@ -250,6 +251,9 @@ function App() {
   const lastRoundContextRef = useRef<PromptContextItem[] | undefined>(undefined);
   /** Prevents a double-click from starting two re-run rounds in the same tick. */
   const rerunInFlightRef = useRef(false);
+  /** Prevents overlapping transcript copy attempts and stale copied feedback. */
+  const transcriptCopyInFlightRef = useRef(false);
+  const transcriptCopyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flushStreamPreviews = useCallback(() => {
     const next: Record<string, string> = {};
@@ -563,17 +567,31 @@ function App() {
   }, [resolveArenaPersona, sessionData]);
 
   const handleCopyTranscript = useCallback(async () => {
+    if (transcriptCopyInFlightRef.current) return;
     const turns = sessionData?.turns;
     if (!turns || !turns.length) return;
-    const ok = await copyArenaTranscriptToClipboard(turns, resolveArenaPersona, {
-      sessionId: sessionData?.session_id,
-    });
-    if (ok) {
-      setTranscriptCopied(true);
-      window.setTimeout(() => setTranscriptCopied(false), 1800);
-      void track('arena_copy_transcript');
-    } else {
-      setError('Could not copy the transcript. Try again or download it instead.');
+    transcriptCopyInFlightRef.current = true;
+    setTranscriptCopying(true);
+    try {
+      const ok = await copyArenaTranscriptToClipboard(turns, resolveArenaPersona, {
+        sessionId: sessionData?.session_id,
+      });
+      if (ok) {
+        setTranscriptCopied(true);
+        if (transcriptCopyFeedbackTimer.current) {
+          clearTimeout(transcriptCopyFeedbackTimer.current);
+        }
+        transcriptCopyFeedbackTimer.current = window.setTimeout(() => {
+          setTranscriptCopied(false);
+          transcriptCopyFeedbackTimer.current = null;
+        }, 1800);
+        void track('arena_copy_transcript');
+      } else {
+        setError('Could not copy the transcript. Try again or download it instead.');
+      }
+    } finally {
+      transcriptCopyInFlightRef.current = false;
+      setTranscriptCopying(false);
     }
   }, [resolveArenaPersona, sessionData]);
 
@@ -1387,6 +1405,7 @@ function App() {
     Object.values(feedbackTimeouts.current).forEach(clearTimeout);
     if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
     if (currentResponseBarTimer.current) clearTimeout(currentResponseBarTimer.current);
+    if (transcriptCopyFeedbackTimer.current) clearTimeout(transcriptCopyFeedbackTimer.current);
   }, []);
 
   const handleFocusedAgentSubmit = async (message: string) => {
@@ -1855,10 +1874,16 @@ function App() {
                     type="button"
                     className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
                     onClick={() => void handleCopyTranscript()}
+                    disabled={transcriptCopying}
+                    aria-busy={transcriptCopying}
                     title="Copy the full session as a markdown transcript"
                     style={{ fontSize: 12 }}
                   >
-                    {transcriptCopied ? 'Transcript copied' : 'Copy transcript'}
+                    {transcriptCopying
+                      ? 'Copying…'
+                      : transcriptCopied
+                        ? 'Transcript copied'
+                        : 'Copy transcript'}
                   </button>
                   <button
                     type="button"

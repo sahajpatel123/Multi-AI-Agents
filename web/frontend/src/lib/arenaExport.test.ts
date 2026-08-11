@@ -623,10 +623,10 @@ describe('copyArenaTranscriptToClipboard', () => {
     });
     expect(ok).toBe(true);
     expect(writeText).toHaveBeenCalledWith(
-      expect.stringContaining('# Arena — session transcript'),
-    );
-    expect(writeText).toHaveBeenCalledWith(
-      expect.stringContaining('**Session:** session-abc123'),
+      formatArenaTranscriptExport(turns, () => ({ name: 'The Analyst' }), {
+        exportedAt: '2026-08-07T12:00:00.000Z',
+        sessionId: 'session-abc123',
+      }),
     );
   });
 
