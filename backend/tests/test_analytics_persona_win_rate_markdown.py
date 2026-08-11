@@ -230,3 +230,89 @@ async def test_persona_win_rate_markdown_reports_fallback_exchanges(
     assert "- **Fallback exchanges:** 1" in res.text
     assert "| The Analyst | 1 | 0 | 0% | low sample |" in res.text
     assert "| The Philosopher | 1 | 1 | 100% | low sample |" in res.text
+
+
+# ─── Rate limiting ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_persona_win_rate_markdown_uses_separate_rate_limit_scope(
+    app_client, make_user, monkeypatch
+):
+    """Markdown and CSV exports must not consume the JSON dashboard budget."""
+    from arena.core import rate_limits
+
+    keys: list[str] = []
+    real_hit = rate_limits.rate_limiter.hit
+
+    def recording_hit(key, *, limit, window_seconds, message):
+        keys.append(key)
+        return real_hit(
+            key, limit=limit, window_seconds=window_seconds, message=message
+        )
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", recording_hit)
+
+    user = make_user(email="pwrmd-rate@test.com", tier=UserTier.PRO)
+    headers = _pro_headers(user)
+    md_res = await app_client.get(
+        "/api/analytics/persona-win-rate/export.md?window_days=30",
+        headers=headers,
+    )
+    csv_res = await app_client.get(
+        "/api/analytics/persona-win-rate/export.csv?window_days=30",
+        headers=headers,
+    )
+    json_res = await app_client.get(
+        "/api/analytics/persona-win-rate?window_days=30",
+        headers=headers,
+    )
+    assert md_res.status_code == 200
+    assert csv_res.status_code == 200
+    assert json_res.status_code == 200
+
+    markdown_key = f"user:analytics_persona_win_rate_markdown:{user.id}"
+    csv_key = f"user:analytics_persona_win_rate_csv:{user.id}"
+    json_key = f"user:analytics_persona_win_rate:{user.id}"
+    assert keys.count(markdown_key) == 1
+    assert keys.count(csv_key) == 1
+    assert keys.count(json_key) == 1
+
+
+@pytest.mark.asyncio
+async def test_persona_win_rate_markdown_rate_limited(
+    app_client, make_user, monkeypatch
+):
+    """The Markdown export rejects callers who exhaust its hourly budget."""
+    from arena.core import rate_limits
+
+    hits = {"n": 0}
+    real_hit = rate_limits.rate_limiter.hit
+
+    def limited_hit(key, *, limit, window_seconds, message):
+        if key.startswith("user:analytics_persona_win_rate_markdown:"):
+            hits["n"] += 1
+            if hits["n"] > 0:
+                from fastapi import HTTPException, status
+
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "error": "rate_limit_exceeded",
+                        "message": message,
+                        "retry_after": 1,
+                    },
+                )
+            return
+        return real_hit(
+            key, limit=limit, window_seconds=window_seconds, message=message
+        )
+
+    monkeypatch.setattr(rate_limits.rate_limiter, "hit", limited_hit)
+
+    user = make_user(email="pwrmd-rl@test.com", tier=UserTier.PRO)
+    res = await app_client.get(
+        "/api/analytics/persona-win-rate/export.md?window_days=30",
+        headers=_pro_headers(user),
+    )
+    assert res.status_code == 429, res.text

@@ -1074,91 +1074,22 @@ async def analytics_activity_markdown(
     )
 
 
-@router.get("/analytics/persona-win-rate")
-async def analytics_persona_win_rate(
-    user: UserResponse = Depends(get_current_user_required),
-    db: Session = Depends(get_db),
-    window_days: int = Query(
-        90,
-        ge=1,
-        le=365,
-        description="Window length in days, ending today (UTC).",
-    ),
-    min_appearances: int = Query(
-        1,
-        ge=1,
-        le=200,
-        description=(
-            "Drop personas that appeared on fewer than N panels. "
-            "Capped at 200 — the max useful floor is well below that, "
-            "and a higher cap would only let clients silence results "
-            "by accident."
-        ),
-    ),
-    include_fallback: bool = Query(
-        False,
-        description=(
-            "Include exchanges where the scorer LLM failed and a fallback "
-            "winner was assigned. Off by default — see the docstring."
-        ),
-    ),
+def _persona_win_rate_report(
+    db: Session,
+    user_id: int,
+    *,
+    window_days: int,
+    min_appearances: int,
+    include_fallback: bool,
 ) -> dict:
-    """Per-persona win rate: wins divided by panel appearances.
+    """Aggregate the per-persona win-rate payload for one user.
 
-    ``/analytics/summary`` already returns ``persona_wins``, but a raw win
-    count is not comparable across personas — a persona that sat on 50 panels
-    and won 10 is weaker than one that sat on 12 and won 9, yet the count
-    ranks it higher. The denominator is what makes the number meaningful, and
-    it was already being persisted: ``ScoringAudit.persona_ids_used`` records
-    the full 4-persona panel for every scored exchange, and
-    ``idx_scoring_audits_winner_persona`` was already indexed for exactly this
-    read. This endpoint closes that gap.
-
-    Honesty rules baked into the math:
-
-    - **Fallback exchanges are excluded by default.** When the scorer LLM call
-      fails, ``scorer.py`` assigns ``is_winner`` to whichever response happens
-      to be at index 0 and gives everyone score=50. That is an arbitrary
-      winner, not a judged one, so counting it would silently reward whichever
-      persona occupies the first panel slot. Pass ``include_fallback=true`` to
-      see the unfiltered numbers.
-
-    - **Rows with no recorded panel cannot contribute a denominator.** Audit
-      rows written before ``persona_ids_used`` was populated still carry a
-      winner. Counting their win without their appearance would push win rates
-      above 100%, so those rows are skipped entirely and reported separately as
-      ``unattributed_exchanges`` rather than being quietly folded in.
-
-    - **Small samples are flagged, not hidden.** A persona with 2 appearances
-      and 2 wins is 100% and means nothing. Each row carries
-      ``low_confidence`` (fewer than ``LOW_CONFIDENCE_APPEARANCES``
-      appearances) so a dashboard can grey it out instead of celebrating noise.
-
-    - **Trends are bucketed by week, not smoothed.** Each row carries a
-      ``trend`` array of weekly buckets covering the window (capped at 26
-      weeks) so a dashboard can show whether a persona is improving or
-      fading. Empty weeks report ``win_rate: null`` — absence is not a 0%
-      week. Bucket totals plus the omitted counters sum exactly to the row
-      totals.
-
-    - **Rows older than the plotted window are counted, not folded in.** For
-      windows beyond 26 weeks the sparkline plots the most recent 26 weeks
-      and reports the remainder in ``trend_omitted_appearances`` /
-      ``trend_omitted_wins``. Folding those older exchanges into the final
-      bucket would make the newest point look like a spike it is not.
-
-    Scoped to the caller — this is "which minds win for *me*", not a global
-    leaderboard. Bounded like the sibling analytics endpoints: capped window,
-    two-column projection, and a per-user hourly limit.
+    This is the single computation shared by the JSON dashboard route and
+    the CSV/Markdown exports. Keeping it outside the route decorator means
+    an export only consumes its own rate-limit scope — a Markdown export
+    does not silently eat into the dashboard's hourly budget as a side
+    effect of calling the JSON route.
     """
-    enforce_user_rate_limit(
-        user.id,
-        scope="analytics_persona_win_rate",
-        limit=60,
-        window_seconds=3600,
-        message="Too many persona win-rate requests. Limit is 60 per hour.",
-    )
-
     from arena.core.agents import PERSONA_METADATA
 
     LOW_CONFIDENCE_APPEARANCES = 5
@@ -1178,7 +1109,7 @@ async def analytics_persona_win_rate(
             ScoringAudit.created_at,
         )
         .filter(
-            ScoringAudit.user_id == user.id,
+            ScoringAudit.user_id == user_id,
             ScoringAudit.created_at >= window_start,
         )
         .all()
@@ -1314,6 +1245,100 @@ async def analytics_persona_win_rate(
     }
 
 
+@router.get("/analytics/persona-win-rate")
+async def analytics_persona_win_rate(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    window_days: int = Query(
+        90,
+        ge=1,
+        le=365,
+        description="Window length in days, ending today (UTC).",
+    ),
+    min_appearances: int = Query(
+        1,
+        ge=1,
+        le=200,
+        description=(
+            "Drop personas that appeared on fewer than N panels. "
+            "Capped at 200 — the max useful floor is well below that, "
+            "and a higher cap would only let clients silence results "
+            "by accident."
+        ),
+    ),
+    include_fallback: bool = Query(
+        False,
+        description=(
+            "Include exchanges where the scorer LLM failed and a fallback "
+            "winner was assigned. Off by default — see the docstring."
+        ),
+    ),
+) -> dict:
+    """Per-persona win rate: wins divided by panel appearances.
+
+    ``/analytics/summary`` already returns ``persona_wins``, but a raw win
+    count is not comparable across personas — a persona that sat on 50 panels
+    and won 10 is weaker than one that sat on 12 and won 9, yet the count
+    ranks it higher. The denominator is what makes the number meaningful, and
+    it was already being persisted: ``ScoringAudit.persona_ids_used`` records
+    the full 4-persona panel for every scored exchange, and
+    ``idx_scoring_audits_winner_persona`` was already indexed for exactly this
+    read. This endpoint closes that gap.
+
+    Honesty rules baked into the math:
+
+    - **Fallback exchanges are excluded by default.** When the scorer LLM call
+      fails, ``scorer.py`` assigns ``is_winner`` to whichever response happens
+      to be at index 0 and gives everyone score=50. That is an arbitrary
+      winner, not a judged one, so counting it would silently reward whichever
+      persona occupies the first panel slot. Pass ``include_fallback=true`` to
+      see the unfiltered numbers.
+
+    - **Rows with no recorded panel cannot contribute a denominator.** Audit
+      rows written before ``persona_ids_used`` was populated still carry a
+      winner. Counting their win without their appearance would push win rates
+      above 100%, so those rows are skipped entirely and reported separately as
+      ``unattributed_exchanges`` rather than being quietly folded in.
+
+    - **Small samples are flagged, not hidden.** A persona with 2 appearances
+      and 2 wins is 100% and means nothing. Each row carries
+      ``low_confidence`` (fewer than ``LOW_CONFIDENCE_APPEARANCES``
+      appearances) so a dashboard can grey it out instead of celebrating noise.
+
+    - **Trends are bucketed by week, not smoothed.** Each row carries a
+      ``trend`` array of weekly buckets covering the window (capped at 26
+      weeks) so a dashboard can show whether a persona is improving or
+      fading. Empty weeks report ``win_rate: null`` — absence is not a 0%
+      week. Bucket totals plus the omitted counters sum exactly to the row
+      totals.
+
+    - **Rows older than the plotted window are counted, not folded in.** For
+      windows beyond 26 weeks the sparkline plots the most recent 26 weeks
+      and reports the remainder in ``trend_omitted_appearances`` /
+      ``trend_omitted_wins``. Folding those older exchanges into the final
+      bucket would make the newest point look like a spike it is not.
+
+    Scoped to the caller — this is "which minds win for *me*", not a global
+    leaderboard. Bounded like the sibling analytics endpoints: capped window,
+    two-column projection, and a per-user hourly limit.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_persona_win_rate",
+        limit=60,
+        window_seconds=3600,
+        message="Too many persona win-rate requests. Limit is 60 per hour.",
+    )
+
+    return _persona_win_rate_report(
+        db,
+        user.id,
+        window_days=window_days,
+        min_appearances=min_appearances,
+        include_fallback=include_fallback,
+    )
+
+
 # Characters that, when they appear as the first character of a CSV cell,
 # cause Excel / Google Sheets / LibreOffice to evaluate the cell as a
 # formula. OWASP CSV Injection guidance: prefix any cell that begins with
@@ -1362,11 +1387,12 @@ async def analytics_persona_win_rate_csv(
 ) -> Response:
     """CSV export of the persona win-rate table.
 
-    Same computation as /analytics/persona-win-rate — reuses the route's
-    shape rather than reimplementing it, so the export and the JSON
-    response can never drift. CSV is the format dashboards + spreadsheets
-    consume directly; the JSON endpoint remains the canonical shape for
-    the web UI.
+    Same computation as /analytics/persona-win-rate — shares
+    ``_persona_win_rate_report`` with the JSON route and the Markdown export,
+    so the formats can never drift. CSV is the format dashboards +
+    spreadsheets consume directly; the JSON endpoint remains the canonical
+    shape for the web UI. Each export is rate-limited under its own scope, so
+    downloading files never consumes the dashboard's hourly budget.
 
     Columns mirror the JSON personas[] rows in the same order:
       persona_id, name, appearances, wins, win_rate, low_confidence
@@ -1385,12 +1411,12 @@ async def analytics_persona_win_rate_csv(
         message="Too many persona win-rate export requests. Limit is 60 per hour.",
     )
 
-    payload = await analytics_persona_win_rate(
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
         window_days=window_days,
         min_appearances=min_appearances,
         include_fallback=False,
-        user=user,
-        db=db,
     )
 
     import csv
@@ -1463,9 +1489,9 @@ async def analytics_persona_win_rate_markdown(
     human-readable report: window facts, scored-exchange honesty counters,
     the best (confident) persona, and a per-persona table with trend
     sparkline data spelled out as weekly win rates. Shares the JSON route's
-    aggregation so the export and the dashboard can never drift, and keeps
-    its own user-scoped rate limit so Markdown exports do not consume the
-    dashboard or CSV export budgets.
+    aggregation helper so the export and the dashboard can never drift, and
+    keeps its own user-scoped rate limit so Markdown exports do not consume
+    the dashboard or CSV export budgets.
     """
     enforce_user_rate_limit(
         user.id,
@@ -1475,12 +1501,12 @@ async def analytics_persona_win_rate_markdown(
         message="Too many persona win-rate export requests. Limit is 60 per hour.",
     )
 
-    payload = await analytics_persona_win_rate(
+    payload = _persona_win_rate_report(
+        db,
+        user.id,
         window_days=window_days,
         min_appearances=min_appearances,
         include_fallback=False,
-        user=user,
-        db=db,
     )
 
     best_row = None
