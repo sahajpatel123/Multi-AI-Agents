@@ -228,6 +228,9 @@ def test_dependency_security_workflow_exists() -> None:
     assert "pip-audit" in run_text, (
         "Dependency security workflow should scan Python dependencies with pip-audit"
     )
+    assert "pip check" in run_text, (
+        "Dependency security workflow should run pip check for consistency"
+    )
     assert "npm audit" in run_text, (
         "Dependency security workflow should scan frontend dependencies with npm audit"
     )

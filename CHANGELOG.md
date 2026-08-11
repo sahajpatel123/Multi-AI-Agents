@@ -114,6 +114,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ships `backend/arena.db` in release artifacts
 
 ### Security
+- Scheduled dependency security scan now also runs `pip check` so dependency
+  resolution inconsistencies are caught on the same recurring cadence as the
+  vulnerability scan
 - Added a scheduled dependency security workflow that runs `pip-audit` and
   `npm audit` weekly (plus on-demand via `workflow_dispatch`) so newly
   disclosed vulnerabilities are caught even without a code change

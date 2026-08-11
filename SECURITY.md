@@ -55,8 +55,9 @@ This project implements the following security practices:
   introduce HIGH/CRITICAL dependency vulnerabilities
 - **Pin floors**: CI guards the minimum security-required versions for
   critical Python and Node packages
-- **Dependency consistency**: `pip check` runs in backend CI to catch
-  dependency resolution inconsistencies
+- **Dependency consistency**: `pip check` runs in backend CI and the
+  scheduled dependency-security workflow to catch dependency resolution
+  inconsistencies
 - **Dependency automation**: Dependabot covers pip, npm, and GitHub Actions
   on a weekly schedule with security labels
 - **Secret scanning**: gitleaks with CI integration
