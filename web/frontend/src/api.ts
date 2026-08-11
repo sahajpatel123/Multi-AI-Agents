@@ -2408,6 +2408,23 @@ export async function exportAnalyticsActivityCsv(days: number = 30): Promise<Blo
   return response.blob();
 }
 
+export type AnalyticsActivityJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsActivityJson(days: number = 30): Promise<AnalyticsActivityJsonExport> {
+  const response = await apiFetch(`/api/analytics/activity/export.json?days=${encodeURIComponent(String(days))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export activity JSON'), response.status, err);
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-activity-${days}d.json`,
+  };
+}
+
 export async function exportAnalyticsPersonaStatsOverviewCsv(windowDays: number = 30): Promise<Blob> {
   const response = await apiFetch(`/api/analytics/persona-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {

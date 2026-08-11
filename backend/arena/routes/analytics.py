@@ -929,6 +929,52 @@ async def analytics_activity_csv(
     )
 
 
+@router.get("/analytics/activity/export.json")
+async def analytics_activity_json(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=366,
+        description="Window length in days, ending today (UTC). Must match the JSON endpoint.",
+    ),
+) -> Response:
+    """JSON export of the GitHub-style activity timeline.
+
+    Downloads the exact payload served by ``/analytics/activity`` so a BI
+    pipeline or archival script gets the same per-day counters, totals,
+    streaks, and busiest-day summary without reimplementing the aggregation.
+    Keeps its own user-scoped rate limit so exporting JSON does not consume
+    the dashboard or CSV export budgets.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_activity_json",
+        limit=60,
+        window_seconds=3600,
+        message="Too many activity JSON exports. Limit is 60 per hour.",
+    )
+
+    payload = _activity_timeline(db, user.id, days)
+
+    import json
+
+    filename = (
+        f"arena-activity-"
+        f"{payload['start_date']}-to-{payload['end_date']}.json"
+    )
+    return Response(
+        content=json.dumps(payload, indent=2, default=str),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-win-rate")
 async def analytics_persona_win_rate(
     user: UserResponse = Depends(get_current_user_required),

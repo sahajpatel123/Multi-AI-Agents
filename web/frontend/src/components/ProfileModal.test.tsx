@@ -93,6 +93,10 @@ vi.mock('../api', () => ({
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
   exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(new Blob(['date,prompts'], { type: 'text/csv' })),
+  exportAnalyticsActivityJson: vi.fn().mockResolvedValue({
+    blob: new Blob(['{"activity":[]}'], { type: 'application/json' }),
+    filename: 'arena-activity-2026-08-05-to-2026-08-11.json',
+  }),
   exportUserUsageCsv: vi.fn().mockResolvedValue(new Blob(['date,tokens'], { type: 'text/csv' })),
   exportUserUsageJson: vi.fn().mockResolvedValue({
     blob: new Blob(['{"history":[]}'], { type: 'application/json' }),
@@ -185,6 +189,23 @@ describe('ProfileModal', () => {
     expect(
       await screen.findByRole('button', { name: /activity export/i }),
     ).toBeInTheDocument();
+  });
+
+  it('renders and downloads the analytics activity JSON export', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const button = await screen.findByRole('button', { name: /activity json export/i });
+    button.click();
+
+    await waitFor(() => {
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-activity-2026-08-05-to-2026-08-11.json',
+      );
+    });
   });
 
   it('renders the usage history export button', async () => {
