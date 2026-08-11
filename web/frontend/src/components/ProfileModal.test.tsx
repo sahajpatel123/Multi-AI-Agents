@@ -189,6 +189,13 @@ vi.mock('../api', () => ({
     blob: new Blob(['# Arena — persona win rates'], { type: 'text/markdown' }),
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
   }),
+  exportCalibrationHistoryCsv: vi.fn().mockResolvedValue(
+    new Blob(['task_id,user_rating'], { type: 'text/csv' }),
+  ),
+  exportCalibrationHistoryJson: vi.fn().mockResolvedValue({
+    blob: new Blob(['[{"task_id":"task-1"}]'], { type: 'application/json' }),
+    filename: 'arena-calibration-7-20260812.json',
+  }),
   exportUserUsageCsv: vi.fn().mockResolvedValue(new Blob(['date,tokens'], { type: 'text/csv' })),
   exportUserUsageJson: vi.fn().mockResolvedValue({
     blob: new Blob(['{"history":[]}'], { type: 'application/json' }),
@@ -333,6 +340,83 @@ describe('ProfileModal', () => {
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
         'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
+      );
+    });
+  });
+
+  it('renders calibration history export buttons when ratings exist', async () => {
+    hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
+      total_ratings: 3,
+      avg_delta: 2.0,
+      trend: 'stable',
+      calibration_score: 92,
+      recent_ratings: [
+        { delta: 5, created_at: '2026-08-11T10:00:00Z' },
+        { delta: -3, created_at: '2026-08-10T10:00:00Z' },
+      ],
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    expect(
+      await screen.findByRole('button', { name: /calibration csv export/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /calibration json export/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('downloads calibration history CSV with a fixed filename', async () => {
+    hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
+      total_ratings: 1,
+      avg_delta: 0,
+      trend: 'stable',
+      calibration_score: 100,
+      recent_ratings: [{ delta: 0, created_at: '2026-08-11T10:00:00Z' }],
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const button = await screen.findByRole('button', {
+      name: /calibration csv export/i,
+    });
+    button.click();
+
+    await waitFor(() => {
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-calibration-history.csv',
+      );
+    });
+  });
+
+  it('downloads calibration history JSON with the server filename', async () => {
+    hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
+      total_ratings: 1,
+      avg_delta: 0,
+      trend: 'stable',
+      calibration_score: 100,
+      recent_ratings: [{ delta: 0, created_at: '2026-08-11T10:00:00Z' }],
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+    const button = await screen.findByRole('button', {
+      name: /calibration json export/i,
+    });
+    button.click();
+
+    await waitFor(() => {
+      expect(downloadBlobFile).toHaveBeenCalledWith(
+        expect.any(Blob),
+        'arena-calibration-7-20260812.json',
       );
     });
   });

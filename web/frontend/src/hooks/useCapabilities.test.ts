@@ -27,13 +27,8 @@ describe('useCapabilities', () => {
     });
     const { result } = renderHook(() => useCapabilities());
     // Cache may already be populated from a prior test — accept either
-    // initial state as long as the end state matches the mock.
-    await waitFor(() => {
-      if (result.current.capabilities.length > 0) return true;
-      // If still empty, we must have hit the loading path. Wait
-      // until loading flips off.
-      return !result.current.loading;
-    });
+    // initial state as long as loading settles to false.
+    await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.loading).toBe(false);
   });
 

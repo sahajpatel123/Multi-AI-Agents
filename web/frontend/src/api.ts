@@ -1921,6 +1921,40 @@ export async function getCalibrationStats(): Promise<unknown> {
   return data;
 }
 
+export async function exportCalibrationHistoryCsv(): Promise<Blob> {
+  const response = await apiFetch(`/api/calibration/history/export.csv`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export calibration CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return response.blob();
+}
+
+export type CalibrationHistoryJsonExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportCalibrationHistoryJson(): Promise<CalibrationHistoryJsonExport> {
+  const response = await apiFetch(`/api/calibration/history/export.json`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export calibration JSON'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-calibration.json',
+  };
+}
+
 export async function getCalibrationRatingForTask(taskId: string): Promise<unknown> {
   const response = await apiFetch(
     `/api/calibration/rating/${encodeURIComponent(taskId)}`,
