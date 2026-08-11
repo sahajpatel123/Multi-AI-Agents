@@ -3151,6 +3151,58 @@ async def run_watchlist_item_now(
     )
 
 
+@router.post("/watchlist/{item_id}/duplicate")
+async def duplicate_watchlist_item(
+    item_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Create a paused copy of a watchlist item.
+
+    Duplication is the quick way to branch a watch into a new variant (e.g.
+    a different cadence or expertise level) without losing the original.
+    The copy starts paused so it never trips the active-watch cap; users
+    refine it in the edit dialog and resume it when they are ready.
+    """
+    _ensure_agent_watchlist_access(user)
+    # Same mutation family as create: bound per-user so a runaway client
+    # cannot multiply scheduler rows faster than the create rate limit.
+    enforce_user_rate_limit(
+        user.id,
+        scope="watchlist_duplicate",
+        limit=30,
+        window_seconds=3600,
+        message="Too many watchlist duplicates. Limit is 30 per hour.",
+    )
+    item = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.id == item_id.strip(), WatchlistItem.user_id == user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
+        )
+
+    now = utcnow_naive()
+    copy = WatchlistItem(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        question=item.question,
+        interval_hours=int(item.interval_hours),
+        expertise_level=(item.expertise_level or "curious").strip().lower() or "curious",
+        expertise_domain=(item.expertise_domain or "").strip()[:100],
+        next_run_at=now + timedelta(hours=int(item.interval_hours)),
+        run_count=0,
+        is_active=False,
+    )
+    db.add(copy)
+    db.commit()
+    db.refresh(copy)
+    return JSONResponse(content=_watchlist_item_api_dict(db, copy))
+
+
 @router.delete("/watchlist/{item_id}")
 async def delete_watchlist_item(
     item_id: str,

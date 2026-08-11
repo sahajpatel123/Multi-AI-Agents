@@ -46,6 +46,7 @@ const getAgentWatchlistMock = vi.fn();
 const patchAgentWatchlistBulkMock = vi.fn();
 const patchAgentWatchlistMock = vi.fn();
 const postAgentWatchlistRunMock = vi.fn();
+const postAgentWatchlistDuplicateMock = vi.fn();
 const getAgentWatchlistStatisticsMock = vi.fn();
 const exportAgentWatchlistStatisticsCsvMock = vi.fn();
 
@@ -84,6 +85,8 @@ vi.mock('../api', async () => {
     }),
     patchAgentWatchlist: (...args: unknown[]) => patchAgentWatchlistMock(...args),
     postAgentWatchlistRun: (...args: unknown[]) => postAgentWatchlistRunMock(...args),
+    postAgentWatchlistDuplicate: (...args: unknown[]) =>
+      postAgentWatchlistDuplicateMock(...args),
     patchAgentWatchlistBulk: (...args: unknown[]) => patchAgentWatchlistBulkMock(...args),
     deleteAgentWatchlist: vi.fn().mockResolvedValue(undefined),
     ApiError: actual.ApiError,
@@ -188,6 +191,15 @@ describe('WatchlistPage', () => {
       task_id: 'task-new',
       message: 'Watch re-check started',
       item: { ...baseItem, run_count: 4, latest_task_id: 'task-new' },
+    });
+    postAgentWatchlistDuplicateMock.mockReset();
+    postAgentWatchlistDuplicateMock.mockResolvedValue({
+      ...baseItem,
+      id: 'item-1-copy',
+      run_count: 0,
+      latest_task_id: null,
+      latest_task: null,
+      is_active: false,
     });
     getAgentWatchlistStatisticsMock.mockReset();
     getAgentWatchlistStatisticsMock.mockResolvedValue({
@@ -343,6 +355,29 @@ describe('WatchlistPage', () => {
       await screen.findByText('Re-check started — the latest result will update shortly.'),
     ).toBeInTheDocument();
     expect(screen.getByText(/Run 4 times/)).toBeInTheDocument();
+  });
+
+  it('duplicates a watch as a paused copy through the duplicate endpoint', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Duplicate watch: How is the Indian IPO market evolving?',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(postAgentWatchlistDuplicateMock).toHaveBeenCalledWith('item-1');
+    });
+    expect(
+      await screen.findByText(
+        'Duplicated watch — the paused copy is ready to edit or resume.',
+      ),
+    ).toBeInTheDocument();
+    expect(getAgentWatchlistMock).toHaveBeenCalledTimes(2);
   });
 
   it('opens the edit dialog prefilled with the watch question and expertise', async () => {

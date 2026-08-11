@@ -16,6 +16,7 @@ import {
   getAgentWatchlistStatistics,
   patchAgentWatchlistBulk,
   patchAgentWatchlist,
+  postAgentWatchlistDuplicate,
   postAgentWatchlistRun,
   type AgentWatchlistHistoryResponse,
   type AgentWatchlistItem,
@@ -123,6 +124,7 @@ export function WatchlistPage() {
   const [bulkBusy, setBulkBusy] = useState<'pause_all' | 'resume_all' | null>(null);
   const [cadenceBusyId, setCadenceBusyId] = useState<string | null>(null);
   const [runNowBusyId, setRunNowBusyId] = useState<string | null>(null);
+  const [duplicateBusyId, setDuplicateBusyId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<AgentWatchlistItem | null>(null);
   const [editQuestion, setEditQuestion] = useState('');
@@ -391,6 +393,27 @@ export function WatchlistPage() {
       setError(e instanceof ApiError ? e.message : 'Could not start this re-check');
     } finally {
       setRunNowBusyId(null);
+    }
+  };
+
+  const onDuplicate = async (item: AgentWatchlistItem) => {
+    if (duplicateBusyId === item.id) return;
+    setDuplicateBusyId(item.id);
+    setError(null);
+    setBulkNotice(null);
+    try {
+      await postAgentWatchlistDuplicate(item.id);
+      const data = await getAgentWatchlist();
+      setItems(data.items);
+      setActiveCount(data.active_count);
+      setActiveCap(data.active_cap);
+      setTotalCount(data.total);
+      setBulkNotice('Duplicated watch — the paused copy is ready to edit or resume.');
+      void refreshStats();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not duplicate this watch');
+    } finally {
+      setDuplicateBusyId(null);
     }
   };
 
@@ -1534,6 +1557,16 @@ export function WatchlistPage() {
                         className="watchlist-link watchlist-link--accent"
                       >
                         {runNowBusyId === item.id ? 'Starting…' : 'Run now'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onDuplicate(item)}
+                        disabled={duplicateBusyId === item.id}
+                        title="Duplicate this watch as a paused copy"
+                        aria-label={`Duplicate watch: ${item.question.slice(0, 80) || 'watched question'}`}
+                        className="watchlist-link"
+                      >
+                        {duplicateBusyId === item.id ? 'Duplicating…' : 'Duplicate'}
                       </button>
                       {item.latest_task_id && item.latest_task ? (
                         <button

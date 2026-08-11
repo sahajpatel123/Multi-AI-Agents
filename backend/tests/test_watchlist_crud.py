@@ -98,6 +98,117 @@ async def test_create_requires_auth(app_client):
 
 
 @pytest.mark.asyncio
+async def test_duplicate_creates_paused_copy_with_same_settings(
+    app_client, make_user, db_session
+):
+    """Duplicating a watch must branch its config without run history."""
+    user = make_user(email="wl-dup@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Quantum computing trends this week?",
+        interval_hours=72,
+        expertise_level="expert",
+        expertise_domain="physics",
+        is_active=True,
+        next_run_at=utcnow_naive() + timedelta(hours=12),
+        run_count=6,
+        latest_task_id="task-original",
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.post(
+        f"/api/agent/watchlist/{item.id}/duplicate",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["id"] != item.id
+    assert body["question"] == item.question
+    assert body["interval_hours"] == 72
+    assert body["expertise_level"] == "expert"
+    assert body["expertise_domain"] == "physics"
+    assert body["is_active"] is False
+    assert body["run_count"] == 0
+    assert body["latest_task_id"] is None
+    assert db_session.query(WatchlistItem).filter(
+        WatchlistItem.id == body["id"], WatchlistItem.user_id == user.id
+    ).count() == 1
+
+
+@pytest.mark.asyncio
+async def test_duplicate_works_when_active_cap_is_full(
+    app_client, make_user, db_session
+):
+    """Paused duplicates must not be blocked by the active-watch cap."""
+    user = make_user(email="wl-dup-cap@test.com", tier=UserTier.PRO)
+    now = utcnow_naive()
+    for i in range(10):
+        db_session.add(
+            WatchlistItem(
+                user_id=user.id,
+                question=f"Active {i}",
+                interval_hours=24,
+                expertise_level="curious",
+                expertise_domain="",
+                is_active=True,
+                next_run_at=now,
+                run_count=0,
+            )
+        )
+    original = WatchlistItem(
+        user_id=user.id,
+        question="Branched watch",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=now,
+        run_count=2,
+    )
+    db_session.add(original)
+    db_session.commit()
+    db_session.refresh(original)
+
+    res = await app_client.post(
+        f"/api/agent/watchlist/{original.id}/duplicate",
+        headers=_pro_headers(user),
+    )
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["is_active"] is False
+    assert body["run_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_duplicate_404_for_other_users_watch(app_client, make_user, db_session):
+    alice = make_user(email="wl-dup-alice@test.com", tier=UserTier.PRO)
+    bob = make_user(email="wl-dup-bob@test.com", tier=UserTier.PRO)
+    bob_item = WatchlistItem(
+        user_id=bob.id,
+        question="Bob's watch",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(bob_item)
+    db_session.commit()
+    db_session.refresh(bob_item)
+
+    res = await app_client.post(
+        f"/api/agent/watchlist/{bob_item.id}/duplicate",
+        headers=_pro_headers(alice),
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_patch_updates_interval(app_client, make_user, db_session):
     user = make_user(email="wl-patch-int@test.com", tier=UserTier.PRO)
     item = WatchlistItem(

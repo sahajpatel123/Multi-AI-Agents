@@ -1573,6 +1573,22 @@ export async function postAgentWatchlist(body: {
   return data as AgentWatchlistItem;
 }
 
+export async function postAgentWatchlistDuplicate(itemId: string): Promise<AgentWatchlistItem> {
+  const response = await apiFetch(
+    `/api/agent/watchlist/${encodeURIComponent(itemId)}/duplicate`,
+    { method: 'POST' },
+  );
+  const data = await parseJsonSafely<AgentWatchlistItem & { detail?: string | { message?: string } }>(response);
+  if (!data || !response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not duplicate watch'), response),
+      response.status,
+      data,
+    );
+  }
+  return data as AgentWatchlistItem;
+}
+
 export async function patchAgentWatchlist(
   itemId: string,
   body: {

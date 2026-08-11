@@ -121,6 +121,7 @@ GET  /api/agent/status/:id|result/:id|history|templates
 GET  /api/agent/feedback/calibration   Display-only confidence adjustment based on caller's verdict history
 GET  /api/agent/tasks/:id/export.json   Download a single task result as a .json file (pretty-printed)
 POST /api/agent/watchlist   Recurring research questions
+POST /api/agent/watchlist/:id/duplicate   Paused copy of an existing watch
 POST /api/agent/upload      File attachment (max 10 MB)
 POST /api/agent/memory/context
 
