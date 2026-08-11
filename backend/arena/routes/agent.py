@@ -73,6 +73,7 @@ from arena.core.agent_metrics import (
 from arena.core.report_generator import (
     generate_orchestration_report_html,
     generate_report_html,
+    generate_report_markdown,
     write_pdf_or_html,
 )
 from arena.core.templates import get_templates_grouped_by_category
@@ -2255,6 +2256,67 @@ async def export_task_pdf(
         content=blob,
         media_type=mime,
         headers={"Content-Disposition": content_disposition_attachment(filename)},
+    )
+
+
+@router.get("/tasks/{task_id}/export.md")
+async def export_task_markdown(
+    task_id: str,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Download a single completed task as a portable Markdown report.
+
+    Sits between the PDF report (styled, print-ready) and the JSON dump
+    (raw, machine-readable): a clean .md document with the question,
+    final answer, intelligence score, sources, steelman, caveats,
+    assumptions, temporal profile, source integrity, and dissent report.
+    The output reuses the same persisted-row + blackboard overlay the
+    PDF path uses, so a warm in-memory pipeline and a cold reload produce
+    the same report content.
+
+    Filename includes the task_id prefix so multiple downloads don't
+    overwrite each other in the browser downloads folder.
+    """
+    _ensure_agent_access(user, db)
+    # Same abuse posture as the other task exports — bound per-user so a
+    # client cannot hammer the DB/overlay builder with concurrent requests.
+    enforce_user_rate_limit(
+        user.id,
+        scope="agent_task_export_md",
+        limit=120,
+        window_seconds=3600,
+        message="Too many task markdown exports. Limit is 120 per hour.",
+    )
+    tid = task_id.strip()
+    row = (
+        db.query(AgentTaskRow)
+        .filter(AgentTaskRow.task_id == tid, AgentTaskRow.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Task not found"},
+        )
+    if not (row.final_answer or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Nothing to export yet for this task"},
+        )
+
+    bb = get_blackboard(tid)
+    overlay = _export_overlay_from_bb(bb, row)
+    body = generate_report_markdown(row, overlay)
+    filename = f"arena-report-{tid[:8]}.md"
+    return Response(
+        content=body,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition_attachment(filename),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

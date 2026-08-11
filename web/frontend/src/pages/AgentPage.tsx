@@ -22,6 +22,7 @@ import {
   crossPollinateAgentAnswer,
   deleteAgentTask,
   exportAgentTaskPdf,
+  exportAgentTaskMarkdown,
   exportOrchestrationPdf,
   getDiscoverRooms,
   getAgentHistory,
@@ -868,6 +869,7 @@ export function AgentPage() {
   const [pendingVerdict, setPendingVerdict] = useState<'correct' | 'partial' | 'wrong' | null>(null);
   const [pendingNote, setPendingNote] = useState('');
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingMd, setExportingMd] = useState(false);
   const [multiMode, setMultiMode] = useState(false);
   const [multiTasks, setMultiTasks] = useState(['', '', '', '']);
   const [activeTaskCount, setActiveTaskCount] = useState(2);
@@ -1871,6 +1873,24 @@ export function AgentPage() {
       const msg = e instanceof ApiError ? agentDetailMessage(e.detail, 'Cross-pollination failed') : e instanceof Error ? e.message : 'Cross-pollination failed';
       setError(msg);
       setCrossPollinateBusy(false);
+    }
+  };
+
+  const handleExportTaskMarkdown = async () => {
+    if (!result?.task_id || exportingMd) return;
+    setExportingMd(true);
+    try {
+      const blob = await exportAgentTaskMarkdown(result.task_id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `arena-report-${result.task_id.slice(0, 8)}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setExportingMd(false);
     }
   };
 
@@ -8793,6 +8813,20 @@ export function AgentPage() {
                         onClick={() => void handleExportTaskPdf()}
                       >
                         {exportingPdf ? 'Exporting…' : 'Export PDF'}
+                      </Button>
+                    ) : null}
+                    {result.task_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        icon={exportingMd ? undefined : Icons.download(14)}
+                        loading={exportingMd}
+                        disabled={exportingMd}
+                        title="Download the full research report as Markdown"
+                        onClick={() => void handleExportTaskMarkdown()}
+                      >
+                        {exportingMd ? 'Exporting…' : 'Report .md'}
                       </Button>
                     ) : null}
                     {result.status === 'complete' && !isRunning && user?.email ? (
