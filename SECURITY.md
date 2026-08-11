@@ -69,7 +69,8 @@ This project implements the following security practices:
 - **Workflow hardening**: CI and release runs execute a static workflow-security
   gate that enforces explicit least-privilege permissions (no
   `write-all`/`read-all` wildcards), job timeouts, no dangerous triggers or
-  `secrets: inherit`, stable version/SHA pins on every third-party action, and
+  `secrets: inherit`, stable version/SHA pins on every third-party action,
+  minimum version floors for security-critical actions, and
   `persist-credentials: false` on every checkout so the runner never leaves the
   GitHub token in the local Git configuration
 - **Pre-commit enforcement**: CI runs the repo's pre-commit hooks (lint,

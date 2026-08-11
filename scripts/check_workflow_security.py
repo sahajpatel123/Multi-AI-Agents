@@ -16,6 +16,8 @@ applied to this repo's workflows:
   * no job inherits every repository secret via `secrets: inherit`;
   * every third-party action is pinned to a stable release tag or immutable
     SHA instead of a mutable branch like `main`, `master`, or `latest`;
+  * security-critical actions cannot be downgraded below their known-good
+    major version floor (matching the repo's Python/Node pin-floor guards);
   * every `actions/checkout` step sets `persist-credentials: false` so the
     runner does not leave the GITHUB_TOKEN in the local Git configuration;
   * `sudo` is only allowed for the apt-get package installs that are already
@@ -24,6 +26,7 @@ applied to this repo's workflows:
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -44,6 +47,19 @@ MUTABLE_REF_MARKERS = (
     "@develop",
     "@refs/heads/",
 )
+
+# Major-version floors for actions with a security/CI history in this repo.
+# A downgrade below these floors fails the gate, just like the Python and
+# Node pin-floor guards in ci.yml.
+ACTION_MINIMUM_TAGS = {
+    "actions/checkout": 7,
+    "actions/setup-python": 6,
+    "actions/setup-node": 7,
+    "actions/upload-artifact": 4,
+    "actions/dependency-review-action": 5,
+    "gitleaks/gitleaks-action": 2,
+    "github/codeql-action": 4,
+}
 
 
 def _events(data: dict) -> dict:
@@ -98,6 +114,15 @@ def _check_action_pinning(path: Path, job_name: str, uses: str) -> str | None:
             return (
                 f"{path}: job '{job_name}' uses mutable ref '@{ref}' for "
                 f"'{uses.split('@', 1)[0]}'; pin to a stable tag or SHA"
+            )
+    major_match = re.match(r"^v(\d+)", ref)
+    if major_match:
+        action_name = uses.split("@", 1)[0]
+        minimum = ACTION_MINIMUM_TAGS.get(action_name)
+        if minimum is not None and int(major_match.group(1)) < minimum:
+            return (
+                f"{path}: job '{job_name}' uses '{uses}' below the action "
+                f"pin floor ({action_name} >= v{minimum})"
             )
     return None
 

@@ -112,6 +112,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ships `backend/arena.db` in release artifacts
 
 ### Security
+- Workflow security gate now enforces minimum version floors for
+  security-critical GitHub Actions, so a downgrade below a known-good major
+  version cannot silently regress CI or CodeQL
 - Release workflow now runs the same workflow-security gate as CI so a
   release cannot ship from a workflow that violates the hardened GitHub
   Actions invariants

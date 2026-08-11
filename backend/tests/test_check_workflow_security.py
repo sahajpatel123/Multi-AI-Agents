@@ -98,6 +98,11 @@ def test_mutable_action_ref_is_reported(tmp_path: Path) -> None:
     assert any("mutable ref" in v for v in _violations(tmp_path, text))
 
 
+def test_action_below_pin_floor_is_reported(tmp_path: Path) -> None:
+    text = _minimal_valid().replace("actions/checkout@v7", "actions/checkout@v6")
+    assert any("pin floor" in v for v in _violations(tmp_path, text))
+
+
 def test_unpinned_action_ref_is_reported(tmp_path: Path) -> None:
     text = _minimal_valid().replace("actions/setup-python@v6", "actions/setup-python")
     assert any("unpinned action" in v for v in _violations(tmp_path, text))
