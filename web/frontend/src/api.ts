@@ -2429,6 +2429,27 @@ export async function exportAnalyticsActivityJson(days: number = 30): Promise<An
   };
 }
 
+export type AnalyticsActivityMarkdownExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportAnalyticsActivityMarkdown(days: number = 30): Promise<AnalyticsActivityMarkdownExport> {
+  const response = await apiFetch(`/api/analytics/activity/export.md?days=${encodeURIComponent(String(days))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export activity Markdown'), response),
+      response.status,
+      err,
+    );
+  }
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? `arena-activity-${days}d.md`,
+  };
+}
+
 export async function exportAnalyticsPersonaStatsOverviewCsv(windowDays: number = 30): Promise<Blob> {
   const response = await apiFetch(`/api/analytics/persona-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {

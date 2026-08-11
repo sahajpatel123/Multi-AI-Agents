@@ -975,6 +975,84 @@ async def analytics_activity_json(
     )
 
 
+@router.get("/analytics/activity/export.md")
+async def analytics_activity_markdown(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=366,
+        description="Window length in days, ending today (UTC).",
+    ),
+) -> Response:
+    """Markdown export of the GitHub-style activity timeline.
+
+    Renders the same JSON aggregation as a human-readable report: summary
+    metrics, streak/busiest-day facts, and a per-day table, so users can
+    drop the timeline into notes, docs, or a changelog without opening a
+    spreadsheet. Shares the aggregation helper with the CSV/JSON exports
+    and keeps its own user-scoped rate limit so Markdown exports do not
+    consume the dashboard or other export budgets.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_activity_markdown",
+        limit=60,
+        window_seconds=3600,
+        message="Too many activity Markdown exports. Limit is 60 per hour.",
+    )
+
+    payload = _activity_timeline(db, user.id, days)
+    totals = payload["totals"]
+
+    lines = [
+        "# Arena — activity timeline",
+        "",
+        f"**Window:** {payload['start_date']} → {payload['end_date']} "
+        f"({payload['window_days']} days, UTC)",
+        "",
+        "## Summary",
+        "",
+        f"- **Prompts:** {totals['prompts']}",
+        f"- **Debates:** {totals['debates']}",
+        f"- **Discusses:** {totals['discusses']}",
+        f"- **Agent runs:** {totals['agent_runs']}",
+        f"- **Active days:** {payload['active_days']}",
+        f"- **Current streak:** {payload['current_streak']}",
+        f"- **Longest streak:** {payload['longest_streak']}",
+        (
+            f"- **Busiest day:** {payload['busiest_day'] or 'none'}"
+            f" ({payload['busiest_day_count']} actions)"
+        ),
+        "",
+        "## Daily activity",
+        "",
+        "| Date | Prompts | Debates | Discusses | Agent runs |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for row in payload["activity"]:
+        lines.append(
+            f"| {row['date']} | {row['prompts']} | {row['debates']} | "
+            f"{row['discusses']} | {row['agent_runs']} |"
+        )
+    lines.extend(["", "---", "_Exported from Arena_", ""])
+
+    filename = (
+        f"arena-activity-"
+        f"{payload['start_date']}-to-{payload['end_date']}.md"
+    )
+    return Response(
+        content="\n".join(lines).strip() + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-win-rate")
 async def analytics_persona_win_rate(
     user: UserResponse = Depends(get_current_user_required),
