@@ -273,6 +273,7 @@ def test_codeowners_cover_ci_security_files() -> None:
         "/.github/PULL_REQUEST_TEMPLATE.md",
         "/CONTRIBUTING.md",
         "/scripts/check_workflow_security.py",
+        "/backend/tests/test_check_workflow_security.py",
         "/backend/tests/test_workflow_security_gates.py",
         "/backend/tests/test_no_stray_main_tokens.py",
     )
@@ -288,6 +289,8 @@ def test_security_doc_lists_new_gates() -> None:
         "Source integrity",
         "git diff --check",
         "CODEOWNERS",
+        "write-all",
+        "persist-credentials",
     )
     for term in required_terms:
         assert term in security_md, f"SECURITY.md is missing mention of {term!r}"

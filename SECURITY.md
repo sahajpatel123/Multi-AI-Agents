@@ -67,9 +67,11 @@ This project implements the following security practices:
   least-privilege GitHub token permissions where possible; in-flight runs are
   not cancelled by newer pushes so each commit gets a trustworthy result
 - **Workflow hardening**: CI runs a static workflow-security gate that enforces
-  explicit least-privilege permissions, job timeouts, no dangerous triggers or
-  `secrets: inherit`, and `persist-credentials: false` on every checkout so the
-  runner never leaves the GitHub token in the local Git configuration
+  explicit least-privilege permissions (no `write-all`/`read-all` wildcards),
+  job timeouts, no dangerous triggers or `secrets: inherit`, stable version/SHA
+  pins on every third-party action, and `persist-credentials: false` on every
+  checkout so the runner never leaves the GitHub token in the local Git
+  configuration
 - **Pre-commit enforcement**: CI runs the repo's pre-commit hooks (lint,
   formatting, secret scanning, and debug-statement checks)
 - **Source integrity**: CI scans for stray-token/paste corruption and runs

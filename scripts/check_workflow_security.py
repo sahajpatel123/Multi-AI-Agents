@@ -9,11 +9,13 @@ The checks are intentionally conservative and match the hardening already
 applied to this repo's workflows:
 
   * every workflow declares an explicit least-privilege top-level `permissions`
-    mapping (no implicit broad GitHub token scopes);
+    mapping, and neither the workflow nor any job grants `write-all`/`read-all`;
   * dangerous triggers (`pull_request_target`, `workflow_run`) are not used;
   * every job has a `timeout-minutes` so a hung run cannot consume a runner
     indefinitely;
   * no job inherits every repository secret via `secrets: inherit`;
+  * every third-party action is pinned to a stable release tag or immutable
+    SHA instead of a mutable branch like `main`, `master`, or `latest`;
   * every `actions/checkout` step sets `persist-credentials: false` so the
     runner does not leave the GITHUB_TOKEN in the local Git configuration;
   * `sudo` is only allowed for the apt-get package installs that are already
@@ -34,6 +36,14 @@ WORKFLOWS_DIR = ROOT / ".github" / "workflows"
 # The only sudo usage currently needed is installing libmagic on Ubuntu runners.
 ALLOWED_SUDO = "sudo apt-get"
 DANGEROUS_TRIGGERS = ("pull_request_target", "workflow_run")
+MUTABLE_REF_MARKERS = (
+    "@main",
+    "@master",
+    "@latest",
+    "@head",
+    "@develop",
+    "@refs/heads/",
+)
 
 
 def _events(data: dict) -> dict:
@@ -53,6 +63,45 @@ def _checkout_steps(job: dict):
             yield step
 
 
+def _all_steps(job: dict):
+    return job.get("steps", []) if isinstance(job, dict) else []
+
+
+def _check_permissions(path: Path, label: str, permissions) -> list[str]:
+    """Validate a permissions mapping without allowing broad wildcard grants."""
+    violations: list[str] = []
+    if not isinstance(permissions, dict):
+        violations.append(
+            f"{path}: {label} 'permissions' must be an explicit least-privilege mapping"
+        )
+        return violations
+    for scope, value in permissions.items():
+        if isinstance(value, str) and value in {"write-all", "read-all"}:
+            violations.append(
+                f"{path}: {label} grants wildcard permission '{scope}: {value}'"
+            )
+    return violations
+
+
+def _check_action_pinning(path: Path, job_name: str, uses: str) -> str | None:
+    """Return a violation message if an action ref is mutable or unpinned."""
+    if uses.startswith("./"):
+        return None
+    if "@" not in uses:
+        return (
+            f"{path}: job '{job_name}' step uses unpinned action '{uses}' "
+            "(missing a version tag or SHA)"
+        )
+    ref = uses.split("@", 1)[1]
+    for marker in MUTABLE_REF_MARKERS:
+        if marker in f"@{ref}":
+            return (
+                f"{path}: job '{job_name}' uses mutable ref '@{ref}' for "
+                f"'{uses.split('@', 1)[0]}'; pin to a stable tag or SHA"
+            )
+    return None
+
+
 def check_workflow(path: Path) -> list[str]:
     violations: list[str] = []
 
@@ -64,11 +113,7 @@ def check_workflow(path: Path) -> list[str]:
     if not isinstance(data, dict):
         return [f"{path}: workflow must be a YAML mapping"]
 
-    permissions = data.get("permissions")
-    if not isinstance(permissions, dict):
-        violations.append(
-            f"{path}: top-level 'permissions' must be an explicit least-privilege mapping"
-        )
+    violations.extend(_check_permissions(path, "workflow", data.get("permissions")))
 
     events = _events(data)
     for trigger in DANGEROUS_TRIGGERS:
@@ -79,6 +124,9 @@ def check_workflow(path: Path) -> list[str]:
     for job_name, job in jobs.items():
         if not isinstance(job, dict):
             continue
+        violations.extend(
+            _check_permissions(path, f"job '{job_name}'", job.get("permissions"))
+        )
         if "timeout-minutes" not in job:
             violations.append(f"{path}: job '{job_name}' is missing timeout-minutes")
         if job.get("secrets") == "inherit":
@@ -90,8 +138,15 @@ def check_workflow(path: Path) -> list[str]:
                 violations.append(
                     f"{path}: checkout in job '{job_name}' must set persist-credentials: false"
                 )
-        for step in job.get("steps", []):
-            if not isinstance(step, dict) or not isinstance(step.get("run"), str):
+        for step in _all_steps(job):
+            if not isinstance(step, dict):
+                continue
+            uses = step.get("uses")
+            if isinstance(uses, str):
+                pin_violation = _check_action_pinning(path, job_name, uses)
+                if pin_violation:
+                    violations.append(pin_violation)
+            if not isinstance(step.get("run"), str):
                 continue
             run = step["run"]
             if "sudo" in run and ALLOWED_SUDO not in run:

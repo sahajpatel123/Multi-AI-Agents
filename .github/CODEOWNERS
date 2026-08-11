@@ -24,6 +24,7 @@
 /SECURITY.md            @sahajpatel123
 /scripts/check_workflow_security.py  @sahajpatel123
 /backend/tests/test_workflow_security_gates.py  @sahajpatel123
+/backend/tests/test_check_workflow_security.py  @sahajpatel123
 /backend/tests/test_no_stray_main_tokens.py     @sahajpatel123
 
 # Documentation

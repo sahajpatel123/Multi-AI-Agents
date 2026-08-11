@@ -81,6 +81,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - “Try again” buttons in Debate Mode error banners
 
 ### Changed
+- Workflow security gate now also rejects wildcard `write-all`/`read-all`
+  permissions, mutable third-party action refs, and comes with negative unit
+  tests for every invariant it enforces
 - Full-session transcript copy now prevents overlapping copy attempts and the
   clipboard fallback always cleans up its temporary textarea, even on failure
 - Activity Markdown export now escapes table cells and is covered by window-boundary,
