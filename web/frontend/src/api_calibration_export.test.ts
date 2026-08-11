@@ -11,21 +11,40 @@ describe('Calibration history export helpers', () => {
     vi.clearAllMocks();
   });
 
-  it('fetches the calibration CSV endpoint and returns a blob', async () => {
+  it('fetches the calibration CSV endpoint and returns the server filename', async () => {
     const mockBlob = new Blob(
       ['task_id,user_rating\n2026-08-01,80\n'],
       { type: 'text/csv' },
     );
     vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
-      new Response(mockBlob, { status: 200 }),
+      new Response(mockBlob, {
+        status: 200,
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="arena-calibration-7-20260812.csv"',
+        },
+      }),
     );
 
     const res = await exportCalibrationHistoryCsv();
-    expect(res).toBeInstanceOf(Blob);
+    expect(res.blob).toBeInstanceOf(Blob);
+    expect(res.filename).toBe('arena-calibration-7-20260812.csv');
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/calibration/history/export.csv',
       {},
     );
+  });
+
+  it('falls back to a fixed filename for CSV when Content-Disposition is missing', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(new Blob(['task_id\n'], { type: 'text/csv' }), {
+        status: 200,
+      }),
+    );
+
+    const res = await exportCalibrationHistoryCsv();
+    expect(res.blob).toBeInstanceOf(Blob);
+    expect(res.filename).toBe('arena-calibration-history.csv');
   });
 
   it('fetches the calibration JSON endpoint and returns the server filename', async () => {

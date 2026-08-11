@@ -190,7 +190,10 @@ vi.mock('../api', () => ({
     filename: 'arena-persona-win-rate-2026-07-13-to-2026-08-11.md',
   }),
   exportCalibrationHistoryCsv: vi.fn().mockResolvedValue(
-    new Blob(['task_id,user_rating'], { type: 'text/csv' }),
+    {
+      blob: new Blob(['task_id,user_rating'], { type: 'text/csv' }),
+      filename: 'arena-calibration-7-20260812.csv',
+    },
   ),
   exportCalibrationHistoryJson: vi.fn().mockResolvedValue({
     blob: new Blob(['[{"task_id":"task-1"}]'], { type: 'application/json' }),
@@ -369,7 +372,7 @@ describe('ProfileModal', () => {
     ).toBeInTheDocument();
   });
 
-  it('downloads calibration history CSV with a fixed filename', async () => {
+  it('downloads calibration history CSV with the server filename', async () => {
     hoistedMocks.getCalibrationStats.mockResolvedValueOnce({
       total_ratings: 1,
       avg_delta: 0,
@@ -390,7 +393,7 @@ describe('ProfileModal', () => {
     await waitFor(() => {
       expect(downloadBlobFile).toHaveBeenCalledWith(
         expect.any(Blob),
-        'arena-calibration-history.csv',
+        'arena-calibration-7-20260812.csv',
       );
     });
   });

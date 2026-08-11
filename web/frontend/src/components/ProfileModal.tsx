@@ -1989,8 +1989,8 @@ export function ProfileModal() {
                         onClick={async () => {
                           setActiveExport('calibration-csv');
                           try {
-                            const blob = await exportCalibrationHistoryCsv();
-                            downloadBlobFile(blob, 'arena-calibration-history.csv');
+                            const { blob, filename } = await exportCalibrationHistoryCsv();
+                            downloadBlobFile(blob, filename);
                           } catch {
                             // ignore error
                           } finally {

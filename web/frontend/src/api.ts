@@ -1921,7 +1921,12 @@ export async function getCalibrationStats(): Promise<unknown> {
   return data;
 }
 
-export async function exportCalibrationHistoryCsv(): Promise<Blob> {
+export type CalibrationHistoryCsvExport = {
+  blob: Blob;
+  filename: string;
+};
+
+export async function exportCalibrationHistoryCsv(): Promise<CalibrationHistoryCsvExport> {
   const response = await apiFetch(`/api/calibration/history/export.csv`);
   if (!response.ok) {
     const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
@@ -1931,7 +1936,10 @@ export async function exportCalibrationHistoryCsv(): Promise<Blob> {
       err,
     );
   }
-  return response.blob();
+  return {
+    blob: await response.blob(),
+    filename: contentDispositionFilename(response) ?? 'arena-calibration-history.csv',
+  };
 }
 
 export type CalibrationHistoryJsonExport = {
