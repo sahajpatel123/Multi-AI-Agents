@@ -1494,12 +1494,14 @@ export async function getAgentWatchlist(): Promise<{
   items: AgentWatchlistItem[];
   active_count: number;
   active_cap: number;
+  total: number;
 }> {
   const response = await apiFetch(`/api/agent/watchlist`);
   const data = await parseJsonSafely<{
     items?: AgentWatchlistItem[];
     active_count?: number;
     active_cap?: number;
+    total?: number;
     detail?: string | { message?: string };
   }>(response);
   if (!response.ok) {
@@ -1514,7 +1516,39 @@ export async function getAgentWatchlist(): Promise<{
     items: data.items || [],
     active_count: data.active_count ?? 0,
     active_cap: data.active_cap ?? 10,
+    total: data.total ?? data.items?.length ?? 0,
   };
+}
+
+export type WatchlistBulkResult = {
+  success: boolean;
+  action: 'pause_all' | 'resume_all';
+  applied: number;
+  skipped: number;
+  active_count: number;
+  paused_count: number;
+  active_cap: number;
+};
+
+export async function patchAgentWatchlistBulk(
+  action: 'pause_all' | 'resume_all',
+): Promise<WatchlistBulkResult> {
+  const response = await apiFetch(`/api/agent/watchlist/bulk`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action }),
+  });
+  const data = await parseJsonSafely<WatchlistBulkResult & { detail?: string | { message?: string } }>(
+    response,
+  );
+  if (!data || !response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Watchlist bulk update failed'), response),
+      response.status,
+      data,
+    );
+  }
+  return data;
 }
 
 export async function postAgentWatchlist(body: {

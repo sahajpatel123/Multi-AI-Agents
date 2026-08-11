@@ -579,6 +579,16 @@ class WatchlistPatchBody(BaseModel):
     is_active: Optional[bool] = None
 
 
+class WatchlistBulkBody(BaseModel):
+    """Body schema for bulk watchlist status changes.
+
+    Only whole-list actions are supported so the endpoint stays predictable:
+    pause every active watch, or resume paused watches up to the active cap.
+    """
+
+    action: Literal["pause_all", "resume_all"]
+
+
 ANALYST_CHALLENGE_PROMPT = """
 You are The Analyst challenging an AI-generated answer.
 
@@ -2849,6 +2859,87 @@ async def list_watchlist_items(
             "offset": offset,
             "has_more": offset + len(items) < total,
             "active_count": active_n,
+            "active_cap": WATCHLIST_MAX_ACTIVE,
+        }
+    )
+
+
+@router.patch("/watchlist/bulk")
+async def set_watchlist_bulk(
+    body: WatchlistBulkBody,
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Pause all active watches or resume paused watches in one call.
+
+    - ``pause_all`` flips every active watch to paused.
+    - ``resume_all`` reactivates paused watches in next-run order, stopping
+      at the active cap. Any remaining paused watches are reported in
+      ``skipped`` so the UI can be honest instead of silently dropping them.
+
+    Both actions are scoped to the requesting user and rate-limited like the
+    per-row mutation so a misbehaving client cannot thrash the scheduler.
+    """
+    _ensure_agent_watchlist_access(user)
+    enforce_user_rate_limit(
+        user.id,
+        scope="watchlist_bulk",
+        limit=30,
+        window_seconds=3600,
+        message="Too many watchlist bulk changes. Limit is 30 per hour.",
+    )
+
+    now = utcnow_naive()
+    if body.action == "pause_all":
+        rows = (
+            db.query(WatchlistItem)
+            .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
+            .all()
+        )
+        applied = len(rows)
+        for item in rows:
+            item.is_active = False
+    else:
+        active_count = (
+            db.query(WatchlistItem)
+            .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
+            .count()
+        )
+        capacity = max(0, WATCHLIST_MAX_ACTIVE - active_count)
+        rows = (
+            db.query(WatchlistItem)
+            .filter(
+                WatchlistItem.user_id == user.id,
+                WatchlistItem.is_active.is_(False),
+            )
+            .order_by(WatchlistItem.next_run_at.asc(), WatchlistItem.id.asc())
+            .limit(capacity)
+            .all()
+        )
+        applied = len(rows)
+        for item in rows:
+            item.is_active = True
+            item.next_run_at = now + timedelta(hours=int(item.interval_hours))
+
+    db.commit()
+    active_count = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(True))
+        .count()
+    )
+    paused_count = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id, WatchlistItem.is_active.is_(False))
+        .count()
+    )
+    return JSONResponse(
+        content={
+            "success": True,
+            "action": body.action,
+            "applied": applied,
+            "skipped": paused_count,
+            "active_count": active_count,
+            "paused_count": paused_count,
             "active_cap": WATCHLIST_MAX_ACTIVE,
         }
     )

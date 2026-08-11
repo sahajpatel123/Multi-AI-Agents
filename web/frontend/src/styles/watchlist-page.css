@@ -95,6 +95,14 @@
   outline: none;
 }
 
+.watchlist-page__bulk-notice {
+  color: #5a8c6a;
+  font-size: 13px;
+  text-align: center;
+  margin: 0 auto 16px;
+  max-width: 680px;
+}
+
 .watchlist-page__loader {
   display: flex;
   justify-content: center;
@@ -113,6 +121,11 @@
   color: #8c7355;
   cursor: pointer;
   font-family: Georgia, 'Source Serif 4', 'Times New Roman', serif;
+}
+
+.watchlist-header-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .watchlist-header-btn--ok {

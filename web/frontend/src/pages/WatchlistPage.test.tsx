@@ -24,6 +24,14 @@ const baseItem: AgentWatchlistItem = {
   },
 };
 
+const pausedItem: AgentWatchlistItem = {
+  ...baseItem,
+  id: 'item-2',
+  question: 'Will the monsoon affect Indian agriculture exports?',
+  is_active: false,
+  latest_task: null,
+};
+
 const tierState: {
   canUseFeature: ReturnType<typeof vi.fn>;
 } = {
@@ -35,6 +43,7 @@ const tierState: {
 
 const navigateMock = vi.fn();
 const getAgentWatchlistMock = vi.fn();
+const patchAgentWatchlistBulkMock = vi.fn();
 
 vi.mock('../context/TierContext', () => ({
   useTier: () => tierState,
@@ -68,6 +77,7 @@ vi.mock('../api', async () => {
     patchAgentWatchlist: vi.fn().mockImplementation(async (id: string) => {
       return { ...baseItem, id };
     }),
+    patchAgentWatchlistBulk: (...args: unknown[]) => patchAgentWatchlistBulkMock(...args),
     deleteAgentWatchlist: vi.fn().mockResolvedValue(undefined),
     ApiError: actual.ApiError,
   };
@@ -138,8 +148,19 @@ describe('WatchlistPage', () => {
     });
     getAgentWatchlistMock.mockReset();
     getAgentWatchlistMock.mockResolvedValue({
-      items: [baseItem],
+      items: [baseItem, pausedItem],
       active_count: 1,
+      active_cap: 10,
+      total: 2,
+    });
+    patchAgentWatchlistBulkMock.mockReset();
+    patchAgentWatchlistBulkMock.mockResolvedValue({
+      success: true,
+      action: 'pause_all',
+      applied: 1,
+      skipped: 1,
+      active_count: 0,
+      paused_count: 2,
       active_cap: 10,
     });
   });
@@ -238,5 +259,25 @@ describe('WatchlistPage', () => {
     expect(container.querySelector('.watchlist-gate__title')?.textContent).toBe(
       'Watchlist',
     );
+  });
+
+  it('renders bulk pause and resume controls with live counts', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Resume paused (1)')).toBeInTheDocument();
+  });
+
+  it('pauses all active watches through the bulk endpoint', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Pause all 1 active watch' }));
+    await waitFor(() => {
+      expect(patchAgentWatchlistBulkMock).toHaveBeenCalledWith('pause_all');
+    });
+    expect(await screen.findByText('Paused 1 active watch.')).toBeInTheDocument();
   });
 });

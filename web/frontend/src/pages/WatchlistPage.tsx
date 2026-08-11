@@ -11,6 +11,7 @@ import {
   deleteAgentWatchlist,
   getAgentWatchlist,
   getAgentWatchlistHistory,
+  patchAgentWatchlistBulk,
   patchAgentWatchlist,
   type AgentWatchlistHistoryResponse,
   type AgentWatchlistItem,
@@ -101,7 +102,10 @@ export function WatchlistPage() {
   const [items, setItems] = useState<AgentWatchlistItem[]>([]);
   const [activeCount, setActiveCount] = useState(0);
   const [activeCap, setActiveCap] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState<'pause_all' | 'resume_all' | null>(null);
   const [cadenceBusyId, setCadenceBusyId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -201,6 +205,8 @@ export function WatchlistPage() {
       setItems(data.items);
       setActiveCount(data.active_count);
       setActiveCap(data.active_cap);
+      setTotalCount(data.total);
+      setBulkNotice(null);
       setLoadFailed(false);
       setHistoryCache({});
       setHistoryOpenId(null);
@@ -246,10 +252,12 @@ export function WatchlistPage() {
   const onToggle = async (item: AgentWatchlistItem) => {
     try {
       setError(null);
+      setBulkNotice(null);
       const updated = await patchAgentWatchlist(item.id, { is_active: !item.is_active });
       setItems((prev) => prev.map((x) => (x.id === item.id ? updated : x)));
       const data = await getAgentWatchlist();
       setActiveCount(data.active_count);
+      setTotalCount(data.total);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Update failed');
     }
@@ -272,15 +280,47 @@ export function WatchlistPage() {
   const onDelete = async (id: string) => {
     try {
       setError(null);
+      setBulkNotice(null);
       await deleteAgentWatchlist(id);
       setItems((prev) => prev.filter((x) => x.id !== id));
       setPendingDeleteId(null);
       const data = await getAgentWatchlist();
       setActiveCount(data.active_count);
+      setTotalCount(data.total);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Delete failed');
     }
   };
+
+  const onBulkStatusChange = async (action: 'pause_all' | 'resume_all') => {
+    if (bulkBusy) return;
+    setBulkBusy(action);
+    setError(null);
+    setBulkNotice(null);
+    try {
+      const result = await patchAgentWatchlistBulk(action);
+      const data = await getAgentWatchlist();
+      setItems(data.items);
+      setActiveCount(data.active_count);
+      setActiveCap(data.active_cap);
+      setTotalCount(data.total);
+      if (action === 'pause_all') {
+        setBulkNotice(`Paused ${result.applied} active watch${result.applied === 1 ? '' : 'es'}.`);
+      } else if (result.skipped > 0) {
+        setBulkNotice(
+          `Resumed ${result.applied} paused watch${result.applied === 1 ? '' : 'es'}; ${result.skipped} stayed paused because the ${result.active_cap}-watch active cap is full.`,
+        );
+      } else {
+        setBulkNotice(`Resumed ${result.applied} paused watch${result.applied === 1 ? '' : 'es'}.`);
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Bulk watchlist update failed');
+    } finally {
+      setBulkBusy(null);
+    }
+  };
+
+  const pausedCount = Math.max(0, totalCount - activeCount);
 
   const bodyMode = watchlistBodyMode({
     loading,
@@ -647,6 +687,42 @@ export function WatchlistPage() {
           <div className="watchlist-page__header-actions">
             <button
               type="button"
+              onClick={() => void onBulkStatusChange('pause_all')}
+              disabled={bulkBusy !== null || activeCount === 0}
+              title={
+                activeCount === 0
+                  ? 'No active watches to pause'
+                  : `Pause all ${activeCount} active watch${activeCount === 1 ? '' : 'es'}`
+              }
+              aria-label={
+                activeCount === 0
+                  ? 'Pause all watches (none active)'
+                  : `Pause all ${activeCount} active watch${activeCount === 1 ? '' : 'es'}`
+              }
+              className="watchlist-header-btn"
+            >
+              {bulkBusy === 'pause_all' ? 'Pausing…' : `Pause all (${activeCount})`}
+            </button>
+            <button
+              type="button"
+              onClick={() => void onBulkStatusChange('resume_all')}
+              disabled={bulkBusy !== null || pausedCount === 0}
+              title={
+                pausedCount === 0
+                  ? 'No paused watches to resume'
+                  : `Resume ${pausedCount} paused watch${pausedCount === 1 ? '' : 'es'} up to the active cap`
+              }
+              aria-label={
+                pausedCount === 0
+                  ? 'Resume paused watches (none paused)'
+                  : `Resume ${pausedCount} paused watch${pausedCount === 1 ? '' : 'es'}`
+              }
+              className="watchlist-header-btn"
+            >
+              {bulkBusy === 'resume_all' ? 'Resuming…' : `Resume paused (${pausedCount})`}
+            </button>
+            <button
+              type="button"
               onClick={() => void copyWatchlist()}
               title="Copy current view as markdown"
               aria-label={
@@ -708,6 +784,11 @@ export function WatchlistPage() {
           >
             {error}
           </div>
+        ) : null}
+        {bulkNotice ? (
+          <p role="status" className="watchlist-page__bulk-notice">
+            {bulkNotice}
+          </p>
         ) : null}
 
         {bodyMode === 'loading' ? (
