@@ -71,6 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - “Try again” buttons in Debate Mode error banners
 
 ### Changed
+- Activity timeline CSV export shares the JSON endpoint's aggregation helper,
+  so exporting no longer consumes the JSON endpoint's rate-limit budget
 - Repaired CodeQL action tag after an invalid v5 bump (now pinned to v4)
 - Upgraded actions/checkout from v4 to v7
 - Optimized Dependabot schedule to daily security checks

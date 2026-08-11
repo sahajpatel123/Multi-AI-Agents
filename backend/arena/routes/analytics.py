@@ -684,31 +684,23 @@ async def analytics_engagement(
     }
 
 
-@router.get("/analytics/activity")
-async def analytics_activity(
-    user: UserResponse = Depends(get_current_user_required),
-    db: Session = Depends(get_db),
-    days: int = Query(30, ge=1, le=366, description="Window length in days, ending today (UTC)."),
-) -> dict:
-    """GitHub-style activity timeline with streak metrics.
+def _activity_timeline(db: Session, user_id: int, days: int) -> dict:
+    """Compute the GitHub-style activity timeline for one user.
 
     Returns one bucket per UTC calendar day for the trailing ``days`` window
     (inclusive of today), plus aggregate counters split by arena mode and the
     user's current/longest consecutive-day streak.
 
+    This is deliberately a plain helper rather than a callable route: the
+    JSON and CSV endpoints share one aggregation so they cannot drift, while
+    each route keeps its own user-scoped rate limit. The CSV export must not
+    consume the JSON endpoint's hourly budget (and vice versa).
+
     Bounded the same way as :func:`analytics_summary` so this can't be used as
     a DB-amplification surface: window length is capped, the row scan is
-    restricted to two indexed columns, and the user-scoped rate limit is
-    shared across analytics endpoints.
+    restricted to two indexed columns, and call volume is capped by the
+    calling route's rate limit.
     """
-    enforce_user_rate_limit(
-        user.id,
-        scope="analytics_activity",
-        limit=60,
-        window_seconds=3600,
-        message="Too many analytics activity requests. Limit is 60 per hour.",
-    )
-
     # _now() in db_models stores naive UTC, so we anchor the window in UTC
     # too — using local time here would mis-bucket events near day boundaries
     # for any user not on UTC.
@@ -723,7 +715,7 @@ async def analytics_activity(
     rows = (
         db.query(UsageRecord.timestamp, UsageRecord.mode)
         .filter(
-            UsageRecord.user_id == user.id,
+            UsageRecord.user_id == user_id,
             UsageRecord.timestamp >= start_dt,
             UsageRecord.timestamp < end_dt,
         )
@@ -826,6 +818,34 @@ async def analytics_activity(
     }
 
 
+@router.get("/analytics/activity")
+async def analytics_activity(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(30, ge=1, le=366, description="Window length in days, ending today (UTC)."),
+) -> dict:
+    """GitHub-style activity timeline with streak metrics.
+
+    Returns one bucket per UTC calendar day for the trailing ``days`` window
+    (inclusive of today), plus aggregate counters split by arena mode and the
+    user's current/longest consecutive-day streak.
+
+    Bounded the same way as :func:`analytics_summary` so this can't be used as
+    a DB-amplification surface: window length is capped, the row scan is
+    restricted to two indexed columns, and call volume is capped by this
+    route's user-scoped rate limit.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_activity",
+        limit=60,
+        window_seconds=3600,
+        message="Too many analytics activity requests. Limit is 60 per hour.",
+    )
+
+    return _activity_timeline(db, user.id, days)
+
+
 @router.get("/analytics/activity/export.csv")
 async def analytics_activity_csv(
     user: UserResponse = Depends(get_current_user_required),
@@ -839,11 +859,11 @@ async def analytics_activity_csv(
 ) -> Response:
     """CSV export of the GitHub-style activity timeline.
 
-    Reuses the JSON activity route so the spreadsheet and the dashboard
-    cannot drift. One row per UTC calendar day with the same per-mode
-    counters as the JSON endpoint, plus a footer rollup with the totals,
-    streaks, and busiest-day summary so the file is self-describing when
-    opened in isolation.
+    Shares the JSON endpoint's aggregation helper so the spreadsheet and
+    the dashboard cannot drift. One row per UTC calendar day with the same
+    per-mode counters as the JSON endpoint, plus a footer rollup with the
+    totals, streaks, and busiest-day summary so the file is self-describing
+    when opened in isolation.
 
     Follows the same defenses as the other analytics exports: user-scoped
     rate limit, RFC 4180 quoting, no-store caching, nosniff, and
@@ -857,7 +877,7 @@ async def analytics_activity_csv(
         message="Too many activity CSV exports. Limit is 60 per hour.",
     )
 
-    payload = await analytics_activity(days=days, user=user, db=db)
+    payload = _activity_timeline(db, user.id, days)
 
     import csv
     import io
