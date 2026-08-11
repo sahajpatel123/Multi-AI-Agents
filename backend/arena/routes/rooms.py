@@ -721,6 +721,54 @@ async def join_room(
     return {"members": member_list}
 
 
+@router.post("/{slug}/leave")
+async def leave_room(
+    slug: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user_required_orm),
+) -> dict[str, Any]:
+    """Remove the caller from a room's membership.
+
+    Rooms are shared boards: leaving removes only the membership, never
+    the room, its tasks, or the synthesis. A creator may leave too — the
+    room stays active for the remaining members and the creator can
+    rejoin later. Unknown/inactive rooms and non-members both return the
+    same 404 so the endpoint can't be used to probe room existence.
+    """
+    # Bound churn so a script cannot rapidly join/leave (each cycle hits
+    # the DB twice) and flood the membership table with row deletes.
+    enforce_user_rate_limit(
+        user.id,
+        scope="room_leave",
+        limit=30,
+        window_seconds=3600,
+        message="Too many room leaves. Please try again later.",
+    )
+    room = (
+        db.query(Room)
+        .filter(Room.slug == slug, Room.is_active.is_(True))
+        .first()
+    )
+    if not room:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
+
+    removed = (
+        db.query(RoomMember)
+        .filter(RoomMember.room_id == room.id, RoomMember.user_id == user.id)
+        .delete(synchronize_session=False)
+    )
+    if not removed:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": ErrorCodes.NOT_FOUND, "message": "Room not found"},
+        )
+    db.commit()
+    return {"status": "left", "slug": room.slug}
+
+
 @router.post("/{slug}/add-task")
 async def add_task_to_room(
     slug: str,

@@ -2506,6 +2506,17 @@ export async function joinRoom(slug: string): Promise<any> {
   return data;
 }
 
+export async function leaveRoom(slug: string): Promise<{ status: string; slug: string }> {
+  const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}/leave`, {
+    method: 'POST',
+  });
+  const data = await parseJsonSafely<{ status?: string; slug?: string; detail?: string }>(response);
+  if (!response.ok) {
+    throw new ApiError(getErrorMessage(data || {}, 'Could not leave room'), response.status, data);
+  }
+  return { status: data?.status ?? 'left', slug: data?.slug ?? slug };
+}
+
 export async function addRoomTask(slug: string, taskId: string): Promise<any> {
   const response = await apiFetch(`/api/rooms/${encodeURIComponent(slug)}/add-task`, {
     method: 'POST',

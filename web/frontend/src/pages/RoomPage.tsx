@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { addRoomTask, getAgentHistory, getRoom, getRoomSynthesis, joinRoom, removeRoomTask } from '../api';
+import {
+  addRoomTask,
+  getAgentHistory,
+  getRoom,
+  getRoomSynthesis,
+  joinRoom,
+  leaveRoom,
+  removeRoomTask,
+} from '../api';
 import { AgentAnswerMarkdown } from '../components/AgentAnswerMarkdown';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { HighlightQuery } from '../components/HighlightQuery';
@@ -674,6 +682,42 @@ export function RoomPage() {
     }
   };
 
+  const handleJoinRoom = async () => {
+    if (!slug || !user) return;
+    setActionError(null);
+    try {
+      const data = await joinRoom(slug);
+      const memberList = Array.isArray(data?.members) ? data.members : [];
+      setRoom((prev: any) => (prev ? { ...prev, members: memberList } : prev));
+      setTaskActionToast('Joined this room.');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not join room');
+    }
+  };
+
+  const handleLeaveRoom = async () => {
+    if (!slug || !user) return;
+    if (!window.confirm('Leave this room? Your tasks stay on the board and you can rejoin anytime.')) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await leaveRoom(slug);
+      setRoom((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              members: (prev.members ?? []).filter((m: any) => m.user_id !== user.id),
+            }
+          : prev,
+      );
+      setBoardMemberFilter((prev) => (prev === String(user.id) ? 'all' : prev));
+      setTaskActionToast('Left room — you can rejoin anytime.');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not leave room');
+    }
+  };
+
   const handleRefreshSynthesis = async () => {
     if (!slug || synthesisRefreshing) return;
     setSynthesisRefreshing(true);
@@ -793,6 +837,25 @@ export function RoomPage() {
       </div>
       <div style={{ fontSize: 12, color: '#8C7355', fontStyle: 'italic', lineHeight: 1.5 }}>{room?.name}</div>
       <div style={{ height: 0.5, background: '#EDE4D8', margin: '12px 0' }} />
+      {user && !isMember ? (
+        <button
+          type="button"
+          onClick={() => void handleJoinRoom()}
+          style={{
+            width: '100%',
+            border: '0.5px dashed #35382F',
+            borderRadius: 8,
+            padding: '8px 12px',
+            fontSize: 12,
+            color: '#C4A882',
+            background: 'transparent',
+            cursor: 'pointer',
+            textAlign: 'center',
+          }}
+        >
+          Join this room
+        </button>
+      ) : null}
       {user && isMember ? (
         <button
           type="button"
@@ -810,6 +873,26 @@ export function RoomPage() {
           }}
         >
           Add your task
+        </button>
+      ) : null}
+      {user && isMember ? (
+        <button
+          type="button"
+          onClick={() => void handleLeaveRoom()}
+          style={{
+            width: '100%',
+            marginTop: 8,
+            border: '0.5px solid rgba(196,149,106,0.35)',
+            borderRadius: 8,
+            padding: '8px 12px',
+            fontSize: 12,
+            color: '#B0784F',
+            background: 'transparent',
+            cursor: 'pointer',
+            textAlign: 'center',
+          }}
+        >
+          Leave room
         </button>
       ) : null}
     </>
