@@ -5,6 +5,13 @@ export type ArenaExportPersona = {
   color?: string;
 };
 
+export type ArenaTranscriptOptions = {
+  /** Pin the export timestamp (tests use this); defaults to the current UTC time. */
+  exportedAt?: string;
+  /** Optional session id included in the header so archives keep provenance. */
+  sessionId?: string;
+};
+
 /**
  * Pick the winning scored take from an Arena response.
  * Prefers `is_winner`, then `winner_agent_id`, then highest score.
@@ -80,8 +87,9 @@ export function formatArenaWinnerExport(
 /**
  * Portable markdown transcript of an entire Arena session, one section per
  * exchange. Covers every stored turn (prompt, all four takes, winner badge,
- * confidence, key assumption) so a user can archive or share a whole
- * conversation, not just the latest round.
+ * confidence, key assumption) plus per-exchange timestamps and an optional
+ * session id, so a user can archive or share a whole conversation, not just
+ * the latest round.
  *
  * Deterministic except for the optional exported-at timestamp: pass
  * ``opts.exportedAt`` to pin it (tests do this); otherwise the caller gets
@@ -90,27 +98,38 @@ export function formatArenaWinnerExport(
 export function formatArenaTranscriptExport(
   turns: SessionTurn[],
   resolvePersona: (agentId: string) => ArenaExportPersona,
-  opts?: { exportedAt?: string },
+  opts?: ArenaTranscriptOptions,
 ): string {
-  const lines: string[] = [
-    '# Arena — session transcript',
-    '',
+  const exchanges = turns ?? [];
+  const lines: string[] = ['# Arena — session transcript', ''];
+  if (opts?.sessionId) {
+    lines.push(`**Session:** ${opts.sessionId}`, '');
+  }
+  lines.push(
     `**Exported:** ${opts?.exportedAt || new Date().toISOString()}`,
-    `**Exchanges:** ${turns.length}`,
+    `**Exchanges:** ${exchanges.length}`,
     '',
-  ];
+  );
 
-  if (!turns.length) {
+  if (!exchanges.length) {
     lines.push('_No exchanges in this session yet._', '', '---', '_Shared from Arena_');
     return lines.join('\n').trim() + '\n';
   }
 
-  turns.forEach((turn, index) => {
+  exchanges.forEach((turn, index) => {
     const category = (turn.prompt_category || '').trim();
     lines.push(`## Exchange ${index + 1}${category ? ` · ${category}` : ''}`, '');
-    lines.push(`**Question:** ${(turn.prompt || '').trim() || '(no prompt)'}`, '');
+    const timestamp = pickExchangeTimestamp(turn);
+    if (timestamp) {
+      lines.push(`**Time:** ${timestamp}`, '');
+    }
+    const prompt = (turn.prompt || '').trim().replace(/\s*\n\s*/g, ' ') || '(no prompt)';
+    lines.push(`**Question:** ${prompt}`, '');
 
     const entries = Object.values(turn.agent_responses || {});
+    if (!entries.length) {
+      lines.push('_No agent takes recorded for this exchange._', '');
+    }
     const winnerId = turn.winner_id;
     const sorted = [...entries].sort((a, b) => {
       const aWinner = a.agent_id === winnerId ? 1 : 0;
@@ -128,7 +147,8 @@ export function formatArenaTranscriptExport(
         Number.isFinite(agentResponse.confidence)
           ? ` · confidence ${agentResponse.confidence}`
           : '';
-      const oneLiner = (agentResponse.one_liner || '').trim() || '_(no one-liner)_';
+      const oneLiner =
+        (agentResponse.one_liner || '').trim().replace(/\s*\n\s*/g, ' ') || '_(no one-liner)_';
       const verdict = (agentResponse.verdict || '').trim();
       const assumption = (agentResponse.key_assumption || '').trim();
 
@@ -142,13 +162,27 @@ export function formatArenaTranscriptExport(
       lines.push('');
     }
 
-    if (index < turns.length - 1) {
+    if (index < exchanges.length - 1) {
       lines.push('---', '');
     }
   });
 
   lines.push('---', '_Shared from Arena_');
   return lines.join('\n').trim() + '\n';
+}
+
+/**
+ * Prefer the exchange's own timestamp; fall back to the newest stored take
+ * timestamp when the turn-level field is empty (older/partial session data).
+ */
+function pickExchangeTimestamp(turn: SessionTurn): string {
+  const own = (turn.timestamp || '').trim();
+  if (own) return own;
+  const responseTimes = Object.values(turn.agent_responses || {})
+    .map((response) => (response.timestamp || '').trim())
+    .filter(Boolean);
+  responseTimes.sort();
+  return responseTimes[responseTimes.length - 1] || '';
 }
 
 /**

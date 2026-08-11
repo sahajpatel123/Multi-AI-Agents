@@ -290,6 +290,8 @@ describe('formatArenaTranscriptExport', () => {
     expect(md).toContain('## Exchange 2 · task');
     expect(md).toContain('**Question:** Should we ship this week?');
     expect(md).toContain('**Question:** Who owns the launch checklist?');
+    expect(md).toContain('**Time:** 2026-08-07T10:00:00Z');
+    expect(md).toContain('**Time:** 2026-08-07T10:05:00Z');
 
     const firstExchange = md.slice(0, md.indexOf('## Exchange 2'));
     expect(firstExchange.indexOf('### The Analyst · winner · confidence 0.9'))
@@ -307,6 +309,63 @@ describe('formatArenaTranscriptExport', () => {
     });
     expect(md).toContain('### agent_1 · winner');
     expect(md).toContain('### agent_2');
+  });
+
+  it('includes an optional session id for provenance', () => {
+    const md = formatArenaTranscriptExport(turns, () => ({ name: 'The Analyst' }), {
+      exportedAt: '2026-08-07T12:00:00.000Z',
+      sessionId: 'session-abc123',
+    });
+    expect(md).toContain('**Session:** session-abc123');
+    expect(md.indexOf('**Session:** session-abc123')).toBeLessThan(md.indexOf('**Exported:**'));
+  });
+
+  it('normalizes multiline prompts and falls back to take timestamps', () => {
+    const md = formatArenaTranscriptExport(
+      [
+        {
+          turn_id: 't3',
+          prompt: 'First line\nSecond line',
+          prompt_category: 'statement',
+          winner_id: '',
+          timestamp: '',
+          agent_responses: {
+            agent_1: {
+              agent_id: 'agent_1',
+              agent_number: 1,
+              one_liner: 'A single line.',
+              verdict: 'Details.',
+              confidence: 0.8,
+              key_assumption: 'assumption',
+              timestamp: '2026-08-07T10:10:00Z',
+            },
+          },
+        },
+      ],
+      () => ({ name: 'The Analyst' }),
+      { exportedAt: '2026-08-07T12:00:00.000Z' },
+    );
+    expect(md).toContain('**Question:** First line Second line');
+    expect(md).toContain('**Time:** 2026-08-07T10:10:00Z');
+    expect(md).not.toContain('\nSecond line');
+  });
+
+  it('renders a placeholder when an exchange has no recorded takes', () => {
+    const md = formatArenaTranscriptExport(
+      [
+        {
+          turn_id: 't4',
+          prompt: 'Where did everyone go?',
+          winner_id: '',
+          timestamp: '2026-08-07T10:15:00Z',
+          agent_responses: {},
+        },
+      ],
+      () => ({ name: 'The Analyst' }),
+      { exportedAt: '2026-08-07T12:00:00.000Z' },
+    );
+    expect(md).toContain('_No agent takes recorded for this exchange._');
+    expect(md).toContain('**Time:** 2026-08-07T10:15:00Z');
   });
 
   it('renders a friendly placeholder for an empty session', () => {

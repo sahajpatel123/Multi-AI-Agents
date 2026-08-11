@@ -542,7 +542,9 @@ function App() {
   const handleDownloadTranscript = useCallback(() => {
     const turns = sessionData?.turns;
     if (!turns || !turns.length) return;
-    const md = formatArenaTranscriptExport(turns, resolveArenaPersona);
+    const md = formatArenaTranscriptExport(turns, resolveArenaPersona, {
+      sessionId: sessionData?.session_id,
+    });
     const stem = `arena-transcript-${(sessionData?.session_id || 'session').slice(0, 12)}`;
     const ok = downloadMarkdownFile(md, stem);
     if (ok) {

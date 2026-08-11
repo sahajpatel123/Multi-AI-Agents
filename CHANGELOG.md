@@ -74,6 +74,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - “Try again” buttons in Debate Mode error banners
 
 ### Changed
+- Markdown session transcript export now includes the session id, per-exchange
+  timestamps, and an empty-exchange fallback, and normalizes multi-line prompts
+  and one-liners for portable archives
 - Usage JSON export preserves the server's date-ranged filename and uses the
   shared Content-Disposition helper
 - Profile export section label now covers JSON and CSV data exports
