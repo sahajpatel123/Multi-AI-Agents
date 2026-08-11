@@ -379,6 +379,81 @@ export function formatArenaCsvExport(
   return lines.join('\n') + '\n';
 }
 
+/**
+ * Flat CSV transcript of an entire Arena session — one row per stored take,
+ * with the exchange's prompt, category, timestamp, and winner repeated on
+ * each row so spreadsheets can filter, pivot, and chart without joins.
+ * Mirrors the Markdown/JSON transcripts: winner-first ordering per exchange,
+ * stale winner ids dropped, and every cell quoted/escaped for CSV consumers.
+ * Multiline prompts and verdicts are preserved inside quoted cells.
+ */
+export function formatArenaTranscriptCsvExport(
+  turns: SessionTurn[],
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+): string {
+  const exchanges = turns ?? [];
+  const headers = [
+    'exchange',
+    'turnId',
+    'timestamp',
+    'prompt',
+    'promptCategory',
+    'winnerAgentId',
+    'agentId',
+    'agentName',
+    'isWinner',
+    'confidence',
+    'oneLiner',
+    'verdict',
+    'keyAssumption',
+    'agentTimestamp',
+  ];
+  const lines: string[] = [headers.map(toCsvCell).join(',')];
+
+  exchanges.forEach((turn, index) => {
+    const entries = Object.values(turn.agent_responses || {});
+    const winnerId =
+      turn.winner_id && entries.some((entry) => entry.agent_id === turn.winner_id)
+        ? turn.winner_id
+        : '';
+    const sorted = [...entries].sort((a, b) => {
+      const aWinner = a.agent_id === winnerId ? 1 : 0;
+      const bWinner = b.agent_id === winnerId ? 1 : 0;
+      if (aWinner !== bWinner) return bWinner - aWinner;
+      return a.agent_id.localeCompare(b.agent_id);
+    });
+    const exchangeTimestamp = pickExchangeTimestamp(turn);
+
+    for (const agentResponse of sorted) {
+      const persona = resolvePersona(agentResponse.agent_id) || {};
+      lines.push(
+        [
+          index + 1,
+          turn.turn_id || '',
+          exchangeTimestamp,
+          (turn.prompt || '').trim() || '(no prompt)',
+          (turn.prompt_category || '').trim(),
+          winnerId,
+          agentResponse.agent_id,
+          persona.name || agentResponse.agent_id,
+          agentResponse.agent_id === winnerId ? 'yes' : 'no',
+          typeof agentResponse.confidence === 'number' && Number.isFinite(agentResponse.confidence)
+            ? agentResponse.confidence
+            : '',
+          (agentResponse.one_liner || '').trim(),
+          (agentResponse.verdict || '').trim(),
+          (agentResponse.key_assumption || '').trim(),
+          (agentResponse.timestamp || '').trim(),
+        ]
+          .map(toCsvCell)
+          .join(','),
+      );
+    }
+  });
+
+  return lines.join('\n') + '\n';
+}
+
 function formatAgentBlock(scored: ScoredAgent, persona: ArenaExportPersona): string {
   const name = persona.name || scored.response.agent_id;
   const badge = scored.is_winner ? ' · winner' : '';

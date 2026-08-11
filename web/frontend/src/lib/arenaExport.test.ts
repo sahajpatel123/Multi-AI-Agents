@@ -4,6 +4,7 @@ import {
   formatArenaCsvExport,
   formatArenaJsonExport,
   formatArenaTranscriptExport,
+  formatArenaTranscriptCsvExport,
   formatArenaTranscriptJsonExport,
   formatArenaWinnerExport,
   pickArenaWinner,
@@ -218,6 +219,159 @@ describe('formatArenaCsvExport', () => {
     expect(csv).toContain('"yes"');
     expect(csv).toContain('"quality bar is fixed"');
     expect(csv.endsWith('\n')).toBe(true);
+  });
+});
+
+describe('formatArenaTranscriptCsvExport', () => {
+  const turns: SessionTurn[] = [
+    {
+      turn_id: 't1',
+      prompt: 'Should we ship this week?',
+      prompt_category: 'question',
+      winner_id: 'agent_1',
+      timestamp: '2026-08-07T10:00:00Z',
+      agent_responses: {
+        agent_2: {
+          agent_id: 'agent_2',
+          agent_number: 2,
+          one_liner: 'Question the deadline first.',
+          verdict: 'The week is arbitrary.',
+          confidence: 0.7,
+          key_assumption: 'time pressure is real',
+          timestamp: '2026-08-07T10:00:00Z',
+        },
+        agent_1: {
+          agent_id: 'agent_1',
+          agent_number: 1,
+          one_liner: 'Ship the smallest honest slice.',
+          verdict: 'Ship a thin vertical that de-risks the week without rewriting the roadmap.',
+          confidence: 0.9,
+          key_assumption: 'quality bar is fixed',
+          timestamp: '2026-08-07T10:00:00Z',
+        },
+      },
+    },
+    {
+      turn_id: 't2',
+      prompt: 'Who owns the launch checklist?',
+      prompt_category: 'task',
+      winner_id: 'agent_2',
+      timestamp: '2026-08-07T10:05:00Z',
+      agent_responses: {
+        agent_2: {
+          agent_id: 'agent_2',
+          agent_number: 2,
+          one_liner: 'Name a single owner.',
+          verdict: 'Assign one accountable owner and give them the checklist.',
+          confidence: 0.85,
+          key_assumption: 'ownership beats committee',
+          timestamp: '2026-08-07T10:05:00Z',
+        },
+        agent_1: {
+          agent_id: 'agent_1',
+          agent_number: 1,
+          one_liner: 'Spread the checklist.',
+          verdict: 'Distribute items by expertise.',
+          confidence: 0.6,
+          key_assumption: 'team is large enough',
+          timestamp: '2026-08-07T10:05:00Z',
+        },
+      },
+    },
+  ];
+
+  it('writes one row per take with winner first inside each exchange', () => {
+    const csv = formatArenaTranscriptCsvExport(turns, (id) => ({
+      name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher',
+    }));
+    const rows = csv.trim().split('\n');
+    expect(rows[0]).toBe(
+      '"exchange","turnId","timestamp","prompt","promptCategory","winnerAgentId","agentId","agentName","isWinner","confidence","oneLiner","verdict","keyAssumption","agentTimestamp"',
+    );
+    expect(rows).toHaveLength(5);
+    expect(rows[1]).toContain('"1","t1","2026-08-07T10:00:00Z","Should we ship this week?","question","agent_1","agent_1","The Analyst","yes","0.9"');
+    expect(rows[2]).toContain('"agent_2","The Philosopher","no"');
+    expect(rows[3]).toContain('"2","t2","2026-08-07T10:05:00Z","Who owns the launch checklist?","task","agent_2","agent_2","The Philosopher","yes"');
+    expect(rows[4]).toContain('"agent_1","The Analyst","no"');
+    expect(csv.endsWith('\n')).toBe(true);
+  });
+
+  it('quotes and escapes commas, quotes, and multiline cells', () => {
+    const csv = formatArenaTranscriptCsvExport(
+      [
+        {
+          turn_id: 't3',
+          prompt: 'Ship "now", please\nSecond line',
+          prompt_category: '',
+          winner_id: 'agent_1',
+          timestamp: '',
+          agent_responses: {
+            agent_1: {
+              agent_id: 'agent_1',
+              agent_number: 1,
+              one_liner: 'A, tricky one.',
+              verdict: 'Details\nacross lines.',
+              confidence: 0.8,
+              key_assumption: '',
+              timestamp: '',
+            },
+          },
+        },
+      ],
+      () => ({ name: 'The Analyst' }),
+    );
+    expect(csv).toContain('"Ship ""now"", please\nSecond line"');
+    expect(csv).toContain('"A, tricky one."');
+    expect(csv).toContain('"Details\nacross lines."');
+  });
+
+  it('returns only the header for an empty session', () => {
+    const csv = formatArenaTranscriptCsvExport([], () => ({ name: 'The Analyst' }));
+    expect(csv.trim().split('\n')).toHaveLength(1);
+    expect(csv).toContain('"exchange"');
+  });
+
+  it('drops a stale winner id and skips exchanges without recorded takes', () => {
+    const csv = formatArenaTranscriptCsvExport(
+      [
+        {
+          turn_id: 't4',
+          prompt: 'Where did everyone go?',
+          winner_id: 'agent_missing',
+          timestamp: '2026-08-07T10:15:00Z',
+          agent_responses: {},
+        },
+        {
+          turn_id: 't5',
+          prompt: 'Who should decide?',
+          winner_id: 'agent_missing',
+          timestamp: '2026-08-07T10:20:00Z',
+          agent_responses: {
+            agent_1: {
+              agent_id: 'agent_1',
+              agent_number: 1,
+              one_liner: 'One owner.',
+              verdict: 'Pick someone.',
+              confidence: 0.8,
+              key_assumption: 'someone is available',
+              timestamp: '2026-08-07T10:20:00Z',
+            },
+          },
+        },
+      ],
+      () => ({ name: 'The Analyst' }),
+    );
+    const rows = csv.trim().split('\n');
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toContain('"2","t5"');
+    expect(rows[1]).toContain('"The Analyst","no"');
+    expect(rows[1].includes('yes')).toBe(false);
+  });
+
+  it('falls back to agent ids when no persona name resolves', () => {
+    const csv = formatArenaTranscriptCsvExport(turns, () => ({ name: '' }));
+    const rows = csv.trim().split('\n');
+    expect(rows[1]).toContain('"agent_1","agent_1"');
   });
 });
 

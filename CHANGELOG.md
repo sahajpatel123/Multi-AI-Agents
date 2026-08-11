@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Full-session transcript CSV export (one spreadsheet row per take, winner first)
 - Full-session JSON transcript export (structured archive of every exchange and take)
 - Full-session Markdown transcript export (download the entire conversation, not just the latest round)
 - Usage history JSON export (14-day dated token rows plus period summary)

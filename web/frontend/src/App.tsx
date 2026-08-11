@@ -40,6 +40,7 @@ import {
   formatArenaCsvExport,
   formatArenaJsonExport,
   formatArenaTranscriptExport,
+  formatArenaTranscriptCsvExport,
   formatArenaTranscriptJsonExport,
   formatArenaWinnerExport,
 } from './lib/arenaExport';
@@ -110,6 +111,7 @@ function App() {
   const [arenaJsonCopied, setArenaJsonCopied] = useState(false);
   const [arenaCsvDownloaded, setArenaCsvDownloaded] = useState(false);
   const [transcriptDownloaded, setTranscriptDownloaded] = useState(false);
+  const [transcriptCsvDownloaded, setTranscriptCsvDownloaded] = useState(false);
   const [transcriptJsonDownloaded, setTranscriptJsonDownloaded] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
@@ -575,6 +577,24 @@ function App() {
       void track('arena_download_transcript_json');
     } else {
       setError('Could not download the transcript JSON. Try again or copy the latest take instead.');
+    }
+  }, [resolveArenaPersona, sessionData]);
+
+  const handleDownloadTranscriptCsv = useCallback(() => {
+    const turns = sessionData?.turns;
+    if (!turns || !turns.length) return;
+    const csv = formatArenaTranscriptCsvExport(turns, resolveArenaPersona);
+    const stem = `arena-transcript-${(sessionData?.session_id || 'session').slice(0, 12)}`;
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate(stem)}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    if (ok) {
+      setTranscriptCsvDownloaded(true);
+      window.setTimeout(() => setTranscriptCsvDownloaded(false), 1800);
+      void track('arena_download_transcript_csv');
+    } else {
+      setError('Could not download the transcript CSV. Try again or copy the latest take instead.');
     }
   }, [resolveArenaPersona, sessionData]);
 
@@ -1831,6 +1851,15 @@ function App() {
                     style={{ fontSize: 12 }}
                   >
                     {transcriptJsonDownloaded ? 'JSON saved' : 'Transcript .json'}
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn arena-btn--ghost arena-btn--sm interactive-surface interactive-surface--soft"
+                    onClick={() => handleDownloadTranscriptCsv()}
+                    title="Download the full session as a CSV spreadsheet"
+                    style={{ fontSize: 12 }}
+                  >
+                    {transcriptCsvDownloaded ? 'CSV saved' : 'Transcript .csv'}
                   </button>
                 </>
               ) : null}
