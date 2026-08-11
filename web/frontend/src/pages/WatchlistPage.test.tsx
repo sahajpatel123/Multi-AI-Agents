@@ -419,6 +419,30 @@ describe('WatchlistPage', () => {
     expect(dialog).toBeInTheDocument();
   });
 
+  it('locks background scroll and restores focus when the edit dialog closes', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    const editButton = screen.getByRole('button', {
+      name: 'Edit watch: How is the Indian IPO market evolving?',
+    });
+    fireEvent.click(editButton);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Edit watch' });
+    expect(dialog).toHaveAttribute('aria-describedby', 'watchlist-edit-hint');
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Edit watch' })).not.toBeInTheDocument();
+    });
+    expect(document.body.style.overflow).toBe('');
+    expect(editButton).toHaveFocus();
+  });
+
   it('downloads the current filtered view as CSV', async () => {
     renderPage();
     await waitFor(() => {

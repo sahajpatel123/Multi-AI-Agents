@@ -97,6 +97,9 @@ import { WatchlistStatsStrip } from '../components/WatchlistStatsStrip';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 function intervalBadge(hours: number): { num: string; unit: string } {
   if (hours === 168) return { num: '7', unit: 'DAYS' };
   if (hours === 72) return { num: '3', unit: 'DAYS' };
@@ -166,6 +169,8 @@ export function WatchlistPage() {
   const errorRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const editQuestionRef = useRef<HTMLTextAreaElement | null>(null);
+  const editDialogRef = useRef<HTMLDivElement | null>(null);
+  const editTriggerRef = useRef<HTMLElement | null>(null);
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
   const csvDownloadStatusTimerRef = useRef<number | null>(null);
@@ -277,8 +282,55 @@ export function WatchlistPage() {
     if (!editingItem) return;
     editQuestionRef.current?.focus();
     editQuestionRef.current?.select();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      const trigger = editTriggerRef.current;
+      if (trigger) {
+        trigger.focus();
+        editTriggerRef.current = null;
+      }
+    };
+  }, [editingItem]);
+
+  useEffect(() => {
+    if (!editingItem) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !editBusy) setEditingItem(null);
+      if (e.key === 'Escape') {
+        if (!editBusy) {
+          e.preventDefault();
+          setEditingItem(null);
+          setEditError(null);
+        }
+        return;
+      }
+      if (e.key !== 'Tab' || !editDialogRef.current) return;
+
+      const nodes = Array.from(
+        editDialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ).filter((el) => {
+        if (el.hasAttribute('disabled') || el.getAttribute('aria-hidden') === 'true') {
+          return false;
+        }
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      if (nodes.length === 0) return;
+
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (e.shiftKey) {
+        if (active === first || !editDialogRef.current.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !editDialogRef.current.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -358,13 +410,15 @@ export function WatchlistPage() {
     }
   };
 
-  const openEdit = (item: AgentWatchlistItem) => {
+  const openEdit = (item: AgentWatchlistItem, trigger: HTMLElement | null = null) => {
     setError(null);
     setEditError(null);
     setEditingItem(item);
     setEditQuestion(item.question);
     setEditLevel((item.expertise_level || 'curious').trim().toLowerCase() || 'curious');
     setEditDomain(item.expertise_domain || '');
+    editTriggerRef.current =
+      trigger ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
   };
 
   const closeEdit = () => {
@@ -1464,7 +1518,7 @@ export function WatchlistPage() {
                     <div className="watchlist-item__actions">
                       <button
                         type="button"
-                        onClick={() => openEdit(item)}
+                        onClick={(e) => openEdit(item, e.currentTarget)}
                         title="Edit the watched question and expertise settings"
                         aria-label={`Edit watch: ${item.question.slice(0, 80) || 'watched question'}`}
                         className="watchlist-link"
@@ -1774,16 +1828,19 @@ export function WatchlistPage() {
           onClick={editBusy ? undefined : closeEdit}
         >
           <div
+            ref={editDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="watchlist-edit-title"
+            aria-describedby="watchlist-edit-hint"
+            aria-busy={editBusy}
             className="watchlist-edit-dialog"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="watchlist-edit-title" className="watchlist-edit-dialog__title">
               Edit watch
             </h2>
-            <p className="watchlist-edit-dialog__hint">
+            <p id="watchlist-edit-hint" className="watchlist-edit-dialog__hint">
               Refining the question or expertise keeps run history intact.
             </p>
             <form

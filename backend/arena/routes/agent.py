@@ -3021,8 +3021,12 @@ async def patch_watchlist_item(
             )
         # Same capability gate as create: a watch that gains a
         # local-intent question must be rejected before the scheduler
-        # sees it.
-        _enforce_capability_gate(capability_id="watchlist.create", task_text=q)
+        # sees it. Only re-classify when the question actually changes —
+        # the dialog sends the full question with every save, so an
+        # expertise-only edit of an existing local-intent watch must not
+        # be rejected for a question the user isn't changing.
+        if q != item.question:
+            _enforce_capability_gate(capability_id="watchlist.create", task_text=q)
         item.question = q
 
     if body.expertise_level is not None:

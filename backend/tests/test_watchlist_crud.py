@@ -312,6 +312,49 @@ async def test_patch_question_honors_capability_gate(
 
 
 @pytest.mark.asyncio
+async def test_patch_expertise_only_skips_question_gate(
+    app_client, make_user, db_session, monkeypatch
+):
+    """Metadata-only edits must not re-classify an unchanged question.
+
+    The edit dialog sends the full watch on save, so an existing local-intent
+    watch would otherwise become impossible to refine once the honest-rejection
+    flag is enabled.
+    """
+    monkeypatch.setenv("CONDURA_HONEST_REJECTION_ENABLED", "true")
+    user = make_user(email="wl-patch-expertise-only@test.com", tier=UserTier.PRO)
+    item = WatchlistItem(
+        user_id=user.id,
+        question="Open Linear and create a ticket from this research",
+        interval_hours=24,
+        expertise_level="curious",
+        expertise_domain="",
+        is_active=True,
+        next_run_at=utcnow_naive(),
+        run_count=0,
+    )
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    res = await app_client.patch(
+        f"/api/agent/watchlist/{item.id}",
+        headers=_pro_headers(user),
+        json={
+            "question": "Open Linear and create a ticket from this research",
+            "expertise_level": "researcher",
+            "expertise_domain": "operations",
+        },
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["expertise_level"] == "researcher"
+    assert body["expertise_domain"] == "operations"
+    db_session.refresh(item)
+    assert item.question == "Open Linear and create a ticket from this research"
+
+
+@pytest.mark.asyncio
 async def test_patch_404_for_other_users_watch(app_client, make_user, db_session):
     alice = make_user(email="wl-patch-alice@test.com", tier=UserTier.PRO)
     bob = make_user(email="wl-patch-bob@test.com", tier=UserTier.PRO)
