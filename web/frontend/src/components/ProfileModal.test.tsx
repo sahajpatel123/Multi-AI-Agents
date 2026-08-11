@@ -51,6 +51,18 @@ const hoistedMocks = vi.hoisted(() => ({
     total_tasks_month: 0,
     usage_history: [],
   }),
+  getAnalyticsActivity: vi.fn().mockResolvedValue({
+    window_days: 30,
+    start_date: '2026-07-13',
+    end_date: '2026-08-11',
+    activity: [],
+    totals: { prompts: 42, debates: 3, discusses: 5, agent_runs: 7 },
+    active_days: 9,
+    current_streak: 2,
+    longest_streak: 6,
+    busiest_day: '2026-08-10',
+    busiest_day_count: 8,
+  }),
   getCalibrationStats: vi.fn().mockResolvedValue({
     score: null,
     coverage: 0,
@@ -88,6 +100,7 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../api', () => ({
   getSubscriptionStatus: hoistedMocks.getSubscriptionStatus,
   getUserUsage: hoistedMocks.getUserUsage,
+  getAnalyticsActivity: hoistedMocks.getAnalyticsActivity,
   getCalibrationStats: hoistedMocks.getCalibrationStats,
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
@@ -250,6 +263,35 @@ describe('ProfileModal', () => {
     usageTab.click();
     expect(
       await screen.findByRole('button', { name: /usage json export/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders activity highlights from the live timeline', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    expect(await screen.findByText('2 days')).toBeInTheDocument();
+    expect(screen.getByText('6 days')).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
+    expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.getByText(/busiest day/i)).toHaveTextContent('2026-08-10');
+    expect(hoistedMocks.getAnalyticsActivity).toHaveBeenCalledWith(30);
+  });
+
+  it('shows a fallback message when activity highlights fail to load', async () => {
+    hoistedMocks.getAnalyticsActivity.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    expect(
+      await screen.findByText('Could not load activity highlights'),
     ).toBeInTheDocument();
   });
 

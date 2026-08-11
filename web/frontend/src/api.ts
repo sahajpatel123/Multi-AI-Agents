@@ -2399,6 +2399,47 @@ export async function exportAnalyticsCategoryStatsCsv(windowDays: number = 30): 
   return response.blob();
 }
 
+export type AnalyticsActivityDay = {
+  date: string;
+  prompts: number;
+  debates: number;
+  discusses: number;
+  agent_runs: number;
+};
+
+export type AnalyticsActivityResponse = {
+  window_days: number;
+  start_date: string;
+  end_date: string;
+  activity: AnalyticsActivityDay[];
+  totals: {
+    prompts: number;
+    debates: number;
+    discusses: number;
+    agent_runs: number;
+  };
+  active_days: number;
+  current_streak: number;
+  longest_streak: number;
+  busiest_day: string | null;
+  busiest_day_count: number;
+};
+
+export async function getAnalyticsActivity(days: number = 30): Promise<AnalyticsActivityResponse> {
+  const response = await apiFetch(`/api/analytics/activity?days=${encodeURIComponent(String(days))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to load activity timeline'), response),
+      response.status,
+      err,
+    );
+  }
+  const data = await parseJsonSafely<AnalyticsActivityResponse>(response);
+  if (!data) throw new Error(withRequestId('Empty activity response', response));
+  return data;
+}
+
 export async function exportAnalyticsActivityCsv(days: number = 30): Promise<Blob> {
   const response = await apiFetch(`/api/analytics/activity/export.csv?days=${encodeURIComponent(String(days))}`);
   if (!response.ok) {

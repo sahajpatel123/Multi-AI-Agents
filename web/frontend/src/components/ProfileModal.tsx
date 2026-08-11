@@ -16,6 +16,7 @@ import {
   exportAnalyticsSummaryCsv,
   exportUserUsageCsv,
   exportUserUsageJson,
+  getAnalyticsActivity,
   getCalibrationStats,
   getMcpIntegrations,
   getRecentAgentFeedback,
@@ -25,6 +26,7 @@ import {
   patchUserProfile,
   postMcpManualConnect,
   reactivateAgentAddon,
+  type AnalyticsActivityResponse,
   type AnswerFeedbackStats,
   type RecentFeedbackItem,
   type SubscriptionStatusResponse,
@@ -248,6 +250,9 @@ export function ProfileModal() {
   const [usage, setUsage] = useState<UserUsageResponse | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageErr, setUsageErr] = useState<string | null>(null);
+  const [activity, setActivity] = useState<AnalyticsActivityResponse | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityErr, setActivityErr] = useState<string | null>(null);
   const [calStats, setCalStats] = useState<{
     total_ratings?: number;
     avg_delta?: number;
@@ -319,6 +324,29 @@ export function ProfileModal() {
       })
       .finally(() => {
         if (!cancelled) setUsageLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'usage') return;
+    let cancelled = false;
+    setActivityLoading(true);
+    setActivityErr(null);
+    void getAnalyticsActivity(30)
+      .then((a) => {
+        if (!cancelled) setActivity(a);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setActivityErr('Could not load activity highlights');
+          setActivity(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setActivityLoading(false);
       });
     return () => {
       cancelled = true;
@@ -1174,6 +1202,65 @@ export function ProfileModal() {
                   <span style={{ color: '#C4A882' }}>14 days ago</span>
                   <span style={{ color: '#C4A882' }}>Today</span>
                 </div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    color: '#A0A39A',
+                    letterSpacing: '0.10em',
+                    margin: '22px 0 10px',
+                  }}
+                >
+                  Activity highlights · 30 days
+                </div>
+                {activityLoading ? (
+                  <div style={{ padding: '18px 0', display: 'flex', justifyContent: 'center' }}>
+                    <MicroLoader />
+                  </div>
+                ) : activityErr ? (
+                  <p style={{ fontSize: 13, color: '#8C7355' }}>{activityErr}</p>
+                ) : activity ? (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 10 }}>
+                      {[
+                        {
+                          n: `${activity.current_streak} day${activity.current_streak === 1 ? '' : 's'}`,
+                          l: 'Current streak',
+                        },
+                        {
+                          n: `${activity.longest_streak} day${activity.longest_streak === 1 ? '' : 's'}`,
+                          l: 'Longest streak',
+                        },
+                        { n: activity.active_days, l: 'Active days' },
+                      ].map((t) => (
+                        <div key={t.l} style={{ background: '#F0E8DC', borderRadius: 8, padding: '12px 14px' }}>
+                          <div style={{ fontSize: 18, color: '#F3F0E7', fontWeight: 500, fontFamily: 'var(--vp-font-sans)' }}>{t.n}</div>
+                          <div style={{ fontSize: 10, color: '#A0A39A', marginTop: 3, letterSpacing: '0.04em' }}>{t.l}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+                      {[
+                        { n: activity.totals.prompts, l: 'Prompts' },
+                        { n: activity.totals.debates, l: 'Debates' },
+                        { n: activity.totals.discusses, l: 'Discusses' },
+                        { n: activity.totals.agent_runs, l: 'Agent runs' },
+                      ].map((t) => (
+                        <div key={t.l} style={{ background: '#EDE4D8', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 16, color: '#F3F0E7', fontWeight: 500, fontFamily: 'var(--vp-font-sans)' }}>{t.n.toLocaleString()}</div>
+                          <div style={{ fontSize: 9, color: '#A0A39A', marginTop: 2, letterSpacing: '0.04em' }}>{t.l}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {activity.busiest_day ? (
+                      <p style={{ fontSize: 12, color: '#8C7355', margin: '0 0 16px' }}>
+                        Busiest day:{' '}
+                        <strong style={{ color: '#F0B84E' }}>{activity.busiest_day}</strong> (
+                        {activity.busiest_day_count} actions)
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
                 <div
                   style={{
                     fontSize: 10,
