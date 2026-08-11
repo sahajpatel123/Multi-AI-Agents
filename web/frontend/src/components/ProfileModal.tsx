@@ -7,6 +7,7 @@ import {
   cancelAgentAddon,
   cancelSubscription,
   deleteMcpIntegration,
+  exportAnalyticsActivityCsv,
   exportAnalyticsCategoryStatsCsv,
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaWinRateCsv,
@@ -1267,6 +1268,35 @@ export function ProfileModal() {
                     }}
                   >
                     {activeExport === 'category' ? '⏳ Downloading…' : '📂 Categories Export'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeExport !== null}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '0.5px solid #E0D5C5',
+                      background: activeExport === 'activity' ? '#EDE4D8' : '#F0E8DC',
+                      color: '#F3F0E7',
+                      fontSize: 12,
+                      cursor: activeExport !== null ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'var(--vp-font-sans)',
+                      opacity: activeExport !== null && activeExport !== 'activity' ? 0.6 : 1,
+                    }}
+                    onClick={async () => {
+                      setActiveExport('activity');
+                      try {
+                        const blob = await exportAnalyticsActivityCsv(30);
+                        downloadBlobFile(blob, 'arena-activity-30d.csv');
+                      } catch {
+                        // ignore error
+                      } finally {
+                        setActiveExport(null);
+                      }
+                    }}
+                  >
+                    {activeExport === 'activity' ? '⏳ Downloading…' : '🗓️ Activity Export'}
                   </button>
                   <button
                     type="button"

@@ -2350,6 +2350,15 @@ export async function exportAnalyticsCategoryStatsCsv(windowDays: number = 30): 
   return response.blob();
 }
 
+export async function exportAnalyticsActivityCsv(days: number = 30): Promise<Blob> {
+  const response = await apiFetch(`/api/analytics/activity/export.csv?days=${encodeURIComponent(String(days))}`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string }>(response);
+    throw new ApiError(getErrorMessage(err, 'Failed to export activity CSV'), response.status, err);
+  }
+  return response.blob();
+}
+
 export async function exportAnalyticsPersonaStatsOverviewCsv(windowDays: number = 30): Promise<Blob> {
   const response = await apiFetch(`/api/analytics/persona-stats/export.csv?window_days=${encodeURIComponent(String(windowDays))}`);
   if (!response.ok) {

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Activity timeline CSV export with per-mode daily counts and a rollup footer
 - CI status badges to README.md
 - SECURITY.md with vulnerability reporting guidelines
 - CODEOWNERS for automatic code review assignment

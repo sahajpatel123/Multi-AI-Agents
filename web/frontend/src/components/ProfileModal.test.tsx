@@ -41,15 +41,21 @@ const hoistedMocks = vi.hoisted(() => ({
     plan: 'plus',
   }),
   getUserUsage: vi.fn().mockResolvedValue({
-    days: [],
-    totals: { questions: 0, characters: 0, agent_runs: 0, savings: 0 },
+    credits_used_today: 0,
+    credits_remaining_today: 0,
+    daily_limit: 0,
+    credits_used_week: 0,
+    credits_remaining_week: 0,
+    weekly_limit: 0,
+    total_tasks_month: 0,
+    usage_history: [],
   }),
   getCalibrationStats: vi.fn().mockResolvedValue({
     score: null,
     coverage: 0,
     avg_gap: null,
   }),
-  getRecentAgentFeedback: vi.fn().mockResolvedValue({ items: [] }),
+  getRecentAgentFeedback: vi.fn().mockResolvedValue([]),
   getUserAnswerFeedbackStats: vi.fn().mockResolvedValue({
     total: 0,
     accurate: 0,
@@ -85,6 +91,7 @@ vi.mock('../api', () => ({
   getRecentAgentFeedback: hoistedMocks.getRecentAgentFeedback,
   getUserAnswerFeedbackStats: hoistedMocks.getUserAnswerFeedbackStats,
   getMcpIntegrations: hoistedMocks.getMcpIntegrations,
+  exportAnalyticsActivityCsv: vi.fn().mockResolvedValue(new Blob(['date,prompts'], { type: 'text/csv' })),
   patchUserProfile: vi.fn().mockResolvedValue({ ok: true }),
   cancelSubscription: vi.fn().mockResolvedValue({ ok: true }),
   reactivateSubscription: vi.fn().mockResolvedValue({ ok: true }),
@@ -155,6 +162,18 @@ describe('ProfileModal', () => {
     const firstLabel = labels[0] as HTMLElement;
     expect(firstLabel.className).toBe('profile-modal__field-label');
     expect(firstLabel.style.fontSize).toBe('');
+  });
+
+  it('renders the analytics activity export button', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    const usageTab = screen.getByRole('button', { name: /usage/i });
+    usageTab.click();
+    expect(
+      await screen.findByRole('button', { name: /activity export/i }),
+    ).toBeInTheDocument();
   });
 
   it('applies the .profile-modal__input BEM class with --readonly variant on the disabled email', async () => {

@@ -3,6 +3,7 @@ import {
   exportAnalyticsSummaryCsv,
   exportAnalyticsPersonaWinRateCsv,
   exportAnalyticsCategoryStatsCsv,
+  exportAnalyticsActivityCsv,
   exportAnalyticsPersonaStatsOverviewCsv,
   exportAnalyticsPersonaStatsTimelineCsv,
   exportAnalyticsPersonaStatsByCategoryCsv,
@@ -64,6 +65,20 @@ describe('Analytics CSV export frontend API helpers', () => {
     expectBlob(res);
     expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
       '/api/analytics/category-stats/export.csv?window_days=7',
+      {}
+    );
+  });
+
+  it('exportAnalyticsActivityCsv fetches expected endpoint', async () => {
+    const mockBlob = new Blob(['date,prompts'], { type: 'text/csv' });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(mockBlob, { status: 200 })
+    );
+
+    const res = await exportAnalyticsActivityCsv(14);
+    expectBlob(res);
+    expect(apiFetchModule.apiFetch).toHaveBeenCalledWith(
+      '/api/analytics/activity/export.csv?days=14',
       {}
     );
   });

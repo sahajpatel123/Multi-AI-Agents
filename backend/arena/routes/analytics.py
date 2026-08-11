@@ -826,6 +826,89 @@ async def analytics_activity(
     }
 
 
+@router.get("/analytics/activity/export.csv")
+async def analytics_activity_csv(
+    user: UserResponse = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    days: int = Query(
+        30,
+        ge=1,
+        le=366,
+        description="Window length in days, ending today (UTC). Must match the JSON endpoint.",
+    ),
+) -> Response:
+    """CSV export of the GitHub-style activity timeline.
+
+    Reuses the JSON activity route so the spreadsheet and the dashboard
+    cannot drift. One row per UTC calendar day with the same per-mode
+    counters as the JSON endpoint, plus a footer rollup with the totals,
+    streaks, and busiest-day summary so the file is self-describing when
+    opened in isolation.
+
+    Follows the same defenses as the other analytics exports: user-scoped
+    rate limit, RFC 4180 quoting, no-store caching, nosniff, and
+    formula-injection defense via _csv_safe.
+    """
+    enforce_user_rate_limit(
+        user.id,
+        scope="analytics_activity_csv",
+        limit=60,
+        window_seconds=3600,
+        message="Too many activity CSV exports. Limit is 60 per hour.",
+    )
+
+    payload = await analytics_activity(days=days, user=user, db=db)
+
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    writer.writerow(["date", "prompts", "debates", "discusses", "agent_runs"])
+    for row in payload["activity"]:
+        # All values are server-computed, but route them through _csv_safe
+        # anyway for defense-in-depth.
+        writer.writerow(
+            [
+                _csv_safe(row["date"]),
+                row["prompts"],
+                row["debates"],
+                row["discusses"],
+                row["agent_runs"],
+            ]
+        )
+    # Footer rollup so the file is self-describing when opened in
+    # isolation. '#' prefix matches the de-facto CSV comment convention
+    # (Excel, Sheets, and most BI tools skip these rows).
+    writer.writerow(
+        [
+            f"# total_prompts={payload['totals']['prompts']}",
+            f"total_debates={payload['totals']['debates']}",
+            f"total_discusses={payload['totals']['discusses']}",
+            f"total_agent_runs={payload['totals']['agent_runs']}",
+            f"active_days={payload['active_days']}",
+            f"current_streak={payload['current_streak']}",
+            f"longest_streak={payload['longest_streak']}",
+            f"busiest_day={payload['busiest_day'] or ''}",
+            f"busiest_day_count={payload['busiest_day_count']}",
+        ]
+    )
+
+    filename = (
+        f"arena-activity-"
+        f"{payload['start_date']}-to-{payload['end_date']}.csv"
+    )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/analytics/persona-win-rate")
 async def analytics_persona_win_rate(
     user: UserResponse = Depends(get_current_user_required),
