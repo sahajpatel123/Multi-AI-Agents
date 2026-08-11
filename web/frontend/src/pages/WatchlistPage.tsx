@@ -18,7 +18,7 @@ import {
 } from '../api';
 import { useTier } from '../context/TierContext';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from '../lib/downloadTextFile';
 import { prefersReducedMotion } from '../lib/motion';
 import {
   formatWatchlistHistoryExport,
@@ -33,6 +33,7 @@ import {
 } from '../lib/watchlistIntervals';
 import {
   formatWatchlistExport,
+  formatWatchlistCsvExport,
   formatWatchlistItemCopy,
   formatWatchlistQuestionCopy,
 } from '../lib/watchlistExport';
@@ -119,6 +120,7 @@ export function WatchlistPage() {
   const [listSort, setListSort] = useState<WatchlistSort>('next_soon');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [csvDownloadStatus, setCsvDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   /** Per-card copy: which item id last acted, and which action. */
   const [itemCopyId, setItemCopyId] = useState<string | null>(null);
   const [itemCopyKind, setItemCopyKind] = useState<'watch' | 'question' | null>(null);
@@ -143,6 +145,7 @@ export function WatchlistPage() {
   const searchRef = useRef<HTMLInputElement | null>(null);
   const copyStatusTimerRef = useRef<number | null>(null);
   const downloadStatusTimerRef = useRef<number | null>(null);
+  const csvDownloadStatusTimerRef = useRef<number | null>(null);
   const reducedMotion = prefersReducedMotion();
 
   useEffect(() => {
@@ -431,6 +434,9 @@ export function WatchlistPage() {
       if (downloadStatusTimerRef.current != null) {
         window.clearTimeout(downloadStatusTimerRef.current);
       }
+      if (csvDownloadStatusTimerRef.current != null) {
+        window.clearTimeout(csvDownloadStatusTimerRef.current);
+      }
       if (historyCopyTimerRef.current != null) {
         window.clearTimeout(historyCopyTimerRef.current);
       }
@@ -462,6 +468,17 @@ export function WatchlistPage() {
     downloadStatusTimerRef.current = window.setTimeout(() => {
       setDownloadStatus('idle');
       downloadStatusTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashCsvDownloadStatus = (status: 'done' | 'failed') => {
+    if (csvDownloadStatusTimerRef.current != null) {
+      window.clearTimeout(csvDownloadStatusTimerRef.current);
+    }
+    setCsvDownloadStatus(status);
+    csvDownloadStatusTimerRef.current = window.setTimeout(() => {
+      setCsvDownloadStatus('idle');
+      csvDownloadStatusTimerRef.current = null;
     }, status === 'done' ? 2200 : 3200);
   };
 
@@ -564,6 +581,20 @@ export function WatchlistPage() {
     if (!ok) setError('Could not download run history — try Copy instead.');
   };
 
+  const buildWatchlistExportItems = () =>
+    filteredItems.map((item) => ({
+      question: item.question,
+      intervalHours: item.interval_hours,
+      isActive: item.is_active,
+      runCount: item.run_count,
+      lastRunAt: item.last_run_at,
+      nextRunAt: item.next_run_at,
+      latestTitle: item.latest_task?.title,
+      latestScore: item.latest_task?.final_score,
+      expertiseLevel: item.expertise_level,
+      expertiseDomain: item.expertise_domain,
+    }));
+
   const buildWatchlistMarkdown = () => {
     const filterBits: string[] = [];
     if (statusFilter !== 'all') filterBits.push(`status: ${statusFilter}`);
@@ -588,18 +619,7 @@ export function WatchlistPage() {
     if (q) filterBits.push(`search: “${q}”`);
     if (listSort !== 'next_soon') filterBits.push(`sort: ${watchlistSortLabel(listSort)}`);
     return formatWatchlistExport({
-      items: filteredItems.map((item) => ({
-        question: item.question,
-        intervalHours: item.interval_hours,
-        isActive: item.is_active,
-        runCount: item.run_count,
-        lastRunAt: item.last_run_at,
-        nextRunAt: item.next_run_at,
-        latestTitle: item.latest_task?.title,
-        latestScore: item.latest_task?.final_score,
-        expertiseLevel: item.expertise_level,
-        expertiseDomain: item.expertise_domain,
-      })),
+      items: buildWatchlistExportItems(),
       activeCount,
       activeCap,
       filterNote: filterBits.length > 0 ? filterBits.join(' · ') : undefined,
@@ -625,6 +645,20 @@ export function WatchlistPage() {
     } else {
       flashDownloadStatus('failed');
       setError('Could not download watchlist — try Copy instead.');
+    }
+  };
+
+  const downloadWatchlistCsv = () => {
+    const csv = formatWatchlistCsvExport(buildWatchlistExportItems());
+    const ok = downloadTextFile(csv, {
+      filename: `${withDownloadDate('agent-watchlist')}.csv`,
+      mimeType: 'text/csv;charset=utf-8',
+    });
+    if (ok) {
+      flashCsvDownloadStatus('done');
+    } else {
+      flashCsvDownloadStatus('failed');
+      setError('Could not download watchlist CSV — try Copy instead.');
     }
   };
 
@@ -765,7 +799,32 @@ export function WatchlistPage() {
                 ? 'Downloaded'
                 : downloadStatus === 'failed'
                   ? 'Failed'
-                  : 'Download .md'}
+                : 'Download .md'}
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadWatchlistCsv()}
+              title="Download current view as CSV"
+              aria-label={
+                csvDownloadStatus === 'done'
+                  ? 'Watchlist CSV downloaded'
+                  : csvDownloadStatus === 'failed'
+                    ? 'CSV download failed'
+                    : 'Download watchlist as CSV'
+              }
+              className={[
+                'watchlist-header-btn',
+                csvDownloadStatus === 'done' ? 'watchlist-header-btn--ok' : '',
+                csvDownloadStatus === 'failed' ? 'watchlist-header-btn--err' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {csvDownloadStatus === 'done'
+                ? 'Downloaded'
+                : csvDownloadStatus === 'failed'
+                  ? 'Failed'
+                  : 'Download .csv'}
             </button>
           </div>
         ) : null}

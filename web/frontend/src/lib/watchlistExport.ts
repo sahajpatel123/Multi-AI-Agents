@@ -140,3 +140,70 @@ export function formatWatchlistQuestionCopy(question: string): string {
   const q = (question || '').trim();
   return q ? `${q}\n` : '';
 }
+
+/**
+ * Characters that, when they appear as the first character of a CSV cell,
+ * cause Excel / Google Sheets / LibreOffice to evaluate the cell as a
+ * formula. OWASP CSV Injection guidance: prefix any cell that begins with
+ * one of these with a single quote to neutralize the formula (CWE-1236).
+ *
+ * Watchlist questions and latest task titles are user- and model-controlled
+ * text, so they must never be able to turn a downloaded CSV into an
+ * executable spreadsheet payload for the next analyst who opens it.
+ */
+const CSV_FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
+
+function toCsvCell(value: string | number | boolean | null | undefined): string {
+  const raw = value == null ? '' : String(value);
+  const safe =
+    raw && CSV_FORMULA_PREFIXES.includes(raw[0]) ? `'${raw}` : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+/**
+ * CSV export of the current watchlist view — one row per watched task.
+ * The first row is headers; every cell is quoted so commas/newlines in
+ * question or latest-task text cannot break the column layout. Filter
+ * context is deliberately kept out of the CSV so every row matches the
+ * header schema exactly (the Markdown export carries the filter note).
+ */
+export function formatWatchlistCsvExport(items: WatchlistExportItem[]): string {
+  const headers = [
+    'question',
+    'status',
+    'cadenceHours',
+    'runs',
+    'lastRunAt',
+    'nextRunAt',
+    'latestTitle',
+    'latestScore',
+    'expertiseLevel',
+    'expertiseDomain',
+  ];
+  const lines: string[] = [headers.map(toCsvCell).join(',')];
+  for (const item of items || []) {
+    lines.push(
+      [
+        (item.question || '').trim() || '(untitled question)',
+        item.isActive ? 'active' : 'paused',
+        typeof item.intervalHours === 'number' && Number.isFinite(item.intervalHours)
+          ? Math.max(0, Math.floor(item.intervalHours))
+          : '',
+        typeof item.runCount === 'number' && Number.isFinite(item.runCount)
+          ? Math.max(0, Math.floor(item.runCount))
+          : '',
+        item.lastRunAt || '',
+        item.isActive && item.nextRunAt ? item.nextRunAt : '',
+        (item.latestTitle || '').trim(),
+        typeof item.latestScore === 'number' && Number.isFinite(item.latestScore)
+          ? Math.round(item.latestScore)
+          : '',
+        (item.expertiseLevel || '').trim(),
+        (item.expertiseDomain || '').trim(),
+      ]
+        .map(toCsvCell)
+        .join(','),
+    );
+  }
+  return lines.join('\n') + '\n';
+}

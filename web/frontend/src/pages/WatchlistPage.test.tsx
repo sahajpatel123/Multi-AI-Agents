@@ -91,9 +91,16 @@ vi.mock('../lib/clipboard', () => ({
   copyToClipboard: vi.fn().mockResolvedValue(true),
 }));
 
-vi.mock('../lib/downloadTextFile', () => ({
-  downloadMarkdownFile: vi.fn().mockReturnValue(true),
-}));
+vi.mock('../lib/downloadTextFile', async () => {
+  const actual = await vi.importActual<typeof import('../lib/downloadTextFile')>(
+    '../lib/downloadTextFile',
+  );
+  return {
+    ...actual,
+    downloadMarkdownFile: vi.fn().mockReturnValue(true),
+    downloadTextFile: vi.fn().mockReturnValue(true),
+  };
+});
 
 vi.mock('../components/KeyboardShortcutsHelp', () => ({
   KeyboardShortcutsHelp: () => null,
@@ -279,5 +286,25 @@ describe('WatchlistPage', () => {
       expect(patchAgentWatchlistBulkMock).toHaveBeenCalledWith('pause_all');
     });
     expect(await screen.findByText('Paused 1 active watch.')).toBeInTheDocument();
+  });
+
+  it('downloads the current filtered view as CSV', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Pause all (1)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Download watchlist as CSV' }),
+    );
+
+    const { downloadTextFile } = await import('../lib/downloadTextFile');
+    expect(downloadTextFile).toHaveBeenCalledTimes(1);
+    const [csv, opts] = vi.mocked(downloadTextFile).mock.calls[0];
+    expect(csv).toContain('"question","status","cadenceHours"');
+    expect(csv).toContain('"How is the Indian IPO market evolving?","active","24","3"');
+    expect(csv).toContain('"Will the monsoon affect Indian agriculture exports?","paused","24","3"');
+    expect(opts.filename).toMatch(/^agent-watchlist-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(opts.mimeType).toBe('text/csv;charset=utf-8');
   });
 });

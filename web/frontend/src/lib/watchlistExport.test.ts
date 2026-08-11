@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatWatchlistExport,
+  formatWatchlistCsvExport,
   formatWatchlistItemCopy,
   formatWatchlistQuestionCopy,
 } from './watchlistExport';
@@ -97,5 +98,98 @@ describe('formatWatchlistQuestionCopy', () => {
 
   it('returns empty for blank', () => {
     expect(formatWatchlistQuestionCopy('   ')).toBe('');
+  });
+});
+
+describe('formatWatchlistCsvExport', () => {
+  const WATCHLIST_CSV_HEADER =
+    '"question","status","cadenceHours","runs","lastRunAt","nextRunAt","latestTitle","latestScore","expertiseLevel","expertiseDomain"';
+
+  it('renders one row per watch with a stable header schema', () => {
+    const csv = formatWatchlistCsvExport([
+      {
+        question: 'How is the Indian IPO market evolving?',
+        intervalHours: 24,
+        isActive: true,
+        runCount: 3,
+        lastRunAt: '2026-07-18T10:00:00Z',
+        nextRunAt: '2026-07-19T10:00:00Z',
+        latestTitle: 'IPO market mid-year recap',
+        latestScore: 82,
+        expertiseLevel: 'expert',
+        expertiseDomain: 'finance',
+      },
+      {
+        question: 'Will the monsoon affect Indian agriculture exports?',
+        intervalHours: 168,
+        isActive: false,
+        runCount: 0,
+      },
+    ]);
+
+    const lines = csv.trim().split('\n');
+    expect(lines[0]).toBe(WATCHLIST_CSV_HEADER);
+    expect(lines[1]).toBe(
+      '"How is the Indian IPO market evolving?","active","24","3","2026-07-18T10:00:00Z","2026-07-19T10:00:00Z","IPO market mid-year recap","82","expert","finance"',
+    );
+    expect(lines[2]).toBe(
+      '"Will the monsoon affect Indian agriculture exports?","paused","168","0","","","","","",""',
+    );
+    expect(lines).toHaveLength(3);
+  });
+
+  it('keeps next run empty for paused watches', () => {
+    const csv = formatWatchlistCsvExport([
+      {
+        question: 'Paused topic',
+        intervalHours: 72,
+        isActive: false,
+        nextRunAt: '2026-07-20T10:00:00Z',
+      },
+    ]);
+    expect(csv).toContain('"Paused topic","paused","72","","","","","","",""');
+  });
+
+  it('quotes commas, quotes, and newlines inside cells', () => {
+    const csv = formatWatchlistCsvExport([
+      {
+        question: 'Rates, tariffs, and "supply"',
+        intervalHours: 24,
+        isActive: true,
+        latestTitle: 'Line one\nLine two',
+      },
+    ]);
+    expect(csv).toContain('"Rates, tariffs, and ""supply"""');
+    expect(csv).toContain('"Line one\nLine two"');
+  });
+
+  it('neutralizes spreadsheet formula injection in every cell', () => {
+    const csv = formatWatchlistCsvExport([
+      {
+        question: '=HYPERLINK("https://evil.example")',
+        intervalHours: 24,
+        isActive: true,
+        latestTitle: '+SUM(1,1)',
+        latestScore: -5,
+        expertiseLevel: '@cmd',
+        expertiseDomain: '-hidden',
+      },
+    ]);
+    expect(csv).toContain(`"'=HYPERLINK(""https://evil.example"")"`);
+    expect(csv).toContain(`"'+SUM(1,1)"`);
+    expect(csv).toContain(`"'@cmd"`);
+    expect(csv).toContain(`"'-hidden"`);
+  });
+
+  it('returns just the header row for an empty view', () => {
+    const csv = formatWatchlistCsvExport([]);
+    expect(csv.trim().split('\n')).toEqual([WATCHLIST_CSV_HEADER]);
+  });
+
+  it('falls back to a placeholder question and blank numeric cells', () => {
+    const csv = formatWatchlistCsvExport([
+      { question: '   ', intervalHours: NaN, isActive: true },
+    ]);
+    expect(csv).toContain('"(untitled question)","active","","","","","","","",""');
   });
 });
