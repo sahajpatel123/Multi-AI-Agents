@@ -9,17 +9,25 @@ import { MotionButton } from '../components/MotionButton';
 import {
   ApiError,
   deleteAgentWatchlist,
+  exportAgentWatchlistStatisticsCsv,
   getAgentWatchlist,
   getAgentWatchlistHistory,
+  getAgentWatchlistStatistics,
   patchAgentWatchlistBulk,
   patchAgentWatchlist,
   postAgentWatchlistRun,
   type AgentWatchlistHistoryResponse,
   type AgentWatchlistItem,
+  type AgentWatchlistStatistics,
 } from '../api';
 import { useTier } from '../context/TierContext';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile, downloadTextFile, withDownloadDate } from '../lib/downloadTextFile';
+import {
+  downloadBlobFile,
+  downloadMarkdownFile,
+  downloadTextFile,
+  withDownloadDate,
+} from '../lib/downloadTextFile';
 import { prefersReducedMotion } from '../lib/motion';
 import {
   formatWatchlistHistoryExport,
@@ -84,6 +92,7 @@ import {
 } from '../lib/watchlistDomainFilter';
 import { formatRelativeFuture, formatRelativePast } from '../lib/relativeTime';
 import { watchlistBodyMode } from '../lib/watchlistView';
+import { WatchlistStatsStrip } from '../components/WatchlistStatsStrip';
 
 type WatchlistStatusFilter = 'all' | 'active' | 'paused';
 
@@ -141,6 +150,10 @@ export function WatchlistPage() {
   const [historyDownloadStatus, setHistoryDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
   const historyCopyTimerRef = useRef<number | null>(null);
   const historyDownloadTimerRef = useRef<number | null>(null);
+  const [stats, setStats] = useState<AgentWatchlistStatistics | null>(null);
+  const [statsDownloadBusy, setStatsDownloadBusy] = useState(false);
+  const [statsDownloadStatus, setStatsDownloadStatus] = useState<'idle' | 'done' | 'failed'>('idle');
+  const statsDownloadTimerRef = useRef<number | null>(null);
   const historyCacheRef = useRef(historyCache);
   historyCacheRef.current = historyCache;
   const errorRef = useRef<HTMLDivElement>(null);
@@ -198,6 +211,14 @@ export function WatchlistPage() {
     [historyOpenId, loadWatchHistory],
   );
 
+  const refreshStats = useCallback(async () => {
+    try {
+      setStats(await getAgentWatchlistStatistics());
+    } catch {
+      setStats(null);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     if (!canWatchlist) {
       setLoading(false);
@@ -205,6 +226,7 @@ export function WatchlistPage() {
     }
     setError(null);
     setLoading(true);
+    setStats(null);
     try {
       const data = await getAgentWatchlist();
       setItems(data.items);
@@ -221,8 +243,9 @@ export function WatchlistPage() {
       setLoadFailed(true);
     } finally {
       setLoading(false);
+      void refreshStats();
     }
-  }, [canWatchlist]);
+  }, [canWatchlist, refreshStats]);
 
   useEffect(() => {
     void load();
@@ -263,6 +286,7 @@ export function WatchlistPage() {
       const data = await getAgentWatchlist();
       setActiveCount(data.active_count);
       setTotalCount(data.total);
+      void refreshStats();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Update failed');
     }
@@ -291,6 +315,7 @@ export function WatchlistPage() {
       const result = await postAgentWatchlistRun(item.id);
       setItems((prev) => prev.map((x) => (x.id === item.id ? result.item : x)));
       setBulkNotice('Re-check started — the latest result will update shortly.');
+      void refreshStats();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not start this re-check');
     } finally {
@@ -308,6 +333,7 @@ export function WatchlistPage() {
       const data = await getAgentWatchlist();
       setActiveCount(data.active_count);
       setTotalCount(data.total);
+      void refreshStats();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Delete failed');
     }
@@ -334,6 +360,7 @@ export function WatchlistPage() {
       } else {
         setBulkNotice(`Resumed ${result.applied} paused watch${result.applied === 1 ? '' : 'es'}.`);
       }
+      void refreshStats();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Bulk watchlist update failed');
     } finally {
@@ -464,6 +491,9 @@ export function WatchlistPage() {
       if (historyDownloadTimerRef.current != null) {
         window.clearTimeout(historyDownloadTimerRef.current);
       }
+      if (statsDownloadTimerRef.current != null) {
+        window.clearTimeout(statsDownloadTimerRef.current);
+      }
     };
   }, []);
 
@@ -497,6 +527,17 @@ export function WatchlistPage() {
     csvDownloadStatusTimerRef.current = window.setTimeout(() => {
       setCsvDownloadStatus('idle');
       csvDownloadStatusTimerRef.current = null;
+    }, status === 'done' ? 2200 : 3200);
+  };
+
+  const flashStatsDownloadStatus = (status: 'done' | 'failed') => {
+    if (statsDownloadTimerRef.current != null) {
+      window.clearTimeout(statsDownloadTimerRef.current);
+    }
+    setStatsDownloadStatus(status);
+    statsDownloadTimerRef.current = window.setTimeout(() => {
+      setStatsDownloadStatus('idle');
+      statsDownloadTimerRef.current = null;
     }, status === 'done' ? 2200 : 3200);
   };
 
@@ -677,6 +718,26 @@ export function WatchlistPage() {
     } else {
       flashCsvDownloadStatus('failed');
       setError('Could not download watchlist CSV — try Copy instead.');
+    }
+  };
+
+  const downloadStatsCsv = async () => {
+    if (statsDownloadBusy) return;
+    setStatsDownloadBusy(true);
+    try {
+      const blob = await exportAgentWatchlistStatisticsCsv();
+      const ok = downloadBlobFile(blob, `${withDownloadDate('arena-watchlist-stats')}.csv`);
+      flashStatsDownloadStatus(ok ? 'done' : 'failed');
+      if (!ok) setError('Could not download watchlist statistics — try again.');
+    } catch (e) {
+      flashStatsDownloadStatus('failed');
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not download watchlist statistics — try again.',
+      );
+    } finally {
+      setStatsDownloadBusy(false);
     }
   };
 
@@ -866,6 +927,15 @@ export function WatchlistPage() {
           <p role="status" className="watchlist-page__bulk-notice">
             {bulkNotice}
           </p>
+        ) : null}
+
+        {bodyMode === 'list' && items.length > 0 ? (
+          <WatchlistStatsStrip
+            stats={stats}
+            downloadBusy={statsDownloadBusy}
+            downloadStatus={statsDownloadStatus}
+            onDownload={() => void downloadStatsCsv()}
+          />
         ) : null}
 
         {bodyMode === 'loading' ? (

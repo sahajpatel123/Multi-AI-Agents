@@ -45,6 +45,8 @@ const navigateMock = vi.fn();
 const getAgentWatchlistMock = vi.fn();
 const patchAgentWatchlistBulkMock = vi.fn();
 const postAgentWatchlistRunMock = vi.fn();
+const getAgentWatchlistStatisticsMock = vi.fn();
+const exportAgentWatchlistStatisticsCsvMock = vi.fn();
 
 vi.mock('../context/TierContext', () => ({
   useTier: () => tierState,
@@ -65,6 +67,10 @@ vi.mock('../api', async () => {
   return {
     ...actual,
     getAgentWatchlist: (...args: unknown[]) => getAgentWatchlistMock(...args),
+    getAgentWatchlistStatistics: (...args: unknown[]) =>
+      getAgentWatchlistStatisticsMock(...args),
+    exportAgentWatchlistStatisticsCsv: (...args: unknown[]) =>
+      exportAgentWatchlistStatisticsCsvMock(...args),
     getAgentWatchlistHistory: vi.fn().mockResolvedValue({
       items: [],
       stats: {
@@ -101,6 +107,7 @@ vi.mock('../lib/downloadTextFile', async () => {
     ...actual,
     downloadMarkdownFile: vi.fn().mockReturnValue(true),
     downloadTextFile: vi.fn().mockReturnValue(true),
+    downloadBlobFile: vi.fn().mockReturnValue(true),
   };
 });
 
@@ -179,6 +186,23 @@ describe('WatchlistPage', () => {
       message: 'Watch re-check started',
       item: { ...baseItem, run_count: 4, latest_task_id: 'task-new' },
     });
+    getAgentWatchlistStatisticsMock.mockReset();
+    getAgentWatchlistStatisticsMock.mockResolvedValue({
+      success: true,
+      total_items: 2,
+      active_items: 1,
+      total_runs: 4,
+      scored_runs: 3,
+      avg_score: 82,
+      min_score: 61,
+      max_score: 95,
+      success_rate: 75,
+      per_item_stats: {},
+    });
+    exportAgentWatchlistStatisticsCsvMock.mockReset();
+    exportAgentWatchlistStatisticsCsvMock.mockResolvedValue(
+      new Blob(['summary'], { type: 'text/csv' }),
+    );
   });
 
   it('renders the watchlist page chrome with BEM classes', async () => {
@@ -341,5 +365,27 @@ describe('WatchlistPage', () => {
     );
     expect(opts.filename).toMatch(/^agent-watchlist-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(opts.mimeType).toBe('text/csv;charset=utf-8');
+  });
+
+  it('renders the overview stats strip and downloads full statistics CSV', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Watchlist overview statistics')).toBeInTheDocument();
+    });
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+    expect(screen.getByText('Research runs')).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Download watchlist statistics as CSV' }),
+    );
+
+    await waitFor(() => {
+      expect(exportAgentWatchlistStatisticsCsvMock).toHaveBeenCalledTimes(1);
+    });
+    const { downloadBlobFile } = await import('../lib/downloadTextFile');
+    expect(downloadBlobFile).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(downloadBlobFile).mock.calls[0][1]).toMatch(
+      /^arena-watchlist-stats-\d{4}-\d{2}-\d{2}\.csv$/,
+    );
   });
 });

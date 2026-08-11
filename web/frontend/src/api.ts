@@ -1714,6 +1714,72 @@ export async function exportAgentWatchlistHistoryCsv(itemId: string, limit = 100
   return response.blob();
 }
 
+export type AgentWatchlistStatistics = {
+  success?: boolean;
+  total_items: number;
+  active_items: number;
+  total_runs: number;
+  scored_runs: number;
+  avg_score: number | null;
+  min_score: number | null;
+  max_score: number | null;
+  success_rate: number;
+  per_item_stats: Record<
+    string,
+    {
+      question: string;
+      run_count: number;
+      scored_run_count: number;
+      avg_score: number | null;
+      last_run_at: string | null;
+      is_active: boolean;
+      interval_hours: number;
+    }
+  >;
+};
+
+/** Aggregate health of the whole watchlist (items, runs, score summary). */
+export async function getAgentWatchlistStatistics(): Promise<AgentWatchlistStatistics> {
+  const response = await apiFetch(`/api/agent/watchlist/statistics`);
+  const data = await parseJsonSafely<
+    AgentWatchlistStatistics & { detail?: string | { message?: string } }
+  >(response);
+  if (!response.ok) {
+    throw new ApiError(
+      withRequestId(getErrorMessage(data, 'Could not load watchlist statistics'), response),
+      response.status,
+      data,
+    );
+  }
+  if (!data) throw new Error(withRequestId('Empty watchlist statistics response', response));
+  return {
+    success: data.success,
+    total_items: data.total_items ?? 0,
+    active_items: data.active_items ?? 0,
+    total_runs: data.total_runs ?? 0,
+    scored_runs: data.scored_runs ?? 0,
+    avg_score: data.avg_score ?? null,
+    min_score: data.min_score ?? null,
+    max_score: data.max_score ?? null,
+    success_rate: data.success_rate ?? 0,
+    per_item_stats: data.per_item_stats || {},
+  };
+}
+
+/** Download the backend watchlist statistics CSV (summary + per-item rows). */
+export async function exportAgentWatchlistStatisticsCsv(): Promise<Blob> {
+  const response = await apiFetch(`/api/agent/watchlist/statistics/export.csv`);
+  if (!response.ok) {
+    const err = await parseJsonSafely<{ detail?: string | { message?: string } }>(response);
+    throw new ApiError(
+      withRequestId(getErrorMessage(err, 'Failed to export watchlist statistics CSV'), response),
+      response.status,
+      err,
+    );
+  }
+  return response.blob();
+}
+
 export interface PromptImproveResult {
   original_prompt: string;
   improved_prompt: string;
