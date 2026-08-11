@@ -96,7 +96,10 @@ import {
   clampToMax,
 } from '../lib/charBudget';
 import { copyToClipboard } from '../lib/clipboard';
-import { downloadMarkdownFile } from '../lib/downloadTextFile';
+import {
+  downloadBlobFile,
+  downloadMarkdownFile,
+} from '../lib/downloadTextFile';
 import { formatAgentAnswerExport } from '../lib/agentAnswerExport';
 import {
   formatAgentHistoryExport,
@@ -1881,12 +1884,11 @@ export function AgentPage() {
     setExportingMd(true);
     try {
       const blob = await exportAgentTaskMarkdown(result.task_id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `arena-report-${result.task_id.slice(0, 8)}.md`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const ok = downloadBlobFile(
+        blob,
+        `arena-report-${result.task_id.slice(0, 8)}.md`,
+      );
+      if (!ok) setError('Export failed');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Export failed');
     } finally {
