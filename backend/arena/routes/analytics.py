@@ -1134,6 +1134,12 @@ async def analytics_persona_win_rate(
       ``low_confidence`` (fewer than ``LOW_CONFIDENCE_APPEARANCES``
       appearances) so a dashboard can grey it out instead of celebrating noise.
 
+    - **Trends are bucketed by week, not smoothed.** Each row carries a
+      ``trend`` array of weekly buckets covering the window (capped at 26
+      weeks) so a dashboard can show whether a persona is improving or
+      fading. Empty weeks report ``win_rate: null`` — absence is not a 0%
+      week. Bucket totals sum exactly to the row totals.
+
     Scoped to the caller — this is "which minds win for *me*", not a global
     leaderboard. Bounded like the sibling analytics endpoints: capped window,
     two-column projection, and a per-user hourly limit.
@@ -1162,6 +1168,7 @@ async def analytics_persona_win_rate(
             ScoringAudit.winner_persona_id,
             ScoringAudit.persona_ids_used,
             ScoringAudit.fallback_used,
+            ScoringAudit.created_at,
         )
         .filter(
             ScoringAudit.user_id == user.id,
@@ -1170,13 +1177,29 @@ async def analytics_persona_win_rate(
         .all()
     )
 
+    # Weekly buckets partition the whole window so every persona's trend
+    # shares one time axis and sums exactly to the row-level totals. Capped at
+    # 26 buckets (~6 months): beyond that a sparkline is noise and the payload
+    # is wasted on a profile tab. Empty buckets carry ``win_rate: null`` — an
+    # absent week is "no data", not a 0% week.
+    MAX_TREND_BUCKETS = 26
+    bucket_count = min(MAX_TREND_BUCKETS, (window_days + 6) // 7)
+    bucket_starts = [
+        window_start_day + timedelta(days=7 * i) for i in range(bucket_count)
+    ]
+    bucket_ends = [
+        min(start + timedelta(days=6), now_utc.date()) for start in bucket_starts
+    ]
+
     appearances: Counter = Counter()
     wins: Counter = Counter()
+    bucket_appearances: list[Counter] = [Counter() for _ in range(bucket_count)]
+    bucket_wins: list[Counter] = [Counter() for _ in range(bucket_count)]
     scored_exchanges = 0
     unattributed_exchanges = 0
     fallback_exchanges = 0
 
-    for winner_persona_id, persona_ids_used, fallback_used in rows:
+    for winner_persona_id, persona_ids_used, fallback_used, created_at in rows:
         if fallback_used:
             fallback_exchanges += 1
             if not include_fallback:
@@ -1191,12 +1214,16 @@ async def analytics_persona_win_rate(
             continue
 
         scored_exchanges += 1
+        days_since_start = max((created_at.date() - window_start_day).days, 0)
+        bucket_index = min(days_since_start // 7, bucket_count - 1)
         # De-duplicate within a panel: a persona seated twice in one exchange
         # still only had one chance to win it.
         for persona_id in set(panel):
             appearances[persona_id] += 1
+            bucket_appearances[bucket_index][persona_id] += 1
         if winner_persona_id and winner_persona_id in panel:
             wins[winner_persona_id] += 1
+            bucket_wins[bucket_index][winner_persona_id] += 1
 
     personas = []
     for persona_id, appearance_count in appearances.items():
@@ -1204,6 +1231,23 @@ async def analytics_persona_win_rate(
             continue
         win_count = wins.get(persona_id, 0)
         metadata = PERSONA_METADATA.get(persona_id) or {}
+        trend = []
+        for i in range(bucket_count):
+            bucket_appearance_count = bucket_appearances[i].get(persona_id, 0)
+            bucket_win_count = bucket_wins[i].get(persona_id, 0)
+            trend.append(
+                {
+                    "bucket_start": bucket_starts[i].isoformat(),
+                    "bucket_end": bucket_ends[i].isoformat(),
+                    "appearances": bucket_appearance_count,
+                    "wins": bucket_win_count,
+                    "win_rate": (
+                        round(bucket_win_count / bucket_appearance_count, 3)
+                        if bucket_appearance_count
+                        else None
+                    ),
+                }
+            )
         personas.append(
             {
                 "persona_id": persona_id,
@@ -1213,6 +1257,7 @@ async def analytics_persona_win_rate(
                 "wins": win_count,
                 "win_rate": round(win_count / appearance_count, 3),
                 "low_confidence": appearance_count < LOW_CONFIDENCE_APPEARANCES,
+                "trend": trend,
             }
         )
 

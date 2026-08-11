@@ -512,3 +512,100 @@ async def test_scoped_to_caller(app_client, make_user, db_session):
 async def test_requires_auth(app_client):
     res = await app_client.get("/api/analytics/persona-win-rate")
     assert res.status_code == 401
+
+
+# ─── Weekly trend buckets ───────────────────────────────────────────────────
+
+
+def _iso_date(s: str) -> bool:
+    """Crude but sufficient ISO-date shape check for trend buckets."""
+    return len(s) == 10 and s[4] == "-" and s[7] == "-"
+
+
+@pytest.mark.asyncio
+async def test_trend_buckets_partition_window(app_client, make_user, db_session):
+    """Row totals are exactly the sum of the weekly trend buckets."""
+    user = make_user(email="pwr-trend@test.com", tier=UserTier.PRO)
+    panel = ["analyst", "philosopher"]
+    # ~40 days ago → bucket 7 of 13; ~2 days ago → bucket 12 of 13.
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        hours_ago=24 * 40,
+    )
+    _seed_audit(
+        db_session,
+        user_id=user.id,
+        winner_persona_id="analyst",
+        panel=panel,
+        hours_ago=24 * 2,
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-win-rate", headers=_pro_headers(user)
+    )
+    body = res.json()
+
+    analyst = _row(body, "analyst")
+    assert analyst["appearances"] == 2
+    assert analyst["wins"] == 2
+    assert len(analyst["trend"]) == 13  # 90-day default window → 13 weekly buckets
+    assert sum(p["appearances"] for p in analyst["trend"]) == analyst["appearances"]
+    assert sum(p["wins"] for p in analyst["trend"]) == analyst["wins"]
+
+    filled = [p for p in analyst["trend"] if p["appearances"] > 0]
+    assert [p["appearances"] for p in filled] == [1, 1]
+    assert [p["win_rate"] for p in filled] == [1.0, 1.0]
+    for p in analyst["trend"]:
+        if p["appearances"] == 0:
+            assert p["wins"] == 0
+            assert p["win_rate"] is None
+
+    # Philosopher was seated both times and never won: same grid, zero rate.
+    philosopher = _row(body, "philosopher")
+    assert [p["bucket_start"] for p in philosopher["trend"]] == [
+        p["bucket_start"] for p in analyst["trend"]
+    ]
+    assert philosopher["trend"][12]["appearances"] == 1
+    assert philosopher["trend"][12]["win_rate"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_trend_bucket_count_ceils_to_weeks_and_caps(
+    app_client, make_user, db_session
+):
+    user = make_user(email="pwr-trend-len@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"]
+    )
+    db_session.commit()
+
+    for window_days, expected in ((1, 1), (7, 1), (8, 2), (30, 5), (365, 26)):
+        res = await app_client.get(
+            f"/api/analytics/persona-win-rate?window_days={window_days}",
+            headers=_pro_headers(user),
+        )
+        assert res.status_code == 200, window_days
+        assert len(_row(res.json(), "analyst")["trend"]) == expected, window_days
+
+
+@pytest.mark.asyncio
+async def test_trend_buckets_are_iso_and_monotonic(app_client, make_user, db_session):
+    user = make_user(email="pwr-trend-shape@test.com", tier=UserTier.PRO)
+    _seed_audit(
+        db_session, user_id=user.id, winner_persona_id="analyst", panel=["analyst"]
+    )
+    db_session.commit()
+
+    res = await app_client.get(
+        "/api/analytics/persona-win-rate?window_days=30", headers=_pro_headers(user)
+    )
+    trend = _row(res.json(), "analyst")["trend"]
+    for prev, point in zip(trend, trend[1:]):
+        assert _iso_date(point["bucket_start"])
+        assert _iso_date(point["bucket_end"])
+        assert point["bucket_start"] <= point["bucket_end"]
+        assert point["bucket_start"] > prev["bucket_end"]

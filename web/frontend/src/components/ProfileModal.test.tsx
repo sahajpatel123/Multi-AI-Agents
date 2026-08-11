@@ -82,6 +82,13 @@ const hoistedMocks = vi.hoisted(() => ({
         wins: 6,
         win_rate: 0.75,
         low_confidence: false,
+        trend: [
+          { bucket_start: '2026-07-13', bucket_end: '2026-07-19', appearances: 2, wins: 1, win_rate: 0.5 },
+          { bucket_start: '2026-07-20', bucket_end: '2026-07-26', appearances: 1, wins: 1, win_rate: 1 },
+          { bucket_start: '2026-07-27', bucket_end: '2026-08-02', appearances: 2, wins: 2, win_rate: 1 },
+          { bucket_start: '2026-08-03', bucket_end: '2026-08-09', appearances: 2, wins: 1, win_rate: 0.5 },
+          { bucket_start: '2026-08-10', bucket_end: '2026-08-11', appearances: 1, wins: 1, win_rate: 1 },
+        ],
       },
       {
         persona_id: 'philosopher',
@@ -91,6 +98,11 @@ const hoistedMocks = vi.hoisted(() => ({
         wins: 2,
         win_rate: 0.667,
         low_confidence: true,
+        trend: [
+          { bucket_start: '2026-07-13', bucket_end: '2026-07-19', appearances: 2, wins: 1, win_rate: 0.5 },
+          { bucket_start: '2026-07-20', bucket_end: '2026-07-26', appearances: 0, wins: 0, win_rate: null },
+          { bucket_start: '2026-07-27', bucket_end: '2026-08-02', appearances: 1, wins: 1, win_rate: 1 },
+        ],
       },
     ],
     best_persona_id: 'analyst',
@@ -382,6 +394,42 @@ describe('ProfileModal', () => {
     expect(within(group).getByText(/best:/i)).toHaveTextContent('The Analyst');
     expect(within(group).getByText('low sample')).toBeInTheDocument();
     expect(hoistedMocks.getAnalyticsPersonaWinRate).toHaveBeenCalledWith(30);
+  });
+
+  it('renders an accessible weekly trend sparkline per persona', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const group = await screen.findByRole('group', { name: /persona win rates/i });
+    expect(
+      within(group).getByRole('img', { name: /The Analyst win rate trend/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(group).getByRole('img', { name: /The Philosopher win rate trend/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('sparkline label spells out rates and marks empty weeks as no data', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    screen.getByRole('button', { name: /usage/i }).click();
+
+    const group = await screen.findByRole('group', { name: /persona win rates/i });
+    expect(
+      within(group).getByRole('img', {
+        name: 'The Analyst win rate trend over the last 5 weeks: 50%, 100%, 100%, 50%, 100%',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(group).getByRole('img', {
+        name: 'The Philosopher win rate trend over the last 3 weeks: 50%, no data, 100%',
+      }),
+    ).toBeInTheDocument();
   });
 
   it('shows a fallback message when persona win rates fail to load', async () => {

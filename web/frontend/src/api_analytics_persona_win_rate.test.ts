@@ -33,6 +33,13 @@ function winRateRow(overrides: Record<string, unknown> = {}) {
     wins: 6,
     win_rate: 0.75,
     low_confidence: false,
+    trend: [
+      { bucket_start: '2026-07-13', bucket_end: '2026-07-19', appearances: 2, wins: 1, win_rate: 0.5 },
+      { bucket_start: '2026-07-20', bucket_end: '2026-07-26', appearances: 1, wins: 1, win_rate: 1 },
+      { bucket_start: '2026-07-27', bucket_end: '2026-08-02', appearances: 2, wins: 2, win_rate: 1 },
+      { bucket_start: '2026-08-03', bucket_end: '2026-08-09', appearances: 2, wins: 1, win_rate: 0.5 },
+      { bucket_start: '2026-08-10', bucket_end: '2026-08-11', appearances: 1, wins: 1, win_rate: 1 },
+    ],
     ...overrides,
   };
 }
@@ -151,6 +158,124 @@ describe('Analytics persona win-rate frontend API helper', () => {
     await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
       status: 200,
       message: 'Malformed persona win rate response (Request ID: req-dupe)',
+    });
+  });
+
+  it('rejects trend buckets that do not sum to the row totals', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          winRatePayload({
+            personas: [
+              winRateRow({
+                trend: [
+                  { bucket_start: '2026-07-13', bucket_end: '2026-07-19', appearances: 7, wins: 6, win_rate: 0.857 },
+                  { bucket_start: '2026-07-20', bucket_end: '2026-07-26', appearances: 0, wins: 0, win_rate: null },
+                ],
+              }),
+            ],
+          }),
+        ),
+        { status: 200, headers: { 'x-request-id': 'req-trend-sum' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-trend-sum)',
+    });
+  });
+
+  it('rejects a win_rate on an empty trend bucket', async () => {
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          winRatePayload({
+            personas: [
+              winRateRow({
+                trend: [
+                  { bucket_start: '2026-07-13', bucket_end: '2026-07-19', appearances: 0, wins: 0, win_rate: 0.5 },
+                ],
+              }),
+            ],
+          }),
+        ),
+        { status: 200, headers: { 'x-request-id': 'req-trend-empty' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-trend-empty)',
+    });
+  });
+
+  it('rejects trend buckets that are not strictly ascending', async () => {
+    const outOfOrder = [
+      { bucket_start: '2026-07-20', bucket_end: '2026-07-26', appearances: 1, wins: 1, win_rate: 1 },
+      { bucket_start: '2026-07-13', bucket_end: '2026-07-19', appearances: 7, wins: 5, win_rate: 0.714 },
+    ];
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          winRatePayload({ personas: [winRateRow({ trend: outOfOrder })] }),
+        ),
+        { status: 200, headers: { 'x-request-id': 'req-trend-order' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-trend-order)',
+    });
+  });
+
+  it('rejects a trend with more than 26 buckets', async () => {
+    const tooLong = Array.from({ length: 27 }, (_, i) => {
+      const start = new Date(Date.UTC(2026, 0, 1 + 7 * i));
+      const end = new Date(Date.UTC(2026, 0, 7 + 7 * i));
+      return {
+        bucket_start: start.toISOString().slice(0, 10),
+        bucket_end: end.toISOString().slice(0, 10),
+        appearances: i === 0 ? 8 : 0,
+        wins: i === 0 ? 6 : 0,
+        win_rate: i === 0 ? 0.75 : null,
+      };
+    });
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          winRatePayload({ personas: [winRateRow({ trend: tooLong })] }),
+        ),
+        { status: 200, headers: { 'x-request-id': 'req-trend-cap' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).rejects.toMatchObject({
+      status: 200,
+      message: 'Malformed persona win rate response (Request ID: req-trend-cap)',
+    });
+  });
+
+  it('accepts null win rates for empty buckets within a valid trend', async () => {
+    const withGap = [
+      { bucket_start: '2026-07-13', bucket_end: '2026-07-19', appearances: 5, wins: 4, win_rate: 0.8 },
+      { bucket_start: '2026-07-20', bucket_end: '2026-07-26', appearances: 0, wins: 0, win_rate: null },
+      { bucket_start: '2026-07-27', bucket_end: '2026-08-02', appearances: 3, wins: 2, win_rate: 0.667 },
+    ];
+    vi.mocked(apiFetchModule.apiFetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          winRatePayload({
+            personas: [winRateRow({ appearances: 8, wins: 6, win_rate: 0.75, trend: withGap })],
+          }),
+        ),
+        { status: 200, headers: { 'x-request-id': 'req-trend-gap' } },
+      ),
+    );
+
+    await expect(getAnalyticsPersonaWinRate()).resolves.toMatchObject({
+      personas: [{ persona_id: 'analyst' }],
     });
   });
 

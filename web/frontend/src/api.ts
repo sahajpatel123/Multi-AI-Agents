@@ -2380,6 +2380,15 @@ export type AnalyticsPersonaWinRateRow = {
   wins: number;
   win_rate: number;
   low_confidence: boolean;
+  trend: AnalyticsPersonaWinRateTrendPoint[];
+};
+
+export type AnalyticsPersonaWinRateTrendPoint = {
+  bucket_start: string;
+  bucket_end: string;
+  appearances: number;
+  wins: number;
+  win_rate: number | null;
 };
 
 export type AnalyticsPersonaWinRateResponse = {
@@ -2400,6 +2409,7 @@ export type AnalyticsPersonaWinRateResponse = {
 function isAnalyticsPersonaWinRateRow(value: unknown): value is AnalyticsPersonaWinRateRow {
   if (!value || typeof value !== 'object') return false;
   const row = value as Record<string, unknown>;
+  if (!Array.isArray(row.trend) || row.trend.length > 26) return false;
   return (
     typeof row.persona_id === 'string' &&
     row.persona_id.length > 0 &&
@@ -2412,8 +2422,47 @@ function isAnalyticsPersonaWinRateRow(value: unknown): value is AnalyticsPersona
     Number.isFinite(row.win_rate) &&
     row.win_rate >= 0 &&
     row.win_rate <= 1 &&
-    typeof row.low_confidence === 'boolean'
+    typeof row.low_confidence === 'boolean' &&
+    row.trend.every(isAnalyticsPersonaWinRateTrendPoint) &&
+    isSortedAscendingTrend(row.trend) &&
+    row.trend.reduce((sum, point) => sum + point.appearances, 0) === row.appearances &&
+    row.trend.reduce((sum, point) => sum + point.wins, 0) === row.wins
   );
+}
+
+function isIsoDateString(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime());
+}
+
+function isAnalyticsPersonaWinRateTrendPoint(
+  value: unknown,
+): value is AnalyticsPersonaWinRateTrendPoint {
+  if (!value || typeof value !== 'object') return false;
+  const point = value as Record<string, unknown>;
+  return (
+    isIsoDateString(point.bucket_start) &&
+    isIsoDateString(point.bucket_end) &&
+    point.bucket_end >= point.bucket_start &&
+    isNonNegativeInteger(point.appearances) &&
+    isNonNegativeInteger(point.wins) &&
+    point.wins <= point.appearances &&
+    (point.win_rate === null
+      ? point.appearances === 0
+      : typeof point.win_rate === 'number' &&
+        Number.isFinite(point.win_rate) &&
+        point.win_rate >= 0 &&
+        point.win_rate <= 1 &&
+        point.appearances > 0)
+  );
+}
+
+function isSortedAscendingTrend(trend: AnalyticsPersonaWinRateTrendPoint[]): boolean {
+  for (let i = 1; i < trend.length; i += 1) {
+    if (trend[i].bucket_start <= trend[i - 1].bucket_end) return false;
+  }
+  return true;
 }
 
 function isNonNegativeInteger(value: unknown): value is number {

@@ -29,6 +29,7 @@ import {
   reactivateAgentAddon,
   type AnalyticsActivityResponse,
   type AnalyticsPersonaWinRateResponse,
+  type AnalyticsPersonaWinRateTrendPoint,
   type AnswerFeedbackStats,
   type RecentFeedbackItem,
   type SubscriptionStatusResponse,
@@ -213,6 +214,91 @@ function UsageChart({
   }, [data, isPlaceholder]);
 
   return <canvas ref={canvasRef} style={{ width: '100%', height: 90, display: 'block' }} />;
+}
+
+function WinRateTrendSparkline({
+  trend,
+  personaName,
+  color,
+}: {
+  trend: AnalyticsPersonaWinRateTrendPoint[];
+  personaName: string;
+  color: string;
+}) {
+  const width = 72;
+  const height = 20;
+  const padding = 2;
+
+  const points = trend.map((point, index) => ({
+    index,
+    x:
+      trend.length > 1
+        ? (index / (trend.length - 1)) * (width - padding * 2) + padding
+        : width / 2,
+    y:
+      point.win_rate === null
+        ? null
+        : height - padding - point.win_rate * (height - padding * 2),
+  }));
+
+  if (!points.some((p) => p.y !== null)) {
+    return (
+      <span style={{ color: '#A0A39A', fontSize: 10, fontFamily: 'var(--vp-font-sans)' }}>
+        no data
+      </span>
+    );
+  }
+
+  // Gaps are real: split the polyline into consecutive non-null runs so an
+  // absent week renders as a break, not as a drawn 0% dip.
+  const runs: { x: number; y: number }[][] = [];
+  let current: { x: number; y: number }[] = [];
+  const plotted: { index: number; x: number; y: number }[] = [];
+  for (const p of points) {
+    if (p.y === null) {
+      if (current.length > 0) {
+        runs.push(current);
+        current = [];
+      }
+    } else {
+      current.push({ x: p.x, y: p.y });
+      plotted.push({ index: p.index, x: p.x, y: p.y });
+    }
+  }
+  if (current.length > 0) runs.push(current);
+
+  // Only accept hex colors from the API; anything else falls back to the
+  // accent so a bad metadata value can never distort the chart.
+  const stroke = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#F0B84E';
+  const label = trend
+    .map((p) => (p.win_rate === null ? 'no data' : `${Math.round(p.win_rate * 100)}%`))
+    .join(', ');
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label={`${personaName} win rate trend over the last ${trend.length} weeks: ${label}`}
+    >
+      <title>{`${personaName} — weekly win rate: ${label}`}</title>
+      {runs.map((run, i) => (
+        <polyline
+          key={i}
+          points={run.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
+      {plotted.map((p) => (
+        <circle key={p.index} cx={p.x} cy={p.y} r={1.5} fill={stroke} />
+      ))}
+    </svg>
+  );
 }
 
 function planFeatures(tier: string): string[] {
@@ -1384,6 +1470,7 @@ export function ProfileModal() {
                         <thead>
                           <tr>
                             <th style={{ textAlign: 'left', color: '#A0A39A', fontWeight: 500, padding: '4px 8px 8px 0' }}>Persona</th>
+                            <th style={{ textAlign: 'left', color: '#A0A39A', fontWeight: 500, padding: '4px 8px 8px 0' }}>Trend</th>
                             <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>Appearances</th>
                             <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>Wins</th>
                             <th style={{ textAlign: 'right', color: '#A0A39A', fontWeight: 500, padding: '4px 0 8px 8px' }}>Rate</th>
@@ -1414,6 +1501,13 @@ export function ProfileModal() {
                                     low sample
                                   </span>
                                 ) : null}
+                              </td>
+                              <td style={{ padding: '5px 8px 5px 0', borderTop: '0.5px solid #E0D5C5', verticalAlign: 'middle' }}>
+                                <WinRateTrendSparkline
+                                  trend={row.trend}
+                                  personaName={row.name}
+                                  color={row.color}
+                                />
                               </td>
                               <td style={{ textAlign: 'right', padding: '5px 0 5px 8px', borderTop: '0.5px solid #E0D5C5', color: '#A0A39A' }}>
                                 {row.appearances}
