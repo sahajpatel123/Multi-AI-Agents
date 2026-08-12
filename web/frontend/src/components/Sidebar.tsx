@@ -1792,6 +1792,10 @@ export function Sidebar({
       if (typeof count === 'number' && count > 0) {
         setImportedChatsCount(count);
         setImportChatsStatus('done');
+        // Imported chats are unpinned and brand new; clear active search/filter
+        // so the restored chats are actually visible in the list.
+        setChatSearchQuery('');
+        setChatsPinFilter(SIDEBAR_CHATS_PIN_ALL);
       } else {
         setImportChatsStatus('failed');
       }
@@ -1803,6 +1807,69 @@ export function Sidebar({
       }
     }
   };
+
+  const importChatsControl = onImportChats ? (
+    <div
+      style={{
+        display: 'flex',
+        gap: 6,
+        marginBottom: recentSessions.length > 0 ? 8 : 0,
+        flexWrap: 'wrap',
+      }}
+    >
+      <button
+        type="button"
+        title="Import chats from a JSON transcript archive"
+        aria-label={
+          importChatsStatus === 'busy'
+            ? 'Importing chats'
+            : importChatsStatus === 'done'
+              ? 'Chats imported'
+              : importChatsStatus === 'failed'
+                ? 'Import failed'
+                : 'Import chats from JSON archive'
+        }
+        disabled={bulkChatsBusy}
+        onClick={() => importChatsInputRef.current?.click()}
+        style={{
+          background: 'none',
+          border: '0.5px solid #E0D8D0',
+          borderRadius: 6,
+          cursor: bulkChatsBusy ? 'default' : 'pointer',
+          color:
+            importChatsStatus === 'failed'
+              ? '#D85A30'
+              : importChatsStatus === 'done'
+                ? '#5A8C6A'
+                : '#F0B84E',
+          padding: '3px 8px',
+          fontSize: 10,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          fontFamily: 'var(--vp-font-sans)',
+        }}
+      >
+        {importChatsStatus === 'busy'
+          ? 'Importing'
+          : importChatsStatus === 'done'
+            ? `Imported ${importedChatsCount ?? 0}`
+            : importChatsStatus === 'failed'
+              ? 'Failed'
+              : 'Import'}
+      </button>
+      <input
+        ref={importChatsInputRef}
+        type="file"
+        accept=".json,application/json"
+        aria-label="Choose transcript archive file"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0] ?? null;
+          if (file) void handleImportChatsFile(file);
+        }}
+      />
+    </div>
+  ) : null;
 
   const handleBulkDeleteChats = async () => {
     if (!onBulkDeleteSessions || bulkDeleteChatsStatus === 'busy') return;
@@ -1987,6 +2054,24 @@ export function Sidebar({
               </div>
             )}
           </div>
+
+          {onImportChats && recentSessions.length === 0 ? (
+            <div style={{ margin: '1.2rem 0 0.6rem' }}>
+              <p
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.12em',
+                  color: '#A0A39A',
+                  margin: '0 0 8px',
+                }}
+              >
+                Restore chats
+              </p>
+              {importChatsControl}
+            </div>
+          ) : null}
 
           {recentSessions.length > 0 ? (
             <div style={{ margin: '1.2rem 0 0.6rem' }}>
@@ -2210,59 +2295,7 @@ export function Sidebar({
                     flexWrap: 'wrap',
                   }}
                 >
-                  {onImportChats ? (
-                    <button
-                      type="button"
-                      title="Import chats from a JSON transcript archive"
-                      aria-label={
-                        importChatsStatus === 'busy'
-                          ? 'Importing chats'
-                          : importChatsStatus === 'done'
-                            ? 'Chats imported'
-                            : importChatsStatus === 'failed'
-                              ? 'Import failed'
-                              : 'Import chats from JSON archive'
-                      }
-                      disabled={bulkChatsBusy}
-                      onClick={() => importChatsInputRef.current?.click()}
-                      style={{
-                        background: 'none',
-                        border: '0.5px solid #E0D8D0',
-                        borderRadius: 6,
-                        cursor: bulkChatsBusy ? 'default' : 'pointer',
-                        color:
-                          importChatsStatus === 'failed'
-                            ? '#D85A30'
-                            : importChatsStatus === 'done'
-                              ? '#5A8C6A'
-                              : '#F0B84E',
-                        padding: '3px 8px',
-                        fontSize: 10,
-                        letterSpacing: '0.04em',
-                        textTransform: 'uppercase',
-                        fontFamily: 'var(--vp-font-sans)',
-                      }}
-                    >
-                      {importChatsStatus === 'busy'
-                        ? 'Importing'
-                        : importChatsStatus === 'done'
-                          ? `Imported ${importedChatsCount ?? 0}`
-                          : importChatsStatus === 'failed'
-                            ? 'Failed'
-                            : 'Import'}
-                    </button>
-                  ) : null}
-                  <input
-                    ref={importChatsInputRef}
-                    type="file"
-                    accept=".json,application/json"
-                    aria-label="Choose transcript archive file"
-                    hidden
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      if (file) void handleImportChatsFile(file);
-                    }}
-                  />
+                  {importChatsControl}
                   <button
                     type="button"
                     title="Copy chats as markdown"

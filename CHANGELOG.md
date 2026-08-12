@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   respect the filter)
 
 ### Fixed
+- Chat archive import now survives archives with missing/null timestamps,
+  honors a take flagged `is_winner` when the winner id is absent, and stays
+  available even when the sidebar has no current chats (with active search
+  filters cleared so restored chats are visible immediately)
 - Combined transcript exports (Markdown and JSON) share one exported-at
   timestamp across the archive header/envelope and every included chat, and
   archive loading follows the fetched session id for provenance while

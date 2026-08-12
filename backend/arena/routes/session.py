@@ -94,6 +94,13 @@ class ImportedAgentResponse(BaseModel):
     key_assumption: str | None = Field(None, max_length=500)
     timestamp: datetime | None = Field(None)
 
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def normalize_timestamp(cls, value):
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        return value
+
 
 class ImportedChatTurn(BaseModel):
     """One exchange inside an imported transcript archive."""
@@ -120,6 +127,13 @@ class ImportedChatTurn(BaseModel):
         if value is None or not value.strip():
             return None
         return sanitize_model_text(value, max_length=50, field_name="prompt_category")
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def normalize_timestamp(cls, value):
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        return value
 
 
 class ImportedChat(BaseModel):

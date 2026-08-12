@@ -1,16 +1,34 @@
 import type { AgentResponse, SessionTurn } from '../types';
 import { AGENTS } from '../types';
 
+/** Matches the backend `/api/sessions/import` request-size cap. */
+export const MAX_TRANSCRIPT_ARCHIVE_BYTES = 2 * 1024 * 1024;
+
+export type ImportedAgentResponse = Omit<AgentResponse, 'timestamp'> & {
+  /** Absent/unknown timestamps are restored as null so they round-trip safely. */
+  timestamp?: string | null;
+};
+
+export type ImportedSessionTurn = Omit<
+  SessionTurn,
+  'timestamp' | 'agent_responses'
+> & {
+  /** Absent/unknown timestamps are restored as null so they round-trip safely. */
+  timestamp?: string | null;
+  agent_responses: Record<string, ImportedAgentResponse>;
+};
+
 export type ImportedChat = {
   /** User-facing title for the restored chat (null falls back to the last prompt). */
   title: string | null;
   /** Restored transcript exchanges in original order. */
-  turns: SessionTurn[];
+  turns: ImportedSessionTurn[];
 };
 
 type RawTake = {
   agent_id?: unknown;
   confidence?: unknown;
+  is_winner?: unknown;
   one_liner?: unknown;
   verdict?: unknown;
   key_assumption?: unknown;
@@ -52,7 +70,7 @@ function agentNumberForId(agentId: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
-function parseExchanges(exchanges: unknown): SessionTurn[] {
+function parseExchanges(exchanges: unknown): ImportedSessionTurn[] {
   if (!Array.isArray(exchanges)) {
     throw new Error('Archive is missing the exchanges array.');
   }
@@ -66,12 +84,14 @@ function parseExchanges(exchanges: unknown): SessionTurn[] {
       throw new Error(`Exchange ${index + 1} has no prompt.`);
     }
 
-    const agentResponses: Record<string, AgentResponse> = {};
+    const agentResponses: Record<string, ImportedAgentResponse> = {};
+    const flaggedWinnerIds: string[] = [];
     for (const rawTake of Array.isArray(exchange.takes) ? exchange.takes : []) {
       if (!rawTake || typeof rawTake !== 'object') continue;
       const agentId = cleanString(rawTake.agent_id);
       const agentNumber = agentNumberForId(agentId);
       if (agentNumber === null) continue;
+      if (rawTake.is_winner === true) flaggedWinnerIds.push(agentId);
       const rawConfidence = Number(rawTake.confidence);
       const confidence = Number.isFinite(rawConfidence)
         ? Math.max(0, Math.min(100, Math.round(rawConfidence)))
@@ -83,7 +103,7 @@ function parseExchanges(exchanges: unknown): SessionTurn[] {
         one_liner: cleanString(rawTake.one_liner),
         confidence,
         key_assumption: cleanString(rawTake.key_assumption),
-        timestamp: cleanString(rawTake.timestamp),
+        timestamp: cleanString(rawTake.timestamp) || null,
       };
     }
 
@@ -96,7 +116,9 @@ function parseExchanges(exchanges: unknown): SessionTurn[] {
     const winnerId =
       winnerCandidate && agentResponses[winnerCandidate]
         ? winnerCandidate
-        : agentIds[0];
+        : flaggedWinnerIds.length === 1 && agentResponses[flaggedWinnerIds[0]]
+          ? flaggedWinnerIds[0]
+          : agentIds[0];
 
     return {
       turn_id: cleanString(exchange.turn_id),
@@ -104,7 +126,7 @@ function parseExchanges(exchanges: unknown): SessionTurn[] {
       prompt_category: cleanString(exchange.prompt_category) || undefined,
       agent_responses: agentResponses,
       winner_id: winnerId,
-      timestamp: cleanString(exchange.timestamp),
+      timestamp: cleanString(exchange.timestamp) || null,
     };
   });
 }

@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { parseArenaTranscriptsArchive } from './arenaChatsImport';
 
-function take(agentId: string, verdict = `${agentId} says yes.`) {
+function take(
+  agentId: string,
+  verdict = `${agentId} says yes.`,
+  timestamp: string | null = '2026-08-12T10:00:00Z',
+) {
   return {
     agent_id: agentId,
     confidence: 82,
     one_liner: 'Yes.',
     verdict,
     key_assumption: 'Scope stays small.',
-    timestamp: '2026-08-12T10:00:00Z',
+    timestamp,
   };
 }
 
@@ -17,7 +21,7 @@ function exchange(
     turn_id: string;
     prompt: string;
     prompt_category: string;
-    timestamp: string;
+    timestamp: string | null;
     winner_agent_id: string;
     takes: unknown[];
   }> = {},
@@ -89,6 +93,46 @@ describe('parseArenaTranscriptsArchive', () => {
     expect(chats).toHaveLength(1);
     expect(chats[0]?.title).toBe('source-1');
     expect(chats[0]?.turns[0]?.winner_id).toBe('agent_1');
+  });
+
+  it('restores null timestamps as null instead of failing the archive', () => {
+    const archive = {
+      exported_from: 'arena',
+      export_type: 'session_transcript',
+      format_version: 1,
+      session_id: 'source-no-times',
+      exchanges: [
+        exchange({
+          timestamp: null,
+          takes: [take('agent_1', undefined, null)],
+        }),
+      ],
+    };
+
+    const chats = parseArenaTranscriptsArchive(JSON.stringify(archive));
+    expect(chats[0]?.turns[0]?.timestamp).toBeNull();
+    expect(chats[0]?.turns[0]?.agent_responses.agent_1.timestamp).toBeNull();
+  });
+
+  it('prefers a take flagged is_winner when the winner id is missing', () => {
+    const archive = {
+      exported_from: 'arena',
+      export_type: 'session_transcript',
+      format_version: 1,
+      session_id: 'source-flag',
+      exchanges: [
+        exchange({
+          winner_agent_id: '',
+          takes: [
+            take('agent_1'),
+            { ...take('agent_2', 'No, wait.'), is_winner: true },
+          ],
+        }),
+      ],
+    };
+
+    const chats = parseArenaTranscriptsArchive(JSON.stringify(archive));
+    expect(chats[0]?.turns[0]?.winner_id).toBe('agent_2');
   });
 
   it('falls back to the chat session id when no title is present', () => {

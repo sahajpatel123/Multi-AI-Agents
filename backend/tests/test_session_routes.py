@@ -702,6 +702,57 @@ async def test_import_does_not_leak_original_owner_ids(app_client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_import_accepts_empty_timestamps_from_partial_archives(
+    app_client, make_user
+):
+    """Archives without per-exchange timestamps (null or empty strings) must
+    restore instead of failing Pydantic datetime parsing."""
+    user = make_user(email="sess-import-no-times@test.com", tier=UserTier.PRO)
+    res = await app_client.post(
+        "/api/sessions/import",
+        headers=_pro_headers(user),
+        json={
+            "chats": [
+                {
+                    "title": "No timestamps",
+                    "turns": [
+                        {
+                            "turn_id": "source-turn-1",
+                            "prompt": "Keep this question.",
+                            "prompt_category": "question",
+                            "winner_id": "agent_1",
+                            "timestamp": "",
+                            "agent_responses": {
+                                "agent_1": {
+                                    "agent_id": "agent_1",
+                                    "verdict": "Keep.",
+                                    "one_liner": "Keep.",
+                                    "confidence": 90,
+                                    "key_assumption": "None.",
+                                    "timestamp": "",
+                                }
+                            },
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    assert res.status_code == 200
+    assert res.json()["imported"] == 1
+
+    session_id = res.json()["sessions"][0]["session_id"]
+    session = await app_client.get(
+        f"/api/session/{session_id}", headers=_pro_headers(user)
+    )
+    assert session.status_code == 200
+    turn = session.json()["turns"][0]
+    assert turn["prompt"] == "Keep this question."
+    assert turn["timestamp"]
+    assert turn["agent_responses"]["agent_1"]["timestamp"]
+
+
+@pytest.mark.asyncio
 async def test_list_skips_malformed_state_without_session_data(app_client, make_user):
     """Listing must not 500 on a malformed state; it skips the broken row."""
     user = make_user(email="sess-list-broken@test.com", tier=UserTier.PRO)

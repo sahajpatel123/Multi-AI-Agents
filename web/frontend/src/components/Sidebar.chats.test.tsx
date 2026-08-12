@@ -2185,20 +2185,28 @@ describe('Sidebar recent chats', () => {
     ).toBeInTheDocument();
   });
 
-  it('hides chat export controls when there are no resumable chats', () => {
+  it('keeps archive import available when there are no resumable chats', () => {
     renderSidebar({ sessions: [] });
 
     expect(
-      screen.queryByRole('button', { name: 'Copy chats as markdown' }),
-    ).toBeNull();
+      screen.getByRole('button', { name: 'Import chats from JSON archive' }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Import chats from JSON archive' }),
+      screen.queryByRole('button', { name: 'Copy chats as markdown' }),
     ).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Download chats as JSON' }),
     ).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Download chats as CSV' }),
+    ).toBeNull();
+  });
+
+  it('hides archive import when the callback is not provided', () => {
+    renderSidebar({ sessions: [], onImportChats: null });
+
+    expect(
+      screen.queryByRole('button', { name: 'Import chats from JSON archive' }),
     ).toBeNull();
   });
 
@@ -2220,6 +2228,31 @@ describe('Sidebar recent chats', () => {
         screen.getByRole('button', { name: 'Chats imported' }),
       ).toHaveTextContent('Imported 2'),
     );
+  });
+
+  it('clears active chat filters after a successful import', async () => {
+    renderSidebar();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats' }), {
+      target: { value: 'nothing matches this' },
+    });
+    const input = screen.getByLabelText('Choose transcript archive file', {
+      hidden: true,
+    });
+    fireEvent.change(input, {
+      target: {
+        files: [new File(['{}'], 'arena-chats.json', { type: 'application/json' })],
+      },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Chats imported' }),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole('searchbox', { name: 'Search chats' }),
+    ).toHaveValue('');
   });
 
   it('announces a failed chat archive import', async () => {

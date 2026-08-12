@@ -65,6 +65,7 @@ import { formatArenaTakeClipboard } from './lib/arenaTakeClipboard';
 import { buildSessionTurnResponse } from './lib/arenaTurn';
 import { loadSessionTranscriptBundles } from './lib/arenaSessionArchive';
 import {
+  MAX_TRANSCRIPT_ARCHIVE_BYTES,
   parseArenaTranscriptsArchive,
   type ImportedChat,
 } from './lib/arenaChatsImport';
@@ -1190,6 +1191,7 @@ function App() {
   }, []);
 
   const handleImportChats = useCallback(async (file: File) => {
+    if (file.size > MAX_TRANSCRIPT_ARCHIVE_BYTES) return null;
     let text: string;
     try {
       text = await file.text();
