@@ -313,4 +313,80 @@ describe('PromptInput', () => {
     fireEvent.keyDown(textarea, { key: 'ArrowDown' });
     expect(textarea.value).toBe('edited newest');
   });
+
+  it('submitting a recalled prompt restarts the history walk', () => {
+    const onSubmit = vi.fn();
+    render(
+      <PromptInput
+        onSubmit={onSubmit}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+
+    fireEvent.submit(textarea.closest('form')!);
+    expect(onSubmit).toHaveBeenCalledWith('newest');
+    expect(textarea.value).toBe('');
+
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+  });
+
+  it('applying a preset resets an in-progress history walk', () => {
+    const { rerender } = render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+
+    rerender(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        history={['newest', 'older']}
+        presetPrompt="fresh preset"
+        presetPromptNonce={2}
+      />,
+    );
+    expect(textarea.value).toBe('fresh preset');
+
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+  });
+
+  it('polishing a recalled prompt restarts the history walk', async () => {
+    mockedImprovePrompt.mockResolvedValueOnce({
+      original_prompt: 'newest',
+      improved_prompt: 'sharpened',
+      refined: true,
+      note: 'Made the ask specific.',
+    });
+    render(
+      <PromptInput
+        onSubmit={() => {}}
+        isLoading={false}
+        polishEnabled
+        history={['newest', 'older']}
+      />,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+
+    fireEvent.click(screen.getByRole('button', { name: /polish prompt with ai/i }));
+    await waitFor(() => {
+      expect(textarea.value).toBe('sharpened');
+    });
+
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('newest');
+  });
 });

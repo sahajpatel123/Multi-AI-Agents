@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   createPromptHistoryState,
-  NO_HISTORY_ENTRY,
   shouldCapturePromptHistoryKey,
   stepPromptHistory,
 } from './promptHistory';
@@ -58,6 +57,29 @@ describe('stepPromptHistory', () => {
     const result = stepPromptHistory('up', state, 'typing', []);
     expect(result.changed).toBe(false);
     expect(result.value).toBe('typing');
+  });
+
+  it('ArrowUp at a stale index beyond the history is a no-op', () => {
+    const state = { index: 5, draft: 'draft in progress' };
+    const result = stepPromptHistory('up', state, 'oldest prompt', HISTORY);
+    expect(result.changed).toBe(false);
+    expect(result.value).toBe('oldest prompt');
+  });
+
+  it('ArrowDown from a stale index restores the saved draft', () => {
+    const state = { index: 5, draft: 'draft in progress' };
+    const result = stepPromptHistory('down', state, 'oldest prompt', HISTORY);
+    expect(result.changed).toBe(true);
+    expect(result.value).toBe('draft in progress');
+    expect(result.state).toEqual(createPromptHistoryState());
+  });
+
+  it('ArrowDown restores the draft when history shrinks to empty mid-walk', () => {
+    const state = { index: 0, draft: 'draft in progress' };
+    const result = stepPromptHistory('down', state, 'oldest prompt', []);
+    expect(result.changed).toBe(true);
+    expect(result.value).toBe('draft in progress');
+    expect(result.state).toEqual(createPromptHistoryState());
   });
 });
 

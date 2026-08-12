@@ -62,6 +62,15 @@ export function stepPromptHistory(
   if (state.index === NO_HISTORY_ENTRY) {
     return { value: currentValue, state, changed: false };
   }
+  if (history.length === 0 || state.index >= history.length) {
+    // A stale position (e.g. history shrank mid-walk) cannot be stepped
+    // backward from, so leave the walk and restore the saved draft.
+    return {
+      value: state.draft,
+      state: createPromptHistoryState(),
+      changed: true,
+    };
+  }
   if (state.index === 0) {
     return {
       value: state.draft,

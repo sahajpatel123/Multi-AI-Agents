@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Loader2, Swords, ArrowUp, Sparkles } from 'lucide-react';
 import { motionDuration, prefersReducedMotion } from '../lib/motion';
 import { improvePrompt } from '../api';
@@ -107,16 +107,19 @@ export function PromptInput({
   if (historyStateRef.current === null) {
     historyStateRef.current = createPromptHistoryState();
   }
+  const resetHistoryState = useCallback(() => {
+    historyStateRef.current = createPromptHistoryState();
+  }, []);
   const budgetId = useId();
 
   const activePlaceholder = placeholder ?? CYCLING_PLACEHOLDERS[placeholderIndex];
-  const historyKey = (history ?? []).join('\u0000');
+  const historyKey = JSON.stringify(history ?? []);
 
   // A changed history (e.g. a freshly submitted prompt) invalidates any
   // in-progress history walk so the next ArrowUp starts from the new list.
   useEffect(() => {
-    historyStateRef.current = createPromptHistoryState();
-  }, [historyKey]);
+    resetHistoryState();
+  }, [historyKey, resetHistoryState]);
 
   // Cycle placeholder text — skip timed fades when the user prefers reduced motion.
   useEffect(() => {
@@ -143,6 +146,7 @@ export function PromptInput({
 
   useEffect(() => {
     if (presetPromptNonce === undefined) return;
+    resetHistoryState();
     setPrompt(presetPrompt || '');
     requestAnimationFrame(() => {
       const el = textareaRef.current;
@@ -150,7 +154,7 @@ export function PromptInput({
       el.focus();
       autoResize(el);
     });
-  }, [presetPrompt, presetPromptNonce]);
+  }, [presetPrompt, presetPromptNonce, resetHistoryState]);
 
   // Restore the draft once on mount — runs before any presetPrompt injection
   // so templates still win, and is skipped entirely when no draftKey was given.
@@ -161,6 +165,7 @@ export function PromptInput({
     draftRestoreDoneRef.current = true;
     const stored = loadPromptDraft(draftKey);
     if (!stored) return;
+    resetHistoryState();
     setPrompt(stored);
     requestAnimationFrame(() => {
       const el = textareaRef.current;
@@ -168,7 +173,7 @@ export function PromptInput({
       el.focus();
       autoResize(el);
     });
-  }, [draftKey]);
+  }, [draftKey, resetHistoryState]);
 
   // Debounced autosave — typing fast should not hammer localStorage.
   useEffect(() => {
@@ -196,6 +201,7 @@ export function PromptInput({
     }
     onSubmit(clampToMax(prompt.trim(), ARENA_PROMPT_MAX_CHARS));
     setPrompt('');
+    resetHistoryState();
     // Reset height after clear
     requestAnimationFrame(() => {
       if (textareaRef.current) {
@@ -213,6 +219,7 @@ export function PromptInput({
       const result = await improvePrompt(trimmed);
       if (result.refined && result.improved_prompt) {
         const polished = clampToMax(result.improved_prompt, ARENA_PROMPT_MAX_CHARS);
+        resetHistoryState();
         setPrompt(polished);
         requestAnimationFrame(() => {
           const el = textareaRef.current;
@@ -347,7 +354,7 @@ export function PromptInput({
               onChange={(e) => {
                 setPrompt(clampToMax(e.target.value, ARENA_PROMPT_MAX_CHARS));
                 // Any manual edit leaves the history walk and starts a new draft.
-                historyStateRef.current = createPromptHistoryState();
+                resetHistoryState();
                 autoResize(e.target);
               }}
               placeholder={
