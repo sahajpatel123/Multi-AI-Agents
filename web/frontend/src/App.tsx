@@ -51,6 +51,7 @@ import {
   formatArenaCsvExport,
   formatArenaJsonExport,
   copyArenaTranscriptToClipboard,
+  copyArenaTranscriptsToClipboard,
   formatArenaTranscriptExport,
   formatArenaTranscriptsExport,
   formatArenaTranscriptCsvExport,
@@ -1204,6 +1205,26 @@ function App() {
     [recentSessions, resolveArenaPersona],
   );
 
+  const handleBulkCopyChatTranscripts = useCallback(
+    async (sessionIds: string[]) => {
+      if (sessionIds.length === 0) return null;
+      const bundles = await loadSessionTranscriptBundles(
+        sessionIds,
+        getSession,
+        recentSessions,
+      );
+      if (bundles.length === 0) return null;
+      const ok = await copyArenaTranscriptsToClipboard(bundles, resolveArenaPersona);
+      if (!ok) return null;
+      void track('arena_selected_chats_transcripts_copied', undefined, undefined, {
+        count: bundles.length,
+        requested: sessionIds.length,
+      });
+      return bundles.length;
+    },
+    [recentSessions, resolveArenaPersona],
+  );
+
   const handleClearSessions = useCallback(async () => {
     const cleared = await clearAllSessions();
     if (cleared === null) return null;
@@ -1998,6 +2019,7 @@ function App() {
           onBulkPinSessions={handleBulkPinSessions}
           onBulkDuplicateSessions={handleBulkDuplicateSessions}
           onBulkExportTranscripts={handleBulkExportChatTranscripts}
+          onBulkCopyTranscripts={handleBulkCopyChatTranscripts}
           onClearSessions={handleClearSessions}
           onRenameSession={handleRenameSession}
           onToggleSessionPin={handleToggleSessionPin}

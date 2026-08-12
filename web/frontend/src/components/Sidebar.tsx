@@ -181,6 +181,10 @@ interface SidebarProps {
   onBulkExportTranscripts?: (
     sessionIds: string[],
   ) => Promise<number | null> | number | null | void;
+  /** Copy full transcripts for a user-selected subset of live chats. */
+  onBulkCopyTranscripts?: (
+    sessionIds: string[],
+  ) => Promise<number | null> | number | null | void;
   onClearSessions?: () => Promise<number | null> | void;
   onRenameSession?: (
     sessionId: string,
@@ -228,6 +232,7 @@ export function Sidebar({
   onBulkPinSessions,
   onBulkDuplicateSessions,
   onBulkExportTranscripts,
+  onBulkCopyTranscripts,
   onClearSessions,
   onRenameSession,
   onToggleSessionPin,
@@ -327,6 +332,12 @@ export function Sidebar({
   const [bulkTranscriptExportedCount, setBulkTranscriptExportedCount] = useState<
     number | null
   >(null);
+  const [bulkTranscriptCopyStatus, setBulkTranscriptCopyStatus] = useState<
+    'idle' | 'busy' | 'done' | 'partial' | 'failed'
+  >('idle');
+  const [bulkTranscriptCopiedCount, setBulkTranscriptCopiedCount] = useState<
+    number | null
+  >(null);
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -356,6 +367,7 @@ export function Sidebar({
   const savedSearchInputRef = useRef<HTMLInputElement>(null);
   const bulkPinUnpinActionRef = useRef<boolean | null>(null);
   const bulkCopyChatsInFlightRef = useRef(false);
+  const bulkTranscriptCopyInFlightRef = useRef(false);
   const chatSelectionAnchorRef = useRef<string | null>(null);
 
   const winnerNameByAgentId = useMemo(() => {
@@ -417,7 +429,8 @@ export function Sidebar({
     bulkPinChatsStatus === 'busy' ||
     bulkDuplicateChatsStatus === 'busy' ||
     bulkCopyChatsStatus === 'busy' ||
-    bulkTranscriptExportStatus === 'busy';
+    bulkTranscriptExportStatus === 'busy' ||
+    bulkTranscriptCopyStatus === 'busy';
   const bulkPinBusyTarget =
     bulkPinChatsStatus === 'busy' && bulkPinUnpinActionRef.current !== null
       ? bulkPinUnpinActionRef.current
@@ -822,6 +835,29 @@ export function Sidebar({
     return () => window.clearTimeout(t);
   }, [bulkTranscriptExportStatus]);
 
+  useEffect(() => {
+    if (
+      bulkTranscriptCopyStatus === 'idle' ||
+      bulkTranscriptCopyStatus === 'busy'
+    ) {
+      return;
+    }
+    const hold = motionDuration(
+      bulkTranscriptCopyStatus === 'failed' ||
+        bulkTranscriptCopyStatus === 'partial'
+        ? 2800
+        : 2000,
+    );
+    const t = window.setTimeout(
+      () => {
+        setBulkTranscriptCopyStatus('idle');
+        setBulkTranscriptCopiedCount(null);
+      },
+      hold > 0 ? hold : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [bulkTranscriptCopyStatus]);
+
   // Keep the stored filter in sync with reality: drop the pinned-only view
   // when the last pinned chat is unpinned and normalize any stale value.
   // Rendering uses `activeChatsPinFilter`, so this effect is only cleanup.
@@ -1115,6 +1151,8 @@ export function Sidebar({
     setBulkExportChatsCsvStatus('idle');
     setBulkTranscriptExportStatus('idle');
     setBulkTranscriptExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
     if (items.length === 0) {
       setBulkCopiedChatsCount(null);
       setBulkCopyChatsStatus('failed');
@@ -1204,6 +1242,8 @@ export function Sidebar({
       setBulkExportChatsCsvStatus('idle');
       setBulkTranscriptExportStatus('idle');
       setBulkTranscriptExportedCount(null);
+      setBulkTranscriptCopyStatus('idle');
+      setBulkTranscriptCopiedCount(null);
       setBulkExportChatsStatus('failed');
       return;
     }
@@ -1211,6 +1251,8 @@ export function Sidebar({
     setBulkExportChatsCsvStatus('idle');
     setBulkTranscriptExportStatus('idle');
     setBulkTranscriptExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
     const md = formatArenaChatsExport({
       totalCount: items.length,
       items,
@@ -1235,6 +1277,8 @@ export function Sidebar({
       setBulkExportChatsCsvStatus('idle');
       setBulkTranscriptExportStatus('idle');
       setBulkTranscriptExportedCount(null);
+      setBulkTranscriptCopyStatus('idle');
+      setBulkTranscriptCopiedCount(null);
       setBulkExportChatsJsonStatus('failed');
       return;
     }
@@ -1242,6 +1286,8 @@ export function Sidebar({
     setBulkExportChatsCsvStatus('idle');
     setBulkTranscriptExportStatus('idle');
     setBulkTranscriptExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
     const json = formatArenaChatsJsonExport({
       totalCount: items.length,
       items,
@@ -1269,6 +1315,8 @@ export function Sidebar({
       setBulkExportChatsJsonStatus('idle');
       setBulkTranscriptExportStatus('idle');
       setBulkTranscriptExportedCount(null);
+      setBulkTranscriptCopyStatus('idle');
+      setBulkTranscriptCopiedCount(null);
       setBulkExportChatsCsvStatus('failed');
       return;
     }
@@ -1276,6 +1324,8 @@ export function Sidebar({
     setBulkExportChatsJsonStatus('idle');
     setBulkTranscriptExportStatus('idle');
     setBulkTranscriptExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
     const csv = formatArenaChatsCsvExport({
       items,
     });
@@ -1302,6 +1352,8 @@ export function Sidebar({
     setBulkExportChatsCsvStatus('idle');
     setBulkExportedChatsCount(null);
     setBulkTranscriptExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
     if (ids.length === 0) {
       setBulkTranscriptExportStatus('failed');
       return;
@@ -1317,6 +1369,39 @@ export function Sidebar({
       setBulkTranscriptExportStatus(exported < ids.length ? 'partial' : 'done');
     } catch {
       setBulkTranscriptExportStatus('failed');
+    }
+  };
+
+  const handleBulkCopyChatTranscripts = async () => {
+    if (!onBulkCopyTranscripts || bulkTranscriptCopyInFlightRef.current) return;
+    const ids = [...selectedChatIds];
+    setBulkCopyChatsStatus('idle');
+    setBulkCopiedChatsCount(null);
+    setBulkExportChatsStatus('idle');
+    setBulkExportChatsJsonStatus('idle');
+    setBulkExportChatsCsvStatus('idle');
+    setBulkExportedChatsCount(null);
+    setBulkTranscriptExportStatus('idle');
+    setBulkTranscriptExportedCount(null);
+    setBulkTranscriptCopiedCount(null);
+    if (ids.length === 0) {
+      setBulkTranscriptCopyStatus('failed');
+      return;
+    }
+    bulkTranscriptCopyInFlightRef.current = true;
+    setBulkTranscriptCopyStatus('busy');
+    try {
+      const copied = await onBulkCopyTranscripts(ids);
+      if (copied === null || copied === undefined) {
+        setBulkTranscriptCopyStatus('failed');
+        return;
+      }
+      setBulkTranscriptCopiedCount(copied);
+      setBulkTranscriptCopyStatus(copied < ids.length ? 'partial' : 'done');
+    } catch {
+      setBulkTranscriptCopyStatus('failed');
+    } finally {
+      bulkTranscriptCopyInFlightRef.current = false;
     }
   };
 
@@ -1395,6 +1480,8 @@ export function Sidebar({
     setBulkCopiedChatsCount(null);
     setBulkTranscriptExportStatus('idle');
     setBulkTranscriptExportedCount(null);
+    setBulkTranscriptCopyStatus('idle');
+    setBulkTranscriptCopiedCount(null);
   };
 
   const handleNewChatClick = () => {
@@ -2422,9 +2509,52 @@ export function Sidebar({
                             ? 'Saved'
                             : bulkTranscriptExportStatus === 'partial'
                               ? 'Partial'
-                              : bulkTranscriptExportStatus === 'failed'
+                          : bulkTranscriptExportStatus === 'failed'
+                            ? 'Failed'
+                            : 'Transcripts'}
+                      </button>
+                    ) : null}
+                    {onBulkCopyTranscripts ? (
+                      <button
+                        type="button"
+                        aria-label={
+                          bulkTranscriptCopyStatus === 'done'
+                            ? `Copied ${bulkTranscriptCopiedCount ?? selectedChatIds.size} selected chat${(bulkTranscriptCopiedCount ?? selectedChatIds.size) === 1 ? '' : 's'} as transcripts`
+                            : bulkTranscriptCopyStatus === 'partial'
+                              ? `Copied ${bulkTranscriptCopiedCount ?? 0} of ${selectedChatIds.size} selected chats as transcripts`
+                              : bulkTranscriptCopyStatus === 'busy'
+                                ? `Copying ${selectedChatIds.size} selected chat transcript${selectedChatIds.size === 1 ? '' : 's'}…`
+                                : bulkTranscriptCopyStatus === 'failed'
+                                  ? 'Selected chat transcript copy failed'
+                                  : `Copy ${selectedChatIds.size} selected chat${selectedChatIds.size === 1 ? '' : 's'} as transcripts`
+                        }
+                        title="Copy selected chats as full transcripts"
+                        onClick={() => void handleBulkCopyChatTranscripts()}
+                        disabled={bulkChatsBusy}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          borderRadius: 6,
+                          color: '#FFFFFF',
+                          background:
+                            bulkTranscriptCopyStatus === 'failed'
+                              ? '#D85A30'
+                              : bulkTranscriptCopyStatus === 'done'
+                                ? '#5A8C6A'
+                                : '#8C7355',
+                          cursor: bulkChatsBusy ? 'default' : 'pointer',
+                          border: 'none',
+                        }}
+                      >
+                        {bulkTranscriptCopyStatus === 'busy'
+                          ? 'Copying…'
+                          : bulkTranscriptCopyStatus === 'done'
+                            ? 'Copied'
+                            : bulkTranscriptCopyStatus === 'partial'
+                              ? 'Partial'
+                              : bulkTranscriptCopyStatus === 'failed'
                                 ? 'Failed'
-                                : 'Transcripts'}
+                                : 'Copy transcripts'}
                       </button>
                     ) : null}
                     {onBulkDeleteSessions ? (
@@ -2694,6 +2824,7 @@ export function Sidebar({
               (bulkDuplicateChatsStatus !== 'idle' &&
                 bulkDuplicateChatsStatus !== 'busy') ||
               bulkCopyChatsStatus !== 'idle' ||
+              bulkTranscriptCopyStatus !== 'idle' ||
               bulkTranscriptExportStatus !== 'idle' ||
               bulkExportChatsStatus !== 'idle' ||
               bulkExportChatsJsonStatus !== 'idle' ||
@@ -2717,7 +2848,15 @@ export function Sidebar({
                     border: 0,
                   }}
                 >
-                  {bulkTranscriptExportStatus === 'busy'
+                  {bulkTranscriptCopyStatus === 'busy'
+                    ? `Copying ${selectedChatIds.size} selected chat transcript${selectedChatIds.size === 1 ? '' : 's'}…`
+                    : bulkTranscriptCopyStatus === 'done'
+                      ? `${bulkTranscriptCopiedCount ?? selectedChatIds.size} ${(bulkTranscriptCopiedCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} copied as transcripts`
+                      : bulkTranscriptCopyStatus === 'partial'
+                        ? 'Some selected chat transcripts could not be copied'
+                        : bulkTranscriptCopyStatus === 'failed'
+                          ? 'Could not copy selected chat transcripts'
+                          : bulkTranscriptExportStatus === 'busy'
                     ? `Exporting ${selectedChatIds.size} selected chat transcript${selectedChatIds.size === 1 ? '' : 's'}…`
                     : bulkTranscriptExportStatus === 'done'
                       ? `${bulkTranscriptExportedCount ?? selectedChatIds.size} ${(bulkTranscriptExportedCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} exported as transcripts`

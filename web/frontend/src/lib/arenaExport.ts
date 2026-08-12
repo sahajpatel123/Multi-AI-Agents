@@ -208,6 +208,19 @@ export async function copyArenaTranscriptToClipboard(
 }
 
 /**
+ * Copy a combined full-transcript Markdown archive to the clipboard. Reuses
+ * the download formatter so copy and download stay byte-for-byte in sync,
+ * and returns the clipboard helper's success flag for UI feedback.
+ */
+export async function copyArenaTranscriptsToClipboard(
+  bundles: ArenaTranscriptBundle[],
+  resolvePersona: (agentId: string) => ArenaExportPersona,
+  opts?: { exportedAt?: string },
+): Promise<boolean> {
+  return copyToClipboard(formatArenaTranscriptsExport(bundles, resolvePersona, opts));
+}
+
+/**
  * Portable markdown archive of several full chat transcripts in one file.
  * Each chat is rendered with the same transcript formatter used by the
  * Arena view, prefixed by an index section so the combined export stays

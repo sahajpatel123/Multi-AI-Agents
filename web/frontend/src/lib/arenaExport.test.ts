@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   copyArenaTranscriptToClipboard,
+  copyArenaTranscriptsToClipboard,
   formatArenaExport,
   formatArenaCsvExport,
   formatArenaJsonExport,
@@ -775,6 +776,48 @@ describe('formatArenaTranscriptsExport', () => {
     );
     expect(sanitizeArenaTranscriptTitle('### plain title')).toBe('plain title');
     expect(sanitizeArenaTranscriptTitle('  ')).toBe('');
+  });
+});
+
+describe('copyArenaTranscriptsToClipboard', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('copies the combined formatted archive through the clipboard helper', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const bundles = [
+      { sessionId: 'chat-1', title: 'Launch plan', turns: [] as SessionTurn[] },
+      { sessionId: 'chat-2', title: 'Roadmap review', turns: [] as SessionTurn[] },
+    ];
+
+    const ok = await copyArenaTranscriptsToClipboard(
+      bundles,
+      (id) => ({ name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher' }),
+      { exportedAt: '2026-08-07T12:00:00.000Z' },
+    );
+
+    expect(ok).toBe(true);
+    expect(writeText).toHaveBeenCalledWith(
+      formatArenaTranscriptsExport(
+        bundles,
+        (id) => ({ name: id === 'agent_1' ? 'The Analyst' : 'The Philosopher' }),
+        { exportedAt: '2026-08-07T12:00:00.000Z' },
+      ),
+    );
+  });
+
+  it('returns false when the clipboard helper reports failure', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: vi.fn().mockReturnValue(false),
+    });
+
+    const ok = await copyArenaTranscriptsToClipboard([], () => ({ name: 'X' }));
+    expect(ok).toBe(false);
   });
 });
 
