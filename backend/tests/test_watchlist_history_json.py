@@ -110,3 +110,37 @@ async def test_watchlist_history_json_404_for_other_user(app_client, make_user, 
         headers=_auth_headers(user2),
     )
     assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_watchlist_history_json_honors_export_limit_beyond_200(
+    app_client, make_user, db_session
+):
+    """The export endpoint advertises up to 500 rows; the helper must not
+    silently truncate at the interactive history ceiling of 200."""
+    user = _make_pro(make_user)
+    item = _seed_watch(db_session, user.id)
+    tasks = [
+        _seed_task(
+            db_session,
+            user.id,
+            item.id,
+            score=score,
+            answer=f"Run {score}",
+        )
+        for score in range(1, 206)
+    ]
+    db_session.add_all(tasks)
+    db_session.commit()
+
+    res = await app_client.get(
+        f"/api/agent/watchlist/{item.id}/history/export.json?limit=205",
+        headers=_auth_headers(user),
+    )
+    assert res.status_code == 200
+    payload = res.json()
+    assert payload["limit"] == 205
+    assert len(payload["items"]) == 205
+    assert payload["stats"]["count"] == 205
+    assert payload["stats"]["scored_count"] == 205
+    assert payload["stats"]["avg_score"] == 103.0

@@ -3379,7 +3379,7 @@ async def get_watchlist_item_history_csv(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
         )
-    payload = get_watchlist_history(db, user.id, item.id, limit=limit)
+    payload = get_watchlist_history(db, user.id, item.id, limit=limit, max_limit=500)
     items = payload.get("items", [])
 
     import csv
@@ -3458,7 +3458,7 @@ async def get_watchlist_item_history_json(
             status_code=404,
             detail={"error": ErrorCodes.NOT_FOUND, "message": "Watchlist item not found"},
         )
-    payload = get_watchlist_history(db, user.id, item.id, limit=limit)
+    payload = get_watchlist_history(db, user.id, item.id, limit=limit, max_limit=500)
 
     clean_question = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in item.question[:30]).strip("_") or "watchlist-item"
     filename = f"arena-watch-history-{clean_question}-{utcnow_naive().strftime('%Y%m%d')}.json"

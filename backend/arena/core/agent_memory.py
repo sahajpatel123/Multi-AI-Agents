@@ -622,6 +622,7 @@ def get_watchlist_history(
     user_id: int,
     watchlist_item_id: str,
     limit: int = 50,
+    max_limit: int = 200,
 ) -> dict[str, Any]:
     """All spawned runs of a single watchlist item, newest first, with aggregate stats.
 
@@ -631,8 +632,11 @@ def get_watchlist_history(
       - stats: {count, avg_score, min_score, max_score, scored_count}
     The stats ignore unscored rows for min/avg/max but report the
     total run count separately so the UI can say \"3 runs, 2 scored\".
+    Limit is clamped to [1, max_limit]; the caller controls the ceiling so
+    interactive history stays at 200 rows while export endpoints can opt into
+    their advertised 500-row cap.
     """
-    cap = max(1, min(int(limit), 200))
+    cap = max(1, min(int(limit), max_limit))
     rows = (
         db.query(AgentTask)
         .filter(
