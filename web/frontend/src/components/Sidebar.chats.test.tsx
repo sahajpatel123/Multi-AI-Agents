@@ -1,12 +1,23 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Sidebar } from './Sidebar';
 import type { SavedResponseItem } from '../types';
+import { downloadMarkdownFile } from '../lib/downloadTextFile';
 import type {
   BulkDuplicateSessionsResult,
   BulkPinSessionsResult,
   SessionSummary,
 } from '../api';
+
+vi.mock('../lib/downloadTextFile', async () => {
+  const actual = await vi.importActual<typeof import('../lib/downloadTextFile')>(
+    '../lib/downloadTextFile',
+  );
+  return {
+    ...actual,
+    downloadMarkdownFile: vi.fn(() => true),
+  };
+});
 
 type MinimalSidebarTurn = {
   turn_id: string;
@@ -61,6 +72,10 @@ vi.mock('../context/TierContext', () => ({
     refreshTier: vi.fn(),
   }),
 }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 const savedItem: SavedResponseItem = {
   id: 1,
@@ -472,6 +487,50 @@ describe('Sidebar recent chats', () => {
     expect(
       screen.queryByRole('dialog', { name: 'Delete selected chats' }),
     ).toBeNull();
+  });
+
+  it('exports only the selected chats as markdown', async () => {
+    renderSidebar();
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chats as markdown',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(downloadMarkdownFile).toHaveBeenCalledWith(
+        expect.stringContaining('## 1. Should we launch today?'),
+        'arena-selected-chats',
+      ),
+    );
+    const exported = vi.mocked(downloadMarkdownFile).mock.calls[0]?.[0];
+    expect(exported).toContain('Chat `chat-1`');
+    expect(exported).not.toContain('Chat `chat-2`');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Exported 1 selected chats' }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('announces a failure when the selected chat export is blocked', async () => {
+    vi.mocked(downloadMarkdownFile).mockReturnValueOnce(false);
+    renderSidebar();
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chats as markdown',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Selected chat export failed' }),
+      ).toBeInTheDocument(),
+    );
   });
 
   it('surfaces a failure when bulk deleting selected chats fails', async () => {
