@@ -533,6 +533,63 @@ describe('Sidebar recent chats', () => {
     );
   });
 
+  it('keeps the exported count honest when sessions change during the success window', async () => {
+    const { rerender } = renderSidebar();
+
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Select chat:/ });
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 2 selected chats as markdown',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Exported 2 selected chats' }),
+      ).toBeInTheDocument(),
+    );
+
+    // chat-1 disappears externally while the success feedback is still up;
+    // the label must keep describing what was actually exported.
+    rerender([sessions[1] as SessionSummary]);
+    const exported = vi.mocked(downloadMarkdownFile).mock.calls[0]?.[0];
+    expect(exported).toContain('Chat `chat-1`');
+    expect(exported).toContain('Chat `chat-2`');
+    expect(
+      screen.getByRole('button', { name: 'Exported 2 selected chats' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('1 chat selected')).toBeInTheDocument();
+    const statuses = screen.getAllByRole('status');
+    expect(
+      statuses.some((status) => status.textContent?.includes('2 chats exported')),
+    ).toBe(true);
+  });
+
+  it('resets export feedback when the selection changes after a success', async () => {
+    renderSidebar();
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Export 1 selected chats as markdown',
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Exported 1 selected chats' }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[1]);
+    expect(
+      screen.getByRole('button', {
+        name: 'Export 2 selected chats as markdown',
+      }),
+    ).toBeInTheDocument();
+  });
+
   it('surfaces a failure when bulk deleting selected chats fails', async () => {
     renderSidebar({ onBulkDeleteSessions: vi.fn().mockResolvedValue(null) });
     fireEvent.click(screen.getAllByRole('checkbox', { name: /Select chat:/ })[0]);

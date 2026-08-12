@@ -301,6 +301,9 @@ export function Sidebar({
   const [bulkExportChatsStatus, setBulkExportChatsStatus] = useState<
     'idle' | 'done' | 'failed'
   >('idle');
+  const [bulkExportedChatsCount, setBulkExportedChatsCount] = useState<number | null>(
+    null,
+  );
   const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -725,7 +728,10 @@ export function Sidebar({
     if (bulkExportChatsStatus === 'idle') return;
     const hold = motionDuration(bulkExportChatsStatus === 'failed' ? 2800 : 2000);
     const t = window.setTimeout(
-      () => setBulkExportChatsStatus('idle'),
+      () => {
+        setBulkExportChatsStatus('idle');
+        setBulkExportedChatsCount(null);
+      },
       hold > 0 ? hold : 0,
     );
     return () => window.clearTimeout(t);
@@ -1066,12 +1072,20 @@ export function Sidebar({
 
   const handleBulkExportChats = () => {
     const items = buildSelectedChatsItems();
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      // The selection toolbar may still reference chats that no longer
+      // resolve (removed from another surface). Surface an honest failure
+      // instead of letting the click silently do nothing.
+      setBulkExportedChatsCount(null);
+      setBulkExportChatsStatus('failed');
+      return;
+    }
     const md = formatArenaChatsExport({
       totalCount: items.length,
       items,
     });
     const ok = downloadMarkdownFile(md, 'arena-selected-chats');
+    setBulkExportedChatsCount(ok ? items.length : null);
     setBulkExportChatsStatus(ok ? 'done' : 'failed');
     if (ok) {
       void track('arena_selected_chats_exported', undefined, undefined, {
@@ -1154,6 +1168,7 @@ export function Sidebar({
     setSelectedChatIds(new Set());
     setConfirmBulkDeleteChats(false);
     setBulkExportChatsStatus('idle');
+    setBulkExportedChatsCount(null);
     sessionRenameCancelledRef.current = true;
     sessionRenameEditingIdRef.current = null;
     setEditingSessionId(null);
@@ -1265,6 +1280,7 @@ export function Sidebar({
     setBulkPinChatsStatus('idle');
     setBulkDuplicateChatsStatus('idle');
     setBulkExportChatsStatus('idle');
+    setBulkExportedChatsCount(null);
     bulkPinUnpinActionRef.current = null;
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
@@ -1283,6 +1299,7 @@ export function Sidebar({
     setBulkPinChatsStatus('idle');
     setBulkDuplicateChatsStatus('idle');
     setBulkExportChatsStatus('idle');
+    setBulkExportedChatsCount(null);
     bulkPinUnpinActionRef.current = null;
     setSelectedChatIds((prev) => {
       const next = new Set(prev);
@@ -1303,6 +1320,7 @@ export function Sidebar({
     setBulkPinChatsStatus('idle');
     setBulkDuplicateChatsStatus('idle');
     setBulkExportChatsStatus('idle');
+    setBulkExportedChatsCount(null);
     bulkPinUnpinActionRef.current = null;
     setSelectedChatIds(new Set());
   };
@@ -1948,7 +1966,7 @@ export function Sidebar({
                       type="button"
                       aria-label={
                         bulkExportChatsStatus === 'done'
-                          ? `Exported ${selectedChatIds.size} selected chats`
+                          ? `Exported ${bulkExportedChatsCount ?? selectedChatIds.size} selected chats`
                           : bulkExportChatsStatus === 'failed'
                             ? 'Selected chat export failed'
                             : `Export ${selectedChatIds.size} selected chats as markdown`
@@ -2283,12 +2301,12 @@ export function Sidebar({
                                     ? 'Some selected chats could not be deleted'
                                     : bulkDeleteChatsStatus === 'done'
                                       ? 'Selected chats deleted'
-                                : bulkDeleteChatsStatus === 'failed'
-                                  ? 'Could not delete selected chats'
-                                  : bulkExportChatsStatus === 'done'
-                                    ? 'Selected chats exported'
-                                    : bulkExportChatsStatus === 'failed'
-                                      ? 'Could not export selected chats'
+                                  : bulkDeleteChatsStatus === 'failed'
+                                    ? 'Could not delete selected chats'
+                                    : bulkExportChatsStatus === 'done'
+                                      ? `${bulkExportedChatsCount ?? selectedChatIds.size} ${(bulkExportedChatsCount ?? selectedChatIds.size) === 1 ? 'chat' : 'chats'} exported`
+                                      : bulkExportChatsStatus === 'failed'
+                                        ? 'Could not export selected chats'
                                       : downloadChatsStatus === 'done'
                                         ? 'Arena chats downloaded'
                                         : downloadChatsStatus === 'failed'
