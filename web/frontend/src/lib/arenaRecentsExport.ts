@@ -134,17 +134,29 @@ export function formatArenaRecentsJsonExport(opts: {
 }
 
 
-function toCsvCell(value: string | number | boolean | null | undefined): string {
-  const raw = value == null ? '' : String(value);
-  return `"${raw.replace(/"/g, '""')}"`;
-}
-
 /**
  * CSV export of sidebar recents (full list or current filter).
  * The first row is headers; every cell is quoted so commas/newlines in
- * prompts cannot break the column layout.
+ * prompts cannot break the column layout. Prompt, title, and winner names
+ * are user- and model-controlled text, so cells that could be interpreted
+ * as spreadsheet formulas are neutralized (OWASP CWE-1236), matching the
+ * watchlist and agent-history CSV exporters.
  */
 export function formatArenaRecentsCsvExport(opts: { items: ArenaRecentExportItem[] }): string {
+  const CSV_FORMULA_PREFIXES: readonly string[] = ['=', '+', '-', '@', '\t', '\r'];
+
+  const csvSafe = (value: string | number | boolean | null | undefined): string => {
+    const raw = value == null ? '' : String(value);
+    // Spreadsheets commonly ignore leading whitespace before deciding whether
+    // a cell is a formula, so check the first significant character, not just
+    // the raw first byte.
+    const firstSignificant = raw.trimStart()[0] || '';
+    return CSV_FORMULA_PREFIXES.includes(firstSignificant) ? `'${raw}` : raw;
+  };
+
+  const csvCell = (value: string | number | boolean | null | undefined): string =>
+    `"${csvSafe(value).replace(/"/g, '""')}"`;
+
   const items = (opts.items || []).map((item) => ({
     title: displayTitle(item),
     prompt: (item.prompt || '').trim() || '',
@@ -161,7 +173,7 @@ export function formatArenaRecentsCsvExport(opts: { items: ArenaRecentExportItem
     'timestamp',
     'turnId',
   ];
-  const lines: string[] = [headers.map(toCsvCell).join(',')];
+  const lines: string[] = [headers.map(csvCell).join(',')];
   items.forEach((item) => {
     lines.push(
       [
@@ -172,7 +184,7 @@ export function formatArenaRecentsCsvExport(opts: { items: ArenaRecentExportItem
         item.timestamp,
         item.turnId,
       ]
-        .map(toCsvCell)
+        .map(csvCell)
         .join(','),
     );
   });
